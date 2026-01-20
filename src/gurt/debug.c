@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -547,7 +548,7 @@ int
 d_log_init(void)
 {
 	char	*log_file;
-	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
+	int      flags = DLOG_FLV_DEFAULT;
 	int	 rc;
 
 	d_agetenv_str(&log_file, D_LOG_FILE_ENV);
@@ -620,4 +621,49 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		return 0;
 	}
 	return -DER_INVAL;
+}
+
+#define D_LOG_MEMORY_LINE_LENGTH (10 + 2 + 3 * 16 + 1) /** 0x12340000: 00 01 02... 0f */
+
+void
+d_log_memory(const uint8_t *ptr, size_t size)
+{
+	static char buf[D_LOG_MEMORY_LINE_LENGTH] = "";
+	size_t      i;
+	char       *out       = buf;
+	size_t      out_space = D_LOG_MEMORY_LINE_LENGTH;
+	int         rc;
+
+	/** printed immediately in case reading the memory cause a crash */
+	D_FATAL("ptr=%p, size=%zu\n", ptr, size);
+
+	if (ptr == NULL || size == 0) {
+		return;
+	}
+
+	for (i = 0; i < size; i++) {
+		/** start a new line */
+		if (i % 16 == 0) {
+			rc = snprintf(out, out_space, "%p: ", &ptr[i]); /** append address */
+			D_ASSERTF(rc > 0, "snprintf() failed: %d\n", rc);
+			out += rc;
+			out_space -= rc;
+		}
+		rc = snprintf(out, out_space, "%02x ", ptr[i]); /** append value */
+		D_ASSERTF(rc > 0, "snprintf() failed: %d\n", rc);
+		out += rc;
+		out_space -= rc;
+
+		/** print a complete line and reset the output buffer */
+		if (i % 16 == 15) {
+			D_FATAL("%s\n", buf);
+			out       = buf;
+			out_space = D_LOG_MEMORY_LINE_LENGTH;
+		}
+	}
+
+	/** print an incomplete line */
+	if (out_space < D_LOG_MEMORY_LINE_LENGTH) {
+		D_FATAL("%s\n", buf);
+	}
 }

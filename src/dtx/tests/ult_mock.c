@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,14 +75,20 @@ struct dss_chore;
 typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool is_reentrance);
 
 void
-dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_diy(struct dss_chore *chore)
 {
 	assert_true(false);
 }
 
 int
-dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_register(struct dss_chore *chore)
 {
 	assert_true(false);
 	return -DER_NOMEM;
+}
+
+void
+dss_chore_deregister(struct dss_chore *chore)
+{
+	assert_true(false);
 }

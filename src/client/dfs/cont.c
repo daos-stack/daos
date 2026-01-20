@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +15,100 @@
 #include <daos/common.h>
 
 #include "dfs_internal.h"
+
+static int
+suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id_t oc_id,
+	       daos_size_t *cs)
+{
+	struct daos_oclass_attr *oc_attr;
+	struct daos_prop_entry  *dpe;
+	uint64_t                 ec_cell_size;
+	uint32_t                 nr_grps;
+	daos_size_t              base;
+	int                      rc;
+
+	/** No EC above RF 3, use default CS */
+	if (rf > 3) {
+		*cs = DFS_DEFAULT_CHUNK_SIZE;
+		return 0;
+	}
+
+	if (oc_id == 0) {
+		daos_obj_id_t oid       = {.hi = 0, .lo = 0};
+		uint32_t      pa_domain = daos_cont_prop2redunlvl(prop);
+
+		/** generate the oclass that would be used for file  */
+		rc = daos_obj_generate_oid_by_rf(poh, rf, &oid, DAOS_OT_ARRAY_BYTE, OC_UNKNOWN, 0,
+						 0, pa_domain);
+		if (rc) {
+			D_ERROR("daos_obj_generate_oid_by_rf() Failed: " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+
+		oc_attr = daos_oclass_attr_find(oid, &nr_grps);
+		if (oc_attr == NULL)
+			return EINVAL;
+	} else {
+		oc_attr = daos_oclass_id2attr(oc_id, &nr_grps);
+		if (oc_attr == NULL)
+			return EINVAL;
+	}
+
+	/** for Replication (including non-redundant), return the default chunk size - 1 MiB */
+	if (oc_attr->ca_resil == DAOS_RES_REPL) {
+		*cs = DFS_DEFAULT_CHUNK_SIZE;
+		return 0;
+	}
+
+	/** query the EC cell size from container first */
+	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_CELL_SZ);
+	if (dpe) {
+		ec_cell_size = dpe->dpe_val;
+	} else {
+		daos_prop_t            *pool_prop;
+		struct daos_prop_entry *entry;
+
+		/** Check the EC Cell size property on pool */
+		pool_prop                          = daos_prop_alloc(1);
+		pool_prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_EC_CELL_SZ;
+
+		rc = daos_pool_query(poh, NULL, NULL, pool_prop, NULL);
+		if (rc) {
+			daos_prop_free(pool_prop);
+			return daos_der2errno(rc);
+		}
+		entry = daos_prop_entry_get(pool_prop, DAOS_PROP_PO_EC_CELL_SZ);
+		if (entry != NULL)
+			ec_cell_size = entry->dpe_val;
+		else
+			ec_cell_size = DAOS_EC_CELL_DEF;
+		daos_prop_free(pool_prop);
+	}
+
+	/** set the DFS chunk size to the the EC cell size x the number of data cells */
+	base = oc_attr->u.ec.e_k * ec_cell_size;
+
+	/*
+	 * If the chunk size is still < than the default chunk size, bump it to be >=, but still a
+	 * multiple of the EC cell size. Find the next multiple of EC_CELL_SIZE greater than
+	 * DFS_DEFAULT_CHUNK_SIZE.
+	 */
+	if (base < DFS_DEFAULT_CHUNK_SIZE) {
+		int nchunks;
+
+		nchunks = DFS_DEFAULT_CHUNK_SIZE / base;
+		if (DFS_DEFAULT_CHUNK_SIZE % base != 0)
+			nchunks++;
+		D_DEBUG(DB_TRACE,
+			"Calculated chunk size (%zu) is smaller than %d, bump it by x %d\n", base,
+			DFS_DEFAULT_CHUNK_SIZE, nchunks);
+		*cs = nchunks * base;
+	} else {
+		*cs = base * 2;
+	}
+	D_DEBUG(DB_TRACE, "Setting the DFS chunk size of the container to %zu\n", *cs);
+	return 0;
+}
 
 int
 dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *_coh,
@@ -31,9 +126,13 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	struct daos_prop_co_roots roots;
 	int                       rc, rc2;
 	struct daos_prop_entry   *dpe;
+	struct daos_prop_entry   *roots_entry  = NULL;
+	struct daos_prop_entry   *layout_entry = NULL;
 	struct timespec           now;
 	uint32_t                  cid_tf;
 	uint32_t                  pa_domain;
+	uint32_t                  prop_nr      = 0;
+	uint32_t                  props_to_add = 0;
 	int                       cont_tf;
 
 	if (cuuid == NULL)
@@ -43,10 +142,23 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		return EINVAL;
 	}
 
-	if (attr != NULL && attr->da_props != NULL)
-		prop = daos_prop_alloc(attr->da_props->dpp_nr + 2);
-	else
-		prop = daos_prop_alloc(2);
+	if (attr != NULL && attr->da_props != NULL) {
+		prop_nr = attr->da_props->dpp_nr;
+
+		roots_entry = daos_prop_entry_get(attr->da_props, DAOS_PROP_CO_ROOTS);
+		if (roots_entry == NULL)
+			props_to_add++;
+
+		layout_entry = daos_prop_entry_get(attr->da_props, DAOS_PROP_CO_LAYOUT_TYPE);
+		if (layout_entry == NULL)
+			props_to_add++;
+	} else {
+		/* roots and layout are still needed */
+		props_to_add = 2;
+	}
+	prop_nr += props_to_add;
+
+	prop = daos_prop_alloc(prop_nr);
 	if (prop == NULL)
 		return ENOMEM;
 
@@ -56,6 +168,17 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 			D_ERROR("failed to copy properties " DF_RC "\n", DP_RC(rc));
 			D_GOTO(err_prop, rc = daos_der2errno(rc));
 		}
+	}
+
+	/** check if RF factor is set on property */
+	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
+	if (!dpe) {
+		rc = dc_pool_get_redunc(poh);
+		if (rc < 0)
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
+		rf = rc;
+	} else {
+		rf = dpe->dpe_val;
 	}
 
 	if (attr) {
@@ -79,11 +202,15 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		/** check non default chunk size */
 		if (attr->da_chunk_size != 0)
 			dattr.da_chunk_size = attr->da_chunk_size;
-		else
-			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+		else {
+			rc = suggest_dfs_cs(poh, prop, rf, dattr.da_file_oclass_id,
+					    &dattr.da_chunk_size);
+			if (rc)
+				D_GOTO(err_prop, rc);
+		}
 
 		if (attr->da_hints[0] != 0) {
-			strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN);
+			strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN - 1);
 			dattr.da_hints[DAOS_CONT_HINT_MAX_LEN - 1] = '\0';
 		}
 	} else {
@@ -91,18 +218,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		dattr.da_dir_oclass_id  = 0;
 		dattr.da_file_oclass_id = 0;
 		dattr.da_mode           = DFS_RELAXED;
-		dattr.da_chunk_size     = DFS_DEFAULT_CHUNK_SIZE;
-	}
-
-	/** check if RF factor is set on property */
-	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
-	if (!dpe) {
-		rc = dc_pool_get_redunc(poh);
-		if (rc < 0)
-			D_GOTO(err_prop, rc = daos_der2errno(rc));
-		rf = rc;
-	} else {
-		rf = dpe->dpe_val;
+		rc                      = suggest_dfs_cs(poh, prop, rf, 0, &dattr.da_chunk_size);
+		if (rc)
+			D_GOTO(err_prop, rc);
 	}
 
 	/** verify object class redundancy */
@@ -166,13 +284,29 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 
 	/* store SB & root OIDs as container property */
 	roots.cr_oids[2] = roots.cr_oids[3]          = DAOS_OBJ_NIL;
-	prop->dpp_entries[prop->dpp_nr - 2].dpe_type = DAOS_PROP_CO_ROOTS;
-	rc = daos_prop_entry_set_ptr(&prop->dpp_entries[prop->dpp_nr - 2], &roots, sizeof(roots));
+
+	if (roots_entry == NULL) {
+		/* need to add roots prop to list */
+		roots_entry           = &prop->dpp_entries[prop->dpp_nr - props_to_add];
+		roots_entry->dpe_type = DAOS_PROP_CO_ROOTS;
+		props_to_add--;
+	}
+	/* if an existing roots prop was passed in, it will be overwritten */
+	rc = daos_prop_entry_set_ptr(roots_entry, &roots, sizeof(roots));
 	if (rc)
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 
-	prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
-	prop->dpp_entries[prop->dpp_nr - 1].dpe_val  = DAOS_PROP_CO_LAYOUT_POSIX;
+	if (layout_entry == NULL) {
+		/* need to add layout prop to list */
+		layout_entry           = &prop->dpp_entries[prop->dpp_nr - props_to_add];
+		layout_entry->dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+		props_to_add--;
+	}
+
+	/* layout passed in will be overwritten */
+	layout_entry->dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
+
+	D_ASSERT(props_to_add == 0);
 
 	rc = daos_cont_create(poh, cuuid, prop, NULL);
 	if (rc) {

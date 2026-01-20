@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -77,7 +78,7 @@ class DestroyRebuild(TestWithServers):
         ranks.append(random.choice(non_ms_ranks))  # nosec
         self.log.info("ranks to rebuild: %s", ranks)
 
-        self.server_managers[0].stop_ranks(ranks, self.d_log, force=True)
+        self.server_managers[0].stop_ranks(ranks, force=True)
         pool.wait_for_rebuild_to_start()
 
         # 4.

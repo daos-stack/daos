@@ -8,7 +8,7 @@ updates:
     ignore:
       - dependency-name: "avocado-framework*"
     schedule:
-      interval: daily
+      interval: weekly
     groups:
       python-packages:
         patterns:
@@ -22,8 +22,10 @@ updates:
       gha-versions:
         patterns:
           - "*"
-    assignees:
+    reviewers:
       - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
 
   - package-ecosystem: github-actions
     target-branch: release/2.6
@@ -34,5 +36,7 @@ updates:
       gha-versions:
         patterns:
           - "*"
-    assignees:
+    reviewers:
       - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"

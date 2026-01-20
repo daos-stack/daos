@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -64,7 +65,7 @@ def get_service_status(logger, hosts, service, user="root"):
     return status
 
 
-def stop_service(logger, hosts, service, user="root"):
+def stop_service(logger, hosts, service, user="root", retries=2):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
@@ -72,6 +73,7 @@ def stop_service(logger, hosts, service, user="root"):
         hosts (NodeSet): list of hosts on which to stop the service.
         service (str): name of the service
         user (str, optional): user to use to issue the command. Defaults to "root".
+        retries (int, optional): number of times to retry stopping the service. Defaults to 2.
 
     Returns:
         bool: True if the service was successfully stopped; False otherwise
@@ -86,15 +88,13 @@ def stop_service(logger, hosts, service, user="root"):
     mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
     check_hosts = NodeSet(hosts)
     loop = 1
-    # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809 has been resolved
-    max_loops = 3
     while check_hosts:
         # Check the status of the service on each host
         result = get_service_status(logger, check_hosts, service)
         check_hosts = NodeSet()
         for key in status_keys:
             if result[key]:
-                if loop == max_loops:
+                if loop == retries:
                     # Exit the while loop if the service is still running
                     logger.error(
                         " - Error %s still %s on %s", service, mapping[key], result[key])

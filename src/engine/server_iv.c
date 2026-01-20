@@ -216,6 +216,8 @@ key_equal(struct ds_iv_entry *entry, struct ds_iv_key *key1,
 {
 	struct ds_iv_class *class = entry->iv_class;
 
+	if (daos_version_get_protocol(&key1->version) != daos_version_get_protocol(&key2->version))
+		return false;
 	if (key1->class_id != key2->class_id)
 		return false;
 
@@ -311,6 +313,7 @@ iv_entry_alloc(struct ds_iv_ns *ns, struct ds_iv_class *class,
 	if (rc)
 		D_GOTO(free, rc);
 
+	entry->iv_key.version = key->version;
 	entry->ns = ns;
 	entry->iv_valid = false;
 	entry->iv_class = class;
@@ -336,8 +339,8 @@ iv_entry_lookup_or_create(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		entry->iv_ref++;
 		if (got != NULL)
 			*got = entry;
-		D_DEBUG(DB_TRACE, "Get entry %p/%d key %d\n",
-			entry, entry->iv_ref, key->class_id);
+		D_DEBUG(DB_TRACE, "Get entry %p, ref %d valid %d key %d\n", entry, entry->iv_ref,
+			entry->iv_valid, key->class_id);
 		return 0;
 	}
 
@@ -451,7 +454,7 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_key	key;
-	struct iv_priv_entry	*priv_entry = priv;
+	struct iv_priv_entry    *priv_entry = priv;
 	int			rc = 0;
 
 	rc = iv_ns_lookup_by_ivns(ivns, &ns);
@@ -470,17 +473,21 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	}
 
 	if (refresh) {
+		/* oid_iv_ent_refresh need to be called to unlock */
 		rc = refresh_iv_value(entry, &key, iv_value, ref_rc,
 				      priv_entry ? priv_entry->priv : NULL);
+		if (rc == 0)
+			rc = ref_rc;
 	} else {
 		D_ASSERT(iv_value != NULL);
+		D_ASSERT(ref_rc == 0);
+		D_ASSERT(!invalidate);
 		if (ns->iv_master_rank != key.rank) {
 			D_DEBUG(DB_MD, "key id %d master rank %u != %u: rc = %d\n",
 				key.class_id, ns->iv_master_rank, key.rank, -DER_GRPVER);
 			D_GOTO(output, rc = -DER_GRPVER);
 		}
-		rc = update_iv_value(entry, &key, iv_value,
-				     priv_entry ? priv_entry->priv : NULL);
+		rc = update_iv_value(entry, &key, iv_value, priv_entry ? priv_entry->priv : NULL);
 	}
 	if (rc != 0) {
 		D_DEBUG(DB_MD, "key id %d update failed: rc = " DF_RC "\n", key.class_id,
@@ -877,6 +884,56 @@ ds_iv_ns_cleanup(struct ds_iv_ns *ns)
 	}
 }
 
+/* To prepare for reintegrate, cleanup some IVs' cache.
+ * May add more types later when needed.
+ */
+int
+ds_iv_ns_reint_prep(struct ds_iv_ns *ns)
+{
+	struct ds_iv_entry *entry;
+	struct ds_iv_entry *tmp;
+	uint32_t            msec  = 100;
+	uint32_t            total = 0;
+	int                 rc;
+
+	/* iv_refcount is 1 after ns create,
+	 *                2 after ds_iv_ns_start.
+	 *              > 2 if with any in-flight IV operation.
+	 * here wait the in-flight IV operation for at most 30 seconds, if cannot finish within
+	 * 30 seconds return EBUSY so user can redo the reintegration. Should be very rare case
+	 * for 30 seconds IV timeout.
+	 */
+	while (ns->iv_refcount > 2) {
+		msec = min(5000, msec * 2);
+		dss_sleep(msec);
+		total += msec;
+		if (total > 30000) {
+			rc = -DER_BUSY;
+			DL_ERROR(
+			    rc, DF_UUID " timed out for wait IV, iv_refcount %d, waited %d seconds",
+			    DP_UUID(ns->iv_pool_uuid), ns->iv_refcount, min(1, total / 1000));
+			return rc;
+		} else {
+			D_INFO(DF_UUID " wait IV operation, iv_refcount %d, waited %d seconds",
+			       DP_UUID(ns->iv_pool_uuid), ns->iv_refcount, min(1, total / 1000));
+		}
+	}
+
+	/* no yield for the cleanup */
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
+		if (entry->iv_key.class_id == IV_CONT_TRACK_EPOCH ||
+		    entry->iv_key.class_id == IV_CONT_PROP ||
+		    entry->iv_key.class_id == IV_CONT_SNAP) {
+			D_INFO(DF_UUID " delete IV class_id %d", DP_UUID(ns->iv_pool_uuid),
+			       entry->iv_key.class_id);
+			d_list_del(&entry->iv_link);
+			iv_entry_free(entry);
+		}
+	}
+
+	return 0;
+}
+
 void
 ds_iv_ns_stop(struct ds_iv_ns *ns)
 {
@@ -1172,9 +1229,12 @@ static int
 iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
       crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
+	struct dss_module_info *dmi = dss_get_module_info();
+
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
 
+	key->version = dmi->dmi_version;
 	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY)
 		return iv_op_async(ns, key, value, sync, shortcut, retry, opc);
 

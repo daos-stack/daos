@@ -1,5 +1,7 @@
 #!/bin/bash -l
 
+set -e
+
 # Only need to do any of this if the version has been updated
 # NOTE: The diff-index with HEAD^ implies that the TAG
 #       must be updated in the last commit.  But version update

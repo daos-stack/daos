@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -24,11 +25,7 @@ func init() {
 	}
 }
 
-func fixBrackets(stringRanks string, remove bool) string {
-	if remove {
-		return strings.Trim(stringRanks, "[]")
-	}
-
+func addBrackets(stringRanks string) string {
 	if !strings.HasPrefix(stringRanks, "[") {
 		stringRanks = "[" + stringRanks
 	}
@@ -37,6 +34,10 @@ func fixBrackets(stringRanks string, remove bool) string {
 	}
 
 	return stringRanks
+}
+
+func removeBrackets(stringRanks string) string {
+	return strings.Trim(stringRanks, "[]")
 }
 
 // RankList provides convenience methods for working with Rank slices.
@@ -64,7 +65,7 @@ func (rs *RankSet) String() string {
 	if rs == nil || rs.ns == nil {
 		return ""
 	}
-	return fixBrackets(rs.ns.String(), true)
+	return removeBrackets(rs.ns.String())
 }
 
 // RangedString returns a ranged string representation of the RankSet.
@@ -113,7 +114,7 @@ func (rs *RankSet) Replace(other *RankSet) {
 
 // Add adds rank to an existing RankSet.
 func (rs *RankSet) Add(rank Rank) {
-	if rs.ns == nil {
+	if rs == nil || rs.ns == nil {
 		rs.ns = hostlist.NewNumericSet()
 	}
 	rs.ns.Add(uint(rank))
@@ -121,7 +122,7 @@ func (rs *RankSet) Add(rank Rank) {
 
 // Delete removes the specified rank from the RankSet.
 func (rs *RankSet) Delete(rank Rank) {
-	if rs.ns == nil {
+	if rs == nil || rs.ns == nil {
 		return
 	}
 	rs.ns.Delete(uint(rank))
@@ -131,7 +132,7 @@ func (rs *RankSet) Delete(rank Rank) {
 func (rs *RankSet) Ranks() (out []Rank) {
 	out = make([]Rank, 0, rs.Count())
 
-	if rs.ns == nil {
+	if rs == nil || rs.ns == nil {
 		return
 	}
 
@@ -140,6 +141,15 @@ func (rs *RankSet) Ranks() (out []Rank) {
 	}
 
 	return
+}
+
+// Ranks returns true if Rank found in RankSet.
+func (rs *RankSet) Contains(r Rank) bool {
+	if rs == nil || rs.ns == nil {
+		return false
+	}
+
+	return rs.ns.Contains(uint(r))
 }
 
 func (rs *RankSet) MarshalJSON() ([]byte, error) {
@@ -191,14 +201,11 @@ func MustCreateRankSet(stringRanks string) *RankSet {
 func CreateRankSet(stringRanks string) (*RankSet, error) {
 	rs := NewRankSet()
 
-	if len(stringRanks) < 1 {
+	if len(removeBrackets(stringRanks)) < 1 {
 		return rs, nil
 	}
 
-	stringRanks = fixBrackets(stringRanks, false)
-
-	// add enclosing brackets to input so CreateSet works without hostnames
-	ns, err := hostlist.CreateNumericSet(stringRanks)
+	ns, err := hostlist.CreateNumericSet(addBrackets(stringRanks))
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +23,7 @@
 #define DAOS_CLIENT_METRICS_DUMP_DIR  "D_CLIENT_METRICS_DUMP_DIR"
 #define DAOS_CLIENT_METRICS_ENABLE    "D_CLIENT_METRICS_ENABLE"
 #define DAOS_CLIENT_METRICS_RETAIN    "D_CLIENT_METRICS_RETAIN"
+#define DAOS_CLIENT_METRICS_REGISTER  "D_CLIENT_METRICS_REGISTER"
 extern bool daos_client_metric;
 extern bool daos_client_metric_retain;
 
@@ -71,7 +73,7 @@ daos_module_nr_pool_metrics(void);
  *  Called during library initialization to init metrics.
  */
 int
-dc_tm_init(void);
+dc_tm_init(crt_init_options_t *crt_info);
 
 /**
  *  Called during library finalization to free metrics resources

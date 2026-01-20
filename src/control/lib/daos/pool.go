@@ -84,14 +84,14 @@ type (
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 		MemFileBytes     uint64               `json:"mem_file_bytes"`
 		MdOnSsdActive    bool                 `json:"md_on_ssd_active"`
+		SelfHealPolicy   string               `json:"self_heal_policy"`
 	}
 
-	PoolQueryTargetType  int32
+	// PoolQueryTargetState represents the current state of the pool target.
 	PoolQueryTargetState int32
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type          PoolQueryTargetType  `json:"target_type"`
 		State         PoolQueryTargetState `json:"target_state"`
 		Space         []*StorageUsageStats `json:"space"`
 		MemFileBytes  uint64               `json:"mem_file_bytes"`
@@ -117,9 +117,9 @@ type (
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD | C.DPI_SELF_HEAL_POLICY))
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
-	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
+	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE | C.DPI_SELF_HEAL_POLICY))
 
 	// PoolQueryOptionSpace retrieves storage space usage as part of the pool query.
 	PoolQueryOptionSpace PoolQueryOption = "space"
@@ -131,6 +131,8 @@ const (
 	PoolQueryOptionDisabledEngines PoolQueryOption = "disabled_engines"
 	// PoolQueryOptionDeadEngines retrieves dead engines as part of the pool query.
 	PoolQueryOptionDeadEngines PoolQueryOption = "dead_engines"
+	// PoolQueryOptionSelfHealPolicy retrieves self_heal_policy in addition to the pool query.
+	PoolQueryOptionSelfHealPolicy PoolQueryOption = "self_heal_policy"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
 	PoolConnectFlagReadOnly PoolConnectFlag = C.DAOS_PC_RO
@@ -139,6 +141,21 @@ const (
 	// PoolConnectFlagExclusive indicates that the connection is exclusive.
 	PoolConnectFlagExclusive PoolConnectFlag = C.DAOS_PC_EX
 )
+
+func (pcf PoolConnectFlag) String() string {
+	flagStrs := []string{}
+	if pcf&PoolConnectFlagReadOnly != 0 {
+		flagStrs = append(flagStrs, "read-only")
+	}
+	if pcf&PoolConnectFlagReadWrite != 0 {
+		flagStrs = append(flagStrs, "read-write")
+	}
+	if pcf&PoolConnectFlagExclusive != 0 {
+		flagStrs = append(flagStrs, "exclusive")
+	}
+	sort.Strings(flagStrs)
+	return strings.Join(flagStrs, ",")
+}
 
 func (pqo PoolQueryOption) String() string {
 	return string(pqo)
@@ -150,6 +167,7 @@ var poolQueryOptMap = map[C.int]PoolQueryOption{
 	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
 	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
 	C.DPI_ENGINES_DEAD:     PoolQueryOptionDeadEngines,
+	C.DPI_SELF_HEAL_POLICY: PoolQueryOptionSelfHealPolicy,
 }
 
 func resolvePoolQueryOpt(name PoolQueryOption) (C.int, error) {
@@ -315,8 +333,9 @@ const (
 	PoolServiceStateReady = PoolServiceState(mgmtpb.PoolServiceState_Ready)
 	// PoolServiceStateDestroying indicates that the pool service is being destroyed
 	PoolServiceStateDestroying = PoolServiceState(mgmtpb.PoolServiceState_Destroying)
-	// PoolServiceStateDegraded indicates that the pool service is in a degraded state
-	PoolServiceStateDegraded = PoolServiceState(mgmtpb.PoolServiceState_Degraded)
+	// PoolServiceStateTargetsExcluded indicates that the pool service is operating with
+	// excluded targets
+	PoolServiceStateTargetsExcluded = PoolServiceState(mgmtpb.PoolServiceState_TargetsExcluded)
 	// PoolServiceStateUnknown indicates that the pool service state is unknown
 	PoolServiceStateUnknown = PoolServiceState(mgmtpb.PoolServiceState_Unknown)
 )
@@ -433,18 +452,6 @@ func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 	*prs = PoolRebuildState(state)
 
 	return nil
-}
-
-func (ptt PoolQueryTargetType) String() string {
-	ptts, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)]
-	if !ok {
-		return "invalid"
-	}
-	return strings.ToLower(ptts)
-}
-
-func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + pqtt.String() + `"`), nil
 }
 
 const (

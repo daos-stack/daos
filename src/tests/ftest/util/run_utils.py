@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -268,6 +269,15 @@ class CommandResult():
         return NodeSet.fromlist(data.hosts for data in self.output if data.returncode != 0)
 
     @property
+    def timeout_hosts(self):
+        """Get all timeout hosts.
+
+        Returns:
+            NodeSet: all nodes where the command timed out
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.timeout)
+
+    @property
     def all_stdout(self):
         """Get all of the stdout from the issued command from each host.
 
@@ -531,7 +541,7 @@ def find_command(source, pattern, depth, other=None):
 
 
 def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False,
-                   full_command=False):
+                   full_command=False, user="root"):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -592,9 +602,9 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
         log.debug(
             "Killing%s any processes on %s that match %s and then waiting %s seconds",
             step[0], result.passed_hosts, pattern_match, step[1])
-        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+        kill_command = command_as_user(f"/usr/bin/pkill{step[0]} {pattern}", user)
         if full_command:
-            kill_command = f"sudo /usr/bin/pkill{step[0]} --full -x {pattern}"
+            kill_command = command_as_user(f"/usr/bin/pkill{step[0]} --full -x {pattern}", user)
         run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
         time.sleep(step[1])
         result = run_remote(log, result.passed_hosts, search_command, verbose, timeout)

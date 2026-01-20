@@ -1,10 +1,10 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import queue
-import random
 import threading
 import time
 
@@ -43,11 +43,13 @@ class OSAOnlineReintegration(OSAUtils):
         self.daos_racer.get_params(self)
         self.daos_racer.run()
 
-    def run_online_reintegration_test(self, num_pool, racer=False, server_boot=False, oclass=None):
+    def run_online_reintegration_test(self, num_pool, ranks, racer=False, server_boot=False,
+                                      oclass=None):
         """Run the Online reintegration without data.
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
+            ranks (list) : list of ranks to reintegrate.
             racer (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank. Defaults to False.
@@ -58,10 +60,6 @@ class OSAOnlineReintegration(OSAUtils):
         test_seq = self.ior_test_sequence[0]
         # Create a pool
         pool = {}
-        exclude_servers = (len(self.hostlist_servers) * 2) - 1
-
-        # Exclude one rank : other than rank 0.
-        rank = random.randint(1, exclude_servers)  # nosec
 
         # Start the daos_racer thread
         if racer is True:
@@ -99,13 +97,13 @@ class OSAOnlineReintegration(OSAUtils):
             # Get initial total free space (scm+nvme)
             initial_free_space = self.pool.get_total_free_space(refresh=True)
             if server_boot is False:
-                output = self.pool.exclude(rank)
+                output = self.pool.exclude(ranks)
             else:
-                output = self.dmg_command.system_stop(ranks=rank, force=True)
+                output = self.dmg_command.system_stop(ranks=ranks, force=True)
                 self.pool.wait_for_rebuild_to_start()
                 self.pool.wait_for_rebuild_to_end()
                 self.log.info(output)
-                output = self.dmg_command.system_start(ranks=rank)
+                output = self.dmg_command.system_start(ranks=ranks)
                 self.pool.wait_for_rebuild_to_start()
 
             self.print_and_assert_on_rebuild_failure(output)
@@ -119,7 +117,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.assertTrue(pver_exclude > (pver_begin + 8), "Pool Version Error:  After exclude")
             self.assertTrue(initial_free_space > free_space_after_exclude,
                             "Expected space after exclude is less than initial")
-            output = self.pool.reintegrate(rank)
+            output = self.pool.reintegrate(ranks)
             self.print_and_assert_on_rebuild_failure(output)
             free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
 
@@ -163,7 +161,8 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration
         """
         self.log.info("Online Reintegration : Basic test")
-        self.run_online_reintegration_test(1)
+        ranks = self.get_random_test_ranks(total_ranks=1)
+        self.run_online_reintegration_test(num_pool=1, ranks=ranks)
 
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
@@ -176,7 +175,8 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_server_stop
         """
         self.log.info("Online Reintegration : System stop/start")
-        self.run_online_reintegration_test(1, server_boot=True)
+        ranks = self.get_random_test_ranks(total_ranks=1)
+        self.run_online_reintegration_test(num_pool=1, server_boot=True, ranks=ranks)
 
     def test_osa_online_reintegration_without_csum(self):
         """Test ID: DAOS-5075.
@@ -190,7 +190,8 @@ class OSAOnlineReintegration(OSAUtils):
         """
         self.log.info("Online Reintegration : No Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum", "/run/checksum/*")
-        self.run_online_reintegration_test(1)
+        ranks = self.get_random_test_ranks(total_ranks=1)
+        self.run_online_reintegration_test(num_pool=1, ranks=ranks)
 
     def test_osa_online_reintegration_with_aggregation(self):
         """Test ID: DAOS-6715.
@@ -205,7 +206,8 @@ class OSAOnlineReintegration(OSAUtils):
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
         self.log.info("Online Reintegration : Aggregation")
-        self.run_online_reintegration_test(1)
+        ranks = self.get_random_test_ranks(total_ranks=1)
+        self.run_online_reintegration_test(num_pool=1, ranks=ranks)
 
     def test_osa_online_reintegration_oclass(self):
         """Test ID: DAOS-6715.
@@ -218,5 +220,20 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_oclass
         """
         self.log.info("Online Reintegration : Object Class")
+        ranks = self.get_random_test_ranks(total_ranks=1)
         for oclass in self.test_oclass:
-            self.run_online_reintegration_test(1, oclass=oclass)
+            self.run_online_reintegration_test(num_pool=1, oclass=oclass, ranks=ranks)
+
+    def test_osa_online_reintegration_with_multiple_ranks(self):
+        """Test ID: DAOS-4753.
+
+        Test Description: Validate online reintegration with multiple ranks.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,online_reintegration
+        :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_with_multiple_ranks
+        """
+        self.log.info("Online Reintegration : Multiple ranks")
+        ranks = self.get_random_test_ranks(join_ranks=False)
+        self.run_online_reintegration_test(num_pool=1, oclass="RP_3G1", ranks=ranks)

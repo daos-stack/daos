@@ -54,50 +54,46 @@ func TestPretty_PrintPoolQueryTargetResponse(t *testing.T) {
 				Status: 0,
 				Infos: []*daos.PoolQueryTargetInfo{
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDown,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDownOut,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down
+Target: state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -111,107 +107,46 @@ Target: type unknown, state up_in
 				Status: 0,
 				Infos: []*daos.PoolQueryTargetInfo{
 					{
-						Type:  0,
 						State: 42,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDownOut,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{tier0, tier1},
 					},
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state invalid
+Target: state invalid
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
 - Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
-Target: type unknown, state up_in
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVME):
-  Total size: 100 GB
-  Free: 90 GB
-`,
-		},
-		"invalid target type": {
-			pqtr: &control.PoolQueryTargetResp{
-				Status: 0,
-				Infos: []*daos.PoolQueryTargetInfo{
-					{
-						Type:  42,
-						State: daos.PoolTargetStateDown,
-						Space: []*daos.StorageUsageStats{tier0, tier1},
-					},
-					{
-						Type:  0,
-						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{tier0, tier1},
-					},
-					{
-						Type:  0,
-						State: daos.PoolTargetStateDownOut,
-						Space: []*daos.StorageUsageStats{tier0, tier1},
-					},
-					{
-						Type:  0,
-						State: daos.PoolTargetStateUpIn,
-						Space: []*daos.StorageUsageStats{tier0, tier1},
-					},
-				},
-			},
-			expPrintStr: `
-Target: type invalid, state down
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVME):
-  Total size: 100 GB
-  Free: 90 GB
-Target: type unknown, state up_in
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVME):
-  Total size: 100 GB
-  Free: 90 GB
-Target: type unknown, state down_out
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVME):
-  Total size: 100 GB
-  Free: 90 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -225,7 +160,6 @@ Target: type unknown, state up_in
 				Status: 0,
 				Infos: []*daos.PoolQueryTargetInfo{
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDown,
 						Space: []*daos.StorageUsageStats{
 							tier0, tier1,
@@ -236,7 +170,6 @@ Target: type unknown, state up_in
 						},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{
 							tier0, tier1,
@@ -247,7 +180,6 @@ Target: type unknown, state up_in
 						},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateDownOut,
 						Space: []*daos.StorageUsageStats{
 							tier0, tier1,
@@ -259,7 +191,6 @@ Target: type unknown, state up_in
 						},
 					},
 					{
-						Type:  0,
 						State: daos.PoolTargetStateUpIn,
 						Space: []*daos.StorageUsageStats{
 							tier0, tier1,
@@ -272,7 +203,7 @@ Target: type unknown, state up_in
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down
+Target: state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -282,7 +213,7 @@ Target: type unknown, state down
 - Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -292,7 +223,7 @@ Target: type unknown, state up_in
 - Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -302,7 +233,7 @@ Target: type unknown, state down_out
 - Storage tier 2 (UNKNOWN):
   Total size: 800 GB
   Free: 200 GB
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -630,6 +561,124 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintPoolRanksResps(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resps  []*control.PoolRanksResp
+		expErr error
+		expOut string
+	}{
+		"normal pool drain response": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 0}, {Rank: 1}, {Rank: 2},
+					},
+				},
+			},
+			expOut: `
+Pool                                 Ranks Result Reason 
+----                                 ----- ------ ------ 
+00000001-0001-0001-0001-000000000001 0-2   OK     -      
+
+`,
+		},
+		"normal response; use labels": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: "label1",
+					Results: []*control.PoolRankResult{
+						{Rank: 0}, {Rank: 1}, {Rank: 2}, {Rank: 3},
+					},
+				},
+				{
+					ID: "label2",
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2}, {Rank: 3}, {Rank: 4},
+					},
+				},
+			},
+			expOut: `
+Pool   Ranks Result Reason 
+----   ----- ------ ------ 
+label1 0-3   OK     -      
+label2 1-4   OK     -      
+
+`,
+		},
+		"multiple response with failures": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2},
+					},
+				},
+				{
+					ID: test.MockUUID(2),
+					Results: []*control.PoolRankResult{
+						{Rank: 0},
+						{Rank: 1, Errored: true, Msg: "fail1"},
+						{Rank: 2, Errored: true, Msg: "fail2"},
+						{Rank: 3, Errored: true, Msg: "fail1"},
+					},
+				},
+			},
+			expOut: `
+Pool                                 Ranks Result Reason 
+----                                 ----- ------ ------ 
+00000001-0001-0001-0001-000000000001 1-2   OK     -      
+00000002-0002-0002-0002-000000000002 0     OK     -      
+00000002-0002-0002-0002-000000000002 1,3   FAIL   fail1  
+00000002-0002-0002-0002-000000000002 2     FAIL   fail2  
+
+`,
+		},
+		"multiple responses for the same pool": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 2},
+					},
+				},
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 0},
+						{Rank: 1, Errored: true, Msg: "fail1"},
+					},
+				},
+			},
+			expErr: errors.New("multiple PoolRanksResps for the same pool"),
+		},
+		"multiple results for the same rank": {
+			resps: []*control.PoolRanksResp{
+				{
+					ID: test.MockUUID(1),
+					Results: []*control.PoolRankResult{
+						{Rank: 1}, {Rank: 1},
+					},
+				},
+			},
+			expErr: errors.New("multiple PoolRankResults for rank 1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out strings.Builder
+			gotErr := PrintPoolRanksResps(&out, tc.resps...)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

@@ -40,6 +40,7 @@ message SystemStopReq {
 	bool force = 4;
 	string ranks = 5; // rankset to query
 	string hosts = 6; // hostset to query
+	bool ignore_admin_excluded = 7;  // ignore AdminExcluded ranks specified in rank/host lists
 }
 
 // SystemStopResp returns status of shutdown attempt and results
@@ -56,6 +57,7 @@ message SystemStartReq {
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
 	bool check_mode = 4; // start ranks in check mode
+	bool ignore_admin_excluded = 5; // ignore AdminExcluded ranks specified in rank/host lists
 }
 
 // SystemStartResp returns status of restart attempt and results
@@ -79,15 +81,6 @@ message SystemExcludeResp {
 	repeated shared.RankResult results = 1;
 }
 
-// Results for system OSA calls on multiple pool-ranks.
-message PoolRankResult
-{
-	int32  status  = 1; // Status of the OSA operation on a specific pool
-	string msg     = 2; // Error message if status indicates an error
-	string pool_id = 3; // Label or uuid of pool
-	string ranks   = 4; // Rank-set that has encountered this result
-}
-
 // SystemDrainReq supplies system-drain parameters.
 message SystemDrainReq
 {
@@ -97,11 +90,47 @@ message SystemDrainReq
 	bool   reint = 4; // Flag to indicate if request is for drain or reint.
 }
 
+// PoolRanksResp describes a response from pool-ranks operation.
+message PoolRanksResp
+{
+	string   id                        = 1; // Pool ID
+	repeated shared.RankResult results = 2; // Pool-rank operation results.
+}
+
 // SystemDrainResp returns status of system-drain request.
 message SystemDrainResp
 {
 	bool                    reint   = 1; // Flag to indicate if results are for drain or reint.
-	repeated PoolRankResult results = 2; // Results for drain or reint calls on pool-ranks.
+	repeated PoolRanksResp  responses = 2; // Response from drain or reint calls on pool-ranks.
+}
+
+// SystemRebuildManageReq supplies system-rebuild operational parameters.
+message SystemRebuildManageReq
+{
+	string sys     = 1; // DAOS system name
+	uint32 op_code = 2; // pool-rebuild operation to run on all pools
+	bool   force   = 3; // Flag to indicate a forced operation
+}
+
+// PoolRebuildManageResult returns the result of a pool-rebuild-manage operation.
+message PoolRebuildManageResult
+{
+	string id      = 1; // Pool ID
+	uint32 op_code = 2; // pool-rebuild operation to run on all pools
+	bool   errored = 3;
+	string msg     = 4;
+}
+
+// SystemRebuildManageResp returns status of system-rebuild-manage request.
+message SystemRebuildManageResp
+{
+	repeated PoolRebuildManageResult results = 1; // Pool-rebuild operation results.
+}
+
+// SystemSelfHealEvalReq supplies system self-heal eval parameters.
+message SystemSelfHealEvalReq
+{
+	string sys = 1; // DAOS system name
 }
 
 // SystemQueryReq supplies system query parameters.
@@ -119,6 +148,7 @@ message SystemQueryResp {
 	string absenthosts = 3; // hostset missing from membership
 	uint64 data_version = 4; // Version of the system database.
 	repeated string providers = 5; // Providers supported by system in configured order
+	string                sys_self_heal_policy = 6; // System self_heal property value
 }
 
 // SystemEraseReq supplies system erase parameters.

@@ -42,15 +42,15 @@ enum dtx_mbs_flags {
 	/* The targets being modified via the DTX belong to a replicated
 	 * object within single redundancy group.
 	 */
-	DMF_SRDG_REP			= (1 << 0),
+	DMF_SRDG_REP = (1 << 0),
 	/* The MBS contains the DTX leader information, usually used for
 	 * distributed transaction. In old release (before 2.4), for some
 	 * stand-alone modification, leader information may be not stored
 	 * inside MBS as optimization.
 	 */
-	DMF_CONTAIN_LEADER		= (1 << 1),
+	DMF_CONTAIN_LEADER = (1 << 1),
 	/* The dtx_memberships::dm_tgts is sorted against target ID. Obsolete. */
-	DMF_SORTED_TGT_ID		= (1 << 2),
+	DMF_SORTED_TGT_ID = (1 << 2),
 	/* The dtx_memberships::dm_tgts is sorted against shard index.
 	 * For most of cases, shard index matches the shard ID. But during
 	 * shard migration, there may be some temporary shards in related
@@ -58,9 +58,15 @@ enum dtx_mbs_flags {
 	 * in the object layout, but the shard index is unique. So we use
 	 * shard index to sort the dtx_memberships::dm_tgts. Obsolete.
 	 */
-	DMF_SORTED_SAD_IDX		= (1 << 3),
+	DMF_SORTED_SAD_IDX = (1 << 3),
 	/* The dtx target information are organized as dtx_coll_target. */
-	DMF_COLL_TARGET			= (1 << 4),
+	DMF_COLL_TARGET = (1 << 4),
+	/*
+	 * The range for the ranks [min, max] on which some object shards reside.
+	 * It is usually used for collective DTX and appended after the bitmap in
+	 * the MBS data.
+	 */
+	DMF_RANK_RANGE = (1 << 5),
 };
 
 /**
@@ -255,20 +261,41 @@ daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
 }
 
+static inline uint32_t *
+dtx_coll_mbs_rankrange(struct dtx_memberships *mbs)
+{
+	struct dtx_daos_target *ddt;
+	struct dtx_coll_target *dct;
+	size_t                  size;
+
+	D_ASSERT(mbs->dm_flags & DMF_COLL_TARGET);
+	D_ASSERT(mbs->dm_flags & DMF_RANK_RANGE);
+
+	ddt = &mbs->dm_tgts[0];
+	dct = (struct dtx_coll_target *)(ddt + mbs->dm_tgt_cnt);
+
+	size = sizeof(*ddt) * mbs->dm_tgt_cnt + sizeof(*dct) +
+	       sizeof(dct->dct_tgts[0]) * dct->dct_tgt_nr + dct->dct_bitmap_sz;
+	size = (size + 3) & ~3;
+
+	return (uint32_t *)((void *)ddt + size);
+}
+
 #define DF_DTI		DF_UUID"."DF_X64
 #define DF_DTIF		DF_UUIDF"."DF_X64
 #define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
 enum daos_ops_intent {
-	DAOS_INTENT_DEFAULT		= 0, /* fetch/enumerate/query */
-	DAOS_INTENT_PURGE		= 1, /* purge/aggregation */
-	DAOS_INTENT_UPDATE		= 2, /* write/insert */
-	DAOS_INTENT_PUNCH		= 3, /* punch/delete */
-	DAOS_INTENT_MIGRATION		= 4, /* for migration related scan */
-	DAOS_INTENT_CHECK		= 5, /* check aborted or not */
-	DAOS_INTENT_KILL		= 6, /* delete object/key */
-	DAOS_INTENT_IGNORE_NONCOMMITTED	= 7, /* ignore non-committed DTX. */
-	DAOS_INTENT_DISCARD		= 8, /* discard data */
+	DAOS_INTENT_DEFAULT             = 0, /* fetch/enumerate/query */
+	DAOS_INTENT_PURGE               = 1, /* purge/aggregation */
+	DAOS_INTENT_UPDATE              = 2, /* write/insert */
+	DAOS_INTENT_PUNCH               = 3, /* punch/delete */
+	DAOS_INTENT_MIGRATION           = 4, /* for migration related scan */
+	DAOS_INTENT_CHECK               = 5, /* check aborted or not */
+	DAOS_INTENT_KILL                = 6, /* delete object/key */
+	DAOS_INTENT_IGNORE_NONCOMMITTED = 7, /* ignore non-committed DTX. */
+	DAOS_INTENT_DISCARD             = 8, /* discard data */
+	DAOS_INTENT_MARK                = 9, /* mark target (obj/dkey/akey), such as corruption */
 };
 
 /**

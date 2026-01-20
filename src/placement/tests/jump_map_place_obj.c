@@ -305,14 +305,17 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	int		ntargets;
 	int		rc, i;
 	d_rank_list_t	rank_list;
-	uint32_t	domains[] = {255, 0, 5, /* root */
-				     1, 101, 1,
+	/* clang-format off */
+	uint32_t	domains[] = {2, 1, 5, /* root */
+				     1, 101, 1, /* nodes */
 				     1, 102, 1,
 				     1, 103, 1,
 				     1, 104, 1,
 				     1, 105, 1};
+	/* clang-format on */
 	const size_t	tuple_size = 3;
 	const size_t	max_domains = 5;
+	const size_t     md_len      = 1;
 	uint32_t	domain_tree_len;
 	uint32_t	domains_only_len;
 	uint32_t	ranks_per_domain;
@@ -337,19 +340,19 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	}
 
 	domains_only_len = (domain_count + 1) * tuple_size;
-	domain_tree_len = domains_only_len + node_count;
+	domain_tree_len  = md_len + domains_only_len + node_count;
 	D_ALLOC_ARRAY(domain_tree, domain_tree_len);
 	assert_non_null(domain_tree);
 
-	memcpy(domain_tree, domains,
-	       sizeof(uint32_t) * domains_only_len);
+	memcpy(&domain_tree[md_len], domains, sizeof(uint32_t) * domains_only_len);
 
 	rank_list.rl_nr = node_count;
 	D_ALLOC_ARRAY(rank_list.rl_ranks, node_count);
 	assert_non_null(rank_list.rl_ranks);
 	for (i = 0; i < node_count; i++) {
-		uint32_t idx = domains_only_len + i;
+		uint32_t idx = md_len + domains_only_len + i;
 
+		assert_in_range(idx, md_len + domains_only_len, domain_tree_len - 1);
 		domain_tree[idx] = ctx->domain_nr + i;
 		rank_list.rl_ranks[i] = ctx->domain_nr + i;
 	}
@@ -361,8 +364,8 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
-	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count,
-			  ntargets, domain_tree, target_count);
+	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count, ntargets,
+			  domain_tree, target_count);
 	D_FREE(domain_tree);
 	assert_success(rc);
 
@@ -1196,10 +1199,10 @@ down_back_to_up_in_same_order(void **state)
 	 * healthy targets because of the retry/collision mechanism of the jump
 	 * map algorithm.
 	 * Due to layout colocation, if the oid has been changed, then it could
-	 * be 2 or even 3 as well, with current oid setting, this is 1.
+	 * be 2 or even 3 as well, with current oid setting, this is 2.
 	 */
-	assert_int_equal(1, ctx.reint.out_nr);
-	jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 1);
+	assert_int_equal(2, ctx.reint.out_nr);
+	jtc_assert_rebuild_reint_new(ctx, 2, 0, 2, 2);
 
 	/* Take second downed target up */
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[1]);
@@ -1674,14 +1677,14 @@ placement_handles_multiple_states_with_addition(void **state)
 	rebuilding = jtc_get_layout_rebuild_count(&ctx);
 
 	/* 1 each for down, up, new ... maybe? */
-	assert_true(rebuilding == 2 || rebuilding == 3);
+	assert_true(rebuilding == 2 || rebuilding == 3 || rebuilding == 4);
 
 	/* Both DOWN and UP target will be remapped during remap */
-	assert_int_equal(ctx.rebuild.out_nr, 2);
+	assert_int_equal(ctx.rebuild.out_nr, 3);
 	/* Adding new targets might make original shard to be remapped
 	 * to new location.
 	 */
-	assert_true(ctx.reint.out_nr == 1 || ctx.reint.out_nr == 2);
+	assert_true(ctx.reint.out_nr == 1 || ctx.reint.out_nr == 2 || ctx.reint.out_nr == 3);
 
 	/* JCH might cause multiple shards remap to the new target */
 	assert_true(ctx.new.out_nr >= 1);

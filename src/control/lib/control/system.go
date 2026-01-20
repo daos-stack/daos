@@ -88,6 +88,9 @@ func (resp *sysResponse) setAbsentHostsRanks(inHosts, inRanks string) error {
 }
 
 func (resp *sysResponse) getAbsentHostsRanksErrors() error {
+	if resp == nil {
+		return nil
+	}
 	var errMsgs []string
 
 	if resp.AbsentHosts.Count() > 0 {
@@ -105,6 +108,9 @@ func (resp *sysResponse) getAbsentHostsRanksErrors() error {
 }
 
 func (resp *sysResponse) getErrors(errIn error) error {
+	if resp == nil {
+		return nil
+	}
 	if errIn != nil {
 		errIn = errors.Errorf("check results for %s", errIn.Error())
 	}
@@ -128,6 +134,7 @@ type SystemJoinReq struct {
 	InstanceIdx          uint32              `json:"idx"`
 	Incarnation          uint64              `json:"incarnation"`
 	CheckMode            bool                `json:"check_mode"`
+	Replace              bool                `json:"replace"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -241,9 +248,10 @@ func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
 
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
-	sysResponse `json:"-"`
-	Members     system.Members `json:"members"`
-	Providers   []string       `json:"providers"`
+	sysResponse       `json:"-"`
+	Members           system.Members `json:"members"`
+	Providers         []string       `json:"providers"`
+	SysSelfHealPolicy string         `json:"sys_self_heal_policy"`
 }
 
 // Wrap sysResponse handling of absent hosts and ranks in a helper to be called from response
@@ -286,6 +294,9 @@ func (resp *SystemQueryResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system query response.
 func (resp *SystemQueryResp) Errors() error {
+	if resp == nil {
+		return nil
+	}
 	return resp.sysResponse.getErrors(nil)
 }
 
@@ -362,6 +373,7 @@ type SystemStartReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
+	IgnoreAdminExcluded bool // Ignore AdminExcluded ranks in the Ranks/Hosts lists
 }
 
 // SystemStartResp contains the request response.
@@ -389,6 +401,12 @@ func (resp *SystemStartResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system start response.
 func (resp *SystemStartResp) Errors() error {
+	if resp == nil {
+		return nil
+	}
+	if resp.Results == nil {
+		return resp.sysResponse.getErrors(nil)
+	}
 	return resp.sysResponse.getErrors(resp.Results.Errors())
 }
 
@@ -404,9 +422,10 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 	}
 
 	pbReq := &mgmtpb.SystemStartReq{
-		Hosts: req.Hosts.String(),
-		Ranks: req.Ranks.String(),
-		Sys:   req.getSystem(rpcClient),
+		Hosts:               req.Hosts.String(),
+		Ranks:               req.Ranks.String(),
+		Sys:                 req.getSystem(rpcClient),
+		IgnoreAdminExcluded: req.IgnoreAdminExcluded,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
@@ -427,7 +446,9 @@ type SystemStopReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
-	Force bool
+	Force               bool
+	Full                bool
+	IgnoreAdminExcluded bool // Ignore any ranks in the rank/host list in the AdminExcluded state
 }
 
 // SystemStopResp contains the request response.
@@ -455,6 +476,12 @@ func (resp *SystemStopResp) UnmarshalJSON(data []byte) error {
 // Errors returns a single error combining all error messages associated with a
 // system stop response.
 func (resp *SystemStopResp) Errors() error {
+	if resp == nil {
+		return nil
+	}
+	if resp.Results == nil {
+		return resp.sysResponse.getErrors(nil)
+	}
 	return resp.sysResponse.getErrors(resp.Results.Errors())
 }
 
@@ -469,12 +496,22 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	if req == nil {
 		return nil, errors.Errorf("nil %T request", req)
 	}
+	if req.Force && req.Full {
+		return nil, errors.New("force and full options may not be mixed")
+	}
+	if req.Full && req.Hosts.String() != "" {
+		return nil, errors.New("full and hosts options may not be mixed")
+	}
+	if req.Full && req.Ranks.String() != "" {
+		return nil, errors.New("full and ranks options may not be mixed")
+	}
 
 	pbReq := &mgmtpb.SystemStopReq{
-		Hosts: req.Hosts.String(),
-		Ranks: req.Ranks.String(),
-		Sys:   req.getSystem(rpcClient),
-		Force: req.Force,
+		Hosts:               req.Hosts.String(),
+		Ranks:               req.Ranks.String(),
+		Sys:                 req.getSystem(rpcClient),
+		Force:               !req.Full, // Force used unless full graceful shutdown requested.
+		IgnoreAdminExcluded: req.IgnoreAdminExcluded,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
@@ -538,6 +575,9 @@ type SystemExcludeResp struct {
 // response. Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be
 // populated in SystemExcludeResp.
 func (resp *SystemExcludeResp) Errors() error {
+	if resp == nil || resp.Results == nil {
+		return nil
+	}
 	return resp.Results.Errors()
 }
 
@@ -565,18 +605,10 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 
 	resp := new(SystemExcludeResp)
 	return resp, convertMSResponse(ur, resp)
-}
 
-// PoolRankResult describes the result of an OSA operation on a pool's ranks.
-type PoolRankResult struct {
-	Status int32  `json:"status"`  // Status returned from a specific OSA dRPC call
-	Msg    string `json:"msg"`     // Error message if Status is not Success
-	PoolID string `json:"pool_id"` // Unique identifier for pool
-	Ranks  string `json:"ranks"`   // RankSet of ranks that should be operated on
+	// DAOS-17289 TODO: Perform SystemDrain with Exclude flag set in request so that PoolExclude
+	//                  gets called for each of the rank's pools.
 }
-
-// PoolRankResults is an alias for a PoolRankResult slice.
-type PoolRankResults []*PoolRankResult
 
 // SystemDrainReq contains the inputs for the system drain request.
 type SystemDrainReq struct {
@@ -591,18 +623,20 @@ type SystemDrainReq struct {
 // in the response so decoding is not required.
 type SystemDrainResp struct {
 	sysResponse `json:"-"`
-	Results     PoolRankResults `json:"results"`
+	Responses   []*PoolRanksResp `json:"responses"`
 }
 
 // Errors returns a single error combining all error messages associated with pool-rank results.
 // Doesn't retrieve errors from sysResponse because missing ranks or hosts will not be returned.
 func (resp *SystemDrainResp) Errors() (err error) {
-	for _, r := range resp.Results {
-		if r.Status != int32(daos.Success) {
-			err = concatErrs(err,
-				errors.Errorf("pool %s ranks %s: %s", r.PoolID, r.Ranks, r.Msg))
-		}
+	if resp == nil || len(resp.Responses) == 0 {
+		return
 	}
+
+	for _, resp := range resp.Responses {
+		err = concatErrs(err, resp.Errors())
+	}
+
 	return
 }
 
@@ -617,7 +651,7 @@ func SystemDrain(ctx context.Context, rpcClient UnaryInvoker, req *SystemDrainRe
 	pbReq := &mgmtpb.SystemDrainReq{
 		Hosts: req.Hosts.String(),
 		Ranks: req.Ranks.String(),
-		Sys:   req.getSystem(rpcClient),
+		Sys:   req.Sys, // getSystem() used in control API drain/reint later in call-stack.
 		Reint: req.Reint,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
@@ -649,6 +683,9 @@ type SystemEraseResp struct {
 
 // Errors returns error if any of the results indicate a failure.
 func (resp *SystemEraseResp) Errors() error {
+	if resp == nil || resp.Results == nil {
+		return nil
+	}
 	return resp.Results.Errors()
 }
 
@@ -986,8 +1023,11 @@ type SystemCleanupResp struct {
 
 // Errors returns a single error combining all error messages associated with a
 // system cleanup response.
-func (scr *SystemCleanupResp) Errors() (errOut error) {
-	for _, r := range scr.Results {
+func (resp *SystemCleanupResp) Errors() (errOut error) {
+	if resp == nil || resp.Results == nil {
+		return
+	}
+	for _, r := range resp.Results {
 		if r.Status != int32(daos.Success) {
 			errOut = concatErrs(errOut, errors.New(r.Msg))
 		}
@@ -1029,7 +1069,6 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 type SystemSetAttrReq struct {
 	unaryRequest
 	msRequest
-
 	Attributes map[string]string
 }
 
@@ -1064,7 +1103,6 @@ type (
 	SystemGetAttrReq struct {
 		unaryRequest
 		msRequest
-
 		Keys []string
 	}
 
@@ -1102,7 +1140,6 @@ func SystemGetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetAt
 type SystemSetPropReq struct {
 	unaryRequest
 	msRequest
-
 	Properties map[daos.SystemPropertyKey]daos.SystemPropertyValue
 }
 
@@ -1140,7 +1177,6 @@ type (
 	SystemGetPropReq struct {
 		unaryRequest
 		msRequest
-
 		Keys []daos.SystemPropertyKey
 	}
 
@@ -1206,4 +1242,126 @@ func SystemGetProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetPr
 	}
 
 	return resp, nil
+}
+
+// SystemRebuildManageReq sends an interactive pool rebuild request to each pool in a DAOS system.
+type SystemRebuildManageReq struct {
+	unaryRequest
+	msRequest
+	OpCode PoolRebuildOpCode // Which pool rebuild operation to trigger
+	Force  bool              // Applies to stop interactive rebuild only
+}
+
+// PoolRebuildManageResult describe the result of an interactive rebuild operation on a given pool.
+type PoolRebuildManageResult struct {
+	ID      string            `json:"id"`
+	OpCode  PoolRebuildOpCode `json:"op_code"`
+	Errored bool              `json:"errored"`
+	Msg     string            `json:"msg"`
+}
+
+// SystemRebuildManageResp contains the request response.
+type SystemRebuildManageResp struct {
+	Results []*PoolRebuildManageResult `json:"results"`
+}
+
+// Errors returns a single error combining all error messages associated with pool-rank results.
+func (resp *SystemRebuildManageResp) Errors() error {
+	if resp == nil {
+		return errors.Errorf("nil %T", resp)
+	}
+
+	var err error
+	for _, res := range resp.Results {
+		if res.Errored {
+			err = concatErrs(err,
+				errors.Errorf("pool-rebuild %s failed on pool %s: %s",
+					res.OpCode, res.ID, res.Msg))
+		}
+	}
+
+	return err
+}
+
+// SystemRebuildManage will apply interactive rebuild operation to all pools.
+func SystemRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *SystemRebuildManageReq) (*SystemRebuildManageResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+	if !req.OpCode.IsValid() {
+		return nil, errors.Errorf("invalid pool-rebuild opcode %d", req.OpCode)
+	}
+	if req.Force && req.OpCode != PoolRebuildOpCodeStop {
+		return nil, errors.New("force flag only supported with rebuild stop opcode")
+	}
+
+	pbReq := &mgmtpb.SystemRebuildManageReq{
+		Sys:    req.getSystem(rpcClient),
+		OpCode: uint32(req.OpCode),
+		Force:  req.Force,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemRebuildManage(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS system rebuild request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemRebuildManageResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemSelfHealEvalReq sends a request to evaluate self_heal system property in a DAOS system.
+type SystemSelfHealEvalReq struct {
+	unaryRequest
+	msRequest
+}
+
+// SystemSelfHealEvalResp contains the response.
+type SystemSelfHealEvalResp struct {
+}
+
+// Errors returns collective error for response.
+func (resp *SystemSelfHealEvalResp) Errors() error {
+	return nil
+}
+
+// SystemSelfHealEval will trigger actions based on the value of the system self_heal property.
+func SystemSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *SystemSelfHealEvalReq) (*SystemSelfHealEvalResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemSelfHealEvalReq{
+		Sys: req.getSystem(rpcClient),
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemSelfHealEval(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS system self-heal eval request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := "system self-heal eval failed"
+	msErr := ur.getMSError()
+	if msErr != nil {
+		return nil, errors.Wrap(msErr, msg)
+	}
+	resp := new(mgmtpb.DaosResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, errors.Wrap(err, msg)
+	}
+
+	rpcClient.Debugf("resp: %+v", resp)
+	if s := daos.Status(resp.Status); s != daos.Success {
+		return nil, errors.Wrap(s, msg)
+	}
+
+	return new(SystemSelfHealEvalResp), nil
 }

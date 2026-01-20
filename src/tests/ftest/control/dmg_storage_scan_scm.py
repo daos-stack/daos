@@ -1,12 +1,13 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 from control_test_base import ControlTestBase
-from general_utils import pcmd, run_pcmd
+from run_utils import run_remote
 
 
 class DmgStorageScanSCMTest(ControlTestBase):
@@ -42,21 +43,18 @@ class DmgStorageScanSCMTest(ControlTestBase):
         for scm_namespace in storage_dict["scm_namespaces"]:
             # Verify that all namespaces exist under /dev.
             pmem_name = scm_namespace["blockdev"]
-            lscmd = "{} {}".format("ls", os.path.join("/dev", pmem_name))
-            # rc is a dictionary where return code is the key.
-            rc = pcmd(hosts=self.hostlist_servers, command=lscmd)
-
-            if 0 not in rc:
-                errors.append("{} didn't exist under /dev!".format(pmem_name))
+            ls_cmd = f"ls {os.path.join('/dev', pmem_name)}"
+            if not run_remote(self.log, self.hostlist_servers, ls_cmd).passed:
+                errors.append(f"{pmem_name} didn't exist under /dev!")
 
             # Verify the Socket ID.
-            numa_node_path = "/sys/class/block/{}/device/numa_node".format(
-                pmem_name)
-            command = "cat {}".format(numa_node_path)
-            out_list = run_pcmd(hosts=self.hostlist_servers, command=command)
-
-            # This one is in str.
-            expected_numa_node = out_list[0]["stdout"][0]
+            numa_node_path = os.path.join(
+                os.sep, "sys", "class", "block", pmem_name, "device", "numa_node")
+            command = f"cat {numa_node_path}"
+            result = run_remote(self.log, self.hostlist_servers, command)
+            if not result.passed:
+                errors.append(f"{command} failed on {result.failed_hosts}")
+            expected_numa_node = result.joined_stdout
             actual_numa_node = str(scm_namespace["numa_node"])
 
             if expected_numa_node != actual_numa_node:

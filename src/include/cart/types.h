@@ -352,6 +352,7 @@ struct crt_bulk_cb_info {
 	struct crt_bulk_desc	*bci_bulk_desc; /**< bulk descriptor */
 	void			*bci_arg; /**< User passed in arg */
 	int			 bci_rc; /**< return code */
+	void                    *bci_complete_cb; /**< completion callback */
 };
 
 /**
@@ -443,6 +444,9 @@ typedef enum {
 typedef enum {
 	/** Limit of number of inflight rpcs */
 	CRT_QUOTA_RPCS,
+
+	/** Limit of number of registered bulk handles */
+	CRT_QUOTA_BULKS,
 
 	/** Total count of supported quotas */
 	CRT_QUOTA_COUNT,

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,7 +150,7 @@ setup_local_args(void **state)
 	memset(&local_args, 0, sizeof(local_args));
 
 	/** i.a. recreates the container */
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	/** prepare OID */
 	la->oid = gen_oid(arg->otype);

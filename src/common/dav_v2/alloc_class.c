@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /* Copyright 2016-2024, Intel Corporation */
+/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
 
 /*
  * alloc_class.c -- implementation of allocation classes
@@ -93,7 +94,8 @@ static const struct {
 /*
  * Target number of allocations per run instance.
  */
-#define RUN_MIN_NALLOCS 200
+#define RUN_MIN_NALLOCS                 200
+#define RUN_MIN_NALLOCS_EMB             68
 
 /*
  * Hard limit of chunks per single run.
@@ -268,10 +270,11 @@ alloc_class_delete(struct alloc_class_collection *ac,
  * If no such class exists, create one.
  */
 static struct alloc_class *
-alloc_class_find_or_create(struct alloc_class_collection *ac, size_t n)
+alloc_class_find_or_create(struct alloc_class_collection *ac, size_t n, bool evictable_mb)
 {
 	COMPILE_ERROR_ON(MAX_ALLOCATION_CLASSES > UINT8_MAX);
-	uint64_t required_size_bytes = n * RUN_MIN_NALLOCS;
+	uint32_t run_min_nallocs     = evictable_mb ? RUN_MIN_NALLOCS_EMB : RUN_MIN_NALLOCS;
+	uint64_t required_size_bytes = n * run_min_nallocs;
 	uint32_t required_size_idx = 1;
 
 	if (required_size_bytes > RUN_DEFAULT_SIZE) {
@@ -401,7 +404,7 @@ alloc_class_find_min_frag(struct alloc_class_collection *ac, size_t n)
  * alloc_class_collection_new -- creates a new collection of allocation classes
  */
 struct alloc_class_collection *
-alloc_class_collection_new()
+alloc_class_collection_new(bool evictable_mb)
 {
 	struct alloc_class_collection *ac;
 
@@ -451,7 +454,7 @@ alloc_class_collection_new()
 		size_t n = categories[c - 1].size + ALLOC_BLOCK_SIZE_GEN;
 
 		do {
-			if (alloc_class_find_or_create(ac, n) == NULL)
+			if (alloc_class_find_or_create(ac, n, evictable_mb) == NULL)
 				goto error;
 
 			float stepf = (float)n * categories[c].step;

@@ -1,10 +1,9 @@
 """
 (C) Copyright 2022-2023 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
-
 from general_utils import bytes_to_human
 from pool_create_all_base import PoolCreateAllTestBase
 
@@ -71,7 +70,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         :avocado: tags=PoolCreateAllVmTests,test_rank_filter
         """
         ranks = list(range(self.engines_count))
-        random.shuffle(ranks)
+        self.random.shuffle(ranks)
         ranks = ranks[(len(ranks) // 2):]
         delta_bytes = self.params.get("delta", "/run/test_rank_filter/*", 0)
         self.log.info("Test ranks filtered pool creation with full storage")
@@ -157,6 +156,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             "distribution",
             "/run/test_two_pools_vm/deltas/*",
             0)
+        # pylint: disable-next=logging-too-few-args
         self.log.info(
             "Test pool creation of two pools with 50% and 100% of the available storage")
         for name in ('pool_half', 'pool_full', 'distribution'):
@@ -164,11 +164,13 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             self.log.info("\t- %s=%s (%d Bytes)", name, bytes_to_human(val), val)
         self.log.info("\t- scm_hugepages_enabled=%s", self.scm_hugepages_enabled)
 
+        # pylint: disable-next=logging-format-truncated
         self.log.info("Creating first pool with half of the available storage: size=50%")
         self.check_pool_half_storage(pool_half_delta_bytes)
 
         self.log.info("Checking data distribution among the different engines")
         self.check_pool_distribution(distribution_delta_bytes)
 
+        # pylint: disable-next=logging-format-truncated
         self.log.info("Creating second pool with all the available storage: size=100%")
         self.check_pool_full_storage(pool_full_delta_bytes)

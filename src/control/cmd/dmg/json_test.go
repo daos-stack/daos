@@ -86,7 +86,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
 				testArgs = append(testArgs, "-s", "1TB", "label")
-			case "pool destroy", "pool evict", "pool query", "pool get-acl", "pool upgrade":
+			case "pool destroy", "pool evict", "pool query", "pool get-acl", "pool upgrade",
+				"pool rebuild start", "pool rebuild stop":
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool overwrite-acl", "pool update-acl":
 				testArgs = append(testArgs, test.MockUUID(), "-a", aclPath)
@@ -96,10 +97,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, test.MockUUID(), "label:foo")
 			case "pool get-prop":
 				testArgs = append(testArgs, test.MockUUID(), "label")
-			case "pool extend":
+			case "pool extend", "pool exclude", "pool drain", "pool reintegrate":
 				testArgs = append(testArgs, test.MockUUID(), "--ranks", "0")
-			case "pool exclude", "pool drain", "pool reintegrate":
-				testArgs = append(testArgs, test.MockUUID(), "--rank", "0")
 			case "pool query-targets":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":

@@ -293,10 +293,10 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 	}
 }
 
-void
-daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink)
+static void
+lru_ref_wait(struct daos_lru_cache *lcache, struct daos_llink *llink, bool evict)
 {
-	if (!llink->ll_evicted)
+	if (evict && !llink->ll_evicted)
 		daos_lru_ref_evict(lcache, llink);
 
 	if (lcache->dlc_ops->lop_wait && !daos_lru_is_last_user(llink)) {
@@ -310,4 +310,16 @@ daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink)
 		lcache->dlc_ops->lop_wait(llink);
 		llink->ll_wait_evict = 0;
 	}
+}
+
+void
+daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink)
+{
+	lru_ref_wait(lcache, llink, true);
+}
+
+void
+daos_lru_ref_noevict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink)
+{
+	lru_ref_wait(lcache, llink, false);
 }

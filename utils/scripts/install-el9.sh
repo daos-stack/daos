@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (C) Copyright 2025 Google LLC
 
 # Install OS updates and packages as required for building DAOS on EL 9 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -10,17 +11,22 @@
 
 set -e
 
-dnf --nodocs install \
+dnf_install_args="${1:-}"
+
+# shellcheck disable=SC2086
+dnf --nodocs install ${dnf_install_args} \
     boost-python3-devel \
     bzip2 \
     capstone-devel \
     clang \
     clang-tools-extra \
     cmake \
+    createrepo \
     CUnit-devel \
     daxctl-devel \
     diffutils \
     e2fsprogs \
+    fdupes \
     file \
     flex \
     fuse3 \
@@ -31,28 +37,37 @@ dnf --nodocs install \
     golang \
     graphviz \
     help2man \
+    hdf5-devel \
     hwloc-devel \
     ipmctl \
     java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
+    libasan \
     libcmocka-devel \
     libevent-devel \
     libipmctl-devel \
+    libibverbs-devel \
     libiscsi-devel \
+    libnl3-devel \
+    libpsm2-devel \
+    librdmacm-devel \
     libtool \
     libtool-ltdl-devel \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
     lz4-devel \
+    Lmod \
     make \
+    nasm \
     ndctl \
     ndctl-devel \
     numactl \
     numactl-devel \
     openmpi-devel \
     openssl-devel \
+    pandoc \
     patch \
     patchelf \
     pciutils \
@@ -60,8 +75,20 @@ dnf --nodocs install \
     protobuf-c-devel \
     python3-devel \
     python3-pip \
+    rpm-build \
     sg3_utils \
+    squashfs-tools \
     sudo \
     valgrind-devel \
     which \
+    ncurses-devel \
     yasm
+
+ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
+# shellcheck disable=SC2086
+dnf --nodocs install ${dnf_install_args} \
+    "@ruby:${ruby_version}" \
+    rubygems \
+    rubygem-json
+
+gem install fpm

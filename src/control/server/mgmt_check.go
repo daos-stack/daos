@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,7 +53,7 @@ func (svc *mgmtSvc) checkerIsEnabled() bool {
 	value, err := system.GetMgmtProperty(svc.sysdb, checkerEnabledKey)
 	if err != nil {
 		if !system.IsNotLeader(err) && !system.IsErrSystemAttrNotFound(err) &&
-			!system.IsNotReplica(err) {
+			!system.IsNotReplica(err) && !errors.Is(err, system.ErrUninitialized) {
 			svc.log.Errorf("failed to get checker enabled value: %s", err)
 		}
 		return false
@@ -250,7 +252,7 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		svc.log.Errorf("failed to save the policies used: %s", err.Error())
 	}
 
-	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStart, req)
+	dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerStart, req)
 	if err != nil {
 		return nil, err
 	}
@@ -261,22 +263,70 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	}
 
 	if resp.Status > 0 {
-		if len(req.Uuids) == 0 {
-			svc.log.Debug("resetting checker findings DB")
-			if err := svc.sysdb.ResetCheckerData(); err != nil {
-				return nil, errors.Wrap(err, "failed to reset checker finding database")
-			}
-		} else {
-			pools := strings.Join(req.Uuids, ", ")
-			svc.log.Debugf("removing old checker findings for pools: %s", pools)
-			if err := svc.sysdb.RemoveCheckerFindingsForPools(req.Uuids...); err != nil {
-				return nil, errors.Wrapf(err, "failed to remove old findings for pools: %s", pools)
-			}
+		// Checker instance was reset. We can safely clear all findings related to any pools
+		// requested.
+		if err := svc.resetFindings(req.Uuids); err != nil {
+			return nil, err
 		}
 		resp.Status = 0 // reset status to indicate success
 	}
 
+	// If either the checker was not reset, or it was only reset against specified pools above,
+	// there may still be unresolved findings in the DB that need to be marked stale or removed.
+	if resp.Status == 0 {
+		svc.handleUnresolvedInteractions(req.Uuids)
+	}
+
 	return resp, nil
+}
+
+func (svc *mgmtSvc) resetFindings(uuids []string) error {
+	if len(uuids) == 0 {
+		svc.log.Debug("resetting checker findings DB")
+		if err := svc.sysdb.ResetCheckerData(); err != nil {
+			return errors.Wrap(err, "failed to reset checker finding database")
+		}
+	} else {
+		pools := strings.Join(uuids, ", ")
+		svc.log.Debugf("removing old checker findings for pools: %s", pools)
+		if err := svc.sysdb.RemoveCheckerFindingsForPools(uuids...); err != nil {
+			return errors.Wrapf(err, "failed to remove old findings for pools: %s", pools)
+		}
+	}
+	return nil
+}
+
+// handleUnresolvedInteractions goes through all unresolved (INTERACT/STALE) findings in the database.
+// Those that will be rediscovered in the next run can be removed. All others must be marked stale
+// as the user will be unable to act on them after the new check instance started. To fix the
+// inconsistency, they'll need to re-run the checker on the affected pool.
+func (svc *mgmtSvc) handleUnresolvedInteractions(uuids []string) {
+	findings, err := svc.sysdb.GetCheckerFindings()
+	if err != nil {
+		svc.log.Errorf("unable to fetch old checker findings: %s", err.Error())
+		return
+	}
+
+	uuidSet := common.NewStringSet(uuids...)
+	for _, f := range findings {
+		switch f.Action {
+		case chkpb.CheckInconsistAction_CIA_INTERACT, chkpb.CheckInconsistAction_CIA_STALE:
+			if len(uuids) == 0 || uuidSet.Has(f.PoolUuid) {
+				// Unresolved interactive and stale findings for pools that will be scanned will be re-discovered.
+				svc.log.Debugf("removing unresolved %s finding %d for pool %s", f.Action, f.Seq, f.PoolUuid)
+				if err := svc.sysdb.RemoveCheckerFinding(f); err != nil {
+					svc.log.Errorf("unable to remove stale checker finding %s: %s", f, err.Error())
+				}
+			} else if f.Action != chkpb.CheckInconsistAction_CIA_STALE { // No need to re-mark stale interactions
+				// If the pool isn't being re-checked, we should keep the unresolved finding, but the user
+				// won't be able to act on it anymore.
+				svc.log.Debugf("marking unresolved interaction %d stale for pool %s", f.Seq, f.PoolUuid)
+				if err := svc.sysdb.SetCheckerFindingAction(f.Seq, int32(chkpb.CheckInconsistAction_CIA_STALE)); err != nil {
+					svc.log.Errorf("unable to mark interactive finding %s stale: %s", f, err.Error())
+				}
+			}
+		}
+	}
 }
 
 func (svc *mgmtSvc) mergePoliciesWithCurrent(policies []*mgmtpb.CheckInconsistPolicy) ([]*mgmtpb.CheckInconsistPolicy, error) {
@@ -307,7 +357,7 @@ func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopRe
 		return nil, err
 	}
 
-	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStop, req)
+	dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerStop, req)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +390,7 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 	reports := []*chkpb.CheckReport{}
 
 	if !req.Shallow {
-		dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerQuery, req)
+		dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerQuery, req)
 		if err != nil {
 			return nil, err
 		}
@@ -499,7 +549,7 @@ func (svc *mgmtSvc) setCheckerPolicyMap(polList []*mgmtpb.CheckInconsistPolicy) 
 	return system.SetMgmtProperty(svc.sysdb, checkerPoliciesKey, string(polStr))
 }
 
-// SystemCheckSetPolicy sets checker policies in the policy map.
+// SystemCheckSetPolicy sets checker policies to the checker instance (if running) and in the policy map.
 func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckSetPolicyReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -507,6 +557,20 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 
 	if err := svc.verifyCheckerReady(); err != nil {
 		return nil, err
+	}
+
+	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerSetPolicy, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.DaosResp)
+	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
+	}
+
+	if resp.Status != 0 {
+		return nil, errors.Wrap(daos.ErrorFromRC(int(resp.Status)), "checker set-policy failed")
 	}
 
 	policies, err := svc.mergePoliciesWithCurrent(req.Policies)
@@ -536,7 +600,7 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, errors.Errorf("invalid action %s (must be one of %s)", req.Act, f.ValidChoicesString())
 	}
 
-	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerAction, req)
+	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerAction, req)
 	if err != nil {
 		return nil, err
 	}

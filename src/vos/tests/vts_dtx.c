@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,40 +51,13 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 
 	vts_init_dte(&dth->dth_dte);
 
-	dth->dth_coh = coh;
-	dth->dth_epoch = epoch;
-	dth->dth_leader_oid = *oid;
-
-	dth->dth_pinned = 0;
-	dth->dth_sync = 0;
-	dth->dth_cos_done = 0;
-	dth->dth_touched_leader_oid = 0;
-	dth->dth_local_tx_started = 0;
-	dth->dth_solo = 0;
-	dth->dth_drop_cmt = 0;
-	dth->dth_modify_shared = 0;
-	dth->dth_active = 0;
-	dth->dth_dist = 0;
-	dth->dth_for_migration = 0;
-	dth->dth_ignore_uncommitted = 0;
-	dth->dth_prepared = 0;
-	dth->dth_epoch_owner = 0;
-	dth->dth_aborted = 0;
-	dth->dth_already = 0;
-	dth->dth_need_validation = 0;
-
-	dth->dth_dti_cos_count = 0;
-	dth->dth_dti_cos = NULL;
-	dth->dth_ent = NULL;
-	dth->dth_flags = DTE_LEADER;
+	dth->dth_coh              = coh;
+	dth->dth_epoch            = epoch;
+	dth->dth_leader_oid       = *oid;
+	dth->dth_flags            = DTE_LEADER;
 	dth->dth_modification_cnt = 1;
-
-	dth->dth_op_seq = 1;
-	dth->dth_oid_cnt = 0;
-	dth->dth_oid_cap = 0;
-	dth->dth_oid_array = NULL;
-
-	dth->dth_dkey_hash = dkey_hash;
+	dth->dth_op_seq           = 1;
+	dth->dth_dkey_hash        = dkey_hash;
 
 	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
@@ -791,21 +764,22 @@ dtx_17(void **state)
 static void
 dtx_18(void **state)
 {
-	struct io_test_args		*args = *state;
-	struct dtx_id			 xid[10];
-	daos_iod_t			 iod = { 0 };
-	d_sg_list_t			 sgl = { 0 };
-	daos_recx_t			 rex = { 0 };
-	daos_key_t			 dkey;
-	daos_key_t			 akey;
-	d_iov_t				 val_iov;
-	uint64_t			 epoch;
-	char				 dkey_buf[UPDATE_DKEY_SIZE];
-	char				 akey_buf[UPDATE_AKEY_SIZE];
-	char				 update_buf[UPDATE_BUF_SIZE];
-	char				 fetch_buf[UPDATE_BUF_SIZE];
-	int				 rc;
-	int				 i;
+	struct io_test_args *args = *state;
+	struct dtx_id        xid[10];
+	daos_iod_t           iod = {0};
+	d_sg_list_t          sgl = {0};
+	daos_recx_t          rex = {0};
+	daos_key_t           dkey;
+	daos_key_t           akey;
+	d_iov_t              val_iov;
+	uint64_t             epoch;
+	uint64_t             cnt;
+	char                 dkey_buf[UPDATE_DKEY_SIZE];
+	char                 akey_buf[UPDATE_AKEY_SIZE];
+	char                 update_buf[UPDATE_BUF_SIZE];
+	char                 fetch_buf[UPDATE_BUF_SIZE];
+	int                  rc;
+	int                  i;
 
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
@@ -841,9 +815,17 @@ dtx_18(void **state)
 
 	sleep(3);
 
-	/* Aggregate the DTXs. */
-	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl);
+	rc = vos_dtx_get_cmt_stat(args->ctx.tc_co_hdl, &cnt, NULL);
 	assert_rc_equal(rc, 0);
+	assert_int_equal(cnt, 10);
+
+	/* Aggregate the DTXs. */
+	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = vos_dtx_get_cmt_stat(args->ctx.tc_co_hdl, &cnt, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cnt, 0);
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, false);
@@ -864,7 +846,7 @@ dtx_18(void **state)
 static int
 dtx_tst_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE);
+	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	return 0;
 }
 

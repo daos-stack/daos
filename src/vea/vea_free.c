@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -766,7 +767,12 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_entry *vfe)
 	return 0;
 }
 
-#define EXPIRE_INTVL		10	/* seconds */
+/*
+ * Tune the EXPIRE_INTVL & FLUSH_INTVL with extreme care. While decreasing these
+ * values could be beneficial for accelerating space reclamation in overwrite mode,
+ * it is generally detrimental in punch mode. DAOS-18012.
+ */
+#define EXPIRE_INTVL            10              /* seconds */
 #define UNMAP_SIZE_THRESH	(1UL << 20)	/* 1MB */
 
 static int

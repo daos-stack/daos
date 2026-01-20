@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,9 +10,8 @@ import site
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
-from util.host_utils import get_local_host
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
-                                get_common_provider, get_fastest_interface)
+                                get_common_provider, get_fastest_interfaces)
 from util.run_utils import run_remote
 
 
@@ -109,6 +109,7 @@ class TestEnvironment():
         'bullseye_file': 'COVFILE',
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
+        'systemd_path': 'DAOS_TEST_SYSTEMD_PATH',
         'systemd_library_path': 'DAOS_TEST_SYSTEMD_LIBRARY_PATH',
         'control_config': 'DAOS_TEST_CONTROL_CONFIG',
         'agent_config': 'DAOS_TEST_AGENT_CONFIG',
@@ -120,7 +121,7 @@ class TestEnvironment():
         self.set_defaults(None)
 
     def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None,
-                     agent_user=None, log_dir=None, systemd_lib_path=None):
+                     agent_user=None, log_dir=None, systemd_path=None, systemd_library_path=None):
         """Set the default test environment variable values with optional inputs.
 
         Args:
@@ -135,7 +136,8 @@ class TestEnvironment():
             agent_user (str, optional): user account to use when running the daos_agent. Defaults
                 to None.
             log_dir (str, optional): test log directory base path. Defaults to None.
-            systemd_lib_path (str, optional): systemd library path. Defaults to None.
+            systemd_path (str, optional): systemd path. Defaults to None.
+            systemd_library_path (str, optional): systemd library path. Defaults to None.
 
         Raises:
             TestEnvironmentException: if there are any issues setting environment variable default
@@ -154,8 +156,10 @@ class TestEnvironment():
             self.insecure_mode = insecure_mode
         if agent_user is not None:
             self.agent_user = agent_user
-        if systemd_lib_path is not None:
-            self.systemd_library_path = systemd_lib_path
+        if systemd_path is not None:
+            self.systemd_path = systemd_path
+        if systemd_library_path is not None:
+            self.systemd_library_path = systemd_library_path
 
         # Set defaults for any unset values
         if self.log_dir is None:
@@ -167,7 +171,7 @@ class TestEnvironment():
         if self.user_dir is None:
             self.user_dir = os.path.join(self.log_dir, "user")
         if self.interface is None:
-            self.interface = self._default_interface(logger, all_hosts)
+            self.interface = self._default_interface(logger, servers)
         if self.provider is None:
             self.provider = self._default_provider(logger, servers)
         if self.insecure_mode is None:
@@ -322,15 +326,18 @@ class TestEnvironment():
         Returns:
             str: the default interface; can be None
         """
-        interface = os.environ.get("D_INTERFACE")
-        if interface is None and hosts:
-            # Find all the /sys/class/net interfaces on the launch node (excluding lo)
-            logger.debug("Detecting network devices - D_INTERFACE not set")
-            try:
-                interface = get_fastest_interface(logger, hosts | get_local_host())
-            except NetworkException as error:
-                raise TestEnvironmentException("Error obtaining a default interface!") from error
-        return interface
+        if not hosts:
+            return None
+
+        logger.debug(
+            "Detecting network devices on %s - %s not set", hosts, self.__ENV_VAR_MAP['interface'])
+        try:
+            interfaces = get_fastest_interfaces(logger, hosts)
+        except NetworkException as error:
+            raise TestEnvironmentException("Error obtaining a default interface!") from error
+
+        logger.debug("  Found interface(s): %s", ",".join(interfaces))
+        return ",".join(interfaces)
 
     @property
     def provider(self):
@@ -368,12 +375,13 @@ class TestEnvironment():
         Returns:
             str: the default provider; can be None
         """
-        if not hosts:
+        if not hosts or self.interface is None:
             return None
 
+        first_interface = self.interface.split(",", maxsplit=1)[0]
         logger.debug(
-            "Detecting provider for %s - %s not set",
-            self.interface, self.__ENV_VAR_MAP['provider'])
+            "Detecting provider for %s on %s - %s not set",
+            first_interface, hosts, self.__ENV_VAR_MAP['provider'])
         provider = None
         supported = list(SUPPORTED_PROVIDERS)
 
@@ -387,7 +395,7 @@ class TestEnvironment():
             supported = list(filter(lambda x: 'verbs' not in x, supported))
 
         # Detect all supported providers for this interface that are common to all of the hosts
-        common_providers = get_common_provider(logger, hosts, self.interface, supported)
+        common_providers = get_common_provider(logger, hosts, first_interface, supported)
         if common_providers:
             # Select the preferred found provider based upon SUPPORTED_PROVIDERS order
             logger.debug("Supported providers detected: %s", common_providers)
@@ -399,9 +407,9 @@ class TestEnvironment():
         # Report an error if a provider cannot be found
         if not provider:
             raise TestEnvironmentException(
-                f"Error obtaining a supported provider for {self.interface} from: {supported}")
+                f"Error obtaining a supported provider for {first_interface} from: {supported}")
 
-        logger.debug("  Found %s provider for %s", provider, self.interface)
+        logger.debug("  Found %s provider for %s", provider, first_interface)
         return provider
 
     @property
@@ -521,6 +529,24 @@ class TestEnvironment():
         self.__set_value('agent_user', value)
 
     @property
+    def systemd_path(self):
+        """Get the systemd PATH.
+
+        Returns:
+            str: the systemd PATH
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['systemd_path'])
+
+    @systemd_path.setter
+    def systemd_path(self, value):
+        """Set the systemd PATH.
+
+        Args:
+            value (str): the systemd PATH
+        """
+        self.__set_value('systemd_path', value)
+
+    @property
     def systemd_library_path(self):
         """Get the systemd LD_LIBRARY_PATH.
 
@@ -607,7 +633,8 @@ class TestEnvironment():
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
                          insecure_mode=False, details=None, agent_user=None, log_dir=None,
-                         systemd_lib_path=None):
+                         systemd_path=None, systemd_library_path=None):
+    # pylint: disable=too-many-arguments
     """Set up the test environment.
 
     Args:
@@ -625,7 +652,8 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         agent_user (str, optional): user account to use when running the daos_agent. Defaults to
             None.
         log_dir (str, optional): test log directory base path. Defaults to None.
-        systemd_lib_path (str, optional): systemd library path. Defaults to None.
+        systemd_path (str, optional): systemd library path. Defaults to None.
+        systemd_library_path (str, optional): systemd library path. Defaults to None.
 
     Raises:
         TestEnvironmentException: if there is a problem setting up the test environment
@@ -638,7 +666,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         # Get the default fabric interface, provider, and daos prefix
         test_env.set_defaults(
             logger, servers, clients, provider, insecure_mode, agent_user, log_dir,
-            systemd_lib_path)
+            systemd_path, systemd_library_path)
         logger.info("Testing with interface:   %s", test_env.interface)
         logger.info("Testing with provider:    %s", test_env.provider)
         logger.info("Testing with daos_prefix: %s", test_env.daos_prefix)

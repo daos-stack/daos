@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,11 +27,15 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 	unsigned int			opc;
 	int				topo;
 	int				rc;
+	uint8_t                          mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		D_GOTO(fini_ranks, rc);
 
 	/* Collective RPC to destroy the pool on all of targets */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc  = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, mgmt_ver);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, filter_ranks, opc, NULL,
 				  NULL, CRT_RPC_FLAG_FILTER_INVERT, topo, &td_req);
 	if (rc)
@@ -90,18 +94,22 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, d_rank_list_t *rank_list, size_t
 	crt_opcode_t			opc;
 	struct mgmt_tgt_create_in	*tc_in;
 	struct mgmt_tgt_create_out	*tc_out = NULL;
-	int				topo;
-	int				rc;
-	int				rc_cleanup;
+	int                              rc;
 	uint32_t			timeout;
+	uint8_t                          mgmt_ver;
 
-	/* Collective RPC to all of targets of the pool */
-	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
-				  rank_list, opc, NULL, NULL,
-				  CRT_RPC_FLAG_FILTER_INVERT, topo, &tc_req);
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		return rc;
+
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE, mgmt_ver);
+	/*
+	 * Create a CoRPC to rank_list. Use CRT_RPC_FLAG_CO_FAILOUT because any
+	 * forwarding error will cause the current function to fail anyway.
+	 */
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, rank_list, opc, NULL, NULL,
+				  CRT_RPC_FLAG_FILTER_INVERT | CRT_RPC_FLAG_CO_FAILOUT,
+				  crt_tree_topo(CRT_TREE_KNOMIAL, 4), &tc_req);
 	if (rc) {
 		D_ERROR(DF_UUID": corpc_req_create failed: rc="DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -141,23 +149,12 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, d_rank_list_t *rank_list, size_t
 decref:
 	if (tc_out)
 		D_FREE(tc_out->tc_ranks.ca_arrays);
-
 	crt_req_decref(tc_req);
-	if (rc) {
-		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, rank_list);
-		if (rc_cleanup)
-			D_ERROR(DF_UUID": failed to clean up failed pool: "
-				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
-		else
-			D_DEBUG(DB_MGMT, DF_UUID": cleaned up failed create targets\n",
-				DP_UUID(pool_uuid));
-	}
-
 	return rc;
 }
 
 static int
-ds_mgmt_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_rank_list_t *ranks,
+ds_mgmt_pool_svc_create(uuid_t pool_uuid, const char *group, d_rank_list_t *ranks,
 			daos_prop_t *prop, d_rank_list_t **svc_list, size_t domains_nr,
 			uint32_t *domains)
 {
@@ -173,10 +170,11 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 		    size_t nvme_size, size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp,
 		    int domains_nr, uint32_t *domains)
 {
-	d_rank_list_t			*pg_ranks = NULL;
-	d_rank_list_t			*pg_targets = NULL;
-	int				rc;
-	int				rc_cleanup;
+	d_rank_list_t *pg_ranks   = NULL;
+	d_rank_list_t *pg_targets = NULL;
+	d_rank_list_t *dummy      = NULL;
+	int            rc;
+	int            rc_cleanup;
 
 	D_DEBUG(DB_MGMT, DF_UUID ": create scm/meta/nvme sizes %ld/%ld/%ld\n", DP_UUID(pool_uuid),
 		scm_size, meta_size, nvme_size);
@@ -216,17 +214,33 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
-	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, targets, scm_size, nvme_size, meta_size);
-	if (rc != 0) {
-		D_ERROR("creating pool "DF_UUID" on ranks failed: rc "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out, rc);
+	/* Extend the targets list to simulate orphan pool shard. */
+	if (DAOS_FAIL_CHECK(DAOS_CHK_ORPHAN_POOL_SHARD)) {
+		d_rank_t rank;
+		int      i;
+
+		rank = daos_fail_value_get();
+		if (!d_rank_in_rank_list(targets, rank)) {
+			dummy = d_rank_list_alloc(targets->rl_nr + 1);
+			D_ASSERT(dummy != NULL);
+
+			for (i = 0; i < targets->rl_nr; i++)
+				dummy->rl_ranks[i] = targets->rl_ranks[i];
+			dummy->rl_ranks[targets->rl_nr] = rank;
+		}
 	}
 
-	D_INFO(DF_UUID": creating targets on ranks succeeded\n", DP_UUID(pool_uuid));
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, dummy != NULL ? dummy : targets, scm_size,
+					   nvme_size, meta_size);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": creating pool on ranks failed", DP_UUID(pool_uuid));
+		goto out_ranks;
+	}
 
-	rc = ds_mgmt_pool_svc_create(pool_uuid, targets->rl_nr, group, targets, prop, svcp,
-				     domains_nr, domains);
+	D_INFO(DF_UUID ": creating targets on %d ranks succeeded\n", DP_UUID(pool_uuid),
+	       dummy != NULL ? dummy->rl_nr : targets->rl_nr);
+
+	rc = ds_mgmt_pool_svc_create(pool_uuid, group, targets, prop, svcp, domains_nr, domains);
 	if (rc) {
 		D_ERROR("create pool "DF_UUID" svc failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -236,7 +250,9 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 		 * those here together with other pool resources to save one
 		 * round of RPCs.
 		 */
-		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets);
+out_ranks:
+		rc_cleanup =
+		    ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, dummy != NULL ? dummy : targets);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
 				DP_UUID(pool_uuid), DP_RC(rc_cleanup));
@@ -250,6 +266,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 out:
 	d_rank_list_free(pg_targets);
 	d_rank_list_free(pg_ranks);
+	d_rank_list_free(dummy);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
 	return rc;
@@ -340,7 +357,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
 				 size_t meta_size, bool skip_rf_check)
 {
-	int			rc;
+	uint64_t deadline;
+	int      rc;
 
 	if (state == PO_COMP_ST_UP) {
 		/* When doing reintegration, need to make sure the pool is created and started on
@@ -364,8 +382,16 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
-					      target_addrs, state, skip_rf_check);
+	deadline = mgmt_ps_call_deadline();
+
+again:
+	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, deadline, target_addrs, state,
+					      skip_rf_check);
+	if (rc == -DER_AGAIN && state == PO_COMP_ST_UP && daos_getmtime_coarse() < deadline) {
+		D_WARN("Retry incremental reintegration for pool " DF_UUID " because of race\n",
+		       DP_UUID(pool_uuid));
+		goto again;
+	}
 
 	return rc;
 }
@@ -391,6 +417,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  * \param[out]		enabled_ranks	   Optional, returned storage ranks with enabled targets.
  * \param[out]		disabled_ranks	   Optional, returned storage ranks with disabled targets.
  * \param[out]		dead_ranks	   Optional, returned storage ranks marked DEAD by SWIM.
+ * \param[in]		deadline	   Unix time deadline in milliseconds
  * \param[in][out]	pool_info	   Query results
  * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
@@ -401,7 +428,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  */
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
-		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks,
+		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks, uint64_t deadline,
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
 		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes)
 {
@@ -412,9 +439,9 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), enabled_ranks,
-				  disabled_ranks, dead_ranks, pool_info, pool_layout_ver,
-				  upgrade_layout_ver, mem_file_bytes);
+	return dsc_pool_svc_query(pool_uuid, svc_ranks, deadline, enabled_ranks, disabled_ranks,
+				  dead_ranks, pool_info, pool_layout_ver, upgrade_layout_ver,
+				  mem_file_bytes);
 }
 
 /**
@@ -603,7 +630,13 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	int              rc;
 
 	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
-		D_ERROR("invalid property list\n");
+		D_ERROR("no properties in prop list\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (!daos_prop_valid(prop, true, true)) {
+		D_ERROR("invalid properties\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -647,6 +680,64 @@ out:
 }
 
 /**
+ * Calls into the pool svc to request stopping a rebuild.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		force			boolean. force a rebuild in op:Fail_reclaim to stop.
+ * \param[in]		svc_ranks		Ranks of pool svc replicas.
+ *
+ * \return			0				Success
+ *					Negative value	Error
+ */
+int
+ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Sending request to stop rebuild for pool " DF_UUID "\n",
+		DP_UUID(pool_uuid));
+
+	return dsc_pool_svc_rebuild_stop(pool_uuid, force, svc_ranks, mgmt_ps_call_deadline());
+}
+
+/**
+ * Calls into the pool svc to request start/resume rebuilding.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		svc_ranks		Ranks of pool svc replicas.
+ *
+ * \return			0				Success
+ *					Negative value	Error
+ */
+int
+ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Sending request to start/resume rebuilding for pool " DF_UUID "\n",
+		DP_UUID(pool_uuid));
+
+	return dsc_pool_svc_rebuild_start(pool_uuid, svc_ranks, mgmt_ps_call_deadline());
+}
+
+/**
+ * Calls into the pool svc to request evaluation of self_heal system property.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		svc_ranks		Ranks of pool svc replicas.
+ * \param[in]		sys_self_heal		Value of system property "self_heal"
+ *
+ * \return			0				Success
+ *					Negative value	Error
+ */
+int
+ds_mgmt_pool_self_heal_eval(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t sys_self_heal)
+{
+	D_DEBUG(DB_MGMT,
+		"Sending request to evaluate self_heal system property for pool " DF_UUID "\n",
+		DP_UUID(pool_uuid));
+
+	return dsc_pool_svc_eval_self_heal(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
+					   sys_self_heal);
+}
+
+/**
  * Destroy the specified pool shard on the specified storage rank
  */
 int
@@ -658,13 +749,17 @@ ds_mgmt_tgt_pool_shard_destroy(uuid_t pool_uuid, int shard_idx, d_rank_t rank)
 	crt_endpoint_t				 tgt_ep;
 	crt_opcode_t				 opc;
 	int					 rc;
+	uint8_t                                  mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		goto out;
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = rank;
 	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, shard_idx);
 
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_SHARD_DESTROY, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_SHARD_DESTROY, DAOS_MGMT_MODULE, mgmt_ver);
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc != 0)

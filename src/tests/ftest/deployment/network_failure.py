@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,11 +11,12 @@ from collections import defaultdict
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import CommandFailure
 from dmg_utils import check_system_query_status
-from general_utils import report_errors, run_pcmd
+from general_utils import report_errors
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from network_utils import NetworkInterface
+from run_utils import run_remote
 
 
 class NetworkFailureTest(IorTestBase):
@@ -97,16 +99,15 @@ class NetworkFailureTest(IorTestBase):
 
         """
         command = "hostname -i"
-        results = run_pcmd(hosts=self.hostlist_servers, command=command)
-        self.log.info("hostname -i results = %s", results)
+        result = run_remote(self.log, self.hostlist_servers, command)
+        if not result.passed:
+            self.fail("Failed to get hostname on servers")
 
         ip_to_host = {}
-        for result in results:
-            ips_str = result["stdout"][0]
+        for hosts, stdout in result.all_stdout.items():
             # There may be multiple IP addresses for one host.
-            ip_addresses = ips_str.split()
-            for ip_address in ip_addresses:
-                ip_to_host[ip_address] = NodeSet(str(result["hosts"]))
+            for ip_address in stdout.split():
+                ip_to_host[ip_address] = NodeSet(hosts)
 
         return ip_to_host
 
@@ -234,7 +235,7 @@ class NetworkFailureTest(IorTestBase):
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
         self.log_step("Reintegrate one rank at a time to enable all ranks.")
         for disabled_rank in disabled_ranks:
-            self.pool.reintegrate(rank=disabled_rank)
+            self.pool.reintegrate(ranks=disabled_rank)
             self.pool.wait_for_rebuild_to_start(interval=5)
             self.pool.wait_for_rebuild_to_end(interval=10)
 

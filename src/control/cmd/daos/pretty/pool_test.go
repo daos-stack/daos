@@ -40,7 +40,7 @@ Pool health info:
 		"normal response": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -68,7 +68,7 @@ Pool health info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Rebuild busy, 42 objs, 21 recs
@@ -85,7 +85,7 @@ Pool space info:
 		"normal response; enabled ranks": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -114,7 +114,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Enabled ranks: 0-2
@@ -132,7 +132,7 @@ Pool space info:
 		"normal response; dead ranks": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.HealthOnlyPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -160,7 +160,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Disabled ranks: 0-1,3
@@ -171,7 +171,7 @@ Pool health info:
 		"normal response; disabled ranks": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -200,7 +200,7 @@ Pool health info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Disabled ranks: 0-1,3
@@ -218,7 +218,7 @@ Pool space info:
 		"unknown/invalid rebuild state response": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -247,7 +247,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Disabled ranks: 0-1,3
@@ -265,7 +265,7 @@ Pool space info:
 		"rebuild failed": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -295,7 +295,7 @@ Pool space info:
 				MemFileBytes: humanize.GiByte,
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Rebuild failed, status=2
@@ -312,7 +312,7 @@ Pool space info:
 		"normal response: MD-on-SSD": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
-				State:            daos.PoolServiceStateDegraded,
+				State:            daos.PoolServiceStateTargetsExcluded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
 				DisabledTargets:  1,
@@ -342,7 +342,7 @@ Pool space info:
 				MdOnSsdActive: true,
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Rebuild busy, 42 objs, 21 recs
@@ -371,6 +371,43 @@ Pool space info:
 	}
 }
 
+func TestPretty_PrintPoolSelfHealDisable(t *testing.T) {
+	for name, tc := range map[string]struct {
+		poolSelfHeal string
+		sysSelfHeal  string
+		expPrintStr  string
+	}{
+		"defaults": {
+			poolSelfHeal: "exclude;rebuild",
+			sysSelfHeal:  "exclude;pool_exclude;pool_rebuild",
+		},
+		"no pool flags": {
+			poolSelfHeal: "none",
+			sysSelfHeal:  "exclude;pool_exclude;pool_rebuild",
+			expPrintStr:  "exclude disabled on pool due to [pool] policy\nrebuild disabled on pool due to [pool] policy\n",
+		},
+		"no system flags": {
+			poolSelfHeal: "exclude;rebuild",
+			sysSelfHeal:  "none",
+			expPrintStr:  "exclude disabled on pool due to [system] policy\nrebuild disabled on pool due to [system] policy\n",
+		},
+		"no flags": {
+			poolSelfHeal: "none",
+			sysSelfHeal:  "none",
+			expPrintStr:  "exclude disabled on pool due to [pool system] policies\nrebuild disabled on pool due to [pool system] policies\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			PrintPoolSelfHealDisable(tc.poolSelfHeal, tc.sysSelfHeal, &bld)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected print string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 	for name, tc := range map[string]struct {
 		pqti        *daos.PoolQueryTargetInfo
@@ -382,7 +419,6 @@ func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 		},
 		"valid: single target (unknown, down_out)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDownOut,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -398,7 +434,7 @@ func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -409,7 +445,6 @@ Target: type unknown, state down_out
 		},
 		"valid: single target (unknown, down)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDown,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -425,7 +460,7 @@ Target: type unknown, state down_out
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down
+Target: state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -436,7 +471,6 @@ Target: type unknown, state down
 		},
 		"valid: single target (unknown, up)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateUp,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -452,7 +486,7 @@ Target: type unknown, state down
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state up
+Target: state up
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -463,7 +497,6 @@ Target: type unknown, state up
 		},
 		"valid: single target (unknown, up_in)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateUpIn,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -479,7 +512,7 @@ Target: type unknown, state up
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -490,7 +523,6 @@ Target: type unknown, state up_in
 		},
 		"valid: single target (unknown, new)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateNew,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -506,7 +538,7 @@ Target: type unknown, state up_in
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state new
+Target: state new
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -517,7 +549,6 @@ Target: type unknown, state new
 		},
 		"valid: single target (unknown, drain)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDrain,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -534,7 +565,7 @@ Target: type unknown, state new
 				MemFileBytes: 3000000000,
 			},
 			expPrintStr: `
-Target: type unknown, state drain
+Target: state drain
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -545,7 +576,6 @@ Target: type unknown, state drain
 		},
 		"valid: single target (unknown, down_out): MD-on-SSD": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDownOut,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -563,7 +593,7 @@ Target: type unknown, state drain
 				MdOnSsdActive: true,
 			},
 			expPrintStr: `
-Target: type unknown, state down_out
+Target: state down_out
 - Metadata storage:
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -860,7 +890,7 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 					TotalTargets:     16,
 					ActiveTargets:    8,
 					DisabledTargets:  8,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
 					Rebuild: &daos.PoolRebuildStatus{
@@ -872,9 +902,9 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 State    SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
------ ----                                 -----    ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
-one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%            6.0 TB    5.0 TB    4%             8/16     1->2           busy          
+Label UUID                                 State           SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----           ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 TargetsExcluded [0-2]   100 GB   80 GB    8%            6.0 TB    5.0 TB    4%             8/16     1->2           busy          
 
 `,
 		},
@@ -888,7 +918,7 @@ one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%
 					TotalTargets:     16,
 					ActiveTargets:    8,
 					DisabledTargets:  8,
-					State:            daos.PoolServiceStateDegraded,
+					State:            daos.PoolServiceStateTargetsExcluded,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
 					Rebuild: &daos.PoolRebuildStatus{
@@ -901,9 +931,9 @@ one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 State    SvcReps Meta Size Meta Used Meta Imbalance Data Size Data Used Data Imbalance Disabled UpgradeNeeded? Rebuild State 
------ ----                                 -----    ------- --------- --------- -------------- --------- --------- -------------- -------- -------------- ------------- 
-one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB    80 GB     8%             6.0 TB    5.0 TB    4%             8/16     1->2           done          
+Label UUID                                 State           SvcReps Meta Size Meta Used Meta Imbalance Data Size Data Used Data Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----           ------- --------- --------- -------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 TargetsExcluded [0-2]   100 GB    80 GB     8%             6.0 TB    5.0 TB    4%             8/16     1->2           done          
 
 `,
 		},

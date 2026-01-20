@@ -160,7 +160,7 @@ static long int         page_size;
 #define DAOS_INIT_RUNNING     1
 
 static _Atomic uint64_t mpi_init_count;
-static _Atomic int64_t  zeInit_count;
+static _Atomic int64_t  dlopen_count;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -412,6 +412,8 @@ static int (*next_rmdir)(const char *path);
 
 static int (*next_rename)(const char *old_name, const char *new_name);
 
+static int (*next_renameat)(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
+
 static char *(*next_getcwd)(char *buf, size_t size);
 
 static int (*libc_unlink)(const char *path);
@@ -468,9 +470,6 @@ static int (*next_munmap)(void *addr, size_t length);
 static void (*next_exit)(int rc);
 static void (*next__exit)(int rc) __attribute__((__noreturn__));
 
-/* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
-/* static org_dup3 real_dup3=NULL; */
-
 static int (*next_execve)(const char *filename, char *const argv[], char *const envp[]);
 static int (*next_execv)(const char *filename, char *const argv[]);
 static int (*next_execvp)(const char *filename, char *const argv[]);
@@ -478,6 +477,10 @@ static int (*next_execvpe)(const char *filename, char *const argv[], char *const
 static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
 
 static pid_t (*next_fork)(void);
+
+static int (*next_fchown)(int fd, uid_t uid, gid_t gid);
+static ssize_t (*next_fgetxattr)(int fd, char *name, void *value, size_t size);
+static int (*next_fsetxattr)(int fd, char *name, void *value, size_t size, int flags);
 
 /* start NOT supported by DAOS */
 static int (*next_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
@@ -490,9 +493,7 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 
 static int (*next_mpi_init)(int *argc, char ***argv);
 static int (*next_pmpi_init)(int *argc, char ***argv);
-static int (*next_ze_init)(int flags);
-static void *(*next_dlsym)(void *handle, const char *symbol);
-static void *(*new_dlsym)(void *handle, const char *symbol);
+static void *(*next_dlopen)(const char *filename, int flags);
 
 /* to do!! */
 /**
@@ -850,7 +851,7 @@ retrieve_handles_from_fuse(int idx)
 		fclose(tmp_file);
 		unlink(fname);
 		if (read_size != hs_reply.fsr_pool_size) {
-			errno_saved = EAGAIN;
+			errno_saved = EIO;
 			D_DEBUG(DB_ANY, "fread expected %zu bytes, read %d bytes : %d (%s)\n",
 				hs_reply.fsr_pool_size, read_size, errno_saved,
 				strerror(errno_saved));
@@ -1079,140 +1080,19 @@ PMPI_Init(int *argc, char ***argv)
 	return rc;
 }
 
-int
-zeInit(int flags)
+void *
+new_dlopen(const char *filename, int flags)
 {
-	int rc;
+	void *rc;
 
-	if (next_ze_init == NULL) {
-		if (d_hook_enabled)
-			next_ze_init = next_dlsym(RTLD_NEXT, "zeInit");
-		else
-			next_ze_init = dlsym(RTLD_NEXT, "zeInit");
-	}
-	D_ASSERT(next_ze_init != NULL);
-	atomic_fetch_add_relaxed(&zeInit_count, 1);
-	rc = next_ze_init(flags);
-	atomic_fetch_add_relaxed(&zeInit_count, -1);
+	if (!d_hook_enabled)
+		return next_dlopen(filename, flags);
+
+	atomic_fetch_add_relaxed(&dlopen_count, 1);
+	rc = next_dlopen(filename, flags);
+	atomic_fetch_add_relaxed(&dlopen_count, -1);
 	return rc;
 }
-
-#if defined(__x86_64__)
-/* This is used to work around compiling warning and limitations of using asm function. */
-static void *
-query_new_dlsym_addr(void *addr)
-{
-	int i;
-
-	/* assume little endian */
-	for (i = 0; i < 64; i++) {
-		/* 0x56579090 is corresponding to the first four instructions at new_dlsym_asm.
-		 * 0x90 - nop, 0x90 - nop, 0x57 - push %rdi, 0x56 - push %rsi
-		 */
-		if (*((int *)(addr + i)) == 0x56579090) {
-			/* two nop are added for easier positioning. offset +2 here to skip two
-			 * nop and start from the real entry.
-			 */
-			return ((void *)(addr + i + 2));
-		}
-	}
-	return NULL;
-}
-
-_Pragma("GCC diagnostic push")
-_Pragma("GCC diagnostic ignored \"-Wunused-function\"")
-_Pragma("GCC diagnostic ignored \"-Wunused-variable\"")
-_Pragma("GCC push_options")
-_Pragma("GCC optimize(\"-O0\")")
-static char str_zeinit[] = "zeInit";
-
-static int
-is_hook_enabled(void)
-{
-	return (d_hook_enabled ? 1 : 0);
-}
-
-/* This wrapper function is introduced to avoid compiling issue with Intel-C on Leap 15.5 */
-static int
-my_strcmp(const char *s1, const char *s2)
-{
-	return strcmp(s1, s2);
-}
-
-static void *
-get_zeinit_addr(void)
-{
-	return (void *)zeInit;
-}
-
-__attribute__((aligned(16))) static void
-new_dlsym_marker(void)
-{
-}
-
-__asm__(
-	"new_dlsym_asm:\n"
-	"nop\n"
-	"nop\n"
-	"push %rdi\n"
-	"push %rsi\n"
-
-	"call is_hook_enabled\n"
-	"test %eax,%eax\n"
-	"je org_dlsym\n"
-
-	"mov %rsi, %rdi\n"
-	"lea str_zeinit(%rip), %rsi\n"
-	"call my_strcmp\n"
-	"test %eax,%eax\n"
-	"jne org_dlsym\n"
-
-	"pop %rsi\n"
-	"pop %rdi\n"
-	"call *next_dlsym(%rip)\n"
-	"mov %rax, next_ze_init(%rip)\n"
-
-	"test %eax,%eax\n"
-	"jne found\n"
-	"ret\n"
-
-	"found:\n"
-	"call get_zeinit_addr\n"
-	"ret\n"
-
-	"org_dlsym:\n"
-	"pop %rsi\n"
-	"pop %rdi\n"
-	"jmp *next_dlsym(%rip)\n"
-);
-_Pragma("GCC pop_options")
-_Pragma("GCC diagnostic pop")
-
-#else
-/* c code for other architecture. caller info could be wrong inside libc dlsym() when handle is set
- * RTLD_NEXT. Assembly version implementation similar to above is needed to fix the issue by using
- * jump instead of call instruction. 
- */
-static void *
-new_dlsym_c(void *handle, const char *symbol)
-{
-	if (!d_hook_enabled)
-		goto org_dlsym;
-	if (strcmp(symbol, "zeInit") != 0)
-		goto org_dlsym;
-
-	next_ze_init = next_dlsym(handle, symbol);
-	if (next_ze_init)
-		/* dlsym() finished successfully, then intercept zeInit() */
-		return zeInit;
-	else
-		return next_ze_init;
-
-org_dlsym:
-	/* Ideally we need to adjust stack and jump to next_dlsym(). */
-	return next_dlsym(handle, symbol);
-}
-#endif
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
@@ -1320,11 +1200,11 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 				goto out_normal;
 			}
 
-			/* Check whether zeInit() is running. If yes, pass to the original
+			/* Check whether dlopen() is running. If yes, pass to the original
 			 * libc functions. Avoid possible zeInit reentrancy/nested call.
 			 */
 
-			if (atomic_load_relaxed(&zeInit_count) > 0) {
+			if (atomic_load_relaxed(&dlopen_count) > 0) {
 				*is_target_path = 0;
 				goto out_normal;
 			}
@@ -1594,16 +1474,16 @@ init_fd_list(void)
 
 	rc = D_MUTEX_INIT(&lock_fd, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_MUTEX_INIT(&lock_dirfd, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_MUTEX_INIT(&lock_mmap, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_RWLOCK_INIT(&lock_fd_dup2ed, NULL);
 	if (rc)
-		return 1;
+		return rc;
 
 	/* fatal error above: failure to create mutexes. */
 
@@ -1775,7 +1655,6 @@ find_next_available_map(int *idx)
 	return 0;
 }
 
-/* May need to support duplicated fd as duplicated dirfd too. */
 static void
 free_fd(int idx, bool closing_dup_fd)
 {
@@ -1796,7 +1675,7 @@ free_fd(int idx, bool closing_dup_fd)
 	d_file_list[idx]->ref_count--;
 	if (d_file_list[idx]->ref_count == 0)
 		saved_obj = d_file_list[idx];
-	if (dup_ref_count[idx] > 0) {
+	if ((dup_ref_count[idx] > 0) || (closing_dup_fd && (d_file_list[idx]->ref_count > 0))) {
 		D_MUTEX_UNLOCK(&lock_fd);
 		return;
 	}
@@ -2094,6 +1973,15 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 	int len_str, dirfd_directed;
 
 	*error = 0;
+
+	if (rel_path[0] == '/') {
+		/* an absolute path, dirfd should be ignored */
+		*full_path_out = strdup(rel_path);
+		if (*full_path_out == NULL)
+			goto out_oom;
+		return query_dfs_mount(*full_path_out);
+	}
+
 	*full_path_out = NULL;
 	dirfd_directed = d_get_fd_redirected(dirfd);
 
@@ -2514,6 +2402,16 @@ new_open_pthread(const char *pathname, int oflags, ...)
 
 	return rc;
 }
+
+int
+creat(const char *path, mode_t mode)
+{
+	/* https://linux.die.net/man/3/creat */
+	return new_open_libc(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
+}
+
+int
+creat64(const char *path, mode_t mode) __attribute__((alias("creat")));
 
 /* Search a fd in fd hash table. Remove it in case it is found. Also free the fake fd.
  * Return true if fd is found. Return false if fd is not found.
@@ -3583,6 +3481,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = DAOS_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -3640,6 +3539,7 @@ fstatfs(int fd, struct statfs *sfs)
 	sfs->f_files  = -1;
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
+	sfs->f_type   = DAOS_SUPER_MAGIC;
 
 	return 0;
 }
@@ -3691,6 +3591,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	svfs->f_files  = -1;
 	svfs->f_ffree  = -1;
 	svfs->f_bavail = svfs->f_bfree;
+	svfs->f_fsid   = DAOS_SUPER_MAGIC;
 
 	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -5145,6 +5046,53 @@ out_err:
 	return (-1);
 }
 
+int
+renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath)
+{
+	int   error = 0;
+	int   rc;
+	char *full_path_old = NULL;
+	char *full_path_new = NULL;
+
+	if (next_renameat == NULL) {
+		next_renameat = dlsym(RTLD_NEXT, "renameat");
+		D_ASSERT(next_renameat != NULL);
+	}
+	if (!d_hook_enabled)
+		return next_renameat(olddirfd, oldpath, newdirfd, newpath);
+
+	if ((oldpath[0] == '/') && (newpath[0] == '/'))
+		/* fd is ignored for absolute path */
+		return rename(oldpath, newpath);
+
+	check_path_with_dirfd(olddirfd, &full_path_old, oldpath, &error);
+	if (error)
+		goto out_err;
+
+	check_path_with_dirfd(newdirfd, &full_path_new, newpath, &error);
+	if (error) {
+		if (full_path_old)
+			free(full_path_old);
+		goto out_err;
+	}
+	rc = rename(full_path_old, full_path_new);
+	/* save errno since free() may affect errno */
+	error = errno;
+	if (full_path_old) {
+		free(full_path_old);
+		errno = error;
+	}
+	if (full_path_new) {
+		free(full_path_new);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
+}
+
 char *
 getcwd(char *buf, size_t size)
 {
@@ -5790,6 +5738,119 @@ out_err:
 }
 
 int
+fchown(int fd, uid_t uid, gid_t gid)
+{
+	int rc, fd_directed;
+
+	if (next_fchown == NULL) {
+		next_fchown = dlsym(RTLD_NEXT, "fchown");
+		D_ASSERT(next_fchown != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fchown(fd, uid, gid);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fchown(fd, uid, gid);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed >= FD_DIR_BASE)
+		/* Let dfuse handle this case. This function is not commonly used in applications.
+		 * There is no need for further optimization here at this time.
+		 */
+		return chown(dir_list[fd_directed - FD_DIR_BASE]->path, uid, gid);
+
+	/* regular file */
+	rc = dfs_chown(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+		       drec2obj(d_file_list[fd_directed - FD_FILE_BASE]->parent),
+		       d_file_list[fd_directed - FD_FILE_BASE]->item_name, uid, gid, 0);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return 0;
+}
+
+ssize_t
+fgetxattr(int fd, char *name, void *value, size_t size)
+{
+	int    rc, fd_directed;
+	size_t buf_size = size;
+
+	if (next_fgetxattr == NULL) {
+		next_fgetxattr = dlsym(RTLD_NEXT, "fgetxattr");
+		D_ASSERT(next_fgetxattr != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fgetxattr(fd, name, value, size);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fgetxattr(fd, name, value, size);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed < FD_DIR_BASE)
+		rc = dfs_getxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value,
+				  &buf_size);
+	else
+		rc = dfs_getxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, &buf_size);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return buf_size;
+}
+
+int
+fsetxattr(int fd, char *name, void *value, size_t size, int flags)
+{
+	int rc, fd_directed;
+
+	if (next_fsetxattr == NULL) {
+		next_fsetxattr = dlsym(RTLD_NEXT, "fsetxattr");
+		D_ASSERT(next_fsetxattr != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fsetxattr(fd, name, value, size, flags);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fsetxattr(fd, name, value, size, flags);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed < FD_DIR_BASE)
+		rc = dfs_setxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value, size,
+				  flags);
+	else
+		rc = dfs_setxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, size,
+				  flags);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return rc;
+}
+
+int
 utime(const char *path, const struct utimbuf *times)
 {
 	int                is_target_path, rc;
@@ -6030,8 +6091,10 @@ out_err:
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	int  idx_dfs, error = 0, rc;
-	char *full_path = NULL;
+	int              idx_dfs, error = 0, rc;
+	char            *full_path = NULL;
+	struct timespec  times_loc[2];
+	struct timespec *times_ptr;
 
 	if (next_utimensat == NULL) {
 		next_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -6049,18 +6112,30 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	}
 	_Pragma("GCC diagnostic pop")
 
+	    /* clang-format off */
+
+	if (times == NULL) {
+		clock_gettime(CLOCK_REALTIME, &times_loc[0]);
+		times_loc[1].tv_sec = times_loc[0].tv_sec;
+		times_loc[1].tv_nsec = times_loc[0].tv_nsec;
+		times_ptr = times_loc;
+	} else {
+		times_ptr = (struct timespec *)times;
+	}
+	/* clang-format on */
+
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
-		return utimens_timespec(path, times, flags);
+		return utimens_timespec(path, times_ptr, flags);
 
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
 		goto out_err;
 
 	if (idx_dfs >= 0)
-		rc = utimens_timespec(full_path, times, flags);
+		rc = utimens_timespec(full_path, times_ptr, flags);
 	else
-		rc = next_utimensat(dirfd, path, times, flags);
+		rc = next_utimensat(dirfd, path, times_ptr, flags);
 
 	error = errno;
 	if (full_path) {
@@ -6255,6 +6330,9 @@ ioctl(int fd, unsigned long request, ...)
 	if ((fd_directed < FD_FILE_BASE) || (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)))
 		return next_ioctl(fd, request, param);
 
+	if (request == FIOCLEX)
+		return 0;
+
 	errno = ENOTSUP;
 	return (-1);
 }
@@ -6432,7 +6510,11 @@ new_dup3(int oldfd, int newfd, int flags)
 	if (d_get_fd_redirected(oldfd) < FD_FILE_BASE && d_get_fd_redirected(newfd) < FD_FILE_BASE)
 		return libc_dup3(oldfd, newfd, flags);
 
-	/* Ignore flags now. Need more work later to handle flags, e.g., O_CLOEXEC */
+	/* only O_CLOEXEC and 0 are accepted for flags in glibc */
+	if (flags != O_CLOEXEC && flags != 0) {
+		errno = EINVAL;
+		return (-1);
+	}
 	return dup2(oldfd, newfd);
 }
 
@@ -7264,17 +7346,11 @@ init_myhook(void)
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 	register_a_hook("libc", "readlink", (void *)new_readlink, (long int *)(&libc_readlink));
 
-#if defined(__x86_64__)
-	new_dlsym = query_new_dlsym_addr(new_dlsym_marker);
-#else
-	new_dlsym = new_dlsym_c;
-#endif
-	D_ASSERT(new_dlsym != NULL);
 	libc_version = query_libc_version();
 	if (libc_ver_cmp(libc_version, 2.34) < 0)
-		register_a_hook("libdl", "dlsym", (void *)new_dlsym, (long int *)(&next_dlsym));
+		register_a_hook("libdl", "dlopen", (void *)new_dlopen, (long int *)(&next_dlopen));
 	else
-		register_a_hook("libc", "dlsym", (void *)new_dlsym, (long int *)(&next_dlsym));
+		register_a_hook("libc", "dlopen", (void *)new_dlopen, (long int *)(&next_dlopen));
 
 	init_fd_dup2_list();
 
@@ -7285,9 +7361,6 @@ init_myhook(void)
 		dcache_rec_timeout = 0;
 
 	install_hook();
-
-	/* Check it here to minimize the work in function new_dlsym() written in assembly */
-	D_ASSERT(next_dlsym != NULL);
 
 	d_hook_enabled   = 1;
 	hook_enabled_bak = d_hook_enabled;

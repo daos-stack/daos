@@ -108,6 +108,15 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_EXTEND:
 		ds_mgmt_drpc_pool_extend(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_REBUILD_START:
+		ds_mgmt_drpc_pool_rebuild_start(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_REBUILD_STOP:
+		ds_mgmt_drpc_pool_rebuild_stop(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_SELF_HEAL_EVAL:
+		ds_mgmt_drpc_pool_self_heal_eval(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
 		ds_mgmt_drpc_bio_health_query(drpc_req, drpc_resp);
 		break;
@@ -174,6 +183,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_CHK_ACT:
 		ds_mgmt_drpc_check_act(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_GROUP_STATUS_GET:
+		ds_mgmt_drpc_get_group_status(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_SET_POLICY:
+		ds_mgmt_drpc_check_set_policy(drpc_req, drpc_resp);
+		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
 		D_ERROR("Unknown method\n");
@@ -205,6 +220,13 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	struct mgmt_tgt_params_set_in	*tc_in;
 	struct mgmt_params_set_out	*out;
 	int				rc;
+	uint8_t                          mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc) {
+		D_ERROR("Failed to get mgmt rpc protocol: %d\n", rc);
+		D_GOTO(out, rc);
+	}
 
 	ps_in = crt_req_get(rpc);
 	D_ASSERT(ps_in != NULL);
@@ -224,8 +246,7 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	}
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc  = DAOS_RPC_OPCODE(MGMT_TGT_PARAMS_SET, DAOS_MGMT_MODULE, mgmt_ver);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
@@ -261,13 +282,17 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	struct mgmt_profile_in	*tc_in;
 	struct mgmt_profile_out	*out;
 	int			rc;
+	uint8_t                  mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_PROFILE, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc  = DAOS_RPC_OPCODE(MGMT_TGT_PROFILE, DAOS_MGMT_MODULE, mgmt_ver);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
@@ -302,13 +327,17 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 	struct mgmt_mark_in	*tc_in;
 	struct mgmt_mark_out	*out;
 	int			rc;
+	uint8_t                  mgmt_ver;
+
+	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
+	if (rc)
+		D_GOTO(out, rc);
 
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	opc = DAOS_RPC_OPCODE(MGMT_TGT_MARK, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc  = DAOS_RPC_OPCODE(MGMT_TGT_MARK, DAOS_MGMT_MODULE, mgmt_ver);
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
 				  opc, NULL, NULL, 0, topo, &tc_req);
 	if (rc)
@@ -586,6 +615,12 @@ ds_mgmt_init()
 	if (rc != 0)
 		return rc;
 
+	rc = ds_mgmt_pbl_create();
+	if (rc != 0) {
+		ds_mgmt_system_module_fini();
+		return rc;
+	}
+
 	D_DEBUG(DB_MGMT, "successful init call\n");
 	return 0;
 }
@@ -593,8 +628,8 @@ ds_mgmt_init()
 static int
 ds_mgmt_fini()
 {
+	ds_mgmt_pbl_destroy();
 	ds_mgmt_system_module_fini();
-
 	D_DEBUG(DB_MGMT, "successful fini call\n");
 	return 0;
 }
@@ -626,3 +661,5 @@ struct dss_module mgmt_module = {
     .sm_handlers      = {mgmt_handlers_v3, mgmt_handlers_v4},
     .sm_drpc_handlers = mgmt_drpc_handlers,
 };
+
+DEFINE_DS_RPC_PROTOCOL(mgmt, DAOS_MGMT_MODULE);

@@ -122,6 +122,57 @@ scons reduces the clutter from compiler setup.
 Additionally, the tool supports options to filter by directory and file names and specify a lower
 bound value to report.
 
+### Address Sanitizer
+
+To debug memory corruptions, leaks, and other issues, DAOS can be compiled with the
+[AddressSanitizer (ASan)](https://github.com/google/sanitizers/wiki/AddressSanitizer) library.
+
+#### Building with ASan
+
+To build instrumented libraries, executables, RPMs, etc., use the `SANITIZERS=address` flag with the
+`scons` command.  This option is also managed by the CI system through a Jenkins configuration
+variable.
+
+ASan is supported with both Clang and GCC compilers. However, some compiler-specific configurations,
+such as maximum function stack size, may lead to unexpected behavior in the instrumented
+binaries.
+
+#### Customizing ASan Behavior
+ASan behavior can be configured using the `ASAN_OPTIONS` environment variable. For example, you can
+add the following entry to the `env_vars` section of the `daos_server.yml` configuration file:
+```yaml
+engines:
+- ..
+  env_vars:
+  ...
+  - ASAN_OPTIONS=atexit=1:print_stats=1:log_path=/tmp/daos_engine0.asan:disable_coredump=1:handle_segv=2:handle_abort=2:handle_sigfpe=2:handle_sigill=2:handle_sigbus=2:use_sigaltstack=1
+```
+For detailed information, see the
+[Sanitizer Common Flags](https://github.com/google/sanitizers/wiki/SanitizerCommonFlags) and
+[AddressSanitizer Flags](https://github.com/google/sanitizers/wiki/AddressSanitizerFlags)
+documentation pages.
+
+#### Known Issues
+
+ASan support in DAOS is still experimental and has the following known issues:
+1. **Library Path Issues**  
+   ASan's instrumentation of `dlopen()` removes `RPATH` and `RUNPATH` entries passed to the
+   compiler. As a result, libraries like `librdb` may not be found if DAOS is built with SCons and
+   installed in a non-standard location.  
+   **Workaround**: Use the `LD_LIBRARY_PATH` environment variable or the `ldconfig` command.  
+   More details are available in [Bug 27790](https://bugs.llvm.org/show_bug.cgi?id=27790).
+
+2. **Missing Statistics on SIGKILL**  
+   Stopping an application with `kill -s SIGKILL` prevents ASan from printing statistics, such as
+   detected memory leaks. For instance, this occurs when stopping DAOS engines using:  
+   ```bash
+   dmg system stop --force
+   ```
+
+3. **Integration with Test Framework**  
+   ASan is not fully integrated with the DAOS regression testing framework. Some tests, such as
+   those using Valgrind, may fail due to false positives.
+
 ## Go dependencies
 
 Developers contributing Go code may need to change the external dependencies
@@ -319,3 +370,34 @@ can be created using the daos admin tool (see next section).
 
 For more advanced configurations involving SCM, SSD or a real fabric, please
 refer to the next section.
+
+## DAOS RPMs build process
+
+The DAOS build process now covers building RPMs for both DAOS and dependencies
+specified in [`utils/build.config`](../../utils/build.config) (or those that we
+build regularly with `--build-deps=yes`). The complete list of RPMs  is defined
+in the [`utils/rpms/build_packages.sh`](../../utils/rpms/build_packages.sh)
+script. The RPM (and deb) build process uses
+[FPM](https://fpm.readthedocs.io/en/latest/getting-started.html). Essentially,
+it creates rpm packages after a DAOS build. Regardless of how that build is done,
+it will put files in the right places in the final packages.  Most of the magic
+is in [`utils/rpms/fpm_common.sh`](../../utils/rpms/fpm_common.sh) with
+component specific code in `utils/rpms/<component>.sh`.
+
+### Updating a 3rd party component
+
+In order to properly upgrade a 3rd party component, do all of the following:
+
+1. Change the [`utils/build.config`](../../utils/build.config) to point to
+   the new version or to add a new patch. Patches should be stored in
+   `deps/patches/<component>`.
+1. Update (increase) the `Release` variable in [`utils/rpms/daos.spec`](../../utils/rpms/daos.spec).
+1. Update [`utils/rpms/daos.changelog`](../../utils/rpms/daos.changelog)
+   changelog and release iteration. This is important to document the change.
+1. Update the `<component>_release` and/or `<component>_version` in
+   [`utils/rpms/package_info.sh`](../../utils/rpms/package_info.sh)
+1. Make any necessary changes to `utils/rpms/<component>.sh` such as adding new
+   files to various packages.
+1. Update the `utils/rpms/<component>.changelog` file to document the change and
+   make sure the file is referenced by the
+   `RPM_CHANGELOG="<component>.changelog"` variable in `utils/rpms/<component>.sh`.

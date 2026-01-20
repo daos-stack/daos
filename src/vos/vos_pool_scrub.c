@@ -272,6 +272,9 @@ sc_get_rec_in_chunk_at_idx(const struct scrub_ctx *ctx, uint32_t i)
 static void
 sc_wait_until_should_continue(struct scrub_ctx *ctx)
 {
+	if (sc_cont_is_stopping(ctx))
+		return;
+
 	if (sc_mode(ctx) == DAOS_SCRUB_MODE_TIMED) {
 		struct timespec	now;
 		uint64_t	msec_between;
@@ -281,6 +284,8 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 			d_tm_set_gauge(ctx->sc_metrics.scm_next_csum_scrub, msec_between);
 			/* don't wait longer than 1 sec each loop */
 			sc_sleep(ctx, min(1000, msec_between));
+			if (sc_cont_is_stopping(ctx))
+				break;
 		}
 	} else if (sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
 		sc_sleep(ctx, 0);
@@ -290,6 +295,8 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 			 * trying again
 			 */
 			sc_sleep(ctx, 1000);
+			if (sc_cont_is_stopping(ctx))
+				break;
 		}
 		sc_m_track_idle(ctx);
 	} else {
@@ -732,8 +739,7 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 	 * partial extents. Unit test multiple_overlapping_extents() verifies
 	 * this case. srv_csum.c has some logic that might be useful/reused.
 	 */
-	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchor,
-			 obj_iter_scrub_pre_cb, NULL, ctx, NULL);
+	rc = vos_iterate_obj(&param, &anchor, obj_iter_scrub_pre_cb, NULL, ctx, NULL);
 
 	if (rc != DER_SUCCESS) {
 		if (rc == -DER_INPROGRESS)
@@ -872,7 +878,7 @@ cont_iter_is_loaded_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	 * initialized if csums are enabled
 	 */
 	if (!args->args_found_unloaded_container)
-		args->args_found_unloaded_container = !args->args_ctx->sc_cont.scs_props_fetched;
+		args->args_found_unloaded_container = !args->args_ctx->sc_cont.scs_csummer_inited;
 
 	sc_cont_teardown(ctx);
 	return 0;

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,27 +24,22 @@ import (
 // log message context refers to caller not callee.
 const UtilLogDepth = 4
 
-// GetFilePaths return full file paths in given directory with
-// matching file extensions
-func GetFilePaths(dir string, ext string) ([]string, error) {
+// GetFilenames returns names of files in a directory.
+func GetFilenames(dir string) ([]string, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	extension := ext
-	// if extension has been provided without '.' prefix, add one
-	if filepath.Ext(ext) == "" {
-		extension = fmt.Sprintf(".%s", ext)
-	}
-	var matchingFiles []string
+
+	names := []string{}
 	for _, file := range files {
-		if filepath.Ext(file.Name()) == extension {
-			matchingFiles = append(
-				matchingFiles,
-				fmt.Sprintf("%s/%s", dir, file.Name()))
+		if file.IsDir() {
+			continue
 		}
+		names = append(names, file.Name())
 	}
-	return matchingFiles, nil
+
+	return names, nil
 }
 
 // TruncFile overrides existing or creates new file with default options

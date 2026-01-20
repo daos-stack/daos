@@ -6,7 +6,7 @@ timeouts:
   test_metadata_fillup_svc_ops_disabled: 400
   test_metadata_fillup_svc_ops_enabled: 400
   test_metadata_addremove: 1300
-  test_metadata_server_restart: 500
+  test_metadata_server_restart: 1500
 
 server_config:
   name: daos_server
@@ -17,8 +17,6 @@ server_config:
       nr_xs_helpers: 4
       first_core: 0
       pinned_numa_node: 0
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -34,8 +32,6 @@ server_config:
       nr_xs_helpers: 4
       first_core: 0
       pinned_numa_node: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -61,12 +57,15 @@ container:
   register_cleanup: False
 
 ior:
-  clientslots:
-    slots: 1
+  np: 1
   dfs_destroy: false
   iorwriteflags: "-w -W -k -G 1"
   iorreadflags: "-r -R -G 1"
-  dfs_oclass: "SX"
+  test_file: /testFile
+  transfer_size: 8B
+  block_size: 8B
+  api: DFS
+  dfs_oclass: SX
 
 metadata:
   mean_percent: 1

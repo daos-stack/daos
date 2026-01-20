@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,31 +26,36 @@ type (
 		err      error
 		index    uint64
 		response interface{}
+		config   raft.Configuration
 	}
 	mockRaftServiceConfig struct {
-		LeaderCh              <-chan bool
-		ServerAddress         raft.ServerAddress
-		State                 raft.RaftState
-		LeadershipTransferErr error
-		BarrierReturn         raft.Future
+		LeaderCh               <-chan bool
+		ServerAddress          raft.ServerAddress
+		State                  raft.RaftState
+		LeadershipTransferErr  error
+		BarrierReturn          raft.Future
+		GetConfigurationReturn raft.ConfigurationFuture
 	}
 	mockRaftService struct {
-		cfg mockRaftServiceConfig
-		fsm raft.FSM
+		cfg                    mockRaftServiceConfig
+		fsm                    raft.FSM
+		addVoterCalledForAddrs []string
 	}
 )
 
 // mockRaftFuture implements raft.Future, raft.IndexFuture, and raft.ApplyFuture
-func (mrf *mockRaftFuture) Error() error          { return mrf.err }
-func (mrf *mockRaftFuture) Index() uint64         { return mrf.index }
-func (mrf *mockRaftFuture) Response() interface{} { return mrf.response }
+func (mrf *mockRaftFuture) Error() error                      { return mrf.err }
+func (mrf *mockRaftFuture) Index() uint64                     { return mrf.index }
+func (mrf *mockRaftFuture) Response() interface{}             { return mrf.response }
+func (mrf *mockRaftFuture) Configuration() raft.Configuration { return mrf.config }
 
 func (mrs *mockRaftService) Apply(cmd []byte, timeout time.Duration) raft.ApplyFuture {
 	mrs.fsm.Apply(&raft.Log{Data: cmd})
 	return &mockRaftFuture{}
 }
 
-func (mr *mockRaftService) AddVoter(_ raft.ServerID, _ raft.ServerAddress, _ uint64, _ time.Duration) raft.IndexFuture {
+func (mr *mockRaftService) AddVoter(_ raft.ServerID, addr raft.ServerAddress, _ uint64, _ time.Duration) raft.IndexFuture {
+	mr.addVoterCalledForAddrs = append(mr.addVoterCalledForAddrs, string(addr))
 	return &mockRaftFuture{}
 }
 
@@ -90,6 +96,18 @@ func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
 		return &mockRaftFuture{}
 	}
 	return mrs.cfg.BarrierReturn
+}
+
+func (mrs *mockRaftService) GetConfiguration() raft.ConfigurationFuture {
+	if mrs.cfg.GetConfigurationReturn == nil {
+		return &mockRaftFuture{}
+	}
+	return mrs.cfg.GetConfigurationReturn
+}
+
+// resetCalls resets call counts for the mock.
+func (mrs *mockRaftService) resetCalls() {
+	mrs.addVoterCalledForAddrs = nil
 }
 
 func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {

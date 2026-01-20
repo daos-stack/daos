@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -97,7 +98,7 @@ class ObjectDataValidation(TestWithServers):
         obj = self.get_object(container)
         ioreq = self.get_io_request(obj)
 
-        self.d_log.info("==Writing the Single Dataset for negative test...")
+        self.log.info("==Writing the Single Dataset for negative test...")
         record_index = 0
         expected_error = "RC: -1002"
         dkey = 0
@@ -196,7 +197,7 @@ class ObjectDataValidation(TestWithServers):
         obj = self.get_object(container)
         ioreq = self.get_io_request(obj)
 
-        self.d_log.info("Writing the Single Dataset")
+        self.log_step("Writing the Single Dataset")
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
@@ -213,7 +214,7 @@ class ObjectDataValidation(TestWithServers):
 
         ioreq = self.reconnect(obj, container)
 
-        self.d_log.info("Single Dataset Verification -- Started")
+        self.log_step("Single Dataset Verification -- Started")
         record_index = 0
         transaction_index = 0
         for dkey in range(no_of_dkeys):
@@ -223,21 +224,16 @@ class ObjectDataValidation(TestWithServers):
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 val = ioreq.single_fetch(c_dkey, c_akey, len(indata) + 1)
                 if indata != str(val.value, 'utf-8'):
-                    self.d_log.error("ERROR:Data mismatch for "
-                                     "dkey = {0}, "
-                                     "akey = {1}".format(
-                                         "dkey {0}".format(dkey),
-                                         "akey {0}".format(akey)))
-                    self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}"
-                              .format("dkey {0}".format(dkey),
-                                      "akey {0}".format(akey)))
+                    msg = f"ERROR: Data mismatch for dkey = dkey {dkey}, akey = akey {akey}"
+                    self.log.error(msg)
+                    self.fail(msg)
 
                 transaction_index = transaction_index + 1
                 record_index = record_index + 1
                 if record_index == len(record_length):
                     record_index = 0
 
-        self.log.info('Test passed')
+        self.log_step('Test passed')
 
     @avocado.fail_on(DaosApiError)
     def test_array_object_validation(self):
@@ -260,7 +256,7 @@ class ObjectDataValidation(TestWithServers):
         obj = self.get_object(container)
         ioreq = self.get_io_request(obj)
 
-        self.d_log.info("Writing the Array Dataset")
+        self.log_step("Writing the Array Dataset")
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
@@ -279,7 +275,7 @@ class ObjectDataValidation(TestWithServers):
 
         ioreq = self.reconnect(obj, container)
 
-        self.d_log.info("Array Dataset Verification -- Started")
+        self.log_step("Array Dataset Verification -- Started")
         record_index = 0
         transaction_index = 0
         for dkey in range(no_of_dkeys):
@@ -297,18 +293,13 @@ class ObjectDataValidation(TestWithServers):
 
                 for item in enumerate(indata):
                     if indata[item[0]] != str(outdata[item[0]], 'utf-8')[:-1]:
-                        self.d_log.error("ERROR:Data mismatch for "
-                                         "dkey = {0}, "
-                                         "akey = {1}".format(
-                                             "dkey {0}".format(dkey),
-                                             "akey {0}".format(akey)))
-                        self.fail("ERROR:Data mismatch for dkey = {0}, akey={1}"
-                                  .format("dkey {0}".format(dkey),
-                                          "akey {0}".format(akey)))
+                        msg = f"ERROR: Data mismatch for dkey = dkey {dkey}, akey = akey {akey}"
+                        self.log.error(msg)
+                        self.fail(msg)
 
                 transaction_index = transaction_index + 1
                 record_index = record_index + 1
                 if record_index == len(record_length):
                     record_index = 0
 
-        self.log.info('Test passed')
+        self.log_step('Test passed')

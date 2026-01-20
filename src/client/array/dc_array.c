@@ -1887,9 +1887,9 @@ dc_array_punch(tse_task_t *task)
 			   DAOS_OPC_ARRAY_PUNCH, task);
 }
 
-#define ENUM_KEY_BUF	32
-#define ENUM_DESC_BUF	512
-#define ENUM_DESC_NR	5
+#define ENUM_DESC_BUF    512
+#define ENUM_DESC_NR     16
+#define ENUM_DESC_NR_MAX 2048
 
 struct key_query_props {
 	struct dc_array		*array;
@@ -2089,11 +2089,15 @@ err_task:
 
 struct set_size_props {
 	struct dc_array *array;
-	char		buf[ENUM_DESC_BUF];
-	daos_key_desc_t kds[ENUM_DESC_NR];
+	char             buf_inline[ENUM_DESC_BUF];
+	daos_key_desc_t  kds_inline[ENUM_DESC_NR];
+	daos_key_desc_t *kds;
+	char            *buf;
 	char		*val;
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
+	uint32_t         kds_size;
+	uint32_t         buf_len;
 	uint32_t	nr;
 	daos_anchor_t	anchor;
 	bool		update_dkey;
@@ -2111,6 +2115,10 @@ free_set_size_cb(tse_task_t *task, void *data)
 {
 	struct set_size_props *props = *((struct set_size_props **)data);
 
+	if (props->kds != props->kds_inline)
+		D_FREE(props->kds);
+	if (props->buf != props->buf_inline)
+		D_FREE(props->buf);
 	D_FREE(props->val);
 	if (props->array)
 		array_decref(props->array);
@@ -2539,10 +2547,37 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 	}
 
 	if (!daos_anchor_is_eof(args->dkey_anchor)) {
-		props->nr = ENUM_DESC_NR;
-		memset(props->buf, 0, ENUM_DESC_BUF);
+		/* if with more dkeys, double the memory for list dkey to save #RPCs */
+		if (props->nr == props->kds_size && props->kds_size * 2 <= ENUM_DESC_NR_MAX) {
+			uint32_t         new_buf_len;
+			uint32_t         new_kds_size;
+			char            *new_buf;
+			daos_key_desc_t *new_kds;
+
+			new_buf_len = props->buf_len * 2;
+			D_ALLOC(new_buf, new_buf_len);
+			if (new_buf == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			new_kds_size = props->kds_size * 2;
+			D_ALLOC_ARRAY(new_kds, new_kds_size);
+			if (new_kds == NULL) {
+				D_FREE(new_buf);
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			if (props->kds != props->kds_inline)
+				D_FREE(props->kds);
+			if (props->buf != props->buf_inline)
+				D_FREE(props->buf);
+			props->buf      = new_buf;
+			props->buf_len  = new_buf_len;
+			props->kds      = new_kds;
+			props->kds_size = new_kds_size;
+			args->kds       = props->kds;
+		}
+		props->nr = props->kds_size;
+		memset(props->buf, 0, props->buf_len);
 		args->sgl->sg_nr = 1;
-		d_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
+		d_iov_set(&args->sgl->sg_iovs[0], props->buf, props->buf_len);
 
 		rc = tse_task_register_cbs(task, NULL, NULL, 0, adjust_array_size_cb, &props,
 					   sizeof(props));
@@ -2612,25 +2647,29 @@ dc_array_set_size(tse_task_t *task)
 	if (set_size_props == NULL)
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
-	set_size_props->dkey_val = dkey_val;
-	set_size_props->array = array;
-	set_size_props->cell_size = array->cell_size;
+	set_size_props->dkey_val    = dkey_val;
+	set_size_props->array       = array;
+	set_size_props->cell_size   = array->cell_size;
 	set_size_props->num_records = num_records;
-	set_size_props->record_i = record_i;
-	set_size_props->chunk_size = array->chunk_size;
-	set_size_props->nr = ENUM_DESC_NR;
-	set_size_props->size = args->size;
-	set_size_props->ptask = task;
-	set_size_props->val = NULL;
+	set_size_props->record_i    = record_i;
+	set_size_props->chunk_size  = array->chunk_size;
+	set_size_props->nr          = ENUM_DESC_NR;
+	set_size_props->kds_size    = ENUM_DESC_NR;
+	set_size_props->size        = args->size;
+	set_size_props->ptask       = task;
+	set_size_props->val         = NULL;
+	set_size_props->kds         = set_size_props->kds_inline;
+	set_size_props->buf         = set_size_props->buf_inline;
+	set_size_props->buf_len     = ENUM_DESC_BUF;
 	if (args->size == 0)
 		set_size_props->update_dkey = false;
 	else
 		set_size_props->update_dkey = true;
-	memset(set_size_props->buf, 0, ENUM_DESC_BUF);
+	memset(set_size_props->buf, 0, set_size_props->buf_len);
 	memset(&set_size_props->anchor, 0, sizeof(set_size_props->anchor));
 	set_size_props->sgl.sg_nr = 1;
 	set_size_props->sgl.sg_iovs = &set_size_props->iov;
-	d_iov_set(&set_size_props->sgl.sg_iovs[0], set_size_props->buf, ENUM_DESC_BUF);
+	d_iov_set(&set_size_props->sgl.sg_iovs[0], set_size_props->buf, set_size_props->buf_len);
 
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task), 0, NULL, &enum_task);
 	if (rc)

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,10 +19,11 @@ struct program_args {
 	char *pa_cmd_file;
 	char *pa_r_cmd_run;
 	char *pa_pool_path;
+	char *pa_db_path;
 	bool  pa_write_mode;
 	bool  pa_get_help;
 };
-#define DB_PATH_LEN 64
+#define DB_PATH_LEN 256
 struct vos_file_parts {
 	char            vf_db_path[DB_PATH_LEN];
 	uuid_t		vf_pool_uuid;
@@ -49,5 +51,9 @@ int ddb_parse_key(const char *input, daos_key_t *key);
  * expected to be.
  */
 int ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id);
+
+/* Parse a string representing a date into a DTX commit time */
+int
+ddb_date2cmt_time(const char *date, uint64_t *cmt_time);
 
 #endif /** __DAOS_DDB_PARSE_H */

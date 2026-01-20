@@ -33,9 +33,11 @@ exp_vals:
   version: 1
   leader: 0
   replicas: [0]
-  query_mask: "disabled_engines,rebuild,space"
+  query_mask: "disabled_engines,rebuild,self_heal_policy,space"
+  self_heal_policy: "exclude;rebuild"
   scm:
     total: 16000008192
+    total_mdonssd: 16039018496
   nvme:
     total: 32000000000
   rebuild:

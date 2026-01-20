@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -33,7 +35,7 @@ type (
 	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, error, int) error
+	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, uint64, error, int) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -48,6 +50,7 @@ type EngineInstance struct {
 
 	log             logging.Logger
 	runner          EngineRunner
+	incarnation     uint64
 	storage         *storage.Provider
 	waitFormat      atm.Bool
 	storageReady    chan bool
@@ -58,6 +61,7 @@ type EngineInstance struct {
 	fsRoot          string
 	hostFaultDomain *system.FaultDomain
 	joinSystem      systemJoinFn
+	replaceRank     atm.Bool
 	onAwaitFormat   []onAwaitFormatFn
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
@@ -209,6 +213,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		InstanceIdx:          ei.Index(),
 		Incarnation:          ready.GetIncarnation(),
 		CheckMode:            ready.GetCheckMode(),
+		Replace:              ei.replaceRank.Load(),
 	}
 
 	resp, err := ei.joinSystem(ctx, joinReq)
@@ -231,6 +236,9 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		}
 	}
 	r = ranklist.Rank(resp.Rank)
+
+	// Reset replaceRank state for instance after joinSystem() has returned.
+	ei.replaceRank.SetFalse()
 
 	if !superblock.ValidRank || ready.Uri != superblock.URI {
 		ei.log.Noticef("updating rank %d URI to %s", resp.Rank, ready.Uri)
@@ -274,9 +282,31 @@ func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
 	return nil
 }
 
+func (ei *EngineInstance) updateIncarnation(req *srvpb.NotifyReadyReq) error {
+	ei.incarnation = req.Incarnation
+	ei.log.Debugf("engine idx=%d ready notification with incarnation=%d", ei.Index(), ei.incarnation)
+
+	sb := ei.getSuperblock()
+	if sb == nil {
+		return errors.New("nil superblock while updating incarnation")
+	}
+	sb.Incarnation = req.Incarnation
+	ei.setSuperblock(sb)
+	if err := ei.WriteSuperblock(); err != nil {
+		return errors.Wrapf(err, "write incarnation=%d to superblock", req.Incarnation)
+	}
+
+	ei.log.Debugf("engine idx=%d wrote incarnation=%d to superblock", ei.Index(), ei.incarnation)
+	return nil
+}
+
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
 func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := ei.updateIncarnation(ready); err != nil {
+		return err
+	}
+
 	if err := ei.updateFaultDomainInSuperblock(); err != nil {
 		ei.log.Error(err.Error()) // nonfatal
 	}
@@ -314,7 +344,7 @@ func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map
 }
 
 func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
-	dresp, err := ei.callDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
+	dresp, err := ei.callDrpc(ctx, daos.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
 	if err != nil {
 		return err
 	}
@@ -374,7 +404,7 @@ func (ei *EngineInstance) GetTargetCount() int {
 }
 
 func (ei *EngineInstance) callSetUp(ctx context.Context) error {
-	dresp, err := ei.callDrpc(ctx, drpc.MethodSetUp, nil)
+	dresp, err := ei.callDrpc(ctx, daos.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}

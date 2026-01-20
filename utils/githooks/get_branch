@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+# find the base branch of the current branch
+# base branches can be master, release/2.4+, release/3+
+# or optionally branches passed into $1
+set -eu -o pipefail
+
+TARGET="origin/master"
+min_diff=-1
+
+find_branches()
+{
+      for script in "utils/githooks/branches."*; do
+        "${script}"
+      done
+}
+
+for origin in $(git remote); do
+  if [ $# -eq 1 ]; then
+    # Assume the branch was found and we just want to find the remote
+    all_bases=("$1")
+  else
+    builtin_bases=()
+    while IFS= read -r base; do
+        builtin_bases+=("$base")
+    done < <(echo "master"
+             git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[4-9]\|[3-9]\)/s/^  $origin\\///p")
+    export ORIGIN="${origin}"
+    export find_branches
+    readarray -t branches <<< "$(find_branches)"
+    all_bases=("${builtin_bases[@]}" "${branches[@]}")
+  fi
+  for base in "${all_bases[@]}"; do
+      git rev-parse --verify "${origin}/${base}" &> /dev/null || continue
+
+      commits_ahead=$(git log --oneline "${origin}/${base}..HEAD" | wc -l)
+      if [ "${min_diff}" -eq -1 ] || [ "${min_diff}" -gt "${commits_ahead}" ]; then
+          TARGET="${origin}/${base}"
+          min_diff="${commits_ahead}"
+      fi
+  done
+done
+echo "$TARGET"
+exit 0

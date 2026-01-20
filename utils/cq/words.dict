@@ -156,6 +156,7 @@ dirname
 distro
 dkey
 dkeys
+dlck
 dll
 dmg
 dnf
@@ -350,6 +351,7 @@ posix
 postfix
 pparent
 ppn
+pragma
 pragmas
 prebuild
 prebuilding
@@ -475,6 +477,7 @@ timestamp
 timestamps
 tmp
 tmpfs
+toolchain
 toplevel
 traceback
 transfersize

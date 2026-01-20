@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,10 +9,14 @@
 
 #include <abt.h>
 #include <daos/common.h>
+#include <daos_srv/vos.h>
 #include <daos_errno.h>
 #include "srv_internal.h"
 
 /* ============== Thread collective functions ============================ */
+
+/** The maximum number of credits for each IO chore queue. That is per helper XS. */
+uint32_t dss_chore_credits;
 
 struct aggregator_arg_type {
 	struct dss_stream_arg_type	at_args;
@@ -88,18 +93,16 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 			       struct dss_coll_args *args, bool create_ult,
 			       unsigned int flags)
 {
-	struct collective_arg		carg;
-	struct dss_coll_stream_args	*stream_args;
-	struct dss_stream_arg_type	*stream;
-	struct aggregator_arg_type	aggregator;
-	struct dss_xstream		*dx;
-	ABT_future			future;
-	int				xs_nr;
-	int				rc;
-	int				tid;
-	int				tgt_id = dss_get_module_info()->dmi_tgt_id;
-	uint32_t			bm_len;
-	bool				self = false;
+	struct dss_coll_stream_args *stream_args;
+	struct dss_stream_arg_type  *stream;
+	struct dss_xstream          *dx;
+	struct collective_arg        carg;
+	struct aggregator_arg_type   aggregator;
+	ABT_future                   future;
+	uint32_t                     bm_len;
+	int                          xs_nr;
+	int                          rc;
+	int                          tid;
 
 	if (ops == NULL || args == NULL || ops->co_func == NULL) {
 		D_DEBUG(DB_MD, "mandatory args missing dss_collective_reduce");
@@ -167,11 +170,6 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 				D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 				continue;
 			}
-
-			if (tgt_id == tid && flags & DSS_USE_CURRENT_ULT) {
-				self = true;
-				continue;
-			}
 		}
 
 		dx = dss_get_xstream(DSS_MAIN_XS_ID(tid));
@@ -210,12 +208,6 @@ next:
 			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
-	}
-
-	if (self) {
-		stream = &stream_args->csa_streams[tgt_id];
-		stream->st_coll_args = &carg;
-		collective_func(stream);
 	}
 
 	ABT_future_wait(future);
@@ -716,20 +708,20 @@ dss_chore_ult(void *arg)
  * Add \a chore for \a func to the chore queue of some other xstream.
  *
  * \param[in]	chore	address of the embedded chore object
- * \param[in]	func	function to be executed via \a chore
  *
  * \retval	-DER_CANCEL	chore queue stopping
  */
 int
-dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_register(struct dss_chore *chore)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	int                     xs_id;
 	struct dss_xstream     *dx;
 	struct dss_chore_queue *queue;
 
+	D_ASSERT(chore->cho_credits > 0);
+
 	chore->cho_status = DSS_CHORE_NEW;
-	chore->cho_func   = func;
 
 	/*
 	 * The dss_chore_queue_ult approach may get insufficient scheduling on
@@ -755,13 +747,44 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 		ABT_mutex_unlock(queue->chq_mutex);
 		return -DER_CANCELED;
 	}
+
+	if (!chore->cho_priority && queue->chq_credits < chore->cho_credits) {
+		/*
+		 * Piggyback current available credits, then the caller can decide
+		 * whether can shrink credit requirement and retry with more steps.
+		 */
+		chore->cho_credits = queue->chq_credits;
+		ABT_mutex_unlock(queue->chq_mutex);
+		return -DER_AGAIN;
+	}
+
+	/* queue->chq_credits can be negative temporarily because of high priority requests. */
+	queue->chq_credits -= chore->cho_credits;
+	chore->cho_hint = queue;
 	d_list_add_tail(&chore->cho_link, &queue->chq_list);
 	ABT_cond_broadcast(queue->chq_cond);
 	ABT_mutex_unlock(queue->chq_mutex);
 
-	D_DEBUG(DB_TRACE, "%p: tgt_id=%d -> xs_id=%d dx.tgt_id=%d\n", chore, info->dmi_tgt_id,
-		xs_id, dx->dx_tgt_id);
+	D_DEBUG(DB_TRACE, "register chore %p on queue %p: tgt=%d -> xs=%d dx.tgt=%d, credits %u\n",
+		chore, queue, info->dmi_tgt_id, xs_id, dx->dx_tgt_id, chore->cho_credits);
 	return 0;
+}
+
+void
+dss_chore_deregister(struct dss_chore *chore)
+{
+	struct dss_chore_queue *queue = chore->cho_hint;
+
+	if (queue != NULL) {
+		D_ASSERT(chore->cho_credits > 0);
+
+		ABT_mutex_lock(queue->chq_mutex);
+		queue->chq_credits += chore->cho_credits;
+		ABT_mutex_unlock(queue->chq_mutex);
+
+		D_DEBUG(DB_TRACE, "deregister chore %p from queue %p: credits %u\n", chore, queue,
+			chore->cho_credits);
+	}
 }
 
 /**
@@ -771,11 +794,10 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
  * \param[in]	func	function to be executed via \a chore
  */
 void
-dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func)
+dss_chore_diy(struct dss_chore *chore)
 {
 	D_INIT_LIST_HEAD(&chore->cho_link);
 	chore->cho_status = DSS_CHORE_NEW;
-	chore->cho_func   = func;
 
 	dss_chore_diy_internal(chore);
 }
@@ -856,6 +878,7 @@ dss_chore_queue_init(struct dss_xstream *dx)
 
 	D_INIT_LIST_HEAD(&queue->chq_list);
 	queue->chq_stop = false;
+	queue->chq_credits = dss_chore_credits;
 
 	rc = ABT_mutex_create(&queue->chq_mutex);
 	if (rc != ABT_SUCCESS) {
@@ -908,4 +931,81 @@ dss_chore_queue_fini(struct dss_xstream *dx)
 
 	ABT_cond_free(&queue->chq_cond);
 	ABT_mutex_free(&queue->chq_mutex);
+}
+
+struct dss_vos_pool_create_args {
+	const char    *spc_path;
+	unsigned char *spc_uuid;
+	daos_size_t    spc_scm_size;
+	daos_size_t    spc_data_sz;
+	daos_size_t    spc_meta_sz;
+	unsigned int   spc_flags;
+	uint32_t       spc_version;
+	daos_handle_t *spc_pool;
+};
+
+static int
+dss_vos_pool_create_ult(void *varg)
+{
+	struct dss_vos_pool_create_args *arg = varg;
+
+	return vos_pool_create(arg->spc_path, arg->spc_uuid, arg->spc_scm_size, arg->spc_data_sz,
+			       arg->spc_meta_sz, arg->spc_flags, arg->spc_version, arg->spc_pool);
+}
+
+/**
+ * Call vos_pool_create in a new deep-stack ULT on the same xstream. This is to
+ * avoid pmemobj_create or SPDK from overflowing the stack of the calling ULT.
+ */
+int
+dss_vos_pool_create(const char *path, unsigned char *uuid, daos_size_t scm_size,
+		    daos_size_t data_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,
+		    daos_handle_t *pool)
+{
+	struct dss_vos_pool_create_args args;
+
+	args.spc_path     = path;
+	args.spc_uuid     = uuid;
+	args.spc_scm_size = scm_size;
+	args.spc_data_sz  = data_sz;
+	args.spc_meta_sz  = meta_sz;
+	args.spc_flags    = flags;
+	args.spc_version  = version;
+	args.spc_pool     = pool;
+
+	return dss_ult_execute(dss_vos_pool_create_ult, &args, NULL /* user_cb */,
+			       NULL /* cb_args */, DSS_XS_SELF, 0 /* tgt_id */, DSS_DEEP_STACK_SZ);
+}
+
+struct dss_vos_pool_open_args {
+	const char    *spo_path;
+	unsigned char *spo_uuid;
+	unsigned int   spo_flags;
+	daos_handle_t *spo_pool;
+};
+
+static int
+dss_vos_pool_open_ult(void *varg)
+{
+	struct dss_vos_pool_open_args *arg = varg;
+
+	return vos_pool_open(arg->spo_path, arg->spo_uuid, arg->spo_flags, arg->spo_pool);
+}
+
+/**
+ * Call vos_pool_open in a new deep-stack ULT on the same xstream. This is to
+ * avoid pmemobj_open or SPDK from overflowing the stack of the calling ULT.
+ */
+int
+dss_vos_pool_open(const char *path, unsigned char *uuid, unsigned int flags, daos_handle_t *pool)
+{
+	struct dss_vos_pool_open_args args;
+
+	args.spo_path  = path;
+	args.spo_uuid  = uuid;
+	args.spo_flags = flags;
+	args.spo_pool  = pool;
+
+	return dss_ult_execute(dss_vos_pool_open_ult, &args, NULL /* user_cb */, NULL /* cb_args */,
+			       DSS_XS_SELF, 0 /* tgt_id */, DSS_DEEP_STACK_SZ);
 }

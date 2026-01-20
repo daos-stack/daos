@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,9 +31,10 @@ var (
 
 func TestProvider_Scan(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mbc     *MockBackendConfig
-		expErr  error
-		expResp *storage.ScmScanResponse
+		pmemInConfig bool // Request param used to indicate whether pmem devices in config.
+		mbc          *MockBackendConfig
+		expErr       error
+		expResp      *storage.ScmScanResponse
 	}{
 		"no modules": {
 			mbc: &MockBackendConfig{
@@ -63,11 +65,21 @@ func TestProvider_Scan(t *testing.T) {
 				Namespaces: storage.ScmNamespaces{defaultNamespace},
 			},
 		},
-		"get modules fails": {
+		"get modules fails; pmem in config": {
+			pmemInConfig: true,
 			mbc: &MockBackendConfig{
 				GetModulesErr: FaultGetModulesFailed,
 			},
 			expErr: FaultGetModulesFailed,
+		},
+		"get modules fails; no pmem in config": {
+			mbc: &MockBackendConfig{
+				GetModulesErr: FaultGetModulesFailed,
+			},
+			expResp: &storage.ScmScanResponse{
+				Modules:    storage.ScmModules{},
+				Namespaces: storage.ScmNamespaces{},
+			},
 		},
 		"get namespaces fails": {
 			mbc: &MockBackendConfig{
@@ -83,7 +95,11 @@ func TestProvider_Scan(t *testing.T) {
 
 			p := NewMockProvider(log, tc.mbc, nil)
 
-			resp, err := p.Scan(storage.ScmScanRequest{})
+			req := storage.ScmScanRequest{
+				PMemInConfig: tc.pmemInConfig,
+			}
+
+			resp, err := p.Scan(req)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -111,10 +112,10 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         os.makedirs(metrics_dir, exist_ok=True)
         per_engine_results = self.server_managers[0].get_daos_metrics()
         for engine_idx, engine_results in enumerate(per_engine_results):
-            for host_results in engine_results:
-                log_name = "{}_engine{}.csv".format(host_results["hosts"], engine_idx)
+            for hosts, stdout in engine_results.all_stdout.items():
+                log_name = "{}_engine{}.csv".format(hosts, engine_idx)
                 log_path = os.path.join(metrics_dir, log_name)
-                self.log_performance(host_results["stdout"], False, log_path)
+                self.log_performance(stdout, False, log_path)
 
     @property
     def unique_id(self):

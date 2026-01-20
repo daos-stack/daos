@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -166,11 +167,10 @@ struct btr_context {
 /** size of print buffer */
 #define BTR_PRINT_BUF			128
 
-static int btr_class_init(umem_off_t root_off,
-			  struct btr_root *root, unsigned int tree_class,
-			  uint64_t *tree_feats, struct umem_attr *uma,
-			  daos_handle_t coh, void *priv,
-			  struct btr_instance *tins);
+static int
+btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_class,
+	       uint64_t *tree_feats, struct umem_attr *uma, daos_handle_t coh, void *priv,
+	       btr_report_fn_t report_fn, void *report_arg, struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  umem_off_t nd_off,
 					  unsigned int at);
@@ -318,6 +318,11 @@ btr_ops(struct btr_context *tcx)
 	return tcx->tc_tins.ti_ops;
 }
 
+static inline void
+report_fn_nop(void *arg, enum btr_report_type type, const char *fmt, ...)
+{
+}
+
 /**
  * Create a btree context (in volatile memory).
  *
@@ -346,8 +351,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 		return -DER_NOMEM;
 
 	tcx->tc_ref = 1; /* for the caller */
-	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma,
-			    coh, priv, &tcx->tc_tins);
+	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, report_fn_nop,
+			    NULL, &tcx->tc_tins);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
 			DP_RC(rc));
@@ -1697,11 +1702,12 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	memset(&tcx->tc_traces[0], 0,
 	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 
-	/* depth could be changed by dbtree_delete/dbtree_iter_delete from
-	 * a different btr_context, so we always reinitialize both depth
-	 * and start point of trace for the context.
+	/* depth & feats could be changed by dbtree_delete/dbtree_iter_delete
+	 * from a different btr_context, so we always reinitialize both depth,
+	 * feats and start point of trace for the context.
 	 */
 	btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
+	tcx->tc_feats = tcx->tc_tins.ti_root->tr_feats;
 
 	if (btr_root_empty(tcx)) { /* empty tree */
 		D_DEBUG(DB_TRACE, "Empty tree\n");
@@ -2819,17 +2825,6 @@ btr_node_del_leaf(struct btr_context *tcx,
 		if (rc != 0)
 			return rc;
 
-		if (tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL) {
-			struct btr_node	*nd;
-
-			nd = btr_off2ptr(tcx, cur_tr->tr_node);
-			/* Current leaf node become empty,
-			 * will be removed from parent node.
-			 */
-			if (nd->tn_keyn == 0)
-				return 0;
-		}
-
 		return 1;
 	}
 
@@ -3146,13 +3141,12 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		is_leaf ? "record" : "child", is_leaf ? "leaf" : "non-leaf",
 		cur_nd->tn_keyn);
 
-	if (cur_nd->tn_keyn > 1 ||
-	    (is_leaf && tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)) {
+	if (cur_nd->tn_keyn > 1) {
 		/* OK to delete record without doing any extra work */
 		D_DEBUG(DB_TRACE, "Straight away deletion, no rebalance.\n");
-		sib_off	= BTR_NODE_NULL;
+		sib_off      = BTR_NODE_NULL;
 		sib_on_right = false; /* whatever... */
-	} else { /* needs to rebalance or merge nodes */
+	} else {                      /* needs to rebalance or merge nodes */
 		D_DEBUG(DB_TRACE, "Parent trace at=%d, key_nr=%d\n",
 			par_tr->tr_at, par_nd->tn_keyn);
 
@@ -3217,8 +3211,46 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 }
 
 /**
+ * Delete the last record from the tree as pointed by @trace.
+ *
+ * It handles both the embedded record and a record stored in a regular tree.
+ */
+static inline int
+btr_root_del_rec_last(struct btr_context *tcx, struct btr_trace *trace, void *args)
+{
+	struct btr_root *root = tcx->tc_tins.ti_root;
+	int              rc;
+
+	rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
+	if (rc != 0)
+		return rc;
+
+	if (btr_has_tx(tcx)) {
+		rc = btr_root_tx_add(tcx);
+		if (rc != 0)
+			return rc;
+	}
+
+	root->tr_depth = 0;
+	root->tr_node  = BTR_NODE_NULL;
+
+	if (btr_has_embedded_value(tcx)) {
+		root->tr_feats ^= BTR_FEAT_EMBEDDED;
+		tcx->tc_feats = root->tr_feats;
+	}
+
+	btr_context_set_depth(tcx, 0);
+	D_DEBUG(DB_TRACE, "Tree is empty now.\n");
+
+	return 0;
+}
+
+/**
  * Deleted the record/child pointed by @trace from the root node.
  *
+ * - If the remaining value is embedded it will be freed.
+ * - If only one record is left in the root and the embedded value is supported, it will become an
+ * embedded value.
  * - If the root node is also a leaf, and the root is empty after the deletion,
  *   then the root node will be freed as well.
  * - If the root node is a non-leaf node, then the corresponding child node
@@ -3228,35 +3260,33 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 static int
 btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 {
-	struct btr_node		*node;
-	struct btr_root		*root;
-	int			 rc = 0;
-	int                      threshold = 1;
-
-	root = tcx->tc_tins.ti_root;
-	node = btr_off2ptr(tcx, trace->tr_node);
+	struct btr_node *node = NULL;
+	struct btr_root *root = tcx->tc_tins.ti_root;
+	int              rc   = 0;
 
 	D_DEBUG(DB_TRACE, "Delete record/child from tree root, depth=%d\n",
 		root->tr_depth);
 
-	if (btr_has_embedded_value(tcx) || btr_node_is_leaf(tcx, trace->tr_node)) {
-		if (D_LOG_ENABLED(DB_TRACE)) {
-			if (btr_has_embedded_value(tcx)) {
-				D_DEBUG(DB_TRACE, "Delete embedded record from the root\n");
-			} else {
-				D_DEBUG(DB_TRACE, "Delete leaf from the root, key_nr=%d.\n",
-					node->tn_keyn);
-			}
-		}
+	if (btr_has_embedded_value(tcx)) {
+		D_DEBUG(DB_TRACE, "Delete the embedded record\n");
+		return btr_root_del_rec_last(tcx, trace, args);
+	}
 
-		if (btr_supports_embedded_value(tcx))
-			threshold = 2;
+	D_ASSERT((tcx->tc_trace.ti_embedded_info & BTR_EMBEDDED_SET) == 0);
+	node = btr_off2ptr(tcx, trace->tr_node);
 
+	if (btr_node_is_leaf(tcx, trace->tr_node)) {
 		/* the root is also a leaf node */
-		if (node->tn_keyn > threshold) {
-			/* have more than one record, simply remove the record
-			 * to be deleted.
-			 */
+		D_DEBUG(DB_TRACE, "Delete leaf from the root, key_nr=%d.\n", node->tn_keyn);
+
+		if (node->tn_keyn > 1) {
+			/* When removing the second to last record and embedding value is supported
+			 * the remaining record will become an embedded one. */
+			if (node->tn_keyn == 2 && btr_supports_embedded_value(tcx)) {
+				return btr_node_del_embed(tcx, trace, root, args);
+			}
+
+			/* have more than one record, simply remove the record to be deleted. */
 			if (btr_has_tx(tcx)) {
 				rc = btr_node_tx_add(tcx, trace->tr_node);
 				if (rc != 0)
@@ -3264,28 +3294,8 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			}
 
 			rc = btr_node_del_leaf_only(tcx, trace, true, args);
-		} else if (node->tn_keyn == 2) {
-			rc = btr_node_del_embed(tcx, trace, root, args);
 		} else {
-			rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
-			if (rc != 0)
-				return rc;
-
-			if (btr_has_tx(tcx)) {
-				rc = btr_root_tx_add(tcx);
-				if (rc != 0)
-					return rc;
-			}
-
-			root->tr_depth	= 0;
-			root->tr_node	= BTR_NODE_NULL;
-			if (btr_has_embedded_value(tcx)) {
-				root->tr_feats ^= BTR_FEAT_EMBEDDED;
-				tcx->tc_feats = root->tr_feats;
-			}
-
-			btr_context_set_depth(tcx, 0);
-			D_DEBUG(DB_TRACE, "Tree is empty now.\n");
+			return btr_root_del_rec_last(tcx, trace, args);
 		}
 	} else {
 		/* non-leaf node */
@@ -3394,7 +3404,7 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 	if (opc == BTR_PROBE_BYPASS)
 		goto delete;
 
-	rc = btr_probe_key(tcx, opc, DAOS_INTENT_PUNCH, key);
+	rc = btr_probe_key(tcx, opc, DAOS_INTENT_KILL, key);
 	if (rc == PROBE_RC_INPROGRESS) {
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
 		return -DER_INPROGRESS;
@@ -3784,9 +3794,9 @@ static int
 btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		 void *args, bool *empty_rc)
 {
-	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
+	struct btr_node   *nd;
 	struct btr_record *rec;
-	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
+	bool               leaf;
 	bool		 empty	= true;
 	int		 rc;
 	int		 i;
@@ -3803,6 +3813,10 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		}
 		goto out;
 	}
+
+	/* If it is not an embedded value it is a regular node. */
+	nd   = btr_off2ptr(tcx, nd_off);
+	leaf = btr_node_is_leaf(tcx, nd_off);
 
 	/* NB: don't need to call TX_ADD_RANGE(nd_off, ...) because I never
 	 * change it so nothing to undo on transaction failure, I may destroy
@@ -4437,49 +4451,22 @@ out:
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 
 /**
- * Initialize a tree instance from a registered tree class.
+ * Calculate tree's features.
+ *
+ * \param[in] tree_class	Tree's class identified.
+ * \param[in,out] tree_feats	Tree's features.
+ * \param[in] tc		Tree's class.
+ *
+ * \retval -DER_PROTO	Unsupported features
+ * \retval DER_SUCCESS	Success
  */
 static int
-btr_class_init(umem_off_t root_off, struct btr_root *root,
-	       unsigned int tree_class, uint64_t *tree_feats,
-	       struct umem_attr *uma, daos_handle_t coh, void *priv,
-	       struct btr_instance *tins)
+btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_class *tc)
 {
-	struct btr_class	*tc;
-	uint64_t		 special_feat;
-	int			 rc;
+	uint64_t special_feat;
 
-	memset(tins, 0, sizeof(*tins));
-	rc = umem_class_init(uma, &tins->ti_umm);
-	if (rc != 0)
-		return rc;
-
-	tins->ti_priv = priv;
-	tins->ti_coh = coh;
-	tins->ti_root_off = UMOFF_NULL;
-
-	if (!UMOFF_IS_NULL(root_off)) {
-		tins->ti_root_off = root_off;
-		if (root == NULL)
-			root = umem_off2ptr(&tins->ti_umm, root_off);
-	}
-	tins->ti_root = root;
-
-	if (root != NULL && root->tr_class != 0) {
-		tree_class = root->tr_class;
-		*tree_feats = root->tr_feats;
-	}
-
-	/* XXX should be multi-thread safe */
-	if (tree_class >= BTR_TYPE_MAX) {
-		D_DEBUG(DB_TRACE, "Invalid class id: %d\n", tree_class);
-		return -DER_INVAL;
-	}
-
-	tc = &btr_class_registered[tree_class];
-	if (tc->tc_ops == NULL) {
-		D_DEBUG(DB_TRACE, "Unregistered class id %d\n", tree_class);
-		return -DER_NONEXIST;
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_FEATURES)) { /** fault injection */
+		return -DER_PROTO;
 	}
 
 	/* If no hkey callbacks are supplied, only special key types are
@@ -4498,9 +4485,6 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	if (tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
 		*tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
 
-	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
-		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
-
 	if ((*tree_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) ==
 	    (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) {
 		/** The key is normally stored in value but with integer
@@ -4516,10 +4500,76 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 
 	/** Only check btree managed bits that can be set in tr_class */
 	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_EXT_FEAT_MASK)) {
-		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
-			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;
 	}
+
+	return DER_SUCCESS;
+}
+
+#define TREE_CLASS_STR           "Tree class... "
+#define TREE_FEATURES_STR        "Tree features... "
+#define INVALID_CLASS_FMT        "Invalid class id: %d\n"
+#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d\n"
+#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64 "\n"
+#define OK_STR                   "ok.\n"
+
+/**
+ * Initialize a tree instance from a registered tree class.
+ */
+static int
+btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_class,
+	       uint64_t *tree_feats, struct umem_attr *uma, daos_handle_t coh, void *priv,
+	       btr_report_fn_t report_fn, void *report_arg, struct btr_instance *tins)
+{
+	struct btr_class *tc;
+	int               rc;
+
+	memset(tins, 0, sizeof(*tins));
+	rc = umem_class_init(uma, &tins->ti_umm);
+	if (rc != 0)
+		return rc;
+
+	tins->ti_priv     = priv;
+	tins->ti_coh      = coh;
+	tins->ti_root_off = UMOFF_NULL;
+
+	if (!UMOFF_IS_NULL(root_off)) {
+		tins->ti_root_off = root_off;
+		if (root == NULL)
+			root = umem_off2ptr(&tins->ti_umm, root_off);
+	}
+	tins->ti_root = root;
+
+	if (root != NULL && root->tr_class != 0) {
+		tree_class  = root->tr_class;
+		*tree_feats = root->tr_feats;
+	}
+
+	/* XXX should be multi-thread safe */
+	if (tree_class >= BTR_TYPE_MAX || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_INV_CLASS)) {
+		report_fn(report_arg, BTR_REPORT_ERROR, TREE_CLASS_STR INVALID_CLASS_FMT,
+			  tree_class);
+		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT, tree_class);
+		return -DER_INVAL;
+	}
+
+	tc = &btr_class_registered[tree_class];
+	if (tc->tc_ops == NULL || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_UNREG_CLASS)) {
+		report_fn(report_arg, BTR_REPORT_ERROR, TREE_CLASS_STR UNREGISTERED_CLASS_FMT,
+			  tree_class);
+		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT, tree_class);
+		return -DER_NONEXIST;
+	}
+	report_fn(report_arg, BTR_REPORT_MSG, TREE_CLASS_STR OK_STR);
+
+	rc = btr_class_feats_init(tree_class, tree_feats, tc);
+	if (rc != DER_SUCCESS) {
+		report_fn(report_arg, BTR_REPORT_ERROR, TREE_FEATURES_STR UNSUPPORTED_FEATURES_FMT,
+			  *tree_feats, tc->tc_feats);
+		D_ERROR(UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
+		return rc;
+	}
+	report_fn(report_arg, BTR_REPORT_MSG, TREE_FEATURES_STR OK_STR);
 
 	tins->ti_ops = tc->tc_ops;
 	return rc;
@@ -4634,3 +4684,183 @@ done:
 	return 0;
 }
 
+#define CK_BTREE_NODE_FMT             "Node (off=%#lx)... "
+#define CK_BTREE_NODE_MALFORMED_STR   "malformed - "
+#define CK_BTREE_NON_ZERO_PADDING_FMT CK_BTREE_NODE_MALFORMED_STR "tn_pad_32 != 0 (%#" PRIx32 ")"
+#define CK_BTREE_NON_ZERO_GEN_FMT     CK_BTREE_NODE_MALFORMED_STR "tn_gen != 0 (%#" PRIx32 ")"
+
+/**
+ * Validate the integrity of the btree node.
+ *
+ * \param[in] nd	Node to check.
+ * \param[in] nd_off	Node's offset.
+ * \param[in] ck	Checker.
+ *
+ * \retval DER_SUCCESS	The node is correct.
+ * \retval -DER_NOTYPE	The node is malformed.
+ */
+static int
+btr_node_check(struct btr_node *nd, umem_off_t nd_off, btr_report_fn_t report_fn, void *report_arg,
+	       bool error_on_non_zero_padding)
+{
+	uint16_t unknown_flags;
+
+	D_ASSERT(report_fn != NULL);
+
+	unknown_flags = nd->tn_flags & ~(BTR_NODE_LEAF | BTR_NODE_ROOT);
+	if (unknown_flags != 0) {
+		report_fn(report_arg, BTR_REPORT_ERROR,
+			  CK_BTREE_NODE_MALFORMED_STR "unknown flags (%#" PRIx16 ")",
+			  unknown_flags);
+		return -DER_NOTYPE;
+	}
+
+	if (nd->tn_pad_32 != 0) {
+		if (error_on_non_zero_padding) {
+			report_fn(report_arg, BTR_REPORT_ERROR,
+				  CK_BTREE_NODE_FMT CK_BTREE_NON_ZERO_PADDING_FMT, nd_off,
+				  nd->tn_pad_32);
+			return -DER_NOTYPE;
+		} else {
+			report_fn(report_arg, BTR_REPORT_WARNING,
+				  CK_BTREE_NODE_FMT CK_BTREE_NON_ZERO_PADDING_FMT, nd_off,
+				  nd->tn_pad_32);
+		}
+	}
+
+	if (nd->tn_gen != 0) {
+		if (error_on_non_zero_padding) {
+			report_fn(report_arg, BTR_REPORT_ERROR,
+				  CK_BTREE_NODE_FMT CK_BTREE_NON_ZERO_GEN_FMT, nd_off, nd->tn_gen);
+			return -DER_NOTYPE;
+		} else {
+			report_fn(report_arg, BTR_REPORT_WARNING,
+				  CK_BTREE_NODE_FMT CK_BTREE_NON_ZERO_GEN_FMT, nd_off, nd->tn_gen);
+		}
+	}
+
+	report_fn(report_arg, BTR_REPORT_MSG, CK_BTREE_NODE_FMT OK_STR, nd_off);
+
+	return DER_SUCCESS;
+}
+
+/**
+ * \struct node_info
+ *
+ * List of node offsets.
+ */
+struct node_info {
+	d_list_t   link;
+	umem_off_t nd_off;
+};
+
+/**
+ * Validate the integrity of a btree.
+ *
+ * \param[in] tcx		Btree context.
+ * \param[in] ck		Checker.
+ *
+ * \retval DER_SUCCESS		The tree is correct.
+ * \retval -DER_NOTYPE		The tree is malformed.
+ * \retval -DER_NONEXIST	The tree is malformed.
+ * \retval -DER_*		Possibly other errors.
+ */
+static int
+btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report_arg,
+		bool error_on_non_zero_padding)
+{
+	D_LIST_HEAD(node_list);
+	struct node_info *ni;
+	struct node_info *ni_tmp;
+	umem_off_t        nd_off;
+	struct btr_node  *nd;
+	int               rc = DER_SUCCESS;
+
+	D_ASSERT(report_fn != NULL);
+
+	if (btr_root_empty(tcx)) {
+		report_fn(report_arg, BTR_REPORT_MSG, "Empty tree\n");
+		return DER_SUCCESS;
+	}
+
+	D_ASSERT(!btr_has_embedded_value(tcx));
+
+	/** add the root node to the node list */
+	D_ALLOC_PTR(ni);
+	ni->nd_off = tcx->tc_tins.ti_root->tr_node;
+	d_list_add_tail(&ni->link, &node_list);
+
+	/** process the node list */
+	while (!d_list_empty(&node_list)) {
+		ni     = d_list_pop_entry(&node_list, struct node_info, link);
+		nd_off = ni->nd_off;
+		nd     = btr_off2ptr(tcx, nd_off);
+
+		/** check the node */
+		rc = btr_node_check(nd, nd_off, report_fn, report_arg, error_on_non_zero_padding);
+		if (rc != DER_SUCCESS) {
+			break;
+		}
+
+		/** a leaf has no child nodes */
+		if (btr_node_is_leaf(tcx, nd_off)) {
+			continue;
+		}
+
+		/**
+		 * append the node's children to the front of the nodes' list
+		 *
+		 * Note: This makes the traversal depth-first. Given the limited depth of a typical
+		 * DAOS tree, this approach should help reduce resource usage.
+		 */
+		for (int at = 0; at < nd->tn_keyn; ++at) {
+			D_ALLOC_PTR(ni);
+			ni->nd_off = btr_node_child_at(tcx, nd_off, at);
+			d_list_add(&ni->link, &node_list);
+		}
+	}
+
+	/** free the list - in case we exit with an error and the list of nodes is not empty */
+	d_list_for_each_entry_safe(ni, ni_tmp, &node_list, link) {
+		/** remove the node from the list */
+		d_list_del(&ni->link);
+		D_FREE(ni);
+	}
+
+	return rc;
+}
+
+/**
+ * Check a btree.
+ *
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[in] ck	Checker.
+ */
+int
+dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn_t report_fn,
+		     void *report_arg, bool error_on_non_zero_padding)
+{
+	struct btr_context tcx        = {0};
+	uint64_t           tree_feats = -1;
+	int                rc;
+
+	D_ASSERT(root != NULL);
+	D_ASSERT(uma != NULL);
+	D_ASSERT(report_fn != NULL);
+
+	rc = btr_class_init(UMOFF_NULL, root, -1, &tree_feats, uma, DAOS_HDL_INVAL, NULL, report_fn,
+			    report_arg, &tcx.tc_tins);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	tcx.tc_feats = root->tr_feats;
+	tcx.tc_order = root->tr_order;
+
+	rc = btr_nodes_check(&tcx, report_fn, report_arg, error_on_non_zero_padding);
+
+	/** no need to free tcx */
+
+	return rc;
+}

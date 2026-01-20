@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -144,7 +145,7 @@ enum {
 extern uint32_t vos_agg_gap;
 
 #define VOS_AGG_GAP_MIN		20 /* seconds */
-#define VOS_AGG_GAP_DEF		60
+#define VOS_AGG_GAP_DEF         20
 #define VOS_AGG_GAP_MAX		180
 
 extern unsigned int vos_agg_nvme_thresh;
@@ -280,6 +281,13 @@ struct vos_gc_info {
 	uint32_t	gi_last_pinned;
 };
 
+/* Inline checkpointing context */
+struct vos_chkpt_context {
+	uint64_t vcc_committed_id;
+	uint64_t vcc_total_blks;
+	uint64_t vcc_used_blks;
+};
+
 /**
  * VOS pool (DRAM)
  */
@@ -300,6 +308,8 @@ struct vos_pool {
 	bool			vp_rdb;
 	/** caller specifies pool is small (for sys space reservation) */
 	bool			vp_small;
+	/** caller does checkpointing periodically */
+	bool                     vp_ext_chkpt;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */
@@ -344,6 +354,8 @@ struct vos_pool {
 	unsigned int		 vp_space_rb;
 	/* GC runtime for pool */
 	struct vos_gc_info	 vp_gc_info;
+	/* Inline checkpointing context */
+	struct vos_chkpt_context vp_chkpt_ctxt;
 };
 
 /**
@@ -427,11 +439,11 @@ struct vos_container {
 	/* GC runtime for container */
 	struct vos_gc_info	vc_gc_info;
 	/* Various flags */
-	unsigned int		vc_in_aggregation:1,
-				vc_in_discard:1,
-				vc_cmt_dtx_indexed:1;
+	uint32_t vc_in_aggregation : 1, vc_in_discard : 1, vc_cmt_dtx_indexed : 1, vc_dtx_reset : 1;
 	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
+	/* The latest pool map version that DTX resync has been done. */
+	uint32_t                vc_dtx_resync_ver;
 };
 
 struct vos_dtx_act_ent {
@@ -456,10 +468,6 @@ struct vos_dtx_act_ent {
 	 * then 'dae_oids' points to the 'dae_oid_inline'.
 	 *
 	 * Otherwise, 'dae_oids' points to new buffer to hold more.
-	 *
-	 * These information is used for EC aggregation optimization.
-	 * If server restarts, then we will lose the optimization but
-	 * it is not fatal.
 	 */
 	daos_unit_oid_t			*dae_oids;
 	/* The time (hlc) when the DTX entry is created. */
@@ -470,6 +478,9 @@ struct vos_dtx_act_ent {
 	d_list_t			 dae_link;
 	/* Back pointer to the DTX handle. */
 	struct dtx_handle		*dae_dth;
+
+	/* The capacity of dae_oids if it points to new allocated area. */
+	uint32_t                         dae_oid_cap;
 
 	unsigned int			 dae_committable:1,
 					 dae_committing:1,
@@ -503,16 +514,15 @@ struct vos_dtx_act_ent {
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
-	struct vos_dtx_cmt_ent_df	 dce_base;
-
-	uint32_t			 dce_reindex:1,
-					 dce_exist:1,
-					 dce_invalid:1;
+	struct vos_dtx_cmt_ent_df dce_base;
+	uint32_t                  dce_invalid : 1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
+
+#define EVT_DESC_MAGIC          0xbeefdead
 
 extern uint64_t vos_evt_feats;
 
@@ -684,7 +694,7 @@ vos_pool_hash_del(struct vos_pool *pool)
 }
 
 /**
- * Register btree class for container table, it is called within vos_init()
+ * Register btree class for container table.
  *
  * \return		0 on success and negative on
  *			failure
@@ -693,8 +703,7 @@ int
 vos_cont_tab_register();
 
 /**
- * VOS object index class register for btree
- * Called with vos_init()
+ * VOS object index class register for btree.
  *
  * \return		0 on success and negative on
  *			failure
@@ -715,7 +724,7 @@ int
 vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
 
 /**
- * Register dbtree class for DTX table, it is called within vos_init().
+ * Register dbtree class for DTX table.
  *
  * \return		0 on success and negative on failure
  */
@@ -842,6 +851,9 @@ vos_dtx_post_handle(struct vos_container *cont,
  */
 int
 vos_dtx_act_reindex(struct vos_container *cont);
+
+int
+vos_dtx_record_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t oid);
 
 enum vos_tree_class {
 	/** the first reserved tree class */
@@ -1127,7 +1139,8 @@ struct vos_iterator {
 	 * mutual exclusion between aggregation and object discard.
 	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
-	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1;
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1,
+	    it_for_check : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1323,7 +1336,8 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh, struct vos_object *obj);
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
+	     struct vos_object *obj);
 
 /** Finish the transaction and publish or cancel the reservations or
  *  return if err == 0 and it's a multi-modification transaction that
@@ -1360,6 +1374,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
+int
+vos_tree_mark_corruption(struct vos_container *cont, struct vos_object *obj, daos_handle_t toh,
+			 enum vos_tree_class tclass, daos_epoch_t epoch, uint32_t pm_ver,
+			 bool is_dkey, daos_key_t *key, daos_handle_t *sub_toh);
 
 /* vos_io.c */
 int
@@ -1411,6 +1429,8 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_for_check)
+		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -1436,7 +1456,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(struct vos_pool *pool, daos_size_t *rsrvd);
 int
-gc_open_pool(struct vos_pool *pool);
+gc_open_pool(struct vos_pool *pool, struct checker *ck);
 void
 gc_close_pool(struct vos_pool *pool);
 int
@@ -1908,20 +1928,6 @@ vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum v
 
 	return false;
 }
-
-/**
- * Insert object ID and its parent container into the array of objects touched by the ongoing
- * local transaction.
- *
- * \param[in] dth	DTX handle for ongoing local transaction
- * \param[in] cont	VOS container
- * \param[in] oid	Object ID
- *
- * \return		0		: Success.
- *			-DER_NOMEM	: Run out of the volatile memory.
- */
-int
-vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
 
 static inline bool
 vos_pool_is_p2(struct vos_pool *pool)

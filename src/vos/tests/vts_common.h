@@ -94,10 +94,8 @@ vts_pool_fallocate(char **fname);
  * test context for I/O tests
  */
 int
-vts_ctx_init(struct vos_test_ctx *tcx,
-	     size_t pool_size);
-int
-vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t pool_size, size_t meta_size);
+vts_ctx_init(struct vos_test_ctx *tcx, uint64_t scm_sz, uint64_t meta_sz, uint64_t datas_sz,
+	     unsigned int flags);
 
 void
 vts_ctx_fini(struct vos_test_ctx *tcx);
@@ -145,6 +143,8 @@ int
 run_evtree_tests(const char *cfg);
 int
 run_tree_tests(const char *cfg);
+int
+run_mark_tests(const char *cfg);
 int
 run_vos_command(const char *arg0, const char *cmd);
 

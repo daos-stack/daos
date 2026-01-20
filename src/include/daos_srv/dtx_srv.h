@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,6 +47,7 @@ struct dtx_local_oid_record {
  * the most optimal way (packed). Please make sure that all necessary padding
  * is explicit so it could be used in the future.
  */
+/* clang-format off */
 struct dtx_handle {
 	union {
 		struct dtx_entry		 dth_dte;
@@ -92,8 +93,6 @@ struct dtx_handle {
 	    dth_modify_shared                     : 1,
 	    /* The DTX entry is in active table. */
 	    dth_active                            : 1,
-	    /* Leader oid is touched. */
-	    dth_touched_leader_oid                : 1,
 	    /* Local TX is started. */
 	    dth_local_tx_started                  : 1,
 	    /* The DTX share lists are inited. */
@@ -117,7 +116,7 @@ struct dtx_handle {
 	    /* Locally generate the epoch. */
 	    dth_epoch_owner			  : 1,
 	    /* Flag to commit the local transaction */
-	    dth_local_complete : 1, padding1 : 12;
+	    dth_local_complete : 1, padding1 : 13;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -138,25 +137,14 @@ struct dtx_handle {
 	uint16_t			 dth_deferred_used_cnt;
 	uint16_t                         padding2;
 
-	union {
-		struct {
-			/** The count of objects that are modified by this DTX. */
-			uint16_t         dth_oid_cnt;
-			/** The total slots in the dth_oid_array. */
-			uint16_t         dth_oid_cap;
-			uint32_t         padding3;
-			/** If more than one objects are modified, the IDs are reocrded here. */
-			daos_unit_oid_t *dth_oid_array;
-		};
-		struct {
-			/** The count of objects stored in dth_local_oid_array. */
-			uint16_t                     dth_local_oid_cnt;
-			/** The total slots in the dth_local_oid_array. */
-			uint16_t                     dth_local_oid_cap;
-			uint32_t                     padding4;
-			/** The record of all objects touched by the local transaction. */
-			struct dtx_local_oid_record *dth_local_oid_array;
-		};
+	struct {
+		/** The count of objects stored in dth_local_oid_array. */
+		uint16_t                     dth_local_oid_cnt;
+		/** The total slots in the dth_local_oid_array. */
+		uint16_t                     dth_local_oid_cap;
+		uint32_t                     padding4;
+		/** The record of all objects touched by the local transaction. */
+		struct dtx_local_oid_record *dth_local_oid_array;
 	};
 
 	/* Hash of the dkey to be modified if applicable. Per modification. */
@@ -179,6 +167,7 @@ struct dtx_handle {
 	int                               dth_share_tbd_count;
 	uint32_t                          padding5;
 };
+/* clang-format on */
 
 /* Each sub transaction handle to manage each sub thandle */
 struct dtx_sub_status {
@@ -192,6 +181,8 @@ struct dtx_sub_status {
 struct dtx_coll_entry {
 	struct dtx_id			 dce_xid;
 	uint32_t			 dce_ver;
+	uint32_t                         dce_min_rank;
+	uint32_t                         dce_max_rank;
 	uint32_t			 dce_refs;
 	d_rank_list_t			*dce_ranks;
 	uint8_t				*dce_hints;
@@ -234,13 +225,13 @@ struct dtx_leader_handle {
 	/* Elements for collective DTX. */
 	struct dtx_coll_entry		*dlh_coll_entry;
 	/* How many normal sub request. */
-	uint32_t			dlh_normal_sub_cnt;
+	int32_t                          dlh_normal_sub_cnt;
 	/* How many delay forward sub request. */
-	uint32_t			dlh_delay_sub_cnt;
+	int32_t                          dlh_delay_sub_cnt;
 	/* The index of the first target that forward sub-request to. */
-	uint32_t			dlh_forward_idx;
+	int32_t                          dlh_forward_idx;
 	/* The count of the targets that forward sub-request to. */
-	uint32_t			dlh_forward_cnt;
+	int32_t                          dlh_forward_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
 };
@@ -305,7 +296,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 		 uint32_t flags, struct dtx_memberships *mbs, struct dtx_coll_entry *dce,
 		 struct dtx_leader_handle **p_dlh);
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int result);
 
 typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
 				  int rc);
@@ -438,9 +429,13 @@ dtx_is_real_handle(const struct dtx_handle *dth)
 struct dtx_scan_args {
 	uuid_t		pool_uuid;
 	uint32_t	version;
+	bool            for_orphan;
 };
 
-int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, bool block);
+/* clang-format off */
+int dtx_cleanup_orphan(uuid_t po_uuid, uint32_t pm_ver);
+int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block);
 void dtx_resync_ult(void *arg);
+/* clang-format on */
 
 #endif /* __DAOS_DTX_SRV_H__ */

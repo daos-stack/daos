@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -532,6 +533,12 @@ ilog_test_update(void **state)
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_rc_equal(rc, 0);
 
+	/* Test non-existent tx */
+	id.id_epoch = epoch;
+	id.id_tx_id = current_tx_id.id_tx_id + 4000;
+	rc          = ilog_persist(loh, &id);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	/* Commit the punch ilog. */
 	id.id_epoch = epoch;
 	id.id_tx_id = current_tx_id.id_tx_id;
@@ -670,6 +677,12 @@ ilog_test_abort(void **state)
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_rc_equal(rc, 0);
 
+	/* Test non-existent tx */
+	id = current_tx_id;
+	id.id_tx_id += 400;
+	rc = ilog_abort(loh, &id);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	id = current_tx_id;
 	rc = ilog_abort(loh, &id);
 	LOG_FAIL(rc, 0, "Failed to abort log entry\n");
@@ -736,6 +749,11 @@ ilog_test_abort(void **state)
 	ilog_close(loh);
 	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
 	assert_rc_equal(rc, 0);
+
+	/** Test open of "reallocated" ilog */
+	memset(ilog, 0xa1, sizeof(*ilog));
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	assert_true(d_list_empty(&fake_tx_list));
 	ilog_free_root(umm, ilog);

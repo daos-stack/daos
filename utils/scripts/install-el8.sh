@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (C) Copyright 2025 Google LLC
 
 # Install OS updates and packages as required for building DAOS on EL 8 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -12,17 +13,22 @@ set -e
 
 arch=$(uname -m)
 
-dnf --nodocs install \
+dnf_install_args="${1:-}"
+
+# shellcheck disable=SC2086
+dnf --nodocs install ${dnf_install_args} \
     boost-python3-devel \
     bzip2 \
     capstone-devel \
     clang \
     clang-tools-extra \
     cmake \
+    createrepo \
     CUnit-devel \
     daxctl-devel \
     diffutils \
     e2fsprogs \
+    fdupes \
     file \
     flex \
     fuse3 \
@@ -33,13 +39,19 @@ dnf --nodocs install \
     golang \
     graphviz \
     help2man \
+    hdf5-devel \
     hwloc-devel \
     java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
+    libasan \
     libcmocka-devel \
     libevent-devel \
+    libibverbs-devel \
     libiscsi-devel \
+    libnl3-devel \
+    libpsm2-devel \
+    librdmacm-devel \
     libtool \
     libtool-ltdl-devel \
     libunwind-devel \
@@ -48,12 +60,13 @@ dnf --nodocs install \
     Lmod \
     lz4-devel \
     make \
+    nasm \
     ndctl \
     ndctl-devel \
     numactl \
     numactl-devel \
-    openmpi-devel \
     openssl-devel \
+    pandoc \
     patch \
     patchelf \
     pciutils \
@@ -61,16 +74,33 @@ dnf --nodocs install \
     protobuf-c-devel \
     python3-devel \
     python3-pip \
+    rpm-build \
     sg3_utils \
+    squashfs-tools \
     sudo \
     systemd \
     valgrind-devel \
     which \
+    ncurses-devel \
     yasm
+
+if [[ -z "${NO_OPENMPI_DEVEL+set}" ]]; then
+    # shellcheck disable=SC2086
+    dnf --nodocs install ${dnf_install_args} \
+    	openmpi-devel 
+fi
+
+ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
+# shellcheck disable=SC2086
+dnf --nodocs install ${dnf_install_args} \
+    "@ruby:${ruby_version}" \
+    rubygems \
+    rubygem-json
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
-    dnf --nodocs install \
+    # shellcheck disable=SC2086
+    dnf --nodocs install ${dnf_install_args} \
         ipmctl \
         libipmctl-devel
 fi
@@ -80,7 +110,11 @@ fi
 # installed specifically.
 
 if [ -e /etc/fedora-release ]; then
-        dnf install java-1.8.0-openjdk-devel maven-openjdk8
+    # shellcheck disable=SC2086
+    dnf install ${dnf_install_args} java-1.8.0-openjdk-devel maven-openjdk8
 else
-        dnf install maven
+    # shellcheck disable=SC2086
+    dnf install ${dnf_install_args} maven
 fi
+
+gem install fpm

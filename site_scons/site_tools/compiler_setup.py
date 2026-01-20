@@ -2,6 +2,9 @@
 
 from SCons.Script import Configure, Exit, GetOption
 
+FRAME_SIZE_MAX = 4096
+ASAN_FRAME_SIZE_MAX = {'gcc': 8192,
+                       'clang': 10240}
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',
                  '-Wno-missing-attributes',
@@ -14,7 +17,7 @@ DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-unused-command-line-argument',
                  '-Wmismatched-dealloc',
                  '-Wfree-nonheap-object',
-                 '-Wframe-larger-than=4096']
+                 f"-Wframe-larger-than={FRAME_SIZE_MAX}"]
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks', '-fwrapv'])
@@ -55,12 +58,42 @@ def _base_setup(env):
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
+    if 'SANITIZERS' in env and env['SANITIZERS'] != "":
+        cc = 'gcc'
+        if 'COMPILER' in env:
+            cc = env['COMPILER']
+        if cc not in ASAN_FRAME_SIZE_MAX:
+            print(f"C compiler {cc} is not supported with the ASan lib")
+            Exit(3)
+
+        print("Using ASasn lib is updating the compilation configuration "
+              "and may lead to unexpected behavior")
+        for flag in [f"-Wframe-larger-than={FRAME_SIZE_MAX}", '-fomit-frame-pointer']:
+            if flag in env["CCFLAGS"]:
+                env["CCFLAGS"].remove(flag)
+        cc_flags = [f"-Wframe-larger-than={ASAN_FRAME_SIZE_MAX[cc]}",
+                    '-fno-omit-frame-pointer',
+                    '-fno-common',
+                    '-Wno-stringop-truncation']
+
+        asan_flags = []
+        for sanitizer in env['SANITIZERS'].split(','):
+            asan_flags.append(f"-fsanitize={sanitizer}")
+
+        env.AppendIfSupported(CCFLAGS=cc_flags + asan_flags)
+
+        for flag in asan_flags:
+            if flag in env["CCFLAGS"]:
+                env.AppendUnique(LINKFLAGS=flag)
+                print(f"Enabling {flag.split('=')[1]} sanitizer for C code")
+
     if '-Wmismatched-dealloc' in env['CCFLAGS']:
         env.AppendUnique(CPPDEFINES={'HAVE_DEALLOC': '1'})
 
     if build_type == 'debug':
         if compiler == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
+            env['CCFLAGS'].remove('-g')
+            env.AppendUnique(CCFLAGS=['-g3', '-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
@@ -74,7 +107,10 @@ def _base_setup(env):
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
         env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
-    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
+    if env['CMOCKA_FILTER_SUPPORTED']:
+        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '1'})
+    else:
+        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
@@ -184,10 +220,30 @@ def _set_fortify_level(env):
     Exit(1)
 
 
+def _check_func(env, func_name):
+    """Check if a function is usable"""
+    denv = env.Clone()
+    # NOTE Remove sanitizers to not scramble the test output
+    if 'SANITIZERS' in denv and denv['SANITIZERS'] != "":
+        for sanitizer in denv['SANITIZERS'].split(','):
+            flag = f"-fsanitize={sanitizer}"
+            if flag not in denv["CCFLAGS"]:
+                continue
+            denv["CCFLAGS"].remove(flag)
+            denv["LINKFLAGS"].remove(flag)
+
+    config = Configure(denv)
+    res = config.CheckFunc(func_name)
+    config.Finish()
+
+    return res
+
+
 def generate(env):
     """Add daos specific method to environment"""
     env.AddMethod(_base_setup, 'compiler_setup')
     env.AddMethod(_append_if_supported, "AppendIfSupported")
+    env.AddMethod(_check_func, "CheckFunc")
 
 
 def exists(_env):

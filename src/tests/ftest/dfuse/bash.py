@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -114,7 +115,7 @@ class DfuseBashCmd(TestWithServers):
             # f'more {fuse_root_dir}/src.c', # more hangs over ssh somehow
             f"dos2unix {fuse_root_dir}/src.c",
             f"gcc -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
-            f"valgrind size {fuse_root_dir}/output",
+            f'export DEBUGINFOD_URLS=""; valgrind size {fuse_root_dir}/output',
             f"readelf -s {fuse_root_dir}/output",
             f"strip -s {fuse_root_dir}/output",
             f"g++ -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
@@ -129,6 +130,7 @@ class DfuseBashCmd(TestWithServers):
             f"cksum {fuse_root_dir}/src.c",
             f"bzip2 -z {fuse_root_dir}/lib.a",
             f"chmod u-r {fuse_root_dir}/lib.a.bz2",
+            f"sed -i 's/abcd/bbcd/g' {fuse_root_dir}/src.c",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=0'
             "--group_reporting --exitall_on_error --continue_on_error=none",
@@ -138,12 +140,14 @@ class DfuseBashCmd(TestWithServers):
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
             '--group_reporting --exitall_on_error --continue_on_error=none',
-            f'curl "https://www.google.com" -o {fuse_root_dir}/download.html',
         ]
+
         for cmd in commands:
             self.log_step(f'Running command: {cmd}')
             result = run_remote(self.log, dfuse_hosts, env_str + cmd)
             if not result.passed:
+                self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+            if result.joined_stdout.find('Bad file descriptor') >= 0:
                 self.fail(f'"{cmd}" failed on {result.failed_hosts}')
         self.log.info('Test passed')
 

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,14 +31,15 @@
  * yaml file.
  */
 typedef enum pool_comp_type {
-	PO_COMP_TP_TARGET	= 0, /** reserved, hard-coded */
-	PO_COMP_TP_RANK		= 1, /** reserved, hard-coded */
-	PO_COMP_TP_MIN		= 2, /** first user-defined domain */
-	PO_COMP_TP_NODE		= 2, /** for test only */
-	PO_COMP_TP_GRP		= 3, /** group, commonly used for performance domain */
-	PO_COMP_TP_MAX		= 254, /** last user-defined domain */
-	PO_COMP_TP_ROOT		= 255,
-	PO_COMP_TP_END		= 256,
+	PO_COMP_TP_TARGET = 0,   /** reserved, hard-coded */
+	PO_COMP_TP_RANK   = 1,   /** reserved, hard-coded */
+	PO_COMP_TP_NODE   = 2,   /** reserved, hard-coded */
+	PO_COMP_TP_MIN    = 3,   /** first user-defined domain */
+	PO_COMP_TP_FAULT  = 3,   /** user-defined fault domain (if not node) */
+	PO_COMP_TP_PERF   = 200, /** user-defined performance domain (optional) */
+	PO_COMP_TP_MAX    = 254, /** last user-defined domain */
+	PO_COMP_TP_ROOT   = 255,
+	PO_COMP_TP_END    = 256,
 } pool_comp_type_t;
 
 /** pool component states */
@@ -256,7 +258,8 @@ void pool_buf_free(struct pool_buf *buf);
 int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
-int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
+int
+    gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
 		 int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr);
 
 int pool_map_comp_cnt(struct pool_map *map);

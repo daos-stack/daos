@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -154,9 +155,6 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 
 	D_ASSERTF(rank_list->rl_nr == grp_size, "rank_list differs in size. expected %d got %d\n",
 		  grp_size, rank_list->rl_nr);
-
-	ret = crt_group_psr_set(*srv_grp, rank_list->rl_ranks[0]);
-	D_ASSERTF(ret == 0, "crt_group_psr_set() failed; rc=%d\n", ret);
 
 	/* waiting to sync with the following parameters
 	 * 0 - tag 0
@@ -749,8 +747,10 @@ run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_cou
 
 		/* Clean up this size iteration's handles */
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
-			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL)
+			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL) {
 				crt_bulk_free(latencies_bulk_hdl[m_idx]);
+				latencies_bulk_hdl[m_idx] = CRT_BULK_NULL;
+			}
 	}
 
 cleanup:

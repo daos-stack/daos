@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -487,7 +488,7 @@ enum btr_feats {
 	 *  tree class
 	 */
 	BTR_FEAT_DYNAMIC_ROOT = (1 << 2),
-	/** Skip rebalance leaf when delete some record from the leaf. */
+	/** Skip rebalance leaf when delete some record from the leaf. Obsolete, DAOS-17148. */
 	BTR_FEAT_SKIP_LEAF_REBAL = (1 << 3),
 	/** Tree supports embedded root. */
 	BTR_FEAT_EMBED_FIRST = (1 << 4),
@@ -542,6 +543,15 @@ int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
 int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 			    daos_handle_t coh, void *priv, daos_handle_t *toh);
+enum btr_report_type {
+	BTR_REPORT_ERROR,
+	BTR_REPORT_WARNING,
+	BTR_REPORT_MSG,
+};
+typedef void (*btr_report_fn_t)(void *arg, enum btr_report_type type, const char *fmt, ...);
+int
+     dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn_t report_fn,
+			  void *report_arg, bool error_on_non_zero_padding);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);

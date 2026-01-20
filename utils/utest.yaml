@@ -47,10 +47,12 @@
     - cmd: ["src/engine/tests/drpc_progress_tests"]
     - cmd: ["src/engine/tests/drpc_handler_tests"]
     - cmd: ["src/engine/tests/drpc_listener_tests"]
+    - cmd: ["src/engine/tests/drpc_comm_tests"]
     - cmd: ["src/mgmt/tests/srv_drpc_tests"]
 - name: gurt
   base: "BUILD_DIR"
   tests:
+    - cmd: ["src/gurt/tests/d_log_memory_ut"]
     - cmd: ["src/gurt/tests/test_gurt"]
     - cmd: ["src/gurt/tests/test_gurt_telem_producer"]
 - name: DTX
@@ -138,6 +140,8 @@
       aio: "AIO_7"
       size: 13
     - cmd: ["bin/vos_tests", "-A", "50"]
+      env_vars:
+        DAOS_MD_ON_SSD_MODE: "1"
       aio: "AIO_7"
       size: 13
     - cmd: ["bin/bio_ut"]
@@ -187,6 +191,10 @@
   tests:
     - cmd: ["bin/ddb_tests"]
     - cmd: ["bin/ddb_ut"]
+- name: dlck
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/utils/dlck/tests/dlck_args_ut"]
 - name: Source metadata testing
   gha: True
   memcheck: False

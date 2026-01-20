@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -67,7 +68,7 @@ class RbldWithIO(TestWithServers):
         self.container.get_target_rank_lists(" prior to rebuild")
 
         # Trigger rebuild
-        self.server_managers[0].stop_ranks([rank], self.d_log)
+        self.server_managers[0].stop_ranks([rank])
 
         # Wait for recovery to start
         self.pool.wait_for_rebuild_to_start()

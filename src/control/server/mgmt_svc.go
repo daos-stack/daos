@@ -105,6 +105,10 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 // checkSystemRequest sanity checks that a request is not nil and
 // has been sent to the correct system.
 func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
+	if svc == nil {
+		return errors.New("nil mgmtSvc")
+	}
+
 	if common.InterfaceIsNil(req) {
 		return errors.New("nil request")
 	}
@@ -129,6 +133,10 @@ func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
 // checkLeaderRequest performs sanity-checking on a request that must
 // be run on the current MS leader.
 func (svc *mgmtSvc) checkLeaderRequest(req proto.Message) error {
+	if svc == nil {
+		return errors.New("nil mgmtSvc")
+	}
+
 	unwrapped, err := svc.unwrapCheckerReq(req)
 	if err != nil {
 		return err
@@ -149,6 +157,10 @@ func (svc *mgmtSvc) checkLeaderRequest(req proto.Message) error {
 // checkReplicaRequest performs sanity-checking on a request that must
 // be run on a MS replica.
 func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
+	if svc == nil {
+		return errors.New("nil mgmtSvc")
+	}
+
 	unwrapped, err := svc.unwrapCheckerReq(req)
 	if err != nil {
 		return err

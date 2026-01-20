@@ -1,25 +1,29 @@
 hosts:
-  test_servers: 1
-  test_clients: 1
-timeout: 120
+  test_servers: 2
+  test_clients: 2
+
+timeout: 240
+
 server_config:
   name: daos_server
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
+
 pool:
   scm_size: 2G
+
 container:
   type: POSIX
   control_method: daos
-mpi: !mux
-  openmpi:
-    mpi_type: openmpi
-    simul_path: /usr/lib64/openmpi/bin
-  mpich:
-    mpi_type: mpich
-    simul_path: /usr/lib64/mpich/bin
+
+mpi:
+  mpi_type: mpich
+  simul_path: /usr/lib64/mpich/bin
+
+client_processes:
+  ppn: 12
+
+dfuse:
+  disable_caching: true

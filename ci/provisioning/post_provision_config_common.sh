@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+#  Copyright 2021-2023 Intel Corporation.
+#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eux
 
 repo_server_pragma=$(echo "$COMMIT_MESSAGE" | sed -ne '/^Repo-servers: */s/.*: *//p')
@@ -21,9 +26,10 @@ if [ -n "$repo_files_pr" ]; then
         branch="${branch%:*}"
     fi
     # shellcheck disable=SC2034
-    REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
+    REPO_FILE_URL="${JENKINS_URL:-https://jenkins-3.daos.hpc.amslabs.hpecorp.net/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
 fi
 
+# shellcheck disable=SC1091
 . /etc/os-release
 # shellcheck disable=SC2034
 EXCLUDE_UPGRADE=mercury,daos,daos-\*

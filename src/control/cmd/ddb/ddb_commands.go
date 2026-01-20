@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+// (C) Copyright 2025 Vdura Inc.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,8 @@
 package main
 
 import (
+	"math"
+
 	"github.com/desertbit/grumble"
 )
 
@@ -42,6 +45,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.Bool("w", "write_mode", false, "Open the vos file in write mode.")
+			f.String("p", "db_path", "", "Path to the sys db to open.")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Path to the vos file to open.")
@@ -308,6 +312,7 @@ the path must include the extent, otherwise, it must not.`,
 		Flags: func(f *grumble.Flags) {
 			f.String("e", "enable", "", "Enable vos pool features")
 			f.String("d", "disable", "", "Disable vos pool features")
+			f.String("p", "db_path", "", "Path to the sys db")
 			f.Bool("s", "show", false, "Show current features")
 		},
 		Args: func(a *grumble.Args) {
@@ -325,6 +330,9 @@ the path must include the extent, otherwise, it must not.`,
 		Help:      "Remove a vos pool.",
 		LongHelp:  "",
 		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.String("p", "db_path", "", "Path to the sys db.")
+		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
 		},
@@ -346,6 +354,94 @@ the path must include the extent, otherwise, it must not.`,
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxActDiscardInvalid(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
+		},
+		Completer: nil,
+	})
+	// Command: dev_list
+	app.AddCommand(&grumble.Command{
+		Name:      "dev_list",
+		Aliases:   nil,
+		Help:      "List all devices",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the vos db.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDevList(ctx, c.Args.String("db_path"))
+		},
+		Completer: nil,
+	})
+	// Command dev_replace
+	app.AddCommand(&grumble.Command{
+		Name:      "dev_replace",
+		Aliases:   nil,
+		Help:      "Replace an old device with a new unused device",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the vos db.")
+			a.String("old_dev", "Old device UUID.")
+			a.String("new_dev", "New device UUID.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDevReplace(ctx, c.Args.String("db_path"), c.Args.String("old_dev"), c.Args.String("new_dev"))
+		},
+		Completer: nil,
+	})
+	// Command dtx_stat
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_stat",
+		Aliases:   nil,
+		Help:      "Stat on DTX entries",
+		LongHelp:  "Print statistic on the DTX entries",
+		HelpGroup: "vos",
+		Flags: func(a *grumble.Flags) {
+			a.Bool("d", "details", false, "Show detailed time related stats.")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, VOS tree path of a container to query.", grumble.Default(""))
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxStat(ctx, c.Args.String("path"), c.Flags.Bool("details"))
+		},
+		Completer: nil,
+	})
+	// Command prov_mem
+	app.AddCommand(&grumble.Command{
+		Name:      "prov_mem",
+		Aliases:   nil,
+		Help:      "Prepare the memory environment for md-on-ssd mode",
+		LongHelp:  "",
+		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.Uint("s", "tmpfs_size", 0, "Specify tmpfs size(GiB) for mount. By default, The total size of all VOS files will be used")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("db_path", "Path to the sys db.")
+			a.String("tmpfs_mount", "Path to the tmpfs mountpoint.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbProvMem(ctx, c.Args.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_size"))
+		},
+		Completer: nil,
+	})
+	// Command dtx_aggr
+	app.AddCommand(&grumble.Command{
+		Name:      "dtx_aggr",
+		Aliases:   nil,
+		Help:      "Aggregate DTX entries",
+		LongHelp:  "Aggregate DTX entries until a given aggregation commit time or date",
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "Optional, VOS tree path of a container to aggregate.", grumble.Default(""))
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("t", "cmt_time", math.MaxUint64, "Max aggregation committed time in seconds")
+			f.String("d", "cmt_date", "", "Max aggregation committed date (format '1970-01-01 00:00:00')")
+		},
+		Run: func(c *grumble.Context) error {
+			return ddbDtxAggr(ctx, c.Args.String("path"), c.Flags.Uint64("cmt_time"), c.Flags.String("cmt_date"))
 		},
 		Completer: nil,
 	})

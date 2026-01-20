@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +17,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -258,7 +260,7 @@ func TestDrpc_Errors(t *testing.T) {
 			mc := newMockDrpcClient(cfg)
 
 			_, err := makeDrpcCall(test.Context(t), log,
-				mc, drpc.MethodPoolCreate,
+				mc, daos.MethodPoolCreate,
 				&mgmtpb.PoolCreateReq{})
 			test.CmpErr(t, tc.expErr, err)
 		})

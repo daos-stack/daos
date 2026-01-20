@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -45,6 +46,11 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 		"key too long": {
 			fv:     strings.Repeat("x", ui.MaxPropKeyLen+1) + ":value",
 			expErr: errors.New("key too long"),
+		},
+		"duplicated properties": {
+			settable: []string{"a", "b"},
+			fv:       "a:c,b:d,a:d",
+			expErr:   errors.New("more than once"),
 		},
 		"valid properties": {
 			settable: []string{"a", "b"},
@@ -105,7 +111,6 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 
 }
 
-/* NB: Doesn't work with go < 1.18
 func FuzzUI_SetPropertiesFlag_UnmarshalFlag(f *testing.F) {
 	f.Fuzz(func(t *testing.T, fv string) {
 		f := ui.SetPropertiesFlag{}
@@ -118,7 +123,6 @@ func FuzzUI_SetPropertiesFlag_UnmarshalFlag(f *testing.F) {
 		}
 	})
 }
-*/
 
 func TestUI_SetPropertiesFlag_Complete(t *testing.T) {
 	comps := ui.CompletionMap{

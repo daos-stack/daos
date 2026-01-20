@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,6 +52,22 @@ daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps)
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
 
+	return &oc->oc_attr;
+}
+
+/**
+ * Find the object class attributes for the provided oclass.
+ */
+struct daos_oclass_attr *
+daos_oclass_id2attr(daos_oclass_id_t oclass_id, uint32_t *nr_grps)
+{
+	struct daos_obj_class *oc;
+
+	oc = oclass_ident2cl(oclass_id, nr_grps);
+	if (!oc) {
+		D_WARN("Unknown object class %u\n", oclass_id);
+		return NULL;
+	}
 	return &oc->oc_attr;
 }
 
@@ -795,9 +812,22 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF3:
-		/** EC not supported here */
-		*ord = OR_RP_4;
-		grp_size = 4;
+		if ((rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) &&
+		    domain_nr >= 10) {
+			if (domain_nr >= 22) {
+				*ord     = OR_RS_16P3;
+				grp_size = 19;
+			} else if (domain_nr >= 14) {
+				*ord     = OR_RS_8P3;
+				grp_size = 11;
+			} else {
+				*ord     = OR_RS_4P3;
+				grp_size = 7;
+			}
+		} else {
+			*ord     = OR_RP_4;
+			grp_size = 4;
+		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF4:
 		/** EC not supported here */

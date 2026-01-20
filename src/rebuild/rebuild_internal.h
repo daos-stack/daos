@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -103,6 +104,7 @@ struct rebuild_tgt_pool_tracker {
 
 struct rebuild_server_status {
 	d_rank_t	rank;
+	double          last_update;
 	uint32_t	dtx_resync_version;
 	uint32_t	scan_done:1,
 			pull_done:1;
@@ -122,8 +124,11 @@ struct rebuild_global_pool_tracker {
 
 	/** rebuild status for each server */
 	struct rebuild_server_status *rgt_servers;
-	double                         *rgt_servers_last_update;
-	double                          rgt_last_warn;
+
+	/** timestamps for the global operation */
+	double rgt_last_warn_ts;          /* time of most recent warning log for "slow engines" */
+	double rgt_scan_warn_deadline_ts; /* time after which to warn that scan may be hung */
+	double rgt_pull_warn_deadline_ts; /* time after which to warn that pull may be hung */
 
 	/** indirect indices for binary search by rank */
 	struct rebuild_server_status  **rgt_servers_sorted;
@@ -161,8 +166,13 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_refcount;
 
 	uint32_t	rgt_opc;
-	unsigned int	rgt_abort:1,
-			rgt_init_scan:1;
+	unsigned int                    rgt_abort : 1, /* abort: kill rebuild */
+	    rgt_init_scan : 1, rgt_stop_admin : 1;     /* stop: admin has asked to kill rebuild */
+
+	uint32_t rgt_num_op_rb;            /* count of op:Rebuild attempts */
+	uint32_t rgt_num_op_freclaim;      /* count of op:Fail_reclaim attempts */
+	uint32_t rgt_num_op_rb_fail;       /* count of op:Rebuild failures */
+	uint32_t rgt_num_op_freclaim_fail; /* count of failed op:Fail_reclaim (not good) */
 };
 
 /* Structure on raft replica nodes to serve completed rebuild status querying */
@@ -221,6 +231,7 @@ struct rebuild_global {
 
 /* Per target structure to track the rebuild status */
 extern struct rebuild_global rebuild_gst;
+extern unsigned int          rebuild_wait_ec_pause;
 
 struct rebuild_task {
 	d_list_t			dst_list;
@@ -239,6 +250,24 @@ struct rebuild_task {
 	 * reclaim those half-rebuild/reintegrated job.
 	 */
 	uint32_t			dst_reclaim_ver;
+
+	/* For failed tasks that may be retried after RB_OP_FAIL_RECLAIM, original map ver and opc
+	 */
+	uint32_t                        dst_retry_map_ver;
+	daos_rebuild_opc_t              dst_retry_rebuild_op;
+
+	/* For dst_rebuild_op == RB_OP_FAIL_RECLAIM: If true, rebuild was stopped by admin.
+	 * Then, on fail_reclaim finish, the pool rebuild state will be set to idle (NOT_STARTED).
+	 */
+	bool                            dst_stop_admin;
+
+	/* Track how many tries for certain daos_rebuild_opc_t */
+	uint32_t                        dst_num_op_rb; /* count of tries to run rebuild */
+	uint32_t                        dst_num_op_reclaim;
+	uint32_t                        dst_num_op_freclaim;
+	uint32_t                        dst_num_op_upgrade;
+	uint32_t                        dst_num_op_rb_fail; /* count of rebuild failures */
+	uint32_t dst_num_op_freclaim_fail;                  /* count of Fail_recliam failures */
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -304,9 +333,6 @@ struct rebuild_iv {
 	int		riv_status;
 
 };
-
-#define SCAN_YIELD_FREQ		4096
-#define SCAN_OBJ_YIELD_CNT	128
 
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
@@ -394,8 +420,12 @@ rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str);
 int
 rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc);
 
-void rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version,
-			 uint32_t rebuild_gen, uint64_t term);
+void
+rebuild_leader_abort(const uuid_t pool_uuid, unsigned int version, uint32_t rebuild_gen,
+		     uint64_t term);
 int
 rebuild_obj_tree_destroy(daos_handle_t btr_hdl);
+
+int
+rebuild_rpc_protocol(uint8_t *protocol);
 #endif /* __REBUILD_INTERNAL_H_ */

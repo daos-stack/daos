@@ -202,6 +202,42 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
+			"system stop with full option",
+			"system stop --full",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStopReq{Full: true}),
+			}, " "),
+			nil,
+		},
+		{
+			"system stop with full and force options",
+			"system stop --full --force",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
+			"system stop with full and rank-hosts options",
+			"system stop --full --rank-hosts foo-[0-2]",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
+			"system stop with full and ranks options",
+			"system stop --full --ranks 0-2",
+			"",
+			errors.New(`may not be mixed`),
+		},
+		{
+			"system stop with ignore-admin-excluded option",
+			"system stop --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStopReq{
+					IgnoreAdminExcluded: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
@@ -244,6 +280,30 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
 			"",
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
+		},
+		{
+			"system start with ranks and ignore-admin-excluded",
+			"system start --ranks 0-3 --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, withRanks(&control.SystemStartReq{IgnoreAdminExcluded: true}, 0, 1, 2, 3)),
+			}, " "),
+			nil,
+		},
+		{
+			"system start with hosts and ignore-admin-excluded",
+			"system start --rank-hosts foo-1 --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, withHosts(&control.SystemStartReq{IgnoreAdminExcluded: true}, "foo-1")),
+			}, " "),
+			nil,
+		},
+		{
+			"system start all with ignore-admin-excluded",
+			"system start --ignore-admin-excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemStartReq{IgnoreAdminExcluded: true}),
+			}, " "),
+			nil,
 		},
 		{
 			"system exclude with multiple ranks",
@@ -326,6 +386,51 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system cleanup -v",
 			"",
 			errors.New("not provided"),
+		},
+		{
+			"system rebuild start",
+			"system rebuild start",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system rebuild start with force",
+			"system rebuild start --force",
+			"",
+			errors.New("unknown flag"),
+		},
+		{
+			"system rebuild stop",
+			"system rebuild stop",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system rebuild stop with force",
+			"system rebuild stop --force",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+					Force:  true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system self-heal evaluate",
+			"system self-heal eval",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSelfHealEvalReq{}),
+			}, " "),
+			nil,
 		},
 		{
 			"leader query",
@@ -491,6 +596,171 @@ func TestDmg_systemStartCmd(t *testing.T) {
 			startCmd.SetLog(log)
 
 			gotErr := startCmd.Execute(nil)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg  *control.Config
+		opCode  control.PoolRebuildOpCode
+		force   bool
+		verbose bool
+		resp    *mgmtpb.SystemRebuildManageResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"no config": {
+			opCode: control.PoolRebuildOpCodeStop,
+			expErr: errors.New("system rebuild stop failed: no configuration loaded"),
+		},
+		"ms failures": {
+			ctlCfg: &control.Config{},
+			resp:   &mgmtpb.SystemRebuildManageResp{},
+			msErr:  errors.New("failed"),
+			expErr: errors.New("failed"),
+		},
+		"no pools": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStop,
+			resp:    &mgmtpb.SystemRebuildManageResp{},
+			expInfo: "System-rebuild stop request succeeded on 0 pools",
+		},
+		"no pools; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStart,
+			verbose: true,
+			resp:    &mgmtpb.SystemRebuildManageResp{},
+			expInfo: "System-rebuild start request succeeded on 0 pools []",
+		},
+		"rebuild stop failed": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "failed",
+						Id:      "foo",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "failed",
+						Id:      "bar",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "baz",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr:  errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
+			expInfo: "System-rebuild stop request succeeded on 1 pool",
+		},
+		"rebuild start succeeded; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStart,
+			verbose: true,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "foo",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "bar",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "baz",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: "System-rebuild start request succeeded on 3 pools [foo bar baz]",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			rbldCmd := new(systemRebuildOpCmd)
+			rbldCmd.setInvoker(mi)
+			rbldCmd.SetLog(log)
+			rbldCmd.setConfig(tc.ctlCfg)
+			rbldCmd.Verbose = tc.verbose
+
+			gotErr := rbldCmd.execute(tc.opCode, tc.force)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			// Note this doesn't verify that the text is on an INFO or DEBUG line
+			// specifically, just that it appears in log output.
+
+			if !strings.Contains(buf.String(), tc.expInfo) {
+				t.Fatalf("expected info log output to contain %s, got %s\n",
+					tc.expInfo, buf.String())
+			}
+			if tc.expInfo == "" && strings.Contains(buf.String(), "INFO") {
+				t.Fatalf("unexpected info log output printed, got %s\n",
+					buf.String())
+			}
+		})
+	}
+}
+
+func TestDmg_systemSelfHealEvalCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg  *control.Config
+		resp    *mgmtpb.DaosResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"no config": {
+			expErr: errors.New("system self-heal eval failed: no configuration loaded"),
+		},
+		"ms failures": {
+			ctlCfg: &control.Config{},
+			msErr:  errors.New("failed"),
+			expErr: errors.New("failed"),
+		},
+		"success": {
+			ctlCfg:  &control.Config{},
+			resp:    &mgmtpb.DaosResp{},
+			expInfo: "System self-heal eval request succeeded",
+		},
+		"daos error": {
+			ctlCfg: &control.Config{},
+			resp: &mgmtpb.DaosResp{
+				Status: -1,
+			},
+			expErr: errors.New("DER_UNKNOWN"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			cmd := new(systemSelfHealEvalCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.setConfig(tc.ctlCfg)
+
+			gotErr := cmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

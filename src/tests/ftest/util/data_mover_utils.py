@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -256,7 +257,7 @@ class FsCopy():
         Args:
             daos_cmd (DaosCommand): daos command to issue the filesystem
                 copy command.
-            log (TestLogger): logger to log messages
+            log (logger): logger for the messages produced by this method
 
         """
         self.src = None
@@ -313,7 +314,7 @@ class ContClone():
         Args:
             daos_cmd (DaosCommand): daos command to issue the cont clone
                 command.
-            log (TestLogger): logger to log messages
+            log (logger): logger for the messages produced by this method
 
         """
         self.src = None

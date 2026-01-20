@@ -1,10 +1,9 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
-import random
 import re
 import threading
 import time
@@ -201,65 +200,6 @@ def get_reservation_hosts(log, control, reservation):
     except (NodeSetParseError, TypeError) as error:
         raise SlurmFailed(
             f'Unable to obtain hosts from the {reservation} slurm reservation output') from error
-
-
-def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch_params=None):
-    """Generate a script for submitting a job to slurm.
-
-    Args:
-        path (str): where to write the script file
-        name (str): job name
-        output (str): where to put the output (full path)
-        nodecount (int): number of compute nodes to execute on
-        cmds (list): shell commands that are to be executed
-        uniq (str): a unique string to append to the job and log files
-        sbatch_params (dict, optional): dictionary containing other less often used parameters to
-                sbatch, e.g. mem:100. Defaults to None.
-
-    Raises:
-        SlurmFailed: if missing require parameters for the slurm script
-
-    Returns:
-        str: the full path of the script
-
-    """
-    if name is None or nodecount is None or cmds is None:
-        raise SlurmFailed("Bad parameters passed for slurm script.")
-    if uniq is None:
-        uniq = random.randint(1, 100000)  # nosec
-    if not os.path.exists(path):
-        os.makedirs(path)
-    scriptfile = path + '/jobscript' + "_" + str(uniq) + ".sh"
-    with open(scriptfile, 'w') as script_file:
-        # identify what be used to run this script
-        script_file.write("#!/bin/bash\n#\n")
-
-        # write the mandatory parameters
-        script_file.write("#SBATCH --job-name={}\n".format(name))
-        script_file.write("#SBATCH --nodes={}\n".format(nodecount))
-        script_file.write("#SBATCH --distribution=cyclic\n")
-        if output is not None:
-            output = output + str(uniq)
-            script_file.write("#SBATCH --output={}\n".format(output))
-        if sbatch_params:
-            for key, value in list(sbatch_params.items()):
-                if value is not None:
-                    if key == "error":
-                        value = value + str(uniq)
-                    script_file.write("#SBATCH --{}={}\n".format(key, value))
-                else:
-                    script_file.write("#SBATCH --{}\n".format(key))
-        script_file.write("\n")
-
-        # debug
-        script_file.write("echo \"nodes: \" $SLURM_JOB_NODELIST \n")
-        script_file.write("echo \"node count: \" $SLURM_JOB_NUM_NODES \n")
-        script_file.write("echo \"job name: \" $SLURM_JOB_NAME \n")
-
-        for cmd in list(cmds):
-            script_file.write(cmd + "\n")
-        script_file.close()
-    return scriptfile
 
 
 def run_slurm_script(log, script, logfile=None):

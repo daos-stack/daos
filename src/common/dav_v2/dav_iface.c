@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,6 +61,84 @@ dav_uc_callback(int evt_type, void *arg, uint32_t zid)
 	return 0;
 }
 
+static int
+dav_setup_zinfo_alloc_class(dav_obj_t *hdl, uint64_t *alloc_size, int *class_id)
+{
+	struct dav_alloc_class_desc p;
+	int                         rc;
+	uint64_t                    size, capacity;
+
+	heap_zinfo_get_size(&size, &capacity);
+	p.unit_size       = size;
+	p.alignment       = 0;
+	p.units_per_block = 1;
+	p.header_type     = DAV_HEADER_NONE;
+	p.class_id        = 0;
+	rc                = dav_class_register_v2(hdl, &p, 0);
+	if (rc) {
+		D_ERROR("unable to register allocation class for zinfo, err %d\n", rc);
+		return rc;
+	}
+	if (class_id)
+		*class_id = p.class_id;
+	if (alloc_size)
+		*alloc_size = size;
+	return 0;
+}
+
+static int
+dav_setup_zone0(dav_obj_t *hdl)
+{
+	int          rc;
+	int          zinfo_class_id = 0;
+	struct zone *z0;
+	uint64_t     alloc_size;
+
+	rc = lw_tx_begin(hdl);
+	if (rc) {
+		D_ERROR("lw_tx_begin failed with err %d\n", rc);
+		rc = ENOMEM;
+		goto out;
+	}
+	rc = heap_ensure_zone0_initialized(hdl->do_heap);
+	if (rc) {
+		lw_tx_end(hdl, NULL);
+		D_ERROR("Failed to initialize zone0, rc = %d", daos_errno2der(rc));
+		goto out;
+	}
+	lw_tx_end(hdl, NULL);
+
+	rc = dav_setup_zinfo_alloc_class(hdl, &alloc_size, &zinfo_class_id);
+	if (rc)
+		goto out;
+
+	rc = lw_tx_begin(hdl);
+	if (rc) {
+		D_ERROR("lw_tx_begin failed with err %d\n", rc);
+		goto out;
+	}
+	z0 = ZID_TO_ZONE(&hdl->do_heap->layout_info, 0);
+	rc = obj_realloc(hdl, &z0->header.zone0_zinfo_off, &z0->header.zone0_zinfo_size, alloc_size,
+			 zinfo_class_id);
+	lw_tx_end(hdl, NULL);
+	if (rc) {
+		D_ERROR("Failed to allocate zinfo array, rc = %d", daos_errno2der(rc));
+		goto out;
+	}
+
+	rc = lw_tx_begin(hdl);
+	if (rc) {
+		D_ERROR("lw_tx_begin failed with err %d\n", rc);
+		goto out;
+	}
+	heap_zinfo_init(hdl->do_heap, true);
+	lw_tx_end(hdl, NULL);
+
+	return 0;
+out:
+	return rc;
+}
+
 static dav_obj_t *
 dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct umem_store *store)
 {
@@ -68,7 +147,9 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	int                     err = 0;
 	int                     rc;
 	struct heap_zone_limits hzl;
-	struct zone            *z0;
+	uint64_t                alloc_size, max_zones = 0;
+
+	heap_zinfo_get_size(&alloc_size, &max_zones);
 
 	hzl = heap_get_zone_limits(store->stor_size, scm_sz, 100);
 
@@ -78,7 +159,14 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		return NULL;
 	}
 
-	if ((hzl.nzones_cache < 2) && (hzl.nzones_heap > hzl.nzones_cache)) {
+	if (hzl.nzones_heap > max_zones) {
+		ERR("heap size %lu greater than max size %lu supported", store->stor_size,
+		    max_zones * ZONE_MAX_SIZE);
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if ((hzl.nzones_cache <= UMEM_CACHE_MIN_PAGES) && (hzl.nzones_heap > hzl.nzones_cache)) {
 		ERR("Insufficient scm size.");
 		errno = EINVAL;
 		return NULL;
@@ -155,81 +243,67 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		goto out3;
 	}
 
-	if (!(flags & DAV_HEAP_INIT)) {
-		rc = heap_zone_load(hdl->do_heap, 0);
-		if (rc) {
-			err = rc;
-			goto out4;
-		}
-		D_ASSERT(store != NULL);
-		rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
-		if (rc) {
-			err = daos_der2errno(rc);
-			goto out4;
-		}
-	}
-
 	rc = dav_create_clogs(hdl);
 	if (rc) {
 		err = rc;
 		goto out4;
 	}
 
-	rc = lw_tx_begin(hdl);
-	if (rc) {
-		D_ERROR("lw_tx_begin failed with err %d\n", rc);
-		err = ENOMEM;
-		goto out5;
-	}
-	rc = heap_ensure_zone0_initialized(hdl->do_heap);
-	if (rc) {
-		lw_tx_end(hdl, NULL);
-		D_ERROR("Failed to initialize zone0, rc = %d", daos_errno2der(rc));
-		goto out5;
-	}
-	lw_tx_end(hdl, NULL);
-
-	z0 = ZID_TO_ZONE(&hdl->do_heap->layout_info, 0);
-	if (z0->header.zone0_zinfo_off) {
-		D_ASSERT(z0->header.zone0_zinfo_size);
-		D_ASSERT(OFFSET_TO_ZID(z0->header.zone0_zinfo_off) == 0);
-
-		rc = heap_update_mbrt_zinfo(hdl->do_heap, false);
+	if (flags & DAV_HEAP_INIT) {
+		rc = dav_setup_zone0(hdl);
 		if (rc) {
-			D_ERROR("Failed to update mbrt with zinfo errno = %d", rc);
-			err = rc;
-			goto out5;
-		}
-
-		rc = heap_load_nonevictable_zones(hdl->do_heap);
-		if (rc) {
-			D_ERROR("Failed to load required zones during boot, errno= %d", rc);
 			err = rc;
 			goto out5;
 		}
 	} else {
-		D_ASSERT(z0->header.zone0_zinfo_size == 0);
+		rc = dav_setup_zinfo_alloc_class(hdl, NULL, NULL);
+		if (rc) {
+			err = rc;
+			goto out5;
+		}
+		rc = heap_zone_load(hdl->do_heap, 0);
+		if (rc) {
+			err = rc;
+			goto out5;
+		}
+		D_ASSERT(store != NULL);
+		rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
+		if (rc) {
+			err = daos_der2errno(rc);
+			goto out5;
+		}
+
 		rc = lw_tx_begin(hdl);
 		if (rc) {
 			D_ERROR("lw_tx_begin failed with err %d\n", rc);
 			err = ENOMEM;
 			goto out5;
 		}
-		rc = obj_realloc(hdl, &z0->header.zone0_zinfo_off, &z0->header.zone0_zinfo_size,
-				 heap_zinfo_get_size(hzl.nzones_heap));
-		if (rc != 0) {
-			lw_tx_end(hdl, NULL);
-			D_ERROR("Failed to setup zinfo");
-			goto out5;
-		}
-		rc = heap_update_mbrt_zinfo(hdl->do_heap, true);
+		rc = heap_ensure_zone0_initialized(hdl->do_heap);
 		if (rc) {
-			D_ERROR("Failed to update mbrt with zinfo errno = %d", rc);
+			lw_tx_end(hdl, NULL);
+			D_ERROR("Failed to initialize zone0, rc = %d", daos_errno2der(rc));
 			err = rc;
 			goto out5;
 		}
+		heap_zinfo_init(hdl->do_heap, false);
 		lw_tx_end(hdl, NULL);
+
+		rc = heap_update_mbrt_zinfo(hdl->do_heap);
+		if (rc) {
+			D_ERROR("Failed to update mbrt with zinfo, rc = %d", daos_errno2der(rc));
+			err = rc;
+			goto out5;
+		}
+		rc = heap_load_nonevictable_zones(hdl->do_heap);
+		if (rc) {
+			D_ERROR("Failed to load required zones during boot, rc = %d",
+				daos_errno2der(rc));
+			err = rc;
+			goto out5;
+		}
 	}
+
 	umem_cache_post_replay(hdl->do_store);
 
 #if VG_MEMCHECK_ENABLED
@@ -378,10 +452,10 @@ dav_get_base_ptr_v2(dav_obj_t *hdl)
 }
 
 DAV_FUNC_EXPORT int
-dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p)
+dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p, int is_evictable_mb)
 {
 	uint8_t                        id        = (uint8_t)p->class_id;
-	struct alloc_class_collection *ac = heap_alloc_classes(pop->do_heap);
+	struct alloc_class_collection *ac = heap_alloc_classes(pop->do_heap, is_evictable_mb);
 	enum header_type               lib_htype = MAX_HEADER_TYPES;
 	size_t                         runsize_bytes;
 	uint32_t                       size_idx;
@@ -455,15 +529,9 @@ dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p)
 	if (size_idx > MAX_CHUNK)
 		size_idx = MAX_CHUNK;
 
-	c = alloc_class_new(id, heap_alloc_classes(pop->do_heap), CLASS_RUN, lib_htype,
-			    p->unit_size, p->alignment, size_idx);
+	c = alloc_class_new(id, ac, CLASS_RUN, lib_htype, p->unit_size, p->alignment, size_idx);
 	if (c == NULL) {
 		errno = EINVAL;
-		return -1;
-	}
-
-	if (heap_create_alloc_class_buckets(pop->do_heap, c) != 0) {
-		alloc_class_delete(ac, c);
 		return -1;
 	}
 

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /* Copyright 2016-2024, Intel Corporation */
+/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
 
 /*
  * memblock.c -- implementation of memory block
@@ -679,14 +680,20 @@ huge_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	 * The footer entry change is updated as transient because it will
 	 * be recreated at heap boot regardless - it's just needed for runtime
 	 * operations.
+	 * Note:
+	 * If a footer is added as part of a tx, creating a transient entry
+	 * and marking the page as dirty at commit time does not justify the
+	 * added complexity and occurs less frequently. Therefore, for now,
+	 * we commit footer in the same way as header when called under a tx.
 	 */
+
 	if (ctx == NULL) {
 		util_atomic_store_explicit64((uint64_t *)footer, val,
 			memory_order_relaxed);
+		heap_touch_umem_cache(m->heap, footer, sizeof(*footer));
 		VALGRIND_SET_CLEAN(footer, sizeof(*footer));
 	} else {
-		operation_add_typed_entry(ctx,
-			footer, val, ULOG_OPERATION_SET, LOG_TRANSIENT);
+		operation_add_entry(ctx, footer, val, ULOG_OPERATION_SET);
 	}
 }
 
@@ -728,7 +735,7 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	uint16_t num = m->size_idx;
 	uint32_t pos = m->block_off % RUN_BITS_PER_VALUE;
 
-	ASSERT_rt(num > 0 && num <= RUN_BITS_PER_VALUE);
+	D_ASSERT(num > 0 && num <= RUN_BITS_PER_VALUE);
 	bmask = ULOG_ENTRY_TO_VAL(pos, num);
 #endif
 
@@ -1233,8 +1240,8 @@ huge_reinit_chunk(const struct memory_block *m)
 {
 	struct chunk_header *hdr = heap_get_chunk_hdr(m->heap, m);
 
-	if (hdr->type == CHUNK_TYPE_USED)
-		huge_write_footer(hdr, hdr->size_idx);
+	D_ASSERT((hdr->type == CHUNK_TYPE_USED) || (hdr->type == CHUNK_TYPE_FREE));
+	huge_write_footer(hdr, hdr->size_idx);
 }
 
 /*
@@ -1571,7 +1578,8 @@ memblock_from_offset_opt(struct palloc_heap *heap, uint64_t off, int size)
 		off -= m.block_off * unit_size;
 	}
 
-	struct alloc_class_collection *acc = heap_alloc_classes(heap);
+	struct mbrt                   *mb  = heap_mbrt_get_mb(heap, m.zone_id);
+	struct alloc_class_collection *acc = mbrt_alloc_classes(mb);
 
 	if (acc != NULL) {
 		struct alloc_class *ac = alloc_class_by_run(acc,

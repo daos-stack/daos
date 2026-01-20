@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -83,7 +84,7 @@ func (m *SecurityModule) validateRespWithStatus(status daos.Status) ([]byte, err
 
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
-	if method != drpc.MethodValidateCredentials {
+	if method != daos.MethodValidateCredentials {
 		return nil, drpc.UnknownMethodFailure()
 	}
 
@@ -91,6 +92,20 @@ func (m *SecurityModule) HandleCall(_ context.Context, session *drpc.Session, me
 }
 
 // ID will return Security module ID
-func (m *SecurityModule) ID() drpc.ModuleID {
-	return drpc.ModuleSecurity
+func (m *SecurityModule) ID() int32 {
+	return daos.ModuleSecurity
+}
+
+func (m *SecurityModule) String() string {
+	return "server_security"
+}
+
+// GetMethod returns a helpful representation of the method matching the ID.
+func (m *SecurityModule) GetMethod(id int32) (drpc.Method, error) {
+	switch id {
+	case daos.MethodValidateCredentials.ID():
+		return daos.MethodValidateCredentials, nil
+	default:
+		return nil, fmt.Errorf("invalid method ID %d for module %s", id, m.String())
+	}
 }

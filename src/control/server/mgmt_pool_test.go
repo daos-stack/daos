@@ -10,6 +10,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -44,7 +45,6 @@ var (
 		Replicas: []ranklist.Rank{0},
 		Storage: &system.PoolServiceStorage{
 			CreationRankStr:    "0",
-			CurrentRankStr:     "0",
 			PerRankTierStorage: mockTierBytes,
 			MemRatio:           mockMemRatio,
 		},
@@ -1356,7 +1356,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, log)
 	mockRanks := []uint32{1}
-	mockFaultDomains := []uint32{1, 1, 1, 1}
+	mockFaultDomains := []uint32{0, 1, 1, 1, 1}
 
 	for name, tc := range map[string]struct {
 		nilReq      bool
@@ -1477,7 +1477,8 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilReq      bool
 		getMockDrpc func(error) *mockDrpcClient
-		mgmtSvc     *mgmtSvc
+		ms          *mgmtSvc
+		members     system.Members
 		reqIn       *mgmtpb.PoolReintReq
 		drpcResp    *mgmtpb.PoolReintResp
 		expDrpcReq  *mgmtpb.PoolReintReq
@@ -1492,12 +1493,12 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
-			mgmtSvc: missingSB,
-			expErr:  errNotReplica,
+			ms:     missingSB,
+			expErr: errNotReplica,
 		},
 		"not MS replica": {
-			mgmtSvc: notAP,
-			expErr:  errNotReplica,
+			ms:     notAP,
+			expErr: errNotReplica,
 		},
 		"dRPC send fails": {
 			expErr: errors.New("send failure"),
@@ -1515,7 +1516,15 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			reqIn:  &mgmtpb.PoolReintReq{Rank: 1},
 			expErr: errors.New("empty pool id"),
 		},
-		"successfully extended": {
+		"invalid rank": {
+			members: system.Members{
+				mockMember(t, 1, 2, "excluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 1, "joined"),
+			},
+			expErr: errors.New("ranks with invalid state: 1"),
+		},
+		"successfully reintegrated": {
 			drpcResp: &mgmtpb.PoolReintResp{},
 			// Expect that the last request contains updated params from ps entry.
 			expDrpcReq: &mgmtpb.PoolReintReq{
@@ -1523,6 +1532,7 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 				SvcRanks:  mockSvcRanks,
 				Id:        mockUUID,
 				Rank:      1,
+				TargetIdx: []uint32{1, 2},
 				TierBytes: mockTierBytes,
 				MemRatio:  mockMemRatio,
 			},
@@ -1533,12 +1543,29 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.reqIn == nil && !tc.nilReq {
-				tc.reqIn = &mgmtpb.PoolReintReq{Id: mockUUID, Rank: 1}
+				tc.reqIn = &mgmtpb.PoolReintReq{
+					Id:        mockUUID,
+					Rank:      1,
+					TargetIdx: []uint32{1, 2},
+				}
 			}
-			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(t, log)
+			if tc.members == nil {
+				tc.members = system.Members{
+					mockMember(t, 1, 2, "joined"),
+					mockMember(t, 2, 2, "joined"),
+					mockMember(t, 3, 1, "joined"),
+				}
 			}
-			addTestPoolService(t, tc.mgmtSvc.sysdb, mockPoolService)
+			if tc.ms == nil {
+				tc.ms = mgmtSystemTestSetup(t, log, tc.members, nil)
+			} else {
+				for _, m := range tc.members {
+					if _, err := tc.ms.membership.Add(m); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			addTestPoolService(t, tc.ms.sysdb, mockPoolService)
 
 			if tc.getMockDrpc == nil {
 				tc.getMockDrpc = func(err error) *mockDrpcClient {
@@ -1546,19 +1573,13 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 				}
 			}
 			mdc := tc.getMockDrpc(tc.expErr)
-			setupSvcDrpcClient(tc.mgmtSvc, 0, mdc)
+			setupSvcDrpcClient(tc.ms, 0, mdc)
 
 			if tc.reqIn != nil && tc.reqIn.Sys == "" {
 				tc.reqIn.Sys = build.DefaultSystemName
 			}
 
-			_, err := tc.mgmtSvc.membership.Add(system.MockMember(t, 1,
-				system.MemberStateJoined))
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			gotResp, gotErr := tc.mgmtSvc.PoolReintegrate(test.Context(t), tc.reqIn)
+			gotResp, gotErr := tc.ms.PoolReintegrate(test.Context(t), tc.reqIn)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1586,46 +1607,38 @@ func TestServer_MgmtSvc_PoolExclude(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, log)
-	testPoolService := &system.PoolService{
-		PoolUUID: uuid.MustParse(mockUUID),
-		State:    system.PoolServiceStateReady,
-		Replicas: []ranklist.Rank{0},
-	}
 
 	for name, tc := range map[string]struct {
-		mgmtSvc       *mgmtSvc
+		ms            *mgmtSvc
 		setupMockDrpc func(_ *mgmtSvc, _ error)
+		nilReq        bool
 		req           *mgmtpb.PoolExcludeReq
 		expResp       *mgmtpb.PoolExcludeResp
 		expErr        error
 	}{
 		"nil request": {
+			nilReq: true,
 			expErr: errors.New("nil request"),
 		},
 		"wrong system": {
-			req:    &mgmtpb.PoolExcludeReq{Id: mockUUID, Sys: "bad"},
+			req:    &mgmtpb.PoolExcludeReq{Id: mockUUID, Sys: "bad", Rank: 0},
 			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
-			mgmtSvc: missingSB,
-			req:     &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
-			expErr:  errNotReplica,
+			ms:     missingSB,
+			expErr: errNotReplica,
 		},
 		"not MS replica": {
-			mgmtSvc: notAP,
-			req:     &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
-			expErr:  errNotReplica,
+			ms:     notAP,
+			expErr: errNotReplica,
 		},
 		"dRPC send fails": {
-			req:    &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
 			expErr: errors.New("send failure"),
 		},
 		"zero target count": {
-			req:    &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
 			expErr: errors.New("zero target count"),
 		},
 		"garbage resp": {
-			req: &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
@@ -1635,11 +1648,14 @@ func TestServer_MgmtSvc_PoolExclude(t *testing.T) {
 			expErr: errors.New("unmarshal"),
 		},
 		"missing uuid": {
-			req:    &mgmtpb.PoolExcludeReq{Rank: 2, TargetIdx: []uint32{1, 2}},
+			req:    &mgmtpb.PoolExcludeReq{Rank: 0, TargetIdx: []uint32{1, 2}},
 			expErr: errors.New("empty pool id"),
 		},
+		"missing rank": {
+			req:    &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 1, TargetIdx: []uint32{1, 2}},
+			expErr: errors.New("invalid rank: 1"),
+		},
 		"successful drained": {
-			req:     &mgmtpb.PoolExcludeReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
 			expResp: &mgmtpb.PoolExcludeResp{},
 		},
 	} {
@@ -1647,23 +1663,37 @@ func TestServer_MgmtSvc_PoolExclude(t *testing.T) {
 			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
-			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(t, log)
+			if tc.req == nil && !tc.nilReq {
+				tc.req = &mgmtpb.PoolExcludeReq{
+					Id:        mockUUID,
+					Rank:      0,
+					TargetIdx: []uint32{1, 2},
+				}
 			}
-			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
+			members := system.Members{mockMember(t, 0, 2, "joined")}
+			if tc.ms == nil {
+				tc.ms = mgmtSystemTestSetup(t, log, members, nil)
+			} else {
+				for _, m := range members {
+					if _, err := tc.ms.membership.Add(m); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			addTestPoolService(t, tc.ms.sysdb, mockPoolService)
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
 					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.expResp, tc.expErr))
 				}
 			}
-			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+			tc.setupMockDrpc(tc.ms, tc.expErr)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolExclude(test.Context(t), tc.req)
+			gotResp, gotErr := tc.ms.PoolExclude(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1682,20 +1712,17 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, log)
-	testPoolService := &system.PoolService{
-		PoolUUID: uuid.MustParse(mockUUID),
-		State:    system.PoolServiceStateReady,
-		Replicas: []ranklist.Rank{0},
-	}
 
 	for name, tc := range map[string]struct {
-		mgmtSvc       *mgmtSvc
+		ms            *mgmtSvc
 		setupMockDrpc func(_ *mgmtSvc, _ error)
+		nilReq        bool
 		req           *mgmtpb.PoolDrainReq
 		expResp       *mgmtpb.PoolDrainResp
 		expErr        error
 	}{
 		"nil request": {
+			nilReq: true,
 			expErr: errors.New("nil request"),
 		},
 		"wrong system": {
@@ -1703,25 +1730,20 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
-			mgmtSvc: missingSB,
-			req:     &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
-			expErr:  errNotReplica,
+			ms:     missingSB,
+			expErr: errNotReplica,
 		},
 		"not MS replica": {
-			mgmtSvc: notAP,
-			req:     &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
-			expErr:  errNotReplica,
+			ms:     notAP,
+			expErr: errNotReplica,
 		},
 		"dRPC send fails": {
-			req:    &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
 			expErr: errors.New("send failure"),
 		},
 		"zero target count": {
-			req:    &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
 			expErr: errors.New("zero target count"),
 		},
 		"garbage resp": {
-			req: &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
@@ -1731,11 +1753,14 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 			expErr: errors.New("unmarshal"),
 		},
 		"missing uuid": {
-			req:    &mgmtpb.PoolDrainReq{Rank: 2, TargetIdx: []uint32{1, 2}},
+			req:    &mgmtpb.PoolDrainReq{Rank: 0, TargetIdx: []uint32{1, 2}},
 			expErr: errors.New("empty pool id"),
 		},
+		"missing rank": {
+			req:    &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
+			expErr: errors.New("invalid rank: 2"),
+		},
 		"successful drained": {
-			req:     &mgmtpb.PoolDrainReq{Id: mockUUID, Rank: 2, TargetIdx: []uint32{1, 2}},
 			expResp: &mgmtpb.PoolDrainResp{},
 		},
 	} {
@@ -1743,23 +1768,37 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 			buf.Reset()
 			defer test.ShowBufferOnFailure(t, buf)
 
-			if tc.mgmtSvc == nil {
-				tc.mgmtSvc = newTestMgmtSvc(t, log)
+			if tc.req == nil && !tc.nilReq {
+				tc.req = &mgmtpb.PoolDrainReq{
+					Id:        mockUUID,
+					Rank:      0,
+					TargetIdx: []uint32{1, 2},
+				}
 			}
-			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
+			members := system.Members{mockMember(t, 0, 2, "joined")}
+			if tc.ms == nil {
+				tc.ms = mgmtSystemTestSetup(t, log, members, nil)
+			} else {
+				for _, m := range members {
+					if _, err := tc.ms.membership.Add(m); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			addTestPoolService(t, tc.ms.sysdb, mockPoolService)
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
 					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.expResp, tc.expErr))
 				}
 			}
-			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+			tc.setupMockDrpc(tc.ms, tc.expErr)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolDrain(test.Context(t), tc.req)
+			gotResp, gotErr := tc.ms.PoolDrain(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -2305,11 +2344,12 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		mgmtSvc       *mgmtSvc
-		setupMockDrpc func(_ *mgmtSvc, _ error)
-		req           *mgmtpb.PoolQueryReq
-		expResp       *mgmtpb.PoolQueryResp
-		expErr        error
+		mgmtSvc                *mgmtSvc
+		setupMockDrpc          func(_ *mgmtSvc, _ error)
+		req                    *mgmtpb.PoolQueryReq
+		missingSelfHealSysProp bool
+		expResp                *mgmtpb.PoolQueryResp
+		expErr                 error
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
@@ -2355,8 +2395,9 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Id: mockUUID,
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				State: mgmtpb.PoolServiceState_Ready,
-				Uuid:  mockUUID,
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			},
 		},
 		"successful query (includes pre-2.6 Leader field)": {
@@ -2372,10 +2413,11 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				setupMockDrpcClient(svc, resp, nil)
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				State:  mgmtpb.PoolServiceState_Ready,
-				Uuid:   mockUUID,
-				SvcLdr: 42,
-				Leader: 42,
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				SvcLdr:            42,
+				Leader:            42,
+				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			},
 		},
 		"successful query; mdonssd enabled": {
@@ -2391,9 +2433,33 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				setupMockDrpcClient(svc, resp, nil)
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				State:        mgmtpb.PoolServiceState_Ready,
-				Uuid:         mockUUID,
-				MemFileBytes: humanize.GiByte,
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				MemFileBytes:      humanize.GiByte,
+				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+			},
+		},
+		"successful query; sys self-heal prop fetch": {
+			req: &mgmtpb.PoolQueryReq{
+				Id:        mockUUID,
+				QueryMask: uint64(daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy)),
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				SysSelfHealPolicy: "pool_rebuild",
+			},
+		},
+		"successful query; sys self-heal prop fetch; missing system property": {
+			missingSelfHealSysProp: true,
+			req: &mgmtpb.PoolQueryReq{
+				Id:        mockUUID,
+				QueryMask: uint64(daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy)),
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			},
 		},
 	} {
@@ -2424,6 +2490,14 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
+			}
+
+			if !tc.missingSelfHealSysProp {
+				// Change stored value to something different from the default.
+				if err := system.SetUserProperty(tc.mgmtSvc.sysdb, tc.mgmtSvc.systemProps,
+					"self_heal", "pool_rebuild"); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			gotResp, gotErr := tc.mgmtSvc.PoolQuery(test.Context(t), tc.req)
@@ -2674,7 +2748,7 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 		mgmtSvc       *mgmtSvc
 		setupMockDrpc func(_ *mgmtSvc, _ error)
 		req           *mgmtpb.PoolUpgradeReq
-		expResp       *mgmtpb.PoolUpgradeResp
+		expResp       *mgmtpb.DaosResp
 		expErr        error
 	}{
 		"nil request": {
@@ -2714,7 +2788,7 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 		},
 		"successful upgraded": {
 			req:     &mgmtpb.PoolUpgradeReq{Id: mockUUID},
-			expResp: &mgmtpb.PoolUpgradeResp{},
+			expResp: &mgmtpb.DaosResp{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -2748,5 +2822,140 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
+	}
+}
+
+type methParams struct {
+	Name string
+	Req  proto.Message
+}
+
+func TestServer_MgmtSvc_PoolServiceSimple(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defSys := build.DefaultSystemName
+	missingSB := newTestMgmtSvc(t, log)
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
+	notAP := newTestMgmtSvc(t, log)
+	testPoolService := &system.PoolService{
+		PoolUUID: uuid.MustParse(mockUUID),
+		State:    system.PoolServiceStateReady,
+		Replicas: []ranklist.Rank{0},
+	}
+	invoke := func(any interface{}, name string, args ...interface{}) []reflect.Value {
+		inputs := make([]reflect.Value, len(args))
+		for i, _ := range args {
+			inputs[i] = reflect.ValueOf(args[i])
+		}
+		return reflect.ValueOf(any).MethodByName(name).Call(inputs)
+	}
+	// One slice elements per pool service method to test.
+	methods := []methParams{
+		{
+			"PoolUpgrade",
+			&mgmtpb.PoolUpgradeReq{},
+		},
+		{
+			"PoolRebuildStart",
+			&mgmtpb.PoolRebuildStartReq{},
+		},
+		{
+			"PoolRebuildStop",
+			&mgmtpb.PoolRebuildStopReq{},
+		},
+		{
+			"PoolSelfHealEval",
+			&mgmtpb.PoolSelfHealEvalReq{},
+		},
+	}
+
+	runPoolServiceTests := func(t *testing.T, methName string, methReq proto.Message) {
+		for name, tc := range map[string]struct {
+			mgmtSvc       *mgmtSvc
+			setupMockDrpc func(_ *mgmtSvc, _ error)
+			sysName       string
+			emptyPoolID   bool
+			expRespNotNil bool
+			expErr        error
+		}{
+			"wrong system": {
+				sysName: "bad",
+				expErr:  FaultWrongSystem("bad", defSys),
+			},
+			"missing superblock": {
+				mgmtSvc: missingSB,
+				expErr:  errNotReplica,
+			},
+			"not MS replica": {
+				mgmtSvc: notAP,
+				expErr:  errNotReplica,
+			},
+			"dRPC send fails": {
+				expErr: errors.New("send failure"),
+			},
+			"garbage resp": {
+				setupMockDrpc: func(svc *mgmtSvc, err error) {
+					// dRPC call returns junk in the message body
+					badBytes := makeBadBytes(42)
+					setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
+				},
+				expErr: errors.New("unmarshal"),
+			},
+			"missing uuid": {
+				emptyPoolID: true,
+				expErr:      errors.New("empty pool id"),
+			},
+			"successful call": {
+				expRespNotNil: true,
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				buf.Reset()
+				defer test.ShowBufferOnFailure(t, buf)
+
+				tc.mgmtSvc = newTestMgmtSvc(t, log)
+				addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
+
+				if tc.setupMockDrpc == nil {
+					tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+						setupSvcDrpcClient(svc, 0,
+							getMockDrpcClient(new(mgmtpb.DaosResp), tc.expErr))
+					}
+				}
+				tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+
+				s := reflect.ValueOf(methReq).Elem()
+
+				sysName := defSys
+				if tc.sysName != "" {
+					sysName = tc.sysName
+				}
+				s.FieldByName("Sys").SetString(sysName)
+
+				poolID := ""
+				if !tc.emptyPoolID {
+					poolID = mockUUID
+				}
+				s.FieldByName("Id").SetString(poolID)
+
+				res := invoke(tc.mgmtSvc, methName, test.Context(t), methReq)
+				ret := res[0].Interface()
+				var gotErr error
+				if v := res[1].Interface(); v != nil {
+					gotErr = v.(error)
+				}
+
+				test.CmpErr(t, tc.expErr, gotErr)
+				if tc.expErr != nil {
+					return
+				}
+
+				test.AssertEqual(t, tc.expRespNotNil, ret != nil,
+					"expected non-nil response")
+			})
+		}
+	}
+
+	for _, params := range methods {
+		runPoolServiceTests(t, params.Name, params.Req)
 	}
 }

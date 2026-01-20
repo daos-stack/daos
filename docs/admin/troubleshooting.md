@@ -68,10 +68,10 @@ server operations:
 
 |Component|Config Parameter|Example Config Value|
 |-|-|-|
-|Control Plane|control_log_file|/tmp/daos_server.log|
-|Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://docs.daos.io/v2.6/admin/predeployment_check/#privileged-helper)|helper_log_file|/tmp/daos_admin.log|
-|agent|log_file|/tmp/daos_agent.log|
+|Control Plane|control_log_file|/var/log/daos/daos_server.log|
+|Data Plane|log_file|/var/log/daos/daos_engine.\*.log|
+|[Privileged Helper](https://docs.daos.io/v2.6/admin/predeployment_check/#privileged-helper)|helper_log_file|/var/log/daos/daos_admin.log|
+|agent|log_file|/var/log/daos/daos_agent.log|
 
 ### Control Plane Log
 
@@ -523,7 +523,7 @@ updated its system fabric provider.
 Example `system_fabric_provider_changed` RAS event from syslog:
 
 ```
-daos_server[3302185]: id: [system_fabric_provider_changed] ts: [2024-02-13T20:08:50.956+00:00] host: [boro-74.boro.hpdd.intel.com] type: [INFO] sev: [NOTICE] msg: [system fabric provider has changed: ofi+tcp -> ofi+tcp;ofi_rxm] pid: [3302185]
+daos_server[3302185]: id: [system_fabric_provider_changed] ts: [2024-02-13T20:08:50.956+00:00] host: [boro-74.boro.example.com] type: [INFO] sev: [NOTICE] msg: [system fabric provider has changed: ofi+tcp -> ofi+tcp;ofi_rxm] pid: [3302185]
 ```
 
 To resolve the issue:
@@ -1083,11 +1083,11 @@ running under systemd run the following command:
    CGroup: /system.slice/rsyslog.service
            └─1962 /usr/sbin/rsyslogd -n
 
-May 23 16:12:31 wolf-164.wolf.hpdd.intel.com systemd[1]: Starting System Logging Service...
-May 23 16:12:31 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: [origin software="rsyslogd" swVersion="8.21>
-May 23 16:12:31 wolf-164.wolf.hpdd.intel.com systemd[1]: Started System Logging Service.
-May 23 16:12:31 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: imjournal: journal files changed, reloading>
-May 29 03:18:01 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: [origin software="rsyslogd" swVersion="8.21>
+May 23 16:12:31 wolf-164.wolf.example.com systemd[1]: Starting System Logging Service...
+May 23 16:12:31 wolf-164.wolf.example.com rsyslogd[1962]: [origin software="rsyslogd" swVersion="8.21>
+May 23 16:12:31 wolf-164.wolf.example.com systemd[1]: Started System Logging Service.
+May 23 16:12:31 wolf-164.wolf.example.com rsyslogd[1962]: imjournal: journal files changed, reloading>
+May 29 03:18:01 wolf-164.wolf.example.com rsyslogd[1962]: [origin software="rsyslogd" swVersion="8.21>
 ```
 
 To configure a Syslog daemon to resolve the delivery errors and receive messages from 'daos_server'

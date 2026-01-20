@@ -1,19 +1,20 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import re
 import time
 
-from ClusterShell.NodeSet import NodeSet
+from apricot import TestWithServers
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from general_utils import report_errors
-from recovery_test_base import RecoveryTestBase
+from recovery_utils import wait_for_check_complete
 
 
-class ContainerListConsolidationTest(RecoveryTestBase):
+class ContainerListConsolidationTest(TestWithServers):
     """Test Pass 4: Container List Consolidation
 
     :avocado: recursive
@@ -66,17 +67,13 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         dmg_command.system_stop()
 
         self.log_step("Use ddb to verify that the container is left in shards (PMEM only).")
-        vos_file = self.get_vos_file_path(pool=pool)
-        if vos_file:
+        vos_paths = self.server_managers[0].get_vos_files(pool)
+        if vos_paths:
             # We're using a PMEM cluster.
-            scm_mount = self.server_managers[0].get_config_value("scm_mount")
-            ddb_command = DdbCommand(
-                server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
-                mount_point=scm_mount, pool_uuid=pool.uuid, vos_file=vos_file)
+            ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
             cmd_result = ddb_command.list_component()
-            ls_out = "\n".join(cmd_result[0]["stdout"])
             uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
-            match = re.search(uuid_regex, ls_out)
+            match = re.search(uuid_regex, cmd_result.joined_stdout)
             if match is None:
                 self.fail("Unexpected output from ddb command, unable to parse.")
             self.log.info("Container UUID from ddb ls = %s", match.group(1))
@@ -84,8 +81,8 @@ class ContainerListConsolidationTest(RecoveryTestBase):
             # UUID is found. Verify that it's the container UUID of the container we created.
             actual_uuid = match.group(1)
             if actual_uuid != expected_uuid:
-                msg = "Unexpected container UUID! Expected = {}; Actual = {}".format(
-                    expected_uuid, actual_uuid)
+                msg = (f"Unexpected container UUID! Expected = {expected_uuid}; "
+                       f"Actual = {actual_uuid}")
                 errors.append(msg)
 
         self.log_step("Enable the checker.")
@@ -116,7 +113,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         dmg_command.check_repair(seq_num=seq_num, action=0)
 
         self.log_step("Query the checker until the fault is repaired.")
-        repair_report = self.wait_for_check_complete()[0]
+        repair_report = wait_for_check_complete(dmg_command)[0]
 
         action_message = repair_report["act_msgs"][0]
         exp_msg = "Discard the container"
@@ -127,15 +124,14 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         self.log_step("Disable the checker.")
         dmg_command.check_disable(start=False)
 
-        if vos_file:
+        if vos_paths:
             # ddb requires the vos file. PMEM cluster only.
             msg = ("Run the ddb command and verify that the container is removed from shard "
                    "(PMEM only).")
             self.log_step(msg)
             cmd_result = ddb_command.list_component()
-            ls_out = "\n".join(cmd_result[0]["stdout"])
             uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
-            match = re.search(uuid_regex, ls_out)
+            match = re.search(uuid_regex, cmd_result.joined_stdout)
             if match:
                 errors.append("Container UUID is found in shard! Checker didn't remove it.")
 

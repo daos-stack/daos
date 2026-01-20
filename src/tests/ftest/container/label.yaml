@@ -1,5 +1,6 @@
 hosts:
   test_servers: 1
+  test_clients: 1
 timeouts:
   test_container_label_valid: 120
   test_container_label_invalid: 60

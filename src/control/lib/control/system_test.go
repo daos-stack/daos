@@ -835,6 +835,12 @@ func TestControl_SystemStop(t *testing.T) {
 	testRespRS := new(SystemStopResp)
 	testRespRS.AbsentRanks.Replace(testRS)
 
+	withFull := func(stopReq *SystemStopReq) *SystemStopReq {
+		nr := *stopReq
+		nr.Full = true
+		return &nr
+	}
+
 	for name, tc := range map[string]struct {
 		req        *SystemStopReq
 		uErr       error
@@ -872,6 +878,21 @@ func TestControl_SystemStop(t *testing.T) {
 			}),
 			expResp:    testRespRS,
 			expRespErr: errors.New("non-existent ranks 1-23"),
+		},
+		"request force and full options": {
+			req: &SystemStopReq{
+				Force: true,
+				Full:  true,
+			},
+			expErr: errors.New("may not be mixed"),
+		},
+		"request full and host set options": {
+			req:    withFull(testReqHS),
+			expErr: errors.New("may not be mixed"),
+		},
+		"request full and rank set options": {
+			req:    withFull(testReqRS),
+			expErr: errors.New("may not be mixed"),
 		},
 		"multiple member results": {
 			req: new(SystemStopReq),
@@ -1090,45 +1111,69 @@ func TestControl_SystemDrain(t *testing.T) {
 		"dual pools; single rank": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
-					{PoolId: test.MockUUID(1), Ranks: "1"},
-					{PoolId: test.MockUUID(2), Ranks: "1"},
+				Responses: []*mgmtpb.PoolRanksResp{
+					{
+						Id:      test.MockUUID(1),
+						Results: []*sharedpb.RankResult{{Rank: 1}},
+					},
+					{
+						Id:      test.MockUUID(2),
+						Results: []*sharedpb.RankResult{{Rank: 1}},
+					},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*PoolRankResult{
-					{PoolID: test.MockUUID(1), Ranks: "1"},
-					{PoolID: test.MockUUID(2), Ranks: "1"},
+				Responses: []*PoolRanksResp{
+					{
+						ID:      test.MockUUID(1),
+						Results: []*PoolRankResult{{Rank: 1}},
+					},
+					{
+						ID:      test.MockUUID(2),
+						Results: []*PoolRankResult{{Rank: 1}},
+					},
 				},
 			},
 		},
-		"dual pools; single rank; with errors": {
+		"dual pools; multiple ranks; with errors": {
 			req: new(SystemDrainReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemDrainResp{
-				Results: []*mgmtpb.PoolRankResult{
+				Responses: []*mgmtpb.PoolRanksResp{
 					{
-						PoolId: test.MockUUID(1), Ranks: "1",
-						Status: -1, Msg: "fail1",
+						Id: test.MockUUID(1),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail1"},
+						},
 					},
 					{
-						PoolId: test.MockUUID(2), Ranks: "1",
-						Status: -1, Msg: "fail2",
+						Id: test.MockUUID(2),
+						Results: []*sharedpb.RankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail2"},
+						},
 					},
 				},
 			}),
 			expResp: &SystemDrainResp{
-				Results: []*PoolRankResult{
+				Responses: []*PoolRanksResp{
 					{
-						PoolID: test.MockUUID(1), Ranks: "1",
-						Status: -1, Msg: "fail1",
+						ID: test.MockUUID(1),
+						Results: []*PoolRankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail1"},
+						},
 					},
 					{
-						PoolID: test.MockUUID(2), Ranks: "1",
-						Status: -1, Msg: "fail2",
+						ID: test.MockUUID(2),
+						Results: []*PoolRankResult{
+							{Rank: 0},
+							{Rank: 1, Errored: true, Msg: "fail2"},
+						},
 					},
 				},
 			},
-			expRespErr: errors.New("pool 00000001-0001-0001-0001-000000000001 ranks 1: fail1, pool 00000002-0002-0002-0002-000000000002 ranks 1: fail2"),
+			expRespErr: errors.New("rank 1 failed on pool 00000001-0001-0001-0001-000000000001, rank 1 failed on pool 00000002-0002-0002-0002-000000000002"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1839,6 +1884,194 @@ func TestControl_SystemGetAttr(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SystemRebuildManage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *SystemRebuildManageReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemRebuildManageResp
+		expRespErr error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemRebuildManageReq request"),
+		},
+		"opcode not supplied": {
+			req:    new(SystemRebuildManageReq),
+			expErr: errors.New("invalid pool-rebuild opcode"),
+		},
+		"local failure": {
+			req:    &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart},
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart},
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"no pools; rebuild-stop no-op": {
+			req:     &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStop},
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{}),
+			expResp: &SystemRebuildManageResp{},
+		},
+		"dual pools; rebuild-start": {
+			req: &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     test.MockUUID(1),
+						OpCode: uint32(PoolRebuildOpCodeStart),
+					},
+					{
+						Id:     test.MockUUID(2),
+						OpCode: uint32(PoolRebuildOpCodeStart),
+					},
+				},
+			}),
+			expResp: &SystemRebuildManageResp{
+				Results: []*PoolRebuildManageResult{
+					{
+						ID:     test.MockUUID(1),
+						OpCode: PoolRebuildOpCodeStart,
+					},
+					{
+						ID:     test.MockUUID(2),
+						OpCode: PoolRebuildOpCodeStart,
+					},
+				},
+			},
+		},
+		"dual pools; rebuild-stop; with errors": {
+			req: &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStop},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:      test.MockUUID(1),
+						OpCode:  uint32(PoolRebuildOpCodeStop),
+						Errored: true,
+						Msg:     "fail1",
+					},
+					{
+						Id:      test.MockUUID(2),
+						OpCode:  uint32(PoolRebuildOpCodeStop),
+						Errored: true,
+						Msg:     "fail2",
+					},
+				},
+			}),
+			expResp: &SystemRebuildManageResp{
+				Results: []*PoolRebuildManageResult{
+					{
+						ID:      test.MockUUID(1),
+						OpCode:  PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "fail1",
+					},
+					{
+						ID:      test.MockUUID(2),
+						OpCode:  PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "fail2",
+					},
+				},
+			},
+			expRespErr: errors.Errorf("pool-rebuild stop failed on pool %s: %s, pool-rebuild "+
+				"stop failed on pool %s: %s", test.MockUUID(1), "fail1", test.MockUUID(2),
+				"fail2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemRebuildManage(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemRebuildManageResp{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+		})
+	}
+}
+
+func TestControl_SystemSelfHealEval(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *SystemSelfHealEvalReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemSelfHealEvalResp
+		expRespErr error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemSelfHealEvalReq request"),
+		},
+		"local failure": {
+			req:    new(SystemSelfHealEvalReq),
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    new(SystemSelfHealEvalReq),
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"success": {
+			req:     new(SystemSelfHealEvalReq),
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.DaosResp{}),
+			expResp: new(SystemSelfHealEvalResp),
+		},
+		"failure": {
+			req: new(SystemSelfHealEvalReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.DaosResp{
+				Status: -1,
+			}),
+			expErr: errors.New("DER_UNKNOWN"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemSelfHealEval(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemSelfHealEvalResp{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
 		})
 	}
 }

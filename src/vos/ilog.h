@@ -136,6 +136,17 @@ int
 ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
 	    daos_epoch_t major_eph, uint16_t minor_eph, bool punch);
 
+/** Set flags to the incaration log. Add ilog entry if no visible one exists yet.
+ *
+ *  \param	loh[in]		Open log handle
+ *  \param	epoch[in]	The epoch for set flags operation
+ *  \param	flags[in]	The flags to be set to the incaration log
+ *
+ *  \return 0 on success, error code on failure
+ */
+int
+ilog_set_flags(daos_handle_t loh, daos_epoch_t epoch, uint32_t flags);
+
 /** Updates specified log entry to mark it as persistent (remove
  * the transaction identifier from the entry.   Additionally, this will
  * remove redundant entries, such as later uncommitted updates.
@@ -288,6 +299,15 @@ ilog_cache_entry(const struct ilog_entries *entries, struct ilog_entry *entry, i
 	for ((entry)->ie_idx = (ents)->ie_num_entries - 1; (entry)->ie_idx >= 0 &&	\
 	     ilog_cache_entry(ents, entry, (entry)->ie_idx); (entry)->ie_idx--)
 
+/** Whether the given ilog is corrupted or not.
+ *
+ * \param	ilog_df[in]	Pointer to the initialized incarnation log
+ *
+ * \return	True if (marked as) corrupted; otherwise false.
+ */
+bool
+ilog_is_corrupted(struct ilog_df *ilog_df);
+
 /** Fetch the address of the timestamp index from the ilog
  *
  * \param	entries[in]	The incarnation log
@@ -319,6 +339,16 @@ ilog_is_punch(const struct ilog_entry *entry)
 	return entry->ie_id.id_punch_minor_eph >
 		entry->ie_id.id_update_minor_eph;
 }
+
+/**
+ * Validate ilog's root.
+ *
+ * \param[in] ilog_df
+ *
+ * \return true if the root is valid.
+ */
+bool
+ilog_root_is_valid(struct ilog_df *ilog_df);
 
 /** Validate the provided ilog.
  *

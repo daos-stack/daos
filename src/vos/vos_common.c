@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +13,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <libgen.h>
 #include <fcntl.h>
 #include <daos/common.h>
 #include <daos/metrics.h>
@@ -24,6 +26,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/smd.h>
 #include "vos_internal.h"
+#include "pmdk_log.h"
 
 struct vos_self_mode {
 	struct vos_tls		*self_tls;
@@ -212,12 +215,22 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 }
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
+	     struct vos_object *obj)
 {
 	int	rc;
 
-	if (dth == NULL)
-		return umem_tx_begin(umm, vos_txd_get(is_sysdb));
+	if (dth == NULL) {
+		/* CPU may yield when umem_tx_begin, related object maybe evicted during that. */
+		rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
+		if (rc == 0 && obj != NULL && unlikely(vos_obj_is_evicted(obj))) {
+			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(1), need to restart TX.\n",
+				DP_UOID(obj->obj_id));
+			rc = umem_tx_end(umm, -DER_TX_RESTART);
+		}
+
+		return rc;
+	}
 
 	D_ASSERT(!is_sysdb);
 	/** Note: On successful return, dth tls gets set and will be cleared by the corresponding
@@ -232,6 +245,14 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
 
 	rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
 	if (rc == 0) {
+		/* CPU may yield when umem_tx_begin, related object maybe evicted during that. */
+		if (obj != NULL && unlikely(vos_obj_is_evicted(obj))) {
+			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(2), need to restart TX.\n",
+				DP_UOID(obj->obj_id));
+
+			return umem_tx_end(umm, -DER_TX_RESTART);
+		}
+
 		dth->dth_local_tx_started = 1;
 		vos_dth_set(dth, false);
 	}
@@ -246,12 +267,6 @@ vos_local_tx_abort(struct dtx_handle *dth)
 
 	if (dth->dth_local_oid_cnt == 0)
 		return;
-
-	/**
-	 * Since a local transaction spawns always a single pool an eaither one of the containers
-	 * can be used to access the pool.
-	 */
-	record = &dth->dth_local_oid_array[0];
 
 	/**
 	 * Evict all objects touched by the aborted transaction from the object cache to make sure
@@ -368,42 +383,13 @@ cancel:
 			dae->dae_preparing = 0;
 		}
 
-		if (err == 0 && unlikely(dth->dth_need_validation && dth->dth_active)) {
-			/* Aborted by race during the yield for local TX commit. */
-			rc = vos_dtx_validation(dth);
-			switch (rc) {
-			case DTX_ST_INITED:
-			case DTX_ST_PREPARED:
-			case DTX_ST_PREPARING:
-				/* The DTX has been ever aborted and related resent RPC
-				 * is in processing. Return -DER_AGAIN to make this ULT
-				 * to retry sometime later without dtx_abort().
-				 */
-				err = -DER_AGAIN;
-				break;
-			case DTX_ST_ABORTED:
-				D_ASSERT(dae == NULL);
-				/* Aborted, return -DER_INPROGRESS for client retry.
-				 *
-				 * Fall through.
-				 */
-			case DTX_ST_ABORTING:
-				err = -DER_INPROGRESS;
-				break;
-			case DTX_ST_COMMITTED:
-			case DTX_ST_COMMITTING:
-			case DTX_ST_COMMITTABLE:
-				/* Aborted then prepared/committed by race.
-				 * Return -DER_ALREADY to avoid repeated modification.
-				 */
-				dth->dth_already = 1;
-				err = -DER_ALREADY;
-				break;
-			default:
-				D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n",
-					  DP_DTI(&dth->dth_xid), rc);
-			}
-		} else if (dae != NULL) {
+		if (err == 0 && dth->dth_active) {
+			err = vos_dtx_validation(dth);
+			if (err != 0)
+				goto out;
+		}
+
+		if (dae != NULL) {
 			if (dth->dth_solo) {
 				if (err == 0 && dae->dae_committing &&
 				    cont->vc_solo_dtx_epoch < dth->dth_epoch)
@@ -428,6 +414,7 @@ cancel:
 		}
 	}
 
+out:
 	if (err != 0) {
 		/* Do not set dth->dth_pinned. Upper layer caller can do that via
 		 * vos_dtx_cleanup() when necessary.
@@ -580,6 +567,12 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 			D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
 			       DP_RC(rc));
 
+		rc = d_tm_add_metric(&tls->vtl_invalid_dtx, D_TM_COUNTER,
+				     "Number of invalid active DTX", NULL, "io/dtx/invalid/tgt_%u",
+				     tgt_id);
+		if (rc)
+			D_WARN("Failed to create invalid DTX cnt sensor: " DF_RC "\n", DP_RC(rc));
+
 		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,
 				     "Number of cached vos object", "entry",
 				     "mem/vos/vos_obj_%u/tgt_%u",
@@ -664,6 +657,12 @@ vos_mod_init(void)
 
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = d_hlc_get();
+
+	rc = pmdk_log_attach();
+	if (rc != 0) {
+		D_ERROR("PMDK log initialization error\n");
+		return rc;
+	}
 
 	rc = vos_pool_settings_init(bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
@@ -968,7 +967,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path)
+vos_self_nvme_init(const char *vos_path, bool init_spdk)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -994,12 +993,11 @@ vos_self_nvme_init(const char *vos_path)
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
-		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
-				   VOS_NVME_NR_TARGET, true);
+		rc = bio_nvme_init_ext(NULL, VOS_NVME_NUMA_NODE, 0, 0, VOS_NVME_NR_TARGET, true,
+				       init_spdk);
 	} else {
-		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
-				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
-				   VOS_NVME_NR_TARGET, true);
+		rc = bio_nvme_init_ext(nvme_conf, VOS_NVME_NUMA_NODE, VOS_NVME_MEM_SIZE,
+				       VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET, true, init_spdk);
 		close(fd);
 	}
 
@@ -1048,7 +1046,7 @@ vos_self_fini(void)
 #define LMMDB_PATH	"/var/daos/"
 
 int
-vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init)
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool init_spdk)
 {
 	char		*evt_mode;
 	int		 rc = 0;
@@ -1073,11 +1071,9 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 		goto out;
 	}
 #endif
-	if (nvme_init) {
-		rc = vos_self_nvme_init(db_path);
-		if (rc)
-			goto failed;
-	}
+	rc = vos_self_nvme_init(db_path, init_spdk);
+	if (rc)
+		goto failed;
 
 	rc = vos_mod_init();
 	if (rc)
@@ -1138,4 +1134,41 @@ int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	return vos_self_init_ext(db_path, use_sys_db, tgt_id, true);
+}
+
+int
+vos_sys_db_init(const char *nvme_conf, const char *storage_path)
+{
+	int   rc;
+	char *sys_db_path    = NULL;
+	char *nvme_conf_path = NULL;
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		goto db_init;
+
+	if (nvme_conf == NULL) {
+		D_ERROR("nvme conf path not set\n");
+		return -DER_INVAL;
+	}
+
+	D_STRNDUP(nvme_conf_path, nvme_conf, PATH_MAX);
+	if (nvme_conf_path == NULL)
+		return -DER_NOMEM;
+	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
+	D_FREE(nvme_conf_path);
+	if (sys_db_path == NULL)
+		return -DER_NOMEM;
+
+db_init:
+	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : storage_path);
+	if (rc)
+		goto out;
+
+	rc = smd_init(vos_db_get());
+	if (rc)
+		vos_db_fini();
+out:
+	D_FREE(sys_db_path);
+
+	return rc;
 }

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -77,6 +78,8 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemRebuildManage":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemSelfHealEval":       {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},
@@ -88,10 +91,14 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/PoolUpdateACL":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDeleteACL":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolExclude":              {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin, ComponentServer},
+		"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
 		"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolRebuildStart":         {ComponentAdmin, ComponentServer},
+		"/mgmt.MgmtSvc/PoolRebuildStop":          {ComponentAdmin, ComponentServer},
+		"/mgmt.MgmtSvc/PoolSelfHealEval":         {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
 		"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
 		"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
@@ -108,11 +115,10 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin, ComponentServer},
 		"/RaftTransport/AppendEntries":           {ComponentServer},
 		"/RaftTransport/AppendEntriesPipeline":   {ComponentServer},
 		"/RaftTransport/RequestVote":             {ComponentServer},

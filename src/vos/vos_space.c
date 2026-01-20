@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,8 +26,8 @@
 static inline void
 frag_reserve_space(uuid_t uuid, daos_size_t *rsrvd, daos_size_t scm_tot)
 {
-	const daos_size_t min_sz = (2ULL << 30);  /* 2GB */
-	const daos_size_t max_sz = (10ULL << 30); /* 10GB */
+	const daos_size_t min_sz = (600ULL << 20); /* 600MB */
+	const daos_size_t max_sz = (6ULL << 30);   /* 6GB */
 	daos_size_t       ovhd_sz;
 
 	ovhd_sz = (scm_tot * 5) / 100;
@@ -37,15 +38,13 @@ frag_reserve_space(uuid_t uuid, daos_size_t *rsrvd, daos_size_t scm_tot)
 		return;
 	}
 
-	if (ovhd_sz > max_sz) {
+	if (ovhd_sz > max_sz)
 		ovhd_sz = max_sz;
-	}
 
-	if (ovhd_sz < min_sz && scm_tot >= 2 * (min_sz + rsrvd[DAOS_MEDIA_SCM])) {
+	if (ovhd_sz < min_sz && scm_tot >= 2 * (min_sz + rsrvd[DAOS_MEDIA_SCM]))
 		ovhd_sz = min_sz;
-	}
 
-	rsrvd[DAOS_MEDIA_SCM] += ovhd_sz;
+	rsrvd[DAOS_MEDIA_SCM] = max(rsrvd[DAOS_MEDIA_SCM], ovhd_sz);
 }
 
 void

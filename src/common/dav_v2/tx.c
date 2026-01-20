@@ -559,7 +559,7 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 			sizeof(struct tx_range_def));
 		tx->first_snapshot = 1;
 		tx->pop = pop;
-		heap_soemb_reserve(pop->do_heap);
+		heap_soemb_active_update(pop->do_heap);
 	} else {
 		FATAL("Invalid stage %d to begin new transaction", tx->stage);
 	}
@@ -575,10 +575,6 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 
 	tx->last_errnum = 0;
 	ASSERT(env == NULL);
-	if (env != NULL)
-		memcpy(txd->env, env, sizeof(jmp_buf));
-	else
-		memset(txd->env, 0, sizeof(jmp_buf));
 
 	txd->failure_behavior = failure_behavior;
 
@@ -702,9 +698,6 @@ obj_tx_abort(int errnum, int user)
 
 	/* ONABORT */
 	obj_tx_callback(tx);
-
-	if (!util_is_zeroed(txd->env, sizeof(jmp_buf)))
-		longjmp(txd->env, errnum);
 }
 
 /*
@@ -1740,6 +1733,8 @@ dav_reserve_v2(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t typ
 
 	if (palloc_reserve(pop->do_heap, size, constructor_alloc, &carg, type_num, 0,
 			   CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), act) != 0) {
+		if (!tx_inprogress)
+			lw_tx_end(pop, NULL);
 		DAV_API_END();
 		return 0;
 	}
@@ -1793,9 +1788,26 @@ dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 DAV_FUNC_EXPORT void
 dav_cancel_v2(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 {
+	int rc, tx_inprogress = 0;
+
 	DAV_DBG("actvcnt=%zu", actvcnt);
+	if (get_tx()->stage != DAV_TX_STAGE_NONE)
+		tx_inprogress = 1;
+
 	DAV_API_START();
+	if (!tx_inprogress) {
+		rc = lw_tx_begin(pop);
+		if (rc) {
+			D_ERROR("Failed to start local tx. %d\n", rc);
+			return;
+		}
+	}
+
 	palloc_cancel(pop->do_heap, actv, actvcnt);
+
+	if (!tx_inprogress)
+		lw_tx_end(pop, NULL);
+
 	DAV_API_END();
 }
 
@@ -1868,7 +1880,7 @@ dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags)
  * obj_realloc -- (internal) reallocate zinfo object
  */
 int
-obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size)
+obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size, uint16_t class_id)
 {
 	struct operation_context *ctx;
 	struct carg_realloc       carg;
@@ -1890,7 +1902,7 @@ obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size)
 	operation_add_entry(ctx, sizep, size, ULOG_OPERATION_SET);
 
 	ret = palloc_operation(pop->do_heap, *offp, offp, size, constructor_zrealloc_root, &carg, 0,
-			       0, 0, 0, ctx);
+			       0, class_id, 0, ctx);
 
 	return ret;
 }

@@ -2,6 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Google LLC
 (C) Copyright 2025 Enakta Labs Ltd
 
@@ -436,6 +437,11 @@ def get_base_env(clean=False):
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+
+    # If set, retain the HTTPS_PROXY for valgrind
+    http_proxy = os.environ.get('HTTPS_PROXY')
+    if http_proxy:
+        env['HTTPS_PROXY'] = http_proxy
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
@@ -920,7 +926,7 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
             self._add_test_case('server_stop', failure=message)
         start = time.perf_counter()
-        rc = self.run_dmg(['system', 'stop'])
+        rc = self.run_dmg(['system', 'stop', '--full'])
         if rc.returncode != 0:
             print(rc)
             entry = {}
@@ -928,7 +934,7 @@ class DaosServer():
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            msg = f'dmg system stop failed with {rc.returncode}'
+            msg = f'dmg system stop --full failed with {rc.returncode}'
             entry['message'] = msg
             self.conf.wf.issues.append(entry)
         if not self.valgrind:
@@ -1048,6 +1054,8 @@ class DaosServer():
                                          delete=False) as log_file:
             log_name = log_file.name
             cmd_env['D_LOG_FILE'] = log_name
+            with open(log_name, 'w', encoding='utf-8') as lf:
+                lf.write(f'cmd: {" ".join(cmd)}\n')
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
@@ -1266,6 +1274,9 @@ class ValgrindHelper():
                '--gen-suppressions=all',
                '--error-exitcode=42']
 
+        if self.conf.args.valgrind_verbose:
+            cmd.append('--verbose')
+
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
@@ -1300,7 +1311,8 @@ class DFuse():
 
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False, ro=False):
+                 caching=True, wbcache=True, multi_user=False, ro=False, dump_h=False,
+                 read_h=False, file_h=None):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1325,6 +1337,9 @@ class DFuse():
         self.log_mask = None
         self.log_file = None
         self._ro = ro
+        self.dump_h = dump_h
+        self.read_h = read_h
+        self.file_h = file_h
 
         self.valgrind = None
         if not os.path.exists(self.dir):
@@ -1397,6 +1412,11 @@ class DFuse():
             if not self.wbcache:
                 cmd.append('--disable-wb-cache')
 
+        if self.dump_h:
+            cmd.extend(['--dump-handles', self.file_h])
+        if self.read_h:
+            cmd.extend(['--read-handles', self.file_h])
+
         if self._ro:
             cmd.append('--read-only')
 
@@ -1437,6 +1457,9 @@ class DFuse():
                 pass
             total_time += 1
             if total_time > 60:
+                # Kill the unresponsive dfuse command
+                self._sp.send_signal(signal.SIGTERM)
+                self._sp = None
                 raise NLTestFail('Timeout starting dfuse')
 
         self._daos.add_fuse(self)
@@ -1719,6 +1742,8 @@ def run_daos_cmd(conf,
                                      delete=False) as log_file:
         log_name = log_file.name
         cmd_env['D_LOG_FILE'] = log_name
+        with open(log_file.name, 'w', encoding='utf-8') as lf:
+            lf.write(f'cmd: {" ".join(cmd)}\n')
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
@@ -2380,15 +2405,29 @@ class PosixTests():
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
+
+        try:
+            fd, tmpfile = tempfile.mkstemp(prefix="my_temp_file_", dir="/tmp")
+            print(f"Created temp file: {tmpfile}")
+            os.close(fd)
+
+        except OSError as e:
+            print(f"mkstemp failed: {e}", file=sys.stderr)
+            sys.exit(1)
+
         dfuse0 = DFuse(self.server,
                        self.conf,
                        caching=False,
+                       dump_h=True,
+                       file_h=tmpfile,
                        container=self.container)
         dfuse0.start(v_hint='two_0')
 
         dfuse1 = DFuse(self.server,
                        self.conf,
                        caching=True,
+                       read_h=True,
+                       file_h=tmpfile,
                        container=self.container)
         dfuse1.start(v_hint='two_1')
 
@@ -2404,9 +2443,9 @@ class PosixTests():
         with open(file0, 'w') as fd:
             fd.write('test')
 
-        if dfuse0.stop():
-            self.fatal_errors = True
         if dfuse1.stop():
+            self.fatal_errors = True
+        if dfuse0.stop():
             self.fatal_errors = True
 
     def test_cache_expire(self):
@@ -4385,7 +4424,7 @@ class PosixTests():
         assert rc.returncode != 0
         output = rc.stderr.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'ERROR: daos: failed fs fix-entry: DER_BUSY(-1012): Device or resource busy':
+        if 'DER_BUSY(-1012): Device or resource busy' not in line[-1]:
             raise NLTestFail('daos fs fix-entry /test_dir/f1')
 
         # stop dfuse
@@ -5389,6 +5428,7 @@ def test_pydaos_kv(server, conf):
         print("That's not good")
 
     del kv
+    container.destroy('my_test_kv')
     del container
 
     print('Running PyDAOS container checker')
@@ -6759,6 +6799,7 @@ def main():
     parser.add_argument('--test', action='append', help="Use '--test list' for list")
     parser.add_argument('--exclude-test', action='append',
                         help='space separated list of tests to exclude')
+    parser.add_argument('--valgrind_verbose', action='store_true', help='Use --verbose w/ valgrind')
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
 

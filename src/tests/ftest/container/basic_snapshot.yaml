@@ -1,8 +1,7 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 timeout: 120
 hosts:
   test_servers: 2
+  test_clients: 1
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -33,6 +32,3 @@ object_class: !mux
     obj_class: OC_RP_2G1
   OC_RP_2G2:
     obj_class: OC_RP_2G2
-
-container:
-  control_method: API

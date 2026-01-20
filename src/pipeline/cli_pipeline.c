@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -544,7 +545,7 @@ shard_task_sched(tse_task_t *task, void *arg)
 
 static int
 pipeline_create_layout(daos_handle_t coh, struct dc_pool *pool, struct daos_obj_md *obj_md,
-		       struct pl_obj_layout **layout)
+		       struct pl_obj_layout **layout, uint16_t layout_gl_version)
 {
 	int            rc = 0;
 	struct pl_map *map;
@@ -555,7 +556,7 @@ pipeline_create_layout(daos_handle_t coh, struct dc_pool *pool, struct daos_obj_
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = pl_obj_place(map, 0, obj_md, 0, NULL, layout);
+	rc = pl_obj_place(map, layout_gl_version, obj_md, 0, NULL, layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, "Failed to generate object layout\n");
@@ -609,6 +610,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	int                           total_replicas;
 	int                           shard;
 	struct pipeline_comp_cb_args  comp_cb_args;
+	uint16_t                       layout_gl_ver;
 
 	coh = dc_obj_hdl2cont_hdl(api_args->oh);
 	rc  = dc_obj_hdl2obj_md(api_args->oh, &obj_md);
@@ -629,7 +631,8 @@ dc_pipeline_run(tse_task_t *api_task)
 
 	/** get layout */
 
-	rc             = pipeline_create_layout(coh, pool, &obj_md, &layout);
+	layout_gl_ver = dc_obj_hdl2layout_ver(api_args->oh);
+	rc            = pipeline_create_layout(coh, pool, &obj_md, &layout, layout_gl_ver);
 	dc_pool_put(pool);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -687,7 +690,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	/** object id */
 	oid.id_pub		= obj_md.omd_id;
 	oid.id_shard		= shard;
-	oid.id_layout_ver	= dc_obj_hdl2layout_ver(api_args->oh);
+	oid.id_layout_ver       = layout_gl_ver;
 	oid.id_padding		= 0;
 
 	/** queue shard task */

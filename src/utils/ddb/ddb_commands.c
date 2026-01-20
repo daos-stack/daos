@@ -1,12 +1,19 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025 Vdura Inc.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <sys/types.h>
+#include <time.h>
+
+#include "daos_errno.h"
+#include "daos_srv/vos_types.h"
+#include "daos_types.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb.h"
@@ -14,9 +21,29 @@
 #include "ddb_printer.h"
 #include "daos.h"
 #include "ddb_tree_path.h"
+#include "gurt/common.h"
+#include "gurt/debug.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 #define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
+
+/* clang-format off */
+#define DDB_POOL_SHOULD_OPEN(ctx)                                                                \
+	do {                                                                                     \
+		if (daos_handle_is_inval((ctx)->dc_poh)) {                                       \
+			ddb_error(ctx, "Cannot operate on a closed pool. Open it firstly.\n");   \
+			return -DER_NO_HDL;                                                      \
+		}                                                                                \
+	} while (0)
+
+#define DDB_POOL_SHOULD_CLOSE(ctx)                                                               \
+	do {                                                                                     \
+		if (daos_handle_is_valid((ctx)->dc_poh)) {                                       \
+			ddb_error(ctx, "Cannot operate on an opened pool. Close it firstly.\n"); \
+			return -DER_BUSY;                                                        \
+		}                                                                                \
+	} while (0)
+/* clang-format on */
 
 int
 ddb_run_version(struct ddb_ctx *ctx)
@@ -53,12 +80,10 @@ ddb_pool_is_open(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
-	if (ddb_pool_is_open(ctx)) {
-		ddb_error(ctx, "Must close pool before can open another\n");
-		return -DER_EXIST;
-	}
+	DDB_POOL_SHOULD_CLOSE(ctx);
+
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, &ctx->dc_poh, 0);
+	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0);
 }
 
 int
@@ -66,10 +91,8 @@ ddb_run_close(struct ddb_ctx *ctx)
 {
 	int rc;
 
-	if (!ddb_pool_is_open(ctx)) {
-		ddb_error(ctx, "No pool open to close\n");
+	if (!ddb_pool_is_open(ctx))
 		return 0;
-	}
 
 	rc = dv_pool_close(ctx->dc_poh);
 	ctx->dc_poh = DAOS_HDL_INVAL;
@@ -208,12 +231,9 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 	struct dv_tree_path vtp;
 	struct ls_ctx lsctx = {0};
 
-	if (daos_handle_is_inval(ctx->dc_poh)) {
-		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
-		return -DER_NONEXIST;
-	}
-	rc = init_path(ctx, opt->path, &itp);
+	DDB_POOL_SHOULD_OPEN(ctx);
 
+	rc = init_path(ctx, opt->path, &itp);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -257,8 +277,9 @@ ddb_run_superblock_dump(struct ddb_ctx *ctx)
 {
 	int rc;
 
-	rc = dv_superblock(ctx->dc_poh, print_superblock_cb, ctx);
+	DDB_POOL_SHOULD_OPEN(ctx);
 
+	rc = dv_superblock(ctx->dc_poh, print_superblock_cb, ctx);
 	if (rc == -DER_DF_INVAL)
 		ddb_error(ctx, "Error with pool superblock");
 
@@ -322,6 +343,8 @@ ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt)
 	dv_dump_value_cb		cb = NULL;
 	int				rc;
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	if (!opt->path) {
 		ddb_error(ctx, "A VOS path to dump is required.\n");
 		return -DER_INVAL;
@@ -373,6 +396,8 @@ ddb_run_ilog_dump(struct ddb_ctx *ctx, struct ilog_dump_options *opt)
 	struct dv_indexed_tree_path	 itp = {0};
 	daos_handle_t			 coh;
 	int				 rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!opt->path) {
 		ddb_error(ctx, ilog_path_required_error_message);
@@ -451,6 +476,8 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 	bool				both = !(opt->committed ^ opt->active);
 	struct dtx_cb_args	args = {.ctx = ctx, .entry_count = 0};
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	rc = init_path(ctx, opt->path, &itp);
 	if (!SUCCESS(rc))
 		return rc;
@@ -477,7 +504,7 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 			itp_free(&itp);
 			return rc;
 		}
-		ddb_printf(ctx, "%d Active Entries\n", args.entry_count);
+		ddb_printf(ctx, "%" PRIu32 " Active Entries\n", args.entry_count);
 	}
 	if (both || opt->committed) {
 		args.entry_count = 0;
@@ -487,7 +514,7 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 			itp_free(&itp);
 			return rc;
 		}
-		ddb_printf(ctx, "%d Committed Entries\n", args.entry_count);
+		ddb_printf(ctx, "%" PRIu32 " Committed Entries\n", args.entry_count);
 	}
 
 	dv_cont_close(&coh);
@@ -502,6 +529,8 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 	struct dv_indexed_tree_path	itp;
 	struct dv_tree_path		vtp;
 	int				rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -539,6 +568,8 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 	d_iov_t				iov = {0};
 	size_t				file_size;
 	int				rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -606,6 +637,8 @@ process_ilog_op(struct ddb_ctx *ctx, char *path, enum ddb_ilog_op op)
 	struct dv_indexed_tree_path	itp = {0};
 	daos_handle_t			coh = {0};
 	int				rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -677,6 +710,8 @@ ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt)
 	daos_handle_t			coh = {0};
 	int				rc;
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
 		return -DER_INVAL;
@@ -713,37 +748,64 @@ done:
 	return rc;
 }
 
+static inline char *
+dev_type2str(enum smd_dev_type st)
+{
+	switch (st) {
+	case SMD_DEV_TYPE_DATA:
+		return "Data";
+	case SMD_DEV_TYPE_META:
+		return "Meta";
+	case SMD_DEV_TYPE_WAL:
+		return "WAL";
+	default:
+		return "Unknown";
+	}
+}
+
 static int
-sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id,
-	    daos_size_t blob_size, uuid_t dev_id)
+sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id, daos_size_t blob_size,
+	    uuid_t dev_id, enum smd_dev_type st)
 {
 	struct ddb_ctx *ctx = cb_args;
 
-	ddb_printf(ctx, "> Sync Info - pool: "DF_UUIDF", target id: %d, blob id: %lu, "
-		   "blob_size: %lu\n", DP_UUID(pool_id),
-		   vos_id, blob_id, blob_size);
-	ddb_printf(ctx, "> Sync Info - dev: "DF_UUIDF", target id: %d\n", DP_UUID(dev_id), vos_id);
+	ddb_printf(ctx,
+		   "> Sync Info - pool: " DF_UUIDF ", target id: %d, \t[%s],\t blob id: %#lx, "
+		   "blob_size: %lu\n",
+		   DP_UUID(pool_id), vos_id, dev_type2str(st), blob_id, blob_size);
+	ddb_printf(ctx, "> Sync Info - dev : " DF_UUIDF ", target id: %d\n", DP_UUID(dev_id),
+		   vos_id);
 
 	return 0;
 }
 
+#define DEFAULT_NVME_CONF "/mnt/daos/daos_nvme.conf"
+#define DEFAULT_DB_PATH   "/mnt/daos"
+#define DDB_PATH_MAX      256
+
 int
 ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 {
-	/* Some defaults */
-	char	nvme_conf[256] = "/mnt/daos/daos_nvme.conf";
-	char	db_path[256] = "/mnt/daos";
+	char    nvme_conf[DDB_PATH_MAX] = DEFAULT_NVME_CONF;
+	char    db_path[DDB_PATH_MAX]   = DEFAULT_DB_PATH;
 	int	rc;
 
-	if (daos_handle_is_valid(ctx->dc_poh)) {
-		ddb_print(ctx, "Close pool connection before attempting to sync smd\n");
-		return -DER_INVAL;
-	}
+	DDB_POOL_SHOULD_CLOSE(ctx);
 
-	if (opt->nvme_conf != NULL && strlen(opt->nvme_conf) > 0)
+	if (opt->nvme_conf != NULL) {
+		if (strlen(opt->nvme_conf) == 0 || strlen(opt->nvme_conf) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid nvme_conf '%s'\n", opt->nvme_conf);
+			return -DER_INVAL;
+		}
 		strncpy(nvme_conf, opt->nvme_conf, ARRAY_SIZE(nvme_conf) - 1);
-	if (opt->db_path != NULL && strlen(opt->db_path) > 0)
+	}
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
 
 	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
 	rc = dv_sync_smd(nvme_conf, db_path, sync_smd_cb, ctx);
@@ -776,6 +838,8 @@ ddb_run_vea_dump(struct ddb_ctx *ctx)
 {
 	struct dump_vea_cb_args args = {.dva_ctx = ctx, .dva_count = 0};
 	int			rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	rc = dv_enumerate_vea(ctx->dc_poh, dump_vea_cb, &args);
 
@@ -855,18 +919,20 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	uint32_t				blk_cnt;
 	int					rc;
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
 		return -DER_INVAL;
 	}
 
 	offset = parse_uint32_t(opt->offset);
-	if (offset <= 0) {
+	if (offset == 0) {
 		ddb_errorf(ctx, "'%s' is not a valid offset\n", opt->offset);
 		return -DER_INVAL;
 	}
 	blk_cnt = parse_uint32_t(opt->blk_cnt);
-	if (blk_cnt <= 0) {
+	if (blk_cnt == 0) {
 		ddb_errorf(ctx, "'%s' is not a valid block size\n", opt->blk_cnt);
 		return -DER_INVAL;
 	}
@@ -875,7 +941,7 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	if (!SUCCESS(rc))
 		return rc;
 
-	ddb_printf(ctx, "Adding free region to vea {%lu, %d}\n", offset, blk_cnt);
+	ddb_printf(ctx, "Adding free region to vea {%" PRIu64 ", %" PRIu32 "}\n", offset, blk_cnt);
 	rc = dv_vea_free_region(ctx->dc_poh, offset, blk_cnt);
 	if (!SUCCESS(rc))
 		ddb_errorf(ctx, "Unable to add new free region: "DF_RC"\n", DP_RC(rc));
@@ -944,6 +1010,8 @@ ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 	struct dtx_modify_args	args = {0};
 	int			rc;
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
 		return -DER_INVAL;
@@ -973,6 +1041,8 @@ ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -1028,7 +1098,10 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
 		opt->path = ctx->dc_pool_path;
 
-	rc = dv_pool_open(opt->path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
+	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
+		opt->db_path = ctx->dc_db_path;
+
+	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
 	if (rc)
 		return rc;
 	close = true;
@@ -1073,12 +1146,9 @@ out:
 int
 ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
 {
-	if (ddb_pool_is_open(ctx)) {
-		ddb_error(ctx, "Must close pool before can open another\n");
-		return -DER_BUSY;
-	}
+	DDB_POOL_SHOULD_CLOSE(ctx);
 
-	return dv_pool_destroy(opt->path);
+	return dv_pool_destroy(opt->path, opt->db_path);
 }
 
 #define DTI_ALL "all"
@@ -1109,7 +1179,7 @@ dtx_active_entry_discard_invalid(struct dv_dtx_active_entry *entry, void *cb_arg
 		ddb_errorf(ctx, "Error: " DF_RC "\n", DP_RC(rc));
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -1118,6 +1188,8 @@ ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt
 	struct dtx_modify_args                         args   = {0};
 	struct dtx_active_entry_discard_invalid_cb_arg bundle = {.ctx = ctx, .args = &args};
 	int                                            rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -1144,5 +1216,603 @@ ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt
 	}
 
 	dtx_modify_fini(&args);
+	return rc;
+}
+
+int
+ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
+{
+	char                 db_path[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+	struct bio_dev_info *dev_info              = NULL, *tmp;
+	d_list_t             dev_list;
+	int                  rc, dev_cnt = 0;
+
+	DDB_POOL_SHOULD_CLOSE(ctx);
+
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
+
+	ddb_printf(ctx, "List devices, db_path='%s'\n", db_path);
+	D_INIT_LIST_HEAD(&dev_list);
+	rc = dv_dev_list(db_path, &dev_list, &dev_cnt);
+	if (rc) {
+		ddb_errorf(ctx, "List device failed. " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+
+	ddb_printf(ctx, "%d SSD devices in total\n", dev_cnt);
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
+		ddb_printf(ctx, "Device:" DF_UUIDF " [inuse:%s, faulty:%s, plugged:%s]\n",
+			   DP_UUID(dev_info->bdi_dev_id),
+			   dev_info->bdi_flags & NVME_DEV_FL_INUSE ? "yes" : "no ",
+			   dev_info->bdi_flags & NVME_DEV_FL_FAULTY ? "yes" : "no ",
+			   dev_info->bdi_flags & NVME_DEV_FL_PLUGGED ? "yes" : "no ");
+
+		d_list_del_init(&dev_info->bdi_link);
+		bio_free_dev_info(dev_info);
+	}
+
+	return 0;
+}
+
+int
+ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
+{
+	char   db_path[DDB_PATH_MAX] = DEFAULT_DB_PATH;
+	uuid_t old_devid, new_devid;
+	int    rc;
+
+	DDB_POOL_SHOULD_CLOSE(ctx);
+
+	if (opt->db_path != NULL) {
+		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
+			ddb_errorf(ctx, "Invalid db_path '%s'\n", opt->db_path);
+			return -DER_INVAL;
+		}
+		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
+	}
+
+	if (opt->old_devid == NULL || opt->new_devid == NULL) {
+		ddb_error(ctx, "Must specify both old and new device ID\n");
+		return -DER_INVAL;
+	}
+
+	rc = uuid_parse(opt->old_devid, old_devid);
+	if (rc) {
+		ddb_errorf(ctx, "Invalid UUID string '%s' for old device\n", opt->old_devid);
+		return -DER_INVAL;
+	}
+
+	rc = uuid_parse(opt->new_devid, new_devid);
+	if (rc) {
+		ddb_errorf(ctx, "Invalid UUID string '%s' for new device\n", opt->new_devid);
+		return -DER_INVAL;
+	}
+
+	if (uuid_compare(old_devid, new_devid) == 0) {
+		ddb_error(ctx, "Doesn't support replacing device by itself\n");
+		return -DER_INVAL;
+	}
+
+	ddb_printf(ctx,
+		   "Replace old device " DF_UUID " with new device " DF_UUID ", db_path='%s'\n",
+		   DP_UUID(old_devid), DP_UUID(new_devid), db_path);
+
+	rc = dv_dev_replace(db_path, old_devid, new_devid);
+	if (rc)
+		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
+	else
+		ddb_print(ctx, "Device replacing succeeded\n");
+
+	return rc;
+}
+
+enum { TIMESPEC_FMT_SIZE = sizeof("1970-01-01 00:00:00") };
+
+static int
+timespec2str(struct timespec *tspec, char *buf, size_t buf_size)
+{
+	struct tm date;
+	size_t    buf_len;
+
+	if (localtime_r(&(tspec->tv_sec), &date) == NULL)
+		return d_errno2der(errno);
+
+	buf_len = strftime(buf, buf_size, "%F %T", &date);
+	if (buf_len != buf_size - 1)
+		return -DER_INVAL;
+
+	return 0;
+}
+
+static int
+dtx_print_epoch(struct ddb_ctx *ctx, const daos_epoch_t epoch)
+{
+	struct timespec tspec;
+	char            buf[TIMESPEC_FMT_SIZE];
+	int             rc;
+
+	rc = d_hlc2timespec(epoch, &tspec);
+	if (!SUCCESS(rc)) {
+		ddb_errorf(ctx, "Failed to convert DTX epoch %" PRIu64 " to timespec: " DF_RC "\n",
+			   epoch, DP_RC(rc));
+		goto out;
+	}
+
+	rc = timespec2str(&tspec, buf, TIMESPEC_FMT_SIZE);
+
+	ddb_printf(ctx, "%s (%" PRIu64 ")", buf, epoch);
+out:
+	return rc;
+}
+
+static const char *stat_names[] = {"min", "max", "mean"};
+
+static int
+dtx_print_epoch_stat(struct ddb_ctx *ctx, const char *prefix, const daos_epoch_t epoch_stats[],
+		     const char *align)
+{
+	int i;
+	int rc;
+
+	ddb_printf(ctx, "\t- %s%s", prefix, align);
+
+	rc = 0;
+	for (i = 0; i < DTX_TIME_STAT_COUNT; i++) {
+		if (epoch_stats[i] == 0 || epoch_stats[i] == DAOS_EPOCH_MAX) {
+			ddb_printf(ctx, "%s=NA (NA)", stat_names[i]);
+		} else {
+			ddb_printf(ctx, "%s=", stat_names[i]);
+			rc = dtx_print_epoch(ctx, epoch_stats[i]);
+			if (!SUCCESS(rc))
+				goto out;
+		}
+		if (i < DTX_TIME_STAT_COUNT - 1)
+			ddb_print(ctx, ", ");
+	}
+	ddb_print(ctx, "\n");
+
+out:
+	return rc;
+}
+
+static int
+dtx_print_time_stat(struct ddb_ctx *ctx, const char *prefix, const uint64_t cmt_time_stats[],
+		    const char *align)
+{
+	int i;
+	int rc;
+
+	ddb_printf(ctx, "\t- %s%s", prefix, align);
+
+	rc = 0;
+	for (i = 0; i < DTX_TIME_STAT_COUNT; i++) {
+		if (cmt_time_stats[i] == 0 || cmt_time_stats[i] == UINT64_MAX) {
+			ddb_printf(ctx, "%s=NA (NA)", stat_names[i]);
+		} else {
+			struct timespec tspec = {0};
+			char            buf[TIMESPEC_FMT_SIZE];
+
+			tspec.tv_sec = cmt_time_stats[i];
+			rc           = timespec2str(&tspec, buf, TIMESPEC_FMT_SIZE);
+			if (!SUCCESS(rc)) {
+				ddb_errorf(ctx,
+					   "Failed to convert DTX commit time %" PRIu64
+					   " to timespec: " DF_RC "\n",
+					   cmt_time_stats[i], DP_RC(rc));
+				goto out;
+			}
+			ddb_printf(ctx, "%s=%s (%" PRIu64 ")", stat_names[i], buf,
+				   cmt_time_stats[i]);
+		}
+		if (i < DTX_TIME_STAT_COUNT - 1)
+			ddb_print(ctx, ", ");
+	}
+	ddb_print(ctx, "\n");
+
+out:
+	return rc;
+}
+
+struct dtx_stat_args {
+	struct ddb_ctx          *ctx;
+	struct dtx_stat_options *opt;
+	uint32_t                 cont_seen;
+	uint64_t                 cmt_cnt;
+	struct dtx_time_stat     time_stat;
+	daos_epoch_t             aggr_epoch;
+};
+
+static int
+dtx_stat_print(struct ddb_ctx *ctx, uint64_t cmt_cnt, const struct dtx_time_stat *dts,
+	       daos_epoch_t aggr_epoch)
+{
+	int rc = 0;
+
+	ddb_printf(ctx, "\t- Committed DTX count:\t%" PRIu64 "\n", cmt_cnt);
+	if (dts != NULL) {
+		rc = dtx_print_time_stat(ctx, "Committed DTX time:", dts->dts_cmt_time, "\t");
+		if (!SUCCESS(rc))
+			goto done;
+		rc = dtx_print_epoch_stat(ctx, "Committed DTX epoch:", dts->dts_epoch, "\t");
+		if (!SUCCESS(rc))
+			goto done;
+	}
+	ddb_print(ctx, "\t- DTX aggregated epoch:\t");
+	if (aggr_epoch == 0 || aggr_epoch == DAOS_EPOCH_MAX)
+		ddb_print(ctx, "NA (NA)");
+	else {
+		rc = dtx_print_epoch(ctx, aggr_epoch);
+		if (!SUCCESS(rc))
+			goto done;
+	}
+	ddb_print(ctx, "\n");
+
+done:
+
+	return rc;
+}
+
+static int
+dtx_stat_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, struct dtx_stat_args *args)
+{
+	daos_handle_t   coh = {0};
+	uint64_t             cmt_cnt_tmp;
+	struct dtx_time_stat dts_tmp;
+	struct dtx_stat      aggr_stat_tmp;
+	int             rc;
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &coh);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (args->opt->details)
+		rc = vos_dtx_get_cmt_stat(coh, &cmt_cnt_tmp, &dts_tmp);
+	else
+		rc = vos_dtx_get_cmt_stat(coh, &cmt_cnt_tmp, NULL);
+	if (!SUCCESS(rc))
+		goto done;
+	vos_dtx_stat(coh, &aggr_stat_tmp, 0);
+
+	ddb_print(ctx, "DTX entries statistics of container ");
+	itp_print_full(ctx, itp);
+	ddb_print(ctx, "\n");
+	if (args->opt->details)
+		rc =
+		    dtx_stat_print(ctx, cmt_cnt_tmp, &dts_tmp, aggr_stat_tmp.dtx_newest_aggregated);
+	else
+		rc = dtx_stat_print(ctx, cmt_cnt_tmp, NULL, aggr_stat_tmp.dtx_newest_aggregated);
+	if (!SUCCESS(rc))
+		goto done;
+
+	args->cmt_cnt    = cmt_cnt_tmp;
+	args->aggr_epoch = aggr_stat_tmp.dtx_newest_aggregated;
+	if (args->opt->details)
+		memcpy(&args->time_stat, &dts_tmp, sizeof(struct dtx_time_stat));
+
+done:
+	dv_cont_close(&coh);
+
+	return rc;
+}
+
+static int
+dtx_stat_cont_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		 vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct ddb_ctx             *ctx;
+	struct dv_indexed_tree_path itp = {0};
+	struct dtx_stat_args       *args;
+	struct dtx_stat_args        args_tmp;
+	int                         rc;
+
+	if (type != VOS_ITER_COUUID) {
+		rc = 0;
+		goto done;
+	}
+
+	args = (struct dtx_stat_args *)cb_arg;
+	memcpy(&args_tmp, args, sizeof(struct dtx_stat_args));
+	ctx  = args->ctx;
+
+	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
+	++(args->cont_seen);
+
+	rc = dtx_stat_cont(ctx, &itp, &args_tmp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (args->opt->details) {
+		if (args->aggr_epoch < args_tmp.aggr_epoch)
+			args->aggr_epoch = args_tmp.aggr_epoch;
+		if (args->time_stat.dts_cmt_time[DTX_TIME_STAT_MIN] >
+		    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MIN])
+			args->time_stat.dts_cmt_time[DTX_TIME_STAT_MIN] =
+			    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MIN];
+		if (args->time_stat.dts_cmt_time[DTX_TIME_STAT_MAX] <
+		    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MAX])
+			args->time_stat.dts_cmt_time[DTX_TIME_STAT_MAX] =
+			    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MAX];
+		if (args->time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] == 0)
+			args->time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] =
+			    args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN];
+		else {
+			long double tmp_mean;
+
+			tmp_mean = args->time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] *
+				   (long double)args->cmt_cnt;
+			tmp_mean +=
+			    (long double)args_tmp.time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] *
+			    (long double)args_tmp.cmt_cnt;
+			tmp_mean /= (long double)(args->cmt_cnt + args_tmp.cmt_cnt);
+			args->time_stat.dts_cmt_time[DTX_TIME_STAT_MEAN] = tmp_mean;
+		}
+		if (args->time_stat.dts_epoch[DTX_TIME_STAT_MIN] >
+		    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MIN])
+			args->time_stat.dts_epoch[DTX_TIME_STAT_MIN] =
+			    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MIN];
+		if (args->time_stat.dts_epoch[DTX_TIME_STAT_MAX] <
+		    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MAX])
+			args->time_stat.dts_epoch[DTX_TIME_STAT_MAX] =
+			    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MAX];
+		if (args->time_stat.dts_epoch[DTX_TIME_STAT_MEAN] == 0)
+			args->time_stat.dts_epoch[DTX_TIME_STAT_MEAN] =
+			    args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MEAN];
+		else {
+			long double tmp_mean;
+
+			tmp_mean = args->time_stat.dts_epoch[DTX_TIME_STAT_MEAN] *
+				   (long double)args->cmt_cnt;
+			tmp_mean += (long double)args_tmp.time_stat.dts_epoch[DTX_TIME_STAT_MEAN] *
+				    (long double)args_tmp.cmt_cnt;
+			tmp_mean /= (long double)(args->cmt_cnt + args_tmp.cmt_cnt);
+			args->time_stat.dts_epoch[DTX_TIME_STAT_MEAN] = tmp_mean;
+		}
+	}
+
+	args->cmt_cnt += args_tmp.cmt_cnt;
+	if (args->aggr_epoch < args_tmp.aggr_epoch)
+		args->aggr_epoch = args_tmp.aggr_epoch;
+
+done:
+	itp_free(&itp);
+
+	return rc;
+}
+
+static int
+dtx_stat_cont_warp(struct ddb_ctx *ctx, struct dtx_stat_args *args)
+{
+	struct dv_indexed_tree_path itp = {0};
+	int                         rc;
+
+	rc = init_path(ctx, args->opt->path, &itp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (!itp_has_cont(&itp)) {
+		ddb_errorf(ctx, "Invalid container path " DF_PATH ".\n", DP_PATH(args->opt->path));
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	rc = dtx_stat_cont(ctx, &itp, args);
+done:
+	itp_free(&itp);
+	return rc;
+}
+
+int
+ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
+{
+	vos_iter_param_t        param   = {0};
+	struct dtx_stat_args    args    = {0};
+	struct vos_iter_anchors anchors = {0};
+	int                     rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
+
+	args.ctx = ctx;
+	args.opt = opt;
+	if (opt->path != NULL && opt->path[0] != '\0') {
+		rc = dtx_stat_cont_warp(ctx, &args);
+		goto done;
+	}
+
+	args.cmt_cnt                   = 0;
+	args.time_stat.dts_cmt_time[DTX_TIME_STAT_MIN] = UINT64_MAX;
+	args.time_stat.dts_epoch[DTX_TIME_STAT_MIN]    = DAOS_EPOCH_MAX;
+	param.ip_hdl                   = ctx->dc_poh;
+	param.ip_epr.epr_hi            = DAOS_EPOCH_MAX;
+	do {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cont_cb,
+				 &args, NULL);
+	} while (rc > 0);
+	ddb_printf(ctx, "DTX entries statistics of the pool %s\n", ctx->dc_pool_path);
+	if (opt->details)
+		rc = dtx_stat_print(ctx, args.cmt_cnt, &args.time_stat, args.aggr_epoch);
+	else
+		rc = dtx_stat_print(ctx, args.cmt_cnt, NULL, args.aggr_epoch);
+
+done:
+	return rc;
+}
+
+struct dtx_aggr_args {
+	struct ddb_ctx *ctx;
+	uint32_t        cont_seen;
+	uint64_t       *cmt_time;
+};
+
+static int
+dtx_aggr_cont(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp, uint64_t *cmt_time)
+{
+	daos_handle_t coh = {0};
+	int           rc;
+
+	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &coh);
+	if (!SUCCESS(rc)) {
+		ddb_error(ctx, "Failed to open container ");
+		itp_print_full(ctx, itp);
+		ddb_errorf(ctx, ": " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+
+	ddb_print(ctx, "Aggregating DTX entries of container ");
+	itp_print_full(ctx, itp);
+	ddb_print(ctx, "...\n");
+	do {
+		rc = vos_dtx_aggregate(coh, cmt_time);
+	} while (rc > 0);
+	if (rc < 0) {
+		ddb_error(ctx, "Failed to aggregate DTX committed entries of container ");
+		itp_print_full(ctx, itp);
+		ddb_errorf(ctx, ": " DF_RC "\n", DP_RC(rc));
+	}
+
+	rc = dv_cont_close(&coh);
+	if (!SUCCESS(rc)) {
+		ddb_error(ctx, "Failed to close container ");
+		itp_print_full(ctx, itp);
+		ddb_errorf(ctx, ": " DF_RC "\n", DP_RC(rc));
+	}
+
+	return rc;
+}
+
+static int
+dtx_aggr_cont_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		 vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct dv_indexed_tree_path itp = {0};
+	struct dtx_aggr_args       *args;
+	int                         rc;
+
+	if (type != VOS_ITER_COUUID) {
+		rc = 0;
+		goto done;
+	}
+
+	args = (struct dtx_aggr_args *)cb_arg;
+
+	itp_set_cont(&itp, entry->ie_couuid, args->cont_seen);
+	++(args->cont_seen);
+
+	rc = dtx_aggr_cont(args->ctx, &itp, args->cmt_time);
+
+done:
+	itp_free(&itp);
+
+	return rc;
+}
+
+static int
+dtx_aggr_cont_warp(struct ddb_ctx *ctx, char *path, uint64_t *epoch)
+{
+	struct dv_indexed_tree_path itp = {0};
+	int                         rc;
+
+	rc = init_path(ctx, path, &itp);
+	if (!SUCCESS(rc))
+		goto done;
+
+	if (!itp_has_cont(&itp)) {
+		ddb_errorf(ctx, "Invalid container path " DF_PATH ".\n", DP_PATH(path));
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	rc = dtx_aggr_cont(ctx, &itp, epoch);
+
+done:
+	itp_free(&itp);
+
+	return rc;
+}
+
+int
+ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
+{
+	vos_iter_param_t        param   = {0};
+	struct dtx_aggr_args    args    = {0};
+	struct vos_iter_anchors anchors = {0};
+	int                     rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		rc = -DER_INVAL;
+		goto done;
+	}
+
+	switch (opt->format) {
+	case DDB_DTX_AGGR_NOW:
+		args.cmt_time = NULL;
+		break;
+	case DDB_DTX_AGGR_CMT_DATE:
+		rc = ddb_date2cmt_time(opt->cmt_date, &opt->cmt_time);
+		if (!SUCCESS(rc)) {
+			ddb_error(ctx, "'--date' option arg date format is invalid\n");
+			goto done;
+		}
+	case DDB_DTX_AGGR_CMT_TIME:
+		args.cmt_time = &opt->cmt_time;
+		break;
+	default:
+		D_ASSERT(false && "Invalid dtx_aggr options");
+	}
+
+	if (opt->path != NULL && opt->path[0] != '\0') {
+		rc = dtx_aggr_cont_warp(ctx, opt->path, args.cmt_time);
+		goto done;
+	}
+
+	args.ctx            = ctx;
+	param.ip_hdl        = ctx->dc_poh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	do {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_aggr_cont_cb,
+				 &args, NULL);
+	} while (rc > 0);
+
+done:
+	return rc;
+}
+
+int
+ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
+{
+	int rc = 0;
+
+	DDB_POOL_SHOULD_CLOSE(ctx);
+
+	if (opt->db_path == NULL || strlen(opt->db_path) == 0 ||
+	    strlen(opt->db_path) >= DDB_PATH_MAX) {
+		ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
+			   opt->db_path, DDB_PATH_MAX);
+		return -DER_INVAL;
+	}
+
+	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 ||
+	    strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
+		ddb_errorf(ctx, "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
+			   opt->tmpfs_mount, DDB_PATH_MAX);
+		return -DER_INVAL;
+	}
+
+	/** setup tmpfs and prepare the vos file on tmpfs_mount */
+	rc = dv_run_prov_mem(opt->db_path, opt->tmpfs_mount, opt->tmpfs_mount_size);
+	if (rc) {
+		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
+	} else {
+		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", opt->tmpfs_mount);
+	}
+
 	return rc;
 }

@@ -1,12 +1,13 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
-from general_utils import run_pcmd
 from ior_test_base import IorTestBase
+from run_utils import run_remote
 
 
 class CPUUsage(IorTestBase):
@@ -36,9 +37,11 @@ class CPUUsage(IorTestBase):
             # Get (instantaneous) CPU usage of the PID with top.
             top_pid = "top -p {} -b -n 1".format(pid)
             usage = -1
-            results = run_pcmd(hosts=self.hostlist_servers, command=top_pid)
-            for result in results:
-                process_row = result["stdout"][-1]
+            result = run_remote(self.log, self.hostlist_servers, top_pid)
+            if not result.passed:
+                self.fail(f"{top_pid} failed on {result.failed_hosts}")
+            for data in result.output:
+                process_row = data.stdout[-1]
                 self.log.info("Process row = %s", process_row)
                 values = process_row.split()
                 self.log.info("Values = %s", values)
@@ -78,10 +81,11 @@ class CPUUsage(IorTestBase):
         # At this point, daos_engine should be started, but do the repetitive
         # calls just in case.
         for _ in range(5):
-            results = run_pcmd(hosts=self.hostlist_servers, command=ps_engine)
-            for result in results:
-                self.log.info("ps output = %s", "\n".join(result["stdout"]))
-                pid = result["stdout"][-1]
+            result = run_remote(self.log, self.hostlist_servers, ps_engine)
+            if not result.passed:
+                self.fail(f"{ps_engine} failed on {result.failed_hosts}")
+            for data in result.output:
+                pid = data.stdout[-1]
                 self.log.info("PID = %s", pid)
                 if "PID" not in pid:
                     pid_found = True

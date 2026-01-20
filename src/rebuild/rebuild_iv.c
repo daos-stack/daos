@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -109,7 +110,14 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rc)
 		return rc;
 
-	if (rank != src_iv->riv_master_rank)
+	/* possibly the iv_master_rank changed due to PS leader switch */
+	if (entry->ns->iv_master_rank != src_iv->riv_master_rank)
+		D_WARN(DF_UUID ":ns->iv_master_rank %d mismatch with src_iv->riv_master_rank %d, "
+			       "on rank %d\n",
+		       DP_UUID(entry->ns->iv_pool_uuid), entry->ns->iv_master_rank,
+		       src_iv->riv_master_rank, rank);
+
+	if (rank != entry->ns->iv_master_rank)
 		return -DER_IVCB_FORWARD;
 
 	if (src_iv->riv_sync)
@@ -177,6 +185,13 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	if (rpt->rt_leader_term != src_iv->riv_leader_term)
 		goto out;
+
+	if (ref_rc != 0) {
+		rc = ref_rc;
+		DL_WARN(rc, DF_UUID "bypass refresh, IV class id %d.",
+			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		goto out;
+	}
 
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;

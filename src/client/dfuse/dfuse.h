@@ -28,6 +28,12 @@ struct dfuse_info {
 	struct fuse_session *di_session;
 	char                *di_group;
 	char                *di_mountpoint;
+	char                *di_handles_file;
+	bool                 di_dump_handles;
+	bool                 di_read_handles;
+	daos_handle_t        di_poh;
+	daos_handle_t        di_coh;
+	dfs_t               *di_dfs;
 	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
 	bool                 di_foreground;
@@ -35,6 +41,7 @@ struct dfuse_info {
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
 	bool                 di_read_only;
+	bool                 di_local_flock;
 
 	/* Per process spinlock
 	 * This is used to lock readdir against closedir where they share a readdir handle,

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -159,6 +160,9 @@ class BasicParameter():
             name (str): name of the value in the yaml file
             test (Test): avocado Test object to use to read the yaml file
             path (str): yaml path where the name is to be found
+
+        Returns:
+            bool: True if a new value was assigned; False if the default value was assigned
         """
         if self._yaml_key is not None:
             # Use the yaml key name instead of the variable name
@@ -167,6 +171,7 @@ class BasicParameter():
             self.value = test.config.get(name, path, self._default)
         else:
             self.value = test.params.get(name, path, self._default)
+        return self.value != self._default
 
     def update(self, value, name=None, append=False):
         """Update the value of the parameter.
@@ -333,10 +338,14 @@ class LogParameter(FormattedParameter):
             name (str): name of the value in the yaml file
             test (Test): avocado Test object to use to read the yaml file
             path (str): yaml path where the name is to be found
+
+        Returns:
+            bool: True if a new value was assigned; False if the default value was assigned
         """
-        super().get_yaml_value(name, test, path)
+        new_value = super().get_yaml_value(name, test, path)
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
+        return new_value
 
     def update(self, value, name=None, append=False):
         """Update the value of the parameter.

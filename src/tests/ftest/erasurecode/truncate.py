@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -7,7 +8,8 @@ import os
 
 from dfuse_utils import get_dfuse, start_dfuse
 from fio_test_base import FioBase
-from general_utils import get_remote_file_size, run_pcmd
+from general_utils import get_remote_file_size
+from run_utils import run_remote
 
 
 class Ecodtruncate(FioBase):
@@ -59,13 +61,14 @@ class Ecodtruncate(FioBase):
 
         # Get the file stats and confirm size
         file_size = get_remote_file_size(self.hostlist_clients[0], testfile)
-        self.assertEqual(original_fs, file_size)
+        self.assertEqual(
+            original_fs, file_size, "file size after truncase is not equal to original")
 
         # Truncate the original file which will extend the size of file.
-        result = run_pcmd(
-            self.hostlist_clients, "truncate -s {} {}".format(truncate_size, testfile))
-        if result[0]["exit_status"] == 1:
-            self.fail("Failed to truncate file {}".format(testfile))
+        result = run_remote(
+            self.log, self.hostlist_clients, f"truncate -s {truncate_size} {testfile}")
+        if not result.passed:
+            self.fail(f"Failed to truncate file {testfile}")
 
         # Verify the file size is extended.
         file_size = get_remote_file_size(self.hostlist_clients[0], testfile)
@@ -75,14 +78,15 @@ class Ecodtruncate(FioBase):
         self.fio_cmd.run()
 
         # Truncate the original file and shrink to original size.
-        result = run_pcmd(
-            self.hostlist_clients, "truncate -s {} {}".format(original_fs, testfile))
-        if result[0]["exit_status"] == 1:
-            self.fail("Failed to truncate file {}".format(testfile))
+        result = run_remote(
+            self.log, self.hostlist_clients, f"truncate -s {original_fs} {testfile}")
+        if not result.passed:
+            self.fail(f"Failed to truncate file {testfile}")
 
         # Verify the file size is shrink to original.
         file_size = get_remote_file_size(self.hostlist_clients[0], testfile)
-        self.assertEqual(original_fs, file_size)
+        self.assertEqual(
+            original_fs, file_size, "file size after truncase is not equal to original")
 
         # Read and verify the data after truncate.
         self.fio_cmd.run()

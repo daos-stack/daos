@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 // ListContainers forwards a gRPC request to the DAOS I/O Engine to retrieve a pool's
@@ -22,7 +23,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodListContainers, req)
+	dresp, err := svc.makePoolServiceCall(ctx, daos.MethodListContainers, req)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +42,7 @@ func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerRe
 		return nil, err
 	}
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodContSetOwner, req)
+	dresp, err := svc.makePoolServiceCall(ctx, daos.MethodContSetOwner, req)
 	if err != nil {
 		return nil, err
 	}

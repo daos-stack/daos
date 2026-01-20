@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +36,8 @@ print_usage(const char *prog_name)
 	       "\tDisplay data in CSV format\n"
 	       "--meta, -M\n"
 	       "\tDisplay associated metric metadata\n"
+	       "--meminfo, -m\n"
+	       "\tDisplay memory allocation metrics\n"
 	       "--type, -T\n"
 	       "\tDisplay metric type\n"
 	       "--help, -h\n"

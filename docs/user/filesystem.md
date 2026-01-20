@@ -486,7 +486,7 @@ $  systemctl status scratch_fs-root_dfuse.mount
      Docs: man:fstab(5)
            man:systemd-fstab-generator(8)
 
-Sep 23 15:55:33 wolf-170.wolf.hpdd.intel.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
+Sep 23 15:55:33 wolf-170.wolf.example.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
 $  systemctl start scratch_fs-root_dfuse.mount
 $  df -h | grep fuse
 dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
@@ -505,8 +505,8 @@ $  systemctl status scratch_fs-root_dfuse.mount
    CGroup: /system.slice/scratch_fs-root_dfuse.mount
            └─4173 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
 
-Sep 23 15:57:52 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
-Sep 23 15:57:53 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+Sep 23 15:57:52 wolf-170.wolf.example.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 15:57:53 wolf-170.wolf.example.com systemd[1]: Mounted /scratch_fs/root_dfuse.
 $  systemctl stop scratch_fs-root_dfuse.mount
 $  systemctl status scratch_fs-root_dfuse.mount
 ● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
@@ -520,11 +520,11 @@ $  systemctl status scratch_fs-root_dfuse.mount
    Memory: 540.0K
    CGroup: /system.slice/scratch_fs-root_dfuse.mount
 
-Sep 23 15:57:52 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
-Sep 23 15:57:53 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
-Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounting /scratch_fs/root_dfuse...
-Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
-Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounted /scratch_fs/root_dfuse.
+Sep 23 15:57:52 wolf-170.wolf.example.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 15:57:53 wolf-170.wolf.example.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+Sep 23 15:58:32 wolf-170.wolf.example.com systemd[1]: Unmounting /scratch_fs/root_dfuse...
+Sep 23 15:58:32 wolf-170.wolf.example.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
+Sep 23 15:58:32 wolf-170.wolf.example.com systemd[1]: Unmounted /scratch_fs/root_dfuse.
 $
 ```
 
@@ -580,8 +580,8 @@ $  systemctl status scratch_fs-root_dfuse.mount
    CGroup: /system.slice/scratch_fs-root_dfuse.mount
            └─2346 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
 
-Sep 23 16:13:34 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
-Sep 23 16:13:35 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+Sep 23 16:13:34 wolf-170.wolf.example.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 16:13:35 wolf-170.wolf.example.com systemd[1]: Mounted /scratch_fs/root_dfuse.
 $
 ```
 
@@ -1019,7 +1019,8 @@ libpil4dfs intercepting summary for ops on DFS:
 
 [op_sum ]  5003
 ```
-
+### The reported number of interception
+libioil intercepts streaming IO functions like fread, fwrite, etc. It issues IO request via dfs API immediately for each call. libpil4dfs only intercepts low level API read/write. Streaming APIs like fread, fwrite, fprintf, etc. are not explicitly intercepted. The default streaming IO buffer size is 8KB (may depend on OS and glibc version). The low level API read() is called by streaming IO API in case read buffer is empty/depleted. write() is called when the write buffer is full or fflush()/fclose() is called. Consequently, the amount of IO interception reported by libioil and libpil4dfs could be different.
 ### Bypassing function interception in libpil4dfs
 libpil4dfs enhances I/O performance by bypassing the fuse kernel when going over dfuse for I/O intensive workloads. In some scenarios however, for short-running applications (e.g., simple linux commands like cat, mkdir, chmod, etc.), there is no enough incentive to justify initializing the DAOS environment in user space with libpil4dfs, since this is relatively expensive. Such overhead is particularly noticeable for processes that complete within tens or hundreds of milliseconds and run frequently.
 To address this issue, DAOS can disable function interception by libpil4dfs for specific executables/commands listed below:

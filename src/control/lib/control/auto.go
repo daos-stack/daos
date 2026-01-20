@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,8 +33,8 @@ const (
 	defaultFiPort         = 31416
 	defaultFiPortInterval = 1000
 	defaultTargetCount    = 16
-	defaultEngineLogFile  = "/tmp/daos_engine"
-	defaultControlLogFile = "/tmp/daos_server.log"
+	defaultEngineLogFile  = "/var/log/daos/daos_engine"
+	defaultControlLogFile = "/var/log/daos/daos_server.log"
 	minNrSSDs             = 1
 	minDMABuffer          = 1024
 	numaCoreUsage         = 0.8 // fraction of numa cores to use for targets
@@ -426,7 +427,7 @@ func getStorageSet(ctx context.Context, req ConfGenerateRemoteReq) (*HostStorage
 
 	req.Log.Debugf("Storage hardware is consistent for hosts %s:\n\t%s\n\t%s\n\t%s",
 		storageSet.HostSet.String(), hostStorage.ScmNamespaces.Summary(),
-		hostStorage.NvmeDevices.Summary(), hostStorage.MemInfo.Summary())
+		hostStorage.NvmeDevices.Summary(), hostStorage.SysMemInfo.Summary())
 
 	return storageSet, nil
 }
@@ -501,10 +502,10 @@ func (nsm numaSSDsMap) fromNVMe(ssds storage.NvmeControllers) error {
 }
 
 type storageDetails struct {
-	NumaSCMs numaSCMsMap
-	NumaSSDs numaSSDsMap
-	MemInfo  *common.MemInfo
-	scmCls   storage.Class
+	NumaSCMs   numaSCMsMap
+	NumaSSDs   numaSSDsMap
+	SysMemInfo *common.SysMemInfo
+	scmCls     storage.Class
 }
 
 // getStorageDetails retrieves mappings of NUMA node to PMem and NVMe SSD devices.  Returns storage
@@ -513,20 +514,19 @@ func getStorageDetails(req ConfGenerateReq, numaCount int, hs *HostStorage) (*st
 	if hs == nil {
 		return nil, errors.New("nil HostStorage")
 	}
-	if hs.MemInfo == nil {
-		return nil, errors.New("nil HostStorage.MemInfo")
+	if hs.SysMemInfo == nil {
+		return nil, errors.New("nil HostStorage.SysMemInfo")
 	}
 
 	sd := storageDetails{
 		NumaSCMs: make(numaSCMsMap),
 		NumaSSDs: make(numaSSDsMap),
-		MemInfo: &common.MemInfo{
-			HugepageSizeKiB: hs.MemInfo.HugepageSizeKiB,
-			MemTotalKiB:     hs.MemInfo.MemTotalKiB,
-		},
-		scmCls: storage.ClassDcpm,
+		scmCls:   storage.ClassDcpm,
 	}
-	if sd.MemInfo.HugepageSizeKiB == 0 {
+	sd.SysMemInfo = &common.SysMemInfo{}
+	sd.SysMemInfo.HugepageSizeKiB = hs.SysMemInfo.HugepageSizeKiB
+	sd.SysMemInfo.MemTotalKiB = hs.SysMemInfo.MemTotalKiB
+	if sd.SysMemInfo.HugepageSizeKiB == 0 {
 		return nil, errors.New("requires nonzero HugepageSizeKiB")
 	}
 
@@ -539,7 +539,7 @@ func getStorageDetails(req ConfGenerateReq, numaCount int, hs *HostStorage) (*st
 		if numaCount <= 0 {
 			return nil, errors.New("requires nonzero numaCount")
 		}
-		if sd.MemInfo.MemTotalKiB == 0 {
+		if sd.SysMemInfo.MemTotalKiB == 0 {
 			return nil, errors.New("requires nonzero MemTotalKiB")
 		}
 

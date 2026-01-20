@@ -22,18 +22,17 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
+import os
 import platform
 
 import distro
 from prereq_tools import GitRepoRetriever
-from SCons.Script import GetOption
+from SCons.Script import Dir, GetOption
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
 ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
-ARM_PLATFORM = False
-if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
-    ARM_PLATFORM = True
+ARM_PLATFORM = PROCESSOR.lower() in [x.lower() for x in ARM_LIST]
 
 
 class InstalledComps():
@@ -94,10 +93,12 @@ def check(reqs, name, built_str, installed_str=""):
 def ofi_config(config):
     """Check ofi version"""
     if not GetOption('silent'):
-        print('Checking for libfabric > 1.11...', end=' ')
+        print('Checking for libfabric >= 1.20...', end=' ')
     code = """#include <rdma/fabric.h>
-_Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
-               "libfabric must be >= 1.11");"""
+_Static_assert(FI_VERSION_GE(
+               FI_VERSION(FI_MAJOR_VERSION, FI_MINOR_VERSION),
+               FI_VERSION(1, 20)),
+               "libfabric must be >= 1.20");"""
     rc = config.TryCompile(code, ".c")
     if not GetOption('silent'):
         print('yes' if rc else 'no')
@@ -117,11 +118,27 @@ def define_mercury(reqs):
     # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
+                 '--libdir=$OFI_PREFIX/lib64',
+                 '--with-dlopen',
+                 '--disable-static',
+                 '--disable-silent-rules',
+                 '--enable-sockets',
+                 '--enable-tcp',
+                 '--enable-verbs',
+                 '--enable-rxm',
+                 '--enable-shm',
+                 '--enable-psm2',
+                 '--enable-opx',
                  '--disable-efa',
-                 '--disable-psm2',
-                 '--disable-psm3',
-                 '--disable-opx',
-                 '--without-gdrcopy']
+                 '--disable-dmabuf_peer_mem',
+                 '--disable-hook_hmem',
+                 '--disable-hook_debug',
+                 '--disable-trace',
+                 '--disable-perf',
+                 '--disable-rxd',
+                 '--disable-mrail',
+                 '--disable-udp',
+                 '--disable-psm3']
 
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
@@ -139,8 +156,8 @@ def define_mercury(reqs):
                 headers=['rdma/fabric.h'],
                 pkgconfig='libfabric',
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
-                patch_rpath=['lib'],
-                build_env={'CFLAGS': "-fstack-usage"})
+                patch_rpath=['lib64'],
+                build_env={'CFLAGS': "-fstack-usage -fPIC"})
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
@@ -173,13 +190,19 @@ def define_mercury(reqs):
                      '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
                      '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
+                     '-DMERCURY_INSTALL_LIB_DIR:PATH=$MERCURY_PREFIX/lib64',
+                     '-DMERCURY_INSTALL_DATA_DIR:PATH=$MERCURY_PREFIX/lib64',
+                     '-DNA_INSTALL_PLUGIN_DIR:PATH=$MERCURY_PREFIX/lib64/mercury',
                      '-DBUILD_DOCUMENTATION:BOOL=OFF',
                      '-DBUILD_EXAMPLES:BOOL=OFF',
                      '-DBUILD_TESTING:BOOL=ON',
                      '-DBUILD_TESTING_PERF:BOOL=ON',
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
+                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
+                     '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
+                     '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
@@ -250,16 +273,17 @@ def define_components(reqs):
     reqs.define('isal',
                 retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
+                          ['./configure', '--disable-static', '--prefix=$ISAL_PREFIX',
+                           '--libdir=$ISAL_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'])
     reqs.define('isal_crypto',
                 retriever=GitRepoRetriever(),
-                commands=[['./autogen.sh'],
-                          ['./configure',
+                commands=[['./autogen.sh', '--no-oshmem'],
+                          ['./configure', '--disable-static',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
-                           '--libdir=$ISAL_CRYPTO_PREFIX/lib'],
+                           '--libdir=$ISAL_CRYPTO_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal_crypto'])
@@ -270,15 +294,28 @@ def define_components(reqs):
                            'all',
                            'BUILD_EXAMPLES=n',
                            'BUILD_BENCHMARKS=n',
-                           'DOC=n',
+                           'DOC=y',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
-                           'prefix=$PMDK_PREFIX']],
+                           'prefix=$PMDK_PREFIX',
+                           'libdir=$PMDK_PREFIX/lib64'],
+                          ['mkdir', '-p', '$PMDK_PREFIX/share/pmdk'],
+                          ['cp', 'utils/pmdk.magic', '$PMDK_PREFIX/share/pmdk'],
+                          ['fdupes', '-s', '$PMDK_PREFIX/share/man']],
                 libs=['pmemobj'])
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
+                 '--libdir=$ARGOBOTS_PREFIX/lib64',
                  'CC=gcc',
-                 '--enable-stack-unwind']
+                 '--enable-stack-unwind=yes']
+    try:
+        if reqs.get_env('SANITIZERS') != "":
+            # NOTE the address sanitizer library add some extra info on the stack and thus ULTs
+            # need a bigger stack
+            print("Increase argobots default stack size from 16384 to 32768")
+            abt_build += ['--enable-default-stacksize=32768']
+    except KeyError:
+        pass
 
     if reqs.target_type == 'debug':
         abt_build.append('--enable-debug=most')
@@ -290,24 +327,13 @@ def define_components(reqs):
 
     reqs.define('argobots',
                 retriever=GitRepoRetriever(True),
-                commands=[['git', 'clean', '-dxf'],
-                          ['./autogen.sh'],
+                commands=[['./autogen.sh'],
                           abt_build,
                           ['make'],
                           ['make', 'install']],
                 requires=['libunwind'],
                 libs=['abt'],
                 headers=['abt.h'])
-
-    reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
-                retriever=GitRepoRetriever(),
-                commands=[['meson', 'setup', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
-                           '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
-                           '--default-library', 'both', '../fuse'],
-                          ['ninja', 'install']],
-                headers=['fuse3/fuse.h'],
-                required_progs=['libtoolize', 'ninja', 'meson'],
-                out_of_src_build=True)
 
     reqs.define('fused', libs=['fused'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever(),
@@ -331,8 +357,13 @@ def define_components(reqs):
     # it has also failed with sandybridge.
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
+
+    spdk_reqs = ['isal', 'isal_crypto']
+    spdk_conf = ['--with-isal=$ISAL_PREFIX', '--with-isal-crypto=$ISAL_CRYPTO_PREFIX']
     if ARM_PLATFORM:
         spdk_arch = 'native'
+        spdk_reqs = []
+        spdk_conf = []
     elif dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
@@ -340,34 +371,45 @@ def define_components(reqs):
     else:
         spdk_arch = 'haswell'
 
+    copy_files = os.path.join(Dir('#').abspath, 'utils/scripts/copy_files.sh')
+    create_pkgconfig = os.path.join(Dir('#').abspath, 'utils/scripts/create_spdk_pkgconfig.sh')
     reqs.define('spdk',
                 retriever=GitRepoRetriever(True),
                 commands=[['./configure',
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
                            '--disable-unit-tests',
-                           '--disable-apps',
                            '--without-vhost',
-                           '--without-crypto',
-                           '--without-pmdk',
                            '--without-rbd',
                            '--without-iscsi-initiator',
-                           '--without-isal',
                            '--without-vtune',
                            '--with-shared',
-                           f'--target-arch={spdk_arch}'],
+                           '--without-nvme-cuse',
+                           '--without-crypto',
+                           f'--target-arch={spdk_arch}'] + spdk_conf,
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
-                          ['make', 'install'],
-                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
-                          ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
-                          ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
-                          ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
-                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
-                          ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
-                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
+                          ['make', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
+                           'includedir=$SPDK_PREFIX/include/daos_srv', 'install'],
+                          [copy_files, 'dpdk/build/lib', '$SPDK_PREFIX/lib64/daos_srv'],
+                          ['rm', '-rf', '$SPDK_PREFIX/lib'],
+                          [copy_files, 'dpdk/build/include', '$SPDK_PREFIX/include/daos_srv/dpdk'],
+                          [copy_files, 'include', '$SPDK_PREFIX/share/daos/spdk/include'],
+                          [copy_files, 'scripts', '$SPDK_PREFIX/share/daos/spdk/scripts'],
+                          ['mv', '$SPDK_PREFIX/bin/spdk_nvme_discover',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_discover'],
+                          ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/daos_spdk_nvme_lsvmd'],
+                          ['cp', 'build/examples/nvme_manage',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_manage'],
+                          ['mv', '$SPDK_PREFIX/bin/spdk_nvme_identify',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_identify'],
+                          ['cp', '$SPDK_PREFIX/bin/spdk_nvme_perf',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_perf'],
+                          [create_pkgconfig, "$SPDK_PREFIX"]],
+                extra_lib_path=['lib64/daos_srv'],
                 headers=['spdk/nvme.h'],
-                patch_rpath=['lib', 'bin'])
+                pkgconfig='daos_spdk',
+                patch_rpath=['lib64/daos_srv', 'bin'],
+                requires=spdk_reqs)
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever(),

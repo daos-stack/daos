@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1490,8 +1491,8 @@ dm_connect(struct cmd_args_s *ap,
 				rc = dm_cont_get_all_props(ap, ca->src_coh, &props,
 							   false, false, false);
 			else
-				rc = dm_cont_get_all_props(ap, ca->src_coh, &props,
-							   true, false, true);
+				rc = dm_cont_get_all_props(ap, ca->src_coh, &props, true, false,
+							   false);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
 				D_GOTO(err, rc);

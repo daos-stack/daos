@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -242,7 +243,7 @@ class EngineEvents(TestWithTelemetry):
         # 2. Stop a rank.
         restart_rank = rank_count - 1
         self.log_step(f"Stop rank {restart_rank} and wait for a while for RPCs to circulate")
-        self.server_managers[0].stop_ranks(ranks=[restart_rank], daos_log=self.d_log)
+        self.server_managers[0].stop_ranks(ranks=[restart_rank])
 
         # 3. Verify the desired rank has stopped successfully.
         self.log_step("Verify the desired rank has stopped successfully.")
@@ -271,7 +272,7 @@ class EngineEvents(TestWithTelemetry):
 
         # 5. Restart the stopped rank.
         self.log_step("Restart the stopped rank.")
-        self.server_managers[0].start_ranks(ranks=[restart_rank], daos_log=self.d_log)
+        self.server_managers[0].start_ranks(ranks=[restart_rank])
 
         # 6. Verify the desired rank restarted successfully.
         self.log_step("Verify the desired rank restarted successfully.")

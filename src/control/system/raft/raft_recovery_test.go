@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -127,7 +128,6 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 			Replicas:  <-replicas,
 			Storage: &system.PoolServiceStorage{
 				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
-				CurrentRankStr:     fmt.Sprintf("[0-%d]", maxRanks),
 				PerRankTierStorage: []uint64{1, 2},
 			},
 		}

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +58,69 @@ map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *r
 			D_ASSERT(n < ranks->rl_nr);
 			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
 			n++;
+		}
+	}
+	D_ASSERTF(n == ranks->rl_nr, "%d != %u\n", n, ranks->rl_nr);
+
+	return 0;
+}
+
+static bool
+all_tgts_match(struct pool_domain *rank_dom, unsigned int status)
+{
+	int i;
+
+	for (i = 0; i < rank_dom->do_target_nr; i++) {
+		if ((status & rank_dom->do_targets[i].ta_comp.co_status) == 0)
+			return false;
+	}
+
+	return true;
+}
+
+/* Build failed rank list, treats the rank as DOWN if all its targets are DOWN . */
+int
+map_ranks_failed(const struct pool_map *map, d_rank_list_t *ranks)
+{
+	struct pool_domain *domains = NULL;
+	unsigned int        status  = PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN;
+	int                 nranks;
+	int                 n = 0;
+	int                 i;
+	d_rank_t           *rs;
+
+	nranks = pool_map_find_ranks((struct pool_map *)map, PO_COMP_ID_ALL, &domains);
+	if (nranks == 0) {
+		D_ERROR("no nodes in pool map\n");
+		return -DER_IO;
+	}
+
+	for (i = 0; i < nranks; i++) {
+		if ((status & domains[i].do_comp.co_status) || all_tgts_match(&domains[i], status))
+			n++;
+	}
+
+	if (n == 0) {
+		ranks->rl_nr    = 0;
+		ranks->rl_ranks = NULL;
+		return 0;
+	}
+
+	D_ALLOC_ARRAY(rs, n);
+	if (rs == NULL)
+		return -DER_NOMEM;
+
+	ranks->rl_nr    = n;
+	ranks->rl_ranks = rs;
+
+	n = 0;
+	for (i = 0; i < nranks; i++) {
+		if ((status & domains[i].do_comp.co_status) ||
+		    all_tgts_match(&domains[i], status)) {
+			D_ASSERT(n < ranks->rl_nr);
+			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
+			n++;
+			continue;
 		}
 	}
 	D_ASSERTF(n == ranks->rl_nr, "%d != %u\n", n, ranks->rl_nr);
@@ -279,6 +342,7 @@ init_reconf_map(struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 	int                 i;
 	int                 rc;
 
+	/* TODO DAOS-6353: Deal with FAULT level components */
 	domains_len = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL, &domains);
 	D_ASSERTF(domains_len > 0, "pool_map_find_domain: %d\n", domains_len);
 
@@ -1448,7 +1512,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	int			 i, nr, rc = 0;
 
 	/* Get pool map to check the target status */
-	pool_child = ds_pool_child_lookup(pool_id);
+	pool_child = ds_pool_child_find(pool_id);
 	if (pool_child == NULL) {
 		D_ERROR(DF_UUID": Pool child not found\n", DP_UUID(pool_id));
 		/*
@@ -1469,6 +1533,13 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 
 	nr_downout = nr_down = nr_upin = nr_up = 0;
 	ABT_rwlock_rdlock(pool->sp_lock);
+
+	if (pool->sp_map == NULL) {
+		D_ERROR(DF_UUID ": Pool map not populated\n", DP_UUID(pool_id));
+		rc = -DER_UNINIT;
+		goto done;
+	}
+
 	for (i = 0; i < tgt_cnt; i++) {
 		nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank,
 						      tgt_ids[i], &target);
@@ -1497,7 +1568,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 			break;
 		}
 	}
-
+done:
 	if (pool->sp_iv_ns != NULL) {
 		*pl_rank = pool->sp_iv_ns->iv_master_rank;
 	} else {

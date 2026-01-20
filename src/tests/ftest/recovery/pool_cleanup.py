@@ -1,15 +1,17 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
+from apricot import TestWithServers
 from general_utils import report_errors
-from recovery_test_base import RecoveryTestBase
+from recovery_utils import wait_for_check_complete
 
 
-class PoolCleanupTest(RecoveryTestBase):
+class PoolCleanupTest(TestWithServers):
     """Test Pass 3: Pool Cleanup
 
     :avocado: recursive
@@ -102,7 +104,7 @@ class PoolCleanupTest(RecoveryTestBase):
 
         # 9. Query the checker until the fault is repaired.
         self.log_step("Query the checker until the fault is repaired.")
-        repair_report = self.wait_for_check_complete()[0]
+        repair_report = wait_for_check_complete(dmg_command)[0]
 
         # Verify that the repair report has expected message "Update the MS label".
         action_message = repair_report["act_msgs"][0]
@@ -209,7 +211,7 @@ class PoolCleanupTest(RecoveryTestBase):
 
         # 8. Query the checker until the fault is repaired.
         self.log_step("Query the checker until the fault is repaired.")
-        repair_report = self.wait_for_check_complete()[0]
+        repair_report = wait_for_check_complete(dmg_command)[0]
 
         # Verify that the repair report has expected message "Reset the pool property
         # using the MS label".

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,4 +47,5 @@ func addMethodHandlers(app *pbin.App) {
 	app.AddHandler("BdevScan", &bdevScanHandler{})
 	app.AddHandler("BdevFormat", &bdevFormatHandler{})
 	app.AddHandler("BdevWriteConfig", &bdevWriteConfigHandler{})
+	app.AddHandler("BdevReadConfig", &bdevReadConfigHandler{})
 }

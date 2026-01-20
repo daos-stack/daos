@@ -330,7 +330,7 @@ properties have been introduced:
 
 - the redundancy factor (rd\_fac) that describes the number of concurrent engine
   exclusions that objects in the container are protected against. The rd\_fac value
-  is an integer between 0 (no data protection) and 5 (support up to 5
+  is an integer between 0 (no data protection) and 4 (support up to 4
   simultaneous failures).
 - a `health` property representing whether any object content might have been
   lost due to cascading engine failures. The value of this property can be
@@ -400,10 +400,22 @@ accessed again.
 
 If the user is willing to access an unhealthy container (e.g., to recover data),
 the force flag can be passed on container open or the container state can be
-forced to healthy via `daos cont set-prop tank mycont1 --properties health:healthy`.
+forced to healthy via `daos cont set-prop tank mycont1 --properties status:healthy`.
 
 The redundancy level (rd\_lvl) is another property that was introduced to
 specify the fault domain level to use for placement.
+
+By default (user doesn't supply `--properties rd_fac:N`), pool's `rd_fac` will be used
+for container's `rd_fac`. However, pool's `rd_fac` can be set to any value between 0 and
+4, which means it could be invalid. If the following error appears during container
+create, try creating with valid `rd_fac`.
+
+```bash
+$ daos container create tank mycont1 --type=POSIX
+object ERR  src/object/obj_class.c:829 dc_set_oclass() grp_size 5 > domain_nr 1, DER_INVAL(-1003): 'Invalid parameters'
+dfs  ERR  src/client/dfs/cont.c:254 dfs_cont_create() Failed to generate SB OID DER_INVAL(-1003): 'Invalid parameters'
+ERROR: daos: failed to create container: DER_INVAL(-1003): Invalid parameters
+```
 
 ### Data Integrity
 

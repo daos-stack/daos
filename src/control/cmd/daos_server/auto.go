@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -69,7 +70,12 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		return nil, errors.Wrap(err, "nvme init")
 	}
 
-	nvmeResp, errNvme := scanNVMe(snc)
+	smi, err := common.GetSysMemInfo()
+	if err != nil {
+		return nil, errors.Wrap(err, "get hugepage info")
+	}
+
+	nvmeResp, errNvme := scanNVMe(snc, smi)
 	if errNvme != nil {
 		return nil, errors.Wrap(errNvme, "nvme scan")
 	}
@@ -88,7 +94,8 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		return nil, errors.Wrap(errScm, "scm scan")
 	}
 
-	mi, err := common.GetMemInfo()
+	// Reload to pick up any changes after scanNVMe (which may implicitly call prepNVMe).
+	smi, err = common.GetSysMemInfo()
 	if err != nil {
 		return nil, errors.Wrap(err, "get hugepage info")
 	}
@@ -97,7 +104,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		NvmeDevices:   nvmeResp.Controllers,
 		ScmModules:    scmResp.Modules,
 		ScmNamespaces: scmResp.Namespaces,
-		MemInfo:       mi,
+		SysMemInfo:    smi,
 	}, nil
 }
 

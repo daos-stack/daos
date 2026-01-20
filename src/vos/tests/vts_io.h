@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -99,8 +100,9 @@ daos_unit_oid_t		gen_oid(enum daos_otype_t type);
 void			reset_oid_stable(uint32_t seed);
 daos_unit_oid_t		gen_oid_stable(enum daos_otype_t type);
 void			inc_cntr(unsigned long op_flags);
-void			test_args_reset(struct io_test_args *args,
-					uint64_t pool_size);
+void
+test_args_reset(struct io_test_args *args, uint64_t scm_sz, uint64_t meta_sz, uint64_t data_sz,
+		unsigned int flags);
 int			io_test_obj_update(struct io_test_args *arg,
 					   daos_epoch_t epoch, uint64_t flags,
 					   daos_key_t *dkey, daos_iod_t *iod,

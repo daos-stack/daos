@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -7,7 +8,9 @@ import json
 import re
 
 from apricot import TestWithServers
-from general_utils import append_error, report_errors, run_pcmd
+from ClusterShell.NodeSet import NodeSet
+from general_utils import append_error, report_errors
+from run_utils import run_remote
 from server_utils_base import DaosServerCommandRunner
 
 
@@ -37,30 +40,16 @@ class DAOSVersion(TestWithServers):
         """
         # Get RPM version.
         rpm_command = "rpm -qa | grep daos-server"
-        output = run_pcmd(hosts=self.hostlist_servers, command=rpm_command)
-        self.log.debug("RPM output = %s", output)
-        rc = output[0]["exit_status"]
-        stdout = output[0]["stdout"]
-        if rc != 0:
-            report_errors(self, ["DAOS RPMs not properly installed: rc={}".format(rc)])
-        rpm_version = None
-        for rpm in stdout:
-            result = re.findall(r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", rpm)
-            if result:
-                rpm_version = result[0]
-                break
-        if not result:
-            report_errors(self, ["RPM version could not be defined"])
+        result = run_remote(self.log, self.hostlist_servers, rpm_command)
+        if not result.passed:
+            self.fail("Failed to list daos-server RPMs")
+        if not result.homogeneous:
+            self.fail("Non-homogenous daos-server RPMs")
+        match = re.findall(r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", result.joined_stdout)
+        if not match:
+            self.fail("Failed to get version from daos-server RPMs")
+        rpm_version = match[0]
         self.log.info("RPM version = %s", rpm_version)
-
-        # Remove configuration files
-        cleanup_cmds = [
-            "sudo find /etc/daos/certs -type f -delete -print",
-            "sudo rm -fv /etc/daos/daos_server.yml /etc/daos/daos_control.yml"
-            "     /etc/daos/daos_agent.yml",
-        ]
-        for cmd in cleanup_cmds:
-            run_pcmd(hosts=self.hostlist_servers, command=cmd)
 
         # Get dmg version.
         dmg_version = self.get_dmg_command().version()["response"]["version"]
@@ -75,17 +64,11 @@ class DAOSVersion(TestWithServers):
         # Get daos_agent version.
         daos_agent_version = None
         daos_agent_cmd = "daos_agent --json version"
-        output = run_pcmd(hosts=self.hostlist_servers, command=daos_agent_cmd)
-        self.log.debug("DAOS Agent output = %s", output)
-        rc = output[0]["exit_status"]
-        stdout = output[0]["stdout"]
-        if rc != 0:
-            msg = "DAOS Agent not properly installed: rc={}".format(rc)
-            append_error(errors, msg, stdout)
-        else:
-            self.log.info("DAOS Agent stdout = %s", "".join(stdout))
-            daos_agent_version = json.loads("".join(stdout))["response"]["version"]
-            self.log.info("daos_agent version = %s", daos_agent_version)
+        result = run_remote(self.log, NodeSet(self.hostlist_servers[0]), daos_agent_cmd)
+        if not result.passed:
+            self.fail("Failed to get daos_agent version")
+        daos_agent_version = json.loads(result.joined_stdout)["response"]["version"]
+        self.log.info("daos_agent version = %s", daos_agent_version)
 
         # Get daos_server version
         daos_server_cmd = DaosServerCommandRunner(path=self.bin)

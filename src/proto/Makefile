@@ -16,6 +16,8 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 mgmt/server.pb-c.h\
 		 mgmt/svc.pb-c.h\
 		 mgmt/check.pb-c.h\
+		 mgmt/system.pb-c.h\
+		 mgmt/shared/ranks.pb-c.h\
 		 chk/chk.pb-c.h\
 		 security/auth.pb-c.h\
 		 tests/drpc/drpc_test.pb-c.h
@@ -30,6 +32,8 @@ C_SOURCE_FILES = common/drpc.pb-c.c\
 		 mgmt/server.pb-c.c\
 		 mgmt/svc.pb-c.c\
 		 mgmt/check.pb-c.c\
+		 mgmt/system.pb-c.c\
+		 mgmt/shared/ranks.pb-c.c\
 		 chk/chk.pb-c.c\
 		 security/auth.pb-c.c\
 		 tests/drpc/drpc_test.pb-c.c
@@ -58,7 +62,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
-		   cmd/drpc_test/hello/drpc_test.pb.go
+		   cmd/hello_drpc/hello/drpc_test.pb.go
 CTRL_SOURCE_ROOT = $(DAOS_ROOT)/src/control
 PROTO_SOURCE_DIR = $(DAOS_ROOT)/src/proto
 uniq = $(if $1,$(firstword $1) $(call uniq,$(filter-out $(firstword $1),$1)))
@@ -75,44 +79,28 @@ endif
 
 $(PROTOC):
 	@echo "Please install the protobufs compiler"
-	@echo "Details: https://github.com/daos-stack/daos/blob/master/doc/dev/development.md#protobuf-compiler"
+	@echo "Details: https://github.com/daos-stack/daos/blob/master/docs/dev/development.md#protobuf-compiler"
 	@false
 
 GOPATH ?= $(shell go env GOPATH)
 PROTOC_GEN_GO_PKG := google.golang.org/protobuf
-PROTOC_GEN_GO_IMP := $(PROTOC_GEN_GO_PKG)/cmd/protoc-gen-go
+PROTOC_GEN_GO_CMD := $(PROTOC_GEN_GO_PKG)/cmd/protoc-gen-go
 PROTOC_GEN_GO_MOD_TAG = $(shell awk '/$(subst /,\/,$(PROTOC_GEN_GO_PKG))/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
 PROTOC_GEN_GO_TAG ?= $(PROTOC_GEN_GO_MOD_TAG)
-PROTOC_GEN_GO := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_IMP))
+PROTOC_GEN_GO := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_CMD))
 
 $(PROTOC_GEN_GO): $(PROTOC)
 	@echo "Installing protobuf generator ($(PROTOC_GEN_GO_TAG)) for Go..."
-	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) ] &&\
-		cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
-		git checkout master || true
-	go get -u $(PROTOC_GEN_GO_IMP) &&\
-	cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
-	git checkout $(PROTOC_GEN_GO_TAG) &&\
-	go install $(PROTOC_GEN_GO_IMP)
+	go install $(PROTOC_GEN_GO_CMD)@$(PROTOC_GEN_GO_TAG)
 
 PROTOC_GEN_GO_GRPC_PKG := google.golang.org/grpc
-PROTOC_GEN_GO_GRPC_IMP := $(PROTOC_GEN_GO_GRPC_PKG)/cmd/protoc-gen-go-grpc
-PROTOC_GEN_GO_GRPC_MOD_TAG = $(shell awk '/$(subst /,\/,$(PROTOC_GEN_GO_GRPC_PKG))/ {print $$2}' $(DAOS_ROOT)/src/control/go.mod)
-PROTOC_GEN_GO_GRPC_TAG ?= $(PROTOC_GEN_GO_GRPC_MOD_TAG)
-PROTOC_GEN_GO_GRPC := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_GRPC_IMP))
+PROTOC_GEN_GO_GRPC_CMD := $(PROTOC_GEN_GO_GRPC_PKG)/cmd/protoc-gen-go-grpc
+PROTOC_GEN_GO_GRPC_TAG ?= latest
+PROTOC_GEN_GO_GRPC := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_GRPC_CMD))
 
 $(PROTOC_GEN_GO_GRPC): $(PROTOC)
 	@echo "Installing gRPC protobuf generator ($(PROTOC_GEN_GO_GRPC_TAG)) for Go..."
-#	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) ] &&\
-#		cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
-#		git checkout master || true
-#	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) ] &&\
-#		cd $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) &&\
-#		git checkout master || true
-#	go get -u $(PROTOC_GEN_GO_GRPC_IMP) &&\
-#	cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
-#	git checkout $(PROTOC_GEN_GO_GRPC_TAG) &&\
-#	go install $(PROTOC_GEN_GO_GRPC_IMP)
+	go install $(PROTOC_GEN_GO_GRPC_CMD)@$(PROTOC_GEN_GO_GRPC_TAG)
 
 clean-gen:
 	rm -f $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC)
@@ -139,7 +127,7 @@ $(CTRL_SOURCE_ROOT)/security/auth/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
 	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
 			    --go-grpc_out=$(dir $@) --go-grpc_opt=paths=source_relative $<
 
-$(CTRL_SOURCE_ROOT)/cmd/drpc_test/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
+$(CTRL_SOURCE_ROOT)/cmd/hello_drpc/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
 	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
 			    --go-grpc_out=$(dir $@) --go-grpc_opt=paths=source_relative $<
 
@@ -191,6 +179,12 @@ $(DAOS_ROOT)/src/mgmt/server.pb-c.h: $(PROTO_SOURCE_DIR)/ctl/server.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/mgmt/server.pb-c.c: $(PROTO_SOURCE_DIR)/ctl/server.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/mgmt/shared/ranks.pb-c.h: $(PROTO_SOURCE_DIR)/shared/ranks.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/mgmt/shared/ranks.pb-c.c: $(PROTO_SOURCE_DIR)/shared/ranks.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/tests/drpc/%.pb-c.h: $(PROTO_SOURCE_DIR)/test/%.proto

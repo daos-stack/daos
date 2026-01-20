@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -529,7 +530,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					ScmNamespaces: storage.ScmNamespaces{
 						storage.MockScmNamespace(0),
 					},
-					MemInfo: MockMemInfo(),
+					SysMemInfo: MockSysMemInfo(),
 				},
 			},
 		},
@@ -1456,14 +1457,14 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 			nd := &networkDetails{
 				NumaIfaces: tc.numaIfaces,
 			}
+			smi := &common.SysMemInfo{}
+			smi.HugepageSizeKiB = 2048
+			smi.MemTotalKiB = tc.memTotal / humanize.KiByte
 			sd := &storageDetails{
-				MemInfo: &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					MemTotalKiB:     tc.memTotal / humanize.KiByte,
-				},
-				NumaSCMs: tc.numaPMems,
-				NumaSSDs: tc.numaSSDs,
-				scmCls:   storage.ClassDcpm,
+				SysMemInfo: smi,
+				NumaSCMs:   tc.numaPMems,
+				NumaSSDs:   tc.numaSSDs,
+				scmCls:     storage.ClassDcpm,
 			}
 			if tc.scmCls.String() != "" {
 				sd.scmCls = tc.scmCls

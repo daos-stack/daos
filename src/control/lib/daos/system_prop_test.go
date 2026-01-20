@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -175,5 +176,23 @@ func TestDaos_SystemPropertyKeys(t *testing.T) {
 		if err := fromString.FromString(key.String()); err != nil {
 			t.Fatalf("prop idx %d string (%q) failed to resolve: %s", i, key, err)
 		}
+	}
+}
+
+func TestDaos_SystemPropertySelfHealHasFlag(t *testing.T) {
+	if SystemPropertySelfHealHasFlag("none", SysSelfHealFlagExclude) {
+		t.Fatal("value \"none\" should not have flag \"exclude\"")
+	}
+	if SystemPropertySelfHealHasFlag("pool_exclude", SysSelfHealFlagExclude) {
+		t.Fatal("value \"pool_exclude\" should not have flag \"exclude\"")
+	}
+	if !SystemPropertySelfHealHasFlag("exclude;pool_exclude", SysSelfHealFlagPoolExclude) {
+		t.Fatal("value \"exclude;pool_exclude\" should have flag \"pool_exclude\"")
+	}
+	if !SystemPropertySelfHealHasFlag("exclude;pool_rebuild", SysSelfHealFlagPoolRebuild) {
+		t.Fatal("value \"exclude;pool_rebuild\" should have flag \"pool_rebuild\"")
+	}
+	if SystemPropertySelfHealHasFlag("exclude;pool_rebuild", SysSelfHealFlag("")) {
+		t.Fatal("value \"exclude;pool_rebuild\" should not have (invalid) flag \"\"")
 	}
 }

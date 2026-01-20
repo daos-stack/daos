@@ -1,16 +1,18 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
+from apricot import TestWithServers
 from exception_utils import CommandFailure
 from general_utils import report_errors
-from recovery_test_base import RecoveryTestBase
+from recovery_utils import wait_for_check_complete
 
 
-class ContainerCleanupTest(RecoveryTestBase):
+class ContainerCleanupTest(TestWithServers):
     """Test Pass 5: Container Cleanup
 
     :avocado: recursive
@@ -105,7 +107,7 @@ class ContainerCleanupTest(RecoveryTestBase):
 
         # 9. Query the checker until the fault is repaired.
         self.log_step("Query the checker until the fault is repaired.")
-        repair_report = self.wait_for_check_complete()[0]
+        repair_report = wait_for_check_complete(dmg_command)[0]
 
         # Verify that the repair report has expected message "Update the CS label".
         action_message = repair_report["act_msgs"][0]

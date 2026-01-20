@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /* Copyright 2015-2024, Intel Corporation */
+/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
 
 /*
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
@@ -270,7 +271,7 @@ struct dav_alloc_class_desc;
  * Registers an allocation class handle with the DAV object.
  */
 int
-dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p);
+dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p, int is_evictable_mb);
 
 struct dav_heap_stats;
 /*

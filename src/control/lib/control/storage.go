@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,8 +59,8 @@ type HostStorage struct {
 	// to achieve some goal (SCM prep, etc.)
 	RebootRequired bool `json:"reboot_required"`
 
-	// MemInfo contains information about the host's hugepages.
-	MemInfo *common.MemInfo `json:"mem_info"`
+	// SysMemInfo contains information about the host's RAM and hugepages.
+	SysMemInfo *common.SysMemInfo `json:"mem_info"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -242,7 +243,7 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		}
 	}
 
-	if err := convert.Types(pbResp.GetMemInfo(), &hs.MemInfo); err != nil {
+	if err := convert.Types(pbResp.GetSysMemInfo(), &hs.SysMemInfo); err != nil {
 		return err
 	}
 
@@ -310,6 +311,7 @@ type (
 	StorageFormatReq struct {
 		unaryRequest
 		Reformat bool `json:"reformat"`
+		Replace  bool `json:"replace"`
 	}
 
 	// StorageFormatResp contains the response from a storage format request.

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -247,10 +247,12 @@ class DmgCommand(DmgCommandBase):
 
         """
         saved_timeout = self.timeout
-        self.timeout = timeout
-        self._get_result(
-            ("storage", "format"), force=force, verbose=verbose)
-        self.timeout = saved_timeout
+        try:
+            self.timeout = timeout
+            self._get_result(
+                ("storage", "format"), force=force, verbose=verbose)
+        finally:
+            self.timeout = saved_timeout
         return self.result
 
     def storage_set_faulty(self, host, uuid, force=True):
@@ -373,7 +375,7 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("storage", "scan"), nvme_health=True)
 
-    def storage_query_usage(self):
+    def storage_query_usage(self, **kwargs):
         """Get the result of the 'dmg storage query usage' command.
 
         Raises:
@@ -474,7 +476,7 @@ class DmgCommand(DmgCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        return self._get_json_result(("storage", "query", "usage"))
+        return self._get_json_result(("storage", "query", "usage"), **kwargs)
 
     def server_set_logmasks(self, masks=None, streams=None, subsystems=None, raise_exception=None):
         """Set engine log-masks at runtime.
@@ -537,7 +539,8 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    tier_ratio=None, properties=None, label=None, nranks=None):
+                    tier_ratio=None, properties=None, label=None, nranks=None,
+                    mem_ratio=None):
         # pylint: disable=too-many-arguments
         """Create a pool with the dmg command.
 
@@ -563,6 +566,8 @@ class DmgCommand(DmgCommandBase):
                 Defaults to None
             label (str, optional): Pool label. Defaults to None.
             nranks (str, optional): Number of ranks to use. Defaults to None
+            mem_ratio (str, optional): memory file to metadata storage size ratio.
+                Defaults to None.
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -584,7 +589,8 @@ class DmgCommand(DmgCommandBase):
             "acl_file": acl_file,
             "properties": properties,
             "label": label,
-            "nranks": nranks
+            "nranks": nranks,
+            "mem_ratio": mem_ratio
         }
 
         if target_list is not None:
@@ -626,9 +632,226 @@ class DmgCommand(DmgCommandBase):
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
-        data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
+
+        # Maintain backwards compatibility with v2.6.1, where this does not exist
+        if "memfile_per_rank" in output["response"]:
+            data["memfile_per_rank"] = output["response"]["mem_file_bytes"]
 
         return data
+
+    def pool_delete_acl(self, pool, principal):
+        """Delete the acl for a given pool.
+
+        Args:
+            pool (str): Pool for which to delete the ACL.
+            principal (str): principal to be deleted
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool delete-acl command fails.
+
+        """
+        return self._get_result(
+            ("pool", "delete-acl"), pool=pool, principal=principal)
+
+    def pool_destroy(self, pool, force=True, recursive=True):
+        """Destroy a pool with the dmg command.
+
+        Args:
+            pool (str): Pool UUID to destroy.
+            force (bool, optional): Force removal of pool. Defaults to True.
+            recursive (bool, optional): Remove pool with containers. Defaults to True.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: if the dmg pool destroy command fails.
+
+        """
+        return self._get_result(("pool", "destroy"), pool=pool, force=force, recursive=recursive)
+
+    def pool_drain(self, pool, ranks, tgt_idx=None):
+        """Drain a daos_server from the pool.
+
+        Args:
+            pool (str): Pool uuid.
+            ranks (str): Comma separated daos_server-rank ranges to drain e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to drain on ranks e.g. "1,2".
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool drain command fails.
+
+        """
+        return self._get_result(
+            ("pool", "drain"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
+
+    def pool_evict(self, pool):
+        """Evict a pool.
+
+        Args:
+            pool (str):  UUID of DAOS pool to evict connection to
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool evict command fails.
+
+        """
+        return self._get_result(("pool", "evict"), pool=pool)
+
+    def pool_exclude(self, pool, ranks, tgt_idx=None, force=False):
+        """Exclude a daos_server from the pool.
+
+        Args:
+            pool (str): Pool uuid.
+            ranks (str): Comma separated daos_server-rank ranges to exclude e.g.
+                "0,2-5".
+            tgt_idx (list, optional): targets to exclude on ranks e.g. "1,2".
+                Defaults to None.
+            force (bool, optional): force exclusion regardless of data loss. Defaults to False
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool exclude command fails.
+
+        """
+        return self._get_result(
+            ("pool", "exclude"), pool=pool, ranks=ranks, tgt_idx=tgt_idx, force=force)
+
+    def pool_extend(self, pool, ranks):
+        """Extend the daos_server pool.
+
+        Args:
+            pool (str): Pool uuid.
+            ranks (str): Comma separated daos_server-rank ranges to extend e.g.
+                "0,2-5".
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool extend command fails.
+
+        """
+        return self._get_result(
+            ("pool", "extend"), pool=pool, ranks=ranks)
+
+    def pool_get_acl(self, pool):
+        """Get the ACL for a given pool.
+
+        Args:
+            pool (str): Pool for which to get the ACL.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool get-acl command fails.
+
+        """
+        return self._get_result(("pool", "get-acl"), pool=pool)
+
+    def pool_get_prop(self, pool, name=None):
+        """Get the Property for a given pool.
+
+        Args:
+            pool (str): Pool for which to get the property.
+            name (str, optional): Get the Property value based on name.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool get-prop command fails.
+
+        """
+        return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
+
+    def pool_list(self, no_query=False, verbose=False):
+        """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
+            verbose (bool, optional): If True, use verbose mode.
+
+        Raises:
+            CommandFailure: if the dmg pool pool list command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        # Sample verbose JSON Output:
+        # {
+        #     "response": {
+        #         "status": 0,
+        #         "pools": [
+        #             {
+        #                 "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #                 "label": "mkp1",
+        #                 "svc_reps": [
+        #                     0
+        #                 ],
+        #                 "total_targets": 8,
+        #                 "disabled_targets": 0,
+        #                 "usage": [
+        #                     {
+        #                         "tier_name": "SCM",
+        #                         "size": 3000000000,
+        #                         "free": 2995801112,
+        #                         "imbalance": 0
+        #                     },
+        #                     {
+        #                         "tier_name": "NVME",
+        #                         "size": 47000000000,
+        #                         "free": 26263322624,
+        #                         "imbalance": 36
+        #                     }
+        #                 ]
+        #             }
+        #         ]
+        #     },
+        #     "error": null,
+        #     "status": 0
+        # }
+        return self._get_json_result(
+            ("pool", "list"), no_query=no_query, verbose=verbose)
+
+    def pool_overwrite_acl(self, pool, acl_file):
+        """Overwrite the acl for a given pool.
+
+        Args:
+            pool (str): Pool for which to overwrite the ACL.
+            acl_file (str): ACL file to update
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool overwrite-acl command fails.
+
+        """
+        return self._get_result(
+            ("pool", "overwrite-acl"), pool=pool, acl_file=acl_file)
 
     def pool_query(self, pool, show_enabled=False, health_only=False):
         """Query a pool with the dmg command.
@@ -703,38 +926,73 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("pool", "query-targets"), pool=pool,
                                      rank=rank, target_idx=target_idx)
 
-    def pool_destroy(self, pool, force=True, recursive=True):
-        """Destroy a pool with the dmg command.
+    def pool_reintegrate(self, pool, ranks, tgt_idx=None):
+        """Reintegrate a daos_server to the pool.
 
         Args:
-            pool (str): Pool UUID to destroy.
-            force (bool, optional): Force removal of pool. Defaults to True.
-            recursive (bool, optional): Remove pool with containers. Defaults to True.
+            pool (str): Pool uuid.
+            ranks (str): Comma separated daos_server-rank ranges to reintegrate
+                e.g. "0,2-5".
+            tgt_idx (list, optional): targets to reintegrate on ranks e.g. "1,2".
+                Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                       information.
+
+        Raises:
+            CommandFailure: if the dmg pool reintegrate command fails.
+
+        """
+        return self._get_result(
+            ("pool", "reintegrate"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
+
+    def pool_rebuild_start(self, pool):
+        """Rebuild start request submitted to pool.
+
+        Args:
+            pool (str): Pool label or uuid.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
-            CommandFailure: if the dmg pool destroy command fails.
+            CommandFailure: if the command fails.
 
         """
-        return self._get_result(("pool", "destroy"), pool=pool, force=force, recursive=recursive)
+        return self._get_result(("pool", "rebuild", "start"), pool=pool)
 
-    def pool_get_acl(self, pool):
-        """Get the ACL for a given pool.
+    def pool_rebuild_stop(self, pool, force=False):
+        """Rebuild stop request submitted to pool.
 
         Args:
-            pool (str): Pool for which to get the ACL.
+            pool (str): Pool label or uuid.
+            force (bool): Force stop rebuild.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
-            CommandFailure: if the dmg pool get-acl command fails.
+            CommandFailure: if the command fails.
 
         """
-        return self._get_result(("pool", "get-acl"), pool=pool)
+        return self._get_result(("pool", "rebuild", "stop"), pool=pool, force=force)
+
+    def pool_set_prop(self, pool, properties):
+        """Set property for a given Pool.
+
+        Args:
+            pool (str): Pool uuid for which property is supposed to be set.
+            properties (str): Property in the form of key:val[,key:val...]
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: if the dmg pool set-prop command fails.
+
+        """
+        return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
     def pool_update_acl(self, pool, acl_file=None, entry=None):
         """Update the acl for a given pool.
@@ -769,201 +1027,6 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_json_result(("pool", "upgrade"), pool=pool)
-
-    def pool_overwrite_acl(self, pool, acl_file):
-        """Overwrite the acl for a given pool.
-
-        Args:
-            pool (str): Pool for which to overwrite the ACL.
-            acl_file (str): ACL file to update
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: if the dmg pool overwrite-acl command fails.
-
-        """
-        return self._get_result(
-            ("pool", "overwrite-acl"), pool=pool, acl_file=acl_file)
-
-    def pool_delete_acl(self, pool, principal):
-        """Delete the acl for a given pool.
-
-        Args:
-            pool (str): Pool for which to delete the ACL.
-            principal (str): principal to be deleted
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: if the dmg pool delete-acl command fails.
-
-        """
-        return self._get_result(
-            ("pool", "delete-acl"), pool=pool, principal=principal)
-
-    def pool_list(self, no_query=False, verbose=False):
-        """List pools.
-
-        Args:
-            no_query (bool, optional): If True, do not query for pool stats.
-            verbose (bool, optional): If True, use verbose mode.
-
-        Raises:
-            CommandFailure: if the dmg pool pool list command fails.
-
-        Returns:
-            dict: the dmg json command output converted to a python dictionary
-
-        """
-        # Sample verbose JSON Output:
-        # {
-        #     "response": {
-        #         "status": 0,
-        #         "pools": [
-        #         {
-        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
-        #             "label": "mkp1",
-        #             "svc_reps": [
-        #             0
-        #             ],
-        #             "total_targets": 8,
-        #             "disabled_targets": 0,
-        #             "usage": [
-        #             {
-        #                 "tier_name": "SCM",
-        #                 "size": 3000000000,
-        #                 "free": 2995801112,
-        #                 "imbalance": 0
-        #             },
-        #             {
-        #                 "tier_name": "NVME",
-        #                 "size": 47000000000,
-        #                 "free": 26263322624,
-        #                 "imbalance": 36
-        #             }
-        #             ]
-        #         }
-        #         ]
-        #     },
-        #     "error": null,
-        #     "status": 0
-        # }
-        return self._get_json_result(
-            ("pool", "list"), no_query=no_query, verbose=verbose)
-
-    def pool_set_prop(self, pool, properties):
-        """Set property for a given Pool.
-
-        Args:
-            pool (str): Pool uuid for which property is supposed to be set.
-            properties (str): Property in the form of key:val[,key:val...]
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other information.
-
-        Raises:
-            CommandFailure: if the dmg pool set-prop command fails.
-
-        """
-        return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
-
-    def pool_get_prop(self, pool, name=None):
-        """Get the Property for a given pool.
-
-        Args:
-            pool (str): Pool for which to get the property.
-            name (str, optional): Get the Property value based on name.
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: if the dmg pool get-prop command fails.
-
-        """
-        return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
-
-    def pool_exclude(self, pool, rank, tgt_idx=None, force=False):
-        """Exclude a daos_server from the pool.
-
-        Args:
-            pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to exclude
-            tgt_idx (int): target to be excluded from the pool
-            force (bool, optional): force exclusion regardless of data loss. Defaults to False
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                       information.
-
-        Raises:
-            CommandFailure: if the dmg pool exclude command fails.
-
-        """
-        return self._get_result(
-            ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx, force=force)
-
-    def pool_extend(self, pool, ranks):
-        """Extend the daos_server pool.
-
-        Args:
-            pool (str): Pool uuid.
-            ranks (int): Ranks of the daos_server to extend
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                       information.
-
-        Raises:
-            CommandFailure: if the dmg pool extend command fails.
-
-        """
-        return self._get_result(
-            ("pool", "extend"), pool=pool, ranks=ranks)
-
-    def pool_drain(self, pool, rank, tgt_idx=None):
-        """Drain a daos_server from the pool.
-
-        Args:
-            pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to drain
-            tgt_idx (int): target to be excluded from the pool
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                       information.
-
-        Raises:
-            CommandFailure: if the dmg pool drain command fails.
-
-        """
-        return self._get_result(
-            ("pool", "drain"), pool=pool, rank=rank, tgt_idx=tgt_idx)
-
-    def pool_reintegrate(self, pool, rank, tgt_idx=None):
-        """Reintegrate a daos_server to the pool.
-
-        Args:
-            pool (str): Pool uuid.
-            rank (int): Rank of the daos_server to reintegrate
-            tgt_idx (int): target to be reintegrated to the pool
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                       information.
-
-        Raises:
-            CommandFailure: if the dmg pool reintegrate command fails.
-
-        """
-        return self._get_result(
-            ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
     def cont_set_owner(self, pool, cont, user=None, group=None):
         """Dmg container set-owner to the specified new user/group.
@@ -1022,18 +1085,18 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "cleanup"), machinename=machinename, verbose=verbose)
 
-    def system_clear_exclude(self, ranks, rank_hosts):
-        """Clear exclude ranks from system.
+    def system_clear_exclude(self, ranks=None, rank_hosts=None):
+        """Call dmg system clear-exclude.
 
-        Either ranks or rank_hosts is necessary. Pass in None to one of them.
+        Either ranks or rank_hosts is required.
 
         Args:
-            ranks (str): comma separated ranks to exclude.
-            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+            ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
+            rank_hosts (str, optional): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
         Raises:
-            CommandFailure: if the dmg system clear-exclude command fails.
+            CommandFailure: if the command fails.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -1042,12 +1105,76 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "clear-exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
+    def system_drain(self, ranks=None, rank_hosts=None):
+        """Call dmg system drain.
+
+        Either ranks or rank_hosts is required.
+
+        Args:
+            ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
+            rank_hosts (str, optional): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("system", "drain"), ranks=ranks, rank_hosts=rank_hosts)
+
+    def system_erase(self):
+        """Erase system metadata prior to reformat.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "erase"))
+
+    def system_exclude(self, ranks=None, rank_hosts=None):
+        """Call dmg system exclude.
+
+        Either ranks or rank_hosts is required.
+
+        Args:
+            ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
+            rank_hosts (str, optional): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
+
+    def system_leader_query(self):
+        """Call dmg system leader-query.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "leader-query"))
+
     def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 
         Args:
             ranks (str): Specify specific ranks to obtain it's status. Use
-                comma separated list for multiple ranks. e.g., 0,1.
+                comma separated rank-ranges for multiple ranks e.g. "0,2-5".
                 Defaults to None, which means report all available ranks.
             verbose (bool): To obtain detailed query report
 
@@ -1065,7 +1192,7 @@ class DmgCommand(DmgCommandBase):
         #     {
         #         "addr": "10.8.1.11:10001",
         #         "state": "joined",
-        #         "fault_domain": "/wolf-11.wolf.hpdd.intel.com",
+        #         "fault_domain": "/wolf-11.wolf.example.com",
         #         "rank": 0,
         #         "uuid": "e7f2cb06-a111-4d55-a6a5-b494b70d62ab",
         #         "fabric_uri": "ofi+sockets://192.168.100.11:31416",
@@ -1075,7 +1202,7 @@ class DmgCommand(DmgCommandBase):
         #     {
         #         "addr": "10.8.1.74:10001",
         #         "state": "excluded",
-        #         "fault_domain": "/wolf-74.wolf.hpdd.intel.com",
+        #         "fault_domain": "/wolf-74.wolf.example.com",
         #         "rank": 1,
         #         "uuid": "db36ab28-fdb0-4822-97e6-89547393ed03",
         #         "fabric_uri": "ofi+sockets://192.168.100.74:31416",
@@ -1090,67 +1217,65 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "query"), ranks=ranks, verbose=verbose)
 
-    def system_leader_query(self):
-        """Query system to obtain the MS leader and replica information.
-
-        Raises:
-            CommandFailure: if the dmg system query command fails.
-
-        Returns:
-            dict: the dmg json command output converted to a python dictionary
-
-        """
-        # Example JSON output:
-        # {
-        #   "response": {
-        #     "current_leader": "127.0.0.1:10001",
-        #     "replicas": [
-        #       "127.0.0.1:10001"
-        #     ]
-        #   },
-        #   "error": null,
-        #   "status": 0
-        # }
-        return self._get_json_result(("system", "leader-query"))
-
-    def system_erase(self):
-        """Erase system metadata prior to reformat.
-
-        Raises:
-            CommandFailure: if the dmg system erase command fails.
-
-        Returns:
-            dict: the dmg json command output converted to a python dictionary
-
-        """
-        return self._get_json_result(("system", "erase"))
-
-    def system_exclude(self, ranks, rank_hosts):
-        """Exclude ranks from system.
-
-        Either ranks or rank_hosts is necessary. Pass in None to one of them.
+    def system_reintegrate(self, ranks=None, rank_hosts=None):
+        """Call dmg system reintegrate.
 
         Args:
-            ranks (str): comma separated ranks to exclude.
-            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+            ranks (str, optional): Comma separated rank-ranges to exclude e.g. "0,2-5".
+            rank_hosts (str, optional): hostlist representing hosts whose managed ranks are to be
                 operated on.
 
         Raises:
-            CommandFailure: if the dmg system exclude command fails.
+            CommandFailure: if the dmg system reintegrate command fails.
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
 
         """
         return self._get_json_result(
-            ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
+            ("system", "reintegrate"), ranks=ranks, rank_hosts=rank_hosts)
 
-    def system_start(self, ranks=None):
+    def system_rebuild_start(self, verbose=False):
+        """Call dmg system rebuild start.
+
+        Args:
+            verbose (str, optional): Print pool identifiers
+
+        Raises:
+            CommandFailure: if the dmg system rebuild start command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("system", "rebuild", "start"), verbose=verbose)
+
+    def system_rebuild_stop(self, verbose=False, force=False):
+        """Call dmg system rebuild stop.
+
+        Args:
+            verbose (str, optional): Print pool identifiers
+            force (str, optional): Forcibly stop interactive rebuild
+
+        Raises:
+            CommandFailure: if the dmg system rebuild start command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("system", "rebuild", "stop"), verbose=verbose, force=force)
+
+    def system_start(self, ranks=None, ignore_admin_excluded=False):
         """Start the system.
 
         Args:
-            ranks (str, optional): comma separated ranks to stop. Defaults to
-                None.
+            ranks (str, optional): Comma separated rank-ranges to start e.g.
+                "0,2-5". Defaults to None.
+            ignore_admin_excluded (bool, optional): Ignore admin-excluded ranks
+                in list of ranks specified
 
         Raises:
             CommandFailure: if the dmg system start command fails.
@@ -1159,7 +1284,8 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "start"), ranks=ranks)
+        self._get_result(("system", "start"), ranks=ranks,
+                         ignore_admin_excluded=ignore_admin_excluded)
 
         # Populate a dictionary with host set keys for each unique state
         data = {}
@@ -1177,8 +1303,8 @@ class DmgCommand(DmgCommandBase):
         Args:
             force (bool, optional): whether to force the stop. Defaults to
                 False.
-            ranks (str, optional): comma separated ranks to stop. Defaults to
-                None.
+            ranks (str, optional): Comma separated rank-ranges to stop e.g.
+                "0,2-5". Defaults to None.
 
         Raises:
             CommandFailure: if the dmg system stop command fails.
@@ -1201,22 +1327,6 @@ class DmgCommand(DmgCommandBase):
             for rank in get_numeric_list(info[0]):
                 data[rank] = info[1].strip()
         return data
-
-    def pool_evict(self, pool):
-        """Evict a pool.
-
-        Args:
-            pool (str):  UUID of DAOS pool to evict connection to
-
-        Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
-
-        Raises:
-            CommandFailure: if the dmg pool evict command fails.
-
-        """
-        return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, mgmt_svc_replicas, num_engines=None, scm_only=False,
                         net_class=None, net_provider=None, use_tmpfs_scm=False,
@@ -1410,6 +1520,18 @@ class DmgCommand(DmgCommandBase):
             self.system_stop(force=True)
 
         return self._get_json_result(("check", "enable"), pool=pool)
+
+    def check_get_policy(self, classes=None):
+        """Call dmg check get-policy [get-policy-OPTIONS] [Classes].
+
+        Args:
+            classes (str, optional): Inconsistency class names. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary.
+
+        """
+        return self._get_json_result(("check", "get-policy"), classes=classes)
 
     def check_set_policy(self, reset_defaults=False, all_interactive=False, policies=None):
         """Call dmg check set-policy [options] [policies].

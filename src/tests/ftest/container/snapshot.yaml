@@ -1,5 +1,6 @@
 hosts:
   test_servers: 2
+  test_clients: 1
 timeout: 600
 faults:
   no_faults:
@@ -35,6 +36,3 @@ object_class: !mux
     obj_class: OC_SX
   OC_RP_2GX:
     obj_class: OC_RP_2GX
-
-container:
-  control_method: API

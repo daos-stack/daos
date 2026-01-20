@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -77,7 +78,7 @@ int ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx);
 
 extern uint32_t dvt_fake_print_called;
 extern bool dvt_fake_print_just_count;
-#define DVT_FAKE_PRINT_BUFFER_SIZE (1024)
+#define DVT_FAKE_PRINT_BUFFER_SIZE (0x20000)
 extern char dvt_fake_print_buffer[DVT_FAKE_PRINT_BUFFER_SIZE];
 int dvt_fake_print(const char *fmt, ...);
 void dvt_fake_print_reset(void);

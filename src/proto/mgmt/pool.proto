@@ -199,13 +199,14 @@ message StorageUsageStats {
 	StorageMediaType media_type = 6;
 }
 
-// PoolRebuildStatus represents a pool's rebuild status.
+// PoolRebuildStatus represents a pool's rebuild status, translates to enum daos_rebuild_state_t
+// IN_PROGRESS/NOT_STARTED/COMPLETED states.
 message PoolRebuildStatus {
 	int32 status = 1; // DAOS error code
 	enum State {
-		IDLE = 0;
-		DONE = 1;
-		BUSY = 2;
+		BUSY = 0; // DRS_IN_PROGRESS
+		IDLE = 1; // DRS_NOT_STARTED
+		DONE = 2; // DRS_COMPLETED
 	}
 	State state = 2;
 	uint64 objects = 3;
@@ -216,7 +217,7 @@ enum PoolServiceState {
 	Creating = 0;   // pool service is being created
 	Ready = 1;      // pool service is ready to be used
 	Destroying = 2; // pool service is being destroyed
-	Degraded = 3 ;  // pool service is degraded
+	TargetsExcluded = 3; // pool service has excluded targets
 	Unknown = 4 ;   // pool service is Unknown state
 }
 
@@ -246,6 +247,8 @@ message PoolQueryResp {
 	uint64 mem_file_bytes = 21; // per-pool accumulated value of memory file sizes
 	string dead_ranks     = 22; // optional set of dead ranks
 	bool   md_on_ssd_active = 23; // MD-on-SSD mode flag
+	string self_heal_policy     = 24; // pool property self_heal value
+	string sys_self_heal_policy = 25; // system property self_heal value
 }
 
 message PoolProperty {
@@ -291,10 +294,7 @@ message PoolUpgradeReq {
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
-// PoolUpgradeResp returns resultant state of upgrade operation.
-message PoolUpgradeResp {
-	int32 status = 1; // DAOS error code
-}
+// PoolUpgrade returns a DaosResp.
 
 // PoolQueryTargetReq represents a pool query target(s) request.
 message PoolQueryTargetReq {
@@ -315,14 +315,7 @@ message StorageTargetUsage {
 // PoolQueryTargetInfo represents pool target query info for a single target.
 // The RPC response type (PoolQueryTargetResponse) contains a sequence of these.
 message PoolQueryTargetInfo {
-	enum TargetType { // See enum daos_target_type_t
-		UNKNOWN = 0;
-		HDD = 1; // Rotating disk
-		SSD = 2; // Flash-based
-		PM = 3; // Persistent memory
-		VM = 4; // Volatile memory
-	}
-	TargetType type = 1; // Target type jsee enum daos_target_type_t
+	reserved 1;
 
 	enum TargetState { // See enum daos_target_state_t
 		STATE_UNKNOWN = 0;
@@ -345,3 +338,38 @@ message PoolQueryTargetResp {
 	int32 status = 1; // DAOS error code
 	repeated PoolQueryTargetInfo infos = 2; // Per-target information
 }
+
+// PoolRebuildStartReq contains information about a request to start an interactive rebuild on a
+// given pool.
+message PoolRebuildStartReq
+{
+	string sys = 1; // DAOS system identifier
+	string id  = 2; // DAOS pool identifier
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
+}
+
+// PoolRebuildStart uses DaosResp
+
+// PoolRebuildStopReq contains information about a request to stop an interactive rebuild on a
+// given pool.
+message PoolRebuildStopReq
+{
+	string sys = 1; // DAOS system identifier
+	string id  = 2; // DAOS pool identifier
+	bool            force     = 3; // Force interactive rebuild stop
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
+}
+
+// PoolRebuildStop uses DaosResp
+
+// PoolSelfHealEvalReq contains information about a request to evaluate the self_heal system
+// property value on a given pool.
+message PoolSelfHealEvalReq
+{
+	string          sys       = 1; // DAOS system identifier
+	string          id        = 2; // DAOS pool identifier
+	string          sys_prop_val = 4; // self_heal system property value
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
+}
+
+// PoolSelfHealEval uses DaosResp

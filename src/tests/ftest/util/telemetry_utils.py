@@ -1,5 +1,7 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025 Google LLC
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -191,6 +193,9 @@ class TelemetryUtils():
         "engine_sched_total_reject",
         *_gen_stats_metrics("engine_sched_cycle_duration"),
         *_gen_stats_metrics("engine_sched_cycle_size")]
+    ENGINE_DTX_METRICS = [
+        "engine_io_dtx_chore_retry",
+        "engine_io_dtx_invalid"]
     ENGINE_DMABUFF_METRICS = [
         "engine_dmabuff_total_chunks",
         "engine_dmabuff_used_chunks_io",
@@ -369,7 +374,16 @@ class TelemetryUtils():
         *_gen_stats_metrics("engine_net_swim_delay"),
         "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
-        "engine_net_uri_lookup_self"]
+        "engine_net_uri_lookup_self",
+        "engine_net_hg_bulks",
+        "engine_net_hg_req_recv",
+        "engine_net_hg_extra_bulk_resp",
+        "engine_net_hg_extra_bulk_req",
+        "engine_net_hg_resp_sent",
+        "engine_net_hg_resp_recv",
+        "engine_net_hg_mr_copies",
+        "engine_net_hg_req_sent",
+        "engine_net_hg_active_rpcs"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     ENGINE_NVME_HEALTH_METRICS = [
@@ -459,6 +473,7 @@ class TelemetryUtils():
         """
         all_metrics_names = list(self.ENGINE_EVENT_METRICS)
         all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
+        all_metrics_names.extend(self.ENGINE_DTX_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
         all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
@@ -846,6 +861,16 @@ class ClientTelemetryUtils(TelemetryUtils):
 
     CLIENT_EVENT_METRICS = [
         "client_started_at"]
+    CLIENT_NET_METRICS = [
+        "client_net_hg_bulks",
+        "client_net_hg_req_recv",
+        "client_net_hg_extra_bulk_resp",
+        "client_net_hg_extra_bulk_req",
+        "client_net_hg_resp_sent",
+        "client_net_hg_resp_recv",
+        "client_net_hg_mr_copies",
+        "client_net_hg_req_sent",
+        "client_net_hg_active_rpcs"]
     CLIENT_POOL_ACTION_METRICS = [
         "client_pool_resent",
         "client_pool_restarted",
@@ -1063,6 +1088,7 @@ class ClientTelemetryUtils(TelemetryUtils):
 
         """
         all_metrics_names = list(self.CLIENT_EVENT_METRICS)
+        all_metrics_names.extend(self.CLIENT_NET_METRICS)
         all_metrics_names.extend(self.CLIENT_IO_METRICS)
         if with_pools:
             all_metrics_names.extend(self.CLIENT_POOL_METRICS)

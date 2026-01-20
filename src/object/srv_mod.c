@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +25,8 @@ obj_mod_init(void)
 {
 	int	rc;
 
+	obj_init_iov_fragment_params();
+
 	rc = obj_utils_init();
 	if (rc)
 		goto out;
@@ -37,9 +40,16 @@ obj_mod_init(void)
 		D_ERROR("failed to obj_ec_codec_init\n");
 		goto out_class;
 	}
+	rc = obj_migrate_init();
+	if (rc) {
+		D_ERROR("failed to init migration resource managers\n");
+		goto out_ec;
+	}
 
 	return 0;
 
+out_ec:
+	obj_ec_codec_fini();
 out_class:
 	obj_class_fini();
 out_utils:
@@ -52,9 +62,29 @@ out:
 static int
 obj_mod_fini(void)
 {
+	obj_migrate_fini();
 	obj_ec_codec_fini();
 	obj_class_fini();
 	obj_utils_fini();
+	return 0;
+}
+
+static int
+obj_mod_setup(void)
+{
+	uint8_t        rpc_ver;
+	int            rc;
+	daos_version_t version = dss_get_join_version();
+	/*
+	 * Server reuse client stack to issue some rebuild migration rpc.
+	 */
+	rc = daos_get_rpc_version(DAOS_OBJ_MODULE, daos_version_get_protocol(&version), &rpc_ver);
+	if (rc) {
+		D_ERROR("failed to get rpc protocol: %d\n", rc);
+		return rc;
+	}
+	dc_obj_proto_version = rpc_ver;
+
 	return 0;
 }
 
@@ -180,9 +210,10 @@ struct dss_module_key obj_module_key = {
 static int
 obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 {
-	int	opc = opc_get(rpc->cr_opc);
-	int	proto_ver = crt_req_get_proto_ver(rpc);
-	int	rc = 0;
+	int          opc       = opc_get(rpc->cr_opc);
+	int          proto_ver = crt_req_get_proto_ver(rpc);
+	unsigned int type;
+	int          rc = 0;
 
 	D_ASSERT(proto_ver == DAOS_OBJ_VERSION || proto_ver == DAOS_OBJ_VERSION - 1);
 
@@ -200,9 +231,13 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = orw_v10->orw_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, obj_rpc_is_update(rpc) ?
-				    SCHED_REQ_UPDATE : SCHED_REQ_FETCH,
-				    &orw->orw_pool_uuid);
+		if (orw->orw_flags & ORF_FOR_MIGRATION)
+			type = SCHED_REQ_MIGRATE;
+		else if (obj_rpc_is_update(rpc))
+			type = SCHED_REQ_UPDATE;
+		else
+			type = SCHED_REQ_FETCH;
+		sched_req_attr_init(attr, type, &orw->orw_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_MIGRATE: {
@@ -230,7 +265,8 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = oei_v10->oei_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oei->oei_pool_uuid);
+		type = (oei->oei_flags & ORF_FOR_MIGRATION) ? SCHED_REQ_MIGRATE : SCHED_REQ_ANONYM;
+		sched_req_attr_init(attr, type, &oei->oei_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_PUNCH:
@@ -462,16 +498,19 @@ struct daos_module_metrics obj_metrics = {
 };
 
 struct dss_module obj_module = {
-	.sm_name	= "obj",
-	.sm_mod_id	= DAOS_OBJ_MODULE,
-	.sm_ver		= DAOS_OBJ_VERSION,
-	.sm_init	= obj_mod_init,
-	.sm_fini	= obj_mod_fini,
-	.sm_proto_count	= 2,
-	.sm_proto_fmt	= {&obj_proto_fmt_v9, &obj_proto_fmt_v10},
-	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
-	.sm_handlers	= {obj_handlers_v9, obj_handlers_v10},
-	.sm_key		= &obj_module_key,
-	.sm_mod_ops	= &ds_obj_mod_ops,
-	.sm_metrics	= &obj_metrics,
+    .sm_name        = "obj",
+    .sm_mod_id      = DAOS_OBJ_MODULE,
+    .sm_ver         = DAOS_OBJ_VERSION,
+    .sm_init        = obj_mod_init,
+    .sm_fini        = obj_mod_fini,
+    .sm_setup       = obj_mod_setup,
+    .sm_proto_count = 2,
+    .sm_proto_fmt   = {&obj_proto_fmt_v9, &obj_proto_fmt_v10},
+    .sm_cli_count   = {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
+    .sm_handlers    = {obj_handlers_v9, obj_handlers_v10},
+    .sm_key         = &obj_module_key,
+    .sm_mod_ops     = &ds_obj_mod_ops,
+    .sm_metrics     = &obj_metrics,
 };
+
+DEFINE_DS_RPC_PROTOCOL(obj, DAOS_OBJ_MODULE);

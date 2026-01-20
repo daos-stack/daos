@@ -143,6 +143,8 @@ enum daos_pool_props {
 	DAOS_PROP_PO_MAX,
 };
 
+#define DAOS_PROP_PO_NUM                (DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
+
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
 
@@ -190,8 +192,8 @@ daos_svc_rf_is_valid(uint64_t svc_rf)
  * Level of perf_domain, should be same value as PO_COMP_TP_xxx (enum pool_comp_type).
  */
 enum {
-	DAOS_PROP_PERF_DOMAIN_ROOT = 255,
-	DAOS_PROP_PERF_DOMAIN_GROUP = 3,
+	DAOS_PROP_PERF_DOMAIN_ROOT  = 255,
+	DAOS_PROP_PERF_DOMAIN_GROUP = 200,
 };
 
 /**
@@ -479,15 +481,17 @@ enum {
  * rank is hardcoded to 1, [2-254] are defined by the admin
  */
 enum {
-	DAOS_PROP_CO_REDUN_MIN	= 1,
+	DAOS_PROP_CO_REDUN_MIN = 1,
 	/* server rank (engine) level */
-	DAOS_PROP_CO_REDUN_RANK	= 1,
+	DAOS_PROP_CO_REDUN_RANK = 1,
 	/* server node level */
-	DAOS_PROP_CO_REDUN_NODE	= 2,
-	DAOS_PROP_CO_REDUN_MAX	= 254,
+	DAOS_PROP_CO_REDUN_NODE = 2,
+	/* pool fault domain level */
+	DAOS_PROP_CO_REDUN_FAULT = 3,
+	DAOS_PROP_CO_REDUN_MAX   = 254,
 };
 
-/** default fault domain level */
+/** default fault domain level - TODO DAOS-6853: Set default to FAULT */
 #define DAOS_PROP_CO_REDUN_DEFAULT	DAOS_PROP_CO_REDUN_NODE
 
 /** container status flag */
@@ -613,7 +617,7 @@ daos_label_is_valid(const char *label)
 	}
 
 	/** Check to see if it could be a valid UUID */
-	if (maybe_uuid && daos_is_valid_uuid_string(label))
+	if (maybe_uuid && daos_is_valid_uuid_string(label, UUID_SST_NONE))
 		return false;
 
 	return true;

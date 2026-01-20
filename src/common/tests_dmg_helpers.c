@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1063,7 +1064,9 @@ dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	args = cmd_push_arg(args, &argcount, "--rank=%d ", rank);
+	// Exclude, drain and reintegrate take ranks option which can be either a rank-list range or
+	// a single rank identifier.
+	args = cmd_push_arg(args, &argcount, "--ranks=%d ", rank);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1200,6 +1203,80 @@ out_json:
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
 
+	return rc;
+}
+
+int
+dmg_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char *grp, bool force)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (force) {
+		args = cmd_push_arg(args, &argcount, "--force");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("pool rebuild stop", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg pool rebuild stop failed\n");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_rebuild_start(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("pool rebuild start", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg pool rebuild start failed\n");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
 	return rc;
 }
 
@@ -2084,7 +2161,7 @@ out:
 }
 
 int
-dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt, bool for_all)
+dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt)
 {
 	char			**args = NULL;
 	struct json_object	*dmg_out = NULL;
@@ -2095,16 +2172,10 @@ dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt, bool f
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	if (for_all) {
-		args = cmd_push_arg(args, &argcount, " -f");
-		if (args == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
-
 	rc = daos_dmg_json_pipe("check repair", dmg_config_file, args, argcount, &dmg_out);
 	if (rc != 0)
-		D_ERROR("dmg check repair with seq %lu, opt %u, for_all %s, failed: %d\n",
-			(unsigned long)seq, opt, for_all ? "yes" : "no", rc);
+		D_ERROR("dmg check repair with seq %lu, opt %u, failed: %d\n", (unsigned long)seq,
+			opt, rc);
 
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
@@ -2130,6 +2201,12 @@ dmg_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *po
 
 	if (flags & TCPF_INTERACT) {
 		args = cmd_push_arg(args, &argcount, " -a");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (policies != NULL) {
+		args = cmd_push_arg(args, &argcount, " %s", policies);
 		if (args == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}

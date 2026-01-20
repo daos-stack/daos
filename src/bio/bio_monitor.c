@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -679,7 +680,8 @@ out:
 static bool
 is_bbs_faulty(struct bio_blobstore *bbs)
 {
-	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
+	struct bio_dev_health *bdh       = &bbs->bb_dev_health;
+	struct nvme_stats     *dev_stats = &bdh->bdh_health_state;
 
 	/*
 	 * Used for DAOS NVMe Recovery Tests. Will trigger bs faulty reaction
@@ -705,6 +707,12 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 				dev_stats->bio_write_errs);
 			return true;
 		}
+	}
+
+	/* Auto-faulty for stalled I/O stalled is always enabled */
+	if (bdh->bdh_io_stalled) {
+		D_ERROR("I/O stalled on NVMe device " DF_UUID "\n", DP_UUID(bbs->bb_dev->bb_uuid));
+		return true;
 	}
 
 	if (!glb_criteria.fc_enabled)
@@ -735,8 +743,8 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 	if (bbs->bb_state == BIO_BS_STATE_FAULTY)
 		return;
 
-	/* To make things simpler, don't detect faulty in SETUP phase */
-	if (bbs->bb_state == BIO_BS_STATE_SETUP)
+	/* To make things simpler, we only detect faulty when BS is in NORMAL or OUT state */
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL && bbs->bb_state != BIO_BS_STATE_OUT)
 		return;
 
 	if (!is_bbs_faulty(bbs))
@@ -744,7 +752,7 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 
 	/*
 	 * The device might have been unplugged before marked as FAULTY, and the bbs is
-	 * already in teardown.
+	 * already in OUT state.
 	 */
 	if (bbs->bb_state != BIO_BS_STATE_NORMAL) {
 		/* Faulty reaction is already successfully performed */

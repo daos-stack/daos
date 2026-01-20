@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -120,7 +121,6 @@ extern "C" {
 	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)                                  \
 	/** Quota limit reached on the requested resource */                                       \
 	ACTION(DER_QUOTA_LIMIT, Quota limit reached)
-	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
 #define D_FOREACH_DAOS_ERR(ACTION)                                                                 \
@@ -212,7 +212,8 @@ extern "C" {
 	ACTION(DER_DIV_BY_ZERO,	Division by zero)						   \
 	/** Target is overload, retry RPC */							   \
 	ACTION(DER_OVERLOAD_RETRY, retry later because of overloaded service)			   \
-	ACTION(DER_NOT_RESUME, Cannot resume former DAOS check instance)
+	ACTION(DER_NOT_RESUME, Cannot resume former DAOS check instance)			   \
+	ACTION(DER_CONT_NONEXIST, The specified container does not exist)
 
 /* clang-format on */
 

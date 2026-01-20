@@ -8,7 +8,7 @@ mgmt_svc_replicas: ['example1', 'example2', 'example3']
 # port: 10001
 provider: ofi+tcp
 control_log_mask: INFO
-control_log_file: /tmp/daos_server.log
+control_log_file: /var/log/daos/daos_server.log
 control_metadata:
   path: /var/daos/config # Location to store control-plane metadata in MD-on-SSD mode.
 
@@ -38,7 +38,7 @@ engines:
     nr_xs_helpers: 1        # count of I/O offload threads per engine
     fabric_iface: ib0
     fabric_iface_port: 31316
-    log_file: /tmp/daos_engine.0.log
+    log_file: /var/log/daos/daos_engine.0.log
     log_mask: INFO
 
     env_vars:

@@ -22,4 +22,4 @@ fi
 
 echo "Checking for spelling mistakes"
 # Convert file names to relative path format that codespell expects. I.e. "./path"
-_git_diff_cached_files | xargs -r -n 1 -I% echo "./%" | xargs -r codespell
+_git_diff_cached_files | xargs -r -I% echo "./%" | xargs -r codespell

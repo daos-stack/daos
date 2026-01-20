@@ -7,8 +7,6 @@ import re
 import subprocess  # nosec
 import sys
 
-modified_re = re.compile(r'^(?:M|A)(\s+)(?P<name>.*)')
-
 
 def rebasing():
     """Determines if the current operation is a rebase"""
@@ -20,39 +18,53 @@ def rebasing():
         return stdout.split('\n', maxsplit=1)[0].startswith("* (no branch, rebasing")
 
 
-def submodule_check(modname, msg_file):
-    """Determines if a sub-module has been updated"""
-    modified = False
+def git_submodules():
+    """Get a list of submodules"""
+    lines = subprocess.check_output(['git', 'submodule', 'status']).decode().rstrip().split('\n')
+    return [
+        line[1:].split(' ')[1]
+        for line in lines
+        if line
+    ]
 
+
+def git_modified_files():
+    """Get a list of modified files"""
+    modified_re = re.compile(r'^(?:M|A)(\s+)(?P<name>.*)')
+    files = []
     with subprocess.Popen(['git', 'status', '--porcelain'], stdout=subprocess.PIPE) as proc:
         out, _ = proc.communicate()
         for line in out.decode().splitlines():
             match = modified_re.match(line)
             if match:
-                modified = modified | (match.group('name') == modname)
-
-        if not rebasing() and modified:
-            with open(msg_file, 'r', encoding='utf-8') as file:
-                lines = file.readlines()
-
-            message = f'# WARNING *** This patch modifies the {modname} reference.  ' \
-                      'Are you sure this is intended? *** WARNING'
-
-            if lines[0] != message:
-                lines = [message, "\n", "\n"] + lines
-
-            with open(msg_file, 'w', encoding='utf-8') as file:
-                file.writelines(lines)
+                files.append(match.group('name'))
+    return files
 
 
 def main(msg_file):
     """main"""
-    for line in subprocess.check_output(['git', 'submodule',
-                                        'status']).decode().rstrip().split('\n'):
-        if line:
-            submodule_check(line[1:].split(' ')[1], msg_file)
+    # Ignore if this is a rebase
+    if rebasing():
+        return
+
+    modified_files = git_modified_files()
+    submodules = git_submodules()
+
+    messages = []
+    for modified_submodule in set(modified_files).intersection(submodules):
+        messages.append(
+            f'# WARNING *** This patch modifies the {modified_submodule} reference. '
+            'Are you sure this is intended? *** WARNING\n\n')
+
+    if messages:
+        with open(msg_file, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+
+        lines = messages + lines
+
+        with open(msg_file, 'w', encoding='utf-8') as file:
+            file.writelines(lines)
 
 
 if __name__ == '__main__':
-
     main(sys.argv[1])

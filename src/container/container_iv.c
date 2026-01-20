@@ -450,6 +450,7 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		  d_sg_list_t *dst, void **priv)
 {
 	struct cont_iv_entry	*src_iv;
+	struct cont_iv_entry     iv_entry = {0};
 	daos_handle_t		root_hdl;
 	d_iov_t			key_iov;
 	d_iov_t			val_iov;
@@ -473,14 +474,21 @@ again:
 				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_DEBUG(DB_MD, "create cont snap iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				/* convert to more specific errno */
+				if (rc == -DER_NONEXIST)
+					rc = -DER_CONT_NONEXIST;
+				DL_ERROR(rc, DF_CONT " create IV_CONT_SNAP iv entry failed",
+					 DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_PROP) {
 				rc = cont_iv_prop_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont prop iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				/* convert to more specific errno */
+				if (rc == -DER_NONEXIST)
+					rc = -DER_CONT_NONEXIST;
+				DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
+					  DF_CONT " create IV_CONT_PROP iv entry failed",
+					  DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_CAPA) {
 				struct container_hdl	chdl = { 0 };
 				int			rc1;
@@ -491,18 +499,11 @@ again:
 				rc1 = ds_cont_hdl_rdb_lookup(entry->ns->iv_pool_uuid,
 							     civ_key->cont_uuid, &chdl);
 				if (rc1 == 0) {
-					struct cont_iv_entry	iv_entry = { 0 };
 					daos_prop_t		*prop = NULL;
 					struct daos_prop_entry	*prop_entry;
 					struct daos_co_status	stat = { 0 };
 
-					if (uuid_is_null(chdl.ch_cont)) {
-						/* Skip for container server handler */
-						iv_entry.iv_capa.sec_capas =
-							ds_sec_get_rebuild_cont_capabilities();
-						iv_entry.iv_capa.flags = 0;
-						D_GOTO(out, rc = 0);
-					}
+					D_ASSERT(!uuid_is_null(chdl.ch_cont));
 					rc = ds_cont_get_prop(entry->ns->iv_pool_uuid,
 							      chdl.ch_cont, &prop);
 					if (rc) {
@@ -541,9 +542,42 @@ again:
 				} else {
 					rc = -DER_NONEXIST;
 				}
+			} else if (class_id == IV_CONT_TRACK_EPOCH) {
+				uint64_t ec_agg_eph;
+
+				rc = ds_cont_ec_agg_eph_rdb_lookup(entry->ns->iv_pool_uuid,
+								   civ_key->cont_uuid, &ec_agg_eph);
+				if (rc == 0) {
+					uuid_copy(iv_entry.cont_uuid, civ_key->cont_uuid);
+					iv_entry.iv_track_eph.ite_ec_agg_eph  = ec_agg_eph;
+					iv_entry.iv_track_eph.ite_rank = dss_self_rank();
+					d_iov_set(&val_iov, &iv_entry, sizeof(iv_entry));
+					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+					DL_CDEBUG(
+					    rc != 0, DLOG_ERR, DB_MD, rc,
+					    DF_CONT ": dbtree_update ec_agg_eph " DF_X64,
+					    DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid),
+					    ec_agg_eph);
+					if (rc)
+						goto failed;
+					/* on master node will not trigger on_refresh callback,
+					 * so need to explicitly refresh its own cont child's
+					 * sc_ec_agg_eph_boundary especially for the case of
+					 * restart that the value is zero.
+					 * pass zero stable epoch that won't refresh it, only to
+					 * fetch+refresh EC aggregation epoch.
+					 */
+					rc = ds_cont_tgt_refresh_track_eph(entry->ns->iv_pool_uuid,
+									   civ_key->cont_uuid,
+									   ec_agg_eph, 0);
+					if (rc == 0)
+						goto again;
+				}
 			}
 		}
-		D_DEBUG(DB_MGMT, "lookup cont: rc "DF_RC"\n", DP_RC(rc));
+failed:
+		D_DEBUG(DB_MGMT, DF_CONT "lookup cont: rc " DF_RC "\n",
+			DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -646,8 +680,15 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_TRACK_EPOCH) {
 			rc = cont_iv_ent_track_eph_refresh(entry, key, src);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(
+					    rc, DF_CONT " cont_iv_ent_agg_eph_refresh ignore",
+					    DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
+					rc = 0;
+				}
 				D_GOTO(out, rc);
+			}
 		}
 	}
 
@@ -701,6 +742,12 @@ cont_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	if (ref_rc != 0) {
+		DL_WARN(ref_rc, DF_UUID "bypass refresh, IV class id %d.",
+			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		return ref_rc;
+	}
+
 	return cont_iv_ent_update(entry, key, src, priv);
 }
 
@@ -973,6 +1020,11 @@ cont_iv_capa_refresh_ult(void *data)
 		D_GOTO(out, rc);
 
 	D_ASSERT(pool != NULL);
+	/* Trying to fetch server handle through IV_CONT_CAPA indicates a BUG */
+	D_ASSERTF(uuid_compare(pool->sp_srv_cont_hdl, arg->cont_hdl_uuid) != 0,
+		  "srv_hdl:" DF_UUID ", hdl:" DF_UUID "", DP_UUID(pool->sp_srv_cont_hdl),
+		  DP_UUID(arg->cont_hdl_uuid));
+
 	if (arg->invalidate_current) {
 		rc = cont_iv_capability_invalidate(pool->sp_iv_ns,
 						   arg->cont_hdl_uuid,
@@ -1069,6 +1121,12 @@ out_eventual:
 	return rc;
 }
 
+static inline bool
+cont_iv_retryable_error(int rc)
+{
+	return daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY;
+}
+
 static int
 cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 				  daos_epoch_t stable_eph, unsigned int shortcut,
@@ -1089,31 +1147,58 @@ cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_ag
 		return rc;
 	}
 
-	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
-			    shortcut, sync_mode, true /* retry */);
-	if (rc)
+	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry), shortcut, sync_mode,
+			    false);
+	if (rc && !cont_iv_retryable_error(rc))
 		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
 			DP_UUID(cont_uuid), op, DP_RC(rc));
 	return rc;
 }
 
+static int
+cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+			daos_epoch_t stable_eph, unsigned int shortcut, unsigned int sync_mode,
+			uint32_t op, struct sched_request *req)
+{
+	int sleep_ms = 1000; /* 1 second retry interval */
+	int rc       = 0;
+
+	while (1) {
+		rc = cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
+						       shortcut, sync_mode, op);
+		if (rc == 0)
+			break;
+
+		/* Only retry on specific errors */
+		if (!cont_iv_retryable_error(rc))
+			break;
+
+		if (req && dss_ult_exiting(req)) {
+			rc = -DER_SHUTDOWN;
+			break;
+		}
+
+		dss_sleep(sleep_ms);
+	}
+
+	return rc;
+}
+
 int
 cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			 daos_epoch_t stable_eph)
+			 daos_epoch_t stable_eph, struct sched_request *req)
 {
-	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
-						 CRT_IV_SHORTCUT_TO_ROOT,
-						 CRT_IV_SYNC_NONE,
-						 IV_CONT_TRACK_EPOCH_REPORT);
+	return cont_iv_track_eph_retry(ns, cont_uuid, ec_agg_eph, stable_eph,
+				       CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE,
+				       IV_CONT_TRACK_EPOCH_REPORT, req);
 }
 
 int
 cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			  daos_epoch_t stable_eph)
+			  daos_epoch_t stable_eph, struct sched_request *req)
 {
-	return cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
-						 0, CRT_IV_SYNC_LAZY,
-						 IV_CONT_TRACK_EPOCH);
+	return cont_iv_track_eph_retry(ns, cont_uuid, ec_agg_eph, stable_eph, 0, CRT_IV_SYNC_EAGER,
+				       IV_CONT_TRACK_EPOCH, req);
 }
 
 int
@@ -1502,19 +1587,22 @@ cont_iv_prop_fetch_ult(void *data)
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "cont_iv_fetch failed");
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
+			  DF_CONT ": cont_iv_fetch failed", DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 
 	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, &prop_fetch);
 	if (rc) {
-		D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": cont_iv_prop_g2l failed",
+			 DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_prop_copy(prop, prop_fetch);
 	if (rc) {
-		D_ERROR("daos_prop_copy failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": daos_prop_copy failed",
+			 DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 
@@ -1655,9 +1743,72 @@ ds_cont_fetch_prop(uuid_t po_uuid, uuid_t co_uuid, daos_prop_t *cont_prop)
 	return cont_iv_prop_fetch(po_uuid, co_uuid, cont_prop);
 }
 
+struct copy_hdl_arg {
+	struct ds_pool *pool;
+	uuid_t          srv_cont_hdl;
+};
+
+static int
+copy_srv_cont_hdl(void *arg)
+{
+	struct copy_hdl_arg *copy_arg = arg;
+	struct ds_pool      *pool     = copy_arg->pool;
+
+	D_ASSERT(pool != NULL);
+	if (!uuid_is_null(pool->sp_srv_cont_hdl)) {
+		uuid_copy(copy_arg->srv_cont_hdl, pool->sp_srv_cont_hdl);
+		return 0;
+	}
+	return -DER_NO_HDL;
+}
+
 int
 ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 {
+	struct ds_pool_child *pool_child;
+	struct ds_cont_hdl   *hdl;
+
+	pool_child = ds_pool_child_lookup(po_uuid);
+	if (pool_child == NULL) {
+		D_ERROR(DF_UUID ": Failed to find pool child.", DP_UUID(po_uuid));
+		return -DER_NO_HDL;
+	}
+
+	/* Return a retry-able error when the srv handle not propagated */
+	if (d_list_empty(&pool_child->spc_srv_cont_hdl)) {
+		struct copy_hdl_arg arg;
+		int                 rc, ret;
+
+		/*
+		 * Sometimes the srv container handle failed to be propagated to the pool
+		 * child when it's target is in DOWN state. Let's fix it here.
+		 */
+		arg.pool = pool_child->spc_pool;
+		rc = dss_ult_execute(copy_srv_cont_hdl, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+		if (!rc) {
+			rc = ds_cont_srv_open(po_uuid, arg.srv_cont_hdl);
+			if (!rc) {
+				D_ASSERT(!d_list_empty(&pool_child->spc_srv_cont_hdl));
+				goto srv_hdl_ready;
+			}
+		}
+		ds_pool_child_put(pool_child);
+		ret = -DER_STALE;
+		DL_INFO(ret, DF_UUID ": Server handle isn't propagated yet %d.", DP_UUID(po_uuid),
+			rc);
+		return ret;
+	}
+
+srv_hdl_ready:
+	hdl = d_list_entry(pool_child->spc_srv_cont_hdl.next, struct ds_cont_hdl, sch_link);
+	D_ASSERT(!uuid_is_null(hdl->sch_uuid));
+
+	ds_pool_child_put(pool_child);
+	if (uuid_compare(hdl->sch_uuid, coh_uuid) == 0) {
+		*coh_p = hdl;
+		return 0;
+	}
+
 	/* NB: it can be called from any xstream */
 	return cont_iv_hdl_fetch(coh_uuid, po_uuid, coh_p);
 }

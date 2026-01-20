@@ -1,11 +1,11 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import itertools
-import random
 import time
 
 from apricot import TestWithServers
@@ -108,7 +108,7 @@ class BoundaryTest(TestWithServers):
         container_manager = ThreadManager(
             self.create_container_and_test, self.get_remaining_time() - 30)
         all_pool_cont_args = list(itertools.product(self.pool, range(num_containers)))
-        random.shuffle(all_pool_cont_args)
+        self.random.shuffle(all_pool_cont_args)
         for pool, cont_num in all_pool_cont_args:
             container_manager.add(pool=pool, cont_num=cont_num)
         self.log.info('Creating %d containers for each pool', num_containers)
@@ -121,6 +121,7 @@ class BoundaryTest(TestWithServers):
 
     def test_container_boundary(self):
         """JIRA ID: DAOS-8464 Test lots of pools and containers in parallel.
+
         Test Description:
             Testcase 1: Test 1 pool with containers boundary condition in parallel.
             Testcase 2: Test large number of pools and containers in parallel.
@@ -133,7 +134,7 @@ class BoundaryTest(TestWithServers):
             3. Launch io and sync-up each container.
             4. Close container.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=container,pool,boundary_test
         :avocado: tags=BoundaryTest,test_container_boundary
         """

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,7 +11,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/dustin/go-humanize"
 )
 
 // MockNvmeNamespace is a mock protobuf Namespace message used in tests for
@@ -109,23 +109,22 @@ func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
 	return pb.AsProto()
 }
 
+// MockScmNamespaceRamdisk generates specific protobuf SCM namespace message used in tests
+// for multiple packages. Represents ramdisk namespace with associated scm mountpoint info.
+func MockScmNamespaceRamdisk(varIdx ...int32) *ctlpb.ScmNamespace {
+	native := storage.MockScmNamespaceRamdisk(varIdx...)
+	pb := new(ScmNamespace)
+
+	if err := pb.FromNative(native); err != nil {
+		panic(err)
+	}
+
+	return pb.AsProto()
+}
+
 // MockPoolList returns a slice of mock protobuf Pool messages used in tests for
 // multiple packages.
 var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
 	{Uuid: "12345678-1234-1234-1234-123456789abc", SvcReps: []uint32{1, 2}},
 	{Uuid: "12345678-1234-1234-1234-cba987654321", SvcReps: []uint32{0}},
-}
-
-// MockPBMemInfo returns a mock MemInfo result.
-func MockPBMemInfo() *ctlpb.MemInfo {
-	return &ctlpb.MemInfo{
-		HugepagesTotal:    1024,
-		HugepagesFree:     512,
-		HugepagesReserved: 64,
-		HugepagesSurplus:  32,
-		HugepageSizeKb:    2048,
-		MemTotalKb:        (humanize.GiByte * 4) / humanize.KiByte,
-		MemFreeKb:         (humanize.GiByte * 1) / humanize.KiByte,
-		MemAvailableKb:    (humanize.GiByte * 2) / humanize.KiByte,
-	}
 }

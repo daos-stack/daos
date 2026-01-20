@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -32,7 +33,7 @@ class EcodOfflineRebuildSingle(ErasureCodeSingle):
         self.write_single_type_dataset()
 
         # Kill the last server rank
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([self.server_count - 1], force=True)
 
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild_to_start()
@@ -42,7 +43,7 @@ class EcodOfflineRebuildSingle(ErasureCodeSingle):
         self.read_single_type_dataset()
 
         # Kill the another server rank
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([self.server_count - 2], force=True)
 
         # Wait for rebuild to complete
         self.pool.wait_for_rebuild_to_start()

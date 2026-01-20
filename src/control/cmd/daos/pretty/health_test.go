@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -197,7 +198,7 @@ func TestPretty_printPoolHealth(t *testing.T) {
 				return pi
 			}),
 			expPrintStr: fmt.Sprintf(`
-%s: Degraded
+%s: TargetsExcluded
 `, healthyPool.Label),
 		},
 		"disabled targets; verbose": {
@@ -207,7 +208,7 @@ func TestPretty_printPoolHealth(t *testing.T) {
 			}),
 			verbose: true,
 			expPrintStr: fmt.Sprintf(`
-%s: Degraded (8/24 targets disabled)
+%s: TargetsExcluded (8/24 targets disabled)
 `, healthyPool.Label),
 		},
 		"rebuilding": {
@@ -237,7 +238,7 @@ func TestPretty_printPoolHealth(t *testing.T) {
 			}),
 			verbose: true,
 			expPrintStr: fmt.Sprintf(`
-%s: Degraded (8/24 targets disabled),Rebuilding (42.0%% complete) (42/100 objects; 7 records)
+%s: TargetsExcluded (8/24 targets disabled),Rebuilding (42.0%% complete) (42/100 objects; 7 records)
 `, healthyPool.Label),
 		},
 		"healthy": {
@@ -303,7 +304,7 @@ func TestPretty_printContainerHealth(t *testing.T) {
 			},
 			ci: healthyContainer,
 			expPrintStr: fmt.Sprintf(`
-%s: Healthy (Pool Degraded)
+%s: Healthy (Pool TargetsExcluded)
 `, healthyContainer.ContainerLabel),
 		},
 		"unhealthy pool, unhealthy container": {
@@ -316,7 +317,7 @@ func TestPretty_printContainerHealth(t *testing.T) {
 				return &clone
 			}(),
 			expPrintStr: fmt.Sprintf(`
-%s: Unhealthy (Pool Degraded)
+%s: Unhealthy (Pool TargetsExcluded)
 `, healthyContainer.ContainerLabel),
 		},
 		"healthy pool, unhealthy container": {

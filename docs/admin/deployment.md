@@ -438,7 +438,7 @@ per engine. The command redirects stderr to /dev/null and stdout to a temporary 
 installation is from a source build.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server config generate -p ofi+tcp --use-tmpfs-scm 2>/dev/null | tee ~/configs/tmp.yml
+$ daos_server config generate -p ofi+tcp --use-tmpfs-scm 2>/dev/null | tee ~/configs/tmp.yml
 port: 10001
 transport_config:
   allow_insecure: false
@@ -450,7 +450,7 @@ engines:
 - targets: 16
   nr_xs_helpers: 4
   first_core: 0
-  log_file: /tmp/daos_engine.0.log
+  log_file: /var/log/daos/daos_engine.0.log
   storage:
   - class: ram
     scm_mount: /mnt/daos0
@@ -472,7 +472,7 @@ engines:
 - targets: 16
   nr_xs_helpers: 4
   first_core: 0
-  log_file: /tmp/daos_engine.1.log
+  log_file: /var/log/daos/daos_engine.1.log
   storage:
   - class: ram
     scm_mount: /mnt/daos1
@@ -496,8 +496,9 @@ disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 16384
 disable_hugepages: false
+allow_thp: false
 control_log_mask: INFO
-control_log_file: /tmp/daos_server.log
+control_log_file: /var/log/daos/daos_server.log
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
@@ -512,7 +513,7 @@ Now we start the `daos_server` service from the generated config which loads suc
 and runs until the point where a storage format is required, as expected.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server start -i -o ~/configs/tmp.yml
+$ daos_server start -i -o ~/configs/tmp.yml
 DAOS Server config loaded from /home/user/configs/tmp.yml
 install/bin/daos_server logging to file /tmp/daos_server.log
 NOTICE: Configuration includes only one MS replica. This provides no redundancy in the event of a MS replica failure.
@@ -534,12 +535,12 @@ Note the subsequent system query command may not show ranks started immediately 
 format command returns so it is recommended to leave a short delay (~5s) before invoking.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/dmg storage format -i
+$ dmg storage format -i
 Format Summary:
   Hosts     SCM Devices NVMe Devices
   -----     ----------- ------------
   localhost 2           16
-[user@wolf-226 daos]$ install/bin/dmg system query -i
+$ dmg system query -i
 Rank  State
 ----  -----
 [0-1] Joined
@@ -564,17 +565,17 @@ daos_engine:1 Using NUMA core allocation algorithm
 SCM @ /mnt/daos0: 91 GB Total/91 GB Avail
 Starting I/O Engine instance 0: /home/user/projects/daos/install/bin/daos_engine
 daos_engine:0 Using NUMA core allocation algorithm
-MS leader running on wolf-226.wolf.hpdd.intel.com
-daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+MS leader running on wolf-226.domain
+daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.domain.
 Using NUMA node: 1
-daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.domain.
 Using NUMA node: 0
 ```
 
 For reference, the hardware scan results for the target storage server are included below.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server nvme scan
+$ daos_server nvme scan
 Scan locally-attached NVMe storage...
 NVMe PCI     Model              FW Revision Socket ID Capacity
 --------     -----              ----------- --------- --------
@@ -595,7 +596,7 @@ NVMe PCI     Model              FW Revision Socket ID Capacity
 0000:e0:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
 0000:e1:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
 
-[user@wolf-226 daos]$ install/bin/daos_server network scan
+$ daos_server network scan
 ---------
 localhost
 ---------
@@ -807,6 +808,32 @@ configuration file with a populated per-engine section can be stored in
 `/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service
 it is then ready for the storage to be formatted.
 
+
+### Transparent HugePage (THP) support
+
+DAOS relies on the use of hugepages in a dedicated manner and turning on transparent hugepages means
+the hugepage memory pool gets used in a model more like a cache. This can have adverse effects on
+DAOS behavior and may cause OOM and DMA buffer allocation failures at high load.
+
+By default the server will fail to start and exit when the server is started with THP enabled.
+
+```bash
+DEBUG 2025/12/14 09:54:32.537839 main.go:87: server: code = 623 description = "transparent hugepage (THP) enabled on storage server, DAOS requires THP to be disabled"
+ERROR: server: code = 623 description = "transparent hugepage (THP) enabled on storage server, DAOS requires THP to be disabled"
+ERROR: server: code = 623 resolution = "disable THP by adding 'transparent_hugepage=never' kernel parameter in the grub configuration file then reboot and restart daos_server"
+```
+
+The following command can be used to verify whether THP is enabled:
+
+```bash
+cat /sys/kernel/mm/transparent_hugepage/enabled
+[always] madvise never
+```
+
+If `allow_thp: true` parameter is set in server config file global section, the behavior will change
+and the server will start with THP enabled.
+
+
 ## DAOS Server Remote Access
 
 Remote tasking of the DAOS system and individual DAOS Server processes can be
@@ -895,7 +922,7 @@ resetting modules into "MemoryMode" through resource allocations.
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
 
-#### Multiple PMem namespaces per socket (Experimental)
+#### Multiple PMem namespaces per socket
 
 By default the `daos_server scm prepare` command will create one PMem namespace on each PMem
 region.
@@ -968,12 +995,12 @@ fallback to using UIO user-space driver with SPDK instead.
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
-bash-4.2$ dmg storage scan
+$ dmg storage scan
 Hosts        SCM Total             NVMe Total
 -----        ---------             ----------
 wolf-[71-72] 6.4 TB (2 namespaces) 3.1 TB (3 controllers)
 
-bash-4.2$ dmg storage scan --verbose
+$ dmg storage scan --verbose
 ------------
 wolf-[71-72]
 ------------
@@ -1018,7 +1045,7 @@ manual reset to do so.
 SSD health state can be verified via `dmg storage scan --nvme-health`:
 
 ```bash
-bash-4.2$ dmg storage scan --nvme-health
+$ dmg storage scan --nvme-health
 -------
 wolf-71
 -------
@@ -1298,7 +1325,7 @@ To illustrate, assume a cluster with homogeneous hardware configurations that
 returns the following from scan for each host:
 
 ```bash
-[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] storage scan --verbose
+$ dmg -l wolf-7[1-2] storage scan --verbose
 -------
 wolf-7[1-2]
 -------
@@ -1324,13 +1351,13 @@ mgmt_svc_replicas: ["wolf-71"] # <----- updated
 <snip>
 engines:
 -
-  pinned_numa_node: 0         # run 1st engine on CPU 0
-  targets: 16                 # number of I/O service threads per-engine
-  nr_xs_helpers: 4            # count of I/O offload threads
-  fabric_iface: eth0          # network interface to use for this engine
-  fabric_iface_port: 31416    # network port
-  log_mask: ERR               # debug level to start with the engine with
-  log_file: /tmp/server1.log  # where to store engine logs
+  pinned_numa_node: 0                             # run 1st engine on CPU 0
+  targets: 16                                     # number of I/O service threads per-engine
+  nr_xs_helpers: 4                                # count of I/O offload threads
+  fabric_iface: eth0                              # network interface to use for this engine
+  fabric_iface_port: 31416                        # network port
+  log_mask: ERR                                   # debug level to start with the engine with
+  log_file: /var/log/daos/daos_engine0.log # where to store engine logs
   storage:
   -
     class: dcpm               # type of first storage tier (SCM)
@@ -1346,7 +1373,7 @@ engines:
   fabric_iface: eth0
   fabric_iface_port: 32416
   log_mask: ERR
-  log_file: /tmp/server2.log
+  log_file: /var/log/daos/daos_engine1.log
   storage:
   -
     class: dcpm               # type of first storage tier (SCM)
@@ -1358,9 +1385,6 @@ engines:
 <end>
 ```
 
-There are a few optional providers that are not built by default. For detailed
-information, please refer to the [DAOS build documentation][6].
-
 !!! note
     DAOS Control Servers will need to be restarted on all hosts after updates to the server
     configuration file.
@@ -1369,9 +1393,6 @@ information, please refer to the [DAOS build documentation][6].
     include the hostnames or IP addresses (don't need to specify port) of those hosts.
 
     This will be the set of servers which host the replicated DAOS management service (MS).
-
->The support of the optional providers is not guarantee and can be removed
->without further notification.
 
 ### Network Configuration
 
@@ -1477,9 +1498,7 @@ This configuration yields the fastest access to that network device.
 Information about the network configuration is stored as metadata on the DAOS
 storage.
 
-If, after initial deployment, the provider must be changed, it is necessary to
-reformat the storage devices using `dmg storage format` after the configuration
-file has been updated with the new provider.
+If, after initial deployment, the provider must be changed, please follow the directions to [`change fabric provider`](https://github.com/daos-stack/daos/blob/master/docs/admin/common_tasks.md#change-fabric-provider-on-a-daos-system).
 
 #### Provider Testing
 
@@ -1552,7 +1571,7 @@ Upon successful format, DAOS Control Servers will start DAOS I/O engines that
 have been specified in the server config file.
 
 Successful start-up is indicated by the following on stdout:
-`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
+`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.domain.`
 
 ### SCM Format
 
@@ -1729,42 +1748,56 @@ Once the service file is installed and `systemctl daemon-reload` has been run to
 reload the configuration, the `daos_agent` can be started through systemd
 as shown above.
 
-#### Disable Agent Cache (Optional)
+#### Refresh Agent Cache
 
-In certain circumstances (e.g. for DAOS development or system evaluation), it
-may be desirable to disable the DAOS Agent's caching mechanism in order to avoid
-stale system information being retained across reformats of a system. The DAOS
-Agent normally caches a map of rank-to-fabric URI lookups as well as client network
-configuration data in order to reduce the number of management RPCs required to
-start an application. When this information becomes stale, the Agent must be
-restarted in order to repopulate the cache with new information.
-Alternatively, the caching mechanism may be disabled, with the tradeoff that
-each application launch will invoke management RPCs in order to obtain system
-connection information.
+In certain circumstances (e.g. [system extension][6] with new servers), it may
+be needed to refresh the DAOS Agent cache.  The DAOS Agent normally caches a map
+of rank-to-fabric URI lookups as well as client network configuration data in
+order to reduce the number of management RPCs required to start an application.
 
-To disable the DAOS Agent caching mechanism, set the following environment
-variable before starting the `daos_agent` process:
+After a new server has been added to the system, or an existing server has been
+permanently removed from the system, the administrator should ensure that the
+Agent is not serving stale system information to new clients. There are three
+options to achieve this goal:
 
-`DAOS_AGENT_DISABLE_CACHE=true`
+1. Send the `SIGUSR2` signal to the `daos_agent` process to force a refresh on
+   demand. This could be done with running the following command
 
-If running from systemd, add the following to the `daos_agent` service file in
-the `[Service]` section before reloading systemd and restarting the
-`daos_agent` service:
+```bash
+pkill -x -SIGUSR2 daos_agent
+```
 
-`Environment=DAOS_AGENT_DISABLE_CACHE=true`
+2. Add a cache expiration value, defined in minutes, to the Agent configuration
+   file `daos_agent.yml` in order to cause a cache refresh when the data is
+   older than the defined value.
 
+```yaml
+cache_expiration: 30
+```
 
-[^1]: https://github.com/intel/ipmctl
+3. Disable the caching mechanism completely, with the tradeoff that each
+   application launch will invoke management RPCs in order to obtain system
+   connection information.  To disable the DAOS Agent caching mechanism, set the
+   following environment variable before starting the `daos_agent` process:
 
-[^2]: https://github.com/daos-stack/daos/tree/master/utils/config
+```bash
+DAOS_AGENT_DISABLE_CACHE=true
+```
 
-[^3]: [https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
+   If running from systemd, add the following line to the `daos_agent` service
+   file in the `[Service]` section before reloading systemd and restarting the
+   `daos_agent` service:
 
-[^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
+```ini
+Environment=DAOS_AGENT_DISABLE_CACHE=true
+```
 
-[^5]: https://github.com/pmem/ndctl/issues/130
+   It is also possible to disable the `daos_agent` cache with adding the
+   following entry into the `daos_agent.yml` configuration file:
 
-[6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
+```yaml
+disable_caching: true
+```
 
 ## Multi-user DFuse setup
 
@@ -1779,3 +1812,16 @@ fuse and must be enabled by root before any user can use it.  To allow this then
 uncomment a line in `/etc/fuse.conf` to enable the `user_allow_other` setting.  The daos-client rpm
 does not do this automatically. An administrator must set this option on all nodes on which they
 want to provide a persistent multi-user dfuse service.
+
+
+[^1]: https://github.com/intel/ipmctl
+
+[^2]: https://github.com/daos-stack/daos/tree/master/utils/config
+
+[^3]: [https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
+
+[^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
+
+[^5]: https://github.com/pmem/ndctl/issues/130
+
+[6]: <administration.md#system-extension>(Extension of the DAOS system)

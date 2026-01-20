@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -68,6 +69,15 @@ func printAbsentRanks(out io.Writer, absentRanks *ranklist.RankSet) {
 		fmt.Fprintf(out, "Unknown %s: %s\n",
 			english.Plural(absentRanks.Count(), "rank", "ranks"),
 			absentRanks.String())
+	}
+}
+
+func printSysSelfHealUnsetFlags(out io.Writer, propVal string) {
+	offFlags := daos.SystemPropertySelfHealUnsetFlags(propVal)
+	if len(offFlags) > 0 {
+		fmt.Fprintf(out, "System property self_heal %s disabled: %s\n",
+			english.PluralWord(len(offFlags), "flag", "flags"),
+			strings.Join(offFlags, ", "))
 	}
 }
 
@@ -130,12 +140,14 @@ func PrintSystemQueryResponse(out, outErr io.Writer, resp *control.SystemQueryRe
 			return err
 		}
 		printAbsentHosts(outErr, &resp.AbsentHosts)
+		printSysSelfHealUnsetFlags(out, resp.SysSelfHealPolicy)
 
 		return nil
 	}
 
 	printAbsentHosts(outErr, &resp.AbsentHosts)
 	printAbsentRanks(outErr, &resp.AbsentRanks)
+	printSysSelfHealUnsetFlags(out, resp.SysSelfHealPolicy)
 
 	return nil
 }
@@ -223,33 +235,24 @@ func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, 
 	fmt.Fprintln(out, "System Cleanup Success")
 }
 
-// PrintPoolRankResults generates a table showing results of operations on pool ranks. Each row will
-// indicate a result for a group of ranks on a pool.
-func PrintPoolRankResults(out io.Writer, results []*control.PoolRankResult) {
-	if len(results) == 0 {
-		fmt.Fprintln(out, "No pool ranks processed")
+// PrintSystemProperties generates a human readable representation of the property supplied.
+func PrintSystemProperties(out io.Writer, props []*daos.SystemProperty) {
+	if len(props) == 0 {
+		fmt.Fprintln(out, "No system properties found.")
 		return
 	}
 
-	titles := []string{"Pool", "Ranks", "Result", "Reason"}
-	formatter := txtfmt.NewTableFormatter(titles...)
-
-	var table []txtfmt.TableRow
-	for _, r := range results {
-		result := "OK"
-		reason := "-"
-		if r.Status != 0 {
-			result = "FAIL"
-			reason = r.Msg
-		}
-		row := txtfmt.TableRow{
-			"Pool":   r.PoolID,
-			"Ranks":  r.Ranks,
-			"Result": result,
-			"Reason": reason,
-		}
+	nameTitle := "Name"
+	valueTitle := "Value"
+	table := []txtfmt.TableRow{}
+	for _, prop := range props {
+		row := txtfmt.TableRow{}
+		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Key)
+		row[valueTitle] = prop.Value.String()
 		table = append(table, row)
 	}
 
-	fmt.Fprintln(out, formatter.Format(table))
+	tf := txtfmt.NewTableFormatter(nameTitle, valueTitle)
+	tf.InitWriter(out)
+	tf.Format(table)
 }

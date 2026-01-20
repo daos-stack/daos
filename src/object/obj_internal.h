@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,6 +45,10 @@ extern bool	cli_bypass_rpc;
 extern unsigned int	srv_io_mode;
 extern unsigned int	obj_coll_thd;
 extern btr_ops_t	dbtree_coll_ops;
+
+/** See comments in obj_sgls_dup(), tune iov merge conditions */
+extern unsigned int     iov_frag_count;
+extern unsigned int     iov_frag_size;
 
 /* Whether check redundancy group validation when DTX resync. */
 extern bool	tx_verify_rdg;
@@ -272,9 +276,16 @@ struct shard_auxi_args {
 	uint64_t		 enqueue_id;
 };
 
+struct sgl_merge_ctx {
+	d_sg_list_t *sgls_dup;
+	d_sg_list_t *sgls_orig;
+	uint64_t   **merged_bitmaps;
+	uint64_t   **alloc_bitmaps;
+};
+
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
-	d_sg_list_t		*sgls_dup;
+	struct sgl_merge_ctx    *merge_ctx;
 	struct dtx_id		 dti;
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
@@ -453,39 +464,19 @@ struct obj_auxi_args {
 	 * ec_wait_recov -- obj fetch wait another EC recovery task,
 	 * ec_in_recov -- a EC recovery task
 	 */
-	uint32_t			 io_retry:1,
-					 args_initialized:1,
-					 to_leader:1,
-					 spec_shard:1,
-					 spec_group:1,
-					 req_reasbed:1,
-					 is_ec_obj:1,
-					 csum_retry:1,
-					 csum_report:1,
-					 tx_uncertain:1,
-					 nvme_io_err:1,
-					 no_retry:1,
-					 ec_wait_recov:1,
-					 ec_in_recov:1,
-					 new_shard_tasks:1,
-					 reset_param:1,
-					 force_degraded:1,
-					 shards_scheded:1,
-					 sub_anchors:1,
-					 ec_degrade_fetch:1,
-					 tx_convert:1,
-					 cond_modify:1,
-					 /* conf_fetch split to multiple sub-tasks */
-					 cond_fetch_split:1,
-					 reintegrating:1,
-					 tx_renew:1,
-					 rebuilding:1,
-					 for_migrate:1;
+	uint32_t new_shard_tasks : 1, reset_param : 1, force_degraded : 1, shards_scheded : 1,
+	    io_retry : 1, args_initialized : 1, to_leader : 1, spec_shard : 1, spec_group : 1,
+	    req_reasbed : 1, is_ec_obj : 1, csum_retry : 1, csum_report : 1, tx_uncertain : 1,
+	    nvme_io_err : 1, no_retry : 1, ec_wait_recov : 1, ec_in_recov : 1, rebuilding : 1,
+	    sub_anchors : 1, ec_degrade_fetch : 1, long_retry_delay : 1, cond_fetch_split : 1,
+	    cond_modify : 1, reintegrating : 1, tx_renew : 1, tx_convert : 1, req_dup_sgl : 1,
+	    for_migrate : 1;
 	/* request flags. currently only: ORF_RESEND */
-	uint32_t			 specified_shard;
-	uint32_t			 flags;
-	uint16_t			 retry_cnt;
-	uint16_t			 inprogress_cnt;
+	uint32_t                         specified_shard;
+	uint32_t                         flags;
+	uint32_t                         retry_cnt;
+	/* Last timestamp (in second) when report retry warning message. */
+	uint32_t                         retry_warn_ts;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
@@ -910,8 +901,9 @@ struct dc_object *obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
-uint32_t dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt,
-			    uint16_t *inprogress_cnt, uint32_t timeout_secs);
+uint32_t
+dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
+		   uint32_t timeout_secs, bool long_delay);
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {
@@ -1070,6 +1062,28 @@ void obj_class_fini(void);
 #define OBJ_COLL_THD_MIN	COLL_DISP_WIDTH_DEF
 #define COLL_BTREE_ORDER	COLL_DISP_WIDTH_DEF
 
+#define IOV_FRAG_SIZE_DEF       4095
+#define IOV_FRAG_COUNT_DEF      128
+#define IOV_FRAG_COUNT_MIN      16
+
+static inline void
+obj_init_iov_fragment_params()
+{
+	d_getenv_uint("DAOS_IOV_FRAG_SIZE", &iov_frag_size);
+	d_getenv_uint("DAOS_IOV_FRAG_COUNT", &iov_frag_count);
+	if (iov_frag_count < IOV_FRAG_COUNT_MIN) {
+		D_WARN("Invalid IOV fragment count threshold: %u (minimum %u). Using default: %u\n",
+		       iov_frag_count, IOV_FRAG_COUNT_MIN, IOV_FRAG_COUNT_DEF);
+		iov_frag_count = IOV_FRAG_COUNT_DEF;
+	}
+	if (iov_frag_size == 0)
+		D_INFO("IOV fragment merging is disabled. Fragment count threshold: %u\n",
+		       iov_frag_count);
+	else
+		D_INFO("IOV fragment merging enabled (size threshold: %u, count threshold: %u)\n",
+		       iov_frag_size, iov_frag_count);
+}
+
 struct obj_query_merge_args {
 	struct daos_oclass_attr	*oqma_oca;
 	daos_unit_oid_t		 oqma_oid;
@@ -1167,10 +1181,14 @@ iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info);
 /* obj_layout.c */
 int
 obj_pl_grp_idx(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_nr);
+void
+obj_dump_grp_layout(daos_handle_t oh, uint32_t shard);
 
 int
 obj_pl_place(struct pl_map *map, uint16_t layout_ver, struct daos_obj_md *md,
 	     unsigned int mode, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp);
+void
+obj_ec_recov_reset(struct obj_reasb_req *reasb_req);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

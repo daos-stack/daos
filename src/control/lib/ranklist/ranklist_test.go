@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
-func TestRankList_RankSet(t *testing.T) {
+func TestRanklist_RankSet(t *testing.T) {
 	for name, tc := range map[string]struct {
 		ranks    string
 		addRanks []Rank
@@ -30,9 +31,21 @@ func TestRankList_RankSet(t *testing.T) {
 			expCount: 0,
 			expRanks: []Rank{},
 		},
+		"empty bracketed start list": {
+			ranks:    "[]",
+			expOut:   "",
+			expCount: 0,
+			expRanks: []Rank{},
+		},
 		"invalid with hostnames": {
 			ranks:  "node2-1,node1-2.suffix1,node1-[45,47].suffix2,node3,node1-3",
 			expErr: errors.New("unexpected alphabetic character(s)"),
+		},
+		"simple bracketed ranged rank list": {
+			ranks:    "[0-10]",
+			expOut:   "0-10",
+			expCount: 11,
+			expRanks: []Rank{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 		},
 		"simple ranged rank list": {
 			ranks:    "0-10",
@@ -93,6 +106,38 @@ func TestRankList_RankSet(t *testing.T) {
 				t.Fatalf("unexpected ranks (-want, +got):\n%s\n", diff)
 			}
 
+		})
+	}
+}
+
+func TestRanklist_RankSet_Contains(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ranks       string
+		searchRank  Rank
+		expContains bool
+	}{
+		"missing": {
+			ranks:       "1-128",
+			searchRank:  200,
+			expContains: false,
+		},
+		"found": {
+			ranks:       "1-128",
+			searchRank:  126,
+			expContains: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rs, err := CreateRankSet(tc.ranks)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotContains := rs.Contains(tc.searchRank)
+			if gotContains != tc.expContains {
+				t.Fatalf("expected %d to be found in %s, want %v got %v",
+					tc.searchRank, tc.ranks, tc.expContains, gotContains)
+			}
 		})
 	}
 }
