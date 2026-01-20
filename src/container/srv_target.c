@@ -690,7 +690,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		goto out_finish_cond;
 	}
 
-	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
+	rc = VOS_CONT_OPEN(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
 	if (rc != 0)
 		goto out_pool;
 
@@ -724,7 +724,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	return 0;
 
 out_cont:
-	vos_cont_close(cont->sc_hdl);
+	VOS_CONT_CLOSE(cont->sc_hdl);
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
 out_finish_cond:
@@ -753,11 +753,10 @@ cont_child_free_ref(struct daos_llink *llink)
 	D_ASSERT(daos_handle_is_valid(cont->sc_hdl));
 	D_ASSERT(d_list_empty(&cont->sc_open_hdls));
 
-	D_DEBUG(DB_MD, DF_CONT": freeing\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+	D_INFO(DF_CONT ": to free %p\n", DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), cont);
 
 	cont_tgt_track_eph_fini(cont);
-	vos_cont_close(cont->sc_hdl);
+	VOS_CONT_CLOSE(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
 	daos_csummer_destroy(&cont->sc_csummer);
 	D_FREE(cont->sc_snapshots);
@@ -767,6 +766,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	ABT_cond_free(&cont->sc_fini_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	ABT_mutex_free(&cont->sc_open_mutex);
+	D_INFO("freeing %p\n", cont);
 	D_FREE(cont);
 }
 
@@ -2041,7 +2041,7 @@ cont_query_one(void *vin)
 	if (pool_child == NULL)
 		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
 
-	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
+	rc = VOS_CONT_OPEN(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
 	if (rc != 0) {
 		D_ERROR(DF_CONT ": Opening VOS container open handle failed: " DF_RC "\n",
 			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), DP_RC(rc));
@@ -2057,7 +2057,7 @@ cont_query_one(void *vin)
 	pack_args->xcq_hae = vos_cinfo.ci_hae;
 
 out:
-	vos_cont_close(vos_chdl);
+	VOS_CONT_CLOSE(vos_chdl);
 ds_child:
 	ds_pool_child_put(pool_child);
 ds_pool_hdl:
@@ -2405,7 +2405,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	daos_handle_t	 coh;
 	int		 rc;
 
-	rc = vos_cont_open(ph, co_uuid, &coh);
+	rc = VOS_CONT_OPEN(ph, co_uuid, &coh);
 	if (rc != 0) {
 		D_ERROR("Open container "DF_UUID" failed: rc = "DF_RC"\n",
 			DP_UUID(co_uuid), DP_RC(rc));
@@ -2475,7 +2475,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 iter_fini:
 	vos_iter_finish(iter_h);
 close:
-	vos_cont_close(coh);
+	VOS_CONT_CLOSE(coh);
 	return rc;
 }
 
