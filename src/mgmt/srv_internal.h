@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -181,5 +181,9 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 /** srv_util.c */
 int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
 void ds_mgmt_kill_rank(bool force);
+int
+ds_mgmt_pbl_create(void);
+void
+ds_mgmt_pbl_destroy(void);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */
