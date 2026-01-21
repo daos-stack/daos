@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1278,6 +1278,42 @@ out:
 	return rc;
 }
 
+static bool
+agg_peer_failed(struct ec_agg_param *agg_param, struct daos_shard_loc *peer_loc)
+{
+	struct pool_target *targets         = NULL;
+	uint32_t            failed_tgts_cnt = 0;
+	int                 i;
+	int                 rc;
+
+	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map, &targets,
+				       &failed_tgts_cnt);
+	if (rc) {
+		DL_ERROR(rc, DF_CONT " pool_map_find_failed_tgts failed.",
+			 DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+				 agg_param->ap_pool_info.api_cont_uuid));
+		return false;
+	}
+
+	if (targets == NULL || failed_tgts_cnt == 0)
+		return false;
+
+	for (i = 0; i < failed_tgts_cnt; i++) {
+		if (targets[i].ta_comp.co_rank == peer_loc->sd_rank &&
+		    targets[i].ta_comp.co_index == peer_loc->sd_tgt_idx) {
+			D_DEBUG(DB_EPC, DF_CONT " peer parity tgt failed rank %d, tgt_idx %d.\n",
+				DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+					agg_param->ap_pool_info.api_cont_uuid),
+				peer_loc->sd_rank, peer_loc->sd_tgt_idx);
+			D_FREE(targets);
+			return true;
+		}
+	}
+
+	D_FREE(targets);
+	return false;
+}
+
 int
 agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 {
@@ -1334,6 +1370,12 @@ out:
 	return rc;
 }
 
+static bool
+agg_peer_retryable_err(int err)
+{
+	return err == -DER_STALE || err == -DER_TIMEDOUT || daos_crt_network_error(err);
+}
+
 /* Sends the generated parity and the stripe number to the peer
  * parity target. Handler writes the parity and deletes the replicas
  * for the stripe.
@@ -1382,7 +1424,7 @@ agg_peer_update_ult(void *arg)
 	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	for (peer = 0; peer < p; peer++) {
 		uint64_t enqueue_id = 0;
-		bool     overloaded;
+		bool     peer_retry;
 
 		if (peer == pidx)
 			continue;
@@ -1390,7 +1432,7 @@ agg_peer_update_ult(void *arg)
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag  = entry->ae_peer_pshards[peer].sd_tgt_idx;
 retry:
-		overloaded = false;
+		peer_retry = false;
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
@@ -1470,13 +1512,20 @@ retry:
 			rc         = ec_agg_out->ea_status;
 			if (rc == -DER_OVERLOAD_RETRY) {
 				enqueue_id = ec_agg_out->ea_comm_out.req_out_enqueue_id;
-				overloaded = true;
+				peer_retry = true;
 			}
 			D_CDEBUG(rc == 0, DB_TRACE, DLOG_ERR,
 				 "update parity[%d] to %d:%d, status = " DF_RC "\n", peer,
 				 tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
 			peer_updated += rc == 0;
 		}
+		if (rc != 0 && peer_updated && agg_peer_retryable_err(rc) &&
+		    !agg_peer_failed(agg_param, &entry->ae_peer_pshards[peer])) {
+			DL_INFO(rc, DF_UOID " pidx %d to parity[%d] will retry.",
+				DP_UOID(entry->ae_oid), pidx, peer);
+			peer_retry = true;
+		}
+
 next:
 		if (bulk_hdl)
 			crt_bulk_free(bulk_hdl);
@@ -1487,7 +1536,7 @@ next:
 		rpc = NULL;
 		bulk_hdl  = NULL;
 		iod_csums = NULL;
-		if (overloaded) {
+		if (peer_retry) {
 			dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 			goto retry;
 		}
@@ -1665,13 +1714,13 @@ agg_process_holes_ult(void *arg)
 	for (peer = 0; peer < p; peer++) {
 		uint64_t enqueue_id = 0;
 		uint32_t peer_shard;
-		bool     overloaded;
+		bool     peer_retry;
 
 		if (pidx == peer)
 			continue;
 
 retry:
-		overloaded = false;
+		peer_retry = false;
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
@@ -1719,7 +1768,7 @@ retry:
 			rc         = ec_rep_out->er_status;
 			if (rc == -DER_OVERLOAD_RETRY) {
 				enqueue_id = ec_rep_out->er_comm_out.req_out_enqueue_id;
-				overloaded = true;
+				peer_retry = true;
 			}
 			D_CDEBUG(rc == 0, DB_TRACE, DLOG_ERR,
 				 DF_UOID " parity[%d] er_status = " DF_RC "\n",
@@ -1728,7 +1777,13 @@ retry:
 		}
 		crt_req_decref(rpc);
 		rpc = NULL;
-		if (overloaded) {
+		if (rc != 0 && peer_updated && agg_peer_retryable_err(rc) &&
+		    !agg_peer_failed(agg_param, &entry->ae_peer_pshards[peer])) {
+			DL_INFO(rc, DF_UOID " pidx %d to parity[%d] will retry.",
+				DP_UOID(entry->ae_oid), pidx, peer);
+			peer_retry = true;
+		}
+		if (peer_retry) {
 			dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 			goto retry;
 		}
