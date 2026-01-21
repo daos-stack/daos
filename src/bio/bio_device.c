@@ -1019,7 +1019,7 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 	if (b_info.bdi_traddr == NULL) {
 		D_DEBUG(DB_MGMT, "Skipping get traddr for device %s (not NVMe?)\n",
 			d_bdev->bb_name);
-		return 0;
+		return -DER_NOTSUPPORTED;
 	}
 
 	rc = spdk_pci_addr_parse(pci_addr, b_info.bdi_traddr);
@@ -1033,11 +1033,19 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 	return rc;
 }
 
+static bool
+is_pci_addr_valid(const struct spdk_pci_addr *addr)
+{
+	struct spdk_pci_addr zero = {0};
+
+	return spdk_pci_addr_compare(addr, &zero) != 0;
+}
+
 int
 bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, unsigned int action,
 	       unsigned int *state, uint64_t duration)
 {
-	struct spdk_pci_addr	pci_addr;
+	struct spdk_pci_addr    pci_addr = {0};
 	int                     addr_len = 0;
 	int			rc;
 
@@ -1050,15 +1058,19 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	if (tr_addr != NULL) {
 		addr_len = strnlen(tr_addr, SPDK_NVMF_TRADDR_MAX_LEN + 1);
 		if (addr_len == SPDK_NVMF_TRADDR_MAX_LEN + 1) {
-			D_ERROR("Address string too long");
+			D_ERROR("Address string too long\n");
 			return -DER_INVAL;
 		}
 	}
 
 	if (addr_len == 0) {
 		rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
+		if (rc == -DER_NOTSUPPORTED) {
+			D_INFO("Skipping LED action for device without valid PCI address\n");
+			return 0;
+		}
 		if (rc != 0) {
-			DL_ERROR(rc, "Failed to read PCI addr from device " DF_UUID,
+			DL_ERROR(rc, "Failed to read PCI addr from device " DF_UUID "\n",
 				 DP_UUID(dev_uuid));
 			return rc;
 		}
@@ -1079,6 +1091,11 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 				spdk_strerror(-rc));
 			return -DER_INVAL;
 		}
+	}
+
+	if (!is_pci_addr_valid(&pci_addr)) {
+		D_ERROR("No valid PCI address found for device\n");
+		return -DER_INVAL;
 	}
 
 	return led_manage(xs_ctxt, pci_addr, (Ctl__LedAction)action, (Ctl__LedState *)state,
