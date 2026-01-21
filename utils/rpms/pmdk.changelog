@@ -31,6 +31,7 @@
 
 * Mon Aug 11 2025  Jeff Olivier <jeffolivier@google.com> - 2.1.0-4
 - Switch to fpm build for RPMs
+- New location of the PMDK repository (https://github.com/daos-stack/pmdk)
 
 * Wed Nov 06 2024  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.1.0-3
 - Apply patches to silence annoying error messages on:
