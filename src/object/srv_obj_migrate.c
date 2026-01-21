@@ -646,6 +646,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			 d_iov_t *csum_iov_fetch, struct migrate_pool_tls *tls)
 {
 	uint32_t *extra_arg = NULL;
+	int       waited    = 0;
 	int       rc;
 
 	/* pass rebuild epoch by extra_arg */
@@ -654,11 +655,10 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			  mrone->mo_epoch);
 		extra_arg = (uint32_t *)mrone->mo_epoch;
 	}
-
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN) &&
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -670,6 +670,17 @@ retry:
 		 */
 		D_WARN(DF_UUID" retry "DF_UOID" "DF_RC"\n",
 		       DP_UUID(tls->mpt_pool_uuid), DP_UOID(mrone->mo_oid), DP_RC(rc));
+		if (rc == -DER_NOMEM) {
+			/* sleep 10 seconds before retry, give other layers a chance to
+			 * release resources.
+			 */
+			dss_sleep(10 * 1000);
+			if (waited != 0 && waited % 3600 == 0) {
+				DL_ERROR(rc, DF_RB ": waited for memory for %d hour(s)",
+					 DP_RB_MPT(tls), waited / 3600);
+			}
+		}
+		waited += 10;
 		D_GOTO(retry, rc);
 	}
 
