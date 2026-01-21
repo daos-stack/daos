@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -676,6 +676,10 @@ int_rebuild_dkeys_stop_failing(void **state)
 		memset(data, 'a', DATA_SIZE);
 		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1, data, DATA_SIZE, &req);
 	}
+
+	/* Quick check that rebuild stop will return -DER_NONEXIST if nothing is rebuilding */
+	rc = dmg_pool_rebuild_stop(arg->dmg_config, arg->pool.pool_uuid, arg->group, false);
+	assert_int_equal(rc, -DER_NONEXIST);
 
 	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
