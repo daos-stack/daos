@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -747,6 +747,8 @@ uint32_t chk_pool_merge_status(uint32_t status_a, uint32_t status_b);
 void chk_ins_merge_info(uint32_t *status_dst, uint32_t status_src, uint32_t *phase_dst,
 			uint32_t phase_src, uint64_t *gen_dst, uint64_t gen_src);
 
+void chk_ins_cleanup(struct chk_instance *ins);
+
 int chk_ins_init(struct chk_instance **p_ins);
 
 void chk_ins_fini(struct chk_instance **p_ins);
@@ -780,7 +782,9 @@ int chk_engine_notify(struct chk_iv *iv);
 
 void chk_engine_rejoin(void *args);
 
-void chk_engine_pause(void);
+int chk_engine_setup(void);
+
+void chk_engine_cleanup(void);
 
 int chk_engine_init(void);
 
@@ -807,7 +811,9 @@ int chk_leader_notify(struct chk_iv *iv);
 int chk_leader_rejoin(uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags, int *pool_nr,
 		      uuid_t **pools);
 
-void chk_leader_pause(void);
+int chk_leader_setup(void);
+
+void chk_leader_cleanup(void);
 
 int chk_leader_init(void);
 
@@ -883,9 +889,16 @@ int chk_prop_update(struct chk_property *cpp, d_rank_list_t *rank_list);
 
 int chk_traverse_pools(sys_db_trav_cb_t cb, void *args);
 
-void chk_vos_init(void);
+void chk_vos_setup(void);
 
-void chk_vos_fini(void);
+void chk_vos_cleanup(void);
+
+#define CHK_IS_READY(ins)                                                       \
+	do {                                                                    \
+		if (unlikely((ins)->ci_inited == 0))                            \
+			return -DER_UNINIT;                                     \
+	} while (0)
+
 /* clang-format on */
 
 static inline bool
@@ -1191,7 +1204,9 @@ chk_stop_sched(struct chk_instance *ins)
 static inline int
 chk_ins_can_start(struct chk_instance *ins)
 {
-	if (unlikely(!ins->ci_inited))
+	CHK_IS_READY(ins);
+
+	if (!ins->ci_is_leader && ins->ci_rejoining)
 		return -DER_AGAIN;
 
 	if (ins->ci_starting)
