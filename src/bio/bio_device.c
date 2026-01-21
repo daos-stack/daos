@@ -1066,7 +1066,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	if (addr_len == 0) {
 		rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
 		if (rc == -DER_NOTSUPPORTED) {
-			D_INFO("Skipping LED action for device without valid PCI address\n");
+			/* Skip LED action for device without valid PCI address */
 			return 0;
 		}
 		if (rc != 0) {
