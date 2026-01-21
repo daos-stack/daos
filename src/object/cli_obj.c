@@ -1836,35 +1836,43 @@ dc_obj_layout_refresh(daos_handle_t oh)
 }
 
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint16_t *retry_cnt,
-		   uint16_t *inprogress_cnt, uint32_t timeout_sec)
+dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
+		   uint32_t timeout_sec, bool long_delay)
 {
 	uint32_t delay = 0;
 
-	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN)
-		++(*inprogress_cnt);
-
-	if (++(*retry_cnt) > 1) {
+	/* Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case. */
+	if (err == -DER_OVERLOAD_RETRY) {
+		delay = daos_rpc_rand_delay(timeout_sec) << 20;
+	} else if (++(*retry_cnt) > 1) {
 		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
 		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
 		/* Rebuild is being established on the server side, wait a bit longer */
-		if (err == -DER_UPDATE_AGAIN)
+		if (err == -DER_UPDATE_AGAIN || long_delay) {
 			delay <<= 10;
-		else if (opc == DAOS_OBJ_RPC_COLL_PUNCH)
-			/* 128 times of the delay for collective object RPC. */
-			delay <<= 7;
-		else if (opc == DAOS_OBJ_RPC_CPD)
-			/* 8 times of the delay for compounded RPC. */
-			delay <<= 3;
-		D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u/%u times with %u us delay\n",
-			task, opc, *inprogress_cnt, *retry_cnt, delay);
+		} else {
+			switch (opc) {
+			case DAOS_OBJ_RPC_COLL_PUNCH:
+			case DAOS_OBJ_RPC_COLL_QUERY:
+				/* 256 times of the delay for collective object RPC. */
+				delay <<= 8;
+				break;
+			case DAOS_OBJ_RPC_CPD:
+				/* 8 times of the delay for compounded RPC. */
+				delay <<= 3;
+				break;
+			default:
+				break;
+			}
+
+			/* Increase delay after multiple times retry. */
+			if (*retry_cnt >= 5)
+				delay <<= 1;
+		}
 	}
 
-	/*
-	 * Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case.
-	 */
-	if (err == -DER_OVERLOAD_RETRY)
-		delay = daos_rpc_rand_delay(timeout_sec) << 20;
+	D_DEBUG(DB_IO, "Try to re-sched task %p (%u) for %u times with %u us delay\n", task, opc,
+		*retry_cnt, delay);
 
 	return delay;
 }
@@ -1911,15 +1919,16 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
 	     bool *io_task_reinited)
 {
-	tse_sched_t	 *sched = tse_task2sched(task);
-	tse_task_t       *required_task = NULL;
-	bool              is_pool_task  = false;
-	int		  result = task->dt_result;
-	int		  rc;
+	tse_sched_t *sched     = tse_task2sched(task);
+	tse_task_t  *pool_task = NULL;
+	uint32_t     delay     = 0;
+	uint32_t     opc       = obj_auxi->opc;
+	int          result    = task->dt_result;
+	int          rc;
 
 	if (pmap_stale) {
 		is_pool_task = true;
-		rc           = obj_pool_query_task(sched, obj, 0, &required_task);
+		rc           = obj_pool_query_task(sched, obj, 0, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	} else if (result == -DER_RECONNECT) {
@@ -1947,10 +1956,8 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	}
 
 	if (obj_auxi->io_retry) {
-		uint32_t delay = 0;
-
-		if (required_task != NULL) {
-			rc = dc_task_depend(task, 1, &required_task);
+		if (pool_task != NULL) {
+			rc = dc_task_depend(task, 1, &pool_task);
 			if (rc != 0) {
 				D_ERROR("Failed to add dependency on pool "
 					"query task (%p)\n",
@@ -1959,19 +1966,24 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			}
 		}
 
+		if (obj_is_modification_opc(opc) && result == -DER_TIMEDOUT)
+			obj_auxi->long_retry_delay = 1;
+		else if (result != -DER_INPROGRESS)
+			obj_auxi->long_retry_delay = 0;
+
 		if (!pmap_stale) {
 			uint32_t now = daos_gettime_coarse();
 
-			delay =
-			    dc_obj_retry_delay(task, obj_auxi->opc, result, &obj_auxi->retry_cnt,
-					       &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
+			delay = dc_obj_retry_delay(task, opc, result, &obj_auxi->retry_cnt,
+						   obj_auxi->max_delay,
+						   obj_auxi->long_retry_delay == 1 ? true : false);
 			if (result == -DER_INPROGRESS &&
-			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->inprogress_cnt >= 10) ||
+			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->retry_cnt >= 10) ||
 			     (obj_auxi->retry_warn_ts > 0 && obj_auxi->retry_warn_ts + 10 < now))) {
 				obj_auxi->retry_warn_ts = now;
 				obj_auxi->flags |= ORF_MAYBE_STARVE;
 				D_WARN("The task %p has been retried for %u times, maybe starve\n",
-				       task, obj_auxi->inprogress_cnt);
+				       task, obj_auxi->retry_cnt);
 			}
 		}
 
@@ -1982,17 +1994,17 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		*io_task_reinited = true;
 	}
 
-	if (required_task != NULL)
+	if (pool_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
-		tse_task_schedule(required_task, obj_auxi->io_retry);
+		tse_task_schedule(pool_task, obj_auxi->io_retry);
 
 	D_DEBUG(DB_IO, "Retrying task=%p/%d for err=%d, io_retry=%d\n",
 		task, task->dt_result, result, obj_auxi->io_retry);
 
 	return 0;
 err:
-	if (is_pool_task && required_task) {
-		dc_pool_abandon_map_refresh_task(required_task);
+	if (is_pool_task && pool_task) {
+		dc_pool_abandon_map_refresh_task(pool_task);
 	}
 
 	task->dt_result = result; /* restore the original error */
@@ -4292,8 +4304,10 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 	obj_auxi_shards_iterate(obj_auxi, update_sub_anchor_cb, NULL);
 
 	sub_anchors = (struct shard_anchors *)anchor->da_sub_anchors;
-	if (!d_list_empty(&sub_anchors->sa_merged_list))
+	if (!d_list_empty(&sub_anchors->sa_merged_list)) {
+		D_ASSERT(obj_auxi->opc != DAOS_OBJ_RPC_ENUMERATE);
 		return;
+	}
 
 	if (sub_anchors_is_eof(sub_anchors)) {
 		daos_obj_list_t *obj_args;
@@ -4302,6 +4316,18 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 
 		obj_args = dc_task_get_args(obj_auxi->obj_task);
 		sub_anchors_free(obj_args, obj_auxi->opc);
+	} else if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE) {
+		for (int i = 0; i < sub_anchors->sa_anchors_nr; i++) {
+			daos_anchor_t *sub_anchor;
+
+			sub_anchor = &sub_anchors->sa_anchors[i].ssa_anchor;
+			if (!daos_anchor_is_eof(sub_anchor)) {
+				D_DEBUG(DB_REBUILD, "shard %d sub_anchor %d/%d non EOF",
+					sub_anchors->sa_anchors[i].ssa_shard, i,
+					sub_anchors->sa_anchors_nr);
+				break;
+			}
+		}
 	}
 }
 
@@ -6625,7 +6651,7 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi, struct shard_anch
 		}
 
 		if (obj_args->recxs != NULL) {
-			if (sub_anchor->ssa_recxs != NULL && sub_anchors->sa_nr == nr)
+			if (sub_anchor->ssa_recxs != NULL && sub_anchors->sa_nr != nr)
 				D_FREE(sub_anchor->ssa_recxs);
 
 			if (sub_anchor->ssa_recxs == NULL) {

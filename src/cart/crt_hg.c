@@ -1221,33 +1221,24 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
-	D_ASSERT(proc != NULL);
-	opc = rpc_tmp.crp_req_hdr.cch_opc;
 
-	/**
-	 * Set the opcode in the temp RPC so that it can be correctly logged.
-	 */
+	D_ASSERT(proc != NULL);
+	opc                    = rpc_tmp.crp_req_hdr.cch_opc;
 	rpc_tmp.crp_pub.cr_opc = opc;
 
+	/* allocate rpc struct for a given opcode; in/out size will vary per opc */
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv, false /* forward */);
 	if (unlikely(rc != 0)) {
-		if (rc == -DER_UNREG) {
-			D_ERROR("opc: %#x, lookup failed.\n", opc);
-			/*
-			 * The RPC is not registered on the server, we don't know how to
-			 * process the RPC request, so we send a CART
-			 * level error message to the client.
-			 */
-			crt_hg_reply_error_send(&rpc_tmp, rc);
-			crt_hg_unpack_cleanup(proc);
-			HG_Destroy(rpc_tmp.crp_hg_hdl);
-			D_GOTO(out, hg_ret = HG_SUCCESS);
-		} else if (rc == -DER_NOMEM) {
-			crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
-			crt_hg_unpack_cleanup(proc);
-			HG_Destroy(rpc_tmp.crp_hg_hdl);
-			D_GOTO(out, hg_ret = HG_SUCCESS);
-		}
+		/* set client rc to denial of service if server is out of mem */
+		if (rc == -DER_NOMEM)
+			rc = -DER_DOS; /* don't log as we are oom already */
+		else
+			D_ERROR("crt_rpc_priv_alloc() failed, rc: %d.\n", rc);
+
+		crt_hg_reply_error_send(&rpc_tmp, rc);
+		crt_hg_unpack_cleanup(proc);
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 
 	opc_info = rpc_priv->crp_opc_info;
@@ -1642,6 +1633,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
+	/* corresponds to decref in crt_hg_reply_send_cb */
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);

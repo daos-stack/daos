@@ -161,6 +161,7 @@ const (
 	ServerBadFaultDomainLabels
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
+	ServerTransparentHugepageEnabled
 )
 
 // server config fault codes
@@ -203,6 +204,7 @@ const (
 	ServerConfigEnableHotplugDeprecated
 	ServerConfigBdevExcludeClash
 	ServerConfigHugepagesDisabledWithNrSet
+	ServerConfigScmHugeEnabled
 )
 
 // SPDK library bindings codes

@@ -851,7 +851,7 @@ retrieve_handles_from_fuse(int idx)
 		fclose(tmp_file);
 		unlink(fname);
 		if (read_size != hs_reply.fsr_pool_size) {
-			errno_saved = EAGAIN;
+			errno_saved = EIO;
 			D_DEBUG(DB_ANY, "fread expected %zu bytes, read %d bytes : %d (%s)\n",
 				hs_reply.fsr_pool_size, read_size, errno_saved,
 				strerror(errno_saved));
@@ -1474,16 +1474,16 @@ init_fd_list(void)
 
 	rc = D_MUTEX_INIT(&lock_fd, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_MUTEX_INIT(&lock_dirfd, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_MUTEX_INIT(&lock_mmap, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_RWLOCK_INIT(&lock_fd_dup2ed, NULL);
 	if (rc)
-		return 1;
+		return rc;
 
 	/* fatal error above: failure to create mutexes. */
 
@@ -6091,8 +6091,10 @@ out_err:
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	int  idx_dfs, error = 0, rc;
-	char *full_path = NULL;
+	int              idx_dfs, error = 0, rc;
+	char            *full_path = NULL;
+	struct timespec  times_loc[2];
+	struct timespec *times_ptr;
 
 	if (next_utimensat == NULL) {
 		next_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -6110,18 +6112,30 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	}
 	_Pragma("GCC diagnostic pop")
 
+	    /* clang-format off */
+
+	if (times == NULL) {
+		clock_gettime(CLOCK_REALTIME, &times_loc[0]);
+		times_loc[1].tv_sec = times_loc[0].tv_sec;
+		times_loc[1].tv_nsec = times_loc[0].tv_nsec;
+		times_ptr = times_loc;
+	} else {
+		times_ptr = (struct timespec *)times;
+	}
+	/* clang-format on */
+
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
-		return utimens_timespec(path, times, flags);
+		return utimens_timespec(path, times_ptr, flags);
 
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
 		goto out_err;
 
 	if (idx_dfs >= 0)
-		rc = utimens_timespec(full_path, times, flags);
+		rc = utimens_timespec(full_path, times_ptr, flags);
 	else
-		rc = next_utimensat(dirfd, path, times, flags);
+		rc = next_utimensat(dirfd, path, times_ptr, flags);
 
 	error = errno;
 	if (full_path) {

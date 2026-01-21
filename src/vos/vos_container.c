@@ -1029,3 +1029,81 @@ vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch)
 
 	return 0;
 }
+
+int
+vos_cont_save_props(daos_handle_t coh, struct cont_props *props)
+{
+	struct umem_instance   *umm;
+	struct vos_container   *cont;
+	struct vos_cont_ext_df *ced;
+	int                     rc = 0;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	umm = vos_cont2umm(cont);
+	ced = umem_off2ptr(umm, cont->vc_cont_df->cd_ext);
+
+	/* Do not allow to save property against old container without extension. */
+	if (ced == NULL)
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
+
+	/* Currently we only save chunksize and csum_type in vos_container. Maybe more in future. */
+
+	if (ced->ced_chunksize == props->dcp_chunksize && ced->ced_valid_bits & VCEB_CSUM &&
+	    ((props->dcp_csum_enabled == 1 && ced->ced_csum_type == props->dcp_csum_type) ||
+	     (props->dcp_csum_enabled == 0 && ced->ced_csum_type == DAOS_PROP_CO_CSUM_OFF)))
+		D_GOTO(out, rc = 0);
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto out;
+
+	if (ced->ced_chunksize != props->dcp_chunksize) {
+		rc = umem_tx_add_ptr(umm, &ced->ced_chunksize, sizeof(ced->ced_chunksize));
+		if (rc != 0)
+			goto abort;
+
+		ced->ced_chunksize = props->dcp_chunksize;
+	}
+
+	if (!(ced->ced_valid_bits & VCEB_CSUM)) {
+		rc = umem_tx_add_ptr(umm, &ced->ced_valid_bits, sizeof(ced->ced_valid_bits));
+		if (rc != 0)
+			goto abort;
+
+		ced->ced_valid_bits |= VCEB_CSUM;
+	}
+
+	if (props->dcp_csum_enabled == 1) {
+		if (ced->ced_csum_type != props->dcp_csum_type) {
+			rc = umem_tx_add_ptr(umm, &ced->ced_csum_type, sizeof(ced->ced_csum_type));
+			if (rc != 0)
+				goto abort;
+
+			ced->ced_csum_type = props->dcp_csum_type;
+		}
+	} else {
+		if (ced->ced_csum_type != DAOS_PROP_CO_CSUM_OFF) {
+			rc = umem_tx_add_ptr(umm, &ced->ced_csum_type, sizeof(ced->ced_csum_type));
+			if (rc != 0)
+				goto abort;
+
+			ced->ced_csum_type = DAOS_PROP_CO_CSUM_OFF;
+		}
+	}
+
+abort:
+	if (rc != 0)
+		rc = umem_tx_abort(umm, rc);
+	else
+		rc = umem_tx_commit(umm);
+
+out:
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MGMT, rc,
+		  "Save property (csum %s, hash_type %d, chunksize %u) for container " DF_UUID,
+		  props->dcp_csum_enabled == 1 ? "enabled" : "disabled", props->dcp_csum_type,
+		  props->dcp_chunksize, DP_UUID(cont->vc_id));
+
+	return rc;
+}

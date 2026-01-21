@@ -1,12 +1,17 @@
 hosts:
   test_servers: 3
   test_clients: 1
+
 timeout: 1110
+
 job_manager:
   manager_timeout: 300
+
 setup:
   start_servers_once: false
+
 skip_add_log_msg: true
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -14,8 +19,6 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31416
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -24,13 +27,12 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31516
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
       storage: auto
+
 pool:
   scm_size: 12000000000
   nvme_size: 108000000000
@@ -38,11 +40,13 @@ pool:
   rebuild_timeout: 120
   pool_query_timeout: 30
   properties: scrub:timed
+
 container:
   type: POSIX
   control_method: daos
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   oclass: RP_2G1
+
 ior:
   client_processes:
     np: 2
@@ -60,9 +64,11 @@ ior:
     #   The values are set to be in the multiples of 10.
     #   Values are appx GB.
     - [4000000000, 18000000000, 40000, 500000000, PASS]  # [4G, 18G, 40K, 510M, PASS]
+
 daos_racer:
   runtime: 480
   clush_timeout: 1000
+
 mdtest:
   api: DFS
   client_processes:
@@ -81,15 +87,20 @@ mdtest:
       read_bytes: 32768
   verbosity_value: 1
   depth: 0
+
 test_obj_class:
   oclass:
     - RP_3G6
     - RP_4G1
+
 loop_test:
   iterations: 3
+
 aggregation:
   test_with_aggregation: true
+
 rebuild:
   test_with_rebuild: true
+
 checksum:
   test_with_checksum: false

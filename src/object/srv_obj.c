@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -708,8 +708,24 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr, uint8_t *skips
 			continue;
 		}
 		sizes[i] = iods[idx].iod_size;
-		D_DEBUG(DB_IO, DF_UOID " %d:" DF_U64 "\n", DP_UOID(orw->orw_oid), i,
-			iods[idx].iod_size);
+		D_DEBUG(DB_IO, DF_UOID" %d:"DF_U64"\n", DP_UOID(orw->orw_oid),
+			i, iods[idx].iod_size);
+		if ((orw->orw_flags & ORF_FOR_MIGRATION) && sizes[i] == 0) {
+			D_DEBUG(DB_REBUILD,
+				DF_CONT " obj " DF_UOID "rebuild fetch zero iod_size, "
+					"i:%d/idx:%d, iod_nr %d, orw_epoch " DF_X64
+					", orw_epoch_first " DF_X64 " may cause DER_DATA_LOSS",
+				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+				DP_UOID(orw->orw_oid), i, idx, iods[idx].iod_nr, orw->orw_epoch,
+				orw->orw_epoch_first);
+			if (iods[idx].iod_type == DAOS_IOD_ARRAY) {
+				int j;
+
+				for (j = 0; j < min(8, iods[idx].iod_nr); j++)
+					D_DEBUG(DB_REBUILD, "recx[%d] - " DF_RECX, j,
+						DP_RECX(iods[idx].iod_recxs[j]));
+			}
+		}
 		idx++;
 	}
 
@@ -1361,7 +1377,7 @@ struct ec_agg_boundary_arg {
 };
 
 static int
-obj_fetch_ec_agg_boundary(void *data)
+obj_fetch_ec_agg_boundary_ult(void *data)
 {
 	struct ec_agg_boundary_arg *arg = data;
 	int                         rc;
@@ -1372,6 +1388,33 @@ obj_fetch_ec_agg_boundary(void *data)
 			 DP_CONT(arg->eab_pool->sp_uuid, arg->eab_co_uuid));
 
 	return rc;
+}
+
+static int
+obj_fetch_ec_agg_boundary(struct obj_io_context *ioc, daos_unit_oid_t *uoid)
+{
+	struct ec_agg_boundary_arg arg;
+	int                        rc;
+
+	arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
+	uuid_copy(arg.eab_co_uuid, ioc->ioc_coc->sc_uuid);
+	rc = dss_ult_execute(obj_fetch_ec_agg_boundary_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (rc) {
+		DL_ERROR(rc, DF_CONT ", " DF_UOID " fetch ec_agg_boundary failed.",
+			 DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
+			 DP_UOID(*uoid));
+		return rc;
+	}
+	if (ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
+		rc = -DER_FETCH_AGAIN;
+		DL_INFO(rc, DF_CONT ", " DF_UOID " zero ec_agg_boundary.",
+			DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid), DP_UOID(*uoid));
+		return rc;
+	}
+	D_DEBUG(DB_IO, DF_CONT ", " DF_UOID " fetched ec_agg_eph_boundary " DF_X64 "\n",
+		DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid), DP_UOID(*uoid),
+		ioc->ioc_coc->sc_ec_agg_eph_boundary);
+	return 0;
 }
 
 static int
@@ -1487,29 +1530,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		}
 		if ((ec_deg_fetch || (ec_recov && get_parity_list)) &&
 		    ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
-			struct ec_agg_boundary_arg arg;
-
-			arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
-			uuid_copy(arg.eab_co_uuid, ioc->ioc_coc->sc_uuid);
-			rc = dss_ult_execute(obj_fetch_ec_agg_boundary, &arg, NULL, NULL,
-					     DSS_XS_SYS, 0, 0);
+			rc = obj_fetch_ec_agg_boundary(ioc, &orw->orw_oid);
 			if (rc) {
 				DL_ERROR(rc, DF_CONT ", " DF_UOID " fetch ec_agg_boundary failed.",
 					 DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
 					 DP_UOID(orw->orw_oid));
 				goto out;
 			}
-			if (ioc->ioc_coc->sc_ec_agg_eph_valid == 0) {
-				rc = -DER_FETCH_AGAIN;
-				DL_INFO(rc, DF_CONT ", " DF_UOID " zero ec_agg_boundary.",
-					DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
-					DP_UOID(orw->orw_oid));
-				goto out;
-			}
-			D_DEBUG(DB_IO,
-				DF_CONT ", " DF_UOID " fetched ec_agg_eph_boundary " DF_X64 "\n",
-				DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
-				DP_UOID(orw->orw_oid), ioc->ioc_coc->sc_ec_agg_eph_boundary);
+			D_ASSERT(ioc->ioc_coc->sc_ec_agg_eph_valid);
 		}
 		if (get_parity_list) {
 			D_ASSERT(!ec_deg_fetch);
@@ -2402,9 +2430,9 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t rpc_ma
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		/* EC aggregation is still inflight, rebuild should wait until it's paused */
 		if (ds_cont_child_ec_aggregating(child)) {
-			D_ERROR(DF_CONT" ec aggregate still active, rebuilding %d\n",
+			D_ERROR(DF_CONT " ec aggregate still active, rebuilding %d\n",
 				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
-				child->sc_pool->spc_pool->sp_rebuilding);
+				atomic_load(&child->sc_pool->spc_pool->sp_rebuilding));
 			return -DER_UPDATE_AGAIN;
 		}
 	}
@@ -2412,7 +2440,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t rpc_ma
 	if (!obj_is_modification_opc(opc) && (opc != DAOS_OBJ_RPC_CPD || flags & ORF_CPD_RDONLY))
 		return 0;
 
-	if (child->sc_pool->spc_pool->sp_rebuilding) {
+	if (atomic_load(&child->sc_pool->spc_pool->sp_rebuilding)) {
 		uint32_t version;
 
 		ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD, &version, NULL, NULL);
@@ -2989,6 +3017,20 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
 			uint64_t rebuild_epoch;
 
+			if (ioc.ioc_coc->sc_ec_agg_eph_valid == 0) {
+				rc = obj_fetch_ec_agg_boundary(&ioc, &orw->orw_oid);
+				if (rc) {
+					DL_ERROR(rc,
+						 DF_CONT ", " DF_UOID " fetch ec_agg_boundary "
+							 "failed.",
+						 DP_CONT(ioc.ioc_coc->sc_pool_uuid,
+							 ioc.ioc_coc->sc_uuid),
+						 DP_UOID(orw->orw_oid));
+					goto out;
+				}
+				D_ASSERT(ioc.ioc_coc->sc_ec_agg_eph_valid);
+			}
+
 			D_ASSERTF(orw->orw_epoch <= orw->orw_epoch_first,
 				  "bad orw_epoch " DF_X64 ", orw_epoch_first " DF_X64 "\n",
 				  orw->orw_epoch, orw->orw_epoch_first);
@@ -3204,6 +3246,27 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version, daos_epoch_t epoc
 	D_FREE(oeo->oeo_csum_iov.iov_buf);
 }
 
+static void
+dump_enum_anchor(daos_unit_oid_t uoid, daos_anchor_t *anchor, char *str)
+{
+	int      nr = DAOS_ANCHOR_BUF_MAX / 8;
+	int      i;
+	uint64_t data[nr];
+
+	D_DEBUG(DB_REBUILD, DF_UOID "%s anchor -", DP_UOID(uoid), str);
+	D_DEBUG(DB_REBUILD, "type %d, shard %d, flags 0x%x\n", anchor->da_type, anchor->da_shard,
+		anchor->da_flags);
+	for (i = 0; i < nr; i++)
+		data[i] = *(uint64_t *)((char *)anchor->da_buf + i * 8);
+	if (nr >= 13)
+		D_DEBUG(DB_REBUILD,
+			"da_buf " DF_X64 "," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64
+			"," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64 "," DF_X64
+			"," DF_X64,
+			data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+			data[8], data[9], data[10], data[11], data[12]);
+}
+
 static int
 obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	       struct ds_obj_enum_arg *enum_arg, daos_epoch_t *e_out)
@@ -3269,7 +3332,10 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc, struct vos_iter_ancho
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
 		param.ip_flags |= VOS_IT_RECX_VISIBLE;
-		if (daos_anchor_get_flags(&anchors->ia_dkey) & DIOF_WITH_SPEC_EPOCH) {
+		dump_enum_anchor(oei->oei_oid, &anchors->ia_dkey, "dkey");
+		dump_enum_anchor(oei->oei_oid, &anchors->ia_akey, "akey");
+		if (daos_anchor_get_flags(&anchors->ia_dkey) &
+		      DIOF_WITH_SPEC_EPOCH) {
 			/* For obj verification case. */
 			param.ip_epc_expr = VOS_IT_EPC_RR;
 		} else {
@@ -3285,7 +3351,12 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc, struct vos_iter_ancho
 		enum_arg->chk_key2big  = 1;
 		enum_arg->need_punch   = 1;
 		enum_arg->copy_data_cb = vos_iter_copy;
-		fill_oid(oei->oei_oid, enum_arg);
+		rc                     = fill_oid(oei->oei_oid, enum_arg);
+		if (rc != 0) {
+			rc = -DER_KEY2BIG;
+			DL_ERROR(rc, DF_UOID "fill oid failed", DP_UOID(oei->oei_oid));
+			goto failed;
+		}
 	}
 
 	/*
@@ -5885,14 +5956,14 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 out:
-	D_DEBUG(DB_IO,
-		"Handled collective query RPC %p %s forwarding for obj " DF_UOID
-		" on rank %u XS %u/%u epc " DF_X64 " pmv %u, with dti " DF_DTI ", dct_nr %u, "
-		"forward width %u, forward depth %u\n: " DF_RC "\n",
-		rpc, ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid),
-		myrank, dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
-		DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
-		ocqi->ocqi_disp_width, ocqi->ocqi_disp_depth, DP_RC(rc));
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS, DLOG_ERR, DB_IO, rc,
+		  "Handled collective query RPC %p %s forwarding for obj " DF_UOID " on rank %u XS "
+		  "%u/%u epc " DF_X64 " pmv %u, with dti " DF_DTI ", dct_nr %u, forward width %u, "
+		  "forward depth %u",
+		  rpc, ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid),
+		  myrank, dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
+		  DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
+		  ocqi->ocqi_disp_width, ocqi->ocqi_disp_depth);
 
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, version);

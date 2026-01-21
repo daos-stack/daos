@@ -52,6 +52,7 @@
 - name: gurt
   base: "BUILD_DIR"
   tests:
+    - cmd: ["src/gurt/tests/d_log_memory_ut"]
     - cmd: ["src/gurt/tests/test_gurt"]
     - cmd: ["src/gurt/tests/test_gurt_telem_producer"]
 - name: DTX
@@ -190,6 +191,10 @@
   tests:
     - cmd: ["bin/ddb_tests"]
     - cmd: ["bin/ddb_ut"]
+- name: dlck
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/utils/dlck/tests/dlck_args_ut"]
 - name: Source metadata testing
   gha: True
   memcheck: False

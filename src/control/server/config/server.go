@@ -69,6 +69,7 @@ type Server struct {
 	SystemRamReserved  int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages   bool                      `yaml:"disable_hugepages"`
 	AllowNumaImbalance bool                      `yaml:"allow_numa_imbalance"`
+	AllowTHP           bool                      `yaml:"allow_thp"`
 	ControlLogMask     common.ControlLogLevel    `yaml:"control_log_mask"`
 	ControlLogFile     string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON     bool                      `yaml:"control_log_json,omitempty"`
@@ -304,6 +305,12 @@ func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 // WithAllowNumaImbalance allows engine count mismatch between NUMA-nodes.
 func (cfg *Server) WithAllowNumaImbalance(allowed bool) *Server {
 	cfg.AllowNumaImbalance = allowed
+	return cfg
+}
+
+// WithAllowTHP allows DAOS server to run with transparent hugepage support enabled.
+func (cfg *Server) WithAllowTHP(allowed bool) *Server {
+	cfg.AllowTHP = allowed
 	return cfg
 }
 
@@ -906,6 +913,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenHelperStreamCount := -1
 	seenScmCls := storage.ClassNone
 	seenScmClsIdx := -1
+	seenScmHuge := false
+	seenScmHugeIdx := -1
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
@@ -952,6 +961,14 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			}
 			seenScmCls = scmConf.Class
 			seenScmClsIdx = idx
+
+			if seenScmHugeIdx != -1 && scmConf.Scm.DisableHugepages != seenScmHuge {
+				log.Debugf("scm_hugepages_disabled entry %v in %d doesn't match %d",
+					scmConf.Scm.DisableHugepages, idx, seenScmHugeIdx)
+				return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+			}
+			seenScmHuge = scmConf.Scm.DisableHugepages
+			seenScmHugeIdx = idx
 		}
 
 		bdevs := engine.Storage.GetBdevs()

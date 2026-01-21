@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -199,17 +199,23 @@ message StorageUsageStats {
 	StorageMediaType media_type = 6;
 }
 
-// PoolRebuildStatus represents a pool's rebuild status.
+// PoolRebuildStatus represents a pool's rebuild status, translates to enum daos_rebuild_state_t
+// IN_PROGRESS/NOT_STARTED/COMPLETED states.
 message PoolRebuildStatus {
 	int32 status = 1; // DAOS error code
 	enum State {
-		IDLE = 0;
-		DONE = 1;
-		BUSY = 2;
+		BUSY     = 0;
+		IDLE     = 1;
+		DONE     = 2;
+		STOPPING = 3;
+		STOPPED  = 4;
+		FAILING  = 5;
+		FAILED   = 6;
 	}
 	State state = 2;
 	uint64 objects = 3;
 	uint64 records = 4;
+	State  derived_state = 5;
 }
 
 enum PoolServiceState {
@@ -314,14 +320,7 @@ message StorageTargetUsage {
 // PoolQueryTargetInfo represents pool target query info for a single target.
 // The RPC response type (PoolQueryTargetResponse) contains a sequence of these.
 message PoolQueryTargetInfo {
-	enum TargetType { // See enum daos_target_type_t
-		UNKNOWN = 0;
-		HDD = 1; // Rotating disk
-		SSD = 2; // Flash-based
-		PM = 3; // Persistent memory
-		VM = 4; // Volatile memory
-	}
-	TargetType type = 1; // Target type jsee enum daos_target_type_t
+	reserved 1;
 
 	enum TargetState { // See enum daos_target_state_t
 		STATE_UNKNOWN = 0;

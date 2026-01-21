@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,7 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
+#include <gurt/atomic.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 
@@ -80,6 +81,7 @@ struct ds_pool {
 	struct sched_request	*sp_ec_ephs_req;
 
 	uint32_t		sp_dtx_resync_version;
+	uint32_t                 sp_gl_dtx_resync_version; /* global DTX resync version */
 	/* Special pool/container handle uuid, which are
 	 * created on the pool leader step up, and propagated
 	 * to all servers by IV. Then they will be used by server
@@ -93,7 +95,7 @@ struct ds_pool {
 	 * rebuild job.
 	 */
 	uint32_t                 sp_rebuild_gen;
-	int			sp_rebuilding;
+	ATOMIC int               sp_rebuilding;
 	/**
 	 * someone has already messaged this pool to for rebuild scan,
 	 * NB: all xstreams can do lockless-write on it but it's OK
@@ -218,7 +220,7 @@ struct ds_pool_svc_op_val {
 static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
-	return (pool->sp_rebuilding > 0 || pool->sp_rebuild_scan > 0);
+	return (atomic_load(&pool->sp_rebuilding) > 0 || pool->sp_rebuild_scan > 0);
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.
@@ -386,7 +388,8 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 
 int
 map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
-
+int
+map_ranks_failed(const struct pool_map *map, d_rank_list_t *ranks);
 void
 map_ranks_fini(d_rank_list_t *ranks);
 
