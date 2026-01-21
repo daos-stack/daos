@@ -1058,7 +1058,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	if (tr_addr != NULL) {
 		addr_len = strnlen(tr_addr, SPDK_NVMF_TRADDR_MAX_LEN + 1);
 		if (addr_len == SPDK_NVMF_TRADDR_MAX_LEN + 1) {
-			D_ERROR("Address string too long\n");
+			D_ERROR("Address string too long");
 			return -DER_INVAL;
 		}
 	}
@@ -1070,7 +1070,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 			return 0;
 		}
 		if (rc != 0) {
-			DL_ERROR(rc, "Failed to read PCI addr from device " DF_UUID "\n",
+			DL_ERROR(rc, "Failed to read PCI addr from device " DF_UUID,
 				 DP_UUID(dev_uuid));
 			return rc;
 		}
@@ -1079,7 +1079,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 			/* Populate tr_addr buffer to return address */
 			rc = spdk_pci_addr_fmt(tr_addr, addr_len, &pci_addr);
 			if (rc != 0) {
-				D_ERROR("Failed to write VMD's PCI address (%s)\n",
+				D_ERROR("Failed to write VMD's PCI address (%s)",
 					spdk_strerror(-rc));
 				return -DER_INVAL;
 			}
@@ -1087,14 +1087,14 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	} else {
 		rc = spdk_pci_addr_parse(&pci_addr, tr_addr);
 		if (rc != 0) {
-			D_ERROR("Unable to parse PCI address for device %s (%s)\n", tr_addr,
+			D_ERROR("Unable to parse PCI address for device %s (%s)", tr_addr,
 				spdk_strerror(-rc));
 			return -DER_INVAL;
 		}
 	}
 
 	if (!is_pci_addr_valid(&pci_addr)) {
-		D_ERROR("No valid PCI address found for device\n");
+		D_ERROR("No valid PCI address found for device");
 		return -DER_INVAL;
 	}
 
