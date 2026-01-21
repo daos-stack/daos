@@ -2738,7 +2738,9 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	struct dtx_id		 dti = { 0 };
 	struct dtx_epoch	 epoch = { 0 };
 	daos_unit_oid_t		 oid = { 0 };
+	vos_cont_info_t           info;
 	uint64_t                  ec_agg_eph;
+	uint64_t                  ec_wrt_eph;
 	int			 blocks = 0;
 	int			 rc = 0;
 
@@ -2756,18 +2758,22 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
-	if (likely(cont->sc_ec_agg_eph_valid)) {
-		if (cont->sc_ec_agg_eph == 0) {
-			D_INFO(DF_CONT ": update cont->sc_ec_agg_eph to " DF_X64,
-			       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			       cont->sc_ec_agg_eph_boundary);
-			cont->sc_ec_agg_eph = cont->sc_ec_agg_eph_boundary;
-		}
-	} else {
+	if (!cont->sc_ec_agg_eph_valid) {
 		D_DEBUG(DB_EPC, DF_CONT ": pause EC aggregation for sc_ec_agg_eph_boundary.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		return 0;
 	}
+
+	if (cont->sc_ec_agg_eph == 0) {
+		D_INFO(DF_CONT ": update cont->sc_ec_agg_eph to " DF_X64,
+		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		       cont->sc_ec_agg_eph_boundary);
+		cont->sc_ec_agg_eph = cont->sc_ec_agg_eph_boundary;
+	}
+
+	/* load the timestamp of the last write that can be aggregated from VOS */
+	vos_cont_query(ec_agg_param->ap_cont_handle, &info);
+	ec_wrt_eph = info.ci_agg_write;
 
 	ec_agg_eph                     = cont->sc_ec_agg_eph;
 	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
@@ -2780,14 +2786,10 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		ec_agg_param->ap_filter_eph = MAX(epr->epr_lo, cont->sc_ec_agg_eph);
 	}
 
-	/* Currently cont->sc_ec_update_timestamp is in memory so this optimization won't be helpful
-	 * when there is no container update since restart.
-	 */
-	if (ec_agg_param->ap_filter_eph != 0 && cont->sc_ec_update_timestamp != 0 &&
-	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
+	if (ec_agg_param->ap_filter_eph != 0 && ec_agg_param->ap_filter_eph >= ec_wrt_eph) {
 		D_DEBUG(DB_EPC, DF_CONT " skip EC agg " DF_U64 ">= " DF_U64 "\n",
 			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
-			cont->sc_ec_update_timestamp);
+			ec_wrt_eph);
 		goto update_hae;
 	}
 

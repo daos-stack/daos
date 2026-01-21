@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2963,10 +2963,4 @@ ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t	*prop)
 			DP_RC(rc));
 
 	return rc;
-}
-
-void
-ds_cont_ec_timestamp_update(struct ds_cont_child *cont)
-{
-	cont->sc_ec_update_timestamp = d_hlc_get();
 }
