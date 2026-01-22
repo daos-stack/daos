@@ -281,11 +281,19 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
+        dmg_command = self.get_dmg_command()
+        if self.server_managers[0].manager.job.using_control_metadata:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
+
         self.log_step("Create a pool with --nsvc=3.")
         pool = self.get_pool(svcn=3)
 
         self.log_step("Stop servers")
-        dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
@@ -303,14 +311,6 @@ class PoolListConsolidationTest(TestWithServers):
                 count += 1
                 if count > 1:
                     break
-        using_control_metadata = self.server_managers[0].manager.job.using_control_metadata
-        if count == 0 or using_control_metadata:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
 
         self.log_step("Start servers.")
         dmg_command.system_start()
