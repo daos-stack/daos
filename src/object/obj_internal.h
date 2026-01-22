@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1181,6 +1181,8 @@ iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info);
 /* obj_layout.c */
 int
 obj_pl_grp_idx(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_nr);
+void
+obj_dump_grp_layout(daos_handle_t oh, uint32_t shard);
 
 int
 obj_pl_place(struct pl_map *map, uint16_t layout_ver, struct daos_obj_md *md,
