@@ -56,8 +56,8 @@ class EvictionMetrics(TestWithTelemetry):
             # Write more (110%) files to exceed mem_file_bytes and cause eviction
             mdtest_params = {"num_of_files_dirs": math.ceil(files_per_process * 1.10)}
         else:
-            # Write less (60%) files to avoid out of space errors
-            mdtest_params = {"num_of_files_dirs": math.floor(files_per_process * 0.60)}
+            # Write less (30%) files to avoid out of space errors
+            mdtest_params = {"num_of_files_dirs": math.floor(files_per_process * 0.30)}
 
         self.log.debug("-" * 60)
         self.log.debug("Pool %s create data:", pool)
@@ -114,7 +114,7 @@ class EvictionMetrics(TestWithTelemetry):
                 elif metric.endswith('_page_flush'):
                     expected_ranges[metric][label] = [0]                # 0 or greater (phase 2)
                 else:
-                    expected_ranges[metric][label] = [1, 10000000]      # 1-10,000,000 (phase 2)
+                    expected_ranges[metric][label] = [1000]             # 1000 or greater (phase 2)
         self.log.debug("%s expected_ranges: %s", pool, expected_ranges)
 
         self.log_step('Verify pool eviction metrics after writing data')
