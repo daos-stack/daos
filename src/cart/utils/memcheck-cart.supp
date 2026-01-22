@@ -795,3 +795,24 @@
    fun:_cgo_b590e4e2531a_Cfunc_daos_init
    fun:runtime.asmcgocall.abi0
 }
+{
+   getpwnam_r() leak
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:getpwnam_r*
+}
+{
+   getpwuid_r() leak
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:getpwuid_r*
+}
+{
+   localtime() leak
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:__tz_convert
+}
