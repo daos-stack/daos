@@ -1,9 +1,11 @@
 hosts:
   test_servers: 2
   test_clients: 2
+
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
 timeout: 3600
+
 job_manager:
   class_name: Orterun
   mpi_type: openmpi
@@ -21,8 +23,6 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       storage:
         0:
@@ -32,8 +32,6 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       storage:
         0:
