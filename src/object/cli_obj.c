@@ -1,8 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -387,7 +386,7 @@ obj_layout_refresh(struct dc_object *obj)
 
 	D_RWLOCK_WRLOCK(&obj->cob_lock);
 	obj_layout_free(obj);
-	rc = obj_layout_create(obj, 0, true);
+	rc = obj_layout_create(obj, obj->cob_mode, true);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return rc;
@@ -4138,8 +4137,10 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 	obj_auxi_shards_iterate(obj_auxi, update_sub_anchor_cb, NULL);
 
 	sub_anchors = (struct shard_anchors *)anchor->da_sub_anchors;
-	if (!d_list_empty(&sub_anchors->sa_merged_list))
+	if (!d_list_empty(&sub_anchors->sa_merged_list)) {
+		D_ASSERT(obj_auxi->opc != DAOS_OBJ_RPC_ENUMERATE);
 		return;
+	}
 
 	if (sub_anchors_is_eof(sub_anchors)) {
 		daos_obj_list_t *obj_args;
@@ -4148,6 +4149,18 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 
 		obj_args = dc_task_get_args(obj_auxi->obj_task);
 		sub_anchors_free(obj_args, obj_auxi->opc);
+	} else if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE) {
+		for (int i = 0; i < sub_anchors->sa_anchors_nr; i++) {
+			daos_anchor_t *sub_anchor;
+
+			sub_anchor = &sub_anchors->sa_anchors[i].ssa_anchor;
+			if (!daos_anchor_is_eof(sub_anchor)) {
+				D_DEBUG(DB_REBUILD, "shard %d sub_anchor %d/%d non EOF",
+					sub_anchors->sa_anchors[i].ssa_shard, i,
+					sub_anchors->sa_anchors_nr);
+				break;
+			}
+		}
 	}
 }
 

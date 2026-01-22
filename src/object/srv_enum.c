@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -321,37 +322,6 @@ entry_is_partial_extent(const vos_iter_entry_t *key_ent)
 }
 
 static int
-csummer_verify_recx(struct daos_csummer *csummer, d_iov_t *data_to_verify,
-		    daos_recx_t *recx, daos_size_t rsize,
-		    struct dcs_csum_info *csum_info)
-{
-	int			rc;
-	struct dcs_iod_csums	iod_csum = {0};
-	daos_iod_t		iod = {0};
-	d_sg_list_t		sgl = {0};
-
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_recxs = recx;
-	iod.iod_nr = 1;
-	iod.iod_size = rsize;
-
-	sgl.sg_iovs = data_to_verify;
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-
-	iod_csum.ic_nr = 1;
-	iod_csum.ic_data = csum_info;
-
-	rc = daos_csummer_verify_iod(csummer, &iod, &sgl,
-				     &iod_csum, NULL, 0, NULL);
-	if (rc != 0)
-		D_ERROR("Corruption found for recx "DF_RECX"\n",
-			DP_RECX(*recx));
-
-	return rc;
-}
-
-static int
 csummer_alloc_csum_info(struct daos_csummer *csummer,
 			daos_recx_t *recx, daos_size_t rsize,
 			struct dcs_csum_info **csum_info)
@@ -467,15 +437,13 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 			return rc;
 		}
 
-		rc = csummer_verify_recx(csummer,
-					 &data_to_verify,
-					 &ent_to_verify.ie_orig_recx,
-					 ent_to_verify.ie_rsize,
-					 &ent_to_verify.ie_csum);
-
+		rc = daos_csummer_verify_value(csummer, &ent_to_verify.ie_orig_recx,
+					       ent_to_verify.ie_rsize, &data_to_verify,
+					       &ent_to_verify.ie_csum);
 		D_FREE(data_to_verify.iov_buf);
 		if (rc != 0) {
-			D_ERROR("Found corruption!\n");
+			D_ERROR("Found corrupted recx " DF_RECX "\n",
+				DP_RECX(ent_to_verify.ie_orig_recx));
 			return rc;
 		}
 
