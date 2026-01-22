@@ -153,7 +153,7 @@ bring-up DAOS servers and clients.
 	IOR-3.4.0+dev: MPI Coordinated Test of Parallel I/O
 	Began : Fri Apr 16 18:07:56 2021
 	Command line : ior -a POSIX -b 26214400 -v -w -k -i 1 -o /tmp/daos_test1/testfile -t 25M
-	Machine : Linux boro-8.boro.hpdd.intel.com
+	Machine : Linux boro-8.boro.example.com
 	Start time skew across all tasks: 0.00 sec
 	TestID : 0
 	StartTime : Fri Apr 16 18:07:56 2021
@@ -358,19 +358,19 @@ bring-up DAOS servers and clients.
 	$ dmg system query -v
 	Rank UUID Control Address Fault Domain State Reason
 	---- --------------- ------------ ----- ------
-	0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 boro-8.boro.hpdd.intel.com Joined
-	1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 boro-35.boro.hpdd.intel.com Joined
-	2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 boro-53.boro.hpdd.intel.com Joined
-	3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 boro-52.boro.hpdd.intel.com Evicted system stop
+	0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 boro-8.boro.example.com Joined
+	1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 boro-35.boro.example.com Joined
+	2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 boro-53.boro.example.com Joined
+	3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 boro-52.boro.example.com Evicted system stop
 
 	# Restart, after evicted server restarted, verify the server joined
 	$ /usr/bin/dmg system query -v
 	Rank UUID Control Address Fault Domain State Reason
 	---- --------------- ------------ ----- ------
-	0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 /boro-8.boro.hpdd.intel.com Joined
-	1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 /boro-35.boro.hpdd.intel.com Joined
-	2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 /boro-53.boro.hpdd.intel.com Joined
-	3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 /boro-52.boro.hpdd.intel.com Joined
+	0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 /boro-8.boro.example.com Joined
+	1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 /boro-35.boro.example.com Joined
+	2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 /boro-53.boro.example.com Joined
+	3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 /boro-52.boro.example.com Joined
 
 	# Unmount after test completed
 	$ fusermount -u /tmp/daos_test1/
@@ -415,19 +415,19 @@ bring-up DAOS servers and clients.
 	$ dmg system query -v
 	Rank UUID Control Address Fault Domain State Reason
 	 ---- --------------- ------------ ----- ------
-	 0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 boro-8.boro.hpdd.intel.com Joined
-	 1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 boro-35.boro.hpdd.intel.com Joined
-	 2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 boro-53.boro.hpdd.intel.com Evicted system stop
-	 3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 boro-52.boro.hpdd.intel.com Joined
+	 0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 boro-8.boro.example.com Joined
+	 1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 boro-35.boro.example.com Joined
+	 2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 boro-53.boro.example.com Evicted system stop
+	 3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 boro-52.boro.example.com Joined
 
 	 # Restart, after evicted server restarted, verify the server joined
 	$ /usr/bin/dmg system query -v
 	 Rank UUID Control Address Fault Domain State Reason
 	 ---- --------------- ------------ ----- ------
-	 0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 /boro-8.boro.hpdd.intel.com Joined
-	 1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 /boro-35.boro.hpdd.intel.com Joined
-	 2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 /boro-53.boro.hpdd.intel.com Joined
-	 3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 /boro-52.boro.hpdd.intel.com Joined
+	 0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 /boro-8.boro.example.com Joined
+	 1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 /boro-35.boro.example.com Joined
+	 2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 /boro-53.boro.example.com Joined
+	 3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 /boro-52.boro.example.com Joined
 
 ## Clean-Up
 

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -204,13 +204,18 @@ message StorageUsageStats {
 message PoolRebuildStatus {
 	int32 status = 1; // DAOS error code
 	enum State {
-		BUSY = 0; // DRS_IN_PROGRESS
-		IDLE = 1; // DRS_NOT_STARTED
-		DONE = 2; // DRS_COMPLETED
+		BUSY     = 0;
+		IDLE     = 1;
+		DONE     = 2;
+		STOPPING = 3;
+		STOPPED  = 4;
+		FAILING  = 5;
+		FAILED   = 6;
 	}
 	State state = 2;
 	uint64 objects = 3;
 	uint64 records = 4;
+	State  derived_state = 5;
 }
 
 enum PoolServiceState {
