@@ -39,6 +39,11 @@ degrade_small_sub_setup(void **state)
 
 	arg = *state;
 	arg->no_rebuild = 1;
+
+	/* Disable manual rebuilds */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DISABLE | DAOS_FAIL_ALWAYS);
+
+	/* Disable automatic rebuilds */
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
 				"exclude");
 	return rc;
@@ -57,6 +62,11 @@ degrade_sub_setup(void **state)
 
 	arg = *state;
 	arg->no_rebuild = 1;
+
+	/* Disable manual rebuilds */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DISABLE | DAOS_FAIL_ALWAYS);
+
+	/* Disable automatic rebuilds */
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
 				"exclude");
 	return rc;
@@ -75,6 +85,11 @@ degrade_sub_rf1_setup(void **state)
 
 	arg = *state;
 	arg->no_rebuild = 1;
+
+	/* Disable manual rebuilds */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DISABLE | DAOS_FAIL_ALWAYS);
+
+	/* Disable automatic rebuilds */
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
 				"exclude");
 	return rc;
@@ -498,13 +513,11 @@ degrade_ec_partial_update_agg(void **state)
 			     data, EC_CELL_SIZE, &req);
 	}
 
-	/* Kill one parity shard, the aggregate leader to verify aggregate works in degraded mode.
-	 * Kill/restart engine for exclude only (due to self_heal setting).
+	/* Kill one parity shard, which is the aggregate leader to verify
+	 * aggregate works in degraded mode.
 	 */
 	rank = get_rank_by_oid_shard(arg, oid, 4);
-	arg->no_rebuild = 1;
-	rebuild_pools_ranks(&arg, 1, &rank, 1, true /* kill */);
-	dmg_system_start_rank(dmg_config_file, rank);
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
 
 	/* Trigger aggregation */
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");

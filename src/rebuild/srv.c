@@ -2699,7 +2699,7 @@ ds_rebuild_admin_start(struct ds_pool *pool)
 	}
 
 	rc = ds_rebuild_regenerate_task(pool, &prop, DS_MGMT_SELF_HEAL_ALL /* sys_self_heal */,
-					false /* self_heal_applicable */, 0 /* delay_sec */);
+					false /* auto_recovery */, 0 /* delay_sec */);
 	daos_prop_fini(&prop);
 	if (rc)
 		DL_ERROR(rc, DF_UUID ": regenerate rebuild task failed", DP_UUID(pool->sp_uuid));

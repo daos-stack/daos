@@ -569,13 +569,17 @@ ds_pool_prop_recov_cont_reset(struct rdb_tx *tx, struct ds_rsvc *rsvc);
 static inline bool
 is_pool_rebuild_allowed(struct ds_pool *pool, uint64_t self_heal, bool auto_recovery)
 {
+	bool auto_rebuild_enabled  = self_heal & DAOS_SELF_HEAL_AUTO_REBUILD;
+	bool delay_rebuild_enabled = self_heal & DAOS_SELF_HEAL_DELAY_REBUILD;
+
 	if (pool->sp_disable_rebuild)
 		return false;
 
-	if (auto_recovery &&
-	    !(self_heal & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)))
+	/* If auto recovery is requested, only allow if self_heal enables auto or delay_rebuild */
+	if (auto_recovery && !(auto_rebuild_enabled || delay_rebuild_enabled))
 		return false;
 
+	/* Otherwise, rebuild is allowed */
 	return true;
 }
 
