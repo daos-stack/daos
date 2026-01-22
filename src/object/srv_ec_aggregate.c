@@ -2687,7 +2687,8 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
 
-	rc = dss_ult_execute(ec_agg_init_ult, agg_param, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(ec_agg_init_ult, agg_param, NULL, NULL, DSS_XS_SYS, 0,
+			     DSS_DEEP_STACK_SZ);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
