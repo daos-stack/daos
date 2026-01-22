@@ -582,6 +582,10 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 		return nil, err
 	}
 
+	if err := resp.UpdateRebuildStatus(); err != nil {
+		return nil, err
+	}
+
 	if req.QueryMask.HasOption(daos.PoolQueryOptionSelfHealPolicy) {
 		if err := resp.UpdateSelfHealPolicy(ctx, rpcClient); err != nil {
 			return nil, errors.Wrap(err, "pool get-prop self_heal failed")
