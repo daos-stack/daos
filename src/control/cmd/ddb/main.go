@@ -260,6 +260,10 @@ ddb "" ls --help
 		return nil
 	}
 
+	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
+		return errors.New("Cannot use both command file and a command string")
+	}
+
 	if opts.Debug {
 		log.WithLogLevel(logging.LogLevelDebug)
 		log.Debug("debug output enabled")
@@ -272,26 +276,30 @@ ddb "" ls --help
 	defer cleanup()
 	app := createGrumbleApp(ctx)
 
-	if opts.Args.VosPath != "" {
-		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
-			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
-			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
-			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
-			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-			if err := ddbOpen(ctx, string(opts.Args.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
-				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
-			}
-		}
-	}
-
-	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
-		return errors.New("Cannot use both command file and a command string")
+	if opts.SysdbPath != "" {
+		ctx.ctx.dc_db_path = C.CString(string(opts.SysdbPath))
+		defer C.free(unsafe.Pointer(ctx.ctx.dc_db_path))
 	}
 
 	if opts.Args.VosPath != "" {
 		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
 		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
+
+		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "open") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "close") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "prov_mem") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "smd_sync") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
+			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
+			if err := ddbOpen(ctx, string(opts.Args.VosPath), bool(opts.WriteMode)); err != nil {
+				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+			}
+		}
 	}
+
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
 		if opts.Args.RunCmd != "" {
