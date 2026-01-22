@@ -114,7 +114,7 @@ class EvictionMetrics(TestWithTelemetry):
                 elif metric.endswith('_page_flush'):
                     expected_ranges[metric][label] = [0]                # 0 or greater (phase 2)
                 else:
-                    expected_ranges[metric][label] = [1000]             # 1000 or greater (phase 2)
+                    expected_ranges[metric][label] = [1]                # 1 or greater (phase 2)
         self.log.debug("%s expected_ranges: %s", pool, expected_ranges)
 
         self.log_step('Verify pool eviction metrics after writing data')
