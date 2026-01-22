@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,8 +31,8 @@
 
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
-/* SPDK blob parameters */
-#define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
+/* Default cluster size in MB */
+#define DAOS_DEFAULT_CLUSTER_MB 128
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_INIT_PCT 50      /* Default per-xstream init chunks, in percentage */
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Default per-xstream max chunks, 1GB */
@@ -224,6 +224,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	char		*env;
 	int		 rc, fd;
 	unsigned int     size_mb = BIO_DMA_CHUNK_MB, io_timeout_secs = 0;
+	unsigned int     cluster_mb = DAOS_DEFAULT_CLUSTER_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -323,8 +324,14 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks, prealloc %u chunks\n",
 	       bio_chk_cnt_max, size_mb, init_chk_cnt());
 
+	d_getenv_uint("DAOS_BS_CLUSTER_MB", &cluster_mb);
+	if (cluster_mb < 32 || cluster_mb > 1024) {
+		D_WARN("DAOS_BS_CLUSTER_MB %u is invalid, default %u is used\n", cluster_mb,
+		       DAOS_DEFAULT_CLUSTER_MB);
+		cluster_mb = DAOS_DEFAULT_CLUSTER_MB;
+	}
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
-	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
+	nvme_glb.bd_bs_opts.cluster_sz      = (cluster_mb << 20);
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	d_agetenv_str(&env, "VOS_BDEV_CLASS");
@@ -368,8 +375,9 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		nvme_glb.bd_bs_opts.cluster_sz = (1UL << 30);	/* 1GB */
 
-	D_INFO("MD on SSD is %s\n",
-	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
+	D_INFO("MD on SSD is %s, %u cluster size is used\n",
+	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled",
+	       nvme_glb.bd_bs_opts.cluster_sz);
 
 	bio_spdk_inited = true;
 

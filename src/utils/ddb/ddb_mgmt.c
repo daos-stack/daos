@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2025 Vdura Inc.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -185,7 +185,8 @@ ddb_recreate_pooltgts(const char *storage_path)
 		D_ASSERT(pool_info->spi_scm_sz > 0);
 
 		rc = ds_mgmt_tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
-					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], rdb_size,
+					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META],
+					  pool_info->spi_tgts[SMD_DEV_TYPE_META], rdb_size,
 					  storage_path, NULL);
 		if (rc != 0)
 			break;

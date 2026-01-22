@@ -136,7 +136,8 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 			fmt.Fprintf(w, "- Rebuild %s, %d objs, %d recs\n",
 				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
 		} else {
-			fmt.Fprintf(w, "- Rebuild failed, status=%d\n", pi.Rebuild.Status)
+			fmt.Fprintf(w, "- Rebuild %s (state=%s, status=%d)\n",
+				pi.Rebuild.DerivedState, pi.Rebuild.State, pi.Rebuild.Status)
 		}
 		if pi.Rebuild.Degraded {
 			fmt.Fprintln(w, "- Data redundancy: degraded")

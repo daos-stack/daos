@@ -204,14 +204,19 @@ message StorageUsageStats {
 message PoolRebuildStatus {
 	int32 status = 1; // DAOS error code
 	enum State {
-		BUSY = 0; // DRS_IN_PROGRESS
-		IDLE = 1; // DRS_NOT_STARTED
-		DONE = 2; // DRS_COMPLETED
+		BUSY     = 0;
+		IDLE     = 1;
+		DONE     = 2;
+		STOPPING = 3;
+		STOPPED  = 4;
+		FAILING  = 5;
+		FAILED   = 6;
 	}
 	State state = 2;
 	uint64 objects = 3;
 	uint64 records = 4;
-	bool degraded = 5; // data redundancy degraded
+	State  derived_state = 5;
+	bool degraded = 6; // data redundancy degraded
 }
 
 enum PoolServiceState {
