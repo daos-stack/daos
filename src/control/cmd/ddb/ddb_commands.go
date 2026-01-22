@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
 // (C) Copyright 2025 Vdura Inc.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,7 +51,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 			a.String("path", "Path to the vos file to open.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbOpen(ctx, c.Args.String("path"), c.Flags.String("db_path"), c.Flags.Bool("write_mode"))
+			return ddbOpen(ctx, c.Args.String("path"), c.Flags.Bool("write_mode"))
 		},
 		Completer: openCompleter,
 	})
@@ -319,7 +319,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+			return ddbFeature(ctx, c.Args.String("path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
 		},
 		Completer: featureCompleter,
 	})
@@ -330,6 +330,9 @@ the path must include the extent, otherwise, it must not.`,
 		Help:      "Remove a vos pool.",
 		LongHelp:  "",
 		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.String("p", "db_path", "", "Path to the sys db.")
+		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
 		},
@@ -434,7 +437,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "Optional, VOS tree path of a container to aggregate.", grumble.Default(""))
 		},
 		Flags: func(f *grumble.Flags) {
-			f.Uint64("t", "cmt_time", math.MaxUint64, "Max aggregfation committed time in seconds")
+			f.Uint64("t", "cmt_time", math.MaxUint64, "Max aggregation committed time in seconds")
 			f.String("d", "cmt_date", "", "Max aggregation committed date (format '1970-01-01 00:00:00')")
 		},
 		Run: func(c *grumble.Context) error {

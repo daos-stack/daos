@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,12 +39,14 @@ func TestMetadata_Provider_Format(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		nilProv  bool
-		sysCfg   *system.MockSysConfig
-		mountCfg *storage.MockMountProviderConfig
-		setup    func(*testing.T, string) func()
-		req      storage.MetadataFormatRequest
-		expErr   error
+		nilProv     bool
+		sysCfg      *system.MockSysConfig
+		mountCfg    *storage.MockMountProviderConfig
+		setup       func(*testing.T, string) func()
+		req         storage.MetadataFormatRequest
+		expErr      error
+		expMkfs     bool
+		expMkfsOpts []string
 	}{
 		"nil provider": {
 			nilProv: true,
@@ -107,6 +110,7 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			sysCfg: &system.MockSysConfig{
 				GetfsTypeErr: []error{errors.New("mock GetfsType")},
 			},
+			expMkfs: true,
 		},
 		"GetfsType retries with parent if dir doesn't exist": {
 			req: pathReq,
@@ -129,19 +133,28 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			},
 			expErr: errors.New("mock MakeMountPath"),
 		},
+		"get label fails": {
+			req: deviceReq,
+			sysCfg: &system.MockSysConfig{
+				GetDeviceLabelErr: errors.New("mock GetDeviceLabel"),
+			},
+			expErr: errors.New("mock GetDeviceLabel"),
+		},
 		"mkfs fails": {
 			req: deviceReq,
 			sysCfg: &system.MockSysConfig{
 				MkfsErr: errors.New("mock mkfs"),
 			},
-			expErr: errors.New("mock mkfs"),
+			expErr:  errors.New("mock mkfs"),
+			expMkfs: true,
 		},
 		"Mount fails": {
 			req: deviceReq,
 			mountCfg: &storage.MockMountProviderConfig{
 				MountErr: errors.New("mock Mount"),
 			},
-			expErr: errors.New("mock Mount"),
+			expErr:  errors.New("mock Mount"),
+			expMkfs: true,
 		},
 		"remove old data dir fails": {
 			req: deviceReq,
@@ -159,7 +172,8 @@ func TestMetadata_Provider_Format(t *testing.T) {
 					}
 				}
 			},
-			expErr: errors.New("removing old control metadata subdirectory"),
+			expErr:  errors.New("removing old control metadata subdirectory"),
+			expMkfs: true,
 		},
 		"create data dir fails": {
 			req: deviceReq,
@@ -177,14 +191,16 @@ func TestMetadata_Provider_Format(t *testing.T) {
 					}
 				}
 			},
-			expErr: errors.New("creating control metadata subdirectory"),
+			expErr:  errors.New("creating control metadata subdirectory"),
+			expMkfs: true,
 		},
 		"chown data dir fails": {
 			req: deviceReq,
 			sysCfg: &system.MockSysConfig{
 				ChownErr: errors.New("mock chown"),
 			},
-			expErr: errors.New("mock chown"),
+			expErr:  errors.New("mock chown"),
+			expMkfs: true,
 		},
 		"Unmount fails": {
 			req: deviceReq,
@@ -192,10 +208,20 @@ func TestMetadata_Provider_Format(t *testing.T) {
 				IsMountedRes: true,
 				UnmountErr:   errors.New("mock Unmount"),
 			},
-			expErr: errors.New("mock Unmount"),
+			expErr:  errors.New("mock Unmount"),
+			expMkfs: true,
 		},
 		"device success": {
+			req:     deviceReq,
+			expMkfs: true,
+		},
+		"preserve existing label": {
 			req: deviceReq,
+			sysCfg: &system.MockSysConfig{
+				GetDeviceLabelRes: "old_label",
+			},
+			expMkfsOpts: []string{"-L", "old_label"},
+			expMkfs:     true,
 		},
 		"path only doesn't attempt device format": {
 			req: pathReq,
@@ -244,14 +270,23 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			defer teardown()
 
 			var p *Provider
+			mockSys := system.NewMockSysProvider(log, tc.sysCfg)
 			if !tc.nilProv {
-				p = NewProvider(log, system.NewMockSysProvider(log, tc.sysCfg),
-					storage.NewMockMountProvider(tc.mountCfg))
+				p = NewProvider(log, mockSys, storage.NewMockMountProvider(tc.mountCfg))
 			}
 
 			err := p.Format(tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
+
+			if tc.expMkfs {
+				test.AssertEqual(t, 1, len(mockSys.MkfsReqs), "should have called mkfs")
+				if diff := cmp.Diff(tc.expMkfsOpts, mockSys.MkfsReqs[0].Options); diff != "" {
+					t.Errorf("unexpected mkfs options (-want +got):\n%s\n", diff)
+				}
+			} else {
+				test.AssertEqual(t, 0, len(mockSys.MkfsReqs), "should not have called mkfs")
+			}
 		})
 	}
 }

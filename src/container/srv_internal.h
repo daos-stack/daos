@@ -62,6 +62,7 @@ struct rank_eph {
 	d_rank_t	re_rank;
 	daos_epoch_t	re_ec_agg_eph;
 	daos_epoch_t	re_stable_eph;
+	uint64_t        re_ec_agg_eph_update_ts; /* re_ec_agg_eph update timestamp */
 };
 
 /* container EC aggregation epoch and stable epoch control descriptor, which is only on leader */
@@ -301,10 +302,12 @@ int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
-int cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			     daos_epoch_t stable_eph);
-int cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			      daos_epoch_t stable_eph);
+int
+cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+			 daos_epoch_t stable_eph, struct sched_request *req);
+int
+      cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
+				daos_epoch_t stable_eph, struct sched_request *req);
 int cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
 
 /* srv_metrics.c*/

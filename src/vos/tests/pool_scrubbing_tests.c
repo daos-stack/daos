@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -497,7 +498,7 @@ sts_ctx_setup_scrub_ctx(struct sts_context *ctx)
 	ctx->tsc_scrub_ctx.sc_drain_pool_tgt_fn = fake_target_drain;
 	ctx->tsc_scrub_ctx.sc_pool = &ctx->tsc_pool;
 	ctx->tsc_scrub_ctx.sc_dmi = &ctx->tsc_dmi;
-	ctx->tsc_scrub_ctx.sc_cont.scs_props_fetched = true;
+	ctx->tsc_scrub_ctx.sc_cont.scs_csummer_inited = true;
 }
 
 static void

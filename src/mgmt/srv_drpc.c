@@ -1756,14 +1756,14 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 	if (rebuild->status == 0) {
 		rebuild->objects = info->rs_obj_nr;
 		rebuild->records = info->rs_rec_nr;
-
-		if (info->rs_version == 0)
-			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
-		else if (info->rs_state == DRS_COMPLETED)
-			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
-		else
-			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
 	}
+
+	if ((info->rs_version == 0) || (info->rs_state == DRS_NOT_STARTED))
+		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
+	else if (info->rs_state == DRS_COMPLETED)
+		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
+	else
+		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
 }
 
 static void
@@ -1984,7 +1984,6 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp.infos[i] = &resp_infos[i];
 		mgmt__pool_query_target_info__init(resp.infos[i]);
 
-		resp.infos[i]->type = (Mgmt__PoolQueryTargetInfo__TargetType) infos[i].ta_type;
 		resp.infos[i]->state = (Mgmt__PoolQueryTargetInfo__TargetState) infos[i].ta_state;
 		D_ALLOC_ARRAY(resp.infos[i]->space, DAOS_MEDIA_MAX);
 		if (resp.infos[i]->space == NULL)

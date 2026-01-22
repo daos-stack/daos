@@ -132,23 +132,24 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 	bool			dedup_only = false;
 
 	D_ASSERT(cont != NULL);
-	cont_props = &cont->sc_props;
+	while (cont->sc_csummer_initing) {
+		ABT_mutex_lock(cont->sc_mutex);
+		ABT_cond_wait(cont->sc_init_cond, cont->sc_mutex);
+		ABT_mutex_unlock(cont->sc_mutex);
+	}
 
-	if (cont->sc_props_fetched)
+	if (cont->sc_csummer_inited)
 		return 0;
 
+	D_ASSERT(cont->sc_csummer == NULL);
+	cont->sc_csummer_initing = 1;
 	/** Get the container csum related properties
 	 * Need the pool for the IV namespace
 	 */
-	D_ASSERT(cont->sc_csummer == NULL);
+	cont_props = &cont->sc_props;
 	rc = ds_cont_get_props(cont_props, cont->sc_pool_uuid, cont->sc_uuid);
 	if (rc != 0)
 		goto done;
-
-	/* Check again since IV fetch yield */
-	if (cont->sc_props_fetched)
-		goto done;
-	cont->sc_props_fetched = 1;
 
 	csum_val = cont_props->dcp_csum_type;
 	if (!daos_cont_csum_prop_is_enabled(csum_val)) {
@@ -162,10 +163,30 @@ ds_cont_csummer_init(struct ds_cont_child *cont)
 					    daos_contprop2hashtype(csum_val),
 					    cont_props->dcp_chunksize,
 					    cont_props->dcp_srv_verify);
+		if (rc != 0)
+			goto done;
+
 		if (dedup_only)
 			dedup_configure_csummer(cont->sc_csummer, cont_props);
 	}
+
+	rc = vos_cont_save_props(cont->sc_hdl, cont_props);
+	if (rc != 0) {
+		/*
+		 * The failure of saving checksum property copy only potentially affect ddb, but
+		 * it is not fatal for current caller. Let's go ahead with some warning message.
+		 */
+		D_WARN("Cannot locally save container property for " DF_UUID ": " DF_RC "\n",
+		       DP_UUID(cont->sc_uuid), DP_RC(rc));
+		rc = 0;
+	}
+	D_ASSERT(!cont->sc_csummer_inited); /* nobody else can do this except me */
+	cont->sc_csummer_inited = 1;
 done:
+	if (cont->sc_csummer_initing) {
+		cont->sc_csummer_initing = 0;
+		ABT_cond_broadcast(cont->sc_init_cond);
+	}
 	return rc;
 }
 
@@ -188,8 +209,8 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 
 	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
 		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), pool->sp_rebuilding,
-			pool->sp_rebuild_scan);
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			atomic_load(&pool->sp_rebuilding), pool->sp_rebuild_scan);
 		return false;
 	}
 
@@ -203,7 +224,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 	}
 
-	if (!cont->sc_props_fetched)
+	if (!cont->sc_csummer_inited)
 		ds_cont_csummer_init(cont);
 
 	if (cont->sc_props.dcp_dedup_enabled ||
@@ -500,8 +521,11 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				  param->ap_vos_agg ? "VOS" : "EC");
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
-			/* Don't sleep when there is space pressure */
-			msecs = 0;
+			/*
+			 * Introduce a small sleep interval between each round to yield CPU time
+			 * for the flush & GC ULTs, irrespective of space pressure. DAOS-18012.
+			 */
+			msecs = 200;
 		}
 
 		if (param->ap_vos_agg)
@@ -517,7 +541,7 @@ next:
 		 * if no space pressure.
 		 */
 		if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool) && !param->ap_vos_agg &&
-		    msecs != 0)
+		    msecs != 200)
 			msecs = 18000;
 
 		if (msecs != 0)
@@ -637,6 +661,25 @@ cont_child_obj(struct daos_llink *llink)
 	return container_of(llink, struct ds_cont_child, sc_list);
 }
 
+static void
+cont_child_fini_abt(struct ds_cont_child *cont)
+{
+	if (cont->sc_dtx_resync_cond)
+		ABT_cond_free(&cont->sc_dtx_resync_cond);
+	if (cont->sc_scrub_cond)
+		ABT_cond_free(&cont->sc_scrub_cond);
+	if (cont->sc_rebuild_cond)
+		ABT_cond_free(&cont->sc_rebuild_cond);
+	if (cont->sc_init_cond)
+		ABT_cond_free(&cont->sc_init_cond);
+	if (cont->sc_fini_cond)
+		ABT_cond_free(&cont->sc_fini_cond);
+	if (cont->sc_mutex)
+		ABT_mutex_free(&cont->sc_mutex);
+	if (cont->sc_open_mutex)
+		ABT_mutex_free(&cont->sc_open_mutex);
+}
+
 static int
 cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		     struct daos_llink **link)
@@ -660,34 +703,39 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	rc = ABT_mutex_create(&cont->sc_mutex);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_open_mutex;
+		goto out_abt;
 	}
 
 	rc = ABT_cond_create(&cont->sc_dtx_resync_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_mutex;
+		goto out_abt;
 	}
 	rc = ABT_cond_create(&cont->sc_scrub_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_resync_cond;
+		goto out_abt;
 	}
 	rc = ABT_cond_create(&cont->sc_rebuild_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_scrub_cond;
+		goto out_abt;
+	}
+	rc = ABT_cond_create(&cont->sc_init_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_abt;
 	}
 	rc = ABT_cond_create(&cont->sc_fini_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_rebuild_cond;
+		goto out_abt;
 	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
 		rc = -DER_NO_HDL;
-		goto out_finish_cond;
+		goto out_abt;
 	}
 
 	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
@@ -727,18 +775,8 @@ out_cont:
 	vos_cont_close(cont->sc_hdl);
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
-out_finish_cond:
-	ABT_cond_free(&cont->sc_fini_cond);
-out_rebuild_cond:
-	ABT_cond_free(&cont->sc_rebuild_cond);
-out_scrub_cond:
-	ABT_cond_free(&cont->sc_scrub_cond);
-out_resync_cond:
-	ABT_cond_free(&cont->sc_dtx_resync_cond);
-out_mutex:
-	ABT_mutex_free(&cont->sc_mutex);
-out_open_mutex:
-	ABT_mutex_free(&cont->sc_open_mutex);
+out_abt:
+	cont_child_fini_abt(cont);
 out:
 	D_FREE(cont);
 	return rc;
@@ -759,14 +797,10 @@ cont_child_free_ref(struct daos_llink *llink)
 	cont_tgt_track_eph_fini(cont);
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
-	daos_csummer_destroy(&cont->sc_csummer);
+	if (cont->sc_csummer)
+		daos_csummer_destroy(&cont->sc_csummer);
 	D_FREE(cont->sc_snapshots);
-	ABT_cond_free(&cont->sc_dtx_resync_cond);
-	ABT_cond_free(&cont->sc_scrub_cond);
-	ABT_cond_free(&cont->sc_rebuild_cond);
-	ABT_cond_free(&cont->sc_fini_cond);
-	ABT_mutex_free(&cont->sc_mutex);
-	ABT_mutex_free(&cont->sc_open_mutex);
+	cont_child_fini_abt(cont);
 	D_FREE(cont);
 }
 
@@ -2829,8 +2863,9 @@ ds_cont_eph_report(struct ds_pool *pool)
 		D_DEBUG(DB_MD, "Update ec_agg_eph " DF_X64 ", stable_eph " DF_X64 ", " DF_UUID "\n",
 			min_ec_agg_eph, min_stable_eph, DP_UUID(ec_eph->cte_cont_uuid));
 
-		ret = cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid,
-					       min_ec_agg_eph, min_stable_eph);
+		ret =
+		    cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid, min_ec_agg_eph,
+					     min_stable_eph, pool->sp_ec_ephs_req);
 		if (ret == 0) {
 			ec_eph->cte_last_ec_agg_epoch = min_ec_agg_eph;
 			ec_eph->cte_last_stable_epoch = min_stable_eph;

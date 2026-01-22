@@ -1,7 +1,9 @@
 hosts:
   test_servers: 3
   test_clients: 1
+
 timeout: 4000
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -9,30 +11,33 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+
 pool:
   num_pools: 4
+
 pool_0:
   size: 20%
+
 pool_1:
   size: 30%
+
 pool_2:
   size: 50%
+
 pool_3:
   size: 60%
+
 container:
   type: POSIX
   control_method: daos
+
 ior:
   client_processes:
     np: 16

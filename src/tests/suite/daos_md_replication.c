@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +11,12 @@
 
 #include <daos/pool.h>
 #include "daos_test.h"
+
+/*
+ * Given the 128MB default blobstore cluster size, the minimal pool scm_size for
+ * an 8 targets engine would be 128MB * 8 = 1GB.
+ */
+#define MIN_SCM_SIZE (1ULL << 30)
 
 static void
 mdr_stop_pool_svc(void **argv)
@@ -24,10 +31,8 @@ mdr_stop_pool_svc(void **argv)
 	/* Create the pool. */
 	if (arg->myrank == 0) {
 		print_message("creating pool\n");
-		rc = dmg_pool_create(dmg_config_file,
-				     geteuid(), getegid(), arg->group,
-				     NULL, 256 * 1024 * 1024, 0,
-				     NULL, arg->pool.svc, uuid);
+		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
+				     MIN_SCM_SIZE, 0, NULL, arg->pool.svc, uuid);
 	}
 	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	assert_rc_equal(rc, 0);
@@ -134,10 +139,8 @@ mdr_stop_cont_svc(void **argv)
 	int			rc;
 
 	print_message("creating pool\n");
-	rc = dmg_pool_create(dmg_config_file,
-			     geteuid(), getegid(), arg->group,
-			     NULL, 256 * 1024 * 1024, 0,
-			     NULL, arg->pool.svc, pool_uuid);
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL, MIN_SCM_SIZE,
+			     0, NULL, arg->pool.svc, pool_uuid);
 	assert_rc_equal(rc, 0);
 
 	if (arg->pool.svc->rl_nr < 3) {
