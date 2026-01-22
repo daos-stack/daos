@@ -32,6 +32,7 @@ class VerifyDTX(TestWithTelemetry):
         :avocado: tags=pool
         :avocado: tags=VerifyDTX,test_verify_dtx
         """
+        # pylint: disable=too-many-branches
         write_bytes = self.params.get('write_bytes', MDTEST_NAMESPACE, None)
         processes = self.params.get('processes', MDTEST_NAMESPACE, None)
         ppn = self.params.get('ppn', MDTEST_NAMESPACE, None)
@@ -70,14 +71,14 @@ class VerifyDTX(TestWithTelemetry):
         self.log.debug("Mdtest write parameters:")
         self.log.debug("  write_bytes per mdtest:        %s", write_bytes)
         if ppn is not None:
-            self.log.debug("  ppn / nodes:                   %s / %s",
-                           ppn, len(self.host_info.clients.hosts))
+            self.log.debug("  processes (ppn * nodes):       %s * %s = %s",
+                           ppn, len(self.host_info.clients.hosts), _write_procs)
         else:
             self.log.debug("  processes:                     %s", processes)
-        self.log.debug("  files_per_process per mtest:  %s", files_per_process)
-        self.log.debug("  Number of mdtest commands:    %s", _mdtest_cmds)
-        self.log.debug("  num_of_files_dirs per mdtest: %s", num_of_files_dirs)
-        self.log.debug("  total expected to write:      %s",
+        self.log.debug("  files_per_process per mtest:   %s", files_per_process)
+        self.log.debug("  number of mdtest commands:     %s", _mdtest_cmds)
+        self.log.debug("  num_of_files_dirs per mdtest:  %s", num_of_files_dirs)
+        self.log.debug("  total expected to write:       %s",
                        _mdtest_cmds * _write_procs * write_bytes * num_of_files_dirs)
         self.log.debug("-" * 60)
 
