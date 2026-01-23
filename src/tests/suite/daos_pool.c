@@ -734,11 +734,17 @@ pool_op_retry(void **state)
 	print_message("success\n");
 
 	/* pool set prop success committed, "lost" reply - duplicate RPC retry */
+	char *orig_self_heal = NULL;
+	rc = daos_pool_get_prop(arg->pool.pool_uuid, "self_heal", &orig_self_heal);
+	assert_rc_equal(rc, 0);
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
 	print_message("set pool prop (retry / dup rpc detection)... ");
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "none");
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", orig_self_heal);
+	assert_rc_equal(rc, 0);
+	free(orig_self_heal);
 
 	/* pool evict success committed, "lost" reply - duplicate RPC retry */
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
