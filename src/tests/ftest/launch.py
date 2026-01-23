@@ -321,6 +321,7 @@ class Launch():
 
         # Done if just listing tests matching the tags
         if args.list and not args.modify:
+            logger.info(f"args.list: {args.list}, args.modify: {args.modify}")
             return self.get_exit_status(0, "Listing tests complete")
 
         logger.info("BANG: 2")
