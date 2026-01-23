@@ -536,6 +536,9 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 		return 0;
 	}
 
+	D_INFO(DF_RB "lxz skip obj_reclaim " DF_UOID, DP_RB_RPT(rpt), DP_UOID(oid));
+	return 0;
+
 	D_DEBUG(DB_REBUILD, DF_RB " deleting stale object " DF_UOID " oid layout %u/%u",
 		DP_RB_RPT(rpt), DP_UOID(oid), oid.id_layout_ver, new_layout_ver);
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
