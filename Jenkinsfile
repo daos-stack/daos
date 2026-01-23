@@ -565,10 +565,10 @@ pipeline {
             }
             parallel {
                 stage('Functional on SLES 15.7') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
                     agent {
                         label vm9_label('Leap15')
                     }
@@ -588,10 +588,10 @@ pipeline {
                     } // post
                 } // stage('Functional on SLES 15.7')
                 stage('Test RPMs on Leap 15.6') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
-                    }
+//                     when {
+//                         beforeAgent true
+//                         expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
+//                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
                     }
