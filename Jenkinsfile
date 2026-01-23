@@ -545,7 +545,7 @@ pipeline {
                     copyArtifacts(
                         projectName: env.JOB_NAME,
                         selector: specific('2'),
-                        filter: 'artifacts/leap15/daos/**, artifacts/leap15/dep/**',
+                        filter: 'artifacts/leap15/daos/**, artifacts/leap15/deps/**',
                         fingerprintArtifacts: true
                     )
                     sh '''
@@ -553,6 +553,11 @@ pipeline {
                     ls -lah artifacts/leap15/daos || true
                     ls -lah artifacts/leap15/deps || true
                     '''
+
+                    archiveArtifacts artifacts: 'artifacts/leap15/**',
+                                     fingerprint: true,
+                                     allowEmptyArchive: true
+
             }
         }
 
