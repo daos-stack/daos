@@ -310,6 +310,8 @@ class Launch():
             message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
+        logger.info("Finished detecting tests")
+
         # Verify at least one test was requested
         if not group.tests:
             message = f"No tests found for tags: {' '.join(args.tags)}"
