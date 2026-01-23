@@ -1919,11 +1919,12 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
 	     bool *io_task_reinited)
 {
-	tse_sched_t *sched     = tse_task2sched(task);
-	tse_task_t  *pool_task = NULL;
-	uint32_t     delay     = 0;
-	uint32_t     opc       = obj_auxi->opc;
-	int          result    = task->dt_result;
+	tse_sched_t *sched        = tse_task2sched(task);
+	tse_task_t  *pool_task    = NULL;
+	uint32_t     delay        = 0;
+	uint32_t     opc          = obj_auxi->opc;
+	bool         is_pool_task = false;
+	int          result       = task->dt_result;
 	int          rc;
 
 	if (pmap_stale) {
