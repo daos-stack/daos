@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,7 +62,6 @@ struct_dtx_handle(void **state)
 	SET_BITFIELD_1(dummy, dth_drop_cmt);
 	SET_BITFIELD_1(dummy, dth_modify_shared);
 	SET_BITFIELD_1(dummy, dth_active);
-	SET_BITFIELD_1(dummy, dth_touched_leader_oid);
 	SET_BITFIELD_1(dummy, dth_local_tx_started);
 	SET_BITFIELD_1(dummy, dth_shares_inited);
 	SET_BITFIELD_1(dummy, dth_dist);
@@ -75,7 +74,7 @@ struct_dtx_handle(void **state)
 	SET_BITFIELD_1(dummy, dth_local);
 	SET_BITFIELD_1(dummy, dth_epoch_owner);
 	SET_BITFIELD_1(dummy, dth_local_complete);
-	SET_BITFIELD(dummy, padding1, 12);
+	SET_BITFIELD(dummy, padding1, 13);
 
 	SET_FIELD(dummy, dth_dti_cos_count);
 	SET_FIELD(dummy, dth_dti_cos);
@@ -87,10 +86,6 @@ struct_dtx_handle(void **state)
 	SET_FIELD(dummy, dth_op_seq);
 	SET_FIELD(dummy, dth_deferred_used_cnt);
 	SET_FIELD(dummy, padding2);
-	SET_FIELD(dummy, dth_oid_cnt);
-	SET_FIELD(dummy, dth_oid_cap);
-	SET_FIELD(dummy, padding3);
-	SET_FIELD(dummy, dth_oid_array);
 	SET_FIELD(dummy, dth_local_oid_cnt);
 	SET_FIELD(dummy, dth_local_oid_cap);
 	SET_FIELD(dummy, padding4);

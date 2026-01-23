@@ -407,6 +407,10 @@ func PoolQuery(ctx context.Context, sysName, poolID string, queryMask daos.PoolQ
 		}
 	}
 
+	if err := poolInfo.UpdateRebuildStatus(); err != nil {
+		return nil, err
+	}
+
 	return poolInfo, nil
 }
 
