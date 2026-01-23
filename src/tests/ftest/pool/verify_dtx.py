@@ -56,29 +56,29 @@ class VerifyDTX(TestWithTelemetry):
         _mdtest_cmds = len(object_classes)
         if ppn is not None:
             _write_procs = ppn * len(self.host_info.clients.hosts)
-        files_per_process = math.floor(
-            (mem_file_bytes * total_engines) / (write_bytes * _write_procs * _mdtest_cmds))
+        files_per_process = math.floor(mem_file_bytes / (write_bytes * _write_procs * _mdtest_cmds))
         if tier_bytes_scm > mem_file_bytes:
-            # Write more (125%) files to exceed mem_file_bytes and cause eviction
-            num_of_files_dirs = math.ceil(files_per_process * 1.25)
+            # Write more (225%) files to exceed mem_file_bytes and cause eviction
+            num_of_files_dirs = math.ceil(files_per_process * 2.25)
         else:
             # Write less (75%) files to avoid out of space errors
             num_of_files_dirs = math.floor(files_per_process * 0.75)
 
         self.log.debug("-" * 60)
         self.log.debug("Pool %s create data:", pool)
-        self.log.debug("  tier_bytes_scm:                  %s", tier_bytes_scm)
-        self.log.debug("  mem_file_bytes:                  %s", mem_file_bytes)
-        self.log.debug("  mem_ratio.value:                 %s", pool.mem_ratio.value)
-        self.log.debug("  total_engines:                   %s", total_engines)
-        self.log.debug("  mem_file_bytes * total_engines:  %s", mem_file_bytes * total_engines)
+        self.log.debug("  tier_bytes_scm (per engine/total):   %s / %s",
+                       tier_bytes_scm, tier_bytes_scm * total_engines)
+        self.log.debug("  mem_file_bytes (per engine/total):   %s / %s",
+                       mem_file_bytes, mem_file_bytes * total_engines)
+        self.log.debug("  mem_ratio.value:                     %s", pool.mem_ratio.value)
+        self.log.debug("  total_engines:                       %s", total_engines)
         self.log.debug("Mdtest write parameters:")
-        self.log.debug("  write_bytes per mdtest:          %s", write_bytes)
+        self.log.debug("  write_bytes per mdtest:              %s", write_bytes)
         if ppn is not None:
-            self.log.debug("  processes (ppn * nodes):         %s * %s = %s",
+            self.log.debug("  processes (ppn * nodes):             %s * %s = %s",
                            ppn, len(self.host_info.clients.hosts), _write_procs)
         else:
-            self.log.debug("  processes:                       %s", processes)
+            self.log.debug("  processes:                           %s", processes)
         self.log.debug("  files_per_process per mtest:     %s", files_per_process)
         self.log.debug("  number of mdtest commands:       %s", _mdtest_cmds)
         self.log.debug("  num_of_files_dirs per mdtest:    %s", num_of_files_dirs)
