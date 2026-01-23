@@ -5,7 +5,7 @@ hosts:
   test_servers: 5
   test_clients: 3
 
-timeout: 16000
+timeout: 10800
 
 server_config:
   name: daos_server
@@ -24,9 +24,9 @@ server_config:
 
 pool: !mux
   default:
-    size: 100%
+    size: 50%
   md_on_ssd_p2:
-    size: 100%
+    size: 50%
     mem_ratio: 25
 
 container:
@@ -40,8 +40,8 @@ mdtest:
   api: DFS
   flags: "-C -F -G 27 -N 1 -Y -u -L"
   branching_factor: 1
-  write_bytes: 1024
-  read_bytes: 1024
+  write_bytes: 4096
+  read_bytes: 4096
 
 object_classes:
   - "EC_2P1G1"

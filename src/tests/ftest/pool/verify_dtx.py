@@ -79,16 +79,16 @@ class VerifyDTX(TestWithTelemetry):
                            ppn, len(self.host_info.clients.hosts), _write_procs)
         else:
             self.log.debug("  processes:                           %s", processes)
-        self.log.debug("  files_per_process per mtest:     %s", files_per_process)
-        self.log.debug("  number of mdtest commands:       %s", _mdtest_cmds)
-        self.log.debug("  num_of_files_dirs per mdtest:    %s", num_of_files_dirs)
-        self.log.debug("  total expected to write:         %s",
+        self.log.debug("  files_per_process per mtest:         %s", files_per_process)
+        self.log.debug("  number of mdtest commands:           %s", _mdtest_cmds)
+        self.log.debug("  num_of_files_dirs per mdtest:        %s", num_of_files_dirs)
+        self.log.debug("  total expected to write:             %s",
                        _mdtest_cmds * _write_procs * write_bytes * num_of_files_dirs)
         self.log.debug("-" * 60)
 
         self.log_step('Collect DTX metrics after creating a pool (dmg telemetry metrics query)')
         expected_ranges = self.telemetry.collect_data(dtx_metrics)
-        for metric in sorted(expected_ranges):
+        for metric in expected_ranges:
             for label in expected_ranges[metric]:
                 expected_ranges[metric][label] = [0, 0]             # 0 only
                 if pool.mem_ratio.value is not None:
@@ -123,7 +123,7 @@ class VerifyDTX(TestWithTelemetry):
 
         self.log_step('Collect DTX metrics after writing data (dmg telemetry metrics query)')
         expected_ranges = self.telemetry.collect_data(dtx_metrics)
-        for metric in sorted(expected_ranges):
+        for metric in expected_ranges:
             for label in expected_ranges[metric]:
                 if metric.endswith('_dtx_committed'):
                     expected_ranges[metric][label] = [0]            # 0 or greater
