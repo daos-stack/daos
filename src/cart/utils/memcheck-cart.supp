@@ -798,7 +798,7 @@
 {
    getpwnam_r() leak
    Memcheck:Leak
-   fun:calloc
+   fun:*alloc
    ...
    fun:getpwnam_r*
 }
