@@ -1,6 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -81,7 +81,7 @@ def run_mdtest(test, hosts, path, slots, container, processes, ppn=None, manager
 
 
 def write_mdtest_data(test, container, namespace=MDTEST_NAMESPACE, **mdtest_run_params):
-    """Write data to the container/dfuse using mdtest.
+    """Write data to the container using mdtest.
 
     Simple method for test classes to use to write data with mdtest. While not required, this is
     setup by default to pull in mdtest parameters from the test yaml.
@@ -316,11 +316,6 @@ class Mdtest:
         """
         self.command.update_params(dfs_pool=pool.identifier, dfs_cont=container.identifier)
 
-        if "mpirun" in str(self.manager) or "srun" in str(self.manager):
-            self.env["DAOS_POOL"] = self.command.dfs_pool.value
-            self.env["DAOS_CONT"] = self.command.dfs_cont.value
-            self.env["IOR_HINT__MPI__romio_daos_obj_class"] = self.command.dfs_oclass.value
-
     def run(self, container, processes, ppn=None, intercept=None, display_space=True):
         """Run mdtest.
 
@@ -345,8 +340,6 @@ class Mdtest:
 
         if intercept:
             self.env["LD_PRELOAD"] = intercept
-            if "D_LOG_MASK" not in self.env:
-                self.env["D_LOG_MASK"] = "INFO"
 
         # Pass only processes or ppn to be compatible with previous behavior
         if ppn is not None:

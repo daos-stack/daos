@@ -82,7 +82,7 @@ class EvictionMetrics(TestWithTelemetry):
         self.log_step(
             'Collect pool eviction metrics after creating a pool (dmg telemetry metrics query)')
         expected_ranges = self.telemetry.collect_data(evict_metrics)
-        for metric in sorted(expected_ranges):
+        for metric in expected_ranges:
             for label in expected_ranges[metric]:
                 if pool.mem_ratio.value is not None and metric.endswith('_hit'):
                     expected_ranges[metric][label] = [0, 100]           # 0-100 (phase 2)
@@ -107,7 +107,7 @@ class EvictionMetrics(TestWithTelemetry):
         self.log_step(
             'Collect pool eviction metrics after writing data (dmg telemetry metrics query)')
         expected_ranges = self.telemetry.collect_data(evict_metrics)
-        for metric in sorted(expected_ranges):
+        for metric in expected_ranges:
             for label in expected_ranges[metric]:
                 if pool.mem_ratio.value is None:
                     expected_ranges[metric][label] = [0, 0]             # 0 only (phase 1)
