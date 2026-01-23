@@ -740,6 +740,7 @@ def main():
     args = parser.parse_args()
 
     # Override arguments via the mode
+    logger.info(f"args.mode: {args.mode}")
     if args.mode == "ci":
         args.archive = True
         args.include_localhost = True
