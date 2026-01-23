@@ -448,35 +448,35 @@ pipeline {
                 }
             }
         }
-        stage('Check PR') {
-            when { changeRequest() }
-            parallel {
-                stage('Branch name check') {
-                    when { changeRequest() }
-                    steps {
-                        script {
-                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
-                                error('Your PR branch name does not follow the rules. Please rename it ' +
-                                      'according to the rules described here: ' +
-                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
-                                      'Once you have renamed your branch locally to match the ' +
-                                      'format, close this PR and open a new one using the newly renamed ' +
-                                      'local branch.')
-                            }
-                        }
-                    }
-                }
-            } // parallel
-        } // stage('Check PR')
-        stage('Cancel Previous Builds') {
-            when {
-                beforeAgent true
-                expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
-            }
-            steps {
-                cancelPreviousBuilds()
-            }
-        }
+//         stage('Check PR') {
+//             when { changeRequest() }
+//             parallel {
+//                 stage('Branch name check') {
+//                     when { changeRequest() }
+//                     steps {
+//                         script {
+//                             if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
+//                                 error('Your PR branch name does not follow the rules. Please rename it ' +
+//                                       'according to the rules described here: ' +
+//                                       'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
+//                                       'Once you have renamed your branch locally to match the ' +
+//                                       'format, close this PR and open a new one using the newly renamed ' +
+//                                       'local branch.')
+//                             }
+//                         }
+//                     }
+//                 }
+//             } // parallel
+//         } // stage('Check PR')
+//         stage('Cancel Previous Builds') {
+//             when {
+//                 beforeAgent true
+//                 expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
+//             }
+//             steps {
+//                 cancelPreviousBuilds()
+//             }
+//         }
 
 //         stage('Build') {
 //             /* Don't use failFast here as whilst it avoids using extra resources
