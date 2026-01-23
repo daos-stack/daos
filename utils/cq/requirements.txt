@@ -5,7 +5,7 @@ pyenchant
 flake8==7.3.0
 isort==7.0.0
 pylint==4.0.4
-yamllint==1.37.1
+yamllint==1.38.0
 codespell==2.4.1
 # Used by ci/jira_query.py which pip installs it standalone.
 jira
