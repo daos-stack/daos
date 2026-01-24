@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2016,6 +2016,21 @@ migrate_one_ult(void *arg)
 	}
 
 	data_size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
+	if (daos_oclass_is_ec(&mrone->mo_oca)) {
+		/* NB: this is a workaround for EC object:
+		 * The fetch buffer is taken from a pre-registered (R)DMA buffer;
+		 * however, a degraded EC read will allocate and register an extra
+		 * buffer to recover data.
+		 *
+		 * Currently, the resource manager cannot control this extra allocation,
+		 * which can lead to increased memory consumption.
+		 *
+		 * While this workaround does not prevent dynamic buffer allocation and
+		 * registration, it does provide relatively precise control over the
+		 * resources consumed by degraded EC reads.
+		 */
+		data_size *= MIN(6, obj_ec_data_tgt_nr(&mrone->mo_oca));
+	}
 	data_size += daos_iods_len(mrone->mo_iods_from_parity,
 				   mrone->mo_iods_num_from_parity);
 
