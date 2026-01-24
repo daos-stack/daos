@@ -316,6 +316,11 @@ class Mdtest:
         """
         self.command.update_params(dfs_pool=pool.identifier, dfs_cont=container.identifier)
 
+        if "mpirun" in str(self.manager) or "srun" in str(self.manager):
+            self.env["DAOS_POOL"] = self.command.dfs_pool.value
+            self.env["DAOS_CONT"] = self.command.dfs_cont.value
+            self.env["IOR_HINT__MPI__romio_daos_obj_class"] = self.command.dfs_oclass.value
+
     def run(self, container, processes, ppn=None, intercept=None, display_space=True):
         """Run mdtest.
 
