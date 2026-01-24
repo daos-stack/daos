@@ -722,7 +722,7 @@ int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 struct bio_dev_info *
 alloc_dev_info(uuid_t dev_id, struct bio_bdev *d_bdev, struct smd_dev_info *s_info);
 int
-bio_set_power_mgmt(const char *bdev_name, struct spdk_bdev *bdev);
+bio_set_power_mgmt(struct bio_xs_context *ctxt, const char *bdev_name);
 
 /* bio_config.c */
 int
