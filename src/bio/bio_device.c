@@ -1068,17 +1068,10 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 			  duration);
 }
 
-static void
-bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev, void *event_ctx)
-{
-	D_ERROR("Unsupported bdev event: type %d\n", type);
-}
-
 struct power_mgmt_context_t {
 	ABT_eventual            eventual;
 	const char             *bdev_name;
-	struct spdk_bdev_desc  *bdev_desc;
-	struct spdk_io_channel *bdev_io_channel;
+	unsigned int            inflights;
 };
 
 static void
@@ -1097,18 +1090,20 @@ set_power_mgmt_completion(struct spdk_bdev_io *bdev_io, bool success, void *cb_a
 		D_INFO("Power management value set on device %s\n", pm_ctx->bdev_name);
 	}
 
+	D_ASSERT(pm_ctx->inflights == 1);
+	pm_ctx->inflights--;
 	spdk_bdev_free_io(bdev_io);
-	spdk_put_io_channel(pm_ctx->bdev_io_channel);
-	spdk_bdev_close(pm_ctx->bdev_desc);
-	ABT_eventual_set(pm_ctx->eventual, NULL, 0);
 }
 
 int
-bio_set_power_mgmt(const char *bdev_name, struct spdk_bdev *bdev)
+bio_set_power_mgmt(struct bio_xs_context *ctxt, const char *bdev_name)
 {
 	struct power_mgmt_context_t pm_ctx = {0};
+	struct spdk_bdev                     *bdev;
 	struct spdk_nvme_cmd cmd;
 	union spdk_nvme_feat_power_management feat = {0};
+	struct spdk_bdev_desc                *bdev_desc;
+	struct spdk_io_channel               *bdev_io_channel;
 	int                         rc = 0;
 
 	D_INFO("Power management 1\n");
@@ -1125,28 +1120,35 @@ bio_set_power_mgmt(const char *bdev_name, struct spdk_bdev *bdev)
 	D_ASSERT(bdev_name != NULL);
 	pm_ctx.bdev_name = bdev_name;
 
-	if (get_bdev_type(bdev) != BDEV_CLASS_NVME) {
-		D_DEBUG(DB_MGMT, "Device %s is not NVMe, skipping power management\n", bdev_name);
-		rc = -DER_NOTSUPPORTED;
-		goto out;
-	}
-
-	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
-		D_ERROR("Bdev NVMe admin passthru not supported for %s\n", bdev_name);
-		rc = -DER_NOTSUPPORTED;
-		goto out;
-	}
-
 	/* Writable descriptor required for applying power management settings */
-	rc = spdk_bdev_open_ext(bdev_name, true, bdev_event_cb, NULL, &pm_ctx.bdev_desc);
+	rc = spdk_bdev_open_ext(bdev_name, true, bio_bdev_event_cb, NULL, &bdev_desc);
 	if (rc != 0) {
 		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
 		rc = daos_errno2der(-rc);
 		goto out;
 	}
 
-	pm_ctx.bdev_io_channel = spdk_bdev_get_io_channel(pm_ctx.bdev_desc);
-	D_ASSERT(pm_ctx.bdev_io_channel != NULL);
+	bdev = spdk_bdev_desc_get_bdev(bdev_desc);
+	if (bdev == NULL) {
+		D_ERROR("No bdev associated with device health descriptor\n");
+		rc = -DER_INVAL;
+		goto out_desc;
+	}
+
+	if (get_bdev_type(bdev) != BDEV_CLASS_NVME) {
+		D_DEBUG(DB_MGMT, "Device %s is not NVMe, skipping power management\n", bdev_name);
+		rc = -DER_NOTSUPPORTED;
+		goto out_desc;
+	}
+
+	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
+		D_DEBUG(DB_MGMT, "Bdev NVMe admin passthru not supported for %s\n", bdev_name);
+		rc = -DER_NOTSUPPORTED;
+		goto out_desc;
+	}
+
+	bdev_io_channel = spdk_bdev_get_io_channel(bdev_desc);
+	D_ASSERT(bdev_io_channel != NULL);
 
 	// Set the target Power State (bits 04:00)
 	feat.bits.ps = bio_spdk_power_mgmt_val;
@@ -1157,14 +1159,10 @@ bio_set_power_mgmt(const char *bdev_name, struct spdk_bdev *bdev)
 	cmd.cdw11 = feat.raw;
 
 	D_INFO("Power management 2\n");
-	rc = ABT_eventual_create(0, &pm_ctx.eventual);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto out_chan;
-	}
 
-	D_INFO("Power management 3\n");
-	rc = spdk_bdev_nvme_admin_passthru(pm_ctx.bdev_desc, pm_ctx.bdev_io_channel, &cmd, NULL, 0,
+	pm_ctx.inflights = 1;
+
+	rc = spdk_bdev_nvme_admin_passthru(bdev_desc, bdev_io_channel, &cmd, NULL, 0,
 					   set_power_mgmt_completion, &pm_ctx);
 	if (rc != 0) {
 		D_ERROR("Failed to submit power management command for %s, rc:%d\n", bdev_name, rc);
@@ -1173,19 +1171,14 @@ bio_set_power_mgmt(const char *bdev_name, struct spdk_bdev *bdev)
 	}
 
 	D_INFO("Power management 4\n");
-	rc = ABT_eventual_wait(pm_ctx.eventual, NULL);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto out_chan;
-	}
 
-	D_INFO("Power management 5\n");
-	ABT_eventual_free(&pm_ctx.eventual);
-	return 0;
+	rc = xs_poll_completion(ctxt, &pm_ctx.inflights, 0);
+	D_ASSERT(rc == 0);
 
 out_chan:
-	spdk_put_io_channel(pm_ctx.bdev_io_channel);
-	spdk_bdev_close(pm_ctx.bdev_desc);
+	spdk_put_io_channel(bdev_io_channel);
+out_desc:
+	spdk_bdev_close(bdev_desc);
 out:
 	return rc;
 }

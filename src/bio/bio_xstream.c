@@ -1054,7 +1054,7 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 		bdev_name = spdk_bdev_get_name(bdev);
 
 		/* Apply NVMe power management settings */
-		rc = bio_set_power_mgmt(bdev_name, bdev);
+		rc = bio_set_power_mgmt(ctxt, bdev_name);
 		if (rc != 0 && rc != -DER_NOTSUPPORTED)
 			D_WARN("Failed to set power management for device %s: " DF_RC "\n",
 			       bdev_name, DP_RC(rc));
