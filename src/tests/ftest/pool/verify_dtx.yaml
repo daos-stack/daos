@@ -40,8 +40,8 @@ mdtest:
   api: DFS
   flags: "-C -F -G 27 -N 1 -Y -u -L"
   branching_factor: 1
-  write_bytes: 4096
-  read_bytes: 4096
+  write_bytes: 3072
+  read_bytes: 3072
 
 object_classes:
   - "EC_2P1G1"
