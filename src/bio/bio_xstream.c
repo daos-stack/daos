@@ -301,7 +301,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	}
 
 	if (nvme_conf && strlen(nvme_conf) > 0) {
-		fd = open(nvme_conf, O_RDONLY, 0600);
+		fd = open(nvme_conf, O_RDONLY);
 		if (fd < 0)
 			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
 			       nvme_conf, DP_RC(daos_errno2der(errno)));
