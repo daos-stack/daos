@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -79,6 +79,7 @@ struct ds_pool {
 	struct sched_request	*sp_ec_ephs_req;
 
 	uint32_t		sp_dtx_resync_version;
+	uint32_t                 sp_gl_dtx_resync_version; /* global DTX resync version */
 	/* Special pool/container handle uuid, which are
 	 * created on the pool leader step up, and propagated
 	 * to all servers by IV. Then they will be used by server
