@@ -76,6 +76,7 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	D_INIT_LIST_HEAD(&cpr->cpr_shutdown_link);
 	D_INIT_LIST_HEAD(&cpr->cpr_shard_list);
 	D_INIT_LIST_HEAD(&cpr->cpr_pending_list);
+	D_INIT_LIST_HEAD(&cpr->cpr_ult_list);
 	cpr->cpr_refs = 1;
 	uuid_copy(cpr->cpr_uuid, cpb->cpb_uuid);
 	cpr->cpr_thread = ABT_THREAD_NULL;
@@ -931,6 +932,27 @@ chk_pool_shard_cleanup(struct chk_instance *ins)
 }
 
 int
+chk_pending_lookup(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr)
+{
+	d_iov_t kiov;
+	d_iov_t riov;
+	int     rc;
+
+	d_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, &seq, sizeof(seq));
+
+	ABT_rwlock_rdlock(ins->ci_abt_lock);
+	rc = dbtree_lookup(ins->ci_pending_hdl, &kiov, &riov);
+	ABT_rwlock_unlock(ins->ci_abt_lock);
+	if (rc == 0)
+		*cpr = (struct chk_pending_rec *)riov.iov_buf;
+	else
+		*cpr = NULL;
+
+	return rc;
+}
+
+int
 chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
 		uint64_t seq, uint32_t rank, uint32_t cla, uint32_t option_nr, uint32_t *options,
 		struct chk_pending_rec **cpr)
@@ -985,12 +1007,14 @@ chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec *
 	d_iov_set(&kiov, &seq, sizeof(seq));
 
 	ABT_rwlock_wrlock(ins->ci_abt_lock);
-	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
+	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, cpr == NULL ? NULL : &riov);
 	ABT_rwlock_unlock(ins->ci_abt_lock);
-	if (rc == 0)
-		*cpr = (struct chk_pending_rec *)riov.iov_buf;
-	else
-		*cpr = NULL;
+	if (cpr != NULL) {
+		if (rc == 0)
+			*cpr = (struct chk_pending_rec *)riov.iov_buf;
+		else
+			*cpr = NULL;
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
 		 "Del pending record with gen "DF_X64", seq "DF_X64": "DF_RC"\n",
