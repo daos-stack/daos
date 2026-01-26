@@ -2829,7 +2829,14 @@ class PosixTests():
         with open(fname, 'w'):
             pass
 
-        self.dfuse.il_cmd(['cat', fname], check_write=False)
+        self.dfuse.il_cmd([
+            'dd',
+            f'if={fname}',
+            'of=/dev/null',
+            'bs=4096',
+            'iflag=fullblock',
+            'status=none'
+        ], check_write=False, check_fstat=False)
 
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_il(self):
@@ -5049,7 +5056,7 @@ def create_and_read_via_il(dfuse, path):
         dfuse.il_cmd([
             'dd',
             f'if={fname}',
-            'of=/tmp/dd_sink',
+            'of=/dev/null',
             'bs=4096',
             'iflag=fullblock',
             'status=none'
