@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -314,12 +314,13 @@ cr_rank_exclude(test_arg_t *arg, struct test_pool *pool, int *rank, bool wait)
 	/* The *rank is stopped, that may cause set_params to timeout, do not wait. */
 	cr_debug_set_params_nowait(arg, 0);
 
+	if (rc == 0 && wait) {
+		print_message("CR: sleep 30 seconds for the rank death event\n");
+		sleep(30);
+	}
+
 	print_message("CR: excluding the rank %d ...\n", *rank);
 	rc = dmg_system_exclude_rank(dmg_config_file, *rank);
-	if (rc == 0 && wait) {
-		print_message("CR: sleep more than 30 seconds for the rank death event\n");
-		sleep(60);
-	}
 
 	return rc;
 }
@@ -443,14 +444,12 @@ cr_cleanup(test_arg_t *arg, struct test_pool *pools, uint32_t nr)
 }
 
 static void
-cr_ins_wait(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci, int pre_wait)
+cr_ins_wait(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 {
 	int	rc;
 	int	i;
 
 	print_message("CR: waiting check instance ...\n");
-	if (pre_wait)
-		sleep(pre_wait);
 
 	for (i = 0; i < CR_WAIT_MAX; i++) {
 		cr_dci_fini(dci);
@@ -1071,7 +1070,7 @@ test_verify_cont(test_arg_t *arg, struct test_pool *pool, struct test_cont *cont
 	rc = cr_check_start(TCSF_RESET, 1, &pool->pool_uuid, "CONT_NONEXIST_ON_PS:CIA_IGNORE");
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool->pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool->pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -1137,7 +1136,7 @@ cr_start_specified(void **state)
 	rc = cr_check_start(TCSF_RESET, 2, uuids, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &uuids[0], &dcis[0], 0);
+	cr_ins_wait(1, &uuids[0], &dcis[0]);
 
 	for (i = 1; i < 3; i++) {
 		rc = cr_check_query(1, &uuids[i], &dcis[i]);
@@ -1247,7 +1246,7 @@ cr_leader_interaction(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -1338,7 +1337,7 @@ cr_engine_interaction(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -1437,7 +1436,7 @@ cr_repair_forall_leader(void **state)
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
-		cr_ins_wait(1, &pools[i].pool_uuid, &dci, 0);
+		cr_ins_wait(1, &pools[i].pool_uuid, &dci);
 
 		rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 		assert_rc_equal(rc, 0);
@@ -1554,7 +1553,7 @@ cr_repair_forall_engine(void **state)
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
-		cr_ins_wait(1, &pools[i].pool_uuid, &dci, 0);
+		cr_ins_wait(1, &pools[i].pool_uuid, &dci);
 
 		rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 		assert_rc_equal(rc, 0);
@@ -1640,7 +1639,7 @@ cr_stop_leader_interaction(void **state)
 	rc = cr_check_stop(0, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_STOPPED);
 	assert_rc_equal(rc, 0);
@@ -1720,7 +1719,7 @@ cr_stop_engine_interaction(void **state)
 	rc = cr_check_stop(0, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_STOPPED);
 	assert_rc_equal(rc, 0);
@@ -1840,7 +1839,7 @@ cr_stop_specified(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &uuids[2], &dcis[2], 0);
+	cr_ins_wait(1, &uuids[2], &dcis[2]);
 
 	rc = cr_ins_verify(&dcis[2], TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -1920,7 +1919,7 @@ cr_auto_reset(void **state)
 	rc = cr_check_start(TCSF_RESET, 0, NULL, "POOL_NONEXIST_ON_MS:CIA_IGNORE");
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -1953,7 +1952,7 @@ cr_auto_reset(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -1964,7 +1963,7 @@ cr_auto_reset(void **state)
 	rc = cr_check_start(TCSF_NONE, 0, NULL, "POOL_NONEXIST_ON_MS:CIA_DEFAULT");
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2170,7 +2169,7 @@ cr_leader_resume(void **state)
 	rc = cr_check_start(TCSF_NONE, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2204,7 +2203,7 @@ cr_leader_resume(void **state)
 	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2295,7 +2294,7 @@ cr_engine_resume(void **state)
 	rc = cr_check_start(TCSF_NONE, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2506,7 +2505,7 @@ cr_failout(void **state)
 	rc = cr_check_start(TCSF_FAILOUT | TCSF_RESET, 0, NULL, "POOL_BAD_LABEL:CIA_TRUST_PS");
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_FAILED);
 	assert_rc_equal(rc, 0);
@@ -2517,7 +2516,7 @@ cr_failout(void **state)
 	rc = cr_check_start(TCSF_RESET | TCSF_NO_FAILOUT, 0, NULL, "POOL_BAD_LABEL:CIA_TRUST_PS");
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2588,7 +2587,7 @@ cr_auto_repair(void **state)
 	rc = cr_check_start(TCSF_AUTO | TCSF_RESET, 0, NULL, "CONT_BAD_LABEL:CIA_TRUST_TARGET");
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2660,7 +2659,7 @@ cr_orphan_pool(void **state)
 	rc = cr_check_start(TCSF_RESET, 1, &pools[0].pool_uuid, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pools[0].pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pools[0].pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2676,7 +2675,7 @@ cr_orphan_pool(void **state)
 	rc = cr_check_start(TCSF_ORPHAN, 1, &pools[0].pool_uuid, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pools[1].pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pools[1].pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2764,7 +2763,7 @@ cr_fail_ps_sync(void **state, bool leader)
 	rc = cr_check_stop(0, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_STOPPED);
 	assert_rc_equal(rc, 0);
@@ -2774,7 +2773,7 @@ cr_fail_ps_sync(void **state, bool leader)
 	rc = cr_check_start(TCSF_NONE, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -2916,7 +2915,7 @@ cr_engine_death(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3032,7 +3031,7 @@ cr_engine_rejoin_succ(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3043,7 +3042,7 @@ cr_engine_rejoin_succ(void **state)
 	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(0, NULL, &dci, 0);
+	cr_ins_wait(0, NULL, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3137,7 +3136,7 @@ cr_engine_rejoin_fail(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3156,7 +3155,7 @@ cr_engine_rejoin_fail(void **state)
 			    "POOL_LESS_SVC_WITHOUT_QUORUM:CIA_DISCARD,POOL_NONEXIST_ON_MS:CIA_DISCARD");
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3282,7 +3281,7 @@ cr_multiple_pools(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &uuids[1], &dci, 0);
+	cr_ins_wait(1, &uuids[1], &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3306,7 +3305,7 @@ cr_multiple_pools(void **state)
 	rc = cr_check_stop(0, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &uuids[1], &dci, 0);
+	cr_ins_wait(1, &uuids[1], &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_STOPPED);
 	assert_rc_equal(rc, 0);
@@ -3346,7 +3345,7 @@ again:
 			goto again;
 	}
 
-	cr_ins_wait(0, NULL, &dci, 0);
+	cr_ins_wait(0, NULL, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3380,7 +3379,7 @@ again:
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(0, NULL, &dci, 0);
+	cr_ins_wait(0, NULL, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3430,18 +3429,12 @@ cr_fail_sync_orphan(void **state)
 	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
-	assert_rc_equal(rc, 0);
-
-	/* Check leader may be completed earlier than check engines in this case, double check. */
-	cr_ins_wait(0, NULL, &dci, 0);
-
-	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
 
 	cr_debug_set_params(arg, 0);
@@ -3533,7 +3526,7 @@ cr_set_policy_after(void **state)
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
-		cr_ins_wait(1, &pools[i].pool_uuid, &dci, 10);
+		cr_ins_wait(1, &pools[i].pool_uuid, &dci);
 
 		rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 		assert_rc_equal(rc, 0);
@@ -3607,7 +3600,7 @@ cr_handle_fail_pool1(void **state)
 	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 10);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3690,7 +3683,7 @@ cr_handle_fail_pool2(void **state)
 	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3786,7 +3779,7 @@ cr_maintenance_mode(void **state)
 	rc = cr_check_start(TCSF_DRYRUN, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pool.pool_uuid, &dci, 0);
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
 
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
@@ -3899,7 +3892,7 @@ static const struct CMUnitTest cr_tests[] = {
 	{ "CR20: check engine death during check",
 	  cr_engine_death, async_disable, test_case_teardown},
 	{ "CR21: check engine rejoins check instance successfully",
-	  cr_engine_rejoin_succ, async_disable, test_case_teardown}, 
+	  cr_engine_rejoin_succ, async_disable, test_case_teardown},
 	{ "CR22: check engine fails to rejoin check instance",
 	  cr_engine_rejoin_fail, async_disable, test_case_teardown},
 	{ "CR23: control multiple pools check start/stop sequence",
