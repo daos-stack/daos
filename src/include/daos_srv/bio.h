@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2025 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1201,19 +1201,5 @@ bool bio_meta_is_empty(struct bio_meta_context *mc);
  * Mark the meta blob as non-empty.
  */
 int bio_meta_clear_empty(struct bio_meta_context *mc);
-
-/*
- * Check if any blob is created for a pool target. This function is supposed to
- * be called in md-on-ssd mode.
- *
- * \param[in]	pool_id		pool UUID
- * \param[in]	tgt_id		VOS target ID
- * \param[in]	flags		bio_mc_flags
- *
- * \return			true, when any blob is created for the pool target
- *				false, when no blob is created
- */
-bool
-bio_pool_tgt_created(uuid_t pool_id, int tgt_id, enum bio_mc_flags flags);
 
 #endif /* __BIO_API_H__ */
