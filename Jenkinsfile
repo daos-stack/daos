@@ -548,10 +548,17 @@ pipeline {
                         filter: 'artifacts/leap15/daos/**, artifacts/leap15/deps/**',
                         fingerprintArtifacts: true
                     )
+                    copyArtifacts(
+                        projectName: env.JOB_NAME,
+                        selector: specific('2'),
+                        filter: 'artifacts/leap15/repodata/**',
+                        fingerprintArtifacts: true
+                    )
                     sh '''
                     set -euxo pipefail
                     ls -lah artifacts/leap15/daos || true
                     ls -lah artifacts/leap15/deps || true
+                    ls -lah artifacts/leap15/repodata || true
                     '''
 
                     archiveArtifacts artifacts: 'artifacts/leap15/**',
