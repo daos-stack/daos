@@ -4,6 +4,9 @@ hosts:
 
 timeout: 5M
 
+setup:
+  start_servers_once: False
+
 server_config:
   name: daos_server
   engines_per_host: 2
