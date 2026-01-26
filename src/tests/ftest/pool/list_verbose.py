@@ -82,6 +82,7 @@ class ListVerboseTest(IorTestBase):
             "rebuild": {
                 "status": 0,
                 "state": rebuild_state,
+                "derived_state": rebuild_state,
                 "objects": 0,
                 "records": 0,
                 "total_objects": 0,
