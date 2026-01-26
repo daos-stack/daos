@@ -1966,6 +1966,7 @@ migrate_one_ult(void *arg)
 	struct migrate_one	*mrone = arg;
 	struct migrate_pool_tls	*tls;
 	daos_size_t		data_size;
+	daos_size_t              degraded_size = 0;
 	int			rc = 0;
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_REBUILD_HANG))
@@ -1991,7 +1992,7 @@ migrate_one_ult(void *arg)
 		 * registration, it does provide relatively precise control over the
 		 * resources consumed by degraded EC reads.
 		 */
-		data_size *= MIN(8, obj_ec_data_tgt_nr(&mrone->mo_oca));
+		degraded_size = data_size * MIN(8, obj_ec_data_tgt_nr(&mrone->mo_oca));
 	}
 	data_size += daos_iods_len(mrone->mo_iods_from_parity,
 				   mrone->mo_iods_num_from_parity);
@@ -2001,13 +2002,13 @@ migrate_one_ult(void *arg)
 
 	D_ASSERT(data_size != (daos_size_t)-1);
 
-	rc = migrate_res_hold(tls, MIGR_DATA, data_size, NULL);
+	rc = migrate_res_hold(tls, MIGR_DATA, data_size + degraded_size, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
 	rc = migrate_dkey(tls, mrone, data_size);
 
-	migrate_res_release(tls, MIGR_DATA, data_size);
+	migrate_res_release(tls, MIGR_DATA, data_size + degraded_size);
 
 	D_DEBUG(DB_REBUILD, DF_UOID" layout %u migrate dkey "DF_KEY" inflight_size "DF_U64": "
 		DF_RC"\n", DP_UOID(mrone->mo_oid), mrone->mo_oid.id_layout_ver,
