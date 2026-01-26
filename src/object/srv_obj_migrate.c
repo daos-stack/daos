@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -752,6 +752,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			 d_iov_t *csum_iov_fetch, struct migrate_pool_tls *tls)
 {
 	uint32_t *extra_arg = NULL;
+	int       waited    = 0;
 	int       rc;
 
 	/* pass rebuild epoch by extra_arg */
@@ -760,11 +761,10 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			  mrone->mo_epoch);
 		extra_arg = (uint32_t *)mrone->mo_epoch;
 	}
-
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN) &&
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -776,6 +776,17 @@ retry:
 		 */
 		D_WARN(DF_UUID" retry "DF_UOID" "DF_RC"\n",
 		       DP_UUID(tls->mpt_pool_uuid), DP_UOID(mrone->mo_oid), DP_RC(rc));
+		if (rc == -DER_NOMEM) {
+			/* sleep 10 seconds before retry, give other layers a chance to
+			 * release resources.
+			 */
+			dss_sleep(10 * 1000);
+			if (waited != 0 && waited % 3600 == 0) {
+				DL_ERROR(rc, DF_RB ": waited for memory for %d hour(s)",
+					 DP_RB_MPT(tls), waited / 3600);
+			}
+		}
+		waited += 10;
 		D_GOTO(retry, rc);
 	}
 
@@ -2002,6 +2013,7 @@ migrate_one_ult(void *arg)
 	struct migrate_one	*mrone = arg;
 	struct migrate_pool_tls	*tls;
 	daos_size_t		data_size;
+	daos_size_t              degraded_size = 0;
 	int			rc = 0;
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_REBUILD_HANG))
@@ -2016,8 +2028,24 @@ migrate_one_ult(void *arg)
 	}
 
 	data_size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
+	if (daos_oclass_is_ec(&mrone->mo_oca)) {
+		/* NB: this is a workaround for EC object:
+		 * The fetch buffer is taken from a pre-registered (R)DMA buffer;
+		 * however, a degraded EC read will allocate and register an extra
+		 * buffer to recover data.
+		 *
+		 * Currently, the resource manager cannot control this extra allocation,
+		 * which can lead to increased memory consumption.
+		 *
+		 * While this workaround does not prevent dynamic buffer allocation and
+		 * registration, it does provide relatively precise control over the
+		 * resources consumed by degraded EC reads.
+		 */
+		degraded_size = data_size * MIN(6, obj_ec_data_tgt_nr(&mrone->mo_oca));
+	}
 	data_size += daos_iods_len(mrone->mo_iods_from_parity,
 				   mrone->mo_iods_num_from_parity);
+	degraded_size += data_size;
 
 	D_DEBUG(DB_TRACE, "mrone %p data size is "DF_U64" %d/%d\n",
 		mrone, data_size, mrone->mo_iod_num, mrone->mo_iods_num_from_parity);
@@ -2026,11 +2054,10 @@ migrate_one_ult(void *arg)
 	D_DEBUG(DB_REBUILD, "mrone %p inflight_size "DF_U64" max "DF_U64"\n",
 		mrone, tls->mpt_inflight_size, tls->mpt_inflight_max_size);
 
-	while (tls->mpt_inflight_size + data_size >= tls->mpt_inflight_max_size &&
-	       tls->mpt_inflight_max_size != 0 && tls->mpt_inflight_size != 0 &&
-	       !tls->mpt_fini) {
-		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"/"DF_U64"\n", mrone,
-			tls->mpt_inflight_size, tls->mpt_inflight_max_size, data_size);
+	while (tls->mpt_inflight_size + degraded_size >= tls->mpt_inflight_max_size &&
+	       tls->mpt_inflight_max_size != 0 && tls->mpt_inflight_size != 0 && !tls->mpt_fini) {
+		D_DEBUG(DB_REBUILD, "mrone %p wait " DF_U64 "/" DF_U64 "/" DF_U64 "\n", mrone,
+			tls->mpt_inflight_size, tls->mpt_inflight_max_size, degraded_size);
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
@@ -2039,9 +2066,9 @@ migrate_one_ult(void *arg)
 	if (tls->mpt_fini)
 		D_GOTO(out, rc);
 
-	tls->mpt_inflight_size += data_size;
+	tls->mpt_inflight_size += degraded_size;
 	rc = migrate_dkey(tls, mrone, data_size);
-	tls->mpt_inflight_size -= data_size;
+	tls->mpt_inflight_size -= degraded_size;
 
 	D_DEBUG(DB_REBUILD, DF_UOID" layout %u migrate dkey "DF_KEY" inflight_size "DF_U64": "
 		DF_RC"\n", DP_UOID(mrone->mo_oid), mrone->mo_oid.id_layout_ver,
