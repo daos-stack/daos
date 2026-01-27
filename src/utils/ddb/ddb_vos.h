@@ -53,11 +53,11 @@ struct ddb_array {
 
 /* Open and close a pool for a ddb_ctx */
 int
-    dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t *poh,
-		 uint32_t flags, bool write_mode);
-int dv_pool_close(daos_handle_t poh);
+dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, uint32_t flags);
 int
-dv_pool_destroy(const char *path, struct vos_file_parts *path_parts);
+dv_pool_close(daos_handle_t poh);
+int
+dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx);
 
 /* Update vos pool flags */
 int
