@@ -282,8 +282,7 @@ class PoolListConsolidationTest(TestWithServers):
         """
         if self.server_managers[0].manager.job.using_control_metadata:
             self.log.info("MD-on-SSD cluster. It will be supported later.")
-            # return results in PASS.
-            return
+            self.cancelForTicket('DAOS-18395')
 
         self.log_step("Create a pool with --nsvc=3.")
         # We can generalize this test more. For example, use
@@ -299,9 +298,14 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
-        rdb_pool_path_0 = f"/mnt/daos0/{pool.uuid.lower()}/rdb-pool"
-        rdb_pool_path_1 = f"/mnt/daos1/{pool.uuid.lower()}/rdb-pool"
-        rdb_pool_paths = [rdb_pool_path_0, rdb_pool_path_1]
+        scm_mounts = set()
+        for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
+            scm_mounts.add(engine_params.get_value('scm_mount'))
+        rdb_pool_paths = []
+        for scm_mount in scm_mounts:
+            rdb_pool_path = f"{scm_mount}/{pool.uuid.lower()}/rdb-pool"
+            rdb_pool_paths.append(rdb_pool_path)
+        self.log.info("rdb_pool_paths = %s", rdb_pool_paths)
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
         # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
