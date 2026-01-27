@@ -3849,7 +3849,7 @@ chk_rank_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 
 	/* Ignore the event that is not applicable to current rank. */
 
-	if (src != CRT_EVS_SWIM)
+	if (src != CRT_EVS_SWIM && src != CRT_EVS_GRPMOD)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
 	if (type != CRT_EVT_DEAD && type != CRT_EVT_ALIVE)
@@ -3861,6 +3861,8 @@ chk_rank_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		cdr->cdr_rank = rank;
+	} else if (d_list_empty(&ins->ci_dead_ranks)) {
+		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 	}
 
 	ABT_mutex_lock(ins->ci_abt_mutex);
