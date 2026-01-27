@@ -81,7 +81,7 @@ def run_mdtest(test, hosts, path, slots, container, processes, ppn=None, manager
 
 
 def write_mdtest_data(test, container, namespace=MDTEST_NAMESPACE, **mdtest_run_params):
-    """Write data to the container/dfuse using mdtest.
+    """Write data to the container using mdtest.
 
     Simple method for test classes to use to write data with mdtest. While not required, this is
     setup by default to pull in mdtest parameters from the test yaml.
