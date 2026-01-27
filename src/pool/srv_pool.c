@@ -7926,7 +7926,6 @@ ds_pool_reint_extend_allowed(struct pool_svc *svc)
 	struct ds_pool     *pool          = svc->ps_pool;
 	struct pool_target *targets       = NULL;
 	uint32_t            down_tgts_cnt = 0;
-	uint64_t            sys_self_heal = 0;
 	int                 rc;
 	bool                ret = true;
 
@@ -7948,27 +7947,6 @@ ds_pool_reint_extend_allowed(struct pool_svc *svc)
 		D_DEBUG(DB_REBUILD,
 			DF_UUID " with DOWN tgt in delay_rebuild node, "
 				"REINT/EXTEND allowed",
-			DP_UUID(pool->sp_uuid));
-		goto out;
-	}
-
-	rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to get self-heal policy", DP_UUID(svc->ps_uuid));
-		/*
-		 * Another PS replica might be able reach the MS. If I'm
-		 * not the PS leader of the specified term, this
-		 * rdb_resign call does nothing.
-		 */
-		rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
-		ret = false;
-		goto out;
-	}
-
-	if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
-		D_DEBUG(DB_REBUILD,
-			DF_UUID " with DOWN tgt, pool_rebuild disabled in "
-				"sys_self_heal, REINT/EXTEND allowed",
 			DP_UUID(pool->sp_uuid));
 		goto out;
 	}
