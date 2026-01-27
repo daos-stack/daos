@@ -88,12 +88,12 @@ MOCK_TEARDOWN(regcomp)
 static void
 vos_file_parse_test_crit_regcomp(void **state)
 {
-	struct vos_file_parts parts = {0};
+	struct vos_path_parts parts = {0};
 	int                   rc;
 
 	/* Testing regcomp failure */
 	will_return(__wrap_regcomp, REG_ESPACE);
-	rc = vos_path_parse(MOCKED_POOL_UUID_STR "/vos-0", &parts);
+	rc = vos_path_parse(MOCKED_POOL_UUID_STR "/vos-0", "/mnt/daos", &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
@@ -102,12 +102,12 @@ MOCK_TEARDOWN(uuid_parse)
 static void
 vos_file_parse_test_crit_uuid_parse(void **state)
 {
-	struct vos_file_parts parts = {0};
+	struct vos_path_parts parts = {0};
 	int                   rc;
 
 	/* Testing uuid_parse failure */
 	will_return(__wrap_uuid_parse, -1);
-	rc = vos_path_parse(MOCKED_POOL_UUID_STR "/vos-0", &parts);
+	rc = vos_path_parse(MOCKED_POOL_UUID_STR "/vos-0", "/mnt/daos", &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
@@ -116,13 +116,13 @@ MOCK_TEARDOWN(strtoull)
 static void
 vos_file_parse_test_crit_strtoull(void **state)
 {
-	struct vos_file_parts parts = {0};
+	struct vos_path_parts parts = {0};
 	int                   rc;
 
 	/* Testing strtoull failure */
 	will_return(__wrap_strtoull, ERANGE);
 	will_return(__wrap_strtoull, ULLONG_MAX);
-	rc = vos_path_parse(MOCKED_POOL_UUID_STR "/vos-0", &parts);
+	rc = vos_path_parse(MOCKED_POOL_UUID_STR "/vos-0", "/mnt/daos", &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 

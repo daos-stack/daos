@@ -41,7 +41,7 @@ print_regx_error(int rc, regex_t *preg, const char *regex_buf)
 }
 
 int
-vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
+vos_path_parse(const char *path, const char *db_path, struct vos_path_parts *vp)
 {
 	enum {
 		DB_PATH_IDX       = 1,
@@ -62,7 +62,7 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 	size_t     vos_file_name_len;
 	int        rc;
 
-	D_ASSERT(path != NULL && vos_file_parts != NULL);
+	D_ASSERT(path != NULL && vp != NULL);
 
 	rc = regcomp(&preg, regex_buf, REG_EXTENDED);
 	if (rc != 0) {
@@ -73,31 +73,41 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 
 	rc = regexec(&preg, path, MATCH_SIZE, match, 0);
 	if (rc == REG_NOMATCH) {
-		D_ERROR("Innvalid VOS path: '%s'\n", path);
+		D_ERROR("Invalid VOS path: '%s'\n", path);
 		rc = -DER_INVAL;
 		goto out_preg;
 	}
 	D_ASSERT(SUCCESS(rc));
 
-	vos_file_parts->vf_db_path[0] = '\0';
-	if ((match[DB_PATH_IDX].rm_eo - match[DB_PATH_IDX].rm_so) != 0) {
-		D_ASSERT(match[DB_PATH_IDX].rm_so == 0);
-		if (match[DB_PATH_IDX].rm_eo > DB_PATH_SIZE) {
-			D_ERROR("DB path '%.*s' too long in VOS path '%s': get=%i, max=%i\n",
-				match[DB_PATH_IDX].rm_eo - 1, &path[match[DB_PATH_IDX].rm_so], path,
-				match[DB_PATH_IDX].rm_eo - 1, DB_PATH_SIZE - 1);
+	if (strnlen(path, VOS_PATH_SIZE) == VOS_PATH_SIZE) {
+		D_ERROR("VOS path too long: max=%i\n", VOS_PATH_SIZE - 1);
+		rc = -DER_INVAL;
+		goto out_preg;
+	}
+	memcpy(vp->vp_vos_file_path, path, strnlen(path, VOS_PATH_SIZE) + 1);
+
+	if (db_path != NULL && db_path[0] != '\0') {
+		if (strnlen(db_path, DB_PATH_SIZE) == DB_PATH_SIZE) {
+			D_ERROR("DB path too long: max=%i\n", DB_PATH_SIZE - 1);
 			rc = -DER_INVAL;
 			goto out_preg;
 		}
-		memcpy(vos_file_parts->vf_db_path, path, match[DB_PATH_IDX].rm_eo - 1);
-		vos_file_parts->vf_db_path[match[DB_PATH_IDX].rm_eo - 1] = '\0';
+		memcpy(vp->vp_db_path, db_path, strnlen(db_path, DB_PATH_SIZE) + 1);
+	} else {
+		vp->vp_db_path[0] = '\0';
+		if ((match[DB_PATH_IDX].rm_eo - match[DB_PATH_IDX].rm_so) != 0) {
+			D_ASSERT(match[DB_PATH_IDX].rm_so == 0);
+			D_ASSERT(match[DB_PATH_IDX].rm_eo <= DB_PATH_SIZE);
+			memcpy(vp->vp_db_path, path, match[DB_PATH_IDX].rm_eo - 1);
+			vp->vp_db_path[match[DB_PATH_IDX].rm_eo - 1] = '\0';
+		}
 	}
 
 	D_ASSERT(match[POOL_UUID_IDX].rm_so != (regoff_t)-1);
 	D_ASSERT(match[POOL_UUID_IDX].rm_eo - match[POOL_UUID_IDX].rm_so == POOL_UUID_LEN);
 	memcpy(pool_uuid, &path[match[POOL_UUID_IDX].rm_so], POOL_UUID_LEN);
 	pool_uuid[POOL_UUID_LEN] = '\0';
-	rc                       = uuid_parse(pool_uuid, vos_file_parts->vf_pool_uuid);
+	rc                       = uuid_parse(pool_uuid, vp->vp_pool_uuid);
 	if (!SUCCESS(rc)) {
 		D_CRIT("Invalid Pool UUID '%s' in VOS path '%s'\n", pool_uuid, path);
 		rc = -DER_INVAL;
@@ -113,9 +123,8 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 		rc = -DER_INVAL;
 		goto out_preg;
 	}
-	memcpy(vos_file_parts->vf_vos_file_name, &path[match[VOS_FILE_NAME_IDX].rm_so],
-	       vos_file_name_len);
-	vos_file_parts->vf_vos_file_name[vos_file_name_len] = '\0';
+	memcpy(vp->vp_vos_file_name, &path[match[VOS_FILE_NAME_IDX].rm_so], vos_file_name_len);
+	vp->vp_vos_file_name[vos_file_name_len] = '\0';
 
 	D_ASSERT(match[TARGET_IDX_IDX].rm_so != (regoff_t)-1);
 	errno      = 0;
@@ -128,12 +137,12 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 	}
 	if (target_idx > UINT32_MAX) {
 		D_ERROR("Target index " DF_U64
-			"' out of range in VOS path '%s': min=0 , max=%" PRIu32 "\n",
+			"' out of range in VOS path '%s': min=0, max=%" PRIu32 "\n",
 			target_idx, path, UINT32_MAX);
 		rc = -DER_INVAL;
 		goto out_preg;
 	}
-	vos_file_parts->vf_target_idx = target_idx;
+	vp->vp_target_idx = target_idx;
 
 	rc = -DER_SUCCESS;
 
@@ -142,7 +151,7 @@ out_preg:
 out:
 	/* Reset to zero if not valid */
 	if (!SUCCESS(rc))
-		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
+		memset(vp, 0, sizeof(*vp));
 	return rc;
 }
 
