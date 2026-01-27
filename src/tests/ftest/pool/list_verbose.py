@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -80,6 +80,7 @@ class ListVerboseTest(IorTestBase):
             "rebuild": {
                 "status": 0,
                 "state": rebuild_state,
+                "derived_state": rebuild_state,
                 "objects": 0,
                 "records": 0,
                 "total_objects": 0
