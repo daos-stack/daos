@@ -66,6 +66,7 @@ type DdbApi interface {
 	DtxStat(path string, details bool) error
 	ProvMem(db_path string, tmpfs_mount string, tmpfs_mount_size uint) error
 	DtxAggr(path string, cmt_time uint64, cmt_date string) error
+	CsumDump(path string, dst string, epoch uint64) error
 }
 
 // DdbContext structure for wrapping the C code context structure
@@ -380,4 +381,16 @@ func (ctx *DdbContext) DtxAggr(path string, cmt_time uint64, cmt_date string) er
 	}
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_aggr(&ctx.ctx, &options))
+}
+
+func (ctx *DdbContext) CsumDump(path string, dst string, epoch uint64) error {
+	/* Set up the options */
+	options := C.struct_csum_dump_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	options.dst = C.CString(dst)
+	defer freeString(options.dst)
+	options.epoch = C.uint64_t(epoch)
+	/* Run the c code command */
+	return daosError(C.ddb_run_csum_dump(&ctx.ctx, &options))
 }

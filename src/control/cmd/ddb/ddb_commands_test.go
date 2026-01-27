@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"reflect"
@@ -44,6 +45,7 @@ type DdbContextStub struct {
 	dtxStat              func(path string, details bool) error
 	provMem              func(db_path string, tmpfs_mount string, tmpfs_mount_size uint) error
 	dtxAggr              func(path string, cmt_time uint64, cmt_date string) error
+	csumDump             func(path string, dst string, epoch uint64) error
 }
 
 func (ctx *DdbContextStub) Init(log *logging.LeveledLogger) (func(), error) {
@@ -242,6 +244,13 @@ func (ctx *DdbContextStub) DtxAggr(path string, cmt_time uint64, cmt_date string
 	return ctx.dtxAggr(path, cmt_time, cmt_date)
 }
 
+func (ctx *DdbContextStub) CsumDump(path string, dst string, epoch uint64) error {
+	if ctx.csumDump == nil {
+		return nil
+	}
+	return ctx.csumDump(path, dst, epoch)
+}
+
 func testCmdHelp(t *testing.T, cmdStr string, helpSubStr string) {
 	t.Helper()
 
@@ -294,6 +303,10 @@ func testCmdHelp(t *testing.T, cmdStr string, helpSubStr string) {
 
 func TestLsHelp(t *testing.T) {
 	testCmdHelp(t, "ls", "Usage:\n  ls [flags] [path]\n")
+}
+
+func TestCsumDumpHelp(t *testing.T) {
+	testCmdHelp(t, "csum_dump", "Usage:\n  csum_dump [flags] path [dst]\n")
 }
 
 func isArgEqual(want interface{}, got interface{}, wantName string) error {
@@ -401,6 +414,99 @@ func TestLs(t *testing.T) {
 			ctx.ls = tc.expCall
 
 			args := []string{"/vos/path", "ls"}
+			if err := parseOpts(test.JoinArgs(args, tc.args...), &opts, ctx, log); err != nil {
+				test.CmpErr(t, tc.expErr, err)
+				if tc.expErr != nil {
+					return
+				}
+			}
+		})
+	}
+}
+
+func TestCsumDump(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args    []string
+		expCall func(path string, dst string, epoch uint64) error
+		expErr  error
+	}{
+		"Invalid options": {
+			args:   []string{"--bar"},
+			expErr: fmt.Errorf("invalid flag: --bar"),
+		},
+		"default": {
+			args: []string{"/[0]"},
+			expCall: func(path string, dst string, epoch uint64) error {
+				if err := isArgEqual("/[0]", path, "path"); err != nil {
+					return err
+				}
+				if err := isArgEqual("", dst, "dst"); err != nil {
+					return err
+				}
+				if err := isArgEqual(uint64(math.MaxUint64), epoch, "epoch"); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		"epoch long": {
+			args: []string{"--epoch=666", "/[0]"},
+			expCall: func(path string, dst string, epoch uint64) error {
+				if err := isArgEqual("/[0]", path, "path"); err != nil {
+					return err
+				}
+				if err := isArgEqual("", dst, "dst"); err != nil {
+					return err
+				}
+				if err := isArgEqual(uint64(666), epoch, "epoch"); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		"epoch short": {
+			args: []string{"-e", "999", "/[0]"},
+			expCall: func(path string, dst string, epoch uint64) error {
+				if err := isArgEqual("/[0]", path, "path"); err != nil {
+					return err
+				}
+				if err := isArgEqual("", dst, "dst"); err != nil {
+					return err
+				}
+				if err := isArgEqual(uint64(999), epoch, "epoch"); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		"destination": {
+			args: []string{"/[0]", "/tmp/csum_dump.out"},
+			expCall: func(path string, dst string, epoch uint64) error {
+				if err := isArgEqual("/[0]", path, "path"); err != nil {
+					return err
+				}
+				if err := isArgEqual("/tmp/csum_dump.out", dst, "dst"); err != nil {
+					return err
+				}
+				if err := isArgEqual(uint64(math.MaxUint64), epoch, "epoch"); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var opts cliOptions
+			ctx := &DdbContextStub{}
+
+			log, buf := logging.NewTestLogger(t.Name())
+			t.Cleanup(func() {
+				test.ShowBufferOnFailure(t, buf)
+			})
+
+			ctx.csumDump = tc.expCall
+
+			args := []string{"/vos/path", "csum_dump"}
 			if err := parseOpts(test.JoinArgs(args, tc.args...), &opts, ctx, log); err != nil {
 				test.CmpErr(t, tc.expErr, err)
 				if tc.expErr != nil {
