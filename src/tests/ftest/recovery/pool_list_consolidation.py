@@ -360,7 +360,7 @@ class PoolListConsolidationTest(TestWithServers):
 
         self.log.info("rdb-pool count = %d", count)
         if count != 3:
-            errors.append(f"Not enough rdb-pool has been recovered! - {count} ranks")
+            errors.append(f"Unexpected number of rdb-pool after repair! - {count} ranks")
 
         report_errors(test=self, errors=errors)
 
