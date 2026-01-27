@@ -25,7 +25,7 @@ dmg:
     storage_sub_command: scan
 
 pool_1:
-  scm_size: 256MiB
+  scm_size: 2GiB
   nvme_size: 16GiB
 
 pool_2:

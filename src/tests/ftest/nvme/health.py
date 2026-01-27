@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -51,7 +52,7 @@ class NvmeHealth(ServerFillUp):
         # consider 1GiB RDB memory consume for MD-on-SSD
         rdb_size = 1073741824
         if self.server_managers[0].manager.job.using_control_metadata:
-            min_scm_per_pool = 104857600
+            min_scm_per_pool = 134217728
             potential_num_pools = int(scm_per_engine / (min_scm_per_pool + rdb_size))
             actual_num_pools = min(potential_num_pools, actual_num_pools)
 
