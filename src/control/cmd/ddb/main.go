@@ -43,15 +43,15 @@ func exitWithError(log logging.Logger, err error) {
 }
 
 type cliOptions struct {
-	Debug     bool   `long:"debug" description:"enable debug output"`
-	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
-	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
-	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
-	Version   bool   `short:"v" long:"version" description:"Show version"`
+	Debug     bool       `long:"debug" description:"enable debug output"`
+	WriteMode bool       `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
+	CmdFile   string     `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
+	SysdbPath string     `long:"db_path" short:"p" description:"Path to the sys db."`
+	VosPath   vosPathStr `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
+	Version   bool       `short:"v" long:"version" description:"Show version"`
 	Args      struct {
-		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
-		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
-		RunCmdArgs []string   `positional-arg-name:"ddb_command_args"`
+		RunCmd     ddbCmdStr `positional-arg-name:"ddb_command"`
+		RunCmdArgs []string  `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
 }
 
@@ -229,18 +229,16 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS]"
 	p.ShortDescription = "daos debug tool"
-	p.LongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
+	p.LongDescription = `
+The DAOS Debug Tool (ddb) allows a user to navigate through and modify
 a file in the VOS format. It offers both a command line and interactive
 shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
 the '-w' option must be included.
 
-If the command requires it, the VOS file provided as the first positional
-parameter will be opened before any commands are executed. See the
-command‑specific help for details. When the VOS file is not required, it is
-ignored; however, it must still be supplied, and it may be empty (""), e.g.
-
-ddb "" ls --help
+If the command requires it, the VOS file must be provided with the parameter 
+--vos-path. The VOS file will be opened before any commands are executed. See
+the command‑specific help for details.
 `
 
 	// Set the traceback level such that a crash results in
@@ -281,8 +279,8 @@ ddb "" ls --help
 		defer C.free(unsafe.Pointer(ctx.ctx.dc_db_path))
 	}
 
-	if opts.Args.VosPath != "" {
-		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
+	if opts.VosPath != "" {
+		ctx.ctx.dc_pool_path = C.CString(string(opts.VosPath))
 		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
 
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
@@ -293,9 +291,9 @@ ddb "" ls --help
 			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
-			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-			if err := ddbOpen(ctx, string(opts.Args.VosPath), bool(opts.WriteMode)); err != nil {
-				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+			log.Debugf("Connect to path: %s\n", opts.VosPath)
+			if err := ddbOpen(ctx, string(opts.VosPath), bool(opts.WriteMode)); err != nil {
+				return errors.Wrapf(err, "Error opening path: %s", opts.VosPath)
 			}
 		}
 	}
