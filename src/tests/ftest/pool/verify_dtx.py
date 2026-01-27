@@ -58,8 +58,8 @@ class VerifyDTX(TestWithTelemetry):
             _write_procs = ppn * len(self.host_info.clients.hosts)
         files_per_process = math.floor(mem_file_bytes / (write_bytes * _write_procs * _mdtest_cmds))
         if tier_bytes_scm > mem_file_bytes:
-            # Write more (225%) files to exceed mem_file_bytes and cause eviction
-            num_of_files_dirs = math.ceil(files_per_process * 2.25)
+            # Write more (125%) files to exceed mem_file_bytes and cause eviction
+            num_of_files_dirs = math.ceil(files_per_process * 1.25)
         else:
             # Write less (75%) files to avoid out of space errors
             num_of_files_dirs = math.floor(files_per_process * 0.75)
