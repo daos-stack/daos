@@ -444,8 +444,12 @@ key_parse_str(const char *input, daos_key_t *key)
 			key_len++;
 		}
 	}
-	if (size == 0)
+	if (size == 0) {
+		if (key_len == 0) {
+			return -DER_INVAL;
+		}
 		size = key_len;
+	}
 	if (size < key_len)
 		return -DER_INVAL;
 
