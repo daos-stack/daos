@@ -298,11 +298,9 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
-        scm_mounts = set()
-        for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
-            scm_mounts.add(engine_params.get_value('scm_mount'))
         rdb_pool_paths = []
-        for scm_mount in scm_mounts:
+        for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
+            scm_mount = engine_params.get_value('scm_mount')
             rdb_pool_path = f"{scm_mount}/{pool.uuid.lower()}/rdb-pool"
             rdb_pool_paths.append(rdb_pool_path)
         self.log.info("rdb_pool_paths = %s", rdb_pool_paths)
@@ -361,7 +359,7 @@ class PoolListConsolidationTest(TestWithServers):
                     self.log.info("rdb-pool found at %s: %s", str(node), rdb_pool_path)
 
         self.log.info("rdb-pool count = %d", count)
-        if count < 3:
+        if count != 3:
             errors.append(f"Not enough rdb-pool has been recovered! - {count} ranks")
 
         report_errors(test=self, errors=errors)
