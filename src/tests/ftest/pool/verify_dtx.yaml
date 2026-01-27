@@ -5,7 +5,7 @@ hosts:
   test_servers: 5
   test_clients: 3
 
-timeout: 800
+timeout: 10800
 
 server_config:
   name: daos_server
@@ -24,9 +24,9 @@ server_config:
 
 pool: !mux
   default:
-    size: 200G
+    size: 300G
   md_on_ssd_p2:
-    size: 200G
+    size: 300G
     mem_ratio: 25
 
 container:
