@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -582,6 +582,10 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 		return nil, err
 	}
 
+	if err := resp.UpdateRebuildStatus(); err != nil {
+		return nil, err
+	}
+
 	if req.QueryMask.HasOption(daos.PoolQueryOptionSelfHealPolicy) {
 		if err := resp.UpdateSelfHealPolicy(ctx, rpcClient); err != nil {
 			return nil, errors.Wrap(err, "pool get-prop self_heal failed")
@@ -642,7 +646,6 @@ func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQuer
 // For using the pretty printer that dmg uses for this target info.
 func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*daos.PoolQueryTargetInfo, error) {
 	pqti := new(daos.PoolQueryTargetInfo)
-	pqti.Type = daos.PoolQueryTargetType(pbInfo.Type)
 	pqti.State = daos.PoolQueryTargetState(pbInfo.State)
 	pqti.Space = []*daos.StorageUsageStats{
 		{
@@ -863,6 +866,9 @@ func getPoolRanksResp(ctx context.Context, rpcClient UnaryInvoker, req *PoolRank
 	if len(req.Ranks) == 0 {
 		return nil, errors.New("no ranks in request")
 	}
+
+	// Set timeout to 5 minutes per rank to allow sufficient time for operation
+	req.SetTimeout(time.Duration(len(req.Ranks)) * DefaultPoolTimeout)
 
 	results := []*PoolRankResult{}
 	for _, rank := range req.Ranks {

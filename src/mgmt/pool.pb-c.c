@@ -3327,20 +3327,28 @@ const ProtobufCMessageDescriptor mgmt__storage_usage_stats__descriptor =
   (ProtobufCMessageInit) mgmt__storage_usage_stats__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue mgmt__pool_rebuild_status__state__enum_values_by_number[3] =
+static const ProtobufCEnumValue mgmt__pool_rebuild_status__state__enum_values_by_number[7] =
 {
   { "BUSY", "MGMT__POOL_REBUILD_STATUS__STATE__BUSY", 0 },
   { "IDLE", "MGMT__POOL_REBUILD_STATUS__STATE__IDLE", 1 },
   { "DONE", "MGMT__POOL_REBUILD_STATUS__STATE__DONE", 2 },
+  { "STOPPING", "MGMT__POOL_REBUILD_STATUS__STATE__STOPPING", 3 },
+  { "STOPPED", "MGMT__POOL_REBUILD_STATUS__STATE__STOPPED", 4 },
+  { "FAILING", "MGMT__POOL_REBUILD_STATUS__STATE__FAILING", 5 },
+  { "FAILED", "MGMT__POOL_REBUILD_STATUS__STATE__FAILED", 6 },
 };
 static const ProtobufCIntRange mgmt__pool_rebuild_status__state__value_ranges[] = {
-{0, 0},{0, 3}
+{0, 0},{0, 7}
 };
-static const ProtobufCEnumValueIndex mgmt__pool_rebuild_status__state__enum_values_by_name[3] =
+static const ProtobufCEnumValueIndex mgmt__pool_rebuild_status__state__enum_values_by_name[7] =
 {
   { "BUSY", 0 },
   { "DONE", 2 },
+  { "FAILED", 6 },
+  { "FAILING", 5 },
   { "IDLE", 1 },
+  { "STOPPED", 4 },
+  { "STOPPING", 3 },
 };
 const ProtobufCEnumDescriptor mgmt__pool_rebuild_status__state__descriptor =
 {
@@ -3349,15 +3357,15 @@ const ProtobufCEnumDescriptor mgmt__pool_rebuild_status__state__descriptor =
   "State",
   "Mgmt__PoolRebuildStatus__State",
   "mgmt",
-  3,
+  7,
   mgmt__pool_rebuild_status__state__enum_values_by_number,
-  3,
+  7,
   mgmt__pool_rebuild_status__state__enum_values_by_name,
   1,
   mgmt__pool_rebuild_status__state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_rebuild_status__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__pool_rebuild_status__field_descriptors[5] =
 {
   {
     "status",
@@ -3407,8 +3415,21 @@ static const ProtobufCFieldDescriptor mgmt__pool_rebuild_status__field_descripto
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "derived_state",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_ENUM,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolRebuildStatus, derived_state),
+    &mgmt__pool_rebuild_status__state__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_rebuild_status__field_indices_by_name[] = {
+  4,   /* field[4] = derived_state */
   2,   /* field[2] = objects */
   3,   /* field[3] = records */
   1,   /* field[1] = state */
@@ -3417,7 +3438,7 @@ static const unsigned mgmt__pool_rebuild_status__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_rebuild_status__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor =
 {
@@ -3427,7 +3448,7 @@ const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor =
   "Mgmt__PoolRebuildStatus",
   "mgmt",
   sizeof(Mgmt__PoolRebuildStatus),
-  4,
+  5,
   mgmt__pool_rebuild_status__field_descriptors,
   mgmt__pool_rebuild_status__field_indices_by_name,
   1,  mgmt__pool_rebuild_status__number_ranges,
@@ -4297,40 +4318,6 @@ const ProtobufCMessageDescriptor mgmt__storage_target_usage__descriptor =
   (ProtobufCMessageInit) mgmt__storage_target_usage__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue mgmt__pool_query_target_info__target_type__enum_values_by_number[5] =
-{
-  { "UNKNOWN", "MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN", 0 },
-  { "HDD", "MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__HDD", 1 },
-  { "SSD", "MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__SSD", 2 },
-  { "PM", "MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__PM", 3 },
-  { "VM", "MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__VM", 4 },
-};
-static const ProtobufCIntRange mgmt__pool_query_target_info__target_type__value_ranges[] = {
-{0, 0},{0, 5}
-};
-static const ProtobufCEnumValueIndex mgmt__pool_query_target_info__target_type__enum_values_by_name[5] =
-{
-  { "HDD", 1 },
-  { "PM", 3 },
-  { "SSD", 2 },
-  { "UNKNOWN", 0 },
-  { "VM", 4 },
-};
-const ProtobufCEnumDescriptor mgmt__pool_query_target_info__target_type__descriptor =
-{
-  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "mgmt.PoolQueryTargetInfo.TargetType",
-  "TargetType",
-  "Mgmt__PoolQueryTargetInfo__TargetType",
-  "mgmt",
-  5,
-  mgmt__pool_query_target_info__target_type__enum_values_by_number,
-  5,
-  mgmt__pool_query_target_info__target_type__enum_values_by_name,
-  1,
-  mgmt__pool_query_target_info__target_type__value_ranges,
-  NULL,NULL,NULL,NULL   /* reserved[1234] */
-};
 static const ProtobufCEnumValue mgmt__pool_query_target_info__target_state__enum_values_by_number[7] =
 {
   { "STATE_UNKNOWN", "MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN", 0 },
@@ -4369,20 +4356,8 @@ const ProtobufCEnumDescriptor mgmt__pool_query_target_info__target_state__descri
   mgmt__pool_query_target_info__target_state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descriptors[4] =
 {
-  {
-    "type",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryTargetInfo, type),
-    &mgmt__pool_query_target_info__target_type__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
   {
     "state",
     2,
@@ -4433,16 +4408,15 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descri
   },
 };
 static const unsigned mgmt__pool_query_target_info__field_indices_by_name[] = {
-  4,   /* field[4] = md_on_ssd_active */
-  3,   /* field[3] = mem_file_bytes */
-  2,   /* field[2] = space */
-  1,   /* field[1] = state */
-  0,   /* field[0] = type */
+  3,   /* field[3] = md_on_ssd_active */
+  2,   /* field[2] = mem_file_bytes */
+  1,   /* field[1] = space */
+  0,   /* field[0] = state */
 };
 static const ProtobufCIntRange mgmt__pool_query_target_info__number_ranges[1 + 1] =
 {
-  { 1, 0 },
-  { 0, 5 }
+  { 2, 0 },
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_query_target_info__descriptor =
 {
@@ -4452,7 +4426,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_target_info__descriptor =
   "Mgmt__PoolQueryTargetInfo",
   "mgmt",
   sizeof(Mgmt__PoolQueryTargetInfo),
-  5,
+  4,
   mgmt__pool_query_target_info__field_descriptors,
   mgmt__pool_query_target_info__field_indices_by_name,
   1,  mgmt__pool_query_target_info__number_ranges,
