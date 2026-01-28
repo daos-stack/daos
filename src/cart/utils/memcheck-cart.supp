@@ -463,6 +463,13 @@
    fun:racecall
 }
 {
+   MemoryRangeSet ShadowSet
+   Memcheck:Value8
+   fun:ShadowSet
+   fun:_ZN6__tsanL14MemoryRangeSetEmmNS_9RawShadowE
+   fun:racecall
+}
+{
    FI leak 8
    Memcheck:Leak
    match-leak-kinds: reachable
