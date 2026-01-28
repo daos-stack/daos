@@ -3258,10 +3258,17 @@ again:
 
 		while (ver == ins->ci_ns_ver && ins->ci_skip_oog == 0 && ins->ci_pause == 0) {
 			dss_sleep(500);
-			if (++wait_cnt % 40 == 0)
+			if (++wait_cnt % 40 == 0) {
 				D_WARN("Leader (" DF_X64 ") query is blocked because of %d for "
 				       "about %d seconds.\n",
 				       gen, rc, wait_cnt / 2);
+				/*
+				 * Let's retry query in case of related dead rank recovered back
+				 * before being handled by chk_dead_rank_ult, although it is rare.
+				 */
+				break;
+			}
+
 			if (rc != -DER_OOG)
 				break;
 		}
@@ -3771,7 +3778,7 @@ chk_rank_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 
 	/* Ignore the event that is not applicable to current rank. */
 
-	if (src != CRT_EVS_SWIM)
+	if (src != CRT_EVS_SWIM && src != CRT_EVS_GRPMOD)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
 	if (type != CRT_EVT_DEAD && type != CRT_EVT_ALIVE)
@@ -3783,14 +3790,37 @@ chk_rank_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		cdr->cdr_rank = rank;
+	} else if (d_list_empty(&ins->ci_dead_ranks)) {
+		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 	}
 
 	ABT_mutex_lock(ins->ci_abt_mutex);
 	if (cdr != NULL) {
+		struct chk_dead_rank *tmp;
+
 		/*
-		 * The event may be triggered on non-system SX. Let's notify the leader scheduler
+		 * The event may be triggered on non-system SX (SWIM). Let's ask chk_dead_rank_ult
 		 * to handle that on system XS.
+		 *
+		 * The callback for one rank dead event maybe triggered twice from multiple source:
+		 * SWIM and PG memberskip changes. Let's only add once into the ins->ci_dead_ranks.
+		 *
+		 * Generally, ins->ci_dead_ranks is very short. Then it is very fast to go through
+		 * the whole list.
 		 */
+		d_list_for_each_entry(tmp, &ins->ci_dead_ranks, cdr_link) {
+			if (tmp->cdr_rank == rank) {
+				/* Repeated one, ignore it. */
+				D_FREE(cdr);
+				D_GOTO(unlock, rc = -DER_NOTAPPLICABLE);
+			}
+
+			if (tmp->cdr_rank > rank) {
+				d_list_add(&cdr->cdr_link, &tmp->cdr_link);
+				D_GOTO(unlock, rc = 0);
+			}
+		}
+
 		d_list_add_tail(&cdr->cdr_link, &ins->ci_dead_ranks);
 	} else {
 		/* Remove former non-handled dead rank from the list. */
@@ -3800,8 +3830,13 @@ chk_rank_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 				D_FREE(cdr);
 				break;
 			}
+
+			if (cdr->cdr_rank > rank)
+				D_GOTO(unlock, rc = -DER_NOTAPPLICABLE);
 		}
 	}
+
+unlock:
 	ABT_mutex_unlock(ins->ci_abt_mutex);
 
 out:
