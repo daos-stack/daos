@@ -5,7 +5,7 @@
 /* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-18348') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -90,9 +91,6 @@ String next_version() {
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-String sanitized_JOB_NAME() {
-    return JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
-}
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -189,10 +187,11 @@ Boolean skip_pragma_set(String name, String def_val='false') {
 }
 
 Boolean skip_build_stage(String distro='', String compiler='gcc') {
-    // Skip the stage if the CI_<distro>_NOBUILD parameter is set
+    // Skip the stage if the CI_BUILD_<distro> parameter is not set
     if (distro) {
-        if (startedByUser() && paramsValue("CI_${distro}_NOBUILD", false)) {
-            println("[${env.STAGE_NAME}] Skipping build stage due to CI_${distro}_NOBUILD")
+        String param_name = "CI_BUILD_${distro.toUpperCase()}"
+        if (startedByUser() && !paramsValue(param_name, false)) {
+            println("[${env.STAGE_NAME}] Skipping build stage due to ${param_name} parameter")
             return true
         }
     }
@@ -201,6 +200,9 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     String pragma_names = ['build']
     if (distro && compiler) {
         pragma_names << "build-${distro}-${compiler}"
+    }
+    else if (distro) {
+        pragma_names << "build-${distro}"
     }
     Boolean any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
     if (any_pragma_skip) {
@@ -218,10 +220,369 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     return false
 }
 
+Boolean skip_unit_test_stage(String name) {
+    // Skip the unit test stage if the CI_UNIT_TEST_<name> parameter is not set
+    if (startedByUser() && !paramsValue("CI_UNIT_TEST_${name.toUpperCase()}", true)) {
+        println("[${env.STAGE_NAME}] Skipping unit test stage due to CI_UNIT_TEST_${name.toUpperCase()} parameter")
+        return true
+    }
+
+    // Skip the unit test stage if any Skip-unit-test-<name> pragmas are true
+    if (skip_pragma_set("unit-test-${name.toLowerCase()}")) {
+        println("[${env.STAGE_NAME}] Skipping unit test stage due to Skip-unit-test-${name.toLowerCase()} pragma")
+        return true
+    }
+
+    // Otherwise run the unit test stage
+    return false
+}
+
+Boolean code_coverage_enabled() {
+    // Determine if code coverage is enabled for the build
+    return !skip_build_stage('bullseye', 'covc')
+    // if (paramsValue('CI_CODE_COVERAGE', true) == true) {
+    //     env.COVFN_DISABLED = 'false'
+    // }
+    // return env.COVFN_DISABLED == 'false'
+}
+
+String code_coverage_build_args() {
+    // Get additional build args for code coverage, if enabled
+    if (!code_coverage_enabled()) {
+        return ''
+    }
+    return " --build-arg COMPILER=covc --build-arg CODE_COVERAGE=true"
+}
+
+String code_coverage_scons_args() {
+    // Get additional scons args for code coverage, if enabled
+    if (!code_coverage_enabled()) {
+        return ''
+    }
+    return ' COMPILER=covc'
+}
+
+String add_daos_pkgs() {
+    // Get the additional daos package names to install in functional test stages
+    // if (code_coverage_enabled()) {
+    //     return 'tests-internal,-code-coverage'
+    // }
+    return 'tests-internal'
+}
+
+Map unit_test_post_args(String name) {
+    // Get the arguments for unitTestPost
+    Map args = [artifacts: ["${name}_logs/"]]
+    if (code_coverage_enabled()) {
+        // args['artifacts'].add("covc_${name}_logs/")
+        // args['artifacts'].add('covc_vm_test/**')
+        args['ignore_failure'] = true
+        args['code_coverage'] = true
+    }
+    return args
+}
+
+Map nlt_post_args() {
+    Map args = [
+        artifacts: ['nlt_logs/'],
+        testResults: 'nlt-junit.xml',
+        always_script: 'ci/unit/test_nlt_post.sh',
+        valgrind_stash: 'el8-gcc-nlt-memcheck'
+    ]
+    if (code_coverage_enabled()) {
+        // args['artifacts'].add('covc_nlt_logs/')
+        args['ignore_failure'] = true
+        args['code_coverage'] = true
+    }
+    return args
+}
+
+String getScriptOutput(String script, String args='') {
+    return sh(script: "${script} ${args}", returnStdout: true).trim()
+}
+
+/**
+ * runStage
+ *
+ * Determine if the stage should be run.
+ *
+ * @param           Map of parameter names and expected values to check
+ * @pragmas         Map of commit pragma names and expected values to check
+ * @otherCondition  Additional condition to consider
+ */
+Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
+    // Run stage w/o any conditionals
+    if (params.isEmpty() && pragmas.isEmpty()) {
+        return true
+    }
+    if (!otherCondition) {
+        println("[${env.STAGE_NAME}] Skipping stage due to otherCondition=false")
+        return false
+    }
+
+    String skip_pragma_msg = ''
+    for(entry in params) {
+        if (paramsValue(entry.key, entry.value) == entry.value) {
+            skip_pragma_msg = "Skipping stage due to ${entry.key} parameter (${entry.value})"
+            break
+        }
+    }
+
+    String skip_param_msg = ''
+    for(entry in pragmas) {
+        String expected = entry.value.toString().toLowerCase()
+        if (cachedCommitPragma(entry.key, expected).toLowerCase() == expected) {
+            skip_pragma_msg = "Skipping stage due to ${entry.key} parameter (${entry.value})"
+            break
+        }
+    }
+
+    for(name in truePragmas) {
+        if (cachedCommitPragma(name, 'true').toLowerCase() == 'true') {
+            skip_param_msg = "Skipping stage due to ${name} commit pragma (true)"
+            break
+        }
+    }
+    if (!skip_param_msg) {
+        for(name in falsePragmas) {
+            if (cachedCommitPragma(name, 'false').toLowerCase() == 'false') {
+                skip_param_msg = "Skipping stage due to ${name} commit pragma (false)"
+                break
+            }
+        }
+    }
+
+    if (startedByUser()) {
+        // Manual build: check parameters first
+        if (skip_pragma_msg) {
+            println("[${env.STAGE_NAME}] ${skip_pragma_msg}")
+            return false
+        }
+        // Manual build: check commit pragmas second
+        if (skip_param_msg) {
+            println("[${env.STAGE_NAME}] ${skip_param_msg}")
+            return false
+        }
+    } else {
+        // Normal build: check commit pragmas first
+        if (skip_param_msg) {
+            println("[${env.STAGE_NAME}] ${skip_param_msg}")
+            return false
+        }
+        // Normal build: check parameters second
+        if (skip_pragma_msg) {
+            println("[${env.STAGE_NAME}] ${skip_pragma_msg}")
+            return false
+        }
+    }
+
+    // Otherwise run the stage
+    return true
+}
+
+/**
+ * scriptedBuildStage
+ *
+ * Get a build stage in scripted syntax.
+ *
+ * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
+ *  name                        the build stage name
+ *  distro                      the shorthand distro name; defaults to 'el8'
+ *  rpmDistro                   the distro to use for rpm building; defaults to distro
+ *  compiler                    the compiler to use; defaults to 'gcc'
+ *  runCondition                optional condition to determine if the stage should run; defaults
+ *                                to !skip_build_stage(distro, compiler)
+ *  buildRpms                   whether or not to build rpms; defaults to true
+ *  release                     the DAOS RPM release value to use; defaults to env.DAOS_RELVAL
+ *  dockerBuildArgs             optional docker build arguments
+ *  sconsBuildArgs              optional scons build arguments
+ *  artifacts                   optional artifacts name to archive; defaults to
+ *                                "config.log-${distro}-${compiler}"
+ *  uploadTarget                the distro to use when uploading rpms; defaults to distro
+ * @return a scripted stage to run in a pipeline
+ */
+def scriptedBuildStage(Map kwargs = [:]) {
+    String name = kwargs.get('name', 'Unknown Build Stage')
+    String distro = kwargs.get('distro', 'el8')
+    String rpmDistro = kwargs.get('rpmDistro', distro)
+    String compiler = kwargs.get('compiler', 'gcc')
+    Boolean runCondition = kwargs.get('runCondition', !skip_build_stage(distro, compiler))
+    Boolean buildRpms = kwargs.get('buildRpms', true)
+    String release = kwargs.get('release', env.DAOS_RELVAL)
+    String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
+    Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
+    String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
+    String uploadTarget = kwargs.get('uploadTarget', distro)
+    String dockerTag = jobStatusKey("${name}-${distro}-${compiler}").toLowerCase()
+    String bullseye = 'false'
+    if (compiler == 'covc') {
+        bullseye = 'true'
+    }
+    return {
+        stage("${name}") {
+            if (runCondition) {
+                node('docker_runner') {
+                    def dockerImage = docker.build(dockerTag, dockerBuildArgs)
+                    try {
+                        dockerImage.inside() {
+                            if (buildRpms) {
+                                sh label: 'Install RPMs',
+                                    script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
+                                sh label: 'Build deps',
+                                    script: "./ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}"
+                            }
+                            job_step_update(sconsBuild(sconsBuildArgs))
+                            if (buildRpms) {
+                                sh label: 'Generate RPMs',
+                                    script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release} ${bullseye}"
+                                // Success actions
+                                uploadNewRPMs(uploadTarget, 'success')
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Unsuccessful actions
+                        sh """if [ -f config.log ]; then
+                                mv config.log ${artifacts}
+                            fi"""
+                        archiveArtifacts artifacts: "${artifacts}", allowEmptyArchive: true
+                        throw e
+                    } finally {
+                        // Cleanup actions
+                        if (buildRpms) {
+                            uploadNewRPMs(uploadTarget, 'cleanup')
+                        }
+                        jobStatusUpdate(job_status_internal, name)
+                    }
+                }
+            }
+            else {
+                println("[${name}] Skipping build stage")
+                Utils.markStageSkippedForConditional("${name}")
+            }
+            println("[${name}] Finished with ${job_status_internal}")
+        }
+    }
+}
+
+/**
+ * scriptedUnitTestStage
+ *
+ * Get a unit test stage in scripted syntax.
+ *
+ * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
+ *  name                the unit test stage name
+ *  runCondition        Optional additional condition to determine if the stage should run
+ *  nodeLabel           the node label to use
+ *  unitTestArgs        Map of arguments to pass to unitTest()
+ *  stashArgs           Map of arguments to pass to optional stash() call
+ *  unitTestPostArgs    Map of arguments to pass to unitTestPost()
+ *  recordIssuesArgs    Map of arguments to pass to recordIssues()
+ * @return a scripted stage to run in a pipeline
+ */
+def scriptedUnitTestStage(Map kwargs = [:]) {
+    String name = kwargs.get('name', 'Unknown Unit Test')
+    Boolean runCondition = kwargs.get('runCondition', !skip_unit_test_stage(name))
+    String nodeLabel = kwargs.get('nodeLabel', params.CI_UNIT_VM1_LABEL)
+    Map unitTestArgs = kwargs.get('unitTestArgs', [:])
+    Map stashArgs = kwargs.get('stashArgs', [:])
+    Map unitTestPostArgs = kwargs.get('unitTestPostArgs', [:])
+    Map recordIssuesArgs = kwargs.get('recordIssuesArgs', [:])
+
+    return {
+        stage("${name}") {
+            if (runCondition) {
+                node(nodeLabel) {
+                    try {
+                        checkoutScm(pruneStaleBranch: true)
+                        // Execute the unit test
+                        job_step_update(unitTest(unitTestArgs))
+                        if (stashArgs) {
+                            stash(stashArgs)
+                        }
+                    } finally {
+                        // Always execute post actions
+                        if (unitTestPostArgs) {
+                            unitTestPost(unitTestPostArgs)
+                        }
+                        if (recordIssuesArgs) {
+                            recordIssues(recordIssuesArgs)
+                        }
+                        jobStatusUpdate(job_status_internal, name)
+                    }
+                }
+            }
+            else {
+                println("[${name}] Skipping unit test stage")
+                Utils.markStageSkippedForConditional("${name}")
+            }
+            println("[${name}] Finished with ${job_status_internal}")
+        }
+    }
+}
+
+/**
+ * scriptedSummaryStage
+ *
+ * Get a summary stage in scripted syntax.
+ *
+ * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
+ *  name                        the summary stage name
+ *  distro                      the shorthand distro name; defaults to 'el8'
+ *  compiler                    the compiler to use; defaults to 'gcc'
+ *  runCondition                Optional additional condition to determine if the stage should run
+ *  dockerBuildArgs             optional docker build arguments
+ *  installScript               optional script to install RPMs
+ *  runScriptArgs               Map of arguments to pass to runScriptWithStashes()
+ *  archiveArtifactsArgs        Map of arguments to pass to archiveArtifacts()
+ * @return a scripted stage to run in a pipeline
+ */
+def scriptedSummaryStage(Map kwargs = [:]) {
+    String name = kwargs.get('name', 'Unknown Summary Stage')
+    String distro = kwargs.get('distro', 'el8')
+    String compiler = kwargs.get('compiler', 'gcc')
+    Boolean runCondition = kwargs.get('runCondition', true)
+    String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
+    String installScript = kwargs.get('installScript', '')
+    Map runScriptArgs = kwargs.get('runScriptArgs', [:])
+    Map archiveArtifactsArgs = kwargs.get('archiveArtifactsArgs', [:])
+    String dockerTag = jobStatusKey("${name}-${distro}-${compiler}").toLowerCase()
+
+    return {
+        stage("${name}") {
+            if (runCondition) {
+                node('docker_runner') {
+                    def dockerImage = docker.build(dockerTag, dockerBuildArgs)
+                    try {
+                        dockerImage.inside() {
+                            if (installScript) {
+                                sh label: 'Install RPMs',
+                                    script: installScript
+                            }
+                            job_step_update(runScriptWithStashes(runScriptArgs))
+                        }
+                    } finally {
+                        // Cleanup actions
+                        if (archiveArtifactsArgs) {
+                            archiveArtifacts(archiveArtifactsArgs)
+                        }
+                        jobStatusUpdate(job_status_internal, name)
+                    }
+                }
+            }
+            else {
+                println("[${name}] Skipping summary stage")
+                Utils.markStageSkippedForConditional("${name}")
+            }
+            println("[${name}] Finished with ${job_status_internal}")
+        }
+    }
+}
+
 pipeline {
     agent { label 'lightweight' }
 
     environment {
+        BULLSEYE_KEY = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = '-ici_key'
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
@@ -296,15 +657,21 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_el8_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on EL 8')
-        booleanParam(name: 'CI_el9_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on EL 9')
-        booleanParam(name: 'CI_leap15_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on Leap 15')
+        booleanParam(name: 'CI_BUILD_EL8',
+                     defaultValue: true,
+                     description: 'Build sources and RPMs on EL 8')
+        booleanParam(name: 'CI_BUILD_EL9',
+                     defaultValue: true,
+                     description: 'Build sources and RPMs on EL 9')
+        booleanParam(name: 'CI_BUILD_LEAP15',
+                     defaultValue: true,
+                     description: 'Build sources and RPMs on Leap 15')
+        booleanParam(name: 'CI_BUILD_LEAP15_ICC',
+                     defaultValue: true,
+                     description: 'Build sources on Leap 15 with Intel-C')
+        booleanParam(name: 'CI_BUILD_BULLSEYE',
+                     defaultValue: true,
+                     description: 'Build sources and RPMs with Bullseye code coverage')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -317,6 +684,12 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
+        booleanParam(name: 'CI_UNIT_TEST_BULLSEYE',
+                     defaultValue: true,
+                     description: 'Run the Unit Test with Bullseye code coverage test stage')
+        booleanParam(name: 'CI_NLT_TEST_BULLSEYE',
+                     defaultValue: true,
+                     description: 'Run the NLT test with Bullseye code coverage test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
@@ -521,205 +894,128 @@ pipeline {
                 beforeAgent true
                 expression { !skip_build_stage() }
             }
-            parallel {
-                stage('Build on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('el8') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                        stash_files: 'ci/test_files_to_stash.txt',
-                                        build_deps: 'no',
-                                        stash_opt: true,
-                                        scons_args: sconsArgs() +
-                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('el8', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('el8', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 9.6') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('el9') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.6 '
-
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                           stash_files: 'ci/test_files_to_stash.txt',
-                                           build_deps: 'no',
-                                           stash_opt: true,
-                                           scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('el9', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el9-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el9-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('el9', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('leap15') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: false) +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg POINT_RELEASE=.5 '
-
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                scons_args: sconsFaultsArgs() +
-                                ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                build_deps: 'yes'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('leap15', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('leap15', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('leap15', 'icc') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-icc" +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg COMPILER=icc' +
-                                                ' --build-arg POINT_RELEASE=.5 '
-
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-intelc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-            }
-        }
+            steps {
+                script {
+                    parallel(
+                        'Build on EL 8.8': scriptedBuildStage(
+                            name: 'Build on EL 8.8',
+                            distro:'el8',
+                            compiler: 'gcc',
+                            buildRpms: true,
+                            release: env.DAOS_RELVAL,
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                                             ' -f utils/docker/Dockerfile.el.8 .',
+                            sconsBuildArgs: [
+                                parallel_build: true,
+                                stash_files: 'ci/test_files_to_stash.txt',
+                                build_deps: 'no',
+                                stash_opt: true,
+                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
+                            ],
+                            artifacts: "config.log-el8-gcc"
+                        ),
+                        'Build on EL 9.6': scriptedBuildStage(
+                            name: 'Build on EL 9.6',
+                            distro:'el9',
+                            compiler: 'gcc',
+                            buildRpms: true,
+                            release: env.DAOS_RELVAL,
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg REPOS="' + prRepos('el9') + '"' +
+                                             ' --build-arg POINT_RELEASE=.6' +
+                                             ' -f utils/docker/Dockerfile.el.9 .',
+                            sconsBuildArgs: [
+                                parallel_build: true,
+                                stash_files: 'ci/test_files_to_stash.txt',
+                                build_deps: 'no',
+                                stash_opt: true,
+                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
+                            ],
+                            artifacts: "config.log-el9-gcc"
+                        ),
+                        'Build on Leap 15.5': scriptedBuildStage(
+                            name: 'Build on Leap 15.5',
+                            distro:'leap15',
+                            rpmDistro: 'suse.lp155',
+                            compiler: 'gcc',
+                            buildRpms: true,
+                            release: env.DAOS_RELVAL,
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg POINT_RELEASE=.5' +
+                                             ' -f utils/docker/Dockerfile.leap.15 .',
+                            sconsBuildArgs: [
+                                parallel_build: true,
+                                build_deps: 'yes',
+                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
+                            ],
+                            artifacts: "config.log-leap15-gcc"
+                        ),
+                        'Build on Leap 15.5 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
+                            name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
+                            distro:'leap15',
+                            compiler: 'icc',
+                            runCondition: !skip_build_stage('leap15_icc'),
+                            buildRpms: false,
+                            release: env.DAOS_RELVAL,
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: true,
+                                                             parallel_build: true) +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg POINT_RELEASE=.5' +
+                                             ' --build-arg COMPILER=icc' +
+                                             ' -f utils/docker/Dockerfile.leap.15 .',
+                            sconsBuildArgs: [
+                                parallel_build: true,
+                                build_deps: 'yes',
+                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
+                            ],
+                            artifacts: "config.log-leap15-intelc"
+                        ),
+                        'Build on EL 8.8 with Bullseye': scriptedBuildStage(
+                            name: 'Build on EL 8.8 with Bullseye',
+                            distro:'el8',
+                            compiler: 'covc',
+                            runCondition: !skip_build_stage('bullseye', 'covc') && code_coverage_enabled(),
+                            buildRpms: true,
+                            release: "${env.DAOS_RELVAL}.bullseye",
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                                             ' --build-arg COMPILER=covc' +
+                                             ' --build-arg CODE_COVERAGE=true' +
+                                             ' -f utils/docker/Dockerfile.el.8 .',
+                            sconsBuildArgs: [
+                                parallel_build: true,
+                                stash_files: 'ci/test_files_to_stash.txt',
+                                build_deps: 'no',
+                                stash_opt: true,
+                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release' +
+                                            ' COMPILER=covc'
+                            ],
+                            artifacts: "config.log-el8-covc",
+                            uploadTarget: 'el8'
+                        )
+                    ) // parallel
+                } // script
+            } // steps
+        } // stage('Build')
         stage('Unit Tests') {
             when {
                 beforeAgent true
@@ -739,7 +1035,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     compiler: 'gcc'))
                     }
                     post {
                         always {
@@ -761,7 +1058,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     compiler: 'gcc'))
                     }
                     post {
                         always {
@@ -782,10 +1080,12 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages(),
+                                     compiler: 'gcc',
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages()))
+                                     with_valgrind: 'memcheck'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
@@ -824,7 +1124,8 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     compiler: 'gcc'))
                     }
                     post {
                         always {
@@ -849,7 +1150,8 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     compiler: 'gcc'))
                     }
                     post {
                         always {
@@ -860,8 +1162,270 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck on EL 8')
+                stage('Unit Test with Bullseye on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression {
+                            runStage(params: ['CI_BUILD_BULLSEYE': true,
+                                              'CI_UNIT_TEST_BULLSEYE': true,
+                                              'CI_BUILD_PACKAGES_ONLY': false],
+                                     pragmas: ['Skip-unit-tests': false,
+                                               'Skip-unit-test-bullseye': false])
+                        }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 120,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+                                     compiler: 'covc',
+                                     ignore_failure: true,
+                                     coverage_stash: 'unit_test_bullseye'))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_bullseye_logs/'],
+                                         ignore_failure: true,
+                                         compiler: 'covc'
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('NLT with Bullseye on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression {
+                            runStage(params: ['CI_BUILD_BULLSEYE': true,
+                                              'CI_UNIT_TEST_BULLSEYE': true,
+                                              'CI_BUILD_PACKAGES_ONLY': false],
+                                     pragmas: ['Skip-unit-tests': false,
+                                               'Skip-nlt-bullseye': false])
+                        }
+                    }
+                    agent {
+                        label params.CI_NLT_1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 120,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+                                     compiler: 'covc',
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_tests: false,
+                                     ignore_failure: true,
+                                     coverage_stash: 'unit_test_bullseye'))
+                        stash(name:'nltr-bullseye', includes:'nltr-bullseye.json', allowEmpty: true)
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         compiler: 'covc',
+                                         NLT: true
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         name: 'NLT server leaks',
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server'),
+                                         scm: 'daos-stack/daos'
+                            job_status_update()
+                        }
+                    }
+                }
             }
-        }
+            // steps {
+            //     script {
+            //         parallel(
+            //             'Unit Test on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST,
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 60,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh'
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_logs/']
+            //                 ]
+            //             ),
+            //             'Unit Test bdev on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test bdev on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST,
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 60,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh'
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_bdev_logs/']
+            //                 ]
+            //             ),
+            //             'NLT on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'NLT on EL 8.8',
+            //                 runCondition: params.CI_NLT_TEST,
+            //                 nodeLabel: params.CI_NLT_1_LABEL,
+            //                 unitTestArgs: [
+            //                     timeout_time: 60,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'nlt-junit.xml',
+            //                     always_script: 'ci/unit/test_nlt_post.sh',
+            //                     with_valgrind: 'memcheck',
+            //                     valgrind_pattern: '*memcheck.xml',
+            //                     test_script: 'ci/unit/test_nlt.sh',
+            //                     unstash_tests: false
+            //                 ],
+            //                 stashArgs: [
+            //                     name: 'nltr',
+            //                     includes: 'nltr.json',
+            //                     allowEmpty: true
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['nlt_logs/'],
+            //                     testResults: 'nlt-junit.xml',
+            //                     always_script: 'ci/unit/test_nlt_post.sh',
+            //                     with_valgrind: 'memcheck',
+            //                     valgrind_stash: 'el8-gcc-nlt-memcheck',
+            //                     NLT: true
+            //                 ],
+            //                 recordIssuesArgs: [
+            //                     enabledForFailure: true,
+            //                     failOnError: false,
+            //                     ignoreQualityGate: true,
+            //                     name: 'NLT server leaks',
+            //                     qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+            //                     tool: issues(pattern: 'nlt-server-leaks.json',
+            //                                  name: 'NLT server results',
+            //                                  id: 'NLT_server'),
+            //                     scm: 'daos-stack/daos'
+            //                 ]
+            //             ),
+            //             'Unit Test with memcheck on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test with memcheck on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST_MEMCHECK,
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 160,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh',
+            //                     with_valgrind: 'memcheck',
+            //                     ignore_failure: true,
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_memcheck_logs.tar.gz',
+            //                                 'unit_test_memcheck_logs/**/*.log'],
+            //                     with_valgrind: 'memcheck',
+            //                     valgrind_stash: 'el8-gcc-unit-memcheck'
+            //                 ]
+            //             ),
+            //             'Unit Test bdev with memcheck on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test bdev with memcheck on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST_MEMCHECK,
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 180,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh',
+            //                     with_valgrind: 'memcheck',
+            //                     ignore_failure: true,
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+            //                                 'unit_test_memcheck_bdev_logs/**/*.log'],
+            //                     with_valgrind: 'memcheck',
+            //                     valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+            //                 ]
+            //             ),
+            //             'Unit Test with Bullseye on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'Unit Test with Bullseye on EL 8.8',
+            //                 runCondition: params.CI_UNIT_TEST_BULLSEYE && code_coverage_enabled(),
+            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
+            //                 unitTestArgs: [
+            //                     timeout_time: 120,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+            //                     testResults: 'test_results/*.xml',
+            //                     always_script: 'ci/unit/test_post_always.sh',
+            //                     ignore_failure: true,
+            //                     coverage_stash: 'unit_test_bullseye'
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['unit_test_bullseye_logs/'],
+            //                     ignore_failure: true,
+            //                     code_coverage: true
+            //                 ]
+            //             ),
+            //             'NLT with Bullseye on EL 8.8': scriptedUnitTestStage(
+            //                 name: 'NLT with Bullseye on EL 8.8',
+            //                 runCondition: params.CI_NLT_TEST && code_coverage_enabled(),
+            //                 nodeLabel: params.CI_NLT_1_LABEL,
+            //                 unitTestArgs: [
+            //                     timeout_time: 120,
+            //                     unstash_opt: true,
+            //                     inst_repos: daosRepos(),
+            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+            //                     testResults: 'nlt-junit.xml',
+            //                     always_script: 'ci/unit/test_nlt_post.sh',
+            //                     test_script: 'ci/unit/test_nlt.sh',
+            //                     unstash_tests: false,
+            //                     ignore_failure: true,
+            //                     code_coverage: true,
+            //                     coverage_stash: 'nlt-bullseye'
+            //                 ],
+            //                 stashArgs: [
+            //                     name: 'nltr-bullseye',
+            //                     includes: 'nltr-bullseye.json',
+            //                     allowEmpty: true
+            //                 ],
+            //                 unitTestPostArgs: [
+            //                     artifacts: ['nlt_logs/'],
+            //                     testResults: 'nlt-junit.xml',
+            //                     always_script: 'ci/unit/test_nlt_post.sh',
+            //                     code_coverage: true,
+            //                     NLT: true
+            //                 ],
+            //                 recordIssuesArgs: [
+            //                     enabledForFailure: true,
+            //                     failOnError: false,
+            //                     ignoreQualityGate: true,
+            //                     name: 'NLT server leaks',
+            //                     qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+            //                     tool: issues(pattern: 'nlt-server-leaks.json',
+            //                                  name: 'NLT server results',
+            //                                  id: 'NLT_server'),
+            //                     scm: 'daos-stack/daos'
+            //                 ]
+            //             )
+            //         ) // parallel
+            //     } // script
+            // } // steps
+        } // stage('Unit Tests')
         stage('Test') {
             when {
                 beforeAgent true
@@ -904,7 +1468,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                    inst_rpms: functionalPackages(1, next_version(), add_daos_pkgs()),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1144,6 +1708,7 @@ pipeline {
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1156,6 +1721,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
@@ -1168,6 +1734,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1181,6 +1748,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1194,6 +1762,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1207,6 +1776,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1220,6 +1790,7 @@ pipeline {
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1232,6 +1803,7 @@ pipeline {
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_daos_packages: add_daos_pkgs(),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1243,6 +1815,84 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
+        stage('Test Summary') {
+            when {
+                beforeAgent true
+                expression { true }
+            }
+            steps {
+                script {
+                    parallel(
+                        'Bullseye Report': scriptedSummaryStage(
+                            name: 'Bullseye Report',
+                            distro: 'el8',
+                            compiler: 'covc',
+                            runCondition: code_coverage_enabled(),
+                            nodeLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs(
+                                repo_type: 'stable',
+                                deps_build: false,
+                                parallel_build: true) +
+                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                ' --build-arg REPOS="' + daosRepos() + '"' +
+                                code_coverage_build_args(),
+                            installScript: './ci/summary/install_pkgs.sh',
+                            runScriptArgs: [
+                                label: 'Generate Bullseye Report',
+                                script: 'ci/summary/bullseye_report.sh',
+                                stashes: ['unit_test_bullseye',
+                                          'unit_test_bdev_bullseye',
+                                          'nlt_bullseye']
+                            ],
+                            archiveArtifactsArgs: [
+                                artifacts: 'bullseye_report/*',
+                                allowEmptyArchive: false
+                            ]
+                        )
+                    ) // parallel
+                } // script
+            } // steps
+            // parallel {
+            //     stage('Bullseye Report') {
+            //         when {
+            //             beforeAgent true
+            //             expression { code_coverage_enabled() }
+            //         }
+            //         agent {
+            //             dockerfile {
+            //                 filename 'utils/docker/Dockerfile.el.8'
+            //                 label 'docker_runner'
+            //                 additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+            //                                                     deps_build: false,
+            //                                                     parallel_build: true) +
+            //                                     ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+            //                                     ' --build-arg REPOS="' + daosRepos() + '"' +
+            //                                     code_coverage_build_args()
+            //             }
+            //         }
+            //         steps {
+            //             script {
+            //                 sh label: 'Install packages',
+            //                     script: './ci/summary/install_pkgs.sh'
+            //                 job_step_update(
+            //                     runScriptWithStashes(
+            //                         label: 'Generate Bullseye Report',
+            //                         script: 'ci/summary/bullseye_report.sh',
+            //                         stashes: ['unit_test_bullseye',
+            //                                   'unit_test_bdev_bullseye',
+            //                                   'nlt_bullseye']))
+            //             }
+            //         }
+            //         post {
+            //             always {
+            //                 archiveArtifacts artifacts: 'bullseye_report/*',
+            //                                  allowEmptyArchive: false
+            //                 job_status_update()
+            //             }
+            //         }
+            //     } // stage('Code Coverage Report')
+            // } // parallel
+        } // stage('Test Summary')
     } // stages
     post {
         always {
