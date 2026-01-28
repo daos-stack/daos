@@ -15,7 +15,6 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
-	"unsafe"
 
 	"github.com/desertbit/go-shlex"
 	"github.com/desertbit/grumble"
@@ -71,14 +70,7 @@ func (pathStr vosPathStr) Complete(match string) (comps []flags.Completion) {
 type ddbCmdStr string
 
 func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
-	// hack to get at command names
-	ctx, cleanup, err := InitDdb(nil)
-	if err != nil {
-		return
-	}
-	defer cleanup()
-
-	app := createGrumbleApp(ctx)
+	app := createGrumbleApp(nil)
 	for _, cmd := range app.Commands().All() {
 		if match == "" || strings.HasPrefix(cmd.Name, match) {
 			comps = append(comps, flags.Completion{Item: cmd.Name})
@@ -128,7 +120,7 @@ func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 	return nil
 }
 
-func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
+func parseOpts(args []string, opts *cliOptions, api DdbApi, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.HelpFlag|flags.IgnoreUnknown)
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS]"
@@ -210,12 +202,12 @@ Example Paths:
 	}
 	log.Debug("debug output enabled")
 
-	ctx, cleanup, err := InitDdb(log)
+	cleanup, err := api.Init(log)
 	if err != nil {
 		return errors.Wrap(err, "Error initializing the DDB Context")
 	}
 	defer cleanup()
-	app := createGrumbleApp(ctx)
+	app := createGrumbleApp(api)
 
 	if opts.Args.VosPath != "" {
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
@@ -223,9 +215,17 @@ Example Paths:
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
 			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-			if err := ddbOpen(ctx, string(opts.Args.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
+			if err := api.Open(string(opts.Args.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
 				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
 			}
+			defer func() {
+				if api.PoolIsOpen() {
+					log.Info("Closing pool...\n")
+					if err := api.Close(); err != nil {
+						log.Errorf("Error closing pool: %s\n", err)
+					}
+				}
+			}()
 		}
 	}
 
@@ -233,28 +233,17 @@ Example Paths:
 		return errors.New("Cannot use both command file and a command string")
 	}
 
-	if opts.Args.VosPath != "" {
-		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
-	}
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
+		var err error
+
 		if opts.Args.RunCmd != "" {
-			err := runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
-			if err != nil {
+			if err = runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...); err != nil {
 				log.Errorf("Error running command %q %s\n", string(opts.Args.RunCmd), err)
 			}
 		} else {
-			err := runFileCmds(log, app, opts.CmdFile)
-			if err != nil {
+			if err = runFileCmds(log, app, opts.CmdFile); err != nil {
 				log.Errorf("Error running command file: %s\n", err)
-			}
-		}
-
-		if ddbPoolIsOpen(ctx) {
-			err := ddbClose(ctx)
-			if err != nil {
-				log.Error("Error closing pool\n")
 			}
 		}
 		return err
@@ -267,8 +256,8 @@ Example Paths:
 	os.Args = []string{}
 	result := app.Run()
 	// make sure pool is closed
-	if ddbPoolIsOpen(ctx) {
-		err := ddbClose(ctx)
+	if api.PoolIsOpen() {
+		err := api.Close()
 		if err != nil {
 			log.Error("Error closing pool\n")
 		}
@@ -278,9 +267,10 @@ Example Paths:
 
 func main() {
 	var opts cliOptions
+	ctx := &DdbContext{}
 	log := logging.NewCommandLineLogger()
 
-	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+	if err := parseOpts(os.Args[1:], &opts, ctx, log); err != nil {
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
 			log.Info(fe.Error())
 			os.Exit(0)
@@ -289,7 +279,7 @@ func main() {
 	}
 }
 
-func createGrumbleApp(ctx *DdbContext) *grumble.App {
+func createGrumbleApp(api DdbApi) *grumble.App {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
 		homedir = "/tmp"
@@ -302,7 +292,7 @@ func createGrumbleApp(ctx *DdbContext) *grumble.App {
 		Prompt:      "ddb:  ",
 	})
 
-	addAppCommands(app, ctx)
+	addAppCommands(app, api)
 
 	// Add the quit command. grumble also includes a builtin exit command
 	app.AddCommand(&grumble.Command{
