@@ -1979,6 +1979,7 @@ migrate_one_ult(void *arg)
 	}
 
 	data_size = daos_iods_len(mrone->mo_iods, mrone->mo_iod_num);
+	data_size += daos_iods_len(mrone->mo_iods_from_parity, mrone->mo_iods_num_from_parity);
 	if (daos_oclass_is_ec(&mrone->mo_oca)) {
 		/* NB: this is a workaround for EC object:
 		 * The fetch buffer is taken from a pre-registered (R)DMA buffer;
@@ -1994,8 +1995,6 @@ migrate_one_ult(void *arg)
 		 */
 		degraded_size = data_size * MIN(8, obj_ec_data_tgt_nr(&mrone->mo_oca));
 	}
-	data_size += daos_iods_len(mrone->mo_iods_from_parity,
-				   mrone->mo_iods_num_from_parity);
 
 	D_DEBUG(DB_TRACE, "mrone %p data size is "DF_U64" %d/%d\n",
 		mrone, data_size, mrone->mo_iod_num, mrone->mo_iods_num_from_parity);
