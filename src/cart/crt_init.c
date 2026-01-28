@@ -1211,24 +1211,24 @@ crt_na_config_init(bool primary, crt_provider_t provider, char *interface, char 
 	}
 
 	if (na_cfg->noc_interface) {
-		/* count number of ','-separated interfaces */
-		count    = 1;
-		save_ptr = na_cfg->noc_interface;
-
-		while (*save_ptr != '\0' && count < CRT_ENV_STR_MAX_SIZE) {
-			if (*save_ptr == ',')
-				count++;
-			save_ptr++;
-		}
-
 		/*
 		 * env checks limit strings to CRT_ENV_STR_MAX_SIZE, but an interface can
 		 * be passed as an init argument
 		 */
-		if (count >= CRT_ENV_STR_MAX_SIZE) {
+		if (strlen(na_cfg->noc_interface) + 1 >= CRT_ENV_STR_MAX_SIZE) {
 			D_ERROR("Interface value '%s' exceeds limit of %d characters\n",
 				na_cfg->noc_interface, CRT_ENV_STR_MAX_SIZE);
 			D_GOTO(out, rc = -DER_INVAL);
+		}
+
+		/* count number of ','-separated interfaces */
+		count    = 1;
+		save_ptr = na_cfg->noc_interface;
+
+		while (*save_ptr != '\0') {
+			if (*save_ptr == ',')
+				count++;
+			save_ptr++;
 		}
 
 		D_ALLOC_ARRAY(na_cfg->noc_iface_str, count);
@@ -1252,24 +1252,24 @@ crt_na_config_init(bool primary, crt_provider_t provider, char *interface, char 
 
 	count = 0;
 	if (na_cfg->noc_domain) {
-		/* count number of ','-separated domains */
-		count    = 1;
-		save_ptr = na_cfg->noc_domain;
-
-		while (*save_ptr != '\0' && count < CRT_ENV_STR_MAX_SIZE) {
-			if (*save_ptr == ',')
-				count++;
-			save_ptr++;
-		}
-
 		/*
 		 * env checks limit strings to CRT_ENV_STR_MAX_SIZE, but a domain can
 		 * be passed as an init argument
 		 */
-		if (count >= CRT_ENV_STR_MAX_SIZE) {
+		if (strlen(na_cfg->noc_domain) + 1 >= CRT_ENV_STR_MAX_SIZE) {
 			D_ERROR("Domain value '%s' exceeds limit of %d characters\n",
 				na_cfg->noc_domain, CRT_ENV_STR_MAX_SIZE);
 			D_GOTO(out, rc = -DER_INVAL);
+		}
+
+		/* count number of ','-separated domains */
+		count    = 1;
+		save_ptr = na_cfg->noc_domain;
+
+		while (*save_ptr != '\0') {
+			if (*save_ptr == ',')
+				count++;
+			save_ptr++;
 		}
 
 		D_ALLOC_ARRAY(na_cfg->noc_domain_str, count);
