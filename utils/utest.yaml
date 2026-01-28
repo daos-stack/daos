@@ -213,6 +213,7 @@
 - name: Argobot stack overflow testing
   base: "BUILD_DIR"
   memcheck: False
+  skip_with_code_coverage: true
   tests:
     - cmd: ["src/engine/tests/abt_stack", "--check-overflow"]
       env_vars:
