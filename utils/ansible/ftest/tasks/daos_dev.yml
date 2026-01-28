@@ -8,41 +8,36 @@
   loop:
     - daos_source_dir
     - daos_build_dir
+    - daos_launch_username
+
+- name: Copy bash script setup-dev_entries.sh
+  become: true
+  copy:
+    src: file/setup-dev_entries.sh
+    dest: /root/setup-dev_entries.sh
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Add DAOS launch user {{ daos_launch_username }}
+  become: true
+  command: "/bin/bash /root/setup-dev_entries.sh {{ daos_launch_username }}"
+
+- name: Copy bash script setup-server_entries.sh
+  become: true
+  copy:
+    src: file/setup-server_entries.sh
+    dest: /root/setup-server_entries.sh
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Create DAOS server entries
+  become: true
+  command: /bin/bash /root/setup-server_entries.sh
 
 - name: Client DAOS configuration
   import_tasks: daos_clients.yml
-
-- name: Add DAOS server groups
-  become: true
-  group:
-    name: "{{ item }}"
-    state: present
-    system: true
-  loop:
-    - daos_metrics
-    - daos_server
-
-- name: Add DAOS server user
-  become: true
-  user:
-    name: daos_server
-    state: present
-    system: true
-    shell: /sbin/nologin
-    create_home: false
-    group: daos_server
-    groups:
-      - daos_metrics
-      - daos_daemons
-
-- name: Create client certificate daos-server configuration file tree
-  become: true
-  file:
-    path: /etc/daos/certs/clients
-    state: directory
-    owner: daos_server
-    group: daos_server
-    mode: 0700
 
 - name: Create DAOS runtime directory
   file:
