@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,7 +15,7 @@ static pthread_mutex_t alock = PTHREAD_MUTEX_INITIALIZER;
 
 /* Perhaps combine with dfuse_open_handle_init? */
 int
-active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
+active_ie_init(struct dfuse_inode_entry *ie)
 {
 	uint32_t oc;
 	int      rc = -DER_SUCCESS;
@@ -25,11 +26,8 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 
 	DFUSE_TRA_DEBUG(ie, "Addref to %d", oc + 1);
 
-	if (oc != 0) {
-		if (preread && *preread)
-			*preread = false;
+	if (oc != 0)
 		goto out;
-	}
 
 	D_ALLOC_PTR(ie->ie_active);
 	if (!ie->ie_active)
@@ -41,13 +39,8 @@ active_ie_init(struct dfuse_inode_entry *ie, bool *preread)
 		goto out;
 	}
 	D_INIT_LIST_HEAD(&ie->ie_active->chunks);
-	if (preread && *preread) {
-		D_ALLOC_PTR(ie->ie_active->readahead);
-		if (ie->ie_active->readahead) {
-			D_INIT_LIST_HEAD(&ie->ie_active->readahead->req_list);
-			atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-		}
-	}
+	D_INIT_LIST_HEAD(&ie->ie_active->open_reads);
+	atomic_init(&ie->ie_active->read_count, 0);
 	/* Take a reference on the inode to prevent it being released */
 	atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 out:
@@ -80,11 +73,10 @@ ah_free(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	dfuse_inode_decref(dfuse_info, ie);
 }
 
-bool
+void
 active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 {
 	uint32_t oc;
-	bool     rcb = true;
 
 	D_MUTEX_LOCK(&alock);
 
@@ -93,15 +85,36 @@ active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 
 	DFUSE_TRA_DEBUG(oh->doh_ie, "Decref to %d", oc - 1);
 
+	/* Leave set_linear_read as false in this case */
 	if (oc != 1)
 		goto out;
 
-	rcb = read_chunk_close(oh->doh_ie);
+	if (read_chunk_close(oh->doh_ie))
+		oh->doh_linear_read = true;
+
+	/* Invalid readahead cache */
+	if (oh->doh_ie->ie_active->readahead && oh->doh_ie->ie_active->readahead->dra_ev) {
+		struct dfuse_event *ev = oh->doh_ie->ie_active->readahead->dra_ev;
+
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
+		oh->doh_ie->ie_active->readahead->dra_ev = NULL;
+	}
+
+	/* Do not set linear read in the case where there's no reads or writes, this could be
+	 * simple open/close calls but it could also be cache use so leave the setting unchanged
+	 * in this case.
+	 */
+	if (oh->doh_linear_read) {
+		if (oh->doh_ie->ie_active->read_count != 0)
+			oh->doh_set_linear_read = true;
+	} else {
+		oh->doh_set_linear_read = true;
+	}
 
 	ah_free(dfuse_info, oh->doh_ie);
 out:
 	D_MUTEX_UNLOCK(&alock);
-	return rcb;
 }
 
 void
