@@ -18,18 +18,19 @@ from run_utils import run_remote
 class DaosRacerCommand(ExecutableCommand):
     """Defines a object representing a daos_racer command."""
 
-    def __init__(self, path, host, dmg=None):
+    def __init__(self, path, hosts, dmg=None):
         """Create a daos_racer command object.
 
         Args:
             path (str): path of the daos_racer command
-            host (str): host on which to run the daos_racer command
+            hosts (str/NodeSet): hosts on which to run the daos_racer command
             dmg (DmgCommand): a DmgCommand object used to obtain the
                 configuration file and certificate
         """
-        super().__init__(
-            "/run/daos_racer/*", "daos_racer", path)
-        self.host = NodeSet(host)
+        super().__init__("/run/daos_racer/*", "daos_racer", path)
+        if not isinstance(hosts, NodeSet):
+            hosts = NodeSet(hosts)
+        self._hosts = NodeSet(hosts)
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
@@ -38,8 +39,8 @@ class DaosRacerCommand(ExecutableCommand):
 
         if dmg:
             self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
-            dmg.copy_certificates(get_log_file("daosCA/certs"), self.host)
-            dmg.copy_configuration(self.host)
+            dmg.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
+            dmg.copy_configuration(self._hosts)
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the
@@ -108,11 +109,11 @@ class DaosRacerCommand(ExecutableCommand):
         # Run daos_racer on the specified host
         self.log.info(
             "Running %s on %s with %s timeout",
-            str(self), self.host,
+            str(self), self._hosts,
             "no" if self.clush_timeout.value is None else
             "a {}s".format(self.clush_timeout.value))
         result = run_remote(
-            self.log, self.host, self.with_exports, timeout=self.clush_timeout.value)
+            self.log, self._hosts, self.with_exports, timeout=self.clush_timeout.value)
         if not result.passed:
             if result.timeout:
                 self.log.info("Stopping timed out daos_racer process on %s", result.timeout_hosts)
