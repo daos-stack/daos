@@ -616,6 +616,7 @@
 {
    __tsan_go_atomic64_load
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_load
    fun:racecall
 }
