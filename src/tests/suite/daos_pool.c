@@ -835,7 +835,10 @@ pool_op_retry(void **state)
 	print_message("test-fail set pool prop (retry / dup rpc detection)... ");
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "rebuild");
 	assert_rc_equal(rc, -DER_MISC);
-	print_message("success\n");
+	rc = daos_pool_get_prop(arg->pool.pool_uuid, "self_heal", &orig_self_heal);
+	assert_rc_equal(rc, 0);
+	print_message("success (self_heal=%s)\n", orig_self_heal);
+	free(orig_self_heal);
 
 	/* pool evict failure committed, "lost" reply - duplicate RPC retry */
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ALWAYS);
@@ -2240,6 +2243,12 @@ pool_map_refreshes_common(void **state, bool fall_back)
 
 	if (!test_runable(arg, 2))
 		skip();
+
+	char *orig_self_heal = NULL;
+	int rc = daos_pool_get_prop(arg->pool.pool_uuid, "self_heal", &orig_self_heal);
+	assert_rc_equal(rc, 0);
+	print_message("self_heal before test: %s\n", orig_self_heal);
+	free(orig_self_heal);
 
 	rebuild_single_pool_target(arg, rank, tgt, false);
 
