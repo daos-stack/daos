@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2022-2025 Intel Corporation.
  * (C) Copyright 2025 Vdura Inc.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,7 +61,7 @@ dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t
 }
 
 int
-dv_pool_destroy(const char *path)
+dv_pool_destroy(const char *path, const char *db_path)
 {
 	struct vos_file_parts path_parts = {0};
 	int                   rc, flags = 0;
@@ -69,6 +69,11 @@ dv_pool_destroy(const char *path)
 	rc = vos_path_parse(path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
+
+	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
+		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
+		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
+	}
 
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
@@ -778,8 +783,9 @@ handle_sv(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_sv_handler);
 	value.ddbs_record_size = entry->ie_rsize;
-	value.ddbs_idx = ctx->value_seen++;
-	value.ddbs_path = &ctx->itp;
+	value.ddbs_epoch       = entry->ie_epoch;
+	value.ddbs_idx         = ctx->value_seen++;
+	value.ddbs_path        = &ctx->itp;
 
 	return ctx->handlers->ddb_sv_handler(&value, ctx->handler_args);
 }
@@ -791,10 +797,11 @@ handle_array(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_array_handler);
 	itp_set_recx(&ctx->itp, &entry->ie_orig_recx, ctx->value_seen);
-	value.ddba_path = &ctx->itp;
+	value.ddba_path        = &ctx->itp;
 	value.ddba_record_size = entry->ie_rsize;
-	value.ddba_recx = entry->ie_orig_recx;
-	value.ddba_idx = ctx->value_seen++;
+	value.ddba_recx        = entry->ie_orig_recx;
+	value.ddba_epoch       = entry->ie_epoch;
+	value.ddba_idx         = ctx->value_seen++;
 
 	return ctx->handlers->ddb_array_handler(&value, ctx->handler_args);
 }

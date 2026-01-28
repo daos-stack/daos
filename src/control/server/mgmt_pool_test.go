@@ -2344,11 +2344,12 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		mgmtSvc       *mgmtSvc
-		setupMockDrpc func(_ *mgmtSvc, _ error)
-		req           *mgmtpb.PoolQueryReq
-		expResp       *mgmtpb.PoolQueryResp
-		expErr        error
+		mgmtSvc                *mgmtSvc
+		setupMockDrpc          func(_ *mgmtSvc, _ error)
+		req                    *mgmtpb.PoolQueryReq
+		missingSelfHealSysProp bool
+		expResp                *mgmtpb.PoolQueryResp
+		expErr                 error
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
@@ -2449,6 +2450,18 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				SysSelfHealPolicy: "pool_rebuild",
 			},
 		},
+		"successful query; sys self-heal prop fetch; missing system property": {
+			missingSelfHealSysProp: true,
+			req: &mgmtpb.PoolQueryReq{
+				Id:        mockUUID,
+				QueryMask: uint64(daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy)),
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				State:             mgmtpb.PoolServiceState_Ready,
+				Uuid:              mockUUID,
+				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			buf.Reset()
@@ -2479,10 +2492,12 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			// Change stored value to something different from the default.
-			if err := system.SetUserProperty(tc.mgmtSvc.sysdb, tc.mgmtSvc.systemProps,
-				"self_heal", "pool_rebuild"); err != nil {
-				t.Fatal(err)
+			if !tc.missingSelfHealSysProp {
+				// Change stored value to something different from the default.
+				if err := system.SetUserProperty(tc.mgmtSvc.sysdb, tc.mgmtSvc.systemProps,
+					"self_heal", "pool_rebuild"); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			gotResp, gotErr := tc.mgmtSvc.PoolQuery(test.Context(t), tc.req)

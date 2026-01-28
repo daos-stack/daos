@@ -574,7 +574,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9') {
+                stage('Build on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -589,7 +589,9 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=.6 '
+
                         }
                     }
                     steps {
@@ -640,7 +642,9 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                " -t ${sanitized_JOB_NAME()}-leap15" +
+                                                ' --build-arg POINT_RELEASE=.5 '
+
                         }
                     }
                     steps {
@@ -671,6 +675,45 @@ pipeline {
                         }
                         cleanup {
                             uploadNewRPMs('leap15', 'cleanup')
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
+                    when {
+                        beforeAgent true
+                        expression { !skip_build_stage('leap15', 'icc') }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.leap.15'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-icc" +
+                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+                                                ' --build-arg COMPILER=icc' +
+                                                ' --build-arg POINT_RELEASE=.5 '
+
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: sconsFaultsArgs() +
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                       build_deps: 'no'))
+                    }
+                    post {
+                        unsuccessful {
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-intelc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
+                                             allowEmptyArchive: true
+                        }
+                        cleanup {
                             job_status_update()
                         }
                     }

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -406,8 +406,11 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL, &pool_info, NULL, NULL,
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL,
+				daos_getmtime_coarse() + 2 * 60 * 1000, &pool_info, NULL, NULL,
 				&mem_file_bytes);
+	if (DAOS_FAIL_CHECK(DAOS_MGMT_FAIL_CREATE_QUERY))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -470,7 +473,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to create pool on %zu ranks.\n", req->n_ranks);
+	D_INFO("Received request to create pool %s on %zu ranks.\n", req->uuid, req->n_ranks);
 
 	if (req->n_tier_bytes != DAOS_MEDIA_MAX)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -534,6 +537,15 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
 	d_rank_list_free(svc);
+	if (rc != 0) {
+		int rc_tmp;
+
+		DL_ERROR(rc, DF_UUID ": failed to fill pool create response", DP_UUID(pool_uuid));
+		rc_tmp = ds_mgmt_destroy_pool(pool_uuid, targets);
+		if (rc_tmp != 0)
+			DL_ERROR(rc_tmp, DF_UUID ": failed to clean up pool", DP_UUID(pool_uuid));
+		goto out;
+	}
 
 out:
 	resp.status = rc;
@@ -1744,14 +1756,14 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 	if (rebuild->status == 0) {
 		rebuild->objects = info->rs_obj_nr;
 		rebuild->records = info->rs_rec_nr;
-
-		if (info->rs_version == 0)
-			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
-		else if (info->rs_state == DRS_COMPLETED)
-			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
-		else
-			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
 	}
+
+	if ((info->rs_version == 0) || (info->rs_state == DRS_NOT_STARTED))
+		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
+	else if (info->rs_state == DRS_COMPLETED)
+		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
+	else
+		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
 }
 
 static void
@@ -1807,8 +1819,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	pool_info.pi_bits = req->query_mask;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &dead_ranks,
-				&pool_info, &resp.pool_layout_ver, &resp.upgrade_layout_ver,
-				&resp.mem_file_bytes);
+				mgmt_ps_call_deadline(), &pool_info, &resp.pool_layout_ver,
+				&resp.upgrade_layout_ver, &resp.mem_file_bytes);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to query the pool", DP_UUID(uuid));
 		D_GOTO(error, rc);
@@ -1972,7 +1984,6 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp.infos[i] = &resp_infos[i];
 		mgmt__pool_query_target_info__init(resp.infos[i]);
 
-		resp.infos[i]->type = (Mgmt__PoolQueryTargetInfo__TargetType) infos[i].ta_type;
 		resp.infos[i]->state = (Mgmt__PoolQueryTargetInfo__TargetState) infos[i].ta_state;
 		D_ALLOC_ARRAY(resp.infos[i]->space, DAOS_MEDIA_MAX);
 		if (resp.infos[i]->space == NULL)
@@ -2778,7 +2789,7 @@ ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to start check\n");
 
 	rc = ds_mgmt_check_start(req->n_ranks, req->ranks, req->n_policies, req->policies,
-				 req->n_uuids, req->uuids, req->flags, -1 /* phase */);
+				 req->n_uuids, req->uuids, req->flags);
 	if (rc < 0)
 		D_ERROR("Failed to start check: "DF_RC"\n", DP_RC(rc));
 

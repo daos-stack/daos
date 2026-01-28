@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -529,20 +529,25 @@ func (pqr *PoolQueryResp) UpdateSelfHealPolicy(ctx context.Context, rpcClient Un
 
 	props, err := PoolGetProp(ctx, rpcClient, req)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "PoolGetProp")
 	}
 
 	switch len(props) {
 	case 0:
-		rpcClient.Debug("self_heal pool property not found, assuming default value 'exclude;rebuild'")
-		pqr.SelfHealPolicy = "exclude;rebuild"
+		rpcClient.Debug("self_heal pool property not found, assuming default 'exclude;rebuild'")
+		pqr.SelfHealPolicy = daos.DefaultPoolSelfHealStr
 	case 1:
 		pqr.SelfHealPolicy = props[0].StringValue()
+		if pqr.SelfHealPolicy == "not set" {
+			pqr.SelfHealPolicy = daos.DefaultPoolSelfHealStr
+		}
 	default:
-		return errors.Errorf("unexpected number of pool props returned, want 1 got %d", len(props))
+		return errors.Errorf("unexpected number of pool props returned, want 1 got %d",
+			len(props))
 	}
 
-	rpcClient.Debugf("pool-query: fetched pool self_heal propval: %s", pqr.SelfHealPolicy)
+	rpcClient.Debugf("pool-query: fetched pool self_heal propval: %s (from props %+v)",
+		pqr.SelfHealPolicy, props)
 
 	return nil
 }
@@ -574,6 +579,10 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 	}
 
 	if err := resp.UpdateState(); err != nil {
+		return nil, err
+	}
+
+	if err := resp.UpdateRebuildStatus(); err != nil {
 		return nil, err
 	}
 
@@ -637,7 +646,6 @@ func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQuer
 // For using the pretty printer that dmg uses for this target info.
 func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*daos.PoolQueryTargetInfo, error) {
 	pqti := new(daos.PoolQueryTargetInfo)
-	pqti.Type = daos.PoolQueryTargetType(pbInfo.Type)
 	pqti.State = daos.PoolQueryTargetState(pbInfo.State)
 	pqti.Space = []*daos.StorageUsageStats{
 		{
@@ -763,7 +771,8 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	pbMap := make(map[uint32]*mgmtpb.PoolProperty)
 	for _, prop := range pbResp.GetProperties() {
 		if _, found := pbMap[prop.GetNumber()]; found {
-			return nil, errors.Errorf("got > 1 %d in response", prop.GetNumber())
+			return nil, errors.Errorf("got > 1 occurrences of prop %d in resp",
+				prop.GetNumber())
 		}
 		pbMap[prop.GetNumber()] = prop
 	}
@@ -857,6 +866,9 @@ func getPoolRanksResp(ctx context.Context, rpcClient UnaryInvoker, req *PoolRank
 	if len(req.Ranks) == 0 {
 		return nil, errors.New("no ranks in request")
 	}
+
+	// Set timeout to 5 minutes per rank to allow sufficient time for operation
+	req.SetTimeout(time.Duration(len(req.Ranks)) * DefaultPoolTimeout)
 
 	results := []*PoolRankResult{}
 	for _, rank := range req.Ranks {

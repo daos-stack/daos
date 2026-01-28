@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,6 +28,7 @@ type (
 		Chown(string, int, int) error
 		Getfs(device string) (string, error)
 		GetfsType(path string) (*system.FsType, error)
+		GetDeviceLabel(string) (string, error)
 		Mkdir(string, os.FileMode) error
 		Mkfs(req system.MkfsReq) error
 		RemoveAll(string) error
@@ -99,10 +101,23 @@ func (p *Provider) setupMountPoint(req storage.MetadataFormatRequest) error {
 		return errors.Wrap(err, "creating control metadata mount point")
 	}
 
+	p.log.Debugf("checking existing device label for %q", req.Device)
+	label, err := p.sys.GetDeviceLabel(req.Device)
+	if err != nil {
+		return errors.Wrap(err, "checking existing device label")
+	}
+
+	var opts []string
+	if label != "" {
+		p.log.Debugf("preserving existing device label %q for %q", label, req.Device)
+		opts = append(opts, "-L", label)
+	}
+
 	p.log.Debugf("formatting device %q", req.Device)
 	if err := p.sys.Mkfs(system.MkfsReq{
 		Filesystem: defaultDevFS,
 		Device:     req.Device,
+		Options:    opts,
 		Force:      true,
 	}); err != nil {
 		return errors.Wrap(err, "formatting control metadata device filesystem")

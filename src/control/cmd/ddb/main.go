@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,8 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/desertbit/columnize"
+	"github.com/desertbit/go-shlex"
 	"github.com/desertbit/grumble"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -41,17 +43,54 @@ func exitWithError(log logging.Logger, err error) {
 }
 
 type cliOptions struct {
-	Debug     bool   `long:"debug" description:"enable debug output"`
-	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
-	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
-	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
-	Version   bool   `short:"v" long:"version" description:"Show version"`
+	Debug     bool       `long:"debug" description:"enable debug output"`
+	WriteMode bool       `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
+	CmdFile   string     `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
+	SysdbPath string     `long:"db_path" short:"p" description:"Path to the sys db."`
+	VosPath   vosPathStr `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
+	Version   bool       `short:"v" long:"version" description:"Show version"`
 	Args      struct {
-		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
-		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
-		RunCmdArgs []string   `positional-arg-name:"ddb_command_args"`
+		RunCmd     ddbCmdStr `positional-arg-name:"ddb_command"`
+		RunCmdArgs []string  `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
 }
+
+const helpCommandsHeader = `
+Available commands:
+
+`
+
+const helpVosTreePath = `
+Path
+
+Many of the commands take a VOS tree path. The format for this path
+is [cont]/[obj]/[dkey]/[akey]/[extent].
+- cont - the full container uuid.
+- obj - the object id.
+- keys (akey, dkey) - there are multiple types of keys
+   -- string keys are simply the string value. If the size of the
+      key is greater than strlen(key), then the size is included at
+      the end of the string value. Example: 'akey{5}' is the key: akey
+      with a null terminator at the end.
+   -- number keys are formatted as '{[type]: NNN}' where type is
+      'uint8, uint16, uint32, or uint64'. NNN can be a decimal or
+      hex number. Example: '{uint32: 123456}'
+   -- binary keys are formatted as '{bin: 0xHHH}' where HHH is the hex
+      representation of the binary key. Example: '{bin: 0x1a2b}'
+- extent for array values - in the format {lo-hi}.
+
+To make it easier to navigate the tree, indexes can be
+used instead of the path part. The index is in the format [i]. Indexes
+and actual path values can be used together
+
+Example Paths:
+/3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
+[0]/[1]/[2]/[1]/[9]
+/[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
+
+`
+
+const grumbleUnknownCmdErr = "unknown command, try 'help'"
 
 type vosPathStr string
 
@@ -96,28 +135,93 @@ func (cmdStr *ddbCmdStr) UnmarshalFlag(fv string) error {
 func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 	file, err := os.Open(fileName)
 	if err != nil {
-		return errors.Wrapf(err, "Error opening file: %s", fileName)
+		return errors.Wrapf(err, "Error opening file %q", fileName)
 
 	}
 	defer func() {
 		err = file.Close()
 		if err != nil {
-			log.Errorf("Error closing %s: %s\n", fileName, err)
+			log.Errorf("Error closing %q: %s\n", fileName, err)
 		}
 	}()
 
-	log.Debugf("Running commands in: %s\n", fileName)
+	log.Debugf("Running commands in %q\n", fileName)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		fileCmd := scanner.Text()
-		log.Debugf("Running Command: %s\n", fileCmd)
-		err := runCmdStr(app, fileCmd)
+		lineStr := scanner.Text()
+		lineCmd, err := shlex.Split(lineStr, true)
 		if err != nil {
-			return errors.Wrapf(err, "Failed running command %q", fileCmd)
+			return errors.Wrapf(err, "Failed running command %q", lineStr)
+		}
+		if len(lineCmd) == 0 || strings.HasPrefix(lineCmd[0], "#") {
+			continue
+		}
+		log.Debugf("Running Command %q\n", lineStr)
+		err = runCmdStr(app, lineCmd[0], lineCmd[1:]...)
+		if err != nil {
+			return errors.Wrapf(err, "Failed running command %q", lineStr)
 		}
 	}
 
 	return nil
+}
+
+// One cannot relay on grumble to print the list of commands since app does not allow executing
+// the help command from the outside of the interactive mode.
+// This method extracts commands and their respective help (short) messages in the simplest possible way,
+// put them in columns and print them using the provided log.
+func printCommands(app *grumble.App, log *logging.LeveledLogger) {
+	var output []string
+	for _, c := range app.Commands().All() {
+		if c.Name == "quit" {
+			continue
+		}
+		row := c.Name + columnize.DefaultConfig().Delim + c.Help
+		output = append(output, row)
+	}
+	log.Info(helpCommandsHeader + columnize.SimpleFormat(output) + "\n\n")
+}
+
+func printGeneralHelp(app *grumble.App, generalMsg string, log *logging.LeveledLogger) {
+	log.Info(generalMsg + "\n") // standard help from go-flags
+	printCommands(app, log)     // list of commands
+	log.Info(helpVosTreePath)   // extra info on VOS Tree Path syntax
+}
+
+// Ask grumble to generate a help message for the requested command.
+// Caveat: There is no known easy way of forcing grumble to use log to print the generated message
+// so the output goes directly to stdout.
+// Returns false in case the opts.Args.RunCmd is unknown.
+func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger) bool {
+	err := runCmdStr(app, string(opts.Args.RunCmd), "--help")
+	if err != nil {
+		if err.Error() == grumbleUnknownCmdErr {
+			log.Errorf("unknown command '%s'", string(opts.Args.RunCmd))
+			printCommands(app, log)
+		} else {
+			log.Error(err.Error())
+		}
+		return false
+	}
+	return true
+}
+
+// Prints either general or command-specific help message.
+// Returns a reasonable return code in case the caller chooses to terminate the process.
+func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) int {
+	// ctx is not necessary since this instance of the app is not intended to run any of the commands
+	app := createGrumbleApp(nil)
+
+	if string(opts.Args.RunCmd) == "" {
+		printGeneralHelp(app, generalMsg, log)
+		return 0
+	}
+
+	if printCmdHelp(app, opts, log) {
+		return 0
+	} else {
+		return 1
+	}
 }
 
 func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
@@ -125,37 +229,16 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS]"
 	p.ShortDescription = "daos debug tool"
-	p.LongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
+	p.LongDescription = `
+The DAOS Debug Tool (ddb) allows a user to navigate through and modify
 a file in the VOS format. It offers both a command line and interactive
 shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
-the '-w' option must be included. If supplied, the VOS file supplied in
-the first positional parameter will be opened before commands are executed.
+the '-w' option must be included.
 
-Many of the commands take a vos tree path. The format for this path
-is [cont]/[obj]/[dkey]/[akey]/[extent].
-- cont - the full container uuid.
-- obj - the object id.
-- keys (akey, dkey) - there are multiple types of keys
-   -- string keys are simply the string value. If the size of the
-      key is greater than strlen(key), then the size is included at
-      the end of the string value. Example: 'akey{5}' is the key: akey
-      with a null terminator at the end.
-   -- number keys are formatted as '{[type]: NNN}' where type is
-      'uint8, uint16, uint32, or uint64'. NNN can be a decimal or
-      hex number. Example: '{uint32: 123456}'
-   -- binary keys are formatted as '{bin: 0xHHH}' where HHH is the hex
-      representation of the binary key. Example: '{bin: 0x1a2b}'
-- extent for array values - in the format {lo-hi}.
-
-To make it easier to navigate the tree, indexes can be
-used instead of the path part. The index is in the format [i]. Indexes
-and actual path values can be used together
-
-Example Paths:
-/3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
-[0]/[1]/[2]/[1]/[9]
-/[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
+If the command requires it, the VOS file must be provided with the parameter 
+--vos-path. The VOS file will be opened before any commands are executed. See
+the command‑specific help for details.
 `
 
 	// Set the traceback level such that a crash results in
@@ -163,12 +246,20 @@ Example Paths:
 	debug.SetTraceback("crash")
 
 	if _, err := p.ParseArgs(args); err != nil {
+		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+			os.Exit(printHelp(fe.Error(), opts, log))
+		}
+
 		return err
 	}
 
 	if opts.Version {
 		log.Infof("ddb version %s", build.DaosVersion)
 		return nil
+	}
+
+	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
+		return errors.New("Cannot use both command file and a command string")
 	}
 
 	if opts.Debug {
@@ -183,26 +274,30 @@ Example Paths:
 	defer cleanup()
 	app := createGrumbleApp(ctx)
 
-	if opts.Args.VosPath != "" {
+	if opts.SysdbPath != "" {
+		ctx.ctx.dc_db_path = C.CString(string(opts.SysdbPath))
+		defer C.free(unsafe.Pointer(ctx.ctx.dc_db_path))
+	}
+
+	if opts.VosPath != "" {
+		ctx.ctx.dc_pool_path = C.CString(string(opts.VosPath))
+		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
+
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "open") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "close") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "prov_mem") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "smd_sync") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
-			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-			if err := ddbOpen(ctx, string(opts.Args.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
-				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+			log.Debugf("Connect to path: %s\n", opts.VosPath)
+			if err := ddbOpen(ctx, string(opts.VosPath), bool(opts.WriteMode)); err != nil {
+				return errors.Wrapf(err, "Error opening path: %s", opts.VosPath)
 			}
 		}
 	}
 
-	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
-		return errors.New("Cannot use both command file and a command string")
-	}
-
-	if opts.Args.VosPath != "" {
-		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
-	}
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
 		if opts.Args.RunCmd != "" {
@@ -213,7 +308,7 @@ Example Paths:
 		} else {
 			err := runFileCmds(log, app, opts.CmdFile)
 			if err != nil {
-				log.Error("Error running command file\n")
+				log.Errorf("Error running command file: %s\n", err)
 			}
 		}
 
@@ -247,10 +342,6 @@ func main() {
 	log := logging.NewCommandLineLogger()
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
-		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
-			log.Info(fe.Error())
-			os.Exit(0)
-		}
 		exitWithError(log, err)
 	}
 }

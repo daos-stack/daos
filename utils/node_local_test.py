@@ -2,7 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Google LLC
 (C) Copyright 2025 Enakta Labs Ltd
 
@@ -2829,7 +2829,14 @@ class PosixTests():
         with open(fname, 'w'):
             pass
 
-        self.dfuse.il_cmd(['cat', fname], check_write=False)
+        self.dfuse.il_cmd([
+            'dd',
+            f'if={fname}',
+            'of=/dev/null',
+            'bs=4096',
+            'iflag=fullblock',
+            'status=none'
+        ], check_write=False, check_fstat=False)
 
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_il(self):
@@ -2847,14 +2854,40 @@ class PosixTests():
         with open(file, 'w') as fd:
             fd.write('Hello')
         # Copy it across containers.
-        self.dfuse.il_cmd(['cp', file, sub_cont_dir])
+        dst = join(sub_cont_dir, 'file')
+        self.dfuse.il_cmd([
+            'dd',
+            f'if={file}',
+            f'of={dst}',
+            'bs=4096',
+            'iflag=fullblock',
+            'status=none'
+        ], check_fstat=False)
 
         # Copy it within the container.
         child_dir = join(self.dfuse.dir, 'new_dir')
         os.mkdir(child_dir)
-        self.dfuse.il_cmd(['cp', file, child_dir])
+        dst = join(child_dir, 'file')
+
+        self.dfuse.il_cmd([
+            'dd',
+            f'if={file}',
+            f'of={dst}',
+            'bs=128K',
+            'status=none'
+        ], check_fstat=False)
+
         # Copy something into a container
-        self.dfuse.il_cmd(['cp', '/bin/bash', sub_cont_dir], check_read=False)
+        dst = join(sub_cont_dir, 'bash')
+
+        self.dfuse.il_cmd([
+            'dd',
+            'if=/bin/bash',
+            f'of={dst}',
+            'bs=128K',
+            'status=none'
+        ], check_read=False, check_fstat=False)
+
         # Read it from within a container
         self.dfuse.il_cmd(['md5sum', join(sub_cont_dir, 'bash')],
                           check_read=False, check_write=False, check_fstat=False)
@@ -5018,7 +5051,16 @@ def create_and_read_via_il(dfuse, path):
         ofd.flush()
         assert_file_size(ofd, 12)
         print(os.fstat(ofd.fileno()))
-    dfuse.il_cmd(['cat', fname], check_write=False)
+
+        # Replace Python snippet with dd to guarantee read()
+        dfuse.il_cmd([
+            'dd',
+            f'if={fname}',
+            'of=/dev/null',
+            'bs=4096',
+            'iflag=fullblock',
+            'status=none'
+        ], check_write=False, check_fstat=False)
 
 
 def run_container_query(conf, path):
@@ -5428,6 +5470,7 @@ def test_pydaos_kv(server, conf):
         print("That's not good")
 
     del kv
+    container.destroy('my_test_kv')
     del container
 
     print('Running PyDAOS container checker')

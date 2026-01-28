@@ -356,12 +356,11 @@
    fun:start_thread
 }
 {
-   getpwnam_r leak
+   getpwnam_r() leak
    Memcheck:Leak
+   fun:*alloc
    ...
-   fun:_nss_systemd_getpwnam_r
    fun:getpwnam_r*
-   fun:daos_acl_principal_to_uid
 }
 {
    getgrgid_r leak
@@ -403,6 +402,14 @@
    fun:syscall
    ...
    fun:bdev_aio_writev
+}
+{
+   bdev_aio_rw param error
+   Memcheck:Param
+   io_submit(PWRITEV(iov[i]))
+   fun:syscall
+   ...
+   fun:bdev_aio_rw
 }
 {
    <insert_a_suppression_name_here>

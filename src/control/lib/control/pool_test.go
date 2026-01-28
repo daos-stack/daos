@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1461,6 +1461,92 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestControl_PoolQueryResp_UpdateSelfHealPolicy(t *testing.T) {
+	type prop struct {
+		number uint32
+		value  interface{}
+	}
+	makePropResp := func(props ...prop) *mgmtpb.PoolGetPropResp {
+		pbProps := make([]*mgmtpb.PoolProperty, 0, len(props))
+		for _, p := range props {
+			switch v := p.value.(type) {
+			case string:
+				pbProps = append(pbProps, &mgmtpb.PoolProperty{
+					Number: p.number,
+					Value:  &mgmtpb.PoolProperty_Strval{Strval: v},
+				})
+			case int:
+				pbProps = append(pbProps, &mgmtpb.PoolProperty{
+					Number: p.number,
+					Value:  &mgmtpb.PoolProperty_Numval{Numval: uint64(v)},
+				})
+			}
+		}
+		return &mgmtpb.PoolGetPropResp{
+			Properties: pbProps,
+		}
+	}
+	selfHealPropNum := propWithVal("self_heal", "").Number
+
+	for name, tc := range map[string]struct {
+		getPropResp *mgmtpb.PoolGetPropResp
+		getPropErr  error
+		expValue    string
+		expErr      string
+	}{
+		"no properties returned": {
+			getPropResp: makePropResp(), // no properties
+			expValue:    "exclude;rebuild",
+		},
+		"single string value; not set value ignored": {
+			getPropResp: makePropResp(prop{selfHealPropNum, "rebuild"}),
+			expValue:    "exclude;rebuild",
+		},
+		"single num value": {
+			getPropResp: makePropResp(prop{selfHealPropNum, daos.PoolSelfHealingAutoRebuild}),
+			expValue:    "rebuild",
+		},
+		"multiple properties returned": {
+			getPropResp: makePropResp(
+				prop{selfHealPropNum, daos.PoolSelfHealingAutoRebuild},
+				prop{selfHealPropNum, daos.PoolSelfHealingAutoExclude},
+			),
+			expErr: "> 1 occurrences of prop 4",
+		},
+		"get-prop returns error": {
+			getPropErr: errors.New("something bad"),
+			expErr:     "something bad",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", tc.getPropErr, tc.getPropResp),
+				},
+			}
+			resp := &PoolQueryResp{}
+			gotErr := resp.UpdateSelfHealPolicy(context.Background(),
+				NewMockInvoker(log, mic))
+
+			var expErr error
+			if tc.expErr != "" {
+				expErr = errors.New(tc.expErr)
+			}
+			test.CmpErr(t, expErr, gotErr)
+			if expErr != nil {
+				return
+			}
+
+			if resp.SelfHealPolicy != tc.expValue {
+				t.Errorf("expected SelfHealPolicy %q, got %q", tc.expValue, resp.SelfHealPolicy)
+			}
+		})
+	}
+}
+
 func TestControl_PoolQuery(t *testing.T) {
 	poolUUID := test.MockPoolUUID()
 
@@ -1776,10 +1862,6 @@ func TestControl_PoolQuery(t *testing.T) {
 				},
 			},
 		},
-		// TODO DAOS-18128: Add more test cases
-		//	sys-prop but no pool-prop
-		//	pool-prop but no sys-prop
-		//	neither pool or sys props
 		"query succeeds self_heal policies provided; missing pool self_heal property": {
 			req: &PoolQueryReq{
 				ID:        poolUUID.String(),
@@ -1800,9 +1882,10 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateIdle,
-						Objects: 1,
-						Records: 2,
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
+						Objects:      1,
+						Records:      2,
 					},
 					TierStats: []*daos.StorageUsageStats{
 						{
@@ -1860,9 +1943,10 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateIdle,
-						Objects: 1,
-						Records: 2,
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
+						Objects:      1,
+						Records:      2,
 					},
 					TierStats: []*daos.StorageUsageStats{
 						{
@@ -1887,6 +1971,229 @@ func TestControl_PoolQuery(t *testing.T) {
 					SelfHealPolicy: "exclude;delay_rebuild",
 				},
 				SysSelfHealPolicy: "exclude;pool_exclude;pool_rebuild",
+			},
+		},
+		"pool get-prop returns error": {
+			req: &PoolQueryReq{
+				ID:        poolUUID.String(),
+				QueryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", errors.New("get-prop failure"), nil),
+				},
+			},
+			expErr: errors.New("pool get-prop self_heal failed"),
+		},
+		"pool get-prop returns multiple properties": {
+			req: &PoolQueryReq{
+				ID:        poolUUID.String(),
+				QueryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+						Properties: []*mgmtpb.PoolProperty{
+							{
+								Number: propWithVal("self_heal", "").Number,
+								Value:  &mgmtpb.PoolProperty_Strval{Strval: "exclude"},
+							},
+							{
+								Number: propWithVal("self_heal", "").Number,
+								Value:  &mgmtpb.PoolProperty_Strval{Strval: "rebuild"},
+							},
+						},
+					}),
+				},
+			},
+			expErr: errors.New("> 1 occurrences of prop 4 in resp"),
+		},
+		"query with rebuild state busy with DER_OP_CANCELED (stopping)": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							Status:  int32(daos.OpCanceled),
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
+							Objects: 100,
+							Records: 500,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						Status:       int32(daos.OpCanceled),
+						State:        daos.PoolRebuildStateBusy,
+						DerivedState: daos.PoolRebuildStateStopping,
+						Objects:      100,
+						Records:      500,
+					},
+				},
+			},
+		},
+		"query with rebuild state idle with DER_OP_CANCELED (stopped)": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							Status:  int32(daos.OpCanceled),
+							State:   mgmtpb.PoolRebuildStatus_IDLE,
+							Objects: 0,
+							Records: 0,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						Status:       int32(daos.OpCanceled),
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateStopped,
+						Objects:      0,
+						Records:      0,
+					},
+				},
+			},
+		},
+		"query with rebuild state busy with error (failing)": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
+							Status:  -1,
+							Objects: 75,
+							Records: 300,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:        daos.PoolRebuildStateBusy,
+						DerivedState: daos.PoolRebuildStateFailing,
+						Status:       -1,
+						Objects:      75,
+						Records:      300,
+					},
+				},
+			},
+		},
+		"query with rebuild state idle with error (failed)": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:  mgmtpb.PoolRebuildStatus_IDLE,
+							Status: -5,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateFailed,
+						Status:       -5,
+					},
+				},
+			},
+		},
+		"query with rebuild state done": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_DONE,
+							Objects: 200,
+							Records: 1000,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:        daos.PoolRebuildStateDone,
+						DerivedState: daos.PoolRebuildStateDone,
+						Objects:      200,
+						Records:      1000,
+					},
+				},
+			},
+		},
+		"query with rebuild state idle": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State: mgmtpb.PoolRebuildStatus_IDLE,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
+					},
+				},
 			},
 		},
 	} {
@@ -2453,9 +2760,10 @@ func TestControl_ListPools(t *testing.T) {
 			rebuildState = daos.PoolRebuildStateBusy
 		}
 		return &daos.PoolRebuildStatus{
-			State:   rebuildState,
-			Objects: 1,
-			Records: 2,
+			State:        rebuildState,
+			DerivedState: rebuildState,
+			Objects:      1,
+			Records:      2,
 		}
 	}
 	expTierStats := []*daos.StorageUsageStats{

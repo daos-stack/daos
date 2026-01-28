@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -262,7 +262,7 @@ Pool space info:
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
 		},
-		"rebuild failed": {
+		"rebuild failing": {
 			pi: &daos.PoolInfo{
 				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateTargetsExcluded,
@@ -275,10 +275,11 @@ Pool space info:
 				PoolLayoutVer:    1,
 				UpgradeLayoutVer: 2,
 				Rebuild: &daos.PoolRebuildStatus{
-					Status:  2,
-					State:   daos.PoolRebuildStateBusy,
-					Objects: 42,
-					Records: 21,
+					Status:       -2,
+					State:        daos.PoolRebuildStateBusy,
+					DerivedState: daos.PoolRebuildStateFailing,
+					Objects:      42,
+					Records:      21,
 				},
 				TierStats: []*daos.StorageUsageStats{
 					{
@@ -298,7 +299,7 @@ Pool space info:
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=TargetsExcluded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
-- Rebuild failed, status=2
+- Rebuild failing (state=busy, status=-2)
 Pool space info:
 - Target count:1
 - Storage tier 0 (SCM):
@@ -357,6 +358,144 @@ Pool space info:
   Free: 2 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
 		},
+		"rebuild state idle": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:        daos.PoolRebuildStateIdle,
+					DerivedState: daos.PoolRebuildStateIdle,
+					Status:       0,
+					Objects:      0,
+					Records:      0,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+`, poolUUID.String()),
+		},
+		"rebuild state stopped": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:        daos.PoolRebuildStateDone,
+					DerivedState: daos.PoolRebuildStateStopped,
+					Status:       int32(daos.OpCanceled),
+					Objects:      0,
+					Records:      0,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild stopped (state=done, status=-2027)
+`, poolUUID.String()),
+		},
+		"rebuild state done": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:        daos.PoolRebuildStateDone,
+					DerivedState: daos.PoolRebuildStateDone,
+					Status:       0,
+					Objects:      200,
+					Records:      1000,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild done, 200 objs, 1000 recs
+`, poolUUID.String()),
+		},
+		"rebuild state failed": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:        daos.PoolRebuildStateDone,
+					DerivedState: daos.PoolRebuildStateFailed,
+					Status:       -1,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild failed (state=done, status=-1)
+`, poolUUID.String()),
+		},
+		"rebuild state busy": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:        daos.PoolRebuildStateBusy,
+					DerivedState: daos.PoolRebuildStateBusy,
+					Status:       0,
+					Objects:      150,
+					Records:      750,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild busy, 150 objs, 750 recs
+`, poolUUID.String()),
+		},
+		"rebuild state stopping": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:        daos.PoolRebuildStateBusy,
+					DerivedState: daos.PoolRebuildStateStopping,
+					Status:       int32(daos.OpCanceled),
+					Objects:      100,
+					Records:      500,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild stopping (state=busy, status=-2027)
+`, poolUUID.String()),
+		},
+		"rebuild state failing": {
+			pi: &daos.PoolInfo{
+				UUID:          poolUUID,
+				TotalTargets:  8,
+				ActiveTargets: 8,
+				State:         daos.PoolServiceStateReady,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:        daos.PoolRebuildStateBusy,
+					DerivedState: daos.PoolRebuildStateFailing,
+					Status:       -1,
+					Objects:      75,
+					Records:      300,
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- Rebuild failing (state=busy, status=-1)
+`, poolUUID.String()),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
@@ -371,12 +510,42 @@ Pool space info:
 	}
 }
 
-// TODO DAOS-18128: Add more test cases
-//func TestPretty_PrintPoolSelfHealDisable(t *testing.T) {
-//	for name, tc := range map[string]struct {
-//		sysSelfHeal string
-//		poolSelfHeal string
-//}
+func TestPretty_PrintPoolSelfHealDisable(t *testing.T) {
+	for name, tc := range map[string]struct {
+		poolSelfHeal string
+		sysSelfHeal  string
+		expPrintStr  string
+	}{
+		"defaults": {
+			poolSelfHeal: "exclude;rebuild",
+			sysSelfHeal:  "exclude;pool_exclude;pool_rebuild",
+		},
+		"no pool flags": {
+			poolSelfHeal: "none",
+			sysSelfHeal:  "exclude;pool_exclude;pool_rebuild",
+			expPrintStr:  "exclude disabled on pool due to [pool] policy\nrebuild disabled on pool due to [pool] policy\n",
+		},
+		"no system flags": {
+			poolSelfHeal: "exclude;rebuild",
+			sysSelfHeal:  "none",
+			expPrintStr:  "exclude disabled on pool due to [system] policy\nrebuild disabled on pool due to [system] policy\n",
+		},
+		"no flags": {
+			poolSelfHeal: "none",
+			sysSelfHeal:  "none",
+			expPrintStr:  "exclude disabled on pool due to [pool system] policies\nrebuild disabled on pool due to [pool system] policies\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			PrintPoolSelfHealDisable(tc.poolSelfHeal, tc.sysSelfHeal, &bld)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected print string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
 
 func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -389,7 +558,6 @@ func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 		},
 		"valid: single target (unknown, down_out)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDownOut,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -405,7 +573,7 @@ func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down_out
+Target: state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -416,7 +584,6 @@ Target: type unknown, state down_out
 		},
 		"valid: single target (unknown, down)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDown,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -432,7 +599,7 @@ Target: type unknown, state down_out
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state down
+Target: state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -443,7 +610,6 @@ Target: type unknown, state down
 		},
 		"valid: single target (unknown, up)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateUp,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -459,7 +625,7 @@ Target: type unknown, state down
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state up
+Target: state up
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -470,7 +636,6 @@ Target: type unknown, state up
 		},
 		"valid: single target (unknown, up_in)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateUpIn,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -486,7 +651,7 @@ Target: type unknown, state up
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state up_in
+Target: state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -497,7 +662,6 @@ Target: type unknown, state up_in
 		},
 		"valid: single target (unknown, new)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateNew,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -513,7 +677,7 @@ Target: type unknown, state up_in
 				},
 			},
 			expPrintStr: `
-Target: type unknown, state new
+Target: state new
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -524,7 +688,6 @@ Target: type unknown, state new
 		},
 		"valid: single target (unknown, drain)": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDrain,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -541,7 +704,7 @@ Target: type unknown, state new
 				MemFileBytes: 3000000000,
 			},
 			expPrintStr: `
-Target: type unknown, state drain
+Target: state drain
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
@@ -552,7 +715,6 @@ Target: type unknown, state drain
 		},
 		"valid: single target (unknown, down_out): MD-on-SSD": {
 			pqti: &daos.PoolQueryTargetInfo{
-				Type:  0,
 				State: daos.PoolTargetStateDownOut,
 				Space: []*daos.StorageUsageStats{
 					{
@@ -570,7 +732,7 @@ Target: type unknown, state drain
 				MdOnSsdActive: true,
 			},
 			expPrintStr: `
-Target: type unknown, state down_out
+Target: state down_out
 - Metadata storage:
   Total size: 6.0 GB
   Free: 5.0 GB

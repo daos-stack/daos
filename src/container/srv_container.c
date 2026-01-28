@@ -1734,6 +1734,7 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
 		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
 		eph_ldr->cte_server_ephs[i].re_stable_eph = 0;
+		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = daos_gettime_coarse();
 	}
 	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
 	*leader_p = eph_ldr;
@@ -1790,8 +1791,11 @@ retry:
 
 	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 		if (eph_ldr->cte_server_ephs[i].re_rank == rank) {
-			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph)
+			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph) {
 				eph_ldr->cte_server_ephs[i].re_ec_agg_eph = ec_agg_eph;
+				eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts =
+				    daos_gettime_coarse();
+			}
 			if (eph_ldr->cte_server_ephs[i].re_stable_eph < stable_eph)
 				eph_ldr->cte_server_ephs[i].re_stable_eph = stable_eph;
 			break;
@@ -1896,7 +1900,8 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	rc = ds_pool_lookup(pool_uuid, &pool);
 	if (rc != 0) {
-		D_ERROR(DF_UUID" lookup pool failed: %d\n", DP_UUID(pool_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc,
+			  DF_UUID " lookup pool failed", DP_UUID(pool_uuid));
 		goto out;
 	}
 	rank = dss_self_rank();
@@ -1941,8 +1946,9 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to look container",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -2005,8 +2011,9 @@ cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph, 
 	ABT_rwlock_wrlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": Failed to look container",
+			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -2053,10 +2060,11 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	uint64_t			 cur_eph, new_eph;
 	daos_epoch_t			 min_ec_agg_eph;
 	daos_epoch_t			 min_stable_eph;
+	uint64_t                         cur_ts;
 	int				 i;
 	int				 rc = 0;
 
-	rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN, &fail_ranks);
+	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
 	if (rc) {
 		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
 		return;
@@ -2074,13 +2082,20 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (eph_ldr->cte_rdb_ec_agg_eph == 0) {
 			rc = cont_agg_eph_load(svc, eph_ldr->cte_cont_uuid,
 					       &eph_ldr->cte_rdb_ec_agg_eph);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(rc, DF_CONT " container skipped",
+						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+					continue;
+				}
 				DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.",
 					 DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+			}
 		}
 
 		min_ec_agg_eph = DAOS_EPOCH_MAX;
 		min_stable_eph = DAOS_EPOCH_MAX;
+		cur_ts         = daos_gettime_coarse();
 		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 			d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
 
@@ -2089,6 +2104,14 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 					DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank);
 				continue;
 			}
+
+			if (pool->sp_reclaim != DAOS_RECLAIM_DISABLED &&
+			    cur_ts > eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts + 600)
+				D_WARN(DF_CONT ": Sluggish EC boundary report from rank %d, " DF_U64
+					       " Seconds.",
+				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank,
+				       cur_ts -
+					   eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts);
 
 			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
 				min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
@@ -2101,7 +2124,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			min_ec_agg_eph = eph_ldr->cte_rdb_ec_agg_eph;
 
 		if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
-		    min_stable_eph == eph_ldr->cte_current_stable_eph)
+		    min_stable_eph == eph_ldr->cte_current_stable_eph &&
+		    eph_ldr->cte_current_ec_agg_eph != 0)
 			continue;
 
 		/**
@@ -2135,19 +2159,30 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_ec_agg_eph > eph_ldr->cte_rdb_ec_agg_eph) {
 			rc = cont_agg_eph_store(svc, eph_ldr->cte_cont_uuid, min_ec_agg_eph,
 						&eph_ldr->cte_rdb_ec_agg_eph);
-			if (rc)
+			if (rc) {
+				if (rc == -DER_NONEXIST) {
+					DL_INFO(rc, DF_CONT " container skipped",
+						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+					continue;
+				}
 				DL_ERROR(rc,
 					 DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64 " failed.",
 					 DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid),
 					 min_ec_agg_eph);
+			}
 		}
 
 		rc = cont_iv_track_eph_refresh(pool->sp_iv_ns, eph_ldr->cte_cont_uuid,
-					       min_ec_agg_eph, min_stable_eph);
+					       min_ec_agg_eph, min_stable_eph,
+					       svc->cs_cont_ephs_leader_req);
 		if (rc) {
 			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
 				  DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+
+			/* If ULT is exiting, break out */
+			if (rc == -DER_SHUTDOWN)
+				break;
 
 			/* If there are network error or pool map inconsistency,
 			 * let's skip the following eph sync, which will fail
@@ -2163,7 +2198,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		}
 		eph_ldr->cte_current_ec_agg_eph = min_ec_agg_eph;
 		eph_ldr->cte_current_stable_eph = min_stable_eph;
-		if (pool->sp_rebuilding)
+		if (atomic_load(&pool->sp_rebuilding))
 			break;
 	}
 	ABT_mutex_unlock(svc->cs_cont_ephs_mutex);
