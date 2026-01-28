@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Google LLC
 // (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -79,6 +80,7 @@ type Server struct {
 	CoreDumpFilter     uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars      []string                  `yaml:"client_env_vars,omitempty"`
 	SupportConfig      SupportConfig             `yaml:"support_config,omitempty"`
+	ClientFirewallMode bool                      `yaml:"client_behind_firewall,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -288,6 +290,12 @@ func (cfg *Server) WithNrHugepages(nr int) *Server {
 	return cfg
 }
 
+// WithClientFirewallMode enables or disable client firewall mode.
+func (cfg *Server) WithClientFirewallMode(clientFirewallMode bool) *Server {
+	cfg.ClientFirewallMode = clientFirewallMode
+	return cfg
+}
+
 // WithDisableHugepages disables the use of huge pages.
 func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 	cfg.DisableHugepages = disabled
@@ -362,7 +370,8 @@ func DefaultServer() *Server {
 		Path:              defaultConfigPath,
 		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
 		// https://man7.org/linux/man-pages/man5/core.5.html
-		CoreDumpFilter: 0b00010011, // private, shared, ELF
+		CoreDumpFilter:     0b00010011, // private, shared, ELF
+		ClientFirewallMode: false,
 	}
 }
 
