@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2025 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -996,7 +996,8 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 umem_create:
 	D_DEBUG(DB_MGMT, "umempobj_create sz: " DF_U64 " store_sz: " DF_U64, scm_sz,
 		store.stor_size);
-	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, 0600, &store);
+	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, UMEM_FILE_MODE_DEFAULT,
+			      &store);
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;

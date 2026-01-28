@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -136,7 +136,8 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 			fmt.Fprintf(w, "- Rebuild %s, %d objs, %d recs\n",
 				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
 		} else {
-			fmt.Fprintf(w, "- Rebuild failed, status=%d\n", pi.Rebuild.Status)
+			fmt.Fprintf(w, "- Rebuild %s (state=%s, status=%d)\n",
+				pi.Rebuild.DerivedState, pi.Rebuild.State, pi.Rebuild.Status)
 		}
 	} else {
 		fmt.Fprintln(w, "- No rebuild status available.")
