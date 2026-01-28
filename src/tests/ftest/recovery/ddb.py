@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -149,7 +149,7 @@ class DdbTest(TestWithServers):
         # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
         vos_paths = self.server_managers[0].get_vos_files(pool)
         if not vos_paths:
-            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_paths(pool)[0]}")
         ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         errors = []
@@ -339,7 +339,7 @@ class DdbTest(TestWithServers):
         # 3. Find the vos file name.
         vos_paths = self.server_managers[0].get_vos_files(pool)
         if not vos_paths:
-            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_paths(pool)[0]}")
         ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         # 4. Call ddb rm to remove the akey.
@@ -481,7 +481,7 @@ class DdbTest(TestWithServers):
         host = self.server_managers[0].hosts[0:1]
         vos_paths = self.server_managers[0].get_vos_files(pool)
         if not vos_paths:
-            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_paths(pool)[0]}")
         ddb_command = DdbCommand(host, self.bin, vos_paths[0])
 
         # 5. Load new data into [0]/[0]/[0]/[0]
@@ -562,7 +562,7 @@ class DdbTest(TestWithServers):
         # 4. Find the vos file name.
         vos_paths = self.server_managers[0].get_vos_files(pool)
         if not vos_paths:
-            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+            self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_paths(pool)[0]}")
         ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         # 5. Dump the two akeys to files.

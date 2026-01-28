@@ -1,6 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -192,7 +192,7 @@ class PoolListConsolidationTest(TestWithServers):
             list: Error list.
 
         """
-        pool_path = self.server_managers[0].get_vos_path(pool)
+        pool_path = self.server_managers[0].get_vos_paths(pool)[0]
         check_out = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_path, directory=True)
         if check_out[0]:
@@ -281,15 +281,23 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
+        dmg_command = self.get_dmg_command()
+        if self.server_managers[0].manager.job.using_control_metadata:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
+
         self.log_step("Create a pool with --nsvc=3.")
         pool = self.get_pool(svcn=3)
 
         self.log_step("Stop servers")
-        dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
-        rdb_pool_path = f"{self.server_managers[0].get_vos_path(pool)}/rdb-pool"
+        rdb_pool_path = f"{self.server_managers[0].get_vos_paths(pool)[0]}/rdb-pool"
         command = f"sudo rm {rdb_pool_path}"
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
@@ -303,14 +311,6 @@ class PoolListConsolidationTest(TestWithServers):
                 count += 1
                 if count > 1:
                     break
-        using_control_metadata = self.server_managers[0].manager.job.using_control_metadata
-        if count == 0 or using_control_metadata:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
 
         self.log_step("Start servers.")
         dmg_command.system_start()
