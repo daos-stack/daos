@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -181,13 +182,76 @@ struct ds_iv_class_ops chk_iv_ops = {
 	.ivc_value_alloc	= chk_iv_value_alloc,
 };
 
-int
-chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode, bool retry)
+void
+chk_iv_ns_destroy(struct chk_instance *ins)
 {
-	d_sg_list_t		sgl;
-	d_iov_t			iov;
-	struct ds_iv_key	key;
-	int			rc;
+	if (ins->ci_iv_ns != NULL) {
+		if (ins->ci_iv_ns->iv_refcount == 1)
+			ds_iv_ns_cleanup(ins->ci_iv_ns);
+		ds_iv_ns_put(ins->ci_iv_ns);
+		ins->ci_iv_ns = NULL;
+	}
+
+	if (ins->ci_iv_group != NULL) {
+		crt_group_secondary_destroy(ins->ci_iv_group);
+		ins->ci_iv_group = NULL;
+	}
+}
+
+int
+chk_iv_ns_create(struct chk_instance *ins, uuid_t uuid, d_rank_t leader, uint32_t ns_ver)
+{
+	char uuid_str[DAOS_UUID_STR_SIZE];
+	int  rc;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	rc = crt_group_secondary_create(uuid_str, NULL, NULL, &ins->ci_iv_group);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, uuid, ins->ci_iv_group, &ins->ci_iv_id,
+			     &ins->ci_iv_ns);
+	if (rc != 0)
+		goto out;
+
+	rc = chk_iv_ns_update(ins, ns_ver);
+	if (rc == 0) {
+		ds_iv_ns_update(ins->ci_iv_ns, leader, ins->ci_iv_ns->iv_master_term + 1);
+		ins->ci_skip_oog = 0;
+	}
+
+out:
+	if (rc != 0)
+		chk_iv_ns_destroy(ins);
+	return rc;
+}
+
+int
+chk_iv_ns_update(struct chk_instance *ins, uint32_t ns_ver)
+{
+	int rc;
+
+	/* Let secondary rank == primary rank. */
+	rc = crt_group_secondary_modify(ins->ci_iv_group, ins->ci_ranks, ins->ci_ranks,
+					CRT_GROUP_MOD_OP_REPLACE, ns_ver);
+	if (rc == 0)
+		ins->ci_ns_ver = ns_ver;
+	else
+		ins->ci_skip_oog = 1;
+
+	return rc;
+}
+
+int
+chk_iv_update(struct chk_instance *ins, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode)
+{
+	d_sg_list_t      sgl;
+	d_iov_t          iov;
+	struct ds_iv_key key;
+	uint32_t         ver;
+	int              try_cnt  = 0;
+	int              wait_cnt = 0;
+	int              rc;
 
 	iv->ci_rank = dss_self_rank();
 	iv->ci_seq = d_hlc_get();
@@ -208,9 +272,35 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 
 		memset(&key, 0, sizeof(key));
 		key.class_id = IV_CHK;
-		rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
+
+again:
+		try_cnt++;
+		ver = ins->ci_ns_ver;
+		rc  = ds_iv_update(ins->ci_iv_ns, &key, &sgl, shortcut, sync_mode, 0, true);
+		if (likely(rc != -DER_OOG))
+			goto out;
+
+		if (try_cnt % 10 == 0)
+			D_WARN("CHK iv " DF_X64 "/" DF_X64 " retry because of -DER_OOG for more "
+			       "than %d times.\n",
+			       iv->ci_gen, iv->ci_seq, try_cnt);
+
+		/* Wait chk_deak_rank_ult to sync the IV namespace. */
+		while (ver == ins->ci_ns_ver && ins->ci_skip_oog == 0 && ins->ci_pause == 0) {
+			dss_sleep(500);
+			if (++wait_cnt % 40 == 0)
+				D_WARN("CHK iv " DF_X64 "/" DF_X64 " is blocked because of DER_OOG "
+				       "for %d seconds.\n",
+				       iv->ci_gen, iv->ci_seq, wait_cnt / 2);
+		}
+
+		if (ins->ci_pause || ins->ci_skip_oog)
+			goto out;
+
+		goto again;
 	}
 
+out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "CHK iv "DF_X64"/"DF_X64" on rank %u, phase %u, ins_status %u, "
 		 "pool_status %u, to_leader %s, from_psl %s: rc = %d\n",
