@@ -24,9 +24,9 @@ server_config:
 
 pool: !mux
   default:
-    size: 15%
+    size: 575G
   md_on_ssd_p2:
-    size: 15%
+    size: 575G
     mem_ratio: 25
 
 container:
