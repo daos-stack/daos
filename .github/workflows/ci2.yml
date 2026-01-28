@@ -27,11 +27,13 @@ jobs:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
     env:
       DEPS_JOBS: 10
       COMPILER: clang
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -57,6 +59,7 @@ jobs:
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_KEEP_SRC=yes
+                            --build-arg PYTHON_VERSION
                             --tag build-image
       - name: Build and Test
         run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
