@@ -295,7 +295,7 @@ ID: 0/nvme/0000:83:00.0/vendor/crc_err_cnt_raw,0
 
 ## Metrics Unit Type
 
-daos_metrics output is available in multiple units. for example, Counters, Guage. It can display the data based on different unit type.
+daos_metrics output is available in multiple units. for example, Counters, Gauge. It can display the data based on different unit type.
 
 ### Display Counter type metrics
 
@@ -309,7 +309,7 @@ ID: 0/net/ofi+tcp;ofi_rxm/hg/bulks/ctx_0,0,,,,,,Mercury-layer count of bulk tran
 ID: 0/net/ofi+tcp;ofi_rxm/hg/bulks/ctx_1,0,,,,,,Mercury-layer count of bulk transfers,bulks
 ```
 
-### Display Guage type metrics
+### Display Gauge type metrics
 
 ```
 sudo daos_metrics -g -M -C | more
@@ -362,7 +362,7 @@ Item: xs_9 has unknown type: 0x800
 Item: xs_10 has unknown type: 0x800
 ```
 
-Foe Engine 1 (Incase multiple engines are running on same node)
+For Engine 1 (In case multiple engines are running on same node)
 ```
 daos_metrics -S 1 -e
 Item: xs_0 has unknown type: 0x800
