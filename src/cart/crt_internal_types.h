@@ -345,7 +345,7 @@ crt_env_list_valid(void)
 
 /* if string env exceeds CRT_ENV_STR_MAX_SIZE - return false */
 #define ENV_STR(x)                                                                                 \
-	if (crt_genvs._rc_##x == 0 && strlen(crt_genvs._##x) > CRT_ENV_STR_MAX_SIZE) {             \
+	if (crt_genvs._rc_##x == 0 && strlen(crt_genvs._##x) + 1 > CRT_ENV_STR_MAX_SIZE) {         \
 		D_ERROR("env '%s' (value='%s') exceeded max size %d\n", #x, crt_genvs._##x,        \
 			CRT_ENV_STR_MAX_SIZE);                                                     \
 		return false;                                                                      \
@@ -353,7 +353,7 @@ crt_env_list_valid(void)
 
 /* if string env exceeds CRT_ENV_STR_MAX_SIZE - return false */
 #define ENV_STR_NO_PRINT(x)                                                                        \
-	if (crt_genvs._rc_##x == 0 && strlen(crt_genvs._##x) > CRT_ENV_STR_MAX_SIZE) {             \
+	if (crt_genvs._rc_##x == 0 && strlen(crt_genvs._##x) + 1 > CRT_ENV_STR_MAX_SIZE) {         \
 		D_ERROR("env '%s' exceeded max size %d\n", #x, CRT_ENV_STR_MAX_SIZE);              \
 		return false;                                                                      \
 	}
