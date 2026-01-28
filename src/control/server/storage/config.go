@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -171,8 +171,8 @@ func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 	return tc
 }
 
-// WithScmDisableHugepages disables hugepages for tmpfs.
-func (tc *TierConfig) WithScmDisableHugepages() *TierConfig {
+// WithScmHugepagesDisabled disables hugepages for tmpfs.
+func (tc *TierConfig) WithScmHugepagesDisabled() *TierConfig {
 	tc.Scm.DisableHugepages = true
 	return tc
 }
