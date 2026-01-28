@@ -27,7 +27,7 @@ class VerifyDTX(TestWithTelemetry):
         4. Collect new DTX metrics
         5. Verify DTX metrics
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=pool
         :avocado: tags=VerifyDTX,test_verify_dtx
