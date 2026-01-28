@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright 2022-2024 Intel Corporation.
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -16,4 +16,4 @@ _print_githook_header "Pylint"
 
 echo "Linting python"
 
-_git_diff_cached_files | ./utils/cq/daos_pylint.py --files-from-stdin
+_git_diff_cached_files | grep -v -E '^src/control/vendor/' | ./utils/cq/daos_pylint.py --files-from-stdin

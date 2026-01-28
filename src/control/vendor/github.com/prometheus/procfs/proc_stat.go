@@ -1,4 +1,4 @@
-// Copyright 2018 The Prometheus Authors
+// Copyright The Prometheus Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/prometheus/procfs/internal/fs"
 	"github.com/prometheus/procfs/internal/util"
 )
 
@@ -81,10 +80,10 @@ type ProcStat struct {
 	STime uint
 	// Amount of time that this process's waited-for children have been
 	// scheduled in user mode, measured in clock ticks.
-	CUTime uint
+	CUTime int
 	// Amount of time that this process's waited-for children have been
 	// scheduled in kernel mode, measured in clock ticks.
-	CSTime uint
+	CSTime int
 	// For processes running a real-time scheduling policy, this is the negated
 	// scheduling priority, minus one.
 	Priority int
@@ -102,6 +101,14 @@ type ProcStat struct {
 	RSS int
 	// Soft limit in bytes on the rss of the process.
 	RSSLimit uint64
+	// The address above which program text can run.
+	StartCode uint64
+	// The address below which program text can run.
+	EndCode uint64
+	// The address of the start (i.e., bottom) of the stack.
+	StartStack uint64
+	// CPU number last executed on.
+	Processor uint
 	// Real-time scheduling priority, a number in the range 1 to 99 for processes
 	// scheduled under a real-time policy, or 0, for non-real-time processes.
 	RTPriority uint
@@ -109,13 +116,18 @@ type ProcStat struct {
 	Policy uint
 	// Aggregated block I/O delays, measured in clock ticks (centiseconds).
 	DelayAcctBlkIOTicks uint64
+	// Guest time of the process (time spent running a virtual CPU for a guest
+	// operating system), measured in clock ticks.
+	GuestTime int
+	// Guest time of the process's children, measured in clock ticks.
+	CGuestTime int
 
-	proc fs.FS
+	proc FS
 }
 
 // NewStat returns the current status information of the process.
 //
-// Deprecated: use p.Stat() instead
+// Deprecated: Use p.Stat() instead.
 func (p Proc) NewStat() (ProcStat, error) {
 	return p.Stat()
 }
@@ -137,10 +149,15 @@ func (p Proc) Stat() (ProcStat, error) {
 	)
 
 	if l < 0 || r < 0 {
-		return ProcStat{}, fmt.Errorf("unexpected format, couldn't extract comm %q", data)
+		return ProcStat{}, fmt.Errorf("%w: unexpected format, couldn't extract comm %q", ErrFileParse, data)
 	}
 
 	s.Comm = string(data[l+1 : r])
+
+	// Check the following resources for the details about the particular stat
+	// fields and their data types:
+	// * https://man7.org/linux/man-pages/man5/proc.5.html
+	// * https://man7.org/linux/man-pages/man3/scanf.3.html
 	_, err = fmt.Fscan(
 		bytes.NewBuffer(data[r+2:]),
 		&s.State,
@@ -166,9 +183,9 @@ func (p Proc) Stat() (ProcStat, error) {
 		&s.VSize,
 		&s.RSS,
 		&s.RSSLimit,
-		&ignoreUint64,
-		&ignoreUint64,
-		&ignoreUint64,
+		&s.StartCode,
+		&s.EndCode,
+		&s.StartStack,
 		&ignoreUint64,
 		&ignoreUint64,
 		&ignoreUint64,
@@ -179,10 +196,12 @@ func (p Proc) Stat() (ProcStat, error) {
 		&ignoreUint64,
 		&ignoreUint64,
 		&ignoreInt64,
-		&ignoreInt64,
+		&s.Processor,
 		&s.RTPriority,
 		&s.Policy,
 		&s.DelayAcctBlkIOTicks,
+		&s.GuestTime,
+		&s.CGuestTime,
 	)
 	if err != nil {
 		return ProcStat{}, err
@@ -203,8 +222,7 @@ func (s ProcStat) ResidentMemory() int {
 
 // StartTime returns the unix timestamp of the process in seconds.
 func (s ProcStat) StartTime() (float64, error) {
-	fs := FS{proc: s.proc}
-	stat, err := fs.Stat()
+	stat, err := s.proc.Stat()
 	if err != nil {
 		return 0, err
 	}
