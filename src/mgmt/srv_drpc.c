@@ -1764,6 +1764,8 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
 	else
 		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
+
+	rebuild->degraded = !!(info->rs_flags & DAOS_RSF_DEGRADED);
 }
 
 static void
