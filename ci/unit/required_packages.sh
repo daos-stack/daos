@@ -42,21 +42,21 @@ pkgs+=("valgrind-devel")
 
 if [ "${code_coverage}" == "true" ] ; then
     pkgs+=("$(utils/rpms/package_version.sh bullseye normal)")
-    case "${distro}" in
-        el*|centos*|rocky*|rhel*|alma*)
-            pkgs+=("java-1.8.0-openjdk")
-            ;;
-        ubuntu*)
-            pkgs+=("openjdk-8-jdk")
-            ;;
-        leap*|sles*)
-            pkgs+=("java-1_8_0-openjdk-devel")
-            ;;
-        *)
-            echo "Unknown java package for ${distro} with code coverage"
-            exit 1
-            ;;
-    esac
+    # case "${distro}" in
+    #     el*|centos*|rocky*|rhel*|alma*)
+    #         pkgs+=("java-1.8.0-openjdk")
+    #         ;;
+    #     ubuntu*)
+    #         pkgs+=("openjdk-8-jdk")
+    #         ;;
+    #     leap*|sles*)
+    #         pkgs+=("java-1_8_0-openjdk-devel")
+    #         ;;
+    #     *)
+    #         echo "Unknown java package for ${distro} with code coverage"
+    #         exit 1
+    #         ;;
+    # esac
 fi
 
 # output with trailing newline suppressed
