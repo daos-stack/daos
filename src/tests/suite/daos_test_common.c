@@ -244,6 +244,70 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 			}
 		}
 
+		/* Temporarily use old container property defaults due to DAOS-17946 */
+		/* Set DAOS_PROP_CO_CSUM to off if not already defined */
+		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_CSUM) == NULL) {
+			daos_prop_t *csum_prop = daos_prop_alloc(1);
+			if (csum_prop == NULL) {
+				D_ERROR("failed to allocate csum prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				return -DER_NOMEM;
+			}
+			csum_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+			csum_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_OFF;
+
+			daos_prop_t *new_merged_props = daos_prop_merge(co_prop, csum_prop);
+			if (new_merged_props == NULL) {
+				D_ERROR("failed to merge co_prop and csum_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				daos_prop_free(csum_prop);
+				return -DER_NOMEM;
+			}
+
+			/* Update co_prop to point to the newly merged properties */
+			if (merged_props) {
+				daos_prop_free(merged_props);
+				merged_props = new_merged_props;
+			} else {
+				merged_props = new_merged_props;
+			}
+			co_prop = merged_props;
+			daos_prop_free(csum_prop);
+		}
+		/* Set DAOS_PROP_CO_CSUM_SERVER_VERIFY to off if not already defined */
+		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_CSUM_SERVER_VERIFY) == NULL) {
+			daos_prop_t *csum_sv_prop = daos_prop_alloc(1);
+			if (csum_sv_prop == NULL) {
+				D_ERROR("failed to allocate csum_sv_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				return -DER_NOMEM;
+			}
+			csum_sv_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+			csum_sv_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_SV_OFF;
+
+			daos_prop_t *new_merged_props = daos_prop_merge(co_prop, csum_sv_prop);
+			if (new_merged_props == NULL) {
+				D_ERROR("failed to merge co_prop and csum_sv_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				daos_prop_free(csum_sv_prop);
+				return -DER_NOMEM;
+			}
+
+			/* Update co_prop to point to the newly merged properties */
+			if (merged_props) {
+				daos_prop_free(merged_props);
+				merged_props = new_merged_props;
+			} else {
+				merged_props = new_merged_props;
+			}
+			co_prop = merged_props;
+			daos_prop_free(csum_sv_prop);
+		}
+
 		D_ASSERT(co_prop != NULL);
 		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
 			char cont_label[32];

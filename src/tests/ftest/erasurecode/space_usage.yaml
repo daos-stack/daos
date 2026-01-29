@@ -23,7 +23,7 @@ server_config:
 
 pool:
   size: 95%
-  properties: ec_cell_sz:128KiB,reclaim:disabled
+  properties: rd_fac:0,space_rb:0,ec_cell_sz:128KiB,reclaim:disabled
 
 container:
   type: POSIX

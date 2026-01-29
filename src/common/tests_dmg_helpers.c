@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -825,6 +825,34 @@ dmg_pool_create(const char *dmg_config_file,
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
+	}
+
+	/* Temporarily use old pool property defaults due to DAOS-17946 */
+	/* Set default rd_fac:0 if --properties=rd_fac is not already defined in args */
+	bool has_rd_fac = false;
+	for (int i = 0; i < argcount; i++) {
+		if (args[i] && strstr(args[i], "--properties=rd_fac") != NULL) {
+			has_rd_fac = true;
+			break;
+		}
+	}
+	if (!has_rd_fac) {
+		args = cmd_push_arg(args, &argcount, "--properties=rd_fac:0 ");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+	/* Set default space_rb:0 if --properties=space_rb is not already defined in args */
+	bool has_space_rb = false;
+	for (int i = 0; i < argcount; i++) {
+		if (args[i] && strstr(args[i], "--properties=space_rb") != NULL) {
+			has_space_rb = true;
+			break;
+		}
+	}
+	if (!has_space_rb) {
+		args = cmd_push_arg(args, &argcount, "--properties=space_rb:0 ");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (!has_label) {
