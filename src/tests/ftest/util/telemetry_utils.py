@@ -1,6 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
-(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2025 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Google LLC
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
