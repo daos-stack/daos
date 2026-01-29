@@ -1932,12 +1932,16 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 		*yielded = waited;
 
 	/* per-pool counters for rebuild status tracking */
-	if (res_type == MIGR_OBJ)
+	if (res_type == MIGR_OBJ) {
 		tls->mpt_tgt_obj_ult_cnt++;
-	else if (res_type == MIGR_KEY)
+	} else if (res_type == MIGR_KEY) {
 		tls->mpt_tgt_dkey_ult_cnt++;
-	else
+	} else {
 		tls->mpt_inflight_size += units;
+		/* remaining resource may be sufficient for more waiters */
+		if (waited && res->res_units < res->res_limit)
+			ABT_cond_signal(res->res_cond);
+	}
 
 	D_DEBUG(DB_REBUILD,
 		"res=%s, hold=%lu, used=%lu, limit=%lu, waited=%d)\n" DF_RB
