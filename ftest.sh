@@ -94,6 +94,7 @@ trap 'set +e; cleanup' EXIT
 # shellcheck disable=SC2206
 CLUSH_ARGS=($CLUSH_ARGS)
 
+DAOS_FTEST_VENV=${DAOS_FTEST_VENV:-"daos_ftest_venv"}
 DAOS_BASE=${SL_SRC_DIR}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")"                                 \
@@ -104,6 +105,9 @@ if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
      TEST_TAG_DIR=$TEST_TAG_DIR
      JENKINS_URL=$JENKINS_URL
      NFS_SERVER=$NFS_SERVER
+     DAOS_FTEST_VENV=$DAOS_FTEST_VENV
+     PYTHON_VERSION=${PYTHON_VERSION:-3.11}
+     PREFIX=$PREFIX
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/setup_nodes.sh)"; then
     echo "Cluster setup (i.e. provisioning) failed"
     exit 1
@@ -130,6 +134,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      WITH_VALGRIND=\"$WITH_VALGRIND\"
      STAGE_NAME=\"$STAGE_NAME\"
      DAOS_HTTPS_PROXY=\"$_DAOS_HTTPS_PROXY\"
+     DAOS_FTEST_VENV=\"$DAOS_FTEST_VENV\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
     if ${SETUP_ONLY:-false}; then

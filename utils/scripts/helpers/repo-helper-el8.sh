@@ -134,5 +134,7 @@ if [ -n "$REPO_FILE_URL" ]; then
 [global]
     trusted-host = ${trusted_host}
     index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple
+    progress_bar = off
+    no_color = true
 EOF
 fi
