@@ -766,6 +766,9 @@ void
 void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
 void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
 
+char *
+test_escape_self_heal(const char *value);
+
 void
 test_verify_cont(test_arg_t *arg, struct test_pool *pool, struct test_cont *conts, int cont_nr);
 
