@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -76,8 +76,9 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         result in Operation already performed error. In that case, repeat. When the first
         pool is fixed, the second start should work.
         6. Query checker and verify that they’re fixed.
-        7. Disable checker and start system.
-        8. Verify that the faults are actually fixed.
+        7. Clear the checker inconsistency reports.
+        8. Disable checker and start system.
+        9. Verify that the faults are actually fixed.
 
         Jira ID: DAOS-17860
 
@@ -86,14 +87,12 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartCornerCaseTest,test_start_back_to_back
         """
-        # 1. Create two pools and a container.
         self.log_step("Create two pools and a container.")
         pool_1 = self.get_pool(connect=False)
         pool_2 = self.get_pool(connect=False)
         container_1 = self.get_container(pool=pool_1)
         container_2 = self.get_container(pool=pool_2)
 
-        # 2. Inject fault on both containers.
         self.log_step("Inject fault on both containers.")
         daos_command = self.get_daos_command()
         daos_command.faults_container(
@@ -103,16 +102,13 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
             pool=pool_2.identifier, cont=container_2.identifier,
             location="DAOS_CHK_CONT_ORPHAN")
 
-        # 3. Enable checker.
         self.log_step("Enable checker.")
         dmg_command = self.get_dmg_command()
         dmg_command.check_enable()
 
-        # 4. Start with the first pool.
         self.log_step("Start with the first pool.")
         dmg_command.check_start(pool=pool_1.identifier)
 
-        # 5. Immediately after starting the first pool, start the second pool.
         self.log_step("Immediately after starting the first pool, start the second pool.")
         pool_2_started = False
         for count in range(8):
@@ -130,15 +126,19 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
             time.sleep(5)
         self.assertTrue(pool_2_started, "dmg check start pool_2 failed after 40 sec!")
 
-        # 6. Query checker and verify that they’re fixed.
         self.log_step("Query checker and verify that they’re fixed.")
         wait_for_check_complete(dmg=dmg_command)
 
-        # 7. Disable checker and start system.
+        self.log_step("Clear the checker inconsistency reports.")
+        dmg_command.check_stop()
+        # Start with --reset clears the inconsistency reports. Old inconsistency reports
+        # may cause subsequent tests to fail because the tests don't expect them. The
+        # tests expect the system to be clean at the beginning.
+        dmg_command.check_start(reset=True)
+
         self.log_step("Disable checker and start system.")
         dmg_command.check_disable()
 
-        # 8. Verify that the faults are actually fixed.
         self.log_step("Verify that the faults are actually fixed.")
         # In this case, check that the containers were removed.
         container_list_out_1 = daos_command.pool_list_containers(pool=pool_1.identifier)
@@ -233,7 +233,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         # Wait for the checker to detect the inconsistent container label.
         query_reports = None
         for _ in range(8):
-            check_query_out = dmg_command.check_query()
+            check_query_out = dmg_command.check_query(pool=pool_3.uuid)
             # Status becomes RUNNING immediately, but it may take a while to detect the
             # inconsistency. If detected, "reports" field is filled.
             if check_query_out["response"]["status"] == "RUNNING":
