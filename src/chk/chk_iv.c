@@ -288,10 +288,16 @@ again:
 		/* Wait chk_deak_rank_ult to sync the IV namespace. */
 		while (ver == ins->ci_ns_ver && ins->ci_skip_oog == 0 && ins->ci_pause == 0) {
 			dss_sleep(500);
-			if (++wait_cnt % 40 == 0)
+			if (++wait_cnt % 40 == 0) {
 				D_WARN("CHK iv " DF_X64 "/" DF_X64 " is blocked because of DER_OOG "
 				       "for %d seconds.\n",
 				       iv->ci_gen, iv->ci_seq, wait_cnt / 2);
+				/*
+				 * Let's retry IV in case of related dead rank recovered back before
+				 * being handled by chk_dead_rank_ult, although it is rare.
+				 */
+				break;
+			}
 		}
 
 		if (ins->ci_pause || ins->ci_skip_oog)
