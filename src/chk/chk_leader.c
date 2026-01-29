@@ -3462,11 +3462,9 @@ chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act)
 	d_iov_t			 riov;
 	int			 rc;
 
-	rc = chk_pending_del(ins, seq, &pending);
+	rc = chk_pending_lookup(ins, seq, &pending);
 	if (rc != 0)
 		goto out;
-
-	D_ASSERT(pending->cpr_busy);
 
 	if (pending->cpr_on_leader) {
 		ABT_mutex_lock(pending->cpr_mutex);
@@ -3477,20 +3475,25 @@ chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act)
 		pending->cpr_action = act;
 		ABT_cond_broadcast(pending->cpr_cond);
 		ABT_mutex_unlock(pending->cpr_mutex);
+		chk_pending_del(ins, seq, &pending);
 	} else {
 		d_iov_set(&riov, NULL, 0);
 		d_iov_set(&kiov, pending->cpr_uuid, sizeof(uuid_t));
 		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
-		if (rc == 0) {
+		if (rc == 0)
 			pool = (struct chk_pool_rec *)riov.iov_buf;
-			if (pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING)
-				pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-		}
 
 		rc = chk_act_remote(ins->ci_ranks, ins->ci_bk.cb_gen, seq, pending->cpr_class, act,
 				    pending->cpr_rank);
+		if (rc == 0) {
+			pending->cpr_busy = 0;
+			chk_pending_del(ins, seq, NULL);
 
-		chk_pending_destroy(pending);
+			if (pool != NULL &&
+			    pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+			    d_list_empty(&pool->cpr_pending_list))
+				pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+		}
 	}
 
 out:
@@ -3584,14 +3587,15 @@ out:
 int
 chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 {
-	struct chk_instance	*ins = chk_leader;
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_pending_rec	*cpr = NULL;
-	struct chk_pool_rec	*pool = NULL;
-	struct chk_rank_rec	*crr = NULL;
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
-	int			 rc;
+	struct chk_instance    *ins  = chk_leader;
+	struct chk_bookmark    *cbk  = &ins->ci_bk;
+	struct chk_pending_rec *cpr  = NULL;
+	struct chk_pool_rec    *pool = NULL;
+	struct chk_rank_rec    *crr  = NULL;
+	d_iov_t                 kiov;
+	d_iov_t                 riov;
+	int                     rc;
+	bool                    upcall_fail = false;
 
 	CHK_IS_READY(ins);
 
@@ -3658,9 +3662,10 @@ new_seq:
 			       cru->cru_cont, cru->cru_cont_label, cru->cru_obj, cru->cru_dkey,
 			       cru->cru_akey, cru->cru_msg, cru->cru_option_nr, cru->cru_options,
 			       cru->cru_detail_nr, cru->cru_details);
-	/* Check cpr->cpr_action for the case of "dmg check repair" by race. */
-	if (rc == 0 && pool != NULL &&
-	    likely(cpr->cpr_action == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT))
+	if (rc != 0)
+		upcall_fail = true;
+	else if (pool != NULL && cpr->cpr_action == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)
+		/* Check cpr->cpr_action for the case of "dmg check repair" by race. */
 		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_PENDING;
 
 log:
@@ -3700,13 +3705,18 @@ again:
 	goto again;
 
 out:
-	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
-	    (rc != 0 || (cpr != NULL &&
-			 cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)))
-		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+	if (cpr != NULL) {
+		if (upcall_fail) {
+			cpr->cpr_busy = 0;
+			chk_pending_del(ins, *seq, NULL);
+		} else if (rc != 0 || decision != NULL) {
+			chk_pending_destroy(cpr);
+		}
+	}
 
-	if ((rc != 0 || decision != NULL) && cpr != NULL)
-		chk_pending_destroy(cpr);
+	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+	    d_list_empty(&pool->cpr_pending_list))
+		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
 
 	return rc;
 }
