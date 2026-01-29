@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1126,7 +1126,7 @@ retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY)) {
-		if (rc == -DER_GRPVER && engine_in_check()) {
+		if ((rc == -DER_GRPVER || rc == -DER_OOG) && engine_in_check()) {
 			/*
 			 * Under check mode, the pool shard on peer rank/target does
 			 * not exist, then it will reply "-DER_GRPVER" that is normal
