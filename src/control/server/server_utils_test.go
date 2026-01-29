@@ -453,8 +453,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expPrepCalls: []storage.BdevPrepareRequest{
 				defCleanDualEngine,
 				{
-					HugeNodes:  "nodes_hp[0]=8192,nodes_hp[1]=8192",
-					TargetUser: username,
+					HugepageCount: 8194,
+					HugeNodes:     "0,1",
+					TargetUser:    username,
 					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
 						storage.BdevPciAddrSep, test.MockPCIAddr(1)),
 					EnableVMD: true,
