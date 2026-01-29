@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -274,6 +274,9 @@ data_init(int server, crt_init_options_t *opt)
 
 	crt_env_dump();
 
+	if (!crt_env_list_valid())
+		return -DER_INVAL;
+
 	/* Set context post init / post incr to tune number of pre-posted recvs */
 	crt_env_get(D_POST_INIT, &post_init);
 	crt_gdata.cg_post_init = post_init;
@@ -440,7 +443,7 @@ __split_arg(char *s_arg_to_split, const char *delim, char **first_arg, char **se
 		return DER_SUCCESS;
 	}
 
-	D_STRNDUP(arg_to_split, s_arg_to_split, 255);
+	D_STRNDUP(arg_to_split, s_arg_to_split, CRT_ENV_STR_MAX_SIZE);
 	if (!arg_to_split) {
 		*first_arg  = NULL;
 		*second_arg = NULL;
@@ -793,25 +796,25 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			 * and processed in crt_na_config_init().
 			 */
 			if (interface) {
-				D_STRNDUP(iface0, interface, 255);
+				D_STRNDUP(iface0, interface, CRT_ENV_STR_MAX_SIZE);
 				if (!iface0)
 					D_GOTO(unlock, rc = -DER_NOMEM);
 			}
 
 			if (domain) {
-				D_STRNDUP(domain0, domain, 255);
+				D_STRNDUP(domain0, domain, CRT_ENV_STR_MAX_SIZE);
 				if (!domain0)
 					D_GOTO(unlock, rc = -DER_NOMEM);
 			}
 
 			if (port) {
-				D_STRNDUP(port0, port, 255);
+				D_STRNDUP(port0, port, CRT_ENV_STR_MAX_SIZE);
 				if (!port0)
 					D_GOTO(unlock, rc = -DER_NOMEM);
 			}
 
 			if (auth_key) {
-				D_STRNDUP(auth_key0, auth_key, 255);
+				D_STRNDUP(auth_key0, auth_key, CRT_ENV_STR_MAX_SIZE);
 				if (!auth_key0)
 					D_GOTO(unlock, rc = -DER_NOMEM);
 			}
@@ -1190,24 +1193,34 @@ crt_na_config_init(bool primary, crt_provider_t provider, char *interface, char 
 	}
 
 	if (interface) {
-		D_STRNDUP(na_cfg->noc_interface, interface, 64);
+		D_STRNDUP(na_cfg->noc_interface, interface, CRT_ENV_STR_MAX_SIZE);
 		if (!na_cfg->noc_interface)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (domain) {
-		D_STRNDUP(na_cfg->noc_domain, domain, 64);
+		D_STRNDUP(na_cfg->noc_domain, domain, CRT_ENV_STR_MAX_SIZE);
 		if (!na_cfg->noc_domain)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (auth_key) {
-		D_STRNDUP(na_cfg->noc_auth_key, auth_key, 255);
+		D_STRNDUP(na_cfg->noc_auth_key, auth_key, CRT_ENV_STR_MAX_SIZE);
 		if (!na_cfg->noc_auth_key)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (na_cfg->noc_interface) {
+		/*
+		 * env checks limit strings to CRT_ENV_STR_MAX_SIZE, but an interface can
+		 * be passed as an init argument
+		 */
+		if (strlen(na_cfg->noc_interface) + 1 >= CRT_ENV_STR_MAX_SIZE) {
+			D_ERROR("Interface value '%s' exceeds limit of %d characters\n",
+				na_cfg->noc_interface, CRT_ENV_STR_MAX_SIZE);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
 		/* count number of ','-separated interfaces */
 		count    = 1;
 		save_ptr = na_cfg->noc_interface;
@@ -1227,6 +1240,7 @@ crt_na_config_init(bool primary, crt_provider_t provider, char *interface, char 
 		idx      = 0;
 		token    = strtok_r(na_cfg->noc_interface, ",", &save_ptr);
 		while (token != NULL) {
+			/* TODO: If needed add filtering for duplicate interfaces here */
 			na_cfg->noc_iface_str[idx] = token;
 			token                      = strtok_r(NULL, ",", &save_ptr);
 			idx++;
@@ -1238,6 +1252,16 @@ crt_na_config_init(bool primary, crt_provider_t provider, char *interface, char 
 
 	count = 0;
 	if (na_cfg->noc_domain) {
+		/*
+		 * env checks limit strings to CRT_ENV_STR_MAX_SIZE, but a domain can
+		 * be passed as an init argument
+		 */
+		if (strlen(na_cfg->noc_domain) + 1 >= CRT_ENV_STR_MAX_SIZE) {
+			D_ERROR("Domain value '%s' exceeds limit of %d characters\n",
+				na_cfg->noc_domain, CRT_ENV_STR_MAX_SIZE);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
 		/* count number of ','-separated domains */
 		count    = 1;
 		save_ptr = na_cfg->noc_domain;
@@ -1267,8 +1291,9 @@ crt_na_config_init(bool primary, crt_provider_t provider, char *interface, char 
 	na_cfg->noc_domain_total = count;
 
 	if (na_cfg->noc_domain_total > 0 && na_cfg->noc_domain_total != na_cfg->noc_iface_total) {
-		D_ERROR("Mismatched number of domains (%d) and interfaces (%d) specified\n",
-			na_cfg->noc_domain_total, na_cfg->noc_iface_total);
+		D_ERROR("Mismatched # of domains [%d]='%s' and interfaces [%d]='%s' specified\n",
+			na_cfg->noc_domain_total, na_cfg->noc_domain, na_cfg->noc_iface_total,
+			na_cfg->noc_interface);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
