@@ -422,6 +422,9 @@ def scriptedBuildStage(Map kwargs = [:]) {
         stage("${name}") {
             if (runCondition) {
                 node('docker_runner') {
+                    println("[${name}] Check out from version control")
+                    checkoutScm(pruneStaleBranch: true)
+
                     def dockerImage = docker.build(dockerTag, dockerBuildArgs)
                     try {
                         dockerImage.inside() {
