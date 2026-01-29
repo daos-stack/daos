@@ -298,6 +298,7 @@ ID: 0/nvme/0000:83:00.0/vendor/crc_err_cnt_raw,0
 daos_metrics output is available in multiple units. for example, Counters, Gauge. It can display the data based on different unit type.
 
 ### Display Counter type metrics
+A counter is a cumulative metric that represents a single monotonically increasing counter whose value can only increase or be reset or to zero on restart.
 
 ```
 sudo daos_metrics -c -M -C
@@ -310,6 +311,7 @@ ID: 0/net/ofi+tcp;ofi_rxm/hg/bulks/ctx_1,0,,,,,,Mercury-layer count of bulk tran
 ```
 
 ### Display Gauge type metrics
+A gauge is a metric that represents a single numerical value that can arbitrarily go up and down.
 
 ```
 sudo daos_metrics -g -M -C | more
