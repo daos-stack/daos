@@ -15,7 +15,7 @@
 #include <daos_types.h>
 #include "ddb_common.h"
 
-#define DB_PATH_LEN 64
+#define DB_PATH_LEN 256
 struct vos_file_parts {
 	char            vf_db_path[DB_PATH_LEN];
 	uuid_t		vf_pool_uuid;

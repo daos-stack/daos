@@ -314,7 +314,7 @@ ddb_teardown_vos(void **state)
 	}
 
 	if (tctx->dvt_special_pool_destroy) {
-		rc = dv_pool_destroy(tctx->dvt_pmem_file);
+		rc = dv_pool_destroy(tctx->dvt_pmem_file, NULL);
 	} else {
 		vos_self_init("/mnt/daos", false, 0);
 		assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));

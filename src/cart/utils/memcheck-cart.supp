@@ -487,6 +487,13 @@
    fun:racecall
 }
 {
+   MemoryRangeSet ShadowSet
+   Memcheck:Value8
+   fun:ShadowSet
+   fun:_ZN6__tsanL14MemoryRangeSetEmmNS_9RawShadowE
+   fun:racecall
+}
+{
    FI leak 8
    Memcheck:Leak
    match-leak-kinds: reachable
@@ -787,4 +794,25 @@
    fun:daos_init
    fun:_cgo_b590e4e2531a_Cfunc_daos_init
    fun:runtime.asmcgocall.abi0
+}
+{
+   getpwnam_r() leak
+   Memcheck:Leak
+   fun:*alloc
+   ...
+   fun:getpwnam_r*
+}
+{
+   getpwuid_r() leak
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:getpwuid_r*
+}
+{
+   localtime() leak
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:__tz_convert
 }

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -55,7 +55,7 @@ int
     dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags);
 int dv_pool_close(daos_handle_t poh);
 int
-dv_pool_destroy(const char *path);
+dv_pool_destroy(const char *path, const char *db_path);
 
 /* Update vos pool flags */
 int
