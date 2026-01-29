@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2021-2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -31,9 +31,6 @@ group_repo_post() {
 distro_custom() {
     # TODO: This code is not exiting on failure.
 
-    # Use a more recent python version for unit testing, this allows us to also test installing
-    # pydaos into virtual environments.
-    dnf -y install python3.9 python3.9-devel
     dnf -y install python3.11 python3.11-devel
 }
 

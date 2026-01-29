@@ -3,8 +3,8 @@
 set -eu
 
 # No longer used but provided by pipeline-lib
-# quick_build="${2:-false}"
 # distro="$1"
+# quick_build="${2:-false}"
 
 OPENMPI_VER=""
 PY_MINOR_VER=""

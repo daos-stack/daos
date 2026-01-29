@@ -5,7 +5,7 @@
 /* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -740,8 +740,8 @@ pipeline {
                                 unitTest(timeout_time: 60,
                                         unstash_opt: true,
                                         inst_repos: daosRepos(),
-                                        inst_rpms: unitPackages([image_version: "el9"]),
-                                        image_version: 'el9.6',
+                                        inst_rpms: unitPackages([mage_version: 'el9'),
+                                        image_version: 'el9.7',
                                         )
                             )
                     }
@@ -765,8 +765,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages([image_version: "el9"]),
-                                     image_version: 'el9.6'))
+                                     inst_rpms: unitPackages(image_version: 'el9'),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -790,7 +790,7 @@ pipeline {
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages([image_version: "el8"]),
+                                     inst_rpms: unitPackages(image_version: 'el8'),
                                      image_version: 'el8.8'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
@@ -830,8 +830,8 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages([image_version: "el9"]),
-                                     image_version: 'el9.6'))
+                                     inst_rpms: unitPackages(image_version: 'el9'),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -856,8 +856,8 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages([image_version: "el9"]),
-                                     image_version: 'el9.6'))
+                                     inst_rpms: unitPackages(image_version: 'el9'),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {

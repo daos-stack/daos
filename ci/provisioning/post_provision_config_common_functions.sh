@@ -2,7 +2,7 @@
 #
 #  Copyright 2022-2023 Intel Corporation.
 #  Copyright 2025 Google LLC
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -101,7 +101,7 @@ retry_dnf() {
                     dnfx="dnf4"
                 fi
                 if "$dnfx" repolist | grep -q '^epel'; then
-                    "$dnfx" config-manager --disable 'epel*' || true
+                    "$dnfx" config-manager --disable 'epel*'
                 fi
             fi
             return 0
