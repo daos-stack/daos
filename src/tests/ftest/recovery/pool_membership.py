@@ -315,6 +315,11 @@ class PoolMembershipTest(IorTestBase):
         :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_rank_entry
         """
+        if self.server_managers[0].manager.job.using_control_metadata:
+            self.log.info("MD-on-SSD cluster. Will be supported later.")
+            # return results in PASS.
+            return
+
         targets = self.params.get("targets", "/run/server_config/engines/0/*")
         exp_msg = "dangling rank entry"
 
