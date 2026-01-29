@@ -70,14 +70,6 @@ fi
 list_files files "${tmp}/bullseye_sources.tar.gz"
 append_install_list "${files[@]}"
 
-# Add sources for covhtml command
-for src_file in "${src_file_list[@]}"; do
-  dir_name=$(dirname "${src_file}")
-  TARGET_PATH="${SL_BULLSEYE_PREFIX}/daos/${dir_name}"
-  list_files files "${src_file}"
-  append_install_list "${files[@]}"
-done
-
 # Fix file permissions
 cat << EOF  > "${tmp}/post_install_bullseye"
 chmod 666 ${SL_BULLSEYE_PREFIX}/daos/test.cov
