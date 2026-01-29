@@ -2614,11 +2614,12 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 	return rc;
 }
 
-
-/* Regenerate the rebuild tasks when changing the leader. */
+/* Regenerate rebuild tasks when changing the leader, or manually starting rebuilds.
+ * auto_recovery (true for leader change, false for manual) applies to both sys_self_heal and prop.
+ */
 int
 ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal,
-			   uint64_t delay_sec)
+			   bool auto_recovery, uint64_t delay_sec)
 {
 	struct daos_prop_entry *entry;
 	char                   *env;
@@ -2626,7 +2627,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys
 
 	rebuild_gst.rg_abort = 0;
 
-	if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+	if (auto_recovery && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
 		D_DEBUG(DB_REBUILD, DF_UUID ": pool_rebuild disabled in sys_self_heal\n",
 			DP_UUID(pool->sp_uuid));
 		return DER_SUCCESS;
@@ -2648,10 +2649,8 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
-
 	D_ASSERT(entry != NULL);
-	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD) &&
-	    !pool->sp_disable_rebuild) {
+	if (is_pool_rebuild_allowed(pool, entry->dpe_val /* self_heal */, auto_recovery)) {
 		rc = regenerate_task_of_type(
 		    pool, PO_COMP_ST_DOWN,
 		    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : delay_sec);
@@ -2662,7 +2661,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys
 		if (rc != 0)
 			return rc;
 	} else {
-		D_DEBUG(DB_REBUILD, DF_UUID" self healing is disabled\n",
+		D_DEBUG(DB_REBUILD, "Pool " DF_UUID " self healing is disabled\n",
 			DP_UUID(pool->sp_uuid));
 	}
 
@@ -2699,7 +2698,8 @@ ds_rebuild_admin_start(struct ds_pool *pool)
 		goto out;
 	}
 
-	rc = ds_rebuild_regenerate_task(pool, &prop, DS_MGMT_SELF_HEAL_ALL, 0);
+	rc = ds_rebuild_regenerate_task(pool, &prop, DS_MGMT_SELF_HEAL_ALL /* sys_self_heal */,
+					false /* auto_recovery */, 0 /* delay_sec */);
 	daos_prop_fini(&prop);
 	if (rc)
 		DL_ERROR(rc, DF_UUID ": regenerate rebuild task failed", DP_UUID(pool->sp_uuid));
