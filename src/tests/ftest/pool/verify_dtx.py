@@ -11,14 +11,14 @@ from mdtest_utils import MDTEST_NAMESPACE, run_mdtest
 from telemetry_test_base import TestWithTelemetry
 
 
-class VerifyDTX(TestWithTelemetry):
+class VerifyDTXMetrics(TestWithTelemetry):
     """
     Ensures DTX is involved with MD on SSD phase 2 pool.
 
     :avocado: recursive
     """
 
-    def test_verify_dtx(self):
+    def test_verify_dtx_metrics(self):
         """Ensure DTX is involved with MD on SSD phase 2 pool.
 
         1. Create a pool with a mem ratio of 100% (for pmem or phase 1) or 25% (for phase 2)
@@ -30,7 +30,7 @@ class VerifyDTX(TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=pool
-        :avocado: tags=VerifyDTX,test_verify_dtx
+        :avocado: tags=VerifyDTXMetrics,test_verify_dtx_metrics
         """
         # pylint: disable=too-many-branches
         write_bytes = self.params.get('write_bytes', MDTEST_NAMESPACE, None)
@@ -92,17 +92,15 @@ class VerifyDTX(TestWithTelemetry):
             for label in expected_ranges[metric]:
                 expected_ranges[metric][label] = [0, 0]             # 0 only
                 if pool.mem_ratio.value is not None:
-                    if metric.endswith('_dtx_committed_max'):
-                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
-                    elif metric.endswith('_dtx_committed_mean'):
-                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
-                    elif metric.endswith('_dtx_committed_samples'):
-                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
-                    elif metric.endswith('_dtx_committed_stddev'):
-                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
-                    elif metric.endswith('_dtx_committed_sum'):
-                        expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
-                    elif metric.endswith('_dtx_committed_sumsquares'):
+                    suffixes = [
+                        '_dtx_committed_max',
+                        '_dtx_committed_mean',
+                        '_dtx_committed_samples',
+                        '_dtx_committed_stddev',
+                        '_dtx_committed_sum',
+                        '_dtx_committed_sumsquares'
+                    ]
+                    if any(map(metric.endswith, suffixes)):
                         expected_ranges[metric][label] = [0]        # 0 or greater (phase 2)
         self.log.debug('%s expected_ranges: %s', pool, expected_ranges)
 
