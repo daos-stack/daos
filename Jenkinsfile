@@ -19,7 +19,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
-@Library(value='pipeline-lib@osalyk/SRE-3459') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -740,7 +739,7 @@ pipeline {
                                 unitTest(timeout_time: 60,
                                         unstash_opt: true,
                                         inst_repos: daosRepos(),
-                                        inst_rpms: unitPackages(image_version: 'el9'),
+                                        inst_rpms: unitPackages(target: 'el9'),
                                         image_version: 'el9.7',
                                         )
                             )
@@ -765,7 +764,7 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(image_version: 'el9'),
+                                     inst_rpms: unitPackages(target: 'el9'),
                                      image_version: 'el9.7'))
                     }
                     post {
@@ -790,7 +789,7 @@ pipeline {
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages(image_version: 'el8'),
+                                     inst_rpms: unitPackages(target: 'el8'),
                                      image_version: 'el8.8'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
@@ -830,7 +829,7 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(image_version: 'el9'),
+                                     inst_rpms: unitPackages(target: 'el9'),
                                      image_version: 'el9.7'))
                     }
                     post {
@@ -856,7 +855,7 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(image_version: 'el9'),
+                                     inst_rpms: unitPackages(target: 'el9'),
                                      image_version: 'el9.7'))
                     }
                     post {
