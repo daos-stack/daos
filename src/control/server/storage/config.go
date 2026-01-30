@@ -174,8 +174,8 @@ func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 }
 
 // WithScmHugepagesDisabled disables hugepages for tmpfs.
-func (tc *TierConfig) WithScmHugepagesDisabled() *TierConfig {
-	tc.Scm.DisableHugepages = true
+func (tc *TierConfig) WithScmHugepagesDisabled(b bool) *TierConfig {
+	tc.Scm.DisableHugepages = b
 	return tc
 }
 
@@ -239,6 +239,26 @@ func (tc *TierConfig) WithBdevDeviceRoles(bits int) *TierConfig {
 func (tc *TierConfig) WithNumaNodeIndex(idx uint) *TierConfig {
 	tc.SetNumaNodeIndex(idx)
 	return tc
+}
+
+// UnmarshalYAML sets SCM DisableHugepages to true unless configured otherwise.
+func (tc *TierConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	// Set defaults before unmarshaling
+	type Alias TierConfig
+	defaults := &Alias{}
+	defaults.Scm.DisableHugepages = true // Default to disabling hugepages
+
+	if err := unmarshal(defaults); err != nil {
+		return err
+	}
+
+	// For classes other than RAM, reset to zero value as setting is irrelevant.
+	if defaults.Class != ClassRam {
+		defaults.Scm.DisableHugepages = false
+	}
+
+	*tc = TierConfig(*defaults)
+	return nil
 }
 
 type TierConfigs []*TierConfig
@@ -592,9 +612,6 @@ func (sc *ScmConfig) Validate(class Class) error {
 		}
 		if len(sc.DeviceList) == 0 {
 			return errors.New("scm_list must be set when class is dcpm")
-		}
-		if sc.DisableHugepages {
-			return errors.New("scm_hugepages_disabled may not be set when class is dcpm")
 		}
 	case ClassRam:
 		if len(sc.DeviceList) > 0 {
