@@ -803,7 +803,13 @@ rebuild_pool_started_after_ver(test_arg_t *arg, uint32_t rs_version)
 			      "(waiting for > %d)\n",
 			      DP_UUID(arg->pool.pool_uuid), in_progress ? "" : "not yet ",
 			      rst->rs_version, rs_version);
-		return in_progress && (rst->rs_version > rs_version);
+		if (in_progress && (rst->rs_version > rs_version)) {
+			/* save final pool query info to be able to inspect rebuild status */
+			memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
+
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -825,11 +831,17 @@ rebuild_pool_started_before_ver(test_arg_t *arg, uint32_t rs_version)
 		return false;
 	} else {
 		bool in_progress = (rst->rs_state == DRS_IN_PROGRESS);
+
 		print_message("rebuild for pool " DF_UUIDF "has %sstarted, rs_version=%u "
 			      "(waiting for < %d)\n",
 			      DP_UUID(arg->pool.pool_uuid), in_progress ? "" : "not yet ",
 			      rst->rs_version, rs_version);
-		return in_progress && (rst->rs_version < rs_version);
+		if (in_progress && (rst->rs_version < rs_version)) {
+			/* save final pool query info to be able to inspect rebuild status */
+			memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -935,8 +947,8 @@ test_get_last_svr_rank(test_arg_t *arg)
 	return arg->srv_nnodes - disable_nodes - 1;
 }
 
-bool
-test_rebuild_started_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
+static bool
+test_rebuild_started_before(test_arg_t **args, int args_cnt, uint32_t *cur_versions)
 {
 	bool all_started = true;
 	int  i;
@@ -945,7 +957,7 @@ test_rebuild_started_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_vers
 		bool started = true;
 
 		if (!args[i]->pool.destroyed)
-			started = rebuild_pool_started_after_ver(args[i], rs_version);
+			started = rebuild_pool_started_before_ver(args[i], cur_versions[i]);
 
 		if (!started)
 			all_started = false;
@@ -953,8 +965,8 @@ test_rebuild_started_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_vers
 	return all_started;
 }
 
-bool
-test_rebuild_started_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
+static bool
+test_rebuild_started_after(test_arg_t **args, int args_cnt, uint32_t *cur_versions)
 {
 	bool all_started = true;
 	int  i;
@@ -963,7 +975,7 @@ test_rebuild_started_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_ver
 		bool started = true;
 
 		if (!args[i]->pool.destroyed)
-			started = rebuild_pool_started_before_ver(args[i], rs_version);
+			started = rebuild_pool_started_after_ver(args[i], cur_versions[i]);
 
 		if (!started)
 			all_started = false;
@@ -971,25 +983,67 @@ test_rebuild_started_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_ver
 	return all_started;
 }
 
+/* wait until pools start rebuilds with rs_version < current (e.g.,. expecting op:Fail_reclaim) */
+void
+test_rebuild_wait_to_start_lower(test_arg_t **args, int args_cnt)
+{
+	uint32_t *cur_versions;
+	int       i;
+
+	D_ALLOC_ARRAY(cur_versions, args_cnt);
+	assert_true(cur_versions != NULL);
+	for (i = 0; i < args_cnt; i++)
+		cur_versions[i] = args[i]->pool.pool_info.pi_rebuild_st.rs_version;
+
+	while (!test_rebuild_started_before(args, args_cnt, cur_versions))
+		sleep(2);
+
+	/* NB: when control reaches here, each pool's current rs_version has been updated
+	 * (for subsequent calls that will rely on it as a baseline)
+	 */
+	D_FREE(cur_versions);
+}
+
+/* wait until pools start rebuilds with rs_version > current (e.g.,. expecting op:Rebuild) */
+void
+test_rebuild_wait_to_start_next(test_arg_t **args, int args_cnt)
+{
+	uint32_t *cur_versions;
+	int       i;
+
+	D_ALLOC_ARRAY(cur_versions, args_cnt);
+	assert_true(cur_versions != NULL);
+	for (i = 0; i < args_cnt; i++)
+		cur_versions[i] = args[i]->pool.pool_info.pi_rebuild_st.rs_version;
+
+	while (!test_rebuild_started_after(args, args_cnt, cur_versions))
+		sleep(2);
+
+	/* NB: when control reaches here, each pool's current rs_version has been updated
+	 * (for subsequent calls that will rely on it as a baseline)
+	 */
+	D_FREE(cur_versions);
+}
+
+/* wait until pools start rebuilds with any rs_version > 0 (whatever is current) */
 void
 test_rebuild_wait_to_start(test_arg_t **args, int args_cnt)
 {
-	while (!test_rebuild_started_after_ver(args, args_cnt, 0 /* don't care rs_version */))
-		sleep(2);
-}
+	uint32_t *cur_versions;
+	int       i;
 
-void
-test_rebuild_wait_to_start_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
-{
-	while (!test_rebuild_started_after_ver(args, args_cnt, rs_version))
-		sleep(2);
-}
+	D_ALLOC_ARRAY(cur_versions, args_cnt);
+	assert_true(cur_versions != NULL);
+	for (i = 0; i < args_cnt; i++)
+		cur_versions[i] = 0;
 
-void
-test_rebuild_wait_to_start_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
-{
-	while (!test_rebuild_started_before_ver(args, args_cnt, rs_version))
+	while (!test_rebuild_started_after(args, args_cnt, cur_versions))
 		sleep(2);
+
+	/* NB: when control reaches here, each pool's current rs_version has been updated
+	 * (for subsequent calls that will rely on it as a baseline)
+	 */
+	D_FREE(cur_versions);
 }
 
 bool

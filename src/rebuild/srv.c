@@ -915,7 +915,9 @@ rebuild_is_stoppable(struct rebuild_global_pool_tracker *rgt, bool force, int *r
 	 */
 	if (rgt->rgt_opc == RB_OP_FAIL_RECLAIM && force) {
 		if (rgt->rgt_num_op_freclaim_fail == 0) {
-			D_INFO(DF_RB ": cannot force-stop op:Fail_reclaim with 0 failures\n",
+			D_INFO(DF_RB
+			       ": cannot force-stop op:Fail_reclaim with 0 failures - defer stop "
+			       "until after it finishes\n",
 			       DP_RB_RGT(rgt));
 			*rcp = 0;
 			return false;
@@ -925,8 +927,7 @@ rebuild_is_stoppable(struct rebuild_global_pool_tracker *rgt, bool force, int *r
 		*rcp = 0;
 		return true;
 	} else if (rgt->rgt_opc == RB_OP_FAIL_RECLAIM) {
-		D_INFO(DF_RB ": stop is deferred until after op:Fail_reclaim finishes\n",
-		       DP_RB_RGT(rgt));
+		D_INFO(DF_RB ": defer stop until after op:Fail_reclaim finishes\n", DP_RB_RGT(rgt));
 		*rcp = 0;
 		return false;
 	}

@@ -101,7 +101,6 @@ int_rebuild_snap_update_recs(void **state)
 	ioreq_fini(&req);
 
 	/* insert rebuild stop|start into the exclude rebuild execution */
-	arg->interactive_rebuild = 1;
 	arg->rebuild_cb          = rebuild_stop_with_dmg;
 	arg->rebuild_post_cb     = rebuild_resume_wait;
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
@@ -190,30 +189,28 @@ rebuild_wait_error_reset_fail_cb(void *data)
 	test_arg_t *arg = data;
 	int         rc;
 
-	print_message("wait until rebuild errors (and starts Fail_reclaim)\n");
+	print_message("wait until rebuild starts erroring\n");
 	test_rebuild_wait_to_error(&arg, 1);
-	print_message("check rebuild errored, rs_errno=%d (expecting -DER_IO=%d)\n",
+	print_message("rebuild version %u erroring, check rs_errno=%d (expecting -DER_IO=%d)\n",
+		      arg->pool.pool_info.pi_rebuild_st.rs_version,
 		      arg->pool.pool_info.pi_rebuild_st.rs_errno, -DER_IO);
 	assert_int_equal(arg->pool.pool_info.pi_rebuild_st.rs_errno, -DER_IO);
-	print_message("rebuild error code check passed\n");
 
 	print_message("clearing fault injection on all engines\n");
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
 
-	/* Give time for transition from op:Rebuild into op:Fail_reclaim */
-	sleep(2);
+	print_message("wait until Fail_reclaim starts\n");
+	test_rebuild_wait_to_start_lower(&arg, 1);
 
 	print_message(
 	    "send rebuild stop --force request during first/only Fail_reclaim operation\n");
 	rc = rebuild_force_stop_with_dmg(data);
-	if (rc != 0)
-		print_message("rebuild_force_stop_with_dmg failed, rc=%d\n", rc);
+	assert_rc_equal(rc, 0);
 
-	print_message("wait for rebuild to be stopped\n");
-	test_rebuild_wait(&arg, 1);
-	/* Verifying rs_state/rs_errno will happen in post_cb rebuild_resume_wait() */
+	/* Wait for stop, verify rs_state/rs_errno happens in rebuild_post_cb rebuild_resume_wait()
+	 */
 
 	return rc;
 }
@@ -231,7 +228,6 @@ int_rebuild_many_objects_with_failure(void **state)
 		return;
 
 	T_BEGIN();
-	arg->interactive_rebuild = 1;
 	D_ALLOC_ARRAY(oids, NUM_OBJS);
 	for (i = 0; i < NUM_OBJS; i++) {
 		char         buffer[256];
@@ -257,11 +253,9 @@ int_rebuild_many_objects_with_failure(void **state)
 	}
 
 	/* For interactive rebuild, we need:
-	 * 1. trigger rebuild (which will fail), query pool reubild state until op:Rebuild fails
-	 *    and op:Fail_reclaim begins. See test_rebuild_wait_to_error().
-	 * 2. Then, while rebuild is in op:Fail_reclaim, issue dmg system stop to test that you
-	 * can't stop during Fail_reclaim (though the command will take effect by not retrying
-	 * rebuild).
+	 * 1. trigger rebuild (which will fail), wait until op:Fail_reclaim begins.
+	 * 2. During op:Fail_reclaim, issue dmg system stop (test that stop does not interrupt
+	 *    reclaim, but takes effect by not retrying the rebuild.
 	 */
 	arg->rebuild_cb      = rebuild_wait_error_reset_fail_cb;
 	arg->rebuild_post_cb = rebuild_resume_wait;
@@ -370,24 +364,30 @@ int_drain_fail_and_retry_objects(void **state)
 
 	arg->no_rebuild = 1;
 	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+	arg->no_rebuild = 0;
 	print_message("wait drain to fail and exit\n");
 	/* NB: could be better to wait (in drain_single_pool_rank or test_rebuild_wait), but that
 	 *  requires new logic in rebuild_task_complete_schedule() to update state after
 	 * Fail_reclaim
 	 */
-	print_message("wait for op:Reclaim to get -DER_IO\n");
+	print_message("wait for drain reubild to get -DER_IO\n");
 	test_rebuild_wait_to_error(&arg, 1);
-	print_message("sleep for op:Fail_reclaim to run\n");
-	sleep(30);
-	arg->no_rebuild = 0;
+	print_message("wait for op:Fail_reclaim to start\n");
+	test_rebuild_wait_to_start_lower(&arg, 1);
 
+	print_message("clear fault injection on all engines and wait for retry rebuild\n");
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	test_rebuild_wait_to_start_next(&arg, 1);
+	print_message("drain rebuild retry started, version=%u\n",
+		      arg->pool.pool_info.pi_rebuild_st.rs_version);
 	rebuild_io_validate(arg, oids, OBJ_NR);
 
 	arg->interactive_rebuild = 1;
 	arg->rebuild_cb          = reintegrate_inflight_io;
 	arg->rebuild_cb_arg      = &oids[OBJ_NR - 1];
+	print_message("inflight IO during drain (that will be stopped/restarted)\n");
 	drain_single_pool_rank(arg, ranks_to_kill[0], false);
+	print_message("final data verification\n");
 	rebuild_io_validate(arg, oids, OBJ_NR);
 	reintegrate_inflight_io_verify(arg);
 	T_END();
@@ -421,8 +421,10 @@ int_extend_drain_cb_internal(void *arg)
 		      test_arg->interactive_rebuild ? "stop rebuild before " : "", opc,
 		      extend_drain_opstrs[opc]);
 
-	if (test_arg->interactive_rebuild)
-		rebuild_stop_with_dmg(arg);
+	if (test_arg->interactive_rebuild) {
+		rc = rebuild_stop_with_dmg(arg);
+		assert_rc_equal(rc, 0);
+	}
 
 	/* Kill another rank during extend */
 	switch (opc) {
@@ -526,19 +528,18 @@ int_extend_cb_internal(void *arg)
 	daos_anchor_t         anchor        = {0};
 	bool                  do_stop       = (!cb_arg->kill && test_arg->interactive_rebuild);
 	const char           *pre_op        = (cb_arg->kill ? "kill" : "extend");
-	daos_pool_info_t      pinfo         = {0};
 	int                   rc;
 	int                   i;
 
-	/* get rebuild version for first extend, so we can wait for second rebuild to start
-	 * (by waiting for an in-progress rebuild with version > pinfo.pi_rebuild_st.rs_version)
+	/* wait for first extend, and (as post-effect) get rebuild version so we can wait for
+	 * the second rebuild to start (by waiting for a rebuild with version > first rs_version)
 	 */
-	pinfo.pi_bits = DPI_REBUILD_STATUS;
-	rc            = test_pool_get_info(test_arg, &pinfo, NULL /* engine_ranks */);
-	assert_rc_equal(rc, 0);
-
+	print_message("before waiting for rebuild to start, pmap_ver=%u, rs_version=%u\n",
+		      test_arg->pool.pool_info.pi_map_ver,
+		      test_arg->pool.pool_info.pi_rebuild_st.rs_version);
+	test_rebuild_wait_to_start_next(&test_arg, 1);
 	print_message("Extending (rs_version=%u), sleep 10, %s rank %u, %sand start op %d (%s)\n",
-		      pinfo.pi_rebuild_st.rs_version, pre_op, cb_arg->rank,
+		      test_arg->pool.pool_info.pi_rebuild_st.rs_version, pre_op, cb_arg->rank,
 		      do_stop ? "stop rebuild, " : "", opc, extend_opstrs[opc]);
 
 	sleep(10);
@@ -558,10 +559,14 @@ int_extend_cb_internal(void *arg)
 
 	if (do_stop) {
 		daos_debug_set_params(test_arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
-		test_rebuild_wait_to_start_after_ver(
-		    &test_arg, 1,
-		    pinfo.pi_rebuild_st.rs_version /* original extend rebuild version */);
-		rebuild_stop_with_dmg(arg); /* then stop the new rebuild */
+		print_message("before waiting for rebuild to start, pmap_ver=%u, rs_version=%u\n",
+			      test_arg->pool.pool_info.pi_map_ver,
+			      test_arg->pool.pool_info.pi_rebuild_st.rs_version);
+		test_rebuild_wait_to_start_next(&test_arg, 1);
+		print_message("rebuild version=%u running\n",
+			      test_arg->pool.pool_info.pi_rebuild_st.rs_version);
+		rc = rebuild_stop_with_dmg(arg);
+		assert_rc_equal(rc, 0);
 		test_rebuild_wait_to_error(&test_arg, 1);
 	}
 
@@ -639,11 +644,8 @@ static void
 int_rebuild_dkeys_stop_failing(void **state)
 {
 	test_arg_t      *arg       = *state;
-	daos_pool_info_t pinfo     = {0};
 	d_rank_t         kill_rank = 0;
 	int              kill_rank_nr;
-	uint32_t         excl_rebuild_ver;
-	uint32_t         reclaim_rebuild_ver;
 	daos_obj_id_t    oid;
 	struct ioreq     req;
 	int              i;
@@ -678,7 +680,8 @@ int_rebuild_dkeys_stop_failing(void **state)
 	}
 
 	/* Quick check that rebuild stop will return -DER_NONEXIST if nothing is rebuilding */
-	rc = dmg_pool_rebuild_stop(arg->dmg_config, arg->pool.pool_uuid, arg->group, false);
+	rc = dmg_pool_rebuild_stop(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				   false /* force */);
 	assert_int_equal(rc, -DER_NONEXIST);
 
 	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
@@ -691,32 +694,28 @@ int_rebuild_dkeys_stop_failing(void **state)
 				      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
 	}
 
-	/* Trigger exclude and rebuild, fail twice, force-stop it during the second Fail_reclaim */
+	/* Trigger exclude and rebuild, fail twice, force-stop command during second Fail_reclaim
+	 * NB: stop will be deferred until after Fail_reclaim (since it did not fail).
+	 */
 	arg->no_rebuild = 1;
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	arg->no_rebuild = 0;
+	print_message("before waiting for rebuild to start, pmap_ver=%u, rs_version=%u\n",
+		      arg->pool.pool_info.pi_map_ver, arg->pool.pool_info.pi_rebuild_st.rs_version);
 	test_rebuild_wait_to_start(&arg, 1);
-	pinfo.pi_bits = DPI_REBUILD_STATUS;
-	rc            = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
-	assert_rc_equal(rc, 0);
-	excl_rebuild_ver = pinfo.pi_rebuild_st.rs_version;
 
 	print_message("Wait for exclude rebuild ver %u to fail (and start Fail_reclaim)\n",
-		      excl_rebuild_ver);
-	test_rebuild_wait_to_start_before_ver(&arg, 1, excl_rebuild_ver);
-	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
-	assert_rc_equal(rc, 0);
-	reclaim_rebuild_ver = pinfo.pi_rebuild_st.rs_version;
-
+		      arg->pool.pool_info.pi_rebuild_st.rs_version);
+	test_rebuild_wait_to_start_lower(&arg, 1);
 	print_message("Wait for Fail_reclaim to finish (and start retry of exclude rebuild)\n");
-	test_rebuild_wait_to_start_after_ver(&arg, 1, reclaim_rebuild_ver);
+	test_rebuild_wait_to_start_next(&arg, 1);
 	print_message("Wait for second exclude rebuild to fail (and start Fail_reclaim)\n");
-	test_rebuild_wait_to_start_before_ver(&arg, 1, excl_rebuild_ver);
-	sleep(2);
+	test_rebuild_wait_to_start_lower(&arg, 1);
 
 	print_message("Force-stop runaway failing exclude rebuild retries\n");
 	rc = rebuild_force_stop_with_dmg(arg);
 	assert_rc_equal(rc, 0);
+	print_message("Waiting for exclude rebuild to stop\n");
 	test_rebuild_wait(&arg, 1);
 	assert_int_equal(arg->pool.pool_info.pi_rebuild_st.rs_state, DRS_NOT_STARTED);
 	assert_int_equal(arg->pool.pool_info.pi_rebuild_st.rs_errno, -DER_OP_CANCELED);
@@ -727,8 +726,7 @@ int_rebuild_dkeys_stop_failing(void **state)
 	/* Do not restart the rebuild ; instead, go directly to reintegrate the rank */
 	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
-	if (rc != 0)
-		assert_rc_equal(rc, -DER_NOSYS);
+	assert_rc_equal(rc, 0);
 	T_END();
 }
 
