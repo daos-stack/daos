@@ -9,14 +9,14 @@ server_config:
   engines_per_host: 2
   engines:
     0:
-      targets: 4
+      targets: 2
       log_file: daos_server0.log
       env_vars:
         - DD_MASK=group_metadata_only
         - DAOS_MD_CAP=1024
       storage: auto
     1:
-      targets: 4
+      targets: 2
       log_file: daos_server1.log
       env_vars:
         - DD_MASK=group_metadata_only
