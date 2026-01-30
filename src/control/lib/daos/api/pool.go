@@ -246,7 +246,9 @@ func PoolConnect(ctx context.Context, req PoolConnectReq) (*PoolConnectResp, err
 		req.Flags = daos.PoolConnectFlagReadOnly
 	}
 
-	var dpi C.daos_pool_info_t
+	dpi := (*C.daos_pool_info_t)(C.calloc(1, C.sizeof_daos_pool_info_t))
+	defer C.free(unsafe.Pointer(dpi))
+
 	if req.Query {
 		dpi.pi_bits = C.ulong(daos.DefaultPoolQueryMask)
 	}
@@ -260,11 +262,14 @@ func PoolConnect(ctx context.Context, req PoolConnectReq) (*PoolConnectResp, err
 		defer freeString(cSys)
 	}
 
-	if err := daosError(daos_pool_connect(cPoolID, cSys, C.uint(req.Flags), &poolConn.daosHandle, &dpi, nil)); err != nil {
+	cHandle := (*C.daos_handle_t)(C.calloc(1, C.sizeof_daos_handle_t))
+	defer C.free(unsafe.Pointer(cHandle))
+	if err := daosError(daos_pool_connect(cPoolID, cSys, C.uint(req.Flags), cHandle, dpi, nil)); err != nil {
 		return nil, errors.Wrap(err, "failed to connect to pool")
 	}
 
-	poolInfo := newPoolInfo(&dpi)
+	poolInfo := newPoolInfo(dpi)
+	poolConn.daosHandle = *cHandle
 	poolConn.connHandle.UUID = poolInfo.UUID
 	if req.ID != poolInfo.UUID.String() {
 		poolInfo.Label = req.ID
@@ -465,17 +470,18 @@ func PoolQueryTargets(ctx context.Context, sysName, poolID string, rank ranklist
 	defer disconnect()
 	logging.FromContext(ctx).Debugf("PoolQueryTargets(%s:%d:[%s])", poolConn, rank, targets)
 
-	ptInfo := C.daos_target_info_t{}
+	ptInfo := (*C.daos_target_info_t)(C.calloc(1, C.sizeof_daos_target_info_t))
+	defer C.free(unsafe.Pointer(ptInfo))
 	var rc C.int
 
 	infos := make([]*daos.PoolQueryTargetInfo, 0, targets.Count())
 	for _, tgt := range targets.Ranks() {
-		rc = daos_pool_query_target(poolConn.daosHandle, C.uint32_t(tgt), C.uint32_t(rank), &ptInfo, nil)
+		rc = daos_pool_query_target(poolConn.daosHandle, C.uint32_t(tgt), C.uint32_t(rank), ptInfo, nil)
 		if err := daosError(rc); err != nil {
 			return nil, errors.Wrapf(err, "failed to query pool %s rank:target %d:%d", poolID, rank, tgt)
 		}
 
-		infos = append(infos, newPoolTargetInfo(&ptInfo))
+		infos = append(infos, newPoolTargetInfo(ptInfo))
 	}
 
 	return infos, nil
