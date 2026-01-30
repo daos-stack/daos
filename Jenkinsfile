@@ -775,7 +775,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8.8') {
+                stage('NLT') {
                     when {
                         beforeAgent true
                         expression { params.CI_NLT_TEST && !skipStage() }
