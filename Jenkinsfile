@@ -333,9 +333,9 @@ pipeline {
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
-        booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
+        booleanParam(name: 'CI_FUNCTIONAL_el9_VALGRIND_TEST',
                      defaultValue: false,
-                     description: 'Run the Functional on EL 8 with Valgrind test stage')
+                     description: 'Run the Functional on EL 9 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
