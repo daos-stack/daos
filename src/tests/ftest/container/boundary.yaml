@@ -9,14 +9,14 @@ server_config:
   engines_per_host: 2
   engines:
     0:
-      targets: 1
+      targets: 4
       log_file: daos_server0.log
       env_vars:
         - DD_MASK=group_metadata_only
         - DAOS_MD_CAP=1024
       storage: auto
     1:
-      targets: 1
+      targets: 4
       log_file: daos_server1.log
       env_vars:
         - DD_MASK=group_metadata_only
@@ -44,7 +44,7 @@ boundary_test: !mux
     num_containers: 30000
     with_io: false
   test_2:
-    num_pools: 100
+    num_pools: 50
     num_containers: 200
     with_io: false
   test_with_io:
