@@ -710,4 +710,7 @@ void
 void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
 void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
 
+char *
+test_escape_self_heal(const char *value);
+
 #endif

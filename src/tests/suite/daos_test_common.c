@@ -1510,3 +1510,41 @@ test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_nu
 	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
 	assert_rc_equal(rc, 0);
 }
+
+/**
+ * Duplicate unescaped \a value, escaping every ';' with '\\'. The caller is
+ * responsible for freeing the returned string.
+ *
+ * \param[in]	value	self_heal value to escape
+ */
+char *
+test_escape_self_heal(const char *value)
+{
+	size_t      len = 0;
+	char       *new_value;
+	const char *src;
+	char       *dst;
+
+	for (src = value; *src != '\0'; src++) {
+		D_ASSERT(*src != '\\');
+		len++;
+		if (*src == ';')
+			len++; /* for '\\' */
+	}
+
+	D_ALLOC(new_value, len + 1 /* '\0' */);
+	D_ASSERT(new_value != NULL);
+
+	dst = new_value;
+	for (src = value; *src != '\0'; src++) {
+		if (*src == ';') {
+			*dst++ = '\\';
+			*dst++ = ';';
+		} else {
+			*dst++ = *src;
+		}
+	}
+	*dst = '\0';
+
+	return new_value;
+}
