@@ -123,10 +123,11 @@ func newPoolRebuildStatus(drs *C.struct_daos_rebuild_status) *daos.PoolRebuildSt
 	}
 
 	return &daos.PoolRebuildStatus{
-		Status:  int32(drs.rs_errno),
-		Objects: uint64(drs.rs_obj_nr),
-		Records: uint64(drs.rs_rec_nr),
-		State:   compatRebuildState(),
+		Status:   int32(drs.rs_errno),
+		Objects:  uint64(drs.rs_obj_nr),
+		Records:  uint64(drs.rs_rec_nr),
+		State:    compatRebuildState(),
+		Degraded: (drs.rs_flags & C.DAOS_RSF_DEGRADED) != 0,
 	}
 }
 
