@@ -94,6 +94,8 @@ int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
 void ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *rebuild_ver,
 			      daos_epoch_t *current_eph, uint32_t *rebuild_gen);
+bool
+ds_rebuild_is_stopped(uuid_t pool_uuid);
 int
      ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal,
 				bool auto_recovery, uint64_t delay_sec);

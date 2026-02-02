@@ -842,6 +842,19 @@ out:
 	return rc;
 }
 
+bool
+ds_rebuild_is_stopped(uuid_t pool_uuid)
+{
+	struct daos_rebuild_status status;
+	int                        rc;
+
+	rc = ds_rebuild_query(pool_uuid, &status);
+	if (rc != 0)
+		return false;
+
+	return (status.rs_state == DRS_NOT_STARTED && status.rs_errno == -DER_OP_CANCELED);
+}
+
 static void
 rebuild_leader_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_pool *pool,
 			     int op, unsigned int rank)

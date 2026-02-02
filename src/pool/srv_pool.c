@@ -7841,13 +7841,24 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		tgt_map_ver);
 
 	if (tgt_map_ver != 0) {
-		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
-					 RB_OP_REBUILD, RB_OP_NONE /* retry_rebuild_op */,
-					 0 /* retry_map_ver */, false /* stop_admin */,
-					 NULL /* cur_taskp */, delay);
-		if (rc != 0) {
-			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
+		if (ds_rebuild_is_stopped(svc->ps_pool->sp_uuid)) {
+			D_DEBUG(DB_REBUILD,
+				DF_UUID ": Rebuild was stopped: restart (and handle this change)\n",
+				DP_UUID(svc->ps_pool->sp_uuid));
+			rc = ds_rebuild_admin_start(svc->ps_pool);
+			if (rc != 0) {
+				DL_ERROR(rc, "rebuild restart failed");
+				D_GOTO(out, rc);
+			}
+		} else {
+			rc = ds_rebuild_schedule(
+			    svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list, RB_OP_REBUILD,
+			    RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
+			    false /* stop_admin */, NULL /* cur_taskp */, delay);
+			if (rc != 0) {
+				DL_ERROR(rc, "failed to schedule rebuild");
+				D_GOTO(out, rc);
+			}
 		}
 	}
 
