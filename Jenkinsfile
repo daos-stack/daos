@@ -877,7 +877,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label vm9_label('EL9')
                     }
                     steps {
                         job_step_update(
