@@ -466,3 +466,11 @@
    ...
    fun:setgrent
 }
+{
+   OPENSSL_init_crypto leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:OPENSSL_init_crypto
+}
