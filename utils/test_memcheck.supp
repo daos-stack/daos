@@ -458,3 +458,11 @@
    fun:spdk_mem_map_set_translation
    ...
 }
+{
+   setgrent() leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:*alloc
+   ...
+   fun:setgrent
+}
