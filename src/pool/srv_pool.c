@@ -796,7 +796,6 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_POOL_CREATE_VERSION)) {
 		uint64_t fail_val = daos_fail_value_get();
-		struct daos_prop_entry *entry;
 
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
 		D_ASSERT(entry != NULL);
