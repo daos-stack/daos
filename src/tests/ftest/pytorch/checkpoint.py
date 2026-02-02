@@ -1,9 +1,10 @@
 """
   (C) Copyright 2025 Google LLC
-  (C) Copyright 2025 Enakta Labs Ltd
+  (C) Copyright 2025-2026 Enakta Labs Ltd
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import errno
 import os
 import uuid
 
@@ -72,6 +73,39 @@ class PytorchCheckpointTest(TestWithServers):
                         self._test_checkpoint(pool.identifier, container.identifier, writes,
                                               chunk_size=chunk_size, chunks_limit=chunks_limit,
                                               workers=worker)
+
+    def test_checkpoint_nested_directories(self):
+        """ Test Pytorch Checkpoint interface with nested directories
+        Test Description: Ensure that parent directories are created for the checkpoint path
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=pytorch
+        :avocado: tags=PytorchCheckpointTest,test_checkpoint_nested_directories
+        """
+
+        pool = self.get_pool()
+        container = self.get_container(pool)
+        data = os.urandom(4096)
+
+        files = ["/file.pt", "/one/file.pt", "/one/two/file.pt"]
+
+        with Checkpoint(pool, container) as pt:
+            # By default parent should be created
+            for name in files:
+                with pt.writer(name) as w:
+                    w.write(data)
+
+            try:
+                fname = f"/{str(uuid.uuid4())}/file.pt"
+                with pt.writer(fname, ensure_path=False) as w:
+                    w.write(data)
+                    raise RuntimeError("expected OSError with errno.ENOENT")
+            except OSError as e:
+                if e.errno != errno.ENOENT:
+                    raise RuntimeError(f"expected errno.ENOENT, got {os.strerror(e.errno)}") from e
+            except Exception as e:
+                raise RuntimeError(f"unexpected error: {e}") from e
 
     def _test_checkpoint(self, pool, cont, writes, chunk_size=0, chunks_limit=0, workers=0):
         """Creates a checkpoint with the given parameters, writes the given data to it,
