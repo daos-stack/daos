@@ -308,6 +308,12 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 		iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
 		iv->riv_dtx_resyc_version);
 
+	if (iv->riv_ver != rgt->rgt_rebuild_ver) {
+		D_DEBUG(DB_REBUILD, DF_UUID ": XXXX ignore stale update iv_ver/rgt_ver = %d/%d\n",
+			DP_UUID(rgt->rgt_pool_uuid), iv->riv_ver, rgt->rgt_rebuild_ver);
+		return 0;
+	}
+
 	if (!iv->riv_scan_done) {
 		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version, 0);
 		return 0;
@@ -719,75 +725,67 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		char				sbuf[RBLD_SBUF_LEN];
 		double				now;
 		char				*str;
-		d_rank_list_t                    rank_list     = {0};
+		struct pool_domain              *doms;
 		bool				rebuild_abort = false;
+		int                              nr;
 		int				i;
 
 		now = ABT_get_wtime();
 		ABT_rwlock_rdlock(pool->sp_lock);
-		rc = map_ranks_init(pool->sp_map,
-				    PO_COMP_ST_UP | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
-					PO_COMP_ST_NEW,
-				    &rank_list);
-		if (rc != 0) {
-			D_INFO(DF_UUID": get rank list: %d\n", DP_UUID(pool->sp_uuid), rc);
+		pool_map_find_domain(pool->sp_map, PO_COMP_TP_RANK, PO_COMP_ID_ALL, &doms);
+		if (rc < 0) {
+			D_INFO(DF_UUID ": get domains: %d\n", DP_UUID(pool->sp_uuid), rc);
 			ABT_rwlock_unlock(pool->sp_lock);
 			goto sleep;
 		}
+		nr = rc;
+		/* check if there is any status change of ranks during rebuild */
+		for (i = 0; i < nr; i++) {
+			struct pool_domain *dom    = &doms[i];
+			uint32_t            resync = 0;
+			uint32_t            done   = 0;
 
-		for (i = 0; i < rank_list.rl_nr; i++) {
-			struct pool_domain *dom;
-
-			dom = pool_map_find_dom_by_rank(pool->sp_map, rank_list.rl_ranks[i]);
-			D_ASSERT(dom != NULL);
-
-			if (rgt->rgt_opc == RB_OP_REBUILD) {
-				if (dom->do_comp.co_status == PO_COMP_ST_UP) {
-					if (dom->do_comp.co_in_ver > rgt->rgt_rebuild_ver) {
-						D_INFO(DF_UUID ": cancel rebuild %u/%u\n",
-						       DP_UUID(pool->sp_uuid), rgt->rgt_rebuild_ver,
-						       dom->do_comp.co_in_ver);
-						D_INFO(DF_RB ": cancel rebuild due to new REINT, "
-							     "co_rank %d, co_in_ver %u\n",
-						       DP_RB_RGT(rgt), dom->do_comp.co_rank,
-						       dom->do_comp.co_in_ver);
-						rebuild_abort = true;
-						break;
-					}
-				} else if (dom->do_comp.co_status == PO_COMP_ST_DOWN) {
-					if (dom->do_comp.co_fseq > rgt->rgt_rebuild_ver) {
-						D_INFO(DF_UUID ": cancel rebuild %u/%u\n",
-						       DP_UUID(pool->sp_uuid), rgt->rgt_rebuild_ver,
-						       dom->do_comp.co_fseq);
-						D_INFO(DF_RB ": cancel rebuild due to new DOWN, "
-							     "co_rank %d, co_fseq %u\n",
-						       DP_RB_RGT(rgt), dom->do_comp.co_rank,
-						       dom->do_comp.co_fseq);
-						rebuild_abort = true;
-						break;
-					}
-				}
-			}
-
-			if (now - last_print > 20)
+			if (now - last_print > 20 && dom->do_comp.co_status != PO_COMP_ST_UPIN) {
 				D_INFO(DF_RB " rank %d, status 0x%x.\n", DP_RB_RGT(rgt),
 				       dom->do_comp.co_rank, dom->do_comp.co_status);
+			}
 
-			/* Some engines don't participate the rebuild that will not report
-			 * progress/completion or dtx resync version through IV, mark the complete/
-			 * skip.
-			 * 1) PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW ranks
-			 * 2) PO_COMP_ST_UP but co_in_ver > rebuild_ver also will be excluded from
-			 *    rebuild request, see rebuild_scan_broadcast().
-			 */
-			if (dom->do_comp.co_status != PO_COMP_ST_UP ||
-			    dom->do_comp.co_in_ver > rgt->rgt_rebuild_ver)
-				rebuild_leader_set_status(rgt, dom->do_comp.co_rank,
-							  RB_DTX_RESYNC_VER_SKIP,
-							  SCAN_DONE | PULL_DONE);
+			if (dom->do_comp.co_status == PO_COMP_ST_UP ||
+			    dom->do_comp.co_status == PO_COMP_ST_NEW) { /* is NEW possible? */
+				if (rgt->rgt_opc == RB_OP_REBUILD) {
+					if (dom->do_comp.co_in_ver > rgt->rgt_rebuild_ver)
+						rebuild_abort = true;
+				} else {
+					resync = RB_DTX_RESYNC_VER_SKIP; /* no DTX resync */
+					done   = SCAN_DONE;              /* no scan */
+				}
+			} else if (dom->do_comp.co_status == PO_COMP_ST_DOWN) { /* and DRAIN? */
+				if (rgt->rgt_opc == RB_OP_REBUILD) {
+					if (dom->do_comp.co_fseq > rgt->rgt_rebuild_ver)
+						rebuild_abort = true;
+				} else {
+					resync = RB_DTX_RESYNC_VER_SKIP; /* no DTX resync */
+					done   = SCAN_DONE | PULL_DONE;  /* no scan & pull */
+				}
+			} else if (dom->do_comp.co_status == PO_COMP_ST_DOWNOUT) {
+				resync = RB_DTX_RESYNC_VER_SKIP; /* no DTX resync */
+				done   = SCAN_DONE | PULL_DONE;  /* no scan & pull */
+			} /* no skip for UPIN */
+
+			if (rebuild_abort) {
+				D_INFO(DF_RB ": cancel rebuild opc=%d due to new change, "
+					     "co_rank %d, co_fseq %u, in_ver=%u rebuid_ver=%u\n",
+				       DP_RB_RGT(rgt), rgt->rgt_opc, dom->do_comp.co_rank,
+				       dom->do_comp.co_fseq, dom->do_comp.co_in_ver,
+				       rgt->rgt_rebuild_ver);
+				break;
+			}
+
+			if (done != 0)
+				rebuild_leader_set_status(rgt, dom->do_comp.co_rank, resync, done);
 		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		map_ranks_fini(&rank_list);
+		D_FREE(doms);
 
 		if (rebuild_abort) {
 			rgt->rgt_abort = 1;
