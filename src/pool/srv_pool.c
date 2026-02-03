@@ -815,23 +815,23 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 		goto out_prop;
 	}
 
-	/** check whether the user provided an explicit incompatible rd_fac, and fail in this case */
 	entry = daos_prop_entry_get(prop_orig, DAOS_PROP_PO_REDUN_FAC);
 	if (entry) {
+		/** if the user provided an explicit incompatible rd_fac, then fail gracefuly */
 		if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
-			D_ERROR("ndomains(%u) could not meet redunc factor(%lu)\n",
+			D_ERROR("ndomains(%u) could not meet specified redunc factor(%lu)\n",
 				map_buf->pb_domain_nr, entry->dpe_val);
 			D_GOTO(out_map_buf, rc = -DER_INVAL);
 		}
-	}
-
-	/** if the default rd_fac cannot be satisfied, adjust it on the fly to be user friendly */
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
-	if (entry) {
-		if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
-			D_ERROR("ndomains(%u) could not meet default redunc factor(%lu), adjust it\n",
-				map_buf->pb_domain_nr, entry->dpe_val);
-			entry->dpe_val = (uint64_t) map_buf->pb_domain_nr;
+	} else {
+		/** if the default rd_fac cannot be satisfied, adjust it on the fly */
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
+		if (entry) {
+			if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
+				D_DEBUG(DB_MD, "ndomains(%u) could not meet default redunc factor(%lu)\n",
+					map_buf->pb_domain_nr, entry->dpe_val);
+				entry->dpe_val = (uint64_t) map_buf->pb_domain_nr - 1;
+			}
 		}
 	}
 
