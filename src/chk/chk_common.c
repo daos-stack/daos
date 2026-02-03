@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1073,8 +1073,7 @@ chk_policy_refresh(uint32_t policy_nr, struct chk_policy *policies, struct chk_p
 }
 
 int
-chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
-		 uint32_t policy_nr, struct chk_policy *policies,
+chk_prop_prepare(d_rank_t leader, uint32_t flags, uint32_t policy_nr, struct chk_policy *policies,
 		 d_rank_list_t *ranks, struct chk_property *prop)
 {
 	int rc = 0;
@@ -1086,11 +1085,8 @@ chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
 		prop->cp_flags &= ~CHK__CHECK_FLAG__CF_FAILOUT;
 	if (flags & CHK__CHECK_FLAG__CF_NO_AUTO)
 		prop->cp_flags &= ~CHK__CHECK_FLAG__CF_AUTO;
-	prop->cp_flags |= flags & ~(CHK__CHECK_FLAG__CF_RESET |
-				    CHK__CHECK_FLAG__CF_ORPHAN_POOL |
-				    CHK__CHECK_FLAG__CF_NO_FAILOUT |
-				    CHK__CHECK_FLAG__CF_NO_AUTO);
-	prop->cp_phase = phase;
+	prop->cp_flags |= flags & ~(CHK__CHECK_FLAG__CF_RESET | CHK__CHECK_FLAG__CF_ORPHAN_POOL |
+				    CHK__CHECK_FLAG__CF_NO_FAILOUT | CHK__CHECK_FLAG__CF_NO_AUTO);
 	if (ranks != NULL)
 		prop->cp_rank_nr = ranks->rl_nr;
 
@@ -1234,6 +1230,15 @@ trust_status:
 	*status_dst = status_src;
 }
 
+void
+chk_ins_cleanup(struct chk_instance *ins)
+{
+	chk_stop_sched(ins);
+	ins->ci_inited = 0;
+
+	chk_iv_ns_destroy(ins);
+}
+
 int
 chk_ins_init(struct chk_instance **p_ins)
 {
@@ -1246,7 +1251,8 @@ chk_ins_init(struct chk_instance **p_ins)
 	if (ins == NULL)
 		D_GOTO(out_init, rc = -DER_NOMEM);
 
-	ins->ci_sched = ABT_THREAD_NULL;
+	ins->ci_sched         = ABT_THREAD_NULL;
+	ins->ci_dead_rank_ult = ABT_THREAD_NULL;
 
 	ins->ci_rank_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&ins->ci_rank_list);
@@ -1300,11 +1306,8 @@ chk_ins_fini(struct chk_instance **p_ins)
 	if (ins == NULL)
 		return;
 
-	ins->ci_inited = 0;
-	chk_iv_ns_cleanup(&ins->ci_iv_ns);
-
-	if (ins->ci_iv_group != NULL)
-		crt_group_secondary_destroy(ins->ci_iv_group);
+	D_ASSERT(ins->ci_iv_ns == NULL);
+	D_ASSERT(ins->ci_iv_group == NULL);
 
 	d_rank_list_free(ins->ci_ranks);
 	D_ASSERT(d_list_empty(&ins->ci_dead_ranks));
@@ -1320,6 +1323,8 @@ chk_ins_fini(struct chk_instance **p_ins)
 
 	D_ASSERT(d_list_empty(&ins->ci_interaction_filter_list));
 	D_ASSERT(d_list_empty(&ins->ci_pool_shutdown_list));
+
+	D_ASSERT(ins->ci_dead_rank_ult == ABT_THREAD_NULL);
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);

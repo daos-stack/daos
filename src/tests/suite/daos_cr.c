@@ -1350,7 +1350,7 @@ cr_engine_interaction(void **state)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	/* Former connection for the pool has been evicted by checkre. Let's re-connect the pool. */
+	/* Former connection for the pool has been evicted by checker. Let's re-connect the pool. */
 	rc = cr_cont_get_label(state, &pool, &cont, true, &label);
 	assert_rc_equal(rc, 0);
 
@@ -1732,7 +1732,7 @@ cr_stop_engine_interaction(void **state)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	/* Former connection for the pool has been evicted by checkre. Let's re-connect the pool. */
+	/* Former connection for the pool has been evicted by checker. Let's re-connect the pool. */
 	rc = cr_cont_get_label(state, &pool, &cont, true, &label);
 	assert_rc_equal(rc, 0);
 
@@ -2344,14 +2344,16 @@ cr_engine_resume(void **state)
 static void
 cr_reset_specified(void **state)
 {
-	test_arg_t		*arg = *state;
-	struct test_pool	 pools[2] = { 0 };
-	struct test_cont	 conts[2] = { 0 };
-	struct daos_check_info	 dcis[2] = { 0 };
-	uint32_t		 classes[3];
-	uint32_t		 actions[3];
-	int			 rc;
-	int			 i;
+	test_arg_t            *arg        = *state;
+	struct test_pool       pools[2]   = {0};
+	struct test_cont       conts[2]   = {0};
+	struct daos_check_info dcis[2]    = {0};
+	const int              NR_REPORTS = 3;
+	uint32_t               classes[NR_REPORTS];
+	uint32_t               actions[NR_REPORTS];
+	uint32_t               stale_actions[NR_REPORTS];
+	int                    rc;
+	int                    i;
 
 	FAULT_INJECTION_REQUIRED();
 
@@ -2367,6 +2369,12 @@ cr_reset_specified(void **state)
 	actions[0] = TCA_IGNORE;
 	actions[1] = TCA_INTERACT;
 	actions[2] = TCA_INTERACT;
+
+	for (i = 0; i < NR_REPORTS; i++) {
+		stale_actions[i] = actions[i];
+		if (stale_actions[i] == TCA_INTERACT)
+			stale_actions[i] = TCA_STALE;
+	}
 
 	for (i = 0; i < 2; i++) {
 		rc = cr_pool_create(state, &pools[i], true, classes[0]);
@@ -2418,7 +2426,8 @@ cr_reset_specified(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Pool2's (old) report should be still there. */
-	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_STOPPED, 2, classes, actions, NULL);
+	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_STOPPED, 2, classes, stale_actions,
+			    NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_check_stop(0, NULL);
@@ -2433,8 +2442,8 @@ cr_reset_specified(void **state)
 	rc = cr_ins_verify(&dcis[1], TCIS_RUNNING);
 	assert_rc_equal(rc, 0);
 
-	/* There are 3 reports for pool2: two are old (since not reset), another one is new. */
-	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_PENDING, 3, classes, actions, NULL);
+	/* Pool2's stale report is re-generated */
+	rc = cr_pool_verify(&dcis[1], pools[1].pool_uuid, TCPS_PENDING, 2, classes, actions, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_check_stop(0, NULL);
@@ -3839,6 +3848,61 @@ cr_maintenance_mode(void **state)
 	cr_cleanup(arg, &pool, 1);
 }
 
+/*
+ * 1. Exclude rank 0.
+ * 2. Create pool without inconsistency.
+ * 3. Start checker without options.
+ * 4. Query checker, it should be completed instead of being blocked.
+ * 5. Switch to normal mode and cleanup.
+ */
+static void
+cr_lost_rank0(void **state)
+{
+	test_arg_t            *arg  = *state;
+	struct test_pool       pool = {0};
+	struct daos_check_info dci  = {0};
+	int                    rc;
+
+	print_message("CR29: CR with rank 0 excluded at the beginning\n");
+
+	print_message("CR: excluding the rank 0 ...\n");
+	rc = dmg_system_exclude_rank(dmg_config_file, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_create(state, &pool, false, TCC_NONE);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Reint the rank for subsequent test. */
+	rc = cr_rank_reint(0, true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
+	cr_cleanup(arg, &pool, 1);
+}
+
 /* clang-format off */
 static const struct CMUnitTest cr_tests[] = {
 	{ "CR1: start checker for specified pools",
@@ -3897,6 +3961,8 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_handle_fail_pool2, async_disable, test_case_teardown},
 	{ "CR28: maintenance mode after dry-run check",
 	  cr_maintenance_mode, async_disable, test_case_teardown},
+	{ "CR29: CR with rank 0 excluded at the beginning",
+	  cr_lost_rank0, async_disable, test_case_teardown},
 };
 /* clang-format on */
 

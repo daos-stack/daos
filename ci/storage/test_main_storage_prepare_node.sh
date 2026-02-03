@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2021-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -44,6 +44,22 @@ if command -v ibv_devinfo; then ibv_devinfo || true; fi
 
 lspci | grep -i "Non-Volatile memory controller" || true
 
+ib_count=0
+for ib_path in /sys/class/net/ib*; do
+    if [ ! -e "$ib_path" ]; then
+        continue
+    fi
+    ((ib_count++)) || true
+    ip addr show "$(basename "$ib_path")"
+done
+
+# Skip test controller
+if [ "$ib_count" -le 1 ]; then
+    echo "Less than 2 Infiniband devices found ($ib_count)."
+    echo "Assuming this is a test controller node. Skipping PMEM setup."
+    exit
+fi
+
 if ipmctl show -dimm; then
     ipmctl show -goal
     ipmctl show -region
@@ -60,12 +76,7 @@ if ipmctl show -dimm; then
       fi
     fi
 else
-    counter=0
-    for ib_path in /sys/class/net/ib*; do
-        ((counter++)) || true
-        ip addr show "$(basename "$ib_path")"
-    done
-    if [ $counter -ge 2 ]; then
+    if [ "$ib_count" -ge 2 ]; then
         # All of our CI nodes with two ib adapters should have PMEM DIMMs
         echo 'No PMEM DIMM devices found on CI node!'
         exit 1
