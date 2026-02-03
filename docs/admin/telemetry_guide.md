@@ -43,6 +43,7 @@ connecting to brd-222:9191...
 ```
 
 ### Identify the pool UUID and leader rank:
+
  - Some metrics are only available on pool leader rank so identify the leader rank for that pool from the pool query command.
  - Below is the example of pool query where leader rank is 1
    - Pool 55cc96d8-5c46-41f4-af29-881d293b6f6f, ntarget=48, disabled=0, `leader=1`, version=1, state=Ready      
