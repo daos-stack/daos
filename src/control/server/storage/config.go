@@ -1164,6 +1164,7 @@ func (si *SpdkIobuf) IsEmpty() bool {
 // Config defines engine storage.
 type Config struct {
 	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
+	KernelConfigPath string          `yaml:"-"` // inherited from server
 	EngineIdx        uint            `yaml:"-"`
 	Tiers            TierConfigs     `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
 	ConfigOutputPath string          `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`

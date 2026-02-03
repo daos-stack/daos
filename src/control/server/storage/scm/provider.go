@@ -1,5 +1,5 @@
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,10 +54,11 @@ type (
 	// Provider encapsulates configuration and logic for
 	// providing SCM management and interrogation.
 	Provider struct {
-		log     logging.Logger
-		backend Backend
-		sys     SystemProvider
-		mounter storage.MountProvider
+		log       logging.Logger
+		backend   Backend
+		sys       SystemProvider
+		mounter   storage.MountProvider
+		kernelCfg map[string]string
 	}
 )
 
@@ -96,11 +97,20 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend, sys SystemProvider, mounter storage.MountProvider) *Provider {
+	// Parse kernel config once at provider init; it doesn't change at runtime.
+	// NB: If kernel config is needed outside of the scm provider, consider
+	// moving to a sync.Once-based accessor in the system package instead.
+	kernelCfg, err := system.ParseKernelConfig()
+	if err != nil {
+		log.Debugf("failed to parse kernel config: %s", err)
+	}
+
 	p := &Provider{
-		log:     log,
-		backend: backend,
-		sys:     sys,
-		mounter: mounter,
+		log:       log,
+		backend:   backend,
+		sys:       sys,
+		mounter:   mounter,
+		kernelCfg: kernelCfg,
 	}
 	return p
 }
@@ -310,7 +320,7 @@ func (p *Provider) formatRamdisk(req storage.ScmFormatRequest) (*storage.ScmForm
 		return nil, FaultFormatMissingParam
 	}
 
-	res, err := p.mountRamdisk(req.Mountpoint, req.Ramdisk)
+	res, err := p.mountRamdisk(req.Mountpoint, req.Ramdisk, req.KernelConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -438,22 +448,48 @@ func (p *Provider) mountDcpm(device, target string) (*storage.MountResponse, err
 }
 
 // mountRamdisk attempts to mount a tmpfs-based ramdisk of the specified size at
-// the specified mountpoint.
-func (p *Provider) mountRamdisk(target string, params *storage.RamdiskParams) (*storage.MountResponse, error) {
+// the specified mountpoint. If the kernel config was not resolved at provider init,
+// an override path from the request is tried before failing.
+func (p *Provider) mountRamdisk(target string, params *storage.RamdiskParams, kernelConfigPath string) (*storage.MountResponse, error) {
+	if p.kernelCfg == nil && kernelConfigPath != "" {
+		p.log.Debugf("retrying kernel config parse with override path %s", kernelConfigPath)
+		cfg, err := system.ParseKernelConfig(kernelConfigPath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "parsing kernel config from %s", kernelConfigPath)
+		}
+		p.kernelCfg = cfg
+	}
+
+	if p.kernelCfg == nil {
+		return nil, FaultKernelConfigUnavailable
+	}
+
+	return p.doMountRamdisk(target, params, p.kernelCfg)
+}
+
+// doMountRamdisk performs the actual ramdisk mount. It is separated from mountRamdisk
+// to allow unit testing with synthetic kernel config values.
+func (p *Provider) doMountRamdisk(target string, params *storage.RamdiskParams, kernelCfg map[string]string) (*storage.MountResponse, error) {
 	if params == nil {
 		return nil, FaultFormatMissingParam
 	}
 
-	var opts = []string{
+	var mountOpts []string
+
+	if system.IsKernelConfigEnabled(kernelCfg, "CONFIG_NUMA") {
 		// https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html
 		// mpol=prefer:Node prefers to allocate memory from the given Node
-		fmt.Sprintf("mpol=prefer:%d", params.NUMANode),
+		mountOpts = append(mountOpts, fmt.Sprintf("mpol=prefer:%d", params.NUMANode))
+	} else {
+		p.log.Debug("NUMA kernel support not detected; skipping tmpfs mpol option")
 	}
 	if params.Size > 0 {
-		opts = append(opts, fmt.Sprintf("size=%dg", params.Size))
+		mountOpts = append(mountOpts, fmt.Sprintf("size=%dg", params.Size))
 	}
-	if !params.DisableHugepages {
-		opts = append(opts, "huge=always")
+	if !params.DisableHugepages && system.IsKernelConfigEnabled(kernelCfg, "CONFIG_TRANSPARENT_HUGEPAGE") {
+		mountOpts = append(mountOpts, "huge=always")
+	} else if !params.DisableHugepages {
+		p.log.Debug("transparent hugepage kernel support not detected; skipping tmpfs huge option")
 	}
 
 	return p.mounter.Mount(storage.MountRequest{
@@ -461,7 +497,7 @@ func (p *Provider) mountRamdisk(target string, params *storage.RamdiskParams) (*
 		Target:     target,
 		Filesystem: ramFsType,
 		Flags:      defaultMountFlags,
-		Options:    strings.Join(opts, ","),
+		Options:    strings.Join(mountOpts, ","),
 	})
 }
 
@@ -471,7 +507,7 @@ func (p *Provider) Mount(req storage.ScmMountRequest) (*storage.MountResponse, e
 	case storage.ClassDcpm:
 		return p.mountDcpm(req.Device, req.Target)
 	case storage.ClassRam:
-		return p.mountRamdisk(req.Target, req.Ramdisk)
+		return p.mountRamdisk(req.Target, req.Ramdisk, req.KernelConfigPath)
 	default:
 		return nil, errors.New(storage.ScmMsgClassNotSupported)
 	}

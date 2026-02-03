@@ -253,6 +253,15 @@
 #allow_thp: true
 #
 #
+## Override the path to the kernel configuration file. By default, the server
+## reads the running kernel's config from /proc/config.gz or /boot/config-<release>.
+## In environments where these paths are unavailable (e.g. containers), set this
+## to the path of a bind-mounted or copied kernel config file. The server uses
+## the kernel config to safely determine correct behavior (e.g. tmpfs mount options).
+#
+#kernel_config_path: /host/boot/config
+#
+#
 ## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
 ## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
 ## reserved when calculating RAM-disk sizes for all engines.

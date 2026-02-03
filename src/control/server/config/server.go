@@ -89,7 +89,8 @@ type Server struct {
 
 	MgmtSvcReplicas []string `yaml:"mgmt_svc_replicas"`
 
-	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
+	Metadata         storage.ControlMetadata `yaml:"control_metadata,omitempty"`
+	KernelConfigPath string                  `yaml:"kernel_config_path,omitempty"`
 
 	// unused (?)
 	FaultCb      string `yaml:"fault_cb"`
@@ -310,6 +311,12 @@ func (cfg *Server) WithAllowNumaImbalance(allowed bool) *Server {
 // WithAllowTHP allows DAOS server to run with transparent hugepage support enabled.
 func (cfg *Server) WithAllowTHP(allowed bool) *Server {
 	cfg.AllowTHP = allowed
+	return cfg
+}
+
+// WithKernelConfigPath sets the path to an alternate kernel configuration file.
+func (cfg *Server) WithKernelConfigPath(path string) *Server {
+	cfg.KernelConfigPath = path
 	return cfg
 }
 
@@ -865,6 +872,7 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
+		ec.Storage.KernelConfigPath = cfg.KernelConfigPath
 		ec.Storage.EngineIdx = uint(idx)
 		ec.Fabric.Update(cfg.Fabric)
 

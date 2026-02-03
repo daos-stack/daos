@@ -541,8 +541,8 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 // HasEnvVar returns true if the configuration contains
 // an environment variable with the given name.
 func (c *Config) HasEnvVar(name string) bool {
-	for _, keyPair := range c.EnvVars {
-		if strings.HasPrefix(keyPair, name+"=") {
+	for _, kv := range c.EnvVars {
+		if strings.HasPrefix(kv, name+"=") {
 			return true
 		}
 	}
@@ -639,6 +639,12 @@ func (c *Config) WithStorageControlMetadataPath(path string) *Config {
 // WithStorageControlMetadataDevice sets the metadata device to be used by this instance.
 func (c *Config) WithStorageControlMetadataDevice(device string) *Config {
 	c.Storage.ControlMetadata.DevicePath = device
+	return c
+}
+
+// WithStorageKernelConfigPath sets the kernel config path to be used by this instance.
+func (c *Config) WithStorageKernelConfigPath(path string) *Config {
+	c.Storage.KernelConfigPath = path
 	return c
 }
 
