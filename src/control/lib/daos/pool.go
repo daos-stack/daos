@@ -61,6 +61,7 @@ type (
 		Objects      uint64           `json:"objects"`
 		Records      uint64           `json:"records"`
 		TotalObjects uint64           `json:"total_objects"`
+		Degraded     bool             `json:"degraded"`
 	}
 
 	// PoolInfo contains information about the pool.

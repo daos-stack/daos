@@ -192,7 +192,7 @@ class PoolListConsolidationTest(TestWithServers):
             list: Error list.
 
         """
-        pool_path = self.server_managers[0].get_vos_path(pool)
+        pool_path = self.server_managers[0].get_vos_paths(pool)[0]
         check_out = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_path, directory=True)
         if check_out[0]:

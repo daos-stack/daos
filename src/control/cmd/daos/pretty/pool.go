@@ -139,6 +139,11 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 			fmt.Fprintf(w, "- Rebuild %s (state=%s, status=%d)\n",
 				pi.Rebuild.DerivedState, pi.Rebuild.State, pi.Rebuild.Status)
 		}
+		s := "normal"
+		if pi.Rebuild.Degraded {
+			s = "degraded"
+		}
+		fmt.Fprintf(w, "- Data redundancy: %s\n", s)
 	} else {
 		fmt.Fprintln(w, "- No rebuild status available.")
 	}
