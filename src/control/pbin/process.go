@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,12 +25,16 @@ func (p *Process) CurrentProcessName() string {
 
 // ParentProcessName fetches the name of the parent process, or returns an error otherwise.
 func (p *Process) ParentProcessName() (string, error) {
-	pPath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", os.Getppid()))
-	if err != nil {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", os.Getppid()))
+	if err != nil || len(data) == 0 {
+		pPath, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", os.Getppid()))
+		if err == nil {
+			return filepath.Base(pPath), nil
+		}
 		return "", errors.Wrap(err, "failed to identify parent process binary")
 	}
 
-	return filepath.Base(pPath), nil
+	return string(data[:len(data)-1]), nil // trim trailing newline
 }
 
 // IsPrivileged determines whether the process is running as a privileged user.

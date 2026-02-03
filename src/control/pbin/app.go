@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -129,8 +130,8 @@ func (a *App) Run() error {
 	}
 
 	if !a.isCallerPermitted(parentName) {
-		return a.logError(errors.Errorf("%s (version %s) may only be invoked by: %s",
-			a.Name(), build.DaosVersion, strings.Join(a.allowedCallers, ", ")))
+		return a.logError(errors.Errorf("%s (version %s) may only be invoked by: %s (tried %q)",
+			a.Name(), build.DaosVersion, strings.Join(a.allowedCallers, ", "), parentName))
 	}
 
 	// set up the r/w pipe from the parent process
