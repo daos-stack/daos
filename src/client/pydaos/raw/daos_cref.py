@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -53,7 +53,8 @@ class RebuildStatus(ctypes.Structure):
                 ("rs_errno", ctypes.c_uint32),
                 ("rs_state", ctypes.c_uint32),
                 ("rs_max_supported_layout_ver", ctypes.c_uint16),
-                ("rs_padding16", ctypes.c_uint16),
+                ("rs_flags", ctypes.c_uint8),
+                ("rs_reserved_", ctypes.c_uint8),
                 ("rs_fail_rank", ctypes.c_uint32),
                 ("rs_toberb_obj_nr", ctypes.c_uint64),
                 ("rs_obj_nr", ctypes.c_uint64),

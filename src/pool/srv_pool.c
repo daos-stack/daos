@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -2577,7 +2577,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, 0);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, true /* auto_recovery */,
+					0 /* delay_sec */);
 	if (rc != 0)
 		goto out;
 
@@ -4155,6 +4156,26 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
+static int
+pool_query_set_rebuild_status_degraded(struct pool_svc *svc, struct daos_rebuild_status *rebuild_st)
+{
+	unsigned int down_tgts = 0;
+	int          rc;
+
+	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+	rc = pool_map_find_down_tgts(svc->ps_pool->sp_map, NULL /* tgt_pp */, &down_tgts);
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+	if (rc != 0)
+		return rc;
+
+	if (down_tgts > 0)
+		rebuild_st->rs_flags |= DAOS_RSF_DEGRADED;
+	else
+		rebuild_st->rs_flags &= ~DAOS_RSF_DEGRADED;
+
+	return 0;
+}
+
 /* Currently we only maintain compatibility between 2 metadata layout versions */
 #define NUM_POOL_VERSIONS	2
 
@@ -4384,6 +4405,12 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		DL_ERROR(rc, DF_UUID ": permission denied for connect attempt for " DF_X64,
 			 DP_UUID(in->pci_op.pi_uuid), flags);
 		goto out_map_version;
+	}
+
+	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = pool_query_set_rebuild_status_degraded(svc, &out->pco_rebuild_st);
+		if (rc != 0)
+			goto out_map_version;
 	}
 
 	transfer_map = true;
@@ -5446,6 +5473,12 @@ pool_query_handler(crt_rpc_t *rpc, int handler_version)
 			D_ERROR("iv_prop verify failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_lock, rc);
 		}
+	}
+
+	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = pool_query_set_rebuild_status_degraded(svc, &out->pqo_rebuild_st);
+		if (rc != 0)
+			goto out_lock;
 	}
 
 out_lock:
@@ -7746,23 +7779,24 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		    struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
 		    struct rsvc_hint *hint, enum map_update_source src, uint32_t flags)
 {
-	struct pool_target_id_list       target_list = {0};
-	uint32_t                         tgt_map_ver = 0;
-	bool				updated;
-	int				rc;
-	char				*env;
-	daos_epoch_t			rebuild_eph = d_hlc_get();
-	uint64_t			delay = 2;
-	bool                             sys_self_heal_applicable;
-	uint64_t                         sys_self_heal = 0;
+	struct pool_target_id_list target_list = {0};
+	uint32_t                   tgt_map_ver = 0;
+	bool                       updated;
+	int                        rc;
+	char                      *env;
+	daos_epoch_t               rebuild_eph = d_hlc_get();
+	uint64_t                   delay       = 2;
+	bool                       auto_recovery;
+	uint64_t                   sys_self_heal = 0;
 
 	/*
-	 * The system self-heal policy only applies to automatic pool exclude
+	 * The pool and system self-heal policies only apply to automatic pool exclude
 	 * and rebuild operations.
 	 */
-	sys_self_heal_applicable = (opc == MAP_EXCLUDE && src == MUS_SWIM);
+	auto_recovery = (opc == MAP_EXCLUDE && src == MUS_SWIM);
 
-	if (sys_self_heal_applicable) {
+	/* If applicable, check system self-heal policy. */
+	if (auto_recovery) {
 		rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
@@ -7784,6 +7818,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		}
 	}
 
+	/* Pool self-heal policy is checked in this call. */
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
 					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
@@ -7804,14 +7839,14 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
-	if (sys_self_heal_applicable && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+	if (auto_recovery && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
 		D_DEBUG(DB_MD, DF_UUID ": pool_rebuild disabled in system property self_heal\n",
 			DP_UUID(svc->ps_uuid));
 		rc = 0;
 		goto out;
 	}
 
-	if (!is_pool_rebuild_allowed(svc->ps_pool, true)) {
+	if (!is_pool_rebuild_allowed(svc->ps_pool, svc->ps_pool->sp_self_heal, auto_recovery)) {
 		D_DEBUG(DB_MD, DF_UUID ": rebuild disabled for pool\n",
 			DP_UUID(svc->ps_pool->sp_uuid));
 		D_GOTO(out, rc);
