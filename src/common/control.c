@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,42 +10,11 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
-/*
- * Disable DPDK telemetry to avoid socket file clashes and quiet DPDK
- * logging by setting specific facility masks.
- */
-const char *
-dpdk_cli_override_opts = "--log-level=lib.eal:4 "
-			 "--log-level=lib.malloc:4 "
-			 "--log-level=lib.ring:4 "
-			 "--log-level=lib.mempool:4 "
-			 "--log-level=lib.timer:4 "
-			 "--log-level=pmd:4 "
-			 "--log-level=lib.hash:4 "
-			 "--log-level=lib.lpm:4 "
-			 "--log-level=lib.kni:4 "
-			 "--log-level=lib.acl:4 "
-			 "--log-level=lib.power:4 "
-			 "--log-level=lib.meter:4 "
-			 "--log-level=lib.sched:4 "
-			 "--log-level=lib.port:4 "
-			 "--log-level=lib.table:4 "
-			 "--log-level=lib.pipeline:4 "
-			 "--log-level=lib.mbuf:4 "
-			 "--log-level=lib.cryptodev:4 "
-			 "--log-level=lib.efd:4 "
-			 "--log-level=lib.eventdev:4 "
-			 "--log-level=lib.gso:4 "
-			 "--log-level=user1:4 "
-			 "--log-level=user2:4 "
-			 "--log-level=user3:4 "
-			 "--log-level=user4:4 "
-			 "--log-level=user5:4 "
-			 "--log-level=user6:4 "
-			 "--log-level=user7:4 "
-			 "--log-level=user8:4 "
-			 "--no-telemetry";
+/* Buffer to hold dynamically generated DPDK CLI options */
+static char dpdk_cli_opts_buffer[2048];
 
 int
 copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
@@ -71,4 +41,69 @@ copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
 	dst[len] = '\0';
 
 	return 0;
+}
+
+/**
+ * Build DPDK CLI options string with per-facility log levels.
+ *
+ * \param eal_level      Log level for EAL facility (1-8)
+ * \param default_level  Default log level for other facilities (1-8)
+ *
+ * \return Pointer to static buffer containing DPDK CLI options string,
+ *         or NULL on error.
+ */
+const char *
+dpdk_cli_build_opts(int eal_level, int default_level)
+{
+	int ret;
+
+	/* Validate log levels */
+	if (eal_level < 1 || eal_level > 8 || default_level < 1 || default_level > 8) {
+		return NULL;
+	}
+
+	/* Build with custom EAL level, others at default */
+	ret = snprintf(dpdk_cli_opts_buffer, sizeof(dpdk_cli_opts_buffer),
+		       "--log-level=lib.eal:%d "
+		       "--log-level=lib.malloc:%d "
+		       "--log-level=lib.ring:%d "
+		       "--log-level=lib.mempool:%d "
+		       "--log-level=lib.timer:%d "
+		       "--log-level=pmd:%d "
+		       "--log-level=lib.hash:%d "
+		       "--log-level=lib.lpm:%d "
+		       "--log-level=lib.kni:%d "
+		       "--log-level=lib.acl:%d "
+		       "--log-level=lib.power:%d "
+		       "--log-level=lib.meter:%d "
+		       "--log-level=lib.sched:%d "
+		       "--log-level=lib.port:%d "
+		       "--log-level=lib.table:%d "
+		       "--log-level=lib.pipeline:%d "
+		       "--log-level=lib.mbuf:%d "
+		       "--log-level=lib.cryptodev:%d "
+		       "--log-level=lib.efd:%d "
+		       "--log-level=lib.eventdev:%d "
+		       "--log-level=lib.gso:%d "
+		       "--log-level=user1:%d "
+		       "--log-level=user2:%d "
+		       "--log-level=user3:%d "
+		       "--log-level=user4:%d "
+		       "--log-level=user5:%d "
+		       "--log-level=user6:%d "
+		       "--log-level=user7:%d "
+		       "--log-level=user8:%d "
+		       "--no-telemetry",
+		       eal_level, default_level, default_level, default_level, default_level,
+		       default_level, default_level, default_level, default_level, default_level,
+		       default_level, default_level, default_level, default_level, default_level,
+		       default_level, default_level, default_level, default_level, default_level,
+		       default_level, default_level, default_level, default_level, default_level,
+		       default_level, default_level, default_level, default_level);
+
+	if (ret < 0 || ret >= sizeof(dpdk_cli_opts_buffer)) {
+		return NULL;
+	}
+
+	return dpdk_cli_opts_buffer;
 }
