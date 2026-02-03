@@ -16,7 +16,7 @@ int
 daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
 			struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API");
+	D_ERROR("Unsupported APIs");
 	return -DER_NOSYS;
 }
 
