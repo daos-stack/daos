@@ -512,6 +512,17 @@
    fun:crt_hg_class_init
 }
 {
+   Mercury plugin close
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:dlclose
+   ...
+   fun:_dl_fini
+   ...
+}
+{
    Tcp provider with ofi rxm
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
