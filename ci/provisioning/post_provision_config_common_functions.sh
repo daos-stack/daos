@@ -441,3 +441,32 @@ post_provision_config_nodes() {
 
     return 0
 }
+
+install_mofed() {
+    if [ -z "$MLNX_VER_NUM" ]; then
+        echo "MLNX_VER_NUM is not set"
+        env
+        exit 1
+    fi
+
+    : "${ARTIFACTORY_URL:=}"
+    if [ -z "$ARTIFACTORY_URL" ]; then
+        return
+    fi
+
+    # Install Mellanox OFED or DOCA RPMS
+    install_mellanox="install_mellanox.sh"
+    script_url="${ARTIFACTORY_URL}/raw-internal/sre_tools/$install_mellanox"
+    install_target="/usr/local/sbin/$install_mellanox"
+
+    if [ ! -e "$install_target" ]; then
+        if ! curl --silent --show-error --fail \
+            -o "/usr/local/sbin/$install_mellanox" "$script_url"; then
+            echo "Failed to fetch $script_url"
+            return 1
+        fi
+        chmod 0755 "$install_target"
+    fi
+
+    MELLANOX_VERSION="$MLNX_VER_NUM" "$install_mellanox"
+}

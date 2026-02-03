@@ -150,9 +150,12 @@ String vm9_label(String distro) {
 }
 
 void rpm_test_post(String stageName, String node) {
+    // Extract first node from comma-delimited list
+    String firstNode = node.split(',')[0].trim()
     sh label: 'Fetch and stage artifacts',
-       script: 'hostname; ssh -i ci_key jenkins@' + node + ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
-               'scp -i ci_key jenkins@' + node +
+       script: 'hostname; ssh -i ci_key jenkins@' + firstNode +
+               ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
+               'scp -i ci_key jenkins@' + firstNode +
                ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
                stageName + '/"'
     archiveArtifacts artifacts: env.STAGE_NAME + '/**'
@@ -334,21 +337,6 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
         if (cachedCommitPragma(entry.key, expected).toLowerCase() == expected) {
             skip_pragma_msg = "Skipping stage due to ${entry.key} parameter (${entry.value})"
             break
-        }
-    }
-
-    for(name in truePragmas) {
-        if (cachedCommitPragma(name, 'true').toLowerCase() == 'true') {
-            skip_param_msg = "Skipping stage due to ${name} commit pragma (true)"
-            break
-        }
-    }
-    if (!skip_param_msg) {
-        for(name in falsePragmas) {
-            if (cachedCommitPragma(name, 'false').toLowerCase() == 'false') {
-                skip_param_msg = "Skipping stage due to ${name} commit pragma (false)"
-                break
-            }
         }
     }
 

@@ -80,7 +80,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 "derived_state": self.params.get("state", path="/run/exp_vals/rebuild/*"),
                 "objects": self.params.get("objects", path="/run/exp_vals/rebuild/*"),
                 "records": self.params.get("records", path="/run/exp_vals/rebuild/*"),
-                "total_objects": self.params.get("total_objects", path="/run/exp_vals/rebuild/*")
+                "total_objects": self.params.get("total_objects", path="/run/exp_vals/rebuild/*"),
+                'degraded': self.params.get("degraded", path="/run/exp_vals/rebuild/*")
             },
             "tier_stats": [
                 {
