@@ -206,8 +206,10 @@ struct daos_rebuild_status {
 
 	/** Maximum supported layout version */
 	uint16_t                rs_max_supported_layout_ver;
-	/** padding of rebuild status */
-	int16_t			rs_padding16;
+	/** See daos_rebuild_status_flag. */
+	uint8_t                 rs_flags;
+	/** Do not access this field by name. */
+	uint8_t                 rs_reserved_;
 
 	/* Failure on which rank */
 	int32_t			rs_fail_rank;

@@ -143,7 +143,8 @@ class DdbTest(TestWithServers):
             # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
             vos_paths = self.server_managers[0].get_vos_files(pool)
             if not vos_paths:
-                self.fail(f"vos file wasn't found in {self.server_managers[0].get_vos_path(pool)}")
+                self.fail(
+                    f"vos file wasn't found in {self.server_managers[0].get_vos_paths(pool)[0]}")
             ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         errors = []

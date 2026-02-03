@@ -38,7 +38,7 @@ class DdbCommandBase(CommandWithParameters):
         self.db_path = BasicParameter(None, position=1)
 
         # VOS file path.
-        self.vos_path = BasicParameter(None, position=2)
+        self.vos_path = FormattedParameter("--vos_path {}", position=2)
 
         # Command to run on the VOS file that contains container, object info, etc.
         self.single_command = BasicParameter(None, position=3)
