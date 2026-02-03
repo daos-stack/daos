@@ -309,9 +309,9 @@ String getScriptOutput(String script, String args='') {
  *
  * Determine if the stage should be run.
  *
- * @param           Map of parameter names and expected values to check
- * @pragmas         Map of commit pragma names and expected values to check
- * @otherCondition  Additional condition to consider
+ * @param           Map of parameter names and expected values. Verify all match.
+ * @pragmas         Map of commit pragma names and expected values. Verify all match.
+ * @otherCondition  Additional condition to consider. Verify this is true.
  */
 Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     // Run stage w/o any conditionals
@@ -323,43 +323,45 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
         return false
     }
 
-    String skip_pragma_msg = ''
+    String skipMsgParams = ''
     for(entry in params) {
-        if (paramsValue(entry.key, entry.value) == entry.value) {
-            skip_pragma_msg = "Skipping stage due to ${entry.key} parameter (${entry.value})"
+        println("Checking parameter ${entry.key} for value ${entry.value}: ${paramsValue(entry.key, entry.value)}")
+        if (paramsValue(entry.key, entry.value) != entry.value) {
+            skipMsgParams = "Skipping stage due to ${entry.key} parameter not set to ${entry.value}"
             break
         }
     }
 
-    String skip_param_msg = ''
+    String skipMsgPragmas = ''
     for(entry in pragmas) {
         String expected = entry.value.toString().toLowerCase()
-        if (cachedCommitPragma(entry.key, expected).toLowerCase() == expected) {
-            skip_pragma_msg = "Skipping stage due to ${entry.key} parameter (${entry.value})"
+        println("Checking pragma ${entry.key} for value ${expected}: ${cachedCommitPragma(entry.key, expected).toLowerCase()}")
+        if (cachedCommitPragma(entry.key, expected).toLowerCase() != expected) {
+            skipMsgPragmas = "Skipping stage due to ${entry.key} pragma not set to ${entry.value}"
             break
         }
     }
 
     if (startedByUser()) {
         // Manual build: check parameters first
-        if (skip_pragma_msg) {
-            println("[${env.STAGE_NAME}] ${skip_pragma_msg}")
+        if (skipMsgParams) {
+            println("[${env.STAGE_NAME}] ${skipMsgParams}")
             return false
         }
         // Manual build: check commit pragmas second
-        if (skip_param_msg) {
-            println("[${env.STAGE_NAME}] ${skip_param_msg}")
+        if (skipMsgPragmas) {
+            println("[${env.STAGE_NAME}] ${skipMsgPragmas}")
             return false
         }
     } else {
         // Normal build: check commit pragmas first
-        if (skip_param_msg) {
-            println("[${env.STAGE_NAME}] ${skip_param_msg}")
+        if (skipMsgPragmas) {
+            println("[${env.STAGE_NAME}] ${skipMsgPragmas}")
             return false
         }
         // Normal build: check parameters second
-        if (skip_pragma_msg) {
-            println("[${env.STAGE_NAME}] ${skip_pragma_msg}")
+        if (skipMsgParams) {
+            println("[${env.STAGE_NAME}] ${skipMsgParams}")
             return false
         }
     }
@@ -1071,7 +1073,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
                                      compiler: 'gcc',
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
