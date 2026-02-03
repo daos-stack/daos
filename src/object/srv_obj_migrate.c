@@ -691,6 +691,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			 d_iov_t *csum_iov_fetch, struct migrate_pool_tls *tls)
 {
 	uint32_t *extra_arg = NULL;
+	int       waited    = 0;
 	int       rc;
 
 	/* pass rebuild epoch by extra_arg */
@@ -699,11 +700,10 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			  mrone->mo_epoch);
 		extra_arg = (uint32_t *)mrone->mo_epoch;
 	}
-
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN) &&
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -714,6 +714,17 @@ retry:
 		 * fail out.
 		 */
 		DL_WARN(rc, DF_RB ": retry " DF_UOID, DP_RB_MPT(tls), DP_UOID(mrone->mo_oid));
+		if (rc == -DER_NOMEM) {
+			/* sleep 10 seconds before retry, give other layers a chance to
+			 * release resources.
+			 */
+			dss_sleep(10 * 1000);
+			if (waited != 0 && waited % 3600 == 0) {
+				DL_ERROR(rc, DF_RB ": waited memory for %d hour(s)",
+					 DP_RB_MRO(mrone), waited / 3600);
+			}
+		}
+		waited += 10;
 		D_GOTO(retry, rc);
 	}
 
@@ -828,7 +839,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 iod_cnt = 0;
 	int			 start;
-	char		 iov_buf[OBJ_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
+	char                     iov_buf[OBJ_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
 	bool			 fetch = false;
 	int			 i;
 	int			 rc = 0;
@@ -1194,6 +1205,28 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	return rc;
 }
 
+static void
+mrone_dump_info(struct migrate_one *mrone, daos_handle_t oh, daos_iod_t *iod)
+{
+	int i;
+
+	if (daos_is_dkey_uint64(mrone->mo_oid.id_pub) && mrone->mo_dkey.iov_len == 8)
+		D_INFO(DF_RB ": " DF_UOID " int dkey " DF_U64 ", akey " DF_KEY ", iod_type %d, "
+			     " iod_nr %d, iod_size " DF_U64,
+		       DP_RB_MPT(mrone->mo_tls), DP_UOID(mrone->mo_oid),
+		       *(uint64_t *)mrone->mo_dkey.iov_buf, DP_KEY(&iod->iod_name), iod->iod_type,
+		       iod->iod_nr, iod->iod_size);
+	else
+		D_INFO(DF_RB ": " DF_UOID " dkey " DF_KEY ", akey " DF_KEY ", iod_type %d, "
+			     " iod_nr %d, iod_size " DF_U64,
+		       DP_RB_MPT(mrone->mo_tls), DP_UOID(mrone->mo_oid), DP_KEY(&mrone->mo_dkey),
+		       DP_KEY(&iod->iod_name), iod->iod_type, iod->iod_nr, iod->iod_size);
+	if (iod->iod_type == DAOS_IOD_ARRAY)
+		for (i = 0; i < min(8, iod->iod_nr); i++)
+			D_INFO("recxs[%d] - " DF_RECX, i, DP_RECX(iod->iod_recxs[i]));
+	obj_dump_grp_layout(oh, mrone->mo_oid.id_shard);
+}
+
 static int
 migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
@@ -1262,6 +1295,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		daos_iod_t	*iod = &mrone->mo_iods[i];
 
 		if (mrone->mo_iods[i].iod_size == 0) {
+			static __thread int log_nr;
+
 			/* zero size iod will cause assertion failure
 			 * in VOS, so let's check here.
 			 * So the object is being destroyed between
@@ -1273,12 +1308,17 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			 * the rebuild and retry.
 			 */
 			rc = -DER_DATA_LOSS;
-			D_DEBUG(DB_REBUILD,
-				DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
-				      " nr %d/%d eph " DF_U64 " " DF_RC "\n",
-				DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone,
-				DP_KEY(&mrone->mo_dkey), DP_KEY(&mrone->mo_iods[i].iod_name),
-				mrone->mo_iod_num, i, mrone->mo_epoch, DP_RC(rc));
+			DL_INFO(rc,
+				DF_RB ": cont " DF_UUID " obj " DF_UOID " dkey " DF_KEY " " DF_KEY
+				      " nr %d/%d eph " DF_X64,
+				DP_RB_MRO(mrone), DP_UUID(mrone->mo_cont_uuid),
+				DP_UOID(mrone->mo_oid), DP_KEY(&mrone->mo_dkey),
+				DP_KEY(&mrone->mo_iods[i].iod_name), mrone->mo_iod_num, i,
+				mrone->mo_epoch);
+			if (log_nr <= 128) {
+				mrone_dump_info(mrone, oh, &mrone->mo_iods[i]);
+				log_nr++;
+			}
 			D_GOTO(out, rc);
 		}
 
@@ -1445,6 +1485,8 @@ post:
 
 	for (i = 0; rc == 0 && i < iod_num; i++) {
 		if (iods[i].iod_size == 0) {
+			static __thread int log_nr;
+
 			/* zero size iod will cause assertion failure
 			 * in VOS, so let's check here.
 			 * So the object is being destroyed between
@@ -1456,11 +1498,16 @@ post:
 			 * the rebuild and retry.
 			 */
 			rc = -DER_DATA_LOSS;
-			D_INFO(DF_RB ": " DF_UOID " %p dkey " DF_KEY " " DF_KEY
-				     " nr %d/%d eph " DF_U64 " " DF_RC "\n",
-			       DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), mrone,
-			       DP_KEY(&mrone->mo_dkey), DP_KEY(&iods[i].iod_name), iod_num, i,
-			       mrone->mo_epoch, DP_RC(rc));
+			DL_INFO(rc,
+				DF_RB ": cont " DF_UUID " obj " DF_UOID " dkey " DF_KEY " " DF_KEY
+				      " nr %d/%d mo_epoch " DF_X64 " fetch_eph " DF_X64,
+				DP_RB_MRO(mrone), DP_UUID(mrone->mo_cont_uuid),
+				DP_UOID(mrone->mo_oid), DP_KEY(&mrone->mo_dkey),
+				DP_KEY(&iods[i].iod_name), iod_num, i, mrone->mo_epoch, fetch_eph);
+			if (log_nr <= 128) {
+				mrone_dump_info(mrone, oh, &mrone->mo_iods[i]);
+				log_nr++;
+			}
 			D_GOTO(end, rc);
 		}
 	}
@@ -3023,8 +3070,8 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 
 		/* Each object enumeration RPC will at least one OID */
 		if (num < minimum_nr && (enum_flags & DIOF_TO_SPEC_GROUP)) {
-			D_DEBUG(DB_REBUILD, DF_RB ": enumeration buffer %u empty" DF_UOID "\n",
-				DP_RB_MPT(tls), num, DP_UOID(arg->oid));
+			D_INFO(DF_RB ": enumeration buffer %u empty" DF_UOID, DP_RB_MPT(tls), num,
+			       DP_UOID(arg->oid));
 			break;
 		}
 
