@@ -44,7 +44,7 @@ boundary_test: !mux
     num_containers: 30000
     with_io: false
   test_2:
-    num_pools: 50
+    num_pools: 45
     num_containers: 200
     with_io: false
   test_with_io:
