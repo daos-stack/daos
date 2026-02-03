@@ -1605,6 +1605,12 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 			if (delay_sec != (uint64_t)(-1))
 				merge_task->dst_schedule_time = daos_gettime_coarse() + delay_sec;
 		}
+		/* For the case of new rebuild task in queue, and then rebuild stop's fail reclaim
+		 * complete and re-scheduled the original rebuild task with delay -1.
+		 */
+		if (merge_pre_task->dst_schedule_time != (uint64_t)(-1) &&
+		    delay_sec == (uint64_t)(-1))
+			merge_task = merge_pre_task;
 	} else if (merge_post_task != NULL && merge_post_task->dst_rebuild_op == rebuild_op) {
 		if ((merge_post_task->dst_schedule_time == (uint64_t)(-1) &&
 		     delay_sec == (uint64_t)(-1)) ||
@@ -1926,6 +1932,19 @@ complete:
 		DL_CDEBUG(rc1, DLOG_ERR, DLOG_INFO, rc1, DF_RB ": updated, state %d errno " DF_RC,
 			  DP_RB_RGT(rgt), rgt->rgt_status.rs_state,
 			  DP_RC(rgt->rgt_status.rs_errno));
+
+		/* re-schedule the stopped original rebuild task with delay -1, to be merged with
+		 * following rebuild task, to avoid losing the task->dst_tgts.
+		 */
+		rc = ds_rebuild_schedule(pool, task->dst_retry_map_ver, rgt->rgt_reclaim_epoch,
+					 task->dst_new_layout_version, &task->dst_tgts,
+					 task->dst_retry_rebuild_op,
+					 RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
+					 false /* stop_admin */, task, -1 /* delay_sec */);
+		DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
+			  DF_RB ": errno " DF_RC ", schedule retry %u(%s) with delay -1",
+			  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno),
+			  task->dst_retry_rebuild_op, RB_OP_STR(task->dst_retry_rebuild_op));
 	} else if ((task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) &&
 		   (task->dst_retry_rebuild_op != RB_OP_NONE)) {
 		/* Fail_reclaim done (and a stop command wasn't received during) - retry rebuild. */
