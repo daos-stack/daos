@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -98,7 +99,7 @@ func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
-	envCtx := C.dpdk_cli_override_opts
+	envCtx := C.dpdk_cli_build_opts(4, 4)
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(opts.PCIAllowList.Len()),
 		cAllowList)
