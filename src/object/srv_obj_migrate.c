@@ -32,10 +32,10 @@
 #endif
 
 /* Max in-flight transfer size per xstream */
-/* Set the total in-flight size to be 50% of MAX DMA size for
+/* Set the total in-flight size to be 1/3 of MAX DMA size for
  * the moment, will adjust it later if needed.
  */
-#define MIGR_TGT_INF_DATA       (1 << 29)
+#define MIGR_TGT_INF_DATA       (300 << 20)
 
 /* Threshold for very large transfers.
  * This may exceed the MIGR_TGT_INF_DATA limit to prevent starvation.
@@ -51,10 +51,10 @@
 
 /* Number of migration ULTs per target */
 #define MIGR_TGT_ULTS_MIN       100
-#define MIGR_TGT_ULTS_DEF       500
-#define MIGR_TGT_ULTS_MAX       2000
+#define MIGR_TGT_ULTS_DEF       300
+#define MIGR_TGT_ULTS_MAX       1000
 
-/* 1/3 object ults, 2/3 key ULTs */
+/* 1/3 object ults (100), 2/3 key ULTs (200) */
 #define MIGR_OBJ_ULT_PERCENT    33
 
 #define MIGR_TGT_OBJ_ULTS(ults) ((ults * MIGR_OBJ_ULT_PERCENT) / 100)
@@ -710,16 +710,16 @@ retry:
 		D_WARN(DF_UUID" retry "DF_UOID" "DF_RC"\n",
 		       DP_UUID(tls->mpt_pool_uuid), DP_UOID(mrone->mo_oid), DP_RC(rc));
 		if (rc == -DER_NOMEM) {
-			/* sleep 10 seconds before retry, give other layers a chance to
+			/* sleep a few seconds before retry, give other layers a chance to
 			 * release resources.
 			 */
-			dss_sleep(10 * 1000);
+			dss_sleep((10 + rand() % 20) * 1000);
 			if (waited != 0 && waited % 3600 == 0) {
 				DL_ERROR(rc, DF_RB ": waited for memory for %d hour(s)",
 					 DP_RB_MPT(tls), waited / 3600);
 			}
 		}
-		waited += 10;
+		waited += 20;
 		D_GOTO(retry, rc);
 	}
 
@@ -2028,7 +2028,7 @@ migrate_one_ult(void *arg)
 		 * registration, it does provide relatively precise control over the
 		 * resources consumed by degraded EC reads.
 		 */
-		degraded_size = data_size * MIN(8, obj_ec_data_tgt_nr(&mrone->mo_oca));
+		degraded_size = data_size * MIN(16, obj_ec_data_tgt_nr(&mrone->mo_oca));
 	}
 
 	D_DEBUG(DB_TRACE, "mrone %p data size is "DF_U64" %d/%d\n",
