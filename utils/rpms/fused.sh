@@ -15,6 +15,7 @@ LICENSE="BSD"
 ARCH=${isa}
 DESCRIPTION="DAOS version of libfuse"
 URL="https://github.com/daos-stack/fused.git"
+RPM_CHANGELOG="fused.changelog"
 
 files=()
 TARGET_PATH="${includedir}/fused"
