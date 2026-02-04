@@ -578,7 +578,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9.7') {
+                stage('Build on EL 9') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -727,7 +727,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 9.7') {
+                stage('Unit Test on EL') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -740,7 +740,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages(),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -749,7 +750,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 9.7') {
+                stage('Unit Test bdev on EL') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -762,7 +763,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages(),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -771,7 +773,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 9.7') {
+                stage('NLT on EL') {
                     when {
                         beforeAgent true
                         expression { params.CI_NLT_TEST && !skipStage() }
@@ -786,7 +788,8 @@ pipeline {
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages(),
+                                     image_version: 'el9.7'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
@@ -797,7 +800,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el9-gcc-nlt-memcheck'
+                                         valgrind_stash: 'nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -811,7 +814,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test with memcheck on EL 9.7') {
+                stage('Unit Test with memcheck on EL') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -825,18 +828,19 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages(),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'el9-gcc-unit-memcheck'
+                                         valgrind_stash: 'unit-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 9.7')
-                stage('Unit Test bdev with memcheck on EL 9.7') {
+                } // stage('Unit Test with memcheck on EL')
+                stage('Unit Test bdev with memcheck on EL') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -850,7 +854,8 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages(),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -860,7 +865,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test bdev with memcheck on EL 9.7')
+                } // stage('Unit Test bdev with memcheck on EL')
             }
         }
         stage('Test') {
@@ -871,7 +876,7 @@ pipeline {
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
-                stage('Functional on EL 9.7 with Valgrind') {
+                stage('Functional on EL with Valgrind') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -884,7 +889,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -892,8 +898,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 9.7 with Valgrind')
-                stage('Functional on EL 8.8') {
+                } // stage('Functional on EL with Valgrind')
+                stage('Functional on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -906,7 +912,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                     inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                                    test_function: 'runTestFunctionalV2',
+                                    image_version: 'el8.10'))
                     }
                     post {
                         always {
@@ -914,8 +921,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8.8')
-                stage('Functional on EL 9.7') {
+                } // stage('Functional on EL 8')
+                stage('Functional on EL 9') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -928,7 +935,8 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                     inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                                    test_function: 'runTestFunctionalV2',
+                                    image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -989,7 +997,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
+                            filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
@@ -1114,7 +1122,7 @@ pipeline {
                 } // stage('Test RPMs on Leap 15.5')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1249,8 +1257,8 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['el9-gcc-nlt-memcheck',
-                                                     'el9-gcc-unit-memcheck',
+            valgrindReportPublish valgrind_stashes: ['nlt-memcheck',
+                                                     'unit-memcheck',
                                                      'fault-inject-valgrind']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
