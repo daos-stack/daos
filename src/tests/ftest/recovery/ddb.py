@@ -163,9 +163,9 @@ class DdbTest(TestWithServers):
         db_path = None
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
-            control_metadata_path = self.server_managers[0].manager.job.yaml.\
-                metadata_params.path.value
-            db_path = os.path.join(control_metadata_path, "daos_control", "engine0")
+            db_path = os.path.join(
+                self.server_managers[0].manager.job.yaml.metadata_params.path.value,
+                "daos_control", "engine0")
             ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
 
         self.log_step("Verify container UUID.")
