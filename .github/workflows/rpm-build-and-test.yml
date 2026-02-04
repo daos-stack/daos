@@ -572,11 +572,13 @@ jobs:
                 STAGE_TAGS+=",provider"
                 if [[ '${{ matrix.stage }}' = *\ Verbs\ * ]]; then
                   FTEST_ARG+=' --provider ofi+verbs'
+                  INST_RPMS+=' mercury-libfabric'
                 elif [[ '${{ matrix.stage }}' = *\ UCX\ * ]]; then
                   FTEST_ARG+=' --provider ucx+dc_x'
                   INST_RPMS+=' mercury-ucx'
                 elif [[ '${{ matrix.stage }}' = *\ TCP\ * ]]; then
                   FTEST_ARG+=' --provider ofi+tcp'
+                  INST_RPMS+=' mercury-libfabric'
                 else
                     echo 'Unknown provider in ${{ matrix.stage }}'
                     exit 1
