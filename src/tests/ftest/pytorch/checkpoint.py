@@ -84,21 +84,21 @@ class PytorchCheckpointTest(TestWithServers):
         :avocado: tags=PytorchCheckpointTest,test_checkpoint_nested_directories
         """
 
-        pool = self.get_pool().identifier
-        container = self.get_container(pool).identifier
+        pool = self.get_pool()
+        container = self.get_container(pool)
 
         d1, d2 = str(uuid.uuid4()), str(uuid.uuid4())
         files = ["/file.pt", f"/{d1}/file.pt", f"/{d1}/{d2}/file.pt"]
 
         # by default parent directories should be created
-        with Checkpoint(pool, container) as pt:
+        with Checkpoint(pool.identifier, container.identifier) as pt:
             for name in files:
                 with pt.writer(name) as w:
                     w.write(os.urandom(4096))
 
         # ensure that it fails with expected exception
         try:
-            with Checkpoint(pool, container) as pt:
+            with Checkpoint(pool.identifier, container.identifier) as pt:
                 fname = f"/{str(uuid.uuid4())}/file.pt"
                 with pt.writer(fname, ensure_path=False) as w:
                     w.write(os.urandom(4096))
