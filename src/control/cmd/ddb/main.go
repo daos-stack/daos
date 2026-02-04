@@ -9,13 +9,13 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime/debug"
 	"sort"
 	"strings"
-	"unsafe"
 
 	"github.com/desertbit/columnize"
 	"github.com/desertbit/go-shlex"
@@ -38,6 +38,10 @@ func exitWithError(log logging.Logger, err error) {
 	log.Errorf("%s: %v", cmdName, err)
 	if fault.HasResolution(err) {
 		log.Errorf("%s: %s", cmdName, fault.ShowResolutionFor(err))
+	}
+	if err.Error() == grumbleUnknownCmdErr {
+		app := createGrumbleApp(nil)
+		printCommands(app)
 	}
 	os.Exit(1)
 }
@@ -91,6 +95,8 @@ Example Paths:
 `
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
+const runCmdArgsErr = "Cannot use both command file and a command string"
+const vosPathMissErr = "Cannot use sys db path without a vos path"
 
 type vosPathStr string
 
@@ -109,14 +115,7 @@ func (pathStr vosPathStr) Complete(match string) (comps []flags.Completion) {
 type ddbCmdStr string
 
 func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
-	// hack to get at command names
-	ctx, cleanup, err := InitDdb(nil)
-	if err != nil {
-		return
-	}
-	defer cleanup()
-
-	app := createGrumbleApp(ctx)
+	app := createGrumbleApp(nil)
 	for _, cmd := range app.Commands().All() {
 		if match == "" || strings.HasPrefix(cmd.Name, match) {
 			comps = append(comps, flags.Completion{Item: cmd.Name})
@@ -169,8 +168,8 @@ func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 // One cannot relay on grumble to print the list of commands since app does not allow executing
 // the help command from the outside of the interactive mode.
 // This method extracts commands and their respective help (short) messages in the simplest possible way,
-// put them in columns and print them using the provided log.
-func printCommands(app *grumble.App, log *logging.LeveledLogger) {
+// put them in columns and print them.
+func printCommands(app *grumble.App) {
 	var output []string
 	for _, c := range app.Commands().All() {
 		if c.Name == "quit" {
@@ -179,52 +178,41 @@ func printCommands(app *grumble.App, log *logging.LeveledLogger) {
 		row := c.Name + columnize.DefaultConfig().Delim + c.Help
 		output = append(output, row)
 	}
-	log.Info(helpCommandsHeader + columnize.SimpleFormat(output) + "\n\n")
+	fmt.Printf(helpCommandsHeader + columnize.SimpleFormat(output) + "\n\n")
 }
 
-func printGeneralHelp(app *grumble.App, generalMsg string, log *logging.LeveledLogger) {
-	log.Info(generalMsg + "\n") // standard help from go-flags
-	printCommands(app, log)     // list of commands
-	log.Info(helpVosTreePath)   // extra info on VOS Tree Path syntax
+func printGeneralHelp(app *grumble.App, generalMsg string) {
+	fmt.Printf(generalMsg + "\n") // standard help from go-flags
+	printCommands(app)            // list of commands
+	fmt.Printf(helpVosTreePath)   // extra info on VOS Tree Path syntax
 }
 
 // Ask grumble to generate a help message for the requested command.
 // Caveat: There is no known easy way of forcing grumble to use log to print the generated message
 // so the output goes directly to stdout.
 // Returns false in case the opts.Args.RunCmd is unknown.
-func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger) bool {
-	err := runCmdStr(app, string(opts.Args.RunCmd), "--help")
-	if err != nil {
-		if err.Error() == grumbleUnknownCmdErr {
-			log.Errorf("unknown command '%s'", string(opts.Args.RunCmd))
-			printCommands(app, log)
-		} else {
-			log.Error(err.Error())
-		}
-		return false
+func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger) {
+	if err := runCmdStr(app, string(opts.Args.RunCmd), "--help"); err != nil {
+		log.Errorf("%v\n", err)
+		printCommands(app)
 	}
-	return true
 }
 
 // Prints either general or command-specific help message.
 // Returns a reasonable return code in case the caller chooses to terminate the process.
-func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) int {
+func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) {
 	// ctx is not necessary since this instance of the app is not intended to run any of the commands
 	app := createGrumbleApp(nil)
 
 	if string(opts.Args.RunCmd) == "" {
-		printGeneralHelp(app, generalMsg, log)
-		return 0
+		printGeneralHelp(app, generalMsg)
+		return
 	}
 
-	if printCmdHelp(app, opts, log) {
-		return 0
-	} else {
-		return 1
-	}
+	printCmdHelp(app, opts, log)
 }
 
-func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
+func parseOpts(args []string, opts *cliOptions, api DdbApi, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.HelpFlag|flags.IgnoreUnknown)
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS]"
@@ -247,19 +235,24 @@ the command‑specific help for details.
 
 	if _, err := p.ParseArgs(args); err != nil {
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
-			os.Exit(printHelp(fe.Error(), opts, log))
+			printHelp(fe.Error(), opts, log)
+			return nil
 		}
 
 		return err
 	}
 
 	if opts.Version {
-		log.Infof("ddb version %s", build.DaosVersion)
+		fmt.Printf("ddb version %s\n", build.DaosVersion)
 		return nil
 	}
 
 	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
-		return errors.New("Cannot use both command file and a command string")
+		return errors.New(runCmdArgsErr)
+	}
+
+	if opts.VosPath == "" && opts.SysdbPath != "" {
+		return errors.New(vosPathMissErr)
 	}
 
 	if os.Getenv("DD_MASK") == "" {
@@ -293,22 +286,14 @@ the command‑specific help for details.
 	}
 	log.Debug("debug output enabled")
 
-	ctx, cleanup, err := InitDdb(log)
+	cleanup, err := api.Init(log)
 	if err != nil {
 		return errors.Wrap(err, "Error initializing the DDB Context")
 	}
 	defer cleanup()
-	app := createGrumbleApp(ctx)
-
-	if opts.SysdbPath != "" {
-		ctx.ctx.dc_db_path = C.CString(string(opts.SysdbPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_db_path))
-	}
+	app := createGrumbleApp(api)
 
 	if opts.VosPath != "" {
-		ctx.ctx.dc_pool_path = C.CString(string(opts.VosPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
-
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "open") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "close") &&
@@ -318,31 +303,28 @@ the command‑specific help for details.
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
 			log.Debugf("Connect to path: %s\n", opts.VosPath)
-			if err := ddbOpen(ctx, string(opts.VosPath), bool(opts.WriteMode)); err != nil {
+			if err := api.Open(string(opts.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
 				return errors.Wrapf(err, "Error opening path: %s", opts.VosPath)
 			}
+			defer func() {
+				if api.PoolIsOpen() {
+					log.Info("Closing pool...\n")
+					if err := api.Close(); err != nil {
+						log.Errorf("Error closing pool: %s\n", err)
+					}
+				}
+			}()
 		}
 	}
 
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
-		if opts.Args.RunCmd != "" {
-			err := runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
-			if err != nil {
-				log.Errorf("Error running command %q %s\n", string(opts.Args.RunCmd), err)
-			}
-		} else {
-			err := runFileCmds(log, app, opts.CmdFile)
-			if err != nil {
-				log.Errorf("Error running command file: %s\n", err)
-			}
-		}
+		var err error
 
-		if ddbPoolIsOpen(ctx) {
-			err := ddbClose(ctx)
-			if err != nil {
-				log.Error("Error closing pool\n")
-			}
+		if opts.Args.RunCmd != "" {
+			err = runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
+		} else {
+			err = runFileCmds(log, app, opts.CmdFile)
 		}
 		return err
 	}
@@ -354,8 +336,8 @@ the command‑specific help for details.
 	os.Args = []string{}
 	result := app.Run()
 	// make sure pool is closed
-	if ddbPoolIsOpen(ctx) {
-		err := ddbClose(ctx)
+	if api.PoolIsOpen() {
+		err := api.Close()
 		if err != nil {
 			log.Error("Error closing pool\n")
 		}
@@ -365,14 +347,15 @@ the command‑specific help for details.
 
 func main() {
 	var opts cliOptions
+	ctx := &DdbContext{}
 	log := logging.NewCommandLineLogger()
 
-	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+	if err := parseOpts(os.Args[1:], &opts, ctx, log); err != nil {
 		exitWithError(log, err)
 	}
 }
 
-func createGrumbleApp(ctx *DdbContext) *grumble.App {
+func createGrumbleApp(api DdbApi) *grumble.App {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
 		homedir = "/tmp"
@@ -385,7 +368,7 @@ func createGrumbleApp(ctx *DdbContext) *grumble.App {
 		Prompt:      "ddb:  ",
 	})
 
-	addAppCommands(app, ctx)
+	addAppCommands(app, api)
 
 	// Add the quit command. grumble also includes a builtin exit command
 	app.AddCommand(&grumble.Command{

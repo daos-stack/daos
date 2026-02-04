@@ -89,7 +89,7 @@ ls_cmd_tests(void **state)
 
 	/* printing a recx works */
 	dvt_fake_print_called = 0;
-	opt.path = "/[0]/[0]/[0]/[0]/[0]";
+	opt.path              = "/[0]/[0]/[0]/[1]/[0]";
 	opt.recursive = true;
 	assert_success(ddb_run_ls(&ctx, &opt));
 
@@ -142,7 +142,7 @@ dump_value_cmd_tests(void **state)
 	assert_rc_equal(ddb_run_value_dump(&ctx, &opt), -DDBER_INCOMPLETE_PATH_VALUE);
 
 	/* Path is complete, no destination means will dump to screen */
-	opt.path = "[0]/[0]/[0]/[1]";
+	opt.path = "[0]/[0]/[0]/[2]";
 	assert_success(ddb_run_value_dump(&ctx, &opt));
 
 	/* success */
@@ -188,7 +188,7 @@ dump_ilog_cmd_tests(void **state)
 	assert_rc_equal(ddb_run_ilog_dump(&ctx, &opt), -DER_INVAL);
 
 	/* Dump akey ilog */
-	opt.path = "[0]/[0]/[0]/[0]";
+	opt.path = "[0]/[0]/[0]/[1]";
 	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 }
 
@@ -211,8 +211,7 @@ dump_dtx_cmd_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	struct ddb_ctx		 ctx = {0};
-	struct dtx_dump_options	 opt = {0};
-	daos_handle_t		 coh;
+	struct dtx_dump_options  opt  = {0};
 
 	dvt_fake_print_reset();
 
@@ -221,11 +220,6 @@ dump_dtx_cmd_tests(void **state)
 	ctx.dc_poh = tctx->dvt_poh;
 
 	assert_invalid(ddb_run_dtx_dump(&ctx, &opt));
-
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
-
-	dvt_vos_insert_2_records_with_dtx(coh);
-	vos_cont_close(coh);
 
 	opt.path = "[0]";
 	assert_success(ddb_run_dtx_dump(&ctx, &opt));
@@ -457,8 +451,7 @@ dtx_stat_tests(void **state)
 		buf[59] += i;
 		assert_regex_match(dvt_fake_print_buffer, buf);
 	}
-	assert_regex_match(dvt_fake_print_buffer,
-			   "^DTX entries statistics of the pool \\(null\\)$");
+	assert_regex_match(dvt_fake_print_buffer, "^DTX entries statistics of the pool:$");
 }
 
 static uint64_t
@@ -568,6 +561,7 @@ static int
 dcv_suit_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx;
+	daos_handle_t           coh;
 
 	assert_success(ddb_test_setup_vos(state));
 
@@ -576,6 +570,11 @@ dcv_suit_setup(void **state)
 	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0));
 
 	g_ctx.dc_poh = tctx->dvt_poh;
+
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+
+	dvt_vos_insert_2_records_with_dtx(coh);
+	vos_cont_close(coh);
 
 	return 0;
 }

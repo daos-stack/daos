@@ -26,11 +26,18 @@
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
 
-int
-dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags)
+static int
+create_path_parts(const char *path, const char *db_path, struct vos_path_parts **vp_ptr)
 {
-	struct vos_file_parts   path_parts = {0};
-	int			rc;
+	struct vos_path_parts *vp;
+	int                    rc;
+
+	D_ALLOC_PTR(vp);
+	if (vp == NULL) {
+		D_ERROR("Unable to allocate memory for pool path\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	/*
 	 * Currently the vos file is required to be in the same path daos_engine created it in.
@@ -38,62 +45,82 @@ dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t
 	 * from the path. It should be considered in the future how to get these from another
 	 * source.
 	 */
-	rc = vos_path_parse(path, &path_parts);
-	if (!SUCCESS(rc))
-		return rc;
-
-	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
-	}
-
-	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
+	rc = vos_path_parse(path, db_path, vp);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS with path '%s': "DF_RC"\n",
-			path_parts.vf_db_path, DP_RC(rc));
-		return rc;
+		D_ERROR("Unable to parse VOS pool path '%s' and DB path '%s'\n", path,
+			db_path ? db_path : "(null)");
+		goto out_vp;
+	}
+	*vp_ptr = vp;
+	goto out;
+
+out_vp:
+	D_FREE(vp);
+out:
+	return rc;
+}
+
+int
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags)
+{
+	int                    rc;
+	struct vos_path_parts *vp;
+
+	rc = create_path_parts(path, db_path, &vp);
+	if (!SUCCESS(rc))
+		goto out;
+
+	rc = vos_self_init(vp->vp_db_path, true, vp->vp_target_idx);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Failed to initialize VOS with DB path '%s': " DF_RC "\n", vp->vp_db_path,
+			DP_RC(rc));
+		goto out_vp;
 	}
 
-	rc = vos_pool_open(path, path_parts.vf_pool_uuid, flags, poh);
+	rc = vos_pool_open(vp->vp_vos_file_path, vp->vp_pool_uuid, flags, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
-		vos_self_fini();
+		goto out_vos;
 	}
+	goto out_vp;
 
+out_vos:
+	vos_self_fini();
+out_vp:
+	D_FREE(vp);
+out:
 	return rc;
 }
 
 int
 dv_pool_destroy(const char *path, const char *db_path)
 {
-	struct vos_file_parts path_parts = {0};
-	int                   rc, flags = 0;
+	struct vos_path_parts *vp;
+	int                    flags = 0;
+	int                    rc;
 
-	rc = vos_path_parse(path, &path_parts);
+	rc = create_path_parts(path, db_path, &vp);
 	if (!SUCCESS(rc))
-		return rc;
+		goto out;
 
-	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
-	}
-
-	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
+	rc = vos_self_init(vp->vp_db_path, true, vp->vp_target_idx);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS with path '%s': " DF_RC "\n",
-			path_parts.vf_db_path, DP_RC(rc));
-		return rc;
+		D_ERROR("Failed to initialize VOS with DB path '%s': " DF_RC "\n", vp->vp_db_path,
+			DP_RC(rc));
+		goto out_vp;
 	}
 
-	if (strncmp(path_parts.vf_vos_file_name, "rdb", 3) == 0)
+	if (strncmp(vp->vp_vos_file_name, "rdb", 3) == 0)
 		flags |= VOS_POF_RDB;
 
-	rc = vos_pool_destroy_ex(path, path_parts.vf_pool_uuid, flags);
+	rc = vos_pool_destroy_ex(vp->vp_vos_file_path, vp->vp_pool_uuid, flags);
 	if (!SUCCESS(rc))
 		D_ERROR("Failed to destroy pool: " DF_RC "\n", DP_RC(rc));
-
 	vos_self_fini();
 
+out_vp:
+	D_FREE(vp);
+out:
 	return rc;
 }
 
