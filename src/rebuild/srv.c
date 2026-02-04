@@ -225,10 +225,14 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		D_INFO(DF_RB " rank %d, update dtx_resync_version from %d to %d", DP_RB_RGT(rgt),
 		       rank, status->dtx_resync_version, resync_ver);
 	status->dtx_resync_version = resync_ver;
-	if (flags & SCAN_DONE)
+	if ((flags & SCAN_DONE) && !status->scan_done) {
+		D_INFO(DF_UUID " rank %u is scan_done\n", DP_UUID(rgt->rgt_pool_uuid), rank);
 		status->scan_done = 1;
-	if (flags & PULL_DONE)
+	}
+	if ((flags & PULL_DONE) && !status->pull_done) {
+		D_INFO(DF_UUID " rank %u is pull_done\n", DP_UUID(rgt->rgt_pool_uuid), rank);
 		status->pull_done = 1;
+	}
 }
 
 #define RB_DTX_RESYNC_VER_SKIP ((uint32_t)-1)
@@ -437,7 +441,7 @@ dss_rebuild_check_one(void *data)
 		DP_RC(pool_tls->rebuild_pool_status));
 
 	ABT_mutex_lock(status->lock);
-	if (pool_tls->rebuild_pool_scanning)
+	if (pool_tls->rebuild_pool_scanning || pool_tls->rebuild_sender_running)
 		status->scanning = 1;
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
@@ -461,13 +465,6 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 	arg.rpt = rpt;
 	arg.status = status;
 
-	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
-		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
-					     rpt->rt_rebuild_gen, &dms);
-		if (rc)
-			D_GOTO(out, rc);
-	}
-
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
 	if (tls != NULL && tls->rebuild_pool_status)
@@ -480,6 +477,15 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out, rc);
+	}
+
+	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
+		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
+					     rpt->rt_rebuild_gen, &dms);
+		if (rc) {
+			ABT_mutex_unlock(rpt->rt_lock);
+			D_GOTO(out, rc);
+		}
 	}
 
 	status->obj_count += dms.dm_obj_count;
@@ -2369,6 +2375,21 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rpt_put(rpt);
 }
 
+bool
+ds_rebuild_gl_scan_done(uuid_t pool_uuid, uint32_t opc, uint32_t version, uint32_t generation)
+{
+	struct rebuild_tgt_pool_tracker *rpt;
+	bool                             done;
+
+	rpt = rpt_lookup(pool_uuid, opc, version, generation);
+	if (!rpt)
+		return true; /* ? */
+
+	done = rpt->rt_global_scan_done;
+	rpt_put(rpt);
+	return done;
+}
+
 void
 rebuild_tgt_status_check_ult(void *arg)
 {
@@ -2442,8 +2463,7 @@ rebuild_tgt_status_check_ult(void *arg)
 		}
 
 		/* Only global scan is done, then pull is trustable */
-		if ((rpt->rt_global_scan_done && !status.rebuilding) ||
-		     rpt->rt_abort)
+		if ((rpt->rt_global_scan_done && !status.rebuilding) || rpt->rt_abort)
 			iv.riv_pull_done = 1;
 
 		/* Once the rebuild is globally done, the target

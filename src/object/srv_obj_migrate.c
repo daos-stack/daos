@@ -3588,6 +3588,9 @@ struct migrate_ult_arg {
 	uint32_t	version;
 };
 
+extern bool
+ds_rebuild_gl_scan_done(uuid_t pool_uuid, uint32_t opc, uint32_t version, uint32_t generation);
+
 static void
 migrate_ult(void *arg)
 {
@@ -3595,7 +3598,7 @@ migrate_ult(void *arg)
 	int			rc;
 
 	D_ASSERT(pool_tls != NULL);
-	while (!dbtree_is_empty(pool_tls->mpt_root_hdl) && !pool_tls->mpt_fini) {
+	while (!pool_tls->mpt_fini) {
 		rc = dbtree_iterate(pool_tls->mpt_root_hdl,
 				    DAOS_INTENT_PURGE, false,
 				    migrate_cont_iter_cb, pool_tls);
@@ -3604,6 +3607,16 @@ migrate_ult(void *arg)
 			if (pool_tls->mpt_status == 0)
 				pool_tls->mpt_status = rc;
 			break;
+		}
+		if (dbtree_is_empty(pool_tls->mpt_root_hdl)) {
+			bool scan_done;
+
+			scan_done = ds_rebuild_gl_scan_done(
+			    pool_tls->mpt_pool_uuid, pool_tls->mpt_opc, pool_tls->mpt_version,
+			    pool_tls->mpt_generation);
+			if (scan_done)
+				break; /* now I can declare I'm done */
+			dss_sleep(10); /* otherwise sleep and wait for objects */
 		}
 	}
 

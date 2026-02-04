@@ -336,6 +336,7 @@ out:
 	if (rc != 0 && tls->rebuild_pool_status == 0)
 		tls->rebuild_pool_status = rc;
 
+	tls->rebuild_sender_running = 0;
 	rpt_put(rpt);
 }
 
@@ -1037,9 +1038,11 @@ rebuild_scanner(void *data)
 
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rpt_get(rpt);
+		tls->rebuild_sender_running = 1;
 		rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
 				    0, 0, &ult_send);
 		if (rc != 0) {
+			tls->rebuild_sender_running = 0;
 			rpt_put(rpt);
 			D_GOTO(out, rc);
 		}
