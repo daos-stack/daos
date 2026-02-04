@@ -47,9 +47,6 @@ nlt_args+=(--dfuse-dir /localhome/jenkins/)
 nlt_args+=(--log-usage-save nltir.xml)
 nlt_args+=(--log-usage-export nltr.json)
 
-echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
-echo "[DEBUG] COVFILE:        ${COVFILE:-}"
-
 : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
 if [ -d "${BULLSEYE_DIR}" ]; then
     export COVFILE="/tmp/test.cov"
@@ -59,17 +56,14 @@ if [ -d "${BULLSEYE_DIR}" ]; then
     nlt_args+=(--memcheck no)
 fi
 
-echo "[DEBUG] BULLSEYE_DIR:   ${BULLSEYE_DIR:-}"
-echo "[DEBUG] COVFILE:        ${COVFILE:-}"
-
-if [ -e "${COVFILE}" ]; then
+if [ -e "${COVFILE:-}" ]; then
     echo "Code coverage before running unit tests:"
     /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 fi
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py "${nlt_args[@]}" all
 
-if [ -e "${COVFILE}" ]; then
+if [ -e "${COVFILE:-}" ]; then
     echo "Code coverage after running unit tests:"
     /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 fi
