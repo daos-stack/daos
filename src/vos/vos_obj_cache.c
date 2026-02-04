@@ -535,22 +535,35 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 	D_ASSERT(intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE ||
 		 intent == DAOS_INTENT_MARK);
 
-	if (obj->obj_df == NULL) {
-		rc = vos_oi_alloc(cont, obj->obj_id, epr->epr_hi, &obj->obj_df, ts_set);
-		if (rc) {
-			DL_ERROR(rc, DF_CONT": Failed to allocate OI "DF_UOID".",
-				 DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				 DP_UOID(obj->obj_id));
-			return rc;
-		}
-		D_ASSERT(obj->obj_df);
-	} else {
-		vos_ilog_ts_ignore(vos_obj2umm(obj), &obj->obj_df->vo_ilog);
-	}
-
-	/* Check again since it could yield since vos_obj_hold() */
 	if (check_discard(obj, flags))
 		return -DER_UPDATE_AGAIN;
+
+	/* Lookup OI table if the cached object is negative */
+	if (obj->obj_df == NULL) {
+		obj->obj_sync_epoch = 0;
+		rc                  = vos_oi_find(cont, obj->obj_id, &obj->obj_df, ts_set);
+		if (rc == 0) {
+			obj->obj_sync_epoch = obj->obj_df->vo_sync;
+		} else if (rc == -DER_NONEXIST) {
+			rc = vos_oi_alloc(cont, obj->obj_id, epr->epr_hi, &obj->obj_df, ts_set);
+			if (rc) {
+				DL_ERROR(rc, DF_CONT ": Failed to allocate OI " DF_UOID ".",
+					 DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+					 DP_UOID(obj->obj_id));
+				return rc;
+			}
+			D_ASSERT(obj->obj_df);
+		} else if (rc) {
+			DL_ERROR(rc, DF_CONT ": Failed to find OI " DF_UOID ".",
+				 DP_CONT(cont->vc_pool->vp_id, cont->vc_id), DP_UOID(obj->obj_id));
+			return rc;
+		}
+	} else if (likely(intent != DAOS_INTENT_MARK)) {
+		vos_ilog_ts_ignore(vos_obj2umm(obj), &obj->obj_df->vo_ilog);
+		rc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog, &obj->obj_id,
+				     sizeof(obj->obj_id));
+		D_ASSERT(rc == 0); /* Non-zero only valid for akey */
+	}
 
 	/* Check the sync epoch */
 	if (intent != DAOS_INTENT_MARK && epr->epr_hi <= obj->obj_sync_epoch &&
@@ -610,6 +623,10 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 	return rc;
 }
 
+/*
+ * The legacy function is being phased out. It is currently used to hold an object for fetch and
+ * iteration operations. Update and punch operations use vos_obj_acquire() to hold an object.
+ */
 int
 vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t *epr,
 	     daos_epoch_t bound, uint64_t flags, uint32_t intent, struct vos_object **obj_p,
@@ -980,14 +997,16 @@ vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, bool pin,
 		}
 	}
 
-	if (!obj->obj_bkt_alloted)
-		obj_allot_bkt(cont->vc_pool, obj);
+	if (vos_pool_is_evictable(cont->vc_pool)) {
+		if (!obj->obj_bkt_alloted)
+			obj_allot_bkt(cont->vc_pool, obj);
 
-	if (pin) {
-		rc = obj_pin_bkt(cont->vc_pool, obj);
-		if (rc) {
-			obj_put(occ, obj, false);
-			return rc;
+		if (pin) {
+			rc = obj_pin_bkt(cont->vc_pool, obj);
+			if (rc) {
+				obj_put(occ, obj, false);
+				return rc;
+			}
 		}
 	}
 
