@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -136,8 +136,14 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 			fmt.Fprintf(w, "- Rebuild %s, %d objs, %d recs\n",
 				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
 		} else {
-			fmt.Fprintf(w, "- Rebuild failed, status=%d\n", pi.Rebuild.Status)
+			fmt.Fprintf(w, "- Rebuild %s (state=%s, status=%d)\n",
+				pi.Rebuild.DerivedState, pi.Rebuild.State, pi.Rebuild.Status)
 		}
+		s := "normal"
+		if pi.Rebuild.Degraded {
+			s = "degraded"
+		}
+		fmt.Fprintf(w, "- Data redundancy: %s\n", s)
 	} else {
 		fmt.Fprintln(w, "- No rebuild status available.")
 	}
@@ -164,7 +170,7 @@ func PrintPoolQueryTargetInfo(pqti *daos.PoolQueryTargetInfo, out io.Writer) err
 	w := txtfmt.NewErrWriter(out)
 
 	// Maintain output compatibility with the `daos pool query-targets` output.
-	fmt.Fprintf(w, "Target: type %s, state %s\n", pqti.Type, pqti.State)
+	fmt.Fprintf(w, "Target: state %s\n", pqti.State)
 	if pqti.Space != nil {
 		if pqti.MdOnSsdActive {
 			printPoolTiersMdOnSsd(pqti.MemFileBytes, pqti.Space, w, false)

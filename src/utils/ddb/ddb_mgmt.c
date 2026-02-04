@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2025 Vdura Inc.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,6 +32,7 @@ ddb_auto_calculate_tmpfs_mount_size(unsigned int *tmpfs_mount_size)
 	int                   rc = 0;
 	int                   pool_list_cnt;
 	uint64_t              pool_size;
+	uint64_t              rdb_size;
 	uint64_t              total_size;
 	const unsigned long   GiB = (1ul << 30);
 
@@ -47,17 +48,32 @@ ddb_auto_calculate_tmpfs_mount_size(unsigned int *tmpfs_mount_size)
 	total_size = 0;
 	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
 		if ((pool_info->spi_blob_sz[SMD_DEV_TYPE_META] == 0) ||
-		    (pool_info->spi_flags[SMD_DEV_TYPE_META] & SMD_POOL_IN_CREATION)) {
+		    (pool_info->spi_flags[SMD_DEV_TYPE_META] & SMD_POOL_IN_CREATION))
 			continue;
+
+		rdb_size = 0;
+		rc       = smd_rdb_get_blob_sz(pool_info->spi_id, &rdb_size);
+		if (rc == 0) {
+			/** Align to 4K */
+			rdb_size = D_ALIGNUP(rdb_size, 1ULL << 12);
+			total_size += rdb_size;
+		} else if (rc == -DER_NONEXIST) {
+			rc = 0;
+		} else {
+			D_ERROR("Failed to extract the size of rdb for " DF_UUID ": " DF_RC "\n",
+				DP_UUID(pool_info->spi_id), DP_RC(rc));
+			break;
 		}
+
 		D_ASSERT(pool_info->spi_scm_sz > 0);
 
 		/** Align to 4K */
 		pool_size = (D_ALIGNUP(pool_info->spi_scm_sz, 1ULL << 12)) *
 			    pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META];
 		total_size += pool_size;
-		D_INFO("Pool " DF_UUID " required scm size: " DF_U64 "", DP_UUID(pool_info->spi_id),
-		       pool_size);
+
+		D_INFO("Pool " DF_UUID " required scm size " DF_U64 ", rdb size " DF_U64 "\n",
+		       DP_UUID(pool_info->spi_id), pool_size, rdb_size);
 	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
@@ -140,6 +156,7 @@ ddb_recreate_pooltgts(const char *storage_path)
 	struct smd_pool_info *pool_info = NULL;
 	struct smd_pool_info *tmp;
 	d_list_t              pool_list;
+	daos_size_t           rdb_size;
 	int                   rc = 0;
 	int                   pool_list_cnt;
 
@@ -152,20 +169,27 @@ ddb_recreate_pooltgts(const char *storage_path)
 	}
 
 	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
-		if ((pool_info->spi_blob_sz[SMD_DEV_TYPE_META] == 0) ||
-		    (pool_info->spi_flags[SMD_DEV_TYPE_META] & SMD_POOL_IN_CREATION)) {
+		if (pool_info->spi_blob_sz[SMD_DEV_TYPE_META] == 0 ||
+		    pool_info->spi_flags[SMD_DEV_TYPE_META] & SMD_POOL_IN_CREATION)
 			continue;
-		}
 
-		D_INFO("Recreating files for the pool " DF_UUID "", DP_UUID(pool_info->spi_id));
-		D_ASSERT(pool_info->spi_scm_sz > 0);
-		/* specify rdb_blob_sz as zero to skip rdb file creation */
-		rc = ds_mgmt_tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
-					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], 0,
-					  storage_path, NULL);
-		if (rc) {
+		rdb_size = 0;
+		rc       = smd_rdb_get_blob_sz(pool_info->spi_id, &rdb_size);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			D_ERROR("Failed to extract the size of rdb for " DF_UUID ": " DF_RC "\n",
+				DP_UUID(pool_info->spi_id), DP_RC(rc));
 			break;
 		}
+
+		D_INFO("Recreating files for the pool " DF_UUID "\n", DP_UUID(pool_info->spi_id));
+		D_ASSERT(pool_info->spi_scm_sz > 0);
+
+		rc = ds_mgmt_tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
+					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META],
+					  pool_info->spi_tgts[SMD_DEV_TYPE_META], rdb_size,
+					  storage_path, NULL);
+		if (rc != 0)
+			break;
 	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {

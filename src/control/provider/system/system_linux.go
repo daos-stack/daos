@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -282,6 +283,33 @@ func (s LinuxProvider) Mkfs(req MkfsReq) error {
 	}
 
 	return nil
+}
+
+// GetDeviceLabel retrieves the filesystem label for the specified device.
+func (s LinuxProvider) GetDeviceLabel(device string) (string, error) {
+	if device == "" {
+		return "", errors.New("empty path")
+	}
+
+	cmdPath, err := exec.LookPath("lsblk")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to find lsblk")
+	}
+
+	if err := s.checkDevice(device); err != nil {
+		return "", err
+	}
+
+	args := []string{"-o", "label", "--noheadings", device}
+	out, err := exec.Command(cmdPath, args...).Output()
+	if err != nil {
+		return "", &RunCmdError{
+			Wrapped: err,
+			Stdout:  string(out),
+		}
+	}
+
+	return strings.TrimSpace(string(out)), nil
 }
 
 // Getfs probes the specified device in an attempt to determine the
