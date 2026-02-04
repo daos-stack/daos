@@ -263,7 +263,7 @@ class DdbTest(TestWithServers):
                        f"stdout = {ls_out}")
                 self.log.info(msg)
                 # Output is in the same format as dkey, so use the same regex. There are
-                # two lines, but lines breaks are added to fit into the code.
+                # two lines, but line breaks are added to fit into the code.
                 # Listing contents of 'DKEY: (/[0]/[0]/[0])
                 #   /a78b65a1-31f4-440b-95e1-b4ead193b3f1/281479271677953.0.0.2/
                 #   GSWOPOF1EX 0 0'
