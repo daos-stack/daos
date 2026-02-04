@@ -43,7 +43,11 @@ def _scan_go_file(node, env, _path):
                 if dep[-1] == '"':
                     includes.append(File(os.path.join(src_dir, header)))
                 else:
-                    includes.append(f'../../../include/{header}')
+                    # For angle-bracket includes, only track DAOS headers (in src/include/).
+                    # Skip system headers like <stdlib.h>, <stdint.h>, etc.
+                    daos_hdr = os.path.join(Dir('#').abspath, 'src', 'include', header)
+                    if os.path.exists(daos_hdr):
+                        includes.append(daos_hdr)
 
     return includes
 

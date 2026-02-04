@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -152,7 +153,7 @@ nvme_fault_reaction(void **state, int mode)
 	 * Get the Device info of all NVMe devices.
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
-	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 
 	faulty_disk_idx = pick_faulty_device(devices, ndisks, rank);
@@ -366,7 +367,7 @@ nvme_test_verify_device_stats(void **state)
 	*Get the Device info of all NVMe devices.
 	*/
 	D_ALLOC_ARRAY(devices, ndisks);
-	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < ndisks; i++)
 		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n",
@@ -420,9 +421,8 @@ nvme_test_verify_device_stats(void **state)
 	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
 		      DP_UUID(devices[rank_pos].device_id),
 		devices[rank_pos].host);
-	rc = dmg_storage_set_nvme_fault(dmg_config_file,
-					devices[rank_pos].host,
-		devices[rank_pos].device_id, 1);
+	rc = dmg_storage_set_nvme_fault(dmg_config_file, devices[rank_pos].host,
+					devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
 	sleep(60);
 
@@ -431,14 +431,14 @@ nvme_test_verify_device_stats(void **state)
 	* Verify "FAULTY -> TEARDOWN" and "TEARDOWN -> OUT" device states found
 	* in server log.
 	*/
-	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 
 	/* The device position could be changed, re-calculate the index */
 	rank_pos = pick_faulty_device(devices, ndisks, 0);
 	assert_true(rank_pos != -1);
 
-	assert_string_equal(devices[rank_pos].state, "\"EVICTED\"");
+	assert_string_equal(devices[rank_pos].state, "EVICTED");
 
 	rc = verify_state_in_log(devices[rank_pos].host, log_file,
 				 "NORMAL -> FAULTY");
@@ -512,7 +512,7 @@ nvme_test_get_blobstore_state(void **state)
 	 * Get the Device info of all NVMe devices.
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
-	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 	faulty_disk_idx = pick_faulty_device(devices, ndisks, rank);
 	if (faulty_disk_idx == -1) {
@@ -566,10 +566,8 @@ nvme_test_get_blobstore_state(void **state)
 	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
 		      DP_UUID(devices[faulty_disk_idx].device_id),
 		      devices[faulty_disk_idx].host);
-	rc = dmg_storage_set_nvme_fault(dmg_config_file,
-					devices[faulty_disk_idx].host,
-					devices[faulty_disk_idx].device_id,
-					1);
+	rc = dmg_storage_set_nvme_fault(dmg_config_file, devices[faulty_disk_idx].host,
+					devices[faulty_disk_idx].device_id);
 	assert_rc_equal(rc, 0);
 
 	/**
@@ -601,9 +599,12 @@ nvme_test_simulate_IO_error(void **state)
 	daos_size_t	size = 4 * 4096; /* record size */
 	char		*ow_buf;
 	char		*fbuf;
-	char		*write_errors;
-	char		*read_errors;
-	char		*check_errors;
+	/* Scratch buffers for dmg_storage_query_device_health: oversized for
+	 * both the longest key name ("bio_write_errs") and any numeric counter
+	 * value we expect back. */
+	char             write_errors[32];
+	char             read_errors[32];
+	char             check_errors[32];
 	char		*control_log_file;
 	char		*server_config_file;
 	int		rx_nr; /* number of record extents */
@@ -628,7 +629,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get the Device info of all NVMe devices
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
-	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 
 	rank_pos = pick_faulty_device(devices, ndisks, rank);
@@ -690,22 +691,20 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Get the Initial write error
 	 */
-	D_STRNDUP_S(write_errors, "bio_write_errs");
-	rc = dmg_storage_query_device_health(dmg_config_file,
-					     devices[rank_pos].host,
-					     write_errors,
-		devices[rank_pos].device_id);
+	strncpy(write_errors, "bio_write_errs", sizeof(write_errors) - 1);
+	write_errors[sizeof(write_errors) - 1] = '\0';
+	rc = dmg_storage_query_device_health(dmg_config_file, devices[rank_pos].host, write_errors,
+					     sizeof(write_errors), devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
 	print_message("Initial write_errors = %s\n", write_errors);
 
 	/*
 	 * Get the Initial read error
 	 */
-	D_STRNDUP_S(read_errors, "bio_read_errs");
-	rc = dmg_storage_query_device_health(dmg_config_file,
-					     devices[rank_pos].host,
-					     read_errors,
-		devices[rank_pos].device_id);
+	strncpy(read_errors, "bio_read_errs", sizeof(read_errors) - 1);
+	read_errors[sizeof(read_errors) - 1] = '\0';
+	rc = dmg_storage_query_device_health(dmg_config_file, devices[rank_pos].host, read_errors,
+					     sizeof(read_errors), devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
 	print_message("Initial read_errors = %s\n", read_errors);
 
@@ -743,11 +742,10 @@ nvme_test_simulate_IO_error(void **state)
 	 * Verify the recent write err count is > the initial err count.
 	 */
 	arg->expect_result = 0;
-	D_STRNDUP_S(check_errors, "bio_write_errs");
-	rc = dmg_storage_query_device_health(dmg_config_file,
-					     devices[rank_pos].host,
-					     check_errors,
-		devices[rank_pos].device_id);
+	strncpy(check_errors, "bio_write_errs", sizeof(check_errors) - 1);
+	check_errors[sizeof(check_errors) - 1] = '\0';
+	rc = dmg_storage_query_device_health(dmg_config_file, devices[rank_pos].host, check_errors,
+					     sizeof(check_errors), devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
 	print_message("Final write_error = %s\n", check_errors);
 	assert_true(atoi(check_errors) == atoi(write_errors) + 1);
@@ -756,11 +754,10 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get the read error count after Injecting BIO read error
 	 * Verify the recent read err count is > the initial err count.
 	 */
-	strcpy(check_errors, "bio_read_errs");
-	rc = dmg_storage_query_device_health(dmg_config_file,
-					     devices[rank_pos].host,
-					     check_errors,
-		devices[rank_pos].device_id);
+	strncpy(check_errors, "bio_read_errs", sizeof(check_errors) - 1);
+	check_errors[sizeof(check_errors) - 1] = '\0';
+	rc = dmg_storage_query_device_health(dmg_config_file, devices[rank_pos].host, check_errors,
+					     sizeof(check_errors), devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
 	print_message("Final read_errors = %s\n", check_errors);
 	assert_true(atoi(check_errors) == atoi(read_errors) + 1);
@@ -769,9 +766,6 @@ nvme_test_simulate_IO_error(void **state)
 	D_FREE(ow_buf);
 	D_FREE(fbuf);
 	D_FREE(devices);
-	D_FREE(write_errors);
-	D_FREE(read_errors);
-	D_FREE(check_errors);
 	D_FREE(control_log_file);
 	ioreq_fini(&req);
 }
