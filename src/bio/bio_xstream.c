@@ -62,7 +62,8 @@ unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
-unsigned int        bio_io_timeout         = 120000000; /* us, 120 seconds */
+unsigned int        bio_io_timeout         = 300000000; /* us, 300 seconds */
+bool                bio_faulty_on_timeout; /* Automatically mark SSD as faulty on IO timeout */
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -281,13 +282,15 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	d_getenv_uint("DAOS_SPDK_IO_TIMEOUT", &io_timeout_secs);
 	if (io_timeout_secs > 0) {
-		if (io_timeout_secs < 30 || io_timeout_secs > 300)
-			D_WARN("DAOS_SPDK_IO_TIMEOUT(%u) is invalid. Min:30,Max:300,Default:120\n",
+		if (io_timeout_secs < 30 || io_timeout_secs > 1200)
+			D_WARN("DAOS_SPDK_IO_TIMEOUT(%u) is invalid. Min:30,Max:1200,Default:300\n",
 			       io_timeout_secs);
 		else
 			bio_io_timeout = io_timeout_secs * 1000000; /* convert to us */
 	}
-	D_INFO("SPDK IO timeout set to %u us\n", bio_io_timeout);
+	d_getenv_bool("DAOS_AUTO_FAULTY_ON_TIMEOUT", &bio_faulty_on_timeout);
+	D_INFO("SPDK IO timeout set to %u us, faulty_on_tiemout:%s\n", bio_io_timeout,
+	       bio_faulty_on_timeout ? "enabled" : "disabled");
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
