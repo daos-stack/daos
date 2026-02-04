@@ -12,7 +12,6 @@ from apricot import TestWithServers
 from ddb_utils import DdbCommand
 from general_utils import create_string_buffer, get_random_string, report_errors
 from pydaos.raw import DaosObjClass, IORequest
-from recovery_utils import check_ram_used
 from run_utils import command_as_user, run_remote
 
 
@@ -101,10 +100,10 @@ class DdbTest(TestWithServers):
             command (str): Command to execute.
         """
         command_root = command_as_user(command=command, user="root")
-        command_result = run_remote(
-            log=self.log, hosts=self.hostlist_servers, command=command_root).passed
-        if not command_result:
-            self.fail(f"{command} failed!")
+        result = run_remote(
+            log=self.log, hosts=self.hostlist_servers, command=command_root)
+        if not result.passed:
+            self.fail(f"{command} failed on {result.failed_hosts}!")
 
     def test_recovery_ddb_ls(self):
         """Test ddb ls.
@@ -126,7 +125,7 @@ class DdbTest(TestWithServers):
         # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb
         # prov_mem documentation, but use daos_load_path here for clarity.
         daos_load_path = "/mnt/daos_load"
-        md_on_ssd = check_ram_used(server_manager=self.server_managers[0], log=self.log)
+        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
         if md_on_ssd:
             self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
             self.run_cmd_check_result(command=f"mkdir {daos_load_path}")
@@ -164,8 +163,9 @@ class DdbTest(TestWithServers):
         db_path = None
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
-            db_path = os.path.join(
-                self.log_dir, "control_metadata", "daos_control", "engine0")
+            control_metadata_path = self.server_managers[0].manager.job.yaml.\
+                metadata_params.path.value
+            db_path = os.path.join(control_metadata_path, "daos_control", "engine0")
             ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
 
         self.log_step("Verify container UUID.")
@@ -173,7 +173,7 @@ class DdbTest(TestWithServers):
             # "ddb ls" command for MD-on-SSD is quite different.
             # PMEM: ddb /mnt/daos/<pool_uuid>/vos-0 ls
             # MD-on-SSD: ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control
-            # /engine0 /mnt/daos_load/<pool_uuid>/vos-0 ls
+            # /engine0 --vos_path /mnt/daos_load/<pool_uuid>/vos-0 ls
             ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
             ddb_command.vos_path.update(
                 value=os.path.join(daos_load_path, pool.uuid.lower(), "vos-0"))
@@ -223,10 +223,14 @@ class DdbTest(TestWithServers):
         for obj_index in range(object_count):
             component_path = f"[0]/[{obj_index}]"
             cmd_result = ddb_command.list_component(component_path=component_path)
-            # Sample output.
-            # /d4e0c836-17bd-4df3-b255-929732486bab/281479271677953.0.0/
-            # [0] 'Sample dkey 0 0' (15)
-            # [1] 'Sample dkey 0 1' (15)
+            # Sample output. There are three lines, but a line break is added to fit into
+            # the code.
+            # Listing contents of 'OBJ: (/[0]/[0])
+            #   /a78b65a1-31f4-440b-95e1-b4ead193b3f1/281479271677953.0.0.2'
+            # DKEY: (/[0]/[0]/[0])
+            #   /a78b65a1-31f4-440b-95e1-b4ead193b3f1/281479271677953.0.0.2/GSWOPOF1EX 0 0
+            # DKEY: (/[0]/[0]/[1])
+            #   /a78b65a1-31f4-440b-95e1-b4ead193b3f1/281479271677953.0.0.2/GSWOPOF1EX 0 1
             match = re.findall(dkey_regex, cmd_result.joined_stdout)
 
             actual_dkey_count += len(match)
@@ -258,12 +262,15 @@ class DdbTest(TestWithServers):
                 msg = (f"List akeys obj_index = {obj_index}, dkey_index = {dkey_index}, "
                        f"stdout = {ls_out}")
                 self.log.info(msg)
-                # Output is in the same format as dkey, so use the same regex.
-                # /d4e0c836-17bd-4df3-b255-929732486bab/281479271677954.0.0/'
-                # Sample dkey 1 0'/
-                # [0] 'Sample akey 1 0 0' (17)
+                # Output is in the same format as dkey, so use the same regex. There are
+                # two lines, but lines breaks are added to fit into the code.
+                # Listing contents of 'DKEY: (/[0]/[0]/[0])
+                #   /a78b65a1-31f4-440b-95e1-b4ead193b3f1/281479271677953.0.0.2/
+                #   GSWOPOF1EX 0 0'
+                # AKEY: (/[0]/[0]/[0]/[0])
+                #   /a78b65a1-31f4-440b-95e1-b4ead193b3f1/281479271677953.0.0.2/
+                #   GSWOPOF1EX 0 0/OOJ2TNAHS7 0 0 0
                 match = re.findall(f"{dkey_regex}/(.*)", ls_out)
-
                 akey_count += len(match)
 
                 # Verify akey string. As in dkey, ignore the numbers at the end.

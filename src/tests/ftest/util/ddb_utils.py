@@ -287,7 +287,7 @@ class DdbCommand(DdbCommandBase):
         return self.run()
 
     def prov_mem(self, db_path, tmpfs_mount):
-        """Call ddb "" prov_mem <db_path> <tmpfs_mount>.
+        """Call ddb --vos_path "" prov_mem <db_path> <tmpfs_mount>.
 
         Before calling this method, "" (two double quotes) needs to be set to
         self.vos_path.
