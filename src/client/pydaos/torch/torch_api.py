@@ -16,6 +16,7 @@ import io
 import math
 import os
 import stat
+import sys
 from multiprocessing import Process, Queue
 from pathlib import Path
 
@@ -374,15 +375,19 @@ class WriteBuffer(io.BufferedIOBase):
                 self._workers.append(worker)
 
     def _worker_fn(self, queue):
-        self._dfs.worker_init()
-        while True:
-            work = queue.get()
-            if work is None:
-                break
+        try:
+            self._dfs.worker_init()
+            while True:
+                work = queue.get()
+                if work is None:
+                    break
 
-            (offset, chunk) = work
-            self._dfs.write(self._path, self._mode, self._oflags,
-                            self._class_name, self._file_chunk_size, offset, chunk)
+                (offset, chunk) = work
+                self._dfs.write(self._path, self._mode, self._oflags,
+                                self._class_name, self._file_chunk_size, offset, chunk)
+        # pylint: disable=broad-exception-caught
+        except Exception as e:
+            sys.exit(getattr(e, 'errno', errno.EIO))
 
     def write(self, data):
         """ Writes data to the buffer."""
@@ -432,6 +437,11 @@ class WriteBuffer(io.BufferedIOBase):
             self._queue.put(None)
         for worker in self._workers:
             worker.join()
+
+        # lets see if any worker exited abnormally and if so, raise an error
+        for worker in self._workers:
+            if worker.exitcode != 0:
+                raise OSError(worker.exitcode, os.strerror(worker.exitcode))
 
         super().close()
 

@@ -84,28 +84,30 @@ class PytorchCheckpointTest(TestWithServers):
         :avocado: tags=PytorchCheckpointTest,test_checkpoint_nested_directories
         """
 
-        pool = self.get_pool()
-        container = self.get_container(pool)
-        data = os.urandom(4096)
+        pool = self.get_pool().identifier
+        container = self.get_container(pool).identifier
 
-        files = ["/file.pt", "/one/file.pt", "/one/two/file.pt"]
+        d1, d2 = str(uuid.uuid4()), str(uuid.uuid4())
+        files = ["/file.pt", f"/{d1}/file.pt", f"/{d1}/{d2}/file.pt"]
 
+        # by default parent directories should be created
         with Checkpoint(pool, container) as pt:
-            # By default parent should be created
             for name in files:
                 with pt.writer(name) as w:
-                    w.write(data)
+                    w.write(os.urandom(4096))
 
-            try:
+        # ensure that it fails with expected exception
+        try:
+            with Checkpoint(pool, container) as pt:
                 fname = f"/{str(uuid.uuid4())}/file.pt"
                 with pt.writer(fname, ensure_path=False) as w:
-                    w.write(data)
+                    w.write(os.urandom(4096))
                     raise RuntimeError("expected OSError with errno.ENOENT")
-            except OSError as e:
-                if e.errno != errno.ENOENT:
-                    raise RuntimeError(f"expected errno.ENOENT, got {os.strerror(e.errno)}") from e
-            except Exception as e:
-                raise RuntimeError(f"unexpected error: {e}") from e
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise RuntimeError(f"expected errno.ENOENT, got {os.strerror(e.errno)}") from e
+        except Exception as e:
+            raise RuntimeError(f"unexpected error: {e}") from e
 
     def _test_checkpoint(self, pool, cont, writes, chunk_size=0, chunks_limit=0, workers=0):
         """Creates a checkpoint with the given parameters, writes the given data to it,
@@ -114,19 +116,17 @@ class PytorchCheckpointTest(TestWithServers):
 
         self.log.info("Checkpoint test: writes=%s, chunk_size=%s, chunks_limit=%s, workers=%s",
                       len(writes), chunk_size, chunks_limit, workers)
-        chkp = Checkpoint(pool, cont, transfer_chunk_size=chunk_size, chunks_limit=chunks_limit,
-                          workers=workers)
+        with Checkpoint(pool, cont, transfer_chunk_size=chunk_size, chunks_limit=chunks_limit,
+                        workers=workers) as chkp:
+            expected = bytearray()
+            fname = str(uuid.uuid4())
+            with chkp.writer(fname) as w:
+                for chunk in writes:
+                    w.write(chunk)
+                    expected.extend(chunk)
 
-        expected = bytearray()
-        fname = str(uuid.uuid4())
-        with chkp.writer(fname) as w:
-            for chunk in writes:
-                w.write(chunk)
-                expected.extend(chunk)
-
-        actual = chkp.reader(fname)
-        if expected != actual.getvalue():
-            self.fail(
-                f"checkpoint did not read back the expected content for {len(writes)} writes,"
-                f"chunk_size={chunk_size}, chunks_limit={chunks_limit}, workers={workers}")
-        del chkp
+            actual = chkp.reader(fname)
+            if expected != actual.getvalue():
+                self.fail(
+                    f"checkpoint did not read back the expected content for {len(writes)} writes,"
+                    f"chunk_size={chunk_size}, chunks_limit={chunks_limit}, workers={workers}")
