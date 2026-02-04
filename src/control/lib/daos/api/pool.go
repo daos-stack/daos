@@ -669,8 +669,11 @@ func GetPoolList(ctx context.Context, req GetPoolListReq) ([]*daos.PoolInfo, err
 	log := logging.FromContext(ctx)
 	log.Debugf("GetPoolList(%+v)", req)
 
-	cSysName := C.CString(req.SysName)
-	defer freeString(cSysName)
+	var cSysName *C.char
+	if req.SysName != "" {
+		cSysName = C.CString(req.SysName)
+		defer freeString(cSysName)
+	}
 
 	var cPools []C.daos_mgmt_pool_info_t
 	for {
