@@ -1,6 +1,10 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
-# WORK IN PROGRESS
+#
+#  (C) Copyright 2025 Google LLC
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
@@ -65,7 +69,7 @@ install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 
 EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
-DEPENDS=( "mercury >= ${mercury_full}" "${libfabric_lib} >= ${libfabric_full}" )
+DEPENDS=( "mercury >= ${mercury_version}" )
 DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
 build_package "daos"
 
