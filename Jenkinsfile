@@ -915,7 +915,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8.8')
-                stage('Functional on EL 9.7') {
+                stage('Functional on EL 9') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -989,7 +989,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
+                            filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
