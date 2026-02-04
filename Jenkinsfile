@@ -324,23 +324,40 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     }
 
     String skipMsgParams = ''
-    for(entry in params) {
-        println("Checking parameter ${entry.key} for value ${entry.value}: ${paramsValue(entry.key, entry.value)}")
-        if (paramsValue(entry.key, entry.value) != entry.value) {
-            skipMsgParams = "Skipping stage due to ${entry.key} parameter not set to ${entry.value}"
-            break
+    params.find { key, value ->
+        println("Checking parameter ${key} for value ${value}: ${paramsValue(key, value)}")
+        if (paramsValue(key, value) != value) {
+            skipMsgParams = "Skipping stage due to ${key} parameter not set to ${value}"
+            return true
         }
+        false
     }
+    // for(entry in params) {
+    //     println("Checking parameter ${entry.key} for value ${entry.value}: ${paramsValue(entry.key, entry.value)}")
+    //     if (paramsValue(entry.key, entry.value) != entry.value) {
+    //         skipMsgParams = "Skipping stage due to ${entry.key} parameter not set to ${entry.value}"
+    //         break
+    //     }
+    // }
 
     String skipMsgPragmas = ''
-    for(entry in pragmas) {
-        String expected = entry.value.toString().toLowerCase()
-        println("Checking pragma ${entry.key} for value ${expected}: ${cachedCommitPragma(entry.key, expected).toLowerCase()}")
-        if (cachedCommitPragma(entry.key, expected).toLowerCase() != expected) {
-            skipMsgPragmas = "Skipping stage due to ${entry.key} pragma not set to ${entry.value}"
-            break
+    pragmas.find { key, value ->
+        String expected = value.toString().toLowerCase()
+        println("Checking pragma ${key} for value ${expected}: ${cachedCommitPragma(key, expected).toLowerCase()}")
+        if (cachedCommitPragma(key, expected).toLowerCase() != expected) {
+            skipMsgPragmas = "Skipping stage due to ${key} pragma not set to ${expected}"
+            return true
         }
+        false
     }
+    // for(entry in pragmas) {
+    //     String expected = entry.value.toString().toLowerCase()
+    //     println("Checking pragma ${entry.key} for value ${expected}: ${cachedCommitPragma(entry.key, expected).toLowerCase()}")
+    //     if (cachedCommitPragma(entry.key, expected).toLowerCase() != expected) {
+    //         skipMsgPragmas = "Skipping stage due to ${entry.key} pragma not set to ${entry.value}"
+    //         break
+    //     }
+    // }
 
     if (startedByUser()) {
         // Manual build: check parameters first
