@@ -310,14 +310,21 @@ class Launch():
             message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
+        logger.info("Finished detecting tests")
+
         # Verify at least one test was requested
         if not group.tests:
             message = f"No tests found for tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
+        logger.info("BANG: 1")
+
         # Done if just listing tests matching the tags
         if args.list and not args.modify:
+            logger.info(f"args.list: {args.list}, args.modify: {args.modify}")
             return self.get_exit_status(0, "Listing tests complete")
+
+        logger.info("BANG: 2")
 
         # Setup the fuse configuration
         try:
@@ -326,7 +333,7 @@ class Launch():
             # Warn but don't fail
             message = "Issue detected setting up the fuse configuration"
             setup_result.warn_test(logger, "Setup", message, sys.exc_info())
-
+        logger.info("BANG: 3")
         # Setup override systemctl files
         try:
             clients = args.test_clients if args.test_clients else args.test_servers
@@ -335,7 +342,7 @@ class Launch():
         except LaunchException:
             message = "Issue detected setting up the systemctl configuration"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
+        logger.info("BANG: 4")
         # Get the core file pattern information
         core_files = {}
         if args.process_cores:
@@ -347,7 +354,7 @@ class Launch():
                 return self.get_exit_status(1, message, "Setup", sys.exc_info())
         else:
             logger.debug("Not collecting core files")
-
+        logger.info("BANG: 5")
         # Determine if bullseye code coverage collection is enabled
         code_coverage = CodeCoverage(test_env)
         # pylint: disable=unsupported-binary-operation
@@ -364,14 +371,14 @@ class Launch():
         except StorageException:
             message = "Error detecting storage information for test yaml files"
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
-
+        logger.info("BANG: 6")
         if args.modify:
             return self.get_exit_status(0, "Modifying test yaml files complete")
-
+        logger.info("BANG: 7")
         # Configure slurm if any tests use partitions
         test_status = group.setup_slurm(
             logger, self.slurm_setup, self.slurm_install, self.user, self.result)
-
+        logger.info("BANG: 8")
         # Split the timer for the test result to account for any non-test execution steps as not
         # to double report the test time accounted for in each individual test result
         setup_result.end()
@@ -382,7 +389,7 @@ class Launch():
             not args.disable_stop_daos, args.archive, args.rename, args.jenkinslog, core_files,
             args.logs_threshold, args.user_create, code_coverage, self.job_results_dir,
             self.logdir, args.clear_mounts, cleanup_files)
-
+        logger.info("BANG: 9")
         # Convert the test status to a launch.py status
         status |= summarize_run(logger, self.mode, test_status)
 
@@ -391,6 +398,8 @@ class Launch():
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
+
+        logger.info("BANG: 10")
 
         # Return the appropriate return code and mark the test result to account for any non-test
         # execution steps complete
@@ -731,6 +740,7 @@ def main():
     args = parser.parse_args()
 
     # Override arguments via the mode
+    logger.info(f"args.mode: {args.mode}")
     if args.mode == "ci":
         args.archive = True
         args.include_localhost = True
