@@ -440,6 +440,37 @@
    fun:runtime.persistentalloc
 }
 {
+   libdaos_control_go_runtime_cond
+   Memcheck:Cond
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_value8
+   Memcheck:Value8
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_addr8
+   Memcheck:Addr8
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_leak
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_free
+   Memcheck:Free
+   ...
+   obj:*/libdaos_control.so
+}
+{
    DAOS-16866
    Memcheck:Leak
    match-leak-kinds: reachable

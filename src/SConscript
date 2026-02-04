@@ -72,6 +72,7 @@ def scons():
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/profile.h')
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/dtx.h')
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/cmd_parser.h')
+    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/control_types.h')
 
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
@@ -104,6 +105,7 @@ def scons():
     # Generate common libraries used by multiple components
     SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
+    SConscript('control/lib/control/c/SConscript')
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
     SConscript('vea/SConscript')
