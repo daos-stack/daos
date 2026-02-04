@@ -4156,6 +4156,26 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
+static int
+pool_query_set_rebuild_status_degraded(struct pool_svc *svc, struct daos_rebuild_status *rebuild_st)
+{
+	unsigned int down_tgts = 0;
+	int          rc;
+
+	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+	rc = pool_map_find_down_tgts(svc->ps_pool->sp_map, NULL /* tgt_pp */, &down_tgts);
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+	if (rc != 0)
+		return rc;
+
+	if (down_tgts > 0)
+		rebuild_st->rs_flags |= DAOS_RSF_DEGRADED;
+	else
+		rebuild_st->rs_flags &= ~DAOS_RSF_DEGRADED;
+
+	return 0;
+}
+
 /* Currently we only maintain compatibility between 2 metadata layout versions */
 #define NUM_POOL_VERSIONS	2
 
@@ -4385,6 +4405,12 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		DL_ERROR(rc, DF_UUID ": permission denied for connect attempt for " DF_X64,
 			 DP_UUID(in->pci_op.pi_uuid), flags);
 		goto out_map_version;
+	}
+
+	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = pool_query_set_rebuild_status_degraded(svc, &out->pco_rebuild_st);
+		if (rc != 0)
+			goto out_map_version;
 	}
 
 	transfer_map = true;
@@ -5447,6 +5473,12 @@ pool_query_handler(crt_rpc_t *rpc, int handler_version)
 			D_ERROR("iv_prop verify failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_lock, rc);
 		}
+	}
+
+	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = pool_query_set_rebuild_status_degraded(svc, &out->pqo_rebuild_st);
+		if (rc != 0)
+			goto out_lock;
 	}
 
 out_lock:
