@@ -1,0 +1,91 @@
+"""Build DAOS Control C Bindings Shared Library"""
+import os
+from os.path import join
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'base_env', 'prereqs')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(CPPPATH=[Dir('.'), Dir('.').srcnode()])
+    env.d_add_build_rpath()
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.AppendUnique(CPPPATH=[Dir('.'), Dir('.').srcnode()])
+    base_env.d_add_build_rpath()
+
+    if not prereqs.client_requested():
+        return
+
+    cenv = env.Clone()
+
+    if cenv.get("COMPILER") == 'covc':
+        cenv.Replace(CC='gcc', CXX='g++')
+
+    cenv.Tool('go_builder')
+
+    cenv.d_add_rpaths("..", True, True)
+    cenv.require('protobufc')
+    cenv.AppendENVPath("CGO_CFLAGS", cenv.subst("$_CPPINCFLAGS"), sep=" ")
+
+    cgolibs = cenv.subst("-L$BUILD_DIR/src/gurt "
+                         "-L$BUILD_DIR/src/cart "
+                         "-L$BUILD_DIR/src/common "
+                         "$_RPATH")
+    cenv.AppendENVPath("CGO_LDFLAGS", cgolibs, sep=" ")
+
+    gosrc = Dir('.').srcnode().abspath
+
+    build_lib = cenv.subst(join('$BUILD_DIR/src/control/lib/control/c', 'libdaos_control.so'))
+    build_hdr = cenv.subst(join('$BUILD_DIR/src/control/lib/control/c', 'libdaos_control.h'))
+    # Write the header out for in-tree consumers. Not packaged for distribution.
+    build_hdr_daos = cenv.subst(join('$BUILD_DIR/src/control/lib/control/c',
+                                     'daos', 'libdaos_control.h'))
+
+    Import('daos_version', 'conf_dir')
+    ldflags_path = 'github.com/daos-stack/daos/src/control/build'
+    ldflags = (f'-X {ldflags_path}.DaosVersion={daos_version} '
+               f'-X {ldflags_path}.ConfigDir={conf_dir} '
+               f'-extldflags "-Wl,-soname,libdaos_control.so"')
+
+    # Build tags must mirror what other go binaries use so conditional files
+    # get compiled consistently.
+    is_release = cenv.get("BUILD_TYPE") == "release"
+    build_tags = ["spdk"]
+    if is_release:
+        build_tags.append("release")
+    else:
+        build_tags.append("fault_injection")
+    tags_flag = f"-tags {','.join(build_tags)}"
+
+    # Build as a C shared library so that C consumers can link against it.
+    hdr_daos_dir = os.path.dirname(build_hdr_daos)
+    cmd = (f"cd {gosrc} && {cenv.d_go_bin} build -mod vendor "
+           f"-ldflags '{ldflags}' "
+           f"{tags_flag} "
+           f"-buildmode=c-shared "
+           f"-o {build_lib} . && chmod 0755 {build_lib} && "
+           f"mkdir -p {hdr_daos_dir} && cp -f {build_hdr} {build_hdr_daos}")
+
+    sources = [File(os.path.join(gosrc, f)) for f in os.listdir(gosrc)
+               if f.endswith('.go') or f.endswith('.h')]
+    sources.append(cenv.d_go_bin)
+
+    targets = cenv.Command([build_lib, build_hdr, build_hdr_daos], sources, cmd)
+    lib_target = targets[0]
+
+    # Ensure library dependencies are built first
+    Depends(targets, cenv.subst('$BUILD_DIR/src/common/libdaos_common.so'))
+    Depends(targets, cenv.subst('$BUILD_DIR/src/cart/libcart.so'))
+    Depends(targets, cenv.subst('$BUILD_DIR/src/gurt/libgurt.so'))
+
+    # Install the shared library only. libdaos_control is consumed by
+    # libdaos_tests via the build-tree header on CPPPATH.
+    cenv.Install('$PREFIX/lib64', lib_target)
+
+    daos_control_tgts = targets
+    Export('daos_control_tgts')
+
+
+if __name__ == "SCons.Script":
+    scons()

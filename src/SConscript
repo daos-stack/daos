@@ -104,6 +104,7 @@ def scons():
     # Generate common libraries used by multiple components
     SConscript('gurt/SConscript')
     SConscript('cart/SConscript')
+    SConscript('control/lib/control/c/SConscript')
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
     SConscript('vea/SConscript')
