@@ -1,6 +1,10 @@
 %changelog
-* Mon Jan 19 2026 Oksana Salyk <oksana.salyk@hpe.com> 2.7.103-2
+* Mon Jan 19 2026 Oksana Salyk <oksana.salyk@hpe.com> 2.7.103-3
 - Update PMDK to release 2.1.3
+
+* Fri Jan 16 2026  Jerome Soumagne <jerome.soumagne@hpe.com> 2.7.103-2
+- Drop libfabric-devel build requirement
+- Drop libfabric requirement that is already provided by mercury-libfabric
 
 * Fri Dec 19 2025 Dalton Bohning <dalton.bohning@hpe.com> 2.7.103-1
 - Bump version to 2.7.103

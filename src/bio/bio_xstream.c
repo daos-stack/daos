@@ -56,9 +56,7 @@ static unsigned int bio_chk_init_pct;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
 /* Whether SPDK inited */
-bool bio_spdk_inited;
-/* Whether VMD is enabled */
-bool                bio_vmd_enabled;
+bool                bio_spdk_inited;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
@@ -109,7 +107,6 @@ bio_spdk_conf_read(struct spdk_env_opts *opts)
 		return rc;
 	}
 	nvme_glb.bd_nvme_roles = roles;
-	bio_vmd_enabled        = vmd_enabled && (nvme_glb.bd_bdev_class == BDEV_CLASS_NVME);
 
 	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 	if (rc != 0) {
@@ -301,7 +298,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	}
 
 	if (nvme_conf && strlen(nvme_conf) > 0) {
-		fd = open(nvme_conf, O_RDONLY, 0600);
+		fd = open(nvme_conf, O_RDONLY);
 		if (fd < 0)
 			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
 			       nvme_conf, DP_RC(daos_errno2der(errno)));
@@ -1075,10 +1072,10 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		/* A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible */
+		/* Clear any pre-existing VMD-LED state */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-		if ((rc != 0) && (rc != -DER_NOTSUPPORTED)) {
+		if (rc != 0) {
 			DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
 				 DP_UUID(d_bdev->bb_uuid));
 			return rc;
@@ -2024,22 +2021,15 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
-	if (!bio_vmd_enabled)
-		return;
-
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			/**
-			 * LED will be reset to faulty or normal state based on SSDs bio_bdevs.
-			 * A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible.
-			 */
+			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs. */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0) {
-				if (rc != -DER_NOTSUPPORTED)
-					DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
-						 DP_UUID(d_bdev->bb_uuid));
+				DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+					 DP_UUID(d_bdev->bb_uuid));
 				continue;
 			}
 

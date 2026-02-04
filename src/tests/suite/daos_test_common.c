@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1121,6 +1121,12 @@ daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
 }
 
+int
+daos_pool_get_prop(const uuid_t pool_uuid, const char *name, char **value_out)
+{
+	return dmg_pool_get_prop(dmg_config_file, NULL, pool_uuid, name, value_out);
+}
+
 void
 daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 		  const char *grp, d_rank_list_t *svc, d_rank_t rank)
@@ -1702,4 +1708,42 @@ test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_nu
 
 	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
 	assert_rc_equal(rc, 0);
+}
+
+/**
+ * Duplicate unescaped \a value, escaping every ';' with '\\'. The caller is
+ * responsible for freeing the returned string.
+ *
+ * \param[in]	value	self_heal value to escape
+ */
+char *
+test_escape_self_heal(const char *value)
+{
+	size_t      len = 0;
+	char       *new_value;
+	const char *src;
+	char       *dst;
+
+	for (src = value; *src != '\0'; src++) {
+		D_ASSERT(*src != '\\');
+		len++;
+		if (*src == ';')
+			len++; /* for '\\' */
+	}
+
+	D_ALLOC(new_value, len + 1 /* '\0' */);
+	D_ASSERT(new_value != NULL);
+
+	dst = new_value;
+	for (src = value; *src != '\0'; src++) {
+		if (*src == ';') {
+			*dst++ = '\\';
+			*dst++ = ';';
+		} else {
+			*dst++ = *src;
+		}
+	}
+	*dst = '\0';
+
+	return new_value;
 }
