@@ -31,7 +31,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     cache_time = '2d'
     # Timeout in minutes.  This is per command so up to double this or more as there are two
     # scons commands which can both take a long time.
-    build_time = 60
+    build_time = 90
 
     dfuse_namespace = None
 
