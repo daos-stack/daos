@@ -726,7 +726,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test') {
+                stage('Unit Test on EL') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -751,7 +751,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev') {
+                stage('Unit Test bdev on EL') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
