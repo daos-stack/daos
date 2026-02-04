@@ -1,12 +1,11 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
-import shutil
 
 from apricot import TestWithServers
 from cmocka_utils import CmockaUtils, get_cmocka_command
@@ -86,6 +85,13 @@ class DaosCoreBase(TestWithServers):
         daos_test_env["D_LOG_FILE"] = get_log_file(self.client_log)
         daos_test_env["D_LOG_MASK"] = self.get_test_param("test_log_mask", "DEBUG")
         daos_test_env["DD_MASK"] = "mgmt,io,md,epc,rebuild,test"
+        # Route libdaos_control (the C-bindings for dmg_* helpers in
+        # tests_dmg_helpers.c) log directly into the test's outputdir.
+        # ftest --archive collects self.outputdir as part of each test's
+        # artifact bundle; DAOS_TEST_LOG_DIR on client nodes is NOT
+        # collected (clush --rcopy only pulls from server hosts).
+        daos_test_env["DAOS_TEST_CONTROL_LOG_FILE"] = os.path.join(
+            self.outputdir, f"{self.subtest_name}_libdaos_control.log")
         daos_test_env["COVFILE"] = "/tmp/test.cov"
         daos_test_env["POOL_SCM_SIZE"] = str(scm_size)
         daos_test_env["POOL_NVME_SIZE"] = str(nvme_size)
@@ -111,13 +117,3 @@ class DaosCoreBase(TestWithServers):
                         rank, ["Stopped", "Excluded"])
 
         cmocka_utils.run_cmocka_test(self, job)
-
-        try:
-            tmp_log_path = "/tmp/suite_dmg.log"
-            log_path = os.path.join(self.outputdir, f"{self.subtest_name}_dmg.log")
-            shutil.move(tmp_log_path, log_path)
-        except FileNotFoundError:
-            # if dmg wasn't called, there will not be a dmg log file
-            self.log.info("dmg log file not found")
-        except IOError as error:
-            self.log.error("unable to move dmg log: %s", error)
