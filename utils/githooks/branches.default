@@ -1,5 +1,4 @@
 #!/bin/bash
 set -eEuo pipefail
-echo feature/cat_recovery
 echo feature/multiprovider
 echo feature/firewall
