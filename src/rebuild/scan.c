@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,9 +67,9 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	shards[count] = obj_val->shard;
 	arg->count++;
 
-	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" ephs "DF_U64
-		"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
-		DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
+	D_DEBUG(DB_REBUILD,
+		"send oid/con " DF_UOID "/" DF_UUID " ephs " DF_X64 " shard %d cnt %d tgt_id %d\n",
+		DP_UOID(oids[count]), DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
 		arg->count, arg->tgt_id);
 
 	rc = dbtree_iter_delete(ih, NULL);
@@ -586,7 +586,7 @@ rebuild_obj_ult(void *data)
 	struct rebuild_obj_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
-	ds_migrate_object(rpt->rt_pool, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
+	ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
 			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
@@ -616,7 +616,7 @@ rebuild_object_local(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 	arg->tgt_index = tgt_index;
 	arg->shard = shard;
 
-	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_create(rebuild_obj_ult, arg, DSS_XS_VOS, tgt_index, 0, NULL);
 	if (rc) {
 		D_FREE(arg);
 		rpt_put(rpt);
@@ -892,11 +892,12 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	while (cont_child->sc_ec_agg_active &&
 	       rpt->rt_rebuild_op != RB_OP_RECLAIM &&
 	       rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
-		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
-			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
+		D_ASSERTF(atomic_load(&rpt->rt_pool->sp_rebuilding) >= 0,
+			  DF_UUID " rebuilding %d\n", DP_UUID(rpt->rt_pool_uuid),
+			  atomic_load(&rpt->rt_pool->sp_rebuilding));
 		/* Wait for EC aggregation to abort before discard the object */
-		D_INFO(DF_UUID" wait for ec agg abort, rebuilding %d.\n",
-		       DP_UUID(entry->ie_couuid), rpt->rt_pool->sp_rebuilding);
+		D_INFO(DF_UUID " wait for ec agg abort, rebuilding %d.\n",
+		       DP_UUID(entry->ie_couuid), atomic_load(&rpt->rt_pool->sp_rebuilding));
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
@@ -1076,13 +1077,21 @@ static void
 rebuild_scan_leader(void *data)
 {
 	struct rebuild_tgt_pool_tracker *rpt = data;
-	struct rebuild_pool_tls	  *tls;
-	int			   rc;
-	bool			   wait = false;
+	struct rebuild_pool_tls         *tls;
+	int                              rc;
 
-	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u/%u < %u\n",
-		DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_dtx_resync_version,
-		rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
+	if (rpt->rt_pool->sp_gl_dtx_resync_version >= rpt->rt_rebuild_ver) {
+		D_DEBUG(DB_REBUILD, DF_RB " sp_gl_dtx_resync_version %d exceed rt_rebuild_ver %d.",
+			DP_RB_RPT(rpt), rpt->rt_pool->sp_gl_dtx_resync_version,
+			rpt->rt_rebuild_ver);
+		if (rpt->rt_global_dtx_resync_version < rpt->rt_pool->sp_gl_dtx_resync_version)
+			rpt->rt_global_dtx_resync_version = rpt->rt_pool->sp_gl_dtx_resync_version;
+		goto do_scan;
+	} else {
+		D_DEBUG(DB_REBUILD, DF_RB " check resync %u/%u < %u\n", DP_RB_RPT(rpt),
+			rpt->rt_pool->sp_dtx_resync_version, rpt->rt_global_dtx_resync_version,
+			rpt->rt_rebuild_ver);
+	}
 
 	/* Wait for dtx resync to finish */
 	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
@@ -1092,7 +1101,6 @@ rebuild_scan_leader(void *data)
 				D_INFO(DF_UUID "wait for global dtx %u rebuild ver %u\n",
 				       DP_UUID(rpt->rt_pool_uuid),
 				       rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
-				wait = true;
 				ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
 			}
 			ABT_mutex_unlock(rpt->rt_lock);
@@ -1104,23 +1112,20 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
-	if (wait)
-		D_INFO("rebuild scan collective "DF_UUID" begin.\n", DP_UUID(rpt->rt_pool_uuid));
-	else
-		D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
-			DP_UUID(rpt->rt_pool_uuid));
+	if (rpt->rt_pool->sp_gl_dtx_resync_version < rpt->rt_global_dtx_resync_version) {
+		rpt->rt_pool->sp_gl_dtx_resync_version = rpt->rt_global_dtx_resync_version;
+		D_INFO(DF_RB " update sp_gl_dtx_resync_version to %d", DP_RB_RPT(rpt),
+		       rpt->rt_pool->sp_gl_dtx_resync_version);
+	}
 
+do_scan:
+	D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
 				       DSS_ULT_DEEP_STACK);
 	if (rc)
 		D_GOTO(out, rc);
-
-	if (wait)
-		D_INFO("rebuild scan collective "DF_UUID" done.\n", DP_UUID(rpt->rt_pool_uuid));
-	else
-		D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
-			DP_UUID(rpt->rt_pool_uuid));
+	D_INFO(DF_RB " rebuild scan collective done\n", DP_RB_RPT(rpt));
 
 	ABT_mutex_lock(rpt->rt_lock);
 	rc = ds_pool_task_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
@@ -1281,7 +1286,7 @@ tls_lookup:
 		D_GOTO(out, rc);
 	}
 
-	rpt->rt_pool->sp_rebuilding++; /* reset in rebuild_tgt_fini */
+	atomic_fetch_add(&rpt->rt_pool->sp_rebuilding, 1); /* reset in rebuild_tgt_fini */
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
