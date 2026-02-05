@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -86,6 +87,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		autoFaultyEnable   bool
 		autoFaultyIO       uint32
 		autoFaultyCsum     uint32
+		iobufSmallPoolNr   uint32
+		iobufLargePoolNr   uint32
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
 		expDaosCfgs        []*DaosConfig
@@ -196,7 +199,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				}...),
 			vosEnv: "AIO",
 		},
-		"multiple controllers; accel, rpc server & auto faulty settings": {
+		"accel, rpc server & auto faulty settings": {
 			class:            storage.ClassNvme,
 			devList:          []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			accelEngine:      storage.AccelEngineSPDK,
@@ -228,6 +231,28 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 						Enable:      true,
 						MaxIoErrs:   100,
 						MaxCsumErrs: 200,
+					},
+				},
+			},
+		},
+		"iobuf custom settings provided": {
+			class:            storage.ClassNvme,
+			devList:          []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			devRoles:         storage.BdevRoleAll,
+			iobufSmallPoolNr: 16384,
+			iobufLargePoolNr: 2048,
+			expBdevCfgs:      multiCtrlrConfs(storage.BdevRoleAll, false),
+			expExtraSubsystems: []*SpdkSubsystem{
+				{
+					Name: "iobuf",
+					Configs: []*SpdkSubsystemConfig{
+						{
+							Method: storage.ConfIobufSetOptions,
+							Params: &IobufParams{
+								SmallPoolCount: 16384,
+								LargePoolCount: 2048,
+							},
+						},
 					},
 				},
 			},
@@ -273,7 +298,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
 				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr).
 				WithStorageAutoFaultyCriteria(tc.autoFaultyEnable, tc.autoFaultyIO,
-					tc.autoFaultyCsum)
+					tc.autoFaultyCsum).
+				WithStorageSpdkIobufProps(tc.iobufSmallPoolNr, tc.iobufLargePoolNr)
 
 			if tc.devRoles != 0 {
 				engineConfig.Storage.ControlMetadata = storage.ControlMetadata{
