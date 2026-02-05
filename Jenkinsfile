@@ -286,7 +286,7 @@ pipeline {
                description: 'Additional repository used for locating packages for the build and ' +
                             'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
-               defaultValue: 'el9.7',
+               defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
@@ -324,9 +324,9 @@ pipeline {
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
-        booleanParam(name: 'CI_TEST_EL9_RPMs',
+        booleanParam(name: 'CI_TEST_EL_RPMs',
                      defaultValue: true,
-                     description: 'Run the Test RPMs on EL 9 test stage')
+                     description: 'Run the Test RPMs on EL test stage')
         booleanParam(name: 'CI_TEST_LEAP15_RPMs',
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15 test stage')
@@ -578,7 +578,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9.7') {
+                stage('Build on EL 9') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -797,7 +797,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el9-gcc-nlt-memcheck'
+                                         valgrind_stash: 'nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -831,7 +831,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'el9-gcc-unit-memcheck'
+                                         valgrind_stash: 'unit-memcheck'
                             job_status_update()
                         }
                     }
@@ -856,7 +856,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
                                                      'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'el9-gcc-unit-memcheck-bdev'
+                                         valgrind_stash: 'unit-memcheck-bdev'
                             job_status_update()
                         }
                     }
@@ -1038,10 +1038,10 @@ pipeline {
                         }
                     }
                 } // stage('Fault injection testing on EL 9.7')
-                stage('Test RPMs on EL 9.6') {
+                stage('Test RPMs on EL') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL9_RPMs && !skipStage() }
+                        expression { params.CI_TEST_EL_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1058,7 +1058,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on EL 9.6')
+                } // stage('Test RPMs on EL')
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
@@ -1249,8 +1249,8 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['el9-gcc-nlt-memcheck',
-                                                     'el9-gcc-unit-memcheck',
+            valgrindReportPublish valgrind_stashes: ['nlt-memcheck',
+                                                     'unit-memcheck',
                                                      'fault-inject-valgrind']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
