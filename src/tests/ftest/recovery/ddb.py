@@ -135,16 +135,17 @@ class DdbTest(TestWithServers):
         container = self.get_container(pool)
 
         if md_on_ssd:
-            ddb_command = DdbCommand(
-                server_host=self.server_managers[0].hosts[0:1], path=self.bin,
-                vos_path="\"\"")
+            vos_path = '""'
         else:
             # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
             vos_paths = self.server_managers[0].get_vos_files(pool)
             if not vos_paths:
-                self.fail(
-                    f"vos file wasn't found in {self.server_managers[0].get_vos_paths(pool)[0]}")
-            ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
+                self.fail("vos file wasn't found!")
+            vos_path = vos_paths[0]
+
+        ddb_command = DdbCommand(
+            server_host=self.server_managers[0].hosts[0:1], path=self.bin,
+            vos_path=vos_path)
 
         errors = []
 

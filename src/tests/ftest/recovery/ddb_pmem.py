@@ -84,7 +84,7 @@ def copy_remote_to_local(remote_file_path, test_dir, remote):
     Args:
         remote_file_path (str): File path to copy to local.
         test_dir (str): Test directory. Usually self.test_dir.
-        remote (str): Remote hostname to copy file from.
+        remote (NodeSet): Remote hostname to copy file from.
     """
     # Use clush --rcopy to copy the file from the remote server node to the local test
     # node. clush will append .<server_hostname> to the file when copying.
