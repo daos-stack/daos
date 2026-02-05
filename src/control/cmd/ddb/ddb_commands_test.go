@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"strings"
@@ -65,6 +66,10 @@ func TestHelpCmds(t *testing.T) {
 		"help for 'open' command": {
 			cmdStr:     "open",
 			helpSubStr: "Usage:\n  open [flags] path\n",
+		},
+		"help for 'csum_dump' command": {
+			cmdStr:     "csum_dump",
+			helpSubStr: "Usage:\n  csum_dump [flags] path [dst]\n",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -178,6 +183,86 @@ func TestCmds(t *testing.T) {
 				}
 			},
 			expStdout: []string{"ls called"},
+		},
+		"csum_dump invalid options": {
+			args:   []string{"csum_dump", "--bar"},
+			expErr: fmt.Errorf("invalid flag: --bar"),
+		},
+		"csum_dump default": {
+			args: []string{"csum_dump", "/[0]"},
+			expCalls: func(ctx *DdbContextStub) {
+				ctx.csumDump = func(path string, dst string, epoch uint64) error {
+					fmt.Println("csum_dump called")
+					if err := isArgEqual("/[0]", path, "path"); err != nil {
+						return err
+					}
+					if err := isArgEqual("", dst, "dst"); err != nil {
+						return err
+					}
+					if err := isArgEqual(uint64(math.MaxUint64), epoch, "epoch"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"csum_dump called"},
+		},
+		"csum_dump epoch short": {
+			args: []string{"csum_dump", "-e", "999", "/[0]"},
+			expCalls: func(ctx *DdbContextStub) {
+				ctx.csumDump = func(path string, dst string, epoch uint64) error {
+					fmt.Println("csum_dump called")
+					if err := isArgEqual("/[0]", path, "path"); err != nil {
+						return err
+					}
+					if err := isArgEqual("", dst, "dst"); err != nil {
+						return err
+					}
+					if err := isArgEqual(uint64(999), epoch, "epoch"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"csum_dump called"},
+		},
+		"csum_dump epoch long": {
+			args: []string{"csum_dump", "--epoch=666", "/[0]"},
+			expCalls: func(ctx *DdbContextStub) {
+				ctx.csumDump = func(path string, dst string, epoch uint64) error {
+					fmt.Println("csum_dump called")
+					if err := isArgEqual("/[0]", path, "path"); err != nil {
+						return err
+					}
+					if err := isArgEqual("", dst, "dst"); err != nil {
+						return err
+					}
+					if err := isArgEqual(uint64(666), epoch, "epoch"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"csum_dump called"},
+		},
+		"csum_dump destination": {
+			args: []string{"csum_dump", "/[0]", "/tmp/csum_dump.out"},
+			expCalls: func(ctx *DdbContextStub) {
+				ctx.csumDump = func(path string, dst string, epoch uint64) error {
+					fmt.Println("csum_dump called")
+					if err := isArgEqual("/[0]", path, "path"); err != nil {
+						return err
+					}
+					if err := isArgEqual("/tmp/csum_dump.out", dst, "dst"); err != nil {
+						return err
+					}
+					if err := isArgEqual(uint64(math.MaxUint64), epoch, "epoch"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"csum_dump called"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

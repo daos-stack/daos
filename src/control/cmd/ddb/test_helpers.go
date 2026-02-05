@@ -50,6 +50,7 @@ type DdbContextStub struct {
 	dtxStat              func(path string, details bool) error
 	provMem              func(db_path string, tmpfs_mount string, tmpfs_mount_size uint) error
 	dtxAggr              func(path string, cmt_time uint64, cmt_date string) error
+	csumDump             func(path string, dst string, epoch uint64) error
 }
 
 func (ctx *DdbContextStub) Init(log *logging.LeveledLogger) (func(), error) {
@@ -246,6 +247,13 @@ func (ctx *DdbContextStub) DtxAggr(path string, cmt_time uint64, cmt_date string
 		return nil
 	}
 	return ctx.dtxAggr(path, cmt_time, cmt_date)
+}
+
+func (ctx *DdbContextStub) CsumDump(path string, dst string, epoch uint64) error {
+	if ctx.csumDump == nil {
+		return nil
+	}
+	return ctx.csumDump(path, dst, epoch)
 }
 
 func runCmdToStdout(log *logging.LeveledLogger, ctx *DdbContextStub, opts *cliOptions, args []string) (string, error) {
