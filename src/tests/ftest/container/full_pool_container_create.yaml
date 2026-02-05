@@ -17,3 +17,4 @@ pool:
   threshold_percent: 0.1  # 10%
 container:
   control_method: daos
+  type: NONE

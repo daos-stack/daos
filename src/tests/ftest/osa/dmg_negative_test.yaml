@@ -41,6 +41,7 @@ pool:
 
 container:
   properties: cksum:crc16,cksum_size:16384
+  type: NONE
 
 test_sequence:
   dmg_cmd_test:

@@ -36,6 +36,7 @@ pool_3:
   size: 90%
 
 container_1:
+  type: NONE
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
 

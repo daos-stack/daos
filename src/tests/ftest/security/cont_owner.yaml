@@ -20,3 +20,4 @@ pool:
   size: 1G
 container:
   control_method: daos
+  type: NONE

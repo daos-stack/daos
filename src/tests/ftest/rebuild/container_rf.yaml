@@ -31,6 +31,7 @@ container:
   data_size: 5
   object_qty: 50
   record_qty: 50
+  type: NONE
 rebuild:
   object_class: OC_RP_3G1
   cont_rf: !mux

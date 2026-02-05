@@ -22,6 +22,7 @@ pool:
   scm_size: 138374182
 container:
   control_method: daos
+  type: NONE
 container_acl:
   acl_file_name: cont_test_acl1.txt
   new_user: root

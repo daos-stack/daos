@@ -19,6 +19,7 @@ pool:
 container:
   control_method: daos
   properties: compression:lz4
+  type: NONE
 ior:
   client_processes:
     np: 1

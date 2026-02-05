@@ -44,3 +44,4 @@ container:
   dkey_size: 10
   data_size: 4096
   array_size: 1
+  type: NONE

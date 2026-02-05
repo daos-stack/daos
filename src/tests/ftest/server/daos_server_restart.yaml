@@ -32,3 +32,4 @@ pool:
 
 container:
   control_method: daos
+  type: NONE
