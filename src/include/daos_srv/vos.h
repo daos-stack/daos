@@ -592,6 +592,29 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
 int
 vos_cont_close(daos_handle_t coh);
 
+#define VOS_CONT_OPEN(poh, co_uuid, coh)                                                           \
+	({                                                                                         \
+		int vco_rc = vos_cont_open(poh, co_uuid, coh);                                     \
+		if (vco_rc != 0)                                                                   \
+			D_ERROR("open vos container " DF_UUID ": " DF_RC "\n", DP_UUID(co_uuid),   \
+				DP_RC(vco_rc));                                                    \
+		else                                                                               \
+			D_INFO("open vos container " DF_UUID ": coh=" DF_X64 "\n",                 \
+			       DP_UUID(co_uuid), (coh)->cookie);                                   \
+		vco_rc;                                                                            \
+	})
+
+#define VOS_CONT_CLOSE(coh)                                                                        \
+	({                                                                                         \
+		int vcc_rc = vos_cont_close(coh);                                                  \
+		if (vcc_rc != 0)                                                                   \
+			D_ERROR("close vos container " DF_X64 ": " DF_RC "\n", (coh).cookie,       \
+				DP_RC(vcc_rc));                                                    \
+		else                                                                               \
+			D_INFO("close vos container " DF_X64 "\n", (coh).cookie);                  \
+		vcc_rc;                                                                            \
+	})
+
 /**
  * Query container information.
  *
