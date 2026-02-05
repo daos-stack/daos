@@ -24,6 +24,9 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31416
       log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
       storage: auto
     1:
       pinned_numa_node: 1
@@ -31,6 +34,9 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31517
       log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
       storage: auto
 pool:
   size: 93%
