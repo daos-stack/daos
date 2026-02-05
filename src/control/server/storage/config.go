@@ -1151,8 +1151,8 @@ type BdevAutoFaulty struct {
 // SpdkIobuf struct describes settings for DAOS I/O buffer pool configuration within the BIO
 // module of the engine process.
 type SpdkIobuf struct {
-	SmallPoolCount uint32 `yaml:"small_pool_count,omitempty" json:"small_pool_count"`
-	LargePoolCount uint32 `yaml:"large_pool_count,omitempty" json:"large_pool_count"`
+	SmallPoolCount uint32 `yaml:"small_pool_count,omitempty" json:"small_pool_count,omitempty"`
+	LargePoolCount uint32 `yaml:"large_pool_count,omitempty" json:"large_pool_count,omitempty"`
 }
 
 // IsEmpty returns true if all struct values are zero.
