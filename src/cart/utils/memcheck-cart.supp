@@ -645,12 +645,14 @@
 {
    __tsan_write_pc
    Memcheck:Value8
+   ...
    fun:__tsan_write_pc
    fun:racecall
 }
 {
    __tsan_read_pc
    Memcheck:Value8
+   ...
    fun:__tsan_read_pc
    fun:racecall
 }
