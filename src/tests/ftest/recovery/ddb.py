@@ -222,8 +222,7 @@ class DdbTest(TestWithServers):
         dkey_regex = f"/{uuid_regex}/{object_id_regex}/(.*)"
         actual_dkey_count = 0
         for obj_index in range(object_count):
-            component_path = f"[0]/[{obj_index}]"
-            cmd_result = ddb_command.list_component(component_path=component_path)
+            cmd_result = ddb_command.list_component(component_path=f"[0]/[{obj_index}]")
             # Sample output. There are three lines, but a line break is added to fit into
             # the code.
             # Listing contents of 'OBJ: (/[0]/[0])
@@ -257,8 +256,8 @@ class DdbTest(TestWithServers):
         akey_count = 0
         for obj_index in range(object_count):
             for dkey_index in range(dkey_count):
-                component_path = f"[0]/[{obj_index}]/[{dkey_index}]"
-                cmd_result = ddb_command.list_component(component_path=component_path)
+                cmd_result = ddb_command.list_component(
+                    component_path=f"[0]/[{obj_index}]/[{dkey_index}]")
                 ls_out = cmd_result.joined_stdout
                 msg = (f"List akeys obj_index = {obj_index}, dkey_index = {dkey_index}, "
                        f"stdout = {ls_out}")
