@@ -397,9 +397,12 @@ func (cmd *containerCreateCmd) getCreateProps() (*daos.ContainerPropertyList, er
 		grpProp.SetString(cmd.Group.String())
 	}
 
+	// Use POSIX container type by default, if none is specified
+	typeProp := createPropList.MustAddEntryByType(daos.ContainerPropLayoutType)
 	if hasType() {
-		typeProp := createPropList.MustAddEntryByType(daos.ContainerPropLayoutType)
 		typeProp.SetValue(uint64(cmd.Type.Type))
+	} else {
+		typeProp.SetValue(uint64(C.DAOS_PROP_CO_LAYOUT_POSIX))
 	}
 
 	return createPropList, nil
