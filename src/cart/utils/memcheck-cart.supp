@@ -613,6 +613,7 @@
 {
    __tsan_go_atomic64_store
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_store
    fun:racecall
 }
