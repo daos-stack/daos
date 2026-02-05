@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -550,9 +550,24 @@ d_rank_list_shuffle(d_rank_list_t *rank_list)
 }
 
 /**
- * Must be previously sorted or not modified at all in order to guarantee
- * consistent indexes.
- **/
+ * Binary search \a rank in the sorted \a rank_list.
+ */
+
+bool
+d_rank_list_bsearch(d_rank_list_t *rank_list, d_rank_t rank, int *idx)
+{
+	d_rank_t *pos = NULL;
+
+	if (rank_list != NULL) {
+		pos = bsearch(&rank, rank_list->rl_ranks, rank_list->rl_nr, sizeof(rank),
+			      rank_compare);
+		if (pos != NULL && idx != NULL)
+			*idx = ((void *)pos - (void *)rank_list->rl_ranks) / sizeof(rank);
+	}
+
+	return pos != NULL;
+}
+
 bool
 d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx)
 {
