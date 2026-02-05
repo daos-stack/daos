@@ -1939,7 +1939,11 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 		return rc;
 	}
 
+	D_DEBUG(DB_MD, DF_CONT ": acquring cs_lock: begin\n",
+		DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	ABT_rwlock_rdlock(svc->cs_lock);
+	D_DEBUG(DB_MD, DF_CONT ": acquring cs_lock: end\n",
+		DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
 		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
@@ -1963,6 +1967,8 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
+	D_DEBUG(DB_MD, DF_CONT ": released cs_lock\n",
+		DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	rdb_tx_end(&tx);
 	return rc;
 }
@@ -6184,6 +6190,9 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	struct cont	*cont = NULL;
 	int		 rc;
 
+	D_DEBUG(DB_MD, DF_CONT": begin\n",
+		DP_CONT(pool_uuid, cont_uuid));
+
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, NULL);
 	if (rc != 0) {
@@ -6196,7 +6205,11 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
+	D_DEBUG(DB_MD, DF_CONT": lock svc: begin\n",
+		DP_CONT(pool_uuid, cont_uuid));
 	ABT_rwlock_rdlock(svc->cs_lock);
+	D_DEBUG(DB_MD, DF_CONT": lock svc: end\n",
+		DP_CONT(pool_uuid, cont_uuid));
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
@@ -6219,6 +6232,8 @@ out_lock:
 	rdb_tx_end(&tx);
 out_put:
 	cont_svc_put_leader(svc);
+	D_DEBUG(DB_MD, DF_CONT": end: "DF_RC"\n",
+		DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
 	return rc;
 }
 
