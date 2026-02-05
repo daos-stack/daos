@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
-#include <pwd.h>
+#include <grp.h>
 #include <abt.h>
 
 #include <daos_errno.h>
@@ -22,47 +22,110 @@
 #include "dlck_cmds.h"
 
 #define EFFECTIVE_USER_STR "Effective user: "
+#define USER_BELONGS_TO_GRP_FMT "User %sbelong%s to group: %s (gid=%" PRIuMAX ")\n"
 #define UNEXPECTED_USER_WARNING_MSG                                                                \
-	"WARNING: It is recommended to run this program as root or user '" DAOS_DEFAULT_SYS_NAME   \
-	"'.\n"                                                                                     \
-	"These accounts are expected to have the necessary privileges.\n"                          \
-	"Running under other users may cause the program to stop due to insufficient "             \
+	"\nWARNING: It is recommended to run this program as root or as a user who belongs to "    \
+	"the '" DAOS_DEFAULT_SYS_NAME "' group.\n"                                                 \
+	"Running it under any other account may cause the program to stop due to insufficient "    \
 	"privileges.\n\n"
 
-static void
-check_user(struct checker *ck)
+static bool
+user_is_root(struct checker *ck)
 {
-	uid_t          euid = geteuid();
-	struct passwd *pw   = NULL;
-	int            ret;
+	uid_t euid = geteuid();
 
-	/** The root user is not always named "root" but its uid is always 0. */
-	if (euid == 0) {
-		/** the root user have all the privileges */
-		CK_PRINT(ck, EFFECTIVE_USER_STR "root\n");
-		return;
+	if (DAOS_FAIL_CHECK(DLCK_MOCK_ROOT)) { /** fault injection */
+		/** it does not have ANY effect on the actual privileges of the user */
+		euid = 0;
 	}
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_GETPWUID)) { /** fault injection */
+	if (euid == 0) {
+		/** The root user is not always named "root" but its uid is always 0. */
+		CK_PRINT(ck, EFFECTIVE_USER_STR "root\n");
+		return true;
+	}
+
+	CK_PRINTF(ck, EFFECTIVE_USER_STR "uid=%" PRIuMAX "\n", (uintmax_t)euid);
+	return false;
+}
+
+#define MAX_GROUPS 128
+
+static bool
+user_belongs_to_group(const char *group_name, struct checker *ck)
+{
+	struct group *group = NULL;
+	gid_t         group_id;
+	gid_t         groups[MAX_GROUPS];
+	int           rc;
+
+	/** get GID of the requested group */
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_GETGRNAM)) { /** fault injection */
+		errno = daos_fail_value_get();
+	} else if (DAOS_FAIL_CHECK(DLCK_MOCK_NO_DAOS_SERVER_GROUP)) { /** fault injection */
+		errno = 0;
+	} else {
+		errno = 0;
+		group = getgrnam(group_name);
+	}
+	if (group == NULL) {
+		if (errno != 0) {
+			rc = daos_errno2der(errno);
+			CK_PRINTFL_RC(ck, rc, "getgrnam(%s) failed", group_name);
+		} else {
+			CK_PRINTF(ck, "The %s group does not exist.\n", group_name);
+		}
+		return false;
+	}
+	group_id = group->gr_gid;
+
+	/** check primary group */
+	if (getgid() == group_id) {
+		CK_PRINTF(ck, USER_BELONGS_TO_GRP_FMT, "", "s", group_name, (uintmax_t)group_id);
+		return true;
+	}
+
+	/** get supplementary groups */
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_GETGROUPS)) { /** fault injection */
+		rc    = -1;
 		errno = daos_fail_value_get();
 	} else {
-		pw = getpwuid(euid);
+		rc = getgroups(MAX_GROUPS, groups);
 	}
-	if (pw == NULL || pw->pw_name == NULL) {
-		ret = d_errno2der(errno);
-		CK_PRINTFL_RC(ck, ret, "Cannot get the name of a user for uid=%" PRIuMAX,
-			      (uintmax_t)euid);
-		CK_PRINT(ck, UNEXPECTED_USER_WARNING_MSG);
+	if (rc < 0) {
+		rc = daos_errno2der(errno);
+		CK_PRINTFL_RC(ck, rc, "getgroups() failed", group_name);
+		return false;
+	}
+
+	/** check supplementary groups */
+	if (!DAOS_FAIL_CHECK(DLCK_MOCK_NOT_IN_DAOS_SERVER_GROUP)) { /** fault injection */
+		for (int i = 0; i < rc; i++) {
+			if (groups[i] == group_id) {
+				CK_PRINTF(ck, USER_BELONGS_TO_GRP_FMT, "", "s", group_name,
+					  (uintmax_t)group_id);
+				return true;
+			}
+		}
+	}
+
+	CK_PRINTF(ck, USER_BELONGS_TO_GRP_FMT, "DOES NOT ", "", group_name, (uintmax_t)group_id);
+
+	return false;
+}
+
+static void
+check_user_privileges(struct checker *ck)
+{
+	if (user_is_root(ck)) {
+		/** the root user is assumed to have all required privileges */
 		return;
 	}
 
-	if (strncmp(pw->pw_name, DAOS_DEFAULT_SYS_NAME, DAOS_SYS_NAME_MAX) == 0) {
-		/** the daos_server user ought to have all the necessary privileges */
-		CK_PRINT(ck, EFFECTIVE_USER_STR DAOS_DEFAULT_SYS_NAME "\n");
+	if (user_belongs_to_group(DAOS_DEFAULT_SYS_NAME, ck)) {
 		return;
 	}
 
-	CK_PRINTF(ck, EFFECTIVE_USER_STR "%s (uid=%" PRIuMAX ")\n", pw->pw_name, (uintmax_t)euid);
 	CK_PRINT(ck, UNEXPECTED_USER_WARNING_MSG);
 }
 
@@ -103,7 +166,7 @@ main(int argc, char *argv[])
 		goto err_abt_fini;
 	}
 
-	check_user(&ctrl.checker);
+	check_user_privileges(&ctrl.checker);
 
 	rc = dlck_cmd_check(&ctrl);
 	if (rc != DER_SUCCESS) {
