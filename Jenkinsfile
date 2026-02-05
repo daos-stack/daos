@@ -362,21 +362,23 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
  * Determine if the build stage should be run.
  *
  * @param kwargs Map containing the following arguments
- *  distro     the shorthand distro name
+ *  distro     the shorthand distro name; defaults to ''
  *  compiler   the compiler to use; defaults to 'gcc'
  */
-Boolean runBuildStage(String distro, String compiler='gcc') {
-    Map params = ["CI_BUILD_${distro.toUpperCase()}": true,
-                  'CI_RPM_TEST_VERSION': '']
-    Map pragmas = ['build': 'true']
-    if (distro && compiler) {
-        pragmas["build-${distro}-${compiler}"] = 'true'
+Boolean runBuildStage(String distro='', String compiler='gcc') {
+    Map params = ['CI_RPM_TEST_VERSION': '']
+    Map pragmas = ['Skip-build': 'false', 'RPM-test-version': '', 'Doc-only': 'false']
+    if (distro) {
+        params["CI_BUILD_${distro.toUpperCase()}"] = true
+        pragmas["Skip-build-${distro}"] = 'false'
+        if (compiler) {
+            pragmas["Skip-build-${distro}-${compiler}"] = 'false'
+        }
+        if (compiler == 'covc') {
+            pragmas['Skip-bullseye'] = 'false'
+        }
     }
-    else if (distro) {
-        pragmas["build-${distro}"] = 'true'
-    }
-    Boolean otherCondition = true
-    return runStage(params, pragmas, otherCondition)
+    return runStage(params, pragmas)
 }
 
 /**
