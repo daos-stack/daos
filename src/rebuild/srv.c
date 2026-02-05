@@ -289,8 +289,8 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 	}
 
 	if (status->dtx_resync_version != resync_ver)
-		D_INFO(DF_RB " rank %d, update dtx_resync_version from %d to %d", DP_RB_RGT(rgt),
-		       rank, status->dtx_resync_version, resync_ver);
+		D_DEBUG(DB_REBUILD, DF_RB " rank %d, update dtx_resync_version from %d to %d",
+			DP_RB_RGT(rgt), rank, status->dtx_resync_version, resync_ver);
 	status->dtx_resync_version = resync_ver;
 	if (flags & SCAN_DONE)
 		status->scan_done = 1;
@@ -2906,8 +2906,9 @@ rebuild_tgt_status_check_ult(void *arg)
 				rpt->rt_reported_rec_cnt = status.rec_count;
 				rpt->rt_reported_size = status.size;
 				if (iv.riv_dtx_resyc_version > reported_dtx_resyc_ver) {
-					D_INFO(DF_RB "reported riv_dtx_resyc_version %d",
-					       DP_RB_RPT(rpt), iv.riv_dtx_resyc_version);
+					D_DEBUG(DB_REBUILD,
+						DF_RB "reported riv_dtx_resyc_version %d",
+						DP_RB_RPT(rpt), iv.riv_dtx_resyc_version);
 					reported_dtx_resyc_ver = iv.riv_dtx_resyc_version;
 				}
 			} else {
