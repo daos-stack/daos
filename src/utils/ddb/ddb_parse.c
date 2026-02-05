@@ -27,7 +27,7 @@ safe_strcat(char *dst, const char *src, size_t dst_size)
 }
 
 static void
-print_regx_error(int rc, regex_t *preg, const char *regex_buf)
+print_regex_error(int rc, regex_t *preg, const char *regex_buf)
 {
 	char  *buf;
 	size_t buf_size;
@@ -66,7 +66,7 @@ vos_path_parse(const char *path, const char *db_path, struct vos_path_parts *vp)
 
 	rc = regcomp(&preg, regex_buf, REG_EXTENDED);
 	if (rc != 0) {
-		print_regx_error(rc, &preg, regex_buf);
+		print_regex_error(rc, &preg, regex_buf);
 		rc = -DER_INVAL;
 		goto out;
 	}

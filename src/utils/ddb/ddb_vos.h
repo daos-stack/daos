@@ -141,6 +141,13 @@ typedef int (*dv_dump_value_cb)(void *cb_arg, d_iov_t *value);
 int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb,
 		  void *cb_arg);
 
+typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *rel,
+			       struct dcs_ci_list *cil);
+
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	     dv_dump_csum_cb dump_cb, void *cb_arg);
+
 struct ddb_ilog_entry {
 	uint32_t	die_idx;
 	int32_t		die_status;
