@@ -285,21 +285,6 @@ Map unit_test_post_args(String name) {
     return args
 }
 
-Map nlt_post_args() {
-    Map args = [
-        artifacts: ['nlt_logs/'],
-        testResults: 'nlt-junit.xml',
-        always_script: 'ci/unit/test_nlt_post.sh',
-        valgrind_stash: 'el8-gcc-nlt-memcheck'
-    ]
-    if (code_coverage_enabled()) {
-        // args['artifacts'].add('covc_nlt_logs/')
-        args['ignore_failure'] = true
-        args['code_coverage'] = true
-    }
-    return args
-}
-
 String getScriptOutput(String script, String args='') {
     return sh(script: "${script} ${args}", returnStdout: true).trim()
 }
@@ -1234,7 +1219,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_bullseye_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          compiler: 'covc',

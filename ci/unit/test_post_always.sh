@@ -35,11 +35,17 @@ case $STAGE_NAME in
     "NLT on "*)
       test_log_dir="nlt_logs"
       ;;
+    "NLT with Bullseye on "*)
+      test_log_dir="nlt_bullseye_logs"
+      ;;
     "Unit Test with memcheck on "*)
       test_log_dir="unit_test_memcheck_logs"
       ;;
     "Unit Test bdev with memcheck on "*)
       test_log_dir="unit_test_memcheck_bdev_logs"
+      ;;
+    "Unit Test with Bullseye on "*)
+      test_log_dir="unit_test_bullseye_logs"
       ;;
     *)
       test_log_dir="unkown_test_logs"

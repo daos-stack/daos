@@ -54,6 +54,7 @@ if [ -d "${BULLSEYE_DIR}" ]; then
     cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
     ls -al "${COVFILE}"
     nlt_args+=(--memcheck no)
+    nlt_args+=(--log-base-dir nlt_bullseye_logs)
 fi
 
 if [ -e "${COVFILE:-}" ]; then
