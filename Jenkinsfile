@@ -3,7 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
- * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -1102,8 +1102,7 @@ pipeline {
                     steps {
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
+                                    daos_pkg_version: daosPackagesVersion(next_version()))
                         )
                     }
                     post {
@@ -1155,8 +1154,7 @@ pipeline {
                     } */
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
+                                    daos_pkg_version: daosPackagesVersion(next_version()))
                         )
                     }
                     post {
