@@ -362,7 +362,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         # Optional daos command argument values to use with the USE_DAOS control
         # method when creating/destroying containers
         self.path = BasicParameter(None)
-        self.type = BasicParameter("NONE")
+        self.type = BasicParameter(None)
         self.oclass = BasicParameter(None)
         self.dir_oclass = BasicParameter(None)
         self.file_oclass = BasicParameter(None)
