@@ -2587,7 +2587,7 @@ out:
 	if (prop)
 		daos_prop_free(prop);
 
-	D_DEBUG(DB_EPC, DF_UUID" get iv for agg: %d\n",
+	D_DEBUG(DB_MD, DF_UUID" get iv for agg: %d\n",
 		DP_UUID(agg_param->ap_pool_info.api_cont_uuid), rc);
 
 	return rc;
@@ -2657,7 +2657,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	D_ASSERT(rc == 0);
 out:
 	if (rc) {
-		D_DEBUG(DB_EPC, "aggregate param init failed: %d\n", rc);
+		D_DEBUG(DB_MD, "aggregate param init failed: %d\n", rc);
 		ec_agg_param_fini(cont, agg_param);
 	} else {
 		agg_param->ap_initialized = 1;
@@ -2709,7 +2709,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			cont->sc_ec_agg_eph = cont->sc_ec_agg_eph_boundary;
 		}
 	} else {
-		D_DEBUG(DB_EPC, DF_CONT ": pause EC aggregation for sc_ec_agg_eph_boundary.\n",
+		D_DEBUG(DB_MD, DF_CONT ": pause EC aggregation for sc_ec_agg_eph_boundary.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		return 0;
 	}
@@ -2730,7 +2730,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	 */
 	if (ec_agg_param->ap_filter_eph != 0 && cont->sc_ec_update_timestamp != 0 &&
 	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
-		D_DEBUG(DB_EPC, DF_CONT " skip EC agg " DF_U64 ">= " DF_U64 "\n",
+		D_DEBUG(DB_MD, DF_CONT " skip EC agg " DF_U64 ">= " DF_U64 "\n",
 			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
 			cont->sc_ec_update_timestamp);
 		goto update_hae;
@@ -2788,7 +2788,7 @@ retry:
 		d_tm_inc_counter(opm->opm_ec_agg_blocked, 1);
 		blocks++;
 		/** Warn once if it goes over 20 times */
-		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_MD,
 			 "EC agg hit conflict with VOS agg or discard (nr=%d), retrying...\n",
 			 blocks);
 		ec_aggregate_yield(ec_agg_param);
@@ -2844,7 +2844,7 @@ ds_obj_ec_aggregate(void *arg)
 	struct agg_param	param = { 0 };
 	int			rc;
 
-	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
+	D_DEBUG(DB_MD, "start EC aggregation "DF_UUID"\n",
 		DP_UUID(cont->sc_uuid));
 	param.ap_data = &agg_param;
 	param.ap_cont = cont;
@@ -2853,7 +2853,7 @@ ds_obj_ec_aggregate(void *arg)
 		/* To make sure the EC aggregation can be run on this xstream, let's do not exit
 		 * here, and in cont_ec_aggregate_cb(), it will keep retrying parameter init.
 		 */
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_EPC, DLOG_ERR, rc,
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_MD, DLOG_ERR, rc,
 			  DF_UUID " EC aggregation failed", DP_UUID(cont->sc_uuid));
 	}
 

@@ -828,7 +828,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
-	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
+	rc = VOS_CONT_OPEN(iter_param->ip_hdl, entry->ie_couuid, &coh);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already destroyed\n",
 			DP_RB_RPT(rpt), DP_UUID(arg->co_uuid));
@@ -937,7 +937,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	dtx_end(dth, NULL, rc);
 
 close:
-	vos_cont_close(coh);
+	VOS_CONT_CLOSE(coh);
 
 	if (cont_child != NULL) {
 		cont_child->sc_rebuilding = 0;

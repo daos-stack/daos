@@ -60,7 +60,11 @@ dsc_cont_init_props(struct dc_cont *cont, uuid_t pool_uuid, uuid_t cont_uuid)
 {
 	int		 rc;
 
+	D_DEBUG(DB_MD, DF_CONT": get props: begin\n",
+		DP_CONT(pool_uuid, cont_uuid));
 	rc = ds_cont_get_props(&cont->dc_props, pool_uuid, cont_uuid);
+	D_DEBUG(DB_MD, DF_CONT": get props: end: "DF_RC"\n",
+		DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
 	if (rc)
 		return rc;
 
