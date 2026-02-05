@@ -300,6 +300,7 @@ String getScriptOutput(String script, String args='') {
  */
 Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     // Run stage w/o any conditionals
+    println("[${env.STAGE_NAME}] Determining if stage should be run (params: ${params}, pragmas: ${pragmas}, otherCondition: ${otherCondition})")
     if (params.isEmpty() && pragmas.isEmpty()) {
         return true
     }
@@ -309,40 +310,23 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     }
 
     String skipMsgParams = ''
-    params.find { key, value ->
-        println("Checking parameter ${key} for value ${value}: ${paramsValue(key, value)}")
-        if (paramsValue(key, value) != value) {
-            skipMsgParams = "Skipping stage due to ${key} parameter not set to ${value}"
-            return true
+    for(entry in params) {
+        println("[${env.STAGE_NAME}] Checking parameter ${entry.key} for value ${entry.value}: ${paramsValue(entry.key, entry.value)}")
+        if (paramsValue(entry.key, entry.value) != entry.value) {
+            skipMsgParams = "Skipping stage due to ${entry.key} parameter not set to ${entry.value}"
+            break
         }
-        false
     }
-    // for(entry in params) {
-    //     println("Checking parameter ${entry.key} for value ${entry.value}: ${paramsValue(entry.key, entry.value)}")
-    //     if (paramsValue(entry.key, entry.value) != entry.value) {
-    //         skipMsgParams = "Skipping stage due to ${entry.key} parameter not set to ${entry.value}"
-    //         break
-    //     }
-    // }
 
     String skipMsgPragmas = ''
-    pragmas.find { key, value ->
-        String expected = value.toString().toLowerCase()
-        println("Checking pragma ${key} for value ${expected}: ${cachedCommitPragma(key, expected).toLowerCase()}")
-        if (cachedCommitPragma(key, expected).toLowerCase() != expected) {
-            skipMsgPragmas = "Skipping stage due to ${key} pragma not set to ${expected}"
-            return true
+    for(entry in pragmas) {
+        String expected = entry.value.toString().toLowerCase()
+        println("[${env.STAGE_NAME}] Checking pragma ${entry.key} for value ${expected}: ${cachedCommitPragma(entry.key, expected).toLowerCase()}")
+        if (cachedCommitPragma(entry.key, expected).toLowerCase() != expected) {
+            skipMsgPragmas = "Skipping stage due to ${entry.key} pragma not set to ${entry.value}"
+            break
         }
-        false
     }
-    // for(entry in pragmas) {
-    //     String expected = entry.value.toString().toLowerCase()
-    //     println("Checking pragma ${entry.key} for value ${expected}: ${cachedCommitPragma(entry.key, expected).toLowerCase()}")
-    //     if (cachedCommitPragma(entry.key, expected).toLowerCase() != expected) {
-    //         skipMsgPragmas = "Skipping stage due to ${entry.key} pragma not set to ${entry.value}"
-    //         break
-    //     }
-    // }
 
     if (startedByUser()) {
         // Manual build: check parameters first
@@ -373,6 +357,29 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
 }
 
 /**
+ * runBuildStage
+ *
+ * Determine if the build stage should be run.
+ *
+ * @param kwargs Map containing the following arguments
+ *  distro     the shorthand distro name
+ *  compiler   the compiler to use; defaults to 'gcc'
+ */
+Boolean runBuildStage(String distro, String compiler='gcc') {
+    Map params = ["CI_BUILD_${distro.toUpperCase()}": true,
+                  'CI_RPM_TEST_VERSION': '']
+    Map pragmas = ['build': 'true']
+    if (distro && compiler) {
+        pragmas["build-${distro}-${compiler}"] = 'true'
+    }
+    else if (distro) {
+        pragmas["build-${distro}"] = 'true'
+    }
+    Boolean otherCondition = true
+    return runStage(params, pragmas, otherCondition)
+}
+
+/**
  * scriptedBuildStage
  *
  * Get a build stage in scripted syntax.
@@ -383,7 +390,7 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
  *  rpmDistro                   the distro to use for rpm building; defaults to distro
  *  compiler                    the compiler to use; defaults to 'gcc'
  *  runCondition                optional condition to determine if the stage should run; defaults
- *                                to !skip_build_stage(distro, compiler)
+ *                                to runBuildStage(distro, compiler)
  *  buildRpms                   whether or not to build rpms; defaults to true
  *  release                     the DAOS RPM release value to use; defaults to env.DAOS_RELVAL
  *  dockerBuildArgs             optional docker build arguments
@@ -398,7 +405,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String distro = kwargs.get('distro', 'el8')
     String rpmDistro = kwargs.get('rpmDistro', distro)
     String compiler = kwargs.get('compiler', 'gcc')
-    Boolean runCondition = kwargs.get('runCondition', !skip_build_stage(distro, compiler))
+    Boolean runCondition = kwargs.get('runCondition', runBuildStage(distro, compiler))
     Boolean buildRpms = kwargs.get('buildRpms', true)
     String release = kwargs.get('release', env.DAOS_RELVAL)
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
@@ -488,6 +495,7 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
             if (runCondition) {
                 node(nodeLabel) {
                     try {
+                        println("[${name}] Check out from version control")
                         checkoutScm(pruneStaleBranch: true)
                         // Execute the unit test
                         job_step_update(unitTest(unitTestArgs))
@@ -887,7 +895,7 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { !skip_build_stage() }
+                expression { runBuildStage() }
             }
             steps {
                 script {
@@ -962,7 +970,7 @@ pipeline {
                             name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
                             distro:'leap15',
                             compiler: 'icc',
-                            runCondition: !skip_build_stage('leap15_icc'),
+                            runCondition: runBuildStage('leap15_icc'),
                             buildRpms: false,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -984,7 +992,7 @@ pipeline {
                             name: 'Build on EL 8.8 with Bullseye',
                             distro:'el8',
                             compiler: 'covc',
-                            runCondition: !skip_build_stage('bullseye', 'covc') && code_coverage_enabled(),
+                            runCondition: runBuildStage('bullseye', 'covc') && code_coverage_enabled(),
                             buildRpms: true,
                             release: "${env.DAOS_RELVAL}.bullseye",
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -1098,8 +1106,8 @@ pipeline {
                                          name: 'NLT server leaks',
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
                                          tool: issues(pattern: 'nlt-server-leaks.json',
-                                           name: 'NLT server results',
-                                           id: 'NLT_server'),
+                                                      name: 'NLT server results',
+                                                      id: 'NLT_server'),
                                          scm: 'daos-stack/daos'
                             job_status_update()
                         }
@@ -1224,15 +1232,6 @@ pipeline {
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          compiler: 'covc',
                                          NLT: true
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         name: 'NLT server leaks',
-                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: 'nlt-server-leaks.json',
-                                           name: 'NLT server results',
-                                           id: 'NLT_server'),
-                                         scm: 'daos-stack/daos'
                             job_status_update()
                         }
                     }
