@@ -21,7 +21,7 @@
 #include "dlck_checker.h"
 #include "dlck_cmds.h"
 
-#define EFFECTIVE_USER_STR "Effective user: "
+#define EFFECTIVE_USER_STR      "Effective user: "
 #define USER_BELONGS_TO_GRP_FMT "User %sbelong%s to group: %s (gid=%" PRIuMAX ")\n"
 #define UNEXPECTED_USER_WARNING_MSG                                                                \
 	"\nWARNING: It is recommended to run this program as root or as a user who belongs to "    \
