@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1086,6 +1086,9 @@ class TestGroup():
         # Generate launch parameter branch extra yaml file
         self._add_launch_param_yaml(logger, self._yaml_directory)
 
+        # Generate daos_server name extra yaml file
+        self._add_daos_server_name_yaml(logger, self._yaml_directory)
+
         # Replace any placeholders in the test yaml file
         for test in self.tests:
             new_yaml_file = updater.update(test.yaml_file, self._yaml_directory)
@@ -1172,6 +1175,17 @@ class TestGroup():
             write_yaml_file(logger, yaml_file, lines)
             for test in self.tests:
                 test.extra_yaml.insert(0, yaml_file)
+
+    def _add_daos_server_name_yaml(self, logger, yaml_dir):
+        """Add an extra yaml for the daos_server name"""
+        yaml_file = os.path.join(yaml_dir, "extra_yaml_daos_server_name.yaml")
+        lines = [
+            'server_config:',
+            '  name: my_daos_server'
+        ]
+        write_yaml_file(logger, yaml_file, lines)
+        for test in self.tests:
+            test.extra_yaml.insert(0, yaml_file)
 
     def setup_slurm(self, logger, setup, install, user, result):
         """Set up slurm on the hosts if any tests are using partitions.
