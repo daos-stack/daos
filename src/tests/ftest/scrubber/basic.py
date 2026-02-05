@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,14 +14,8 @@ class TestWithScrubberBasic(TestWithScrubber):
     :avocado: recursive
     """
 
-    def run_scrubber_basic(self, pool_prop=None, cont_prop=None):
-        """JIRA ID: DAOS-7371
-        Scrubber basic main method which runs the basic testing.
-
-        Args:
-           pool_prop(str) : Test pool properties string.
-           cont_prop(str) : Test container properties string
-        """
+    def run_scrubber_basic(self):
+        """Runs the basic scrubber testing."""
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         transfer_block_size = self.params.get("transfer_block_size",
@@ -30,7 +25,6 @@ class TestWithScrubberBasic(TestWithScrubber):
         self.ior_cmd.flags.update(flags[0], "ior.flags")
         self.ior_cmd.dfs_oclass.update(obj_class[0])
         self.ior_cmd.dfs_dir_oclass.update(obj_class[0])
-        self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
         for test in transfer_block_size:
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
@@ -57,7 +51,16 @@ class TestWithScrubberBasic(TestWithScrubber):
         :avocado: tags=TestWithScrubberBasic,test_scrubber_disabled_during_pool_creation
 
         """
-        self.run_scrubber_basic(None, None)
+        other_properties = self.params.get("other_properties", '/run/pool/*')
+
+        self.add_pool()
+        for prop_val in other_properties.split(","):
+            if prop_val is not None:
+                value = prop_val.split(":")
+                self.pool.set_property(value[0], value[1])
+        self.add_container(pool=self.pool)
+
+        self.run_scrubber_basic()
 
     def test_scrubber_enabled_during_pool_creation(self):
         """JIRA ID: DAOS-7371
@@ -74,6 +77,10 @@ class TestWithScrubberBasic(TestWithScrubber):
         :avocado: tags=TestWithScrubberBasic,test_scrubber_enabled_during_pool_creation
 
         """
-        pool_prop = self.params.get("properties", '/run/pool/*')
-        cont_prop = self.params.get("properties", '/run/container/*')
-        self.run_scrubber_basic(pool_prop, cont_prop)
+        pool_properties = self.params.get("properties", '/run/pool/*')
+        other_properties = self.params.get("other_properties", '/run/pool/*')
+
+        self.add_pool(properties=f"{pool_properties},{other_properties}")
+        self.add_container(pool=self.pool)
+
+        self.run_scrubber_basic()

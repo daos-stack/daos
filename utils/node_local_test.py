@@ -1015,7 +1015,8 @@ class DaosServer():
         else:
             size = 1024 * 4
 
-        rc = self.run_dmg(['pool', 'create', 'NLT', '--scm-size', f'{size}M'])
+        rc = self.run_dmg(['pool', 'create', 'NLT', '--scm-size', f'{size}M', '--properties',
+                           'rd_fac:0,space_rb:0'])
         print(rc)
         assert rc.returncode == 0
         self.fetch_pools()
@@ -1838,6 +1839,8 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
 
     if attrs:
         cmd.extend(['--attrs', ','.join([f"{name}:{val}" for name, val in attrs.items()])])
+
+    cmd.extend(['--properties', 'cksum:off,srv_cksum:off,rd_fac:0'])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -6209,7 +6212,7 @@ def test_alloc_cont_create(server, conf, wf):
                 'create',
                 pool.id(),
                 '--properties',
-                f'srv_cksum:on,label:{cont_id}']
+                f'srv_cksum:on,label:{cont_id},rd_fac:0']
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf

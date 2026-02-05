@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -272,7 +272,7 @@ class TestPool(TestDaosApiBase):
         self.gid = os.getegid()
 
         self.mode = BasicParameter(None)
-        self.name = BasicParameter(None)            # server group name
+        self.name = BasicParameter(None)                                # server group name
         self.svcn = BasicParameter(None)
         self.target_list = BasicParameter(None)
         self.nranks = BasicParameter(None)
@@ -281,9 +281,9 @@ class TestPool(TestDaosApiBase):
         self.mem_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
-        self.prop_name = BasicParameter(None)       # name of property to be set
-        self.prop_value = BasicParameter(None)      # value of property
-        self.properties = BasicParameter(None)      # string of cs name:value
+        self.prop_name = BasicParameter(None)                           # name of property to be set
+        self.prop_value = BasicParameter(None)                          # value of property
+        self.properties = BasicParameter(None, "rd_fac:0,space_rb:0")   # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.pool_query_delay = BasicParameter(None)
@@ -1049,7 +1049,7 @@ class TestPool(TestDaosApiBase):
         return False
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_state=None, rs_padding16=None,
+                             rs_errno=None, rs_state=None, rs_flags=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -1066,7 +1066,7 @@ class TestPool(TestDaosApiBase):
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
             rs_state (int, optional): rebuild state flag. Defaults to None.
-            rs_padding16 (int, optional): padding. Defaults to None.
+            rs_flags (int, optional): rebuild status flags. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
                 Defaults to None.
