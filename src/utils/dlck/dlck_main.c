@@ -85,6 +85,13 @@ main(int argc, char *argv[])
 
 	dlck_args_parse(argc, argv, &ctrl);
 
+	if (ctrl.common.verbose) {
+		rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_ERR);
+		if (rc != 0) {
+			goto err_args_free;
+		}
+	}
+
 	rc_abt = ABT_init(0, NULL);
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
@@ -128,6 +135,10 @@ err_print_main_fini:
 err_abt_fini:
 	(void)ABT_finalize();
 err_args_free:
+	if (ctrl.common.verbose) {
+		daos_debug_fini();
+	}
+
 	dlck_args_free(&ctrl);
 	(void)d_fault_inject_fini();
 

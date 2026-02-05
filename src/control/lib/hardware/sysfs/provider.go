@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -600,4 +601,24 @@ func (s *Provider) IsIOMMUEnabled() (bool, error) {
 	}
 
 	return err == nil && len(dmars) > 0, nil
+}
+
+// IsTHPEnabled checks whether transparent hugepages is enabled by interrogating sysfs and
+// implements the THPDetector interface on sysfs provider.
+func (s *Provider) IsTHPEnabled() (bool, error) {
+	if s == nil {
+		return false, errors.New("sysfs provider is nil")
+	}
+
+	thpStatePath := s.sysPath("kernel", "mm", "transparent_hugepage", "enabled")
+	thpState, err := os.ReadFile(thpStatePath)
+	if err != nil {
+		return false, errors.Wrap(err, "unable to get transparent hugepage state")
+	}
+
+	thpStateStr := strings.TrimSuffix(string(thpState), "\n")
+	strToks := strings.Split(thpStateStr, " ")
+	isDisabled := common.Includes(strToks, "[never]")
+
+	return !isDisabled, nil
 }

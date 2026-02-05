@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -763,7 +763,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 
 static int
 init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, const char *group,
-		   const d_rank_list_t *ranks, daos_prop_t *prop, uint32_t ndomains,
+		   const d_rank_list_t *ranks, daos_prop_t *prop_orig, uint32_t ndomains,
 		   const uint32_t *domains)
 {
 	struct pool_buf	       *map_buf;
@@ -780,23 +780,58 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	uint32_t                svc_ops_max;
 	uint32_t                svc_ops_num;
 	uint64_t                rdb_size;
+	daos_prop_t	       *prop = NULL;
 	int			rc;
 	struct daos_prop_entry *entry;
 	uuid_t                  uuid;
+
+	/* duplicate the default properties, overwrite it with pool create
+	 * parameter and then write to pool meta data.
+	 */
+	prop = daos_prop_dup(&pool_prop_default, true /* pool */, false /* input */);
+	if (prop == NULL) {
+		D_ERROR("daos_prop_dup failed.\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_FAIL_POOL_CREATE_VERSION)) {
+		uint64_t fail_val = daos_fail_value_get();
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
+		D_ASSERT(entry != NULL);
+		entry->dpe_val = (uint32_t)fail_val;
+	}
+
+	rc = pool_prop_default_copy(prop, prop_orig);
+	if (rc) {
+		DL_ERROR(rc, "daos_prop_default_copy() failed");
+		D_GOTO(out_prop, rc);
+	}
 
 	rc = gen_pool_buf(NULL /* map */, &map_buf, map_version, ndomains, nnodes, ntargets,
 			  domains, dss_tgt_nr);
 	if (rc != 0) {
 		D_ERROR("failed to generate pool buf, "DF_RC"\n", DP_RC(rc));
-		goto out;
+		goto out_prop;
 	}
 
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
+	entry = daos_prop_entry_get(prop_orig, DAOS_PROP_PO_REDUN_FAC);
 	if (entry) {
+		/** if the user provided an explicit incompatible rd_fac, then fail gracefully */
 		if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
-			D_ERROR("ndomains(%u) could not meet redunc factor(%lu)\n",
+			D_ERROR("ndomains(%u) could not meet specified redunc factor(%lu)\n",
 				map_buf->pb_domain_nr, entry->dpe_val);
 			D_GOTO(out_map_buf, rc = -DER_INVAL);
+		}
+	} else {
+		/** if the default rd_fac cannot be satisfied, adjust it on the fly */
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
+		if (entry) {
+			if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
+				D_DEBUG(DB_MD, "ndomains(%u) could not meet default redunc factor(%lu)\n",
+					map_buf->pb_domain_nr, entry->dpe_val);
+				entry->dpe_val = (uint64_t) map_buf->pb_domain_nr - 1;
+			}
 		}
 	}
 
@@ -930,6 +965,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 
 out_map_buf:
 	pool_buf_free(map_buf);
+out_prop:
+	daos_prop_free(prop);
 out:
 	return rc;
 }
@@ -1017,23 +1054,26 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 			d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
 			daos_prop_t *prop, d_rank_list_t **svc_addrs)
 {
-	struct daos_prop_entry *svc_rf_entry;
-	struct pool_buf	       *map_buf;
-	uint32_t		map_version = 1;
-	d_rank_list_t	       *ranks;
-	d_iov_t			psid;
-	struct rsvc_client	client;
-	struct dss_module_info *info = dss_get_module_info();
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
-	struct daos_prop_entry *lbl_ent;
-	struct daos_prop_entry *def_lbl_ent;
-	struct pool_create_out *out;
-	struct d_backoff_seq	backoff_seq;
-	uuid_t                  pi_hdl_uuid;
-	uint64_t                req_time   = 0;
-	int			n_attempts = 0;
-	int			rc;
+	struct daos_prop_entry      *svc_rf_entry;
+	struct pool_buf             *map_buf;
+	uint32_t                     map_version = 1;
+	d_rank_list_t               *ranks;
+	rdb_replica_id_t            *replicas;
+	int                          i;
+	struct ds_rsvc_create_params create_params;
+	d_iov_t                      psid;
+	struct rsvc_client           client;
+	struct dss_module_info      *info = dss_get_module_info();
+	crt_endpoint_t               ep;
+	crt_rpc_t                   *rpc;
+	struct daos_prop_entry      *lbl_ent;
+	struct daos_prop_entry      *def_lbl_ent;
+	struct pool_create_out      *out;
+	struct d_backoff_seq         backoff_seq;
+	uuid_t                       pi_hdl_uuid;
+	uint64_t                     req_time   = 0;
+	int                          n_attempts = 0;
+	int                          rc;
 
 	/* Check for default label supplied via property. */
 	def_lbl_ent = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_LABEL);
@@ -1063,20 +1103,37 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	D_DEBUG(DB_MD, DF_UUID": creating PS: ntargets=%d ndomains=%d svc_rf="DF_U64"\n",
 		DP_UUID(pool_uuid), ntargets, ndomains, svc_rf_entry->dpe_val);
 
+	/* Determine the ranks and IDs of the PS replicas. */
 	rc = select_svc_ranks(svc_rf_entry->dpe_val, map_buf, map_version, &ranks);
 	if (rc != 0)
 		goto out_map_buf;
+	D_ALLOC_ARRAY(replicas, ranks->rl_nr);
+	if (replicas == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ranks;
+	}
+	for (i = 0; i < ranks->rl_nr; i++) {
+		replicas[i].rri_rank = ranks->rl_ranks[i];
+		/* Allocate replica generations from 1. See rdb_raft_init. */
+		replicas[i].rri_gen = i + 1;
+	}
+
+	create_params.scp_bootstrap      = true;
+	create_params.scp_size           = ds_rsvc_get_md_cap();
+	create_params.scp_vos_df_version = ds_pool_get_vos_df_version_default();
+	create_params.scp_layout_version = 0 /* default */;
+	create_params.scp_replicas       = replicas;
+	create_params.scp_replicas_len   = ranks->rl_nr;
 
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, RDB_NIL_TERM,
-				DS_RSVC_CREATE, true /* bootstrap */, ds_rsvc_get_md_cap(),
-				ds_pool_get_vos_df_version_default());
+				DS_RSVC_CREATE, &create_params);
 	if (rc != 0)
-		D_GOTO(out_ranks, rc);
+		goto out_replicas;
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
-		D_GOTO(out_ranks, rc);
+		goto out_replicas;
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
 				8 /* next (ms) */, 1 << 10 /* max (ms) */);
@@ -1141,6 +1198,8 @@ out_backoff_seq:
 	 * Intentionally skip cleaning up the PS replicas. See the function
 	 * documentation above.
 	 */
+out_replicas:
+	D_FREE(replicas);
 out_ranks:
 	d_rank_list_free(ranks);
 out_map_buf:
@@ -1180,8 +1239,8 @@ ds_pool_svc_start(uuid_t uuid)
 	}
 
 	d_iov_set(&id, uuid, sizeof(uuid_t));
-	rc = ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, RDB_NIL_TERM, DS_RSVC_START, 0 /* size */,
-			   0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */);
+	rc = ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, RDB_NIL_TERM, DS_RSVC_START,
+			   NULL /* create_params */, NULL /* arg */);
 	if (rc == -DER_ALREADY) {
 		D_DEBUG(DB_MD, DF_UUID": pool service already started\n", DP_UUID(uuid));
 		return 0;
@@ -2555,7 +2614,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, 0);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, true /* auto_recovery */,
+					0 /* delay_sec */);
 	if (rc != 0)
 		goto out;
 
@@ -3947,7 +4007,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct rdb_tx		tx;
 	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
-	daos_prop_t	       *prop_dup = NULL;
 	daos_prop_t            *prop      = NULL;
 	d_rank_list_t          *tgt_ranks = NULL;
 	uint32_t                ndomains;
@@ -4025,38 +4084,13 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D_GOTO(out_tx, rc);
 	}
 
-	/* duplicate the default properties, overwrite it with pool create
-	 * parameter and then write to pool meta data.
-	 */
-	prop_dup = daos_prop_dup(&pool_prop_default, true /* pool */,
-				 false /* input */);
-	if (prop_dup == NULL) {
-		D_ERROR("daos_prop_dup failed.\n");
-		D_GOTO(out_tx, rc = -DER_NOMEM);
-	}
-
-	if (DAOS_FAIL_CHECK(DAOS_FAIL_POOL_CREATE_VERSION)) {
-		uint64_t fail_val = daos_fail_value_get();
-		struct daos_prop_entry *entry;
-
-		entry = daos_prop_entry_get(prop_dup, DAOS_PROP_PO_OBJ_VERSION);
-		D_ASSERT(entry != NULL);
-		entry->dpe_val = (uint32_t)fail_val;
-	}
-
-	rc = pool_prop_default_copy(prop_dup, prop);
-	if (rc) {
-		DL_ERROR(rc, "daos_prop_default_copy() failed");
-		D_GOTO(out_tx, rc);
-	}
-
 	/* Initialize the DB and the metadata for this pool. */
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 8;
 	rc = rdb_tx_create_root(&tx, &attr);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
-	rc = init_pool_metadata(&tx, &svc->ps_root, ntgts, NULL /* group */, tgt_ranks, prop_dup,
+	rc = init_pool_metadata(&tx, &svc->ps_root, ntgts, NULL /* group */, tgt_ranks, prop,
 				ndomains, domains);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
@@ -4069,7 +4103,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D_GOTO(out_tx, rc);
 
 out_tx:
-	daos_prop_free(prop_dup);
 	ds_cont_unlock_metadata(svc->ps_cont_svc);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -4130,6 +4163,26 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 
 	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
 			 sizeof(cb_info->bci_rc));
+	return 0;
+}
+
+static int
+pool_query_set_rebuild_status_degraded(struct pool_svc *svc, struct daos_rebuild_status *rebuild_st)
+{
+	unsigned int down_tgts = 0;
+	int          rc;
+
+	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+	rc = pool_map_find_down_tgts(svc->ps_pool->sp_map, NULL /* tgt_pp */, &down_tgts);
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+	if (rc != 0)
+		return rc;
+
+	if (down_tgts > 0)
+		rebuild_st->rs_flags |= DAOS_RSF_DEGRADED;
+	else
+		rebuild_st->rs_flags &= ~DAOS_RSF_DEGRADED;
+
 	return 0;
 }
 
@@ -4362,6 +4415,12 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		DL_ERROR(rc, DF_UUID ": permission denied for connect attempt for " DF_X64,
 			 DP_UUID(in->pci_op.pi_uuid), flags);
 		goto out_map_version;
+	}
+
+	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = pool_query_set_rebuild_status_degraded(svc, &out->pco_rebuild_st);
+		if (rc != 0)
+			goto out_map_version;
 	}
 
 	transfer_map = true;
@@ -4738,10 +4797,7 @@ out:
 void
 ds_pool_disconnect_handler(crt_rpc_t *rpc)
 {
-	uint8_t rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
-
-	D_ASSERT(rpc_ver == DAOS_POOL_VERSION);
-	pool_disconnect_handler(rpc, rpc_ver);
+	pool_disconnect_handler(rpc, opc_get_rpc_ver(rpc->cr_opc));
 }
 
 static int
@@ -5427,6 +5483,12 @@ pool_query_handler(crt_rpc_t *rpc, int handler_version)
 			D_ERROR("iv_prop verify failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_lock, rc);
 		}
+	}
+
+	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = pool_query_set_rebuild_status_degraded(svc, &out->pqo_rebuild_st);
+		if (rc != 0)
+			goto out_lock;
 	}
 
 out_lock:
@@ -6966,7 +7028,7 @@ pool_svc_reconf_ult(void *varg)
 				DP_UUID(svc->ps_uuid), DP_RC(rc));
 			goto out_to_add_remove;
 		}
-		rc = rdb_remove_replicas(svc->ps_rsvc.s_db, tmp);
+		rc = ds_rsvc_remove_replicas_s(&svc->ps_rsvc, to_remove, false /* destroy */);
 		if (rc != 0)
 			D_ERROR(DF_UUID": failed to remove replicas: "DF_RC"\n",
 				DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -7727,23 +7789,24 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		    struct pool_target_addr_list *inval_list_out, uint32_t *map_version,
 		    struct rsvc_hint *hint, enum map_update_source src, uint32_t flags)
 {
-	struct pool_target_id_list       target_list = {0};
-	uint32_t                         tgt_map_ver = 0;
-	bool				updated;
-	int				rc;
-	char				*env;
-	daos_epoch_t			rebuild_eph = d_hlc_get();
-	uint64_t			delay = 2;
-	bool                             sys_self_heal_applicable;
-	uint64_t                         sys_self_heal = 0;
+	struct pool_target_id_list target_list = {0};
+	uint32_t                   tgt_map_ver = 0;
+	bool                       updated;
+	int                        rc;
+	char                      *env;
+	daos_epoch_t               rebuild_eph = d_hlc_get();
+	uint64_t                   delay       = 2;
+	bool                       auto_recovery;
+	uint64_t                   sys_self_heal = 0;
 
 	/*
-	 * The system self-heal policy only applies to automatic pool exclude
+	 * The pool and system self-heal policies only apply to automatic pool exclude
 	 * and rebuild operations.
 	 */
-	sys_self_heal_applicable = (opc == MAP_EXCLUDE && src == MUS_SWIM);
+	auto_recovery = (opc == MAP_EXCLUDE && src == MUS_SWIM);
 
-	if (sys_self_heal_applicable) {
+	/* If applicable, check system self-heal policy. */
+	if (auto_recovery) {
 		rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": failed to get self-heal policy",
@@ -7765,6 +7828,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		}
 	}
 
+	/* Pool self-heal policy is checked in this call. */
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
 					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
@@ -7785,14 +7849,14 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 	d_freeenv_str(&env);
 
-	if (sys_self_heal_applicable && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+	if (auto_recovery && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
 		D_DEBUG(DB_MD, DF_UUID ": pool_rebuild disabled in system property self_heal\n",
 			DP_UUID(svc->ps_uuid));
 		rc = 0;
 		goto out;
 	}
 
-	if (!is_pool_rebuild_allowed(svc->ps_pool, true)) {
+	if (!is_pool_rebuild_allowed(svc->ps_pool, svc->ps_pool->sp_self_heal, auto_recovery)) {
 		D_DEBUG(DB_MD, DF_UUID ": rebuild disabled for pool\n",
 			DP_UUID(svc->ps_pool->sp_uuid));
 		D_GOTO(out, rc);

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1512,7 +1512,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	int			 i, nr, rc = 0;
 
 	/* Get pool map to check the target status */
-	pool_child = ds_pool_child_lookup(pool_id);
+	pool_child = ds_pool_child_find(pool_id);
 	if (pool_child == NULL) {
 		D_ERROR(DF_UUID": Pool child not found\n", DP_UUID(pool_id));
 		/*
@@ -1533,6 +1533,13 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 
 	nr_downout = nr_down = nr_upin = nr_up = 0;
 	ABT_rwlock_rdlock(pool->sp_lock);
+
+	if (pool->sp_map == NULL) {
+		D_ERROR(DF_UUID ": Pool map not populated\n", DP_UUID(pool_id));
+		rc = -DER_UNINIT;
+		goto done;
+	}
+
 	for (i = 0; i < tgt_cnt; i++) {
 		nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank,
 						      tgt_ids[i], &target);
@@ -1561,7 +1568,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 			break;
 		}
 	}
-
+done:
 	if (pool->sp_iv_ns != NULL) {
 		*pl_rank = pool->sp_iv_ns->iv_master_rank;
 	} else {

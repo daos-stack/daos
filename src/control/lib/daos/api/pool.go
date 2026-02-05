@@ -123,10 +123,11 @@ func newPoolRebuildStatus(drs *C.struct_daos_rebuild_status) *daos.PoolRebuildSt
 	}
 
 	return &daos.PoolRebuildStatus{
-		Status:  int32(drs.rs_errno),
-		Objects: uint64(drs.rs_obj_nr),
-		Records: uint64(drs.rs_rec_nr),
-		State:   compatRebuildState(),
+		Status:   int32(drs.rs_errno),
+		Objects:  uint64(drs.rs_obj_nr),
+		Records:  uint64(drs.rs_rec_nr),
+		State:    compatRebuildState(),
+		Degraded: (drs.rs_flags & C.DAOS_RSF_DEGRADED) != 0,
 	}
 }
 
@@ -407,12 +408,15 @@ func PoolQuery(ctx context.Context, sysName, poolID string, queryMask daos.PoolQ
 		}
 	}
 
+	if err := poolInfo.UpdateRebuildStatus(); err != nil {
+		return nil, err
+	}
+
 	return poolInfo, nil
 }
 
 func newPoolTargetInfo(ptinfo *C.daos_target_info_t) *daos.PoolQueryTargetInfo {
 	return &daos.PoolQueryTargetInfo{
-		Type:  daos.PoolQueryTargetType(ptinfo.ta_type),
 		State: daos.PoolQueryTargetState(ptinfo.ta_state),
 		Space: []*daos.StorageUsageStats{
 			{

@@ -15,8 +15,6 @@ timeouts:
   test_rebuild_35: 180
   test_rebuild_36: 200
   test_rebuild_37: 250
-pool:
-  nvme_size: 0G
 
 server_config:
   name: daos_server
@@ -25,8 +23,6 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -37,8 +33,6 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
@@ -56,6 +50,9 @@ agent_config:
 dmg:
   transport_config:
     allow_insecure: false
+
+pool:
+  nvme_size: 0G
 
 daos_tests:
   num_clients: 1

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -423,9 +423,13 @@ test_rebuild_wait_to_start(test_arg_t **args, int args_cnt);
 void
 test_rebuild_wait_to_start_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_version);
 void
+test_rebuild_wait_to_start_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_version);
+void
     test_rebuild_wait_to_error(test_arg_t **args, int args_cnt);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
+int
+    daos_pool_get_prop(const uuid_t pool_uuid, const char *name, char **value_out);
 
 int daos_pool_upgrade(const uuid_t pool_uuid);
 int ec_data_nr_get(daos_obj_id_t oid);
@@ -761,6 +765,9 @@ void
      test_set_engine_fail_loc_quiet(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
 void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
 void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
+
+char *
+test_escape_self_heal(const char *value);
 
 void
 test_verify_cont(test_arg_t *arg, struct test_pool *pool, struct test_cont *conts, int cont_nr);

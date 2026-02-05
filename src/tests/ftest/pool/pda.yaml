@@ -18,7 +18,7 @@ pool:
   scm_size: 1G
 pool_1:
   scm_size: 1G
-  properties: ec_pda:2,rp_pda:4
+  properties: rd_fac:0,space_rb:0,ec_pda:2,rp_pda:4
 container:
   type: POSIX
   control_method: daos

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1877,7 +1877,7 @@ child_status_check(struct pool_domain *domain, uint32_t status)
 /* Domain status update state machine */
 static int
 update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint32_t version,
-		  bool *updated)
+		  bool *updated, bool for_revert)
 {
 	int i;
 
@@ -1893,7 +1893,7 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 		struct pool_domain *child = &domain->do_children[i];
 		int found;
 
-		found = update_dom_status(child, id, status, version, updated);
+		found = update_dom_status(child, id, status, version, updated, for_revert);
 		if (!found)
 			continue;
 
@@ -1947,14 +1947,14 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 			/* Only change to DOWNOUT/DOWN if all of children are DOWNOUT/DOWN */
 			if (child_status_check(child, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT) &&
 			    (child->do_comp.co_status != status)) {
-				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
+				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u, for_revert %d",
 					child->do_comp.co_rank, child->do_comp.co_id,
-					child->do_comp.co_status, status);
+					child->do_comp.co_status, status, for_revert);
 				if (child->do_comp.co_status == PO_COMP_ST_DOWN)
 					child->do_comp.co_flags = PO_COMPF_DOWN2OUT;
 
 				child->do_comp.co_status = status;
-				if (status == PO_COMP_ST_DOWN)
+				if (status == PO_COMP_ST_DOWN && !for_revert)
 					child->do_comp.co_fseq = version;
 				*updated = true;
 			}
@@ -1975,12 +1975,12 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 
 int
 update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t status,
-			    uint32_t version, bool *updated)
+			    uint32_t version, bool *updated, bool for_revert)
 {
 	int rc;
 
 	D_ASSERT(map->po_tree != NULL);
-	rc = update_dom_status(map->po_tree, tgt_id, status, version, updated);
+	rc = update_dom_status(map->po_tree, tgt_id, status, version, updated, for_revert);
 	if (rc < 0)
 		return rc;
 	return 0;
@@ -2040,6 +2040,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 	struct pool_domain	*tmp;
 	int			 i;
 
+	D_ASSERT(map != NULL);
 	if (pool_map_empty(map)) {
 		D_ERROR("Uninitialized pool map\n");
 		return 0;
@@ -2092,6 +2093,7 @@ int
 pool_map_find_ranks(struct pool_map *map, uint32_t id,
 		    struct pool_domain **domain_pp)
 {
+	D_ASSERT(map != NULL);
 	return pool_map_find_domain(map, PO_COMP_TP_RANK, id,
 				    domain_pp);
 }
@@ -2150,6 +2152,7 @@ pool_map_find_dom_by_rank(struct pool_map *map, uint32_t rank)
 	int			doms_cnt;
 	int			i;
 
+	D_ASSERT(map != NULL);
 	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
 	if (doms_cnt <= 0)
 		return NULL;
@@ -2232,6 +2235,7 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 {
 	struct pool_domain	*dom;
 
+	D_ASSERT(map != NULL);
 	dom = pool_map_find_dom_by_rank(map, rank);
 	if (dom == NULL)
 		return 0;

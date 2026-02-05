@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,6 +58,7 @@ const (
 	RASSystemFabricProvChanged RASID = C.RAS_SYSTEM_FABRIC_PROV_CHANGED // info
 	RASNVMeLinkSpeedChanged    RASID = C.RAS_DEVICE_LINK_SPEED_CHANGED  // warning|notice
 	RASNVMeLinkWidthChanged    RASID = C.RAS_DEVICE_LINK_WIDTH_CHANGED  // warning|notice
+	RASDeviceLEDSet            RASID = C.RAS_DEVICE_LED_SET             // info
 )
 
 func (id RASID) String() string {
