@@ -175,7 +175,7 @@ class DdbPMEMTest(TestWithServers):
         self.log_step("Find the vos file name.")
         vos_paths = self.server_managers[0].get_vos_files(pool)
         if not vos_paths:
-            self.fail(f"vos file wasn't found!")
+            self.fail("vos file wasn't found!")
         ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         self.log_step("Call ddb rm to remove the akey.")
@@ -310,7 +310,7 @@ class DdbPMEMTest(TestWithServers):
         host = self.server_managers[0].hosts[0:1]
         vos_paths = self.server_managers[0].get_vos_files(pool)
         if not vos_paths:
-            self.fail(f"vos file wasn't found!")
+            self.fail("vos file wasn't found!")
         ddb_command = DdbCommand(host, self.bin, vos_paths[0])
 
         self.log_step("Load new data into [0]/[0]/[0]/[0]; Create a file in test node.")
@@ -386,7 +386,7 @@ class DdbPMEMTest(TestWithServers):
         self.log_step("Find the vos file name.")
         vos_paths = self.server_managers[0].get_vos_files(pool)
         if not vos_paths:
-            self.fail(f"vos file wasn't found!")
+            self.fail("vos file wasn't found!")
         ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
 
         self.log_step("Dump the two akeys to files.")
