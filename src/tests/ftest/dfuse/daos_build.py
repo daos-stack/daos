@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
   (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -134,7 +134,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
             'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
             'python3 -m pip install pip --upgrade',
-            f'python3 -m pip install -r {build_dir}/requirements-build.txt',
+            f'python3 -m pip install --progress-bar off -r {build_dir}/requirements-build.txt',
             f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
             f'daos filesystem query {mount_dir}',
             f'daos filesystem evict {build_dir}',

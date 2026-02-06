@@ -28,7 +28,7 @@ python3 -m venv venv
 source venv/bin/activate
 
 pip install --upgrade pip
-pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
+pip install --progress-bar off -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
@@ -49,7 +49,7 @@ fi
 # from the read-only tree directly but for now that isn't working.
 # https://github.com/pypa/setuptools/issues/3237
 cp -a "$PREFIX"/lib/daos/python pydaos
-pip install ./pydaos
+pip install --progress-bar off ./pydaos
 rm -rf pydaos
 
 # Disable D_PROVIDER to allow launch.py to set it
