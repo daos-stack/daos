@@ -27,7 +27,7 @@ python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
-pip install --upgrade pip
+pip install --quiet --upgrade pip
 pip install --progress-bar off -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then

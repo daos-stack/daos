@@ -88,7 +88,7 @@ source venv/bin/activate
 # pip config set global.progress_bar off
 # pip config set global.no_color true
 
-pip install --upgrade pip
+pip install --quiet --upgrade pip
 pip install --progress-bar off --requirement requirements-utest.txt
 
 pip install --progress-bar off /opt/daos/lib/daos/python/
