@@ -542,7 +542,7 @@ int_extend_cb_internal(void *arg)
 		      test_arg->pool.pool_info.pi_rebuild_st.rs_version, pre_op, cb_arg->rank,
 		      do_stop ? "stop rebuild, " : "", opc, extend_opstrs[opc]);
 
-	sleep(10);
+	sleep(5);
 
 	if (cb_arg->kill) {
 		/* Kill another rank during extend */
@@ -563,7 +563,7 @@ int_extend_cb_internal(void *arg)
 			      test_arg->pool.pool_info.pi_map_ver,
 			      test_arg->pool.pool_info.pi_rebuild_st.rs_version);
 		test_rebuild_wait_to_start_next(&test_arg, 1);
-		print_message("rebuild version=%u running\n",
+		print_message("second rebuild version=%u running\n",
 			      test_arg->pool.pool_info.pi_rebuild_st.rs_version);
 		rc = rebuild_stop_with_dmg(arg);
 		assert_rc_equal(rc, 0);

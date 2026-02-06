@@ -845,7 +845,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **eng
 	return rc;
 }
 
-/* Determine if pool rebuild is busy, and the rebuild version is > rs_version */
+/* Determine if pool rebuild is busy (or finished already), and rebuild version > rs_version */
 static bool
 rebuild_pool_started_after_ver(test_arg_t *arg, uint32_t rs_version)
 {
@@ -863,11 +863,16 @@ rebuild_pool_started_after_ver(test_arg_t *arg, uint32_t rs_version)
 		return false;
 	} else {
 		bool in_progress = (rst->rs_state == DRS_IN_PROGRESS);
-		print_message("rebuild for pool " DF_UUIDF "has %sstarted, rs_version=%u "
-			      "(waiting for > %d)\n",
-			      DP_UUID(arg->pool.pool_uuid), in_progress ? "" : "not yet ",
+		bool done        = (rst->rs_state == DRS_COMPLETED);
+
+		/* NB: check for done (e.g., test killed leader, query times out during rebuild. */
+		print_message("rebuild for pool " DF_UUIDF "%s, rs_version=%u (waiting for > %d)\n",
+			      DP_UUID(arg->pool.pool_uuid),
+			      in_progress ? "started"
+			      : done      ? "finished already"
+					  : "not yet started",
 			      rst->rs_version, rs_version);
-		if (in_progress && (rst->rs_version > rs_version)) {
+		if ((in_progress || done) && (rst->rs_version > rs_version)) {
 			/* save final pool query info to be able to inspect rebuild status */
 			memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
 

@@ -893,12 +893,6 @@ enum {
 static bool
 rebuild_is_stoppable(struct rebuild_global_pool_tracker *rgt, bool force, int *rcp)
 {
-	/* NAK if nothing is rebuilding */
-	if (rgt == NULL) {
-		*rcp = -DER_NONEXIST;
-		return false;
-	}
-
 	/* NAK if another rebuild is queued for the same pool (it would run after this one stopped)
 	 */
 	if (!d_list_empty(&rebuild_gst.rg_queue_list)) {
@@ -962,19 +956,18 @@ ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 
 	/* admin stop command only for specific cases (and force option for failing op:Fail_reclaim)
 	 */
+	if (rgt == NULL) {
+		D_INFO(DF_UUID ": nothing found to stop\n", DP_UUID(pool->sp_uuid));
+		return -DER_NONEXIST;
+	}
 	if (rebuild_is_stoppable(rgt, force, &rc)) {
 		D_INFO(DF_RB ": stopping rebuild force=%u opc %u(%s)\n", DP_RB_RGT(rgt), force,
 		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
 		rgt->rgt_abort           = 1;
 		rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 	} else {
-		if (rgt) {
-			D_INFO(DF_RB ": NOT stopping rebuild force=%u opc %u(%s), rc=%d\n",
-			       DP_RB_RGT(rgt), force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
-		} else {
-			DL_INFO(rc, DF_UUID ": nothing found to stop", DP_UUID(pool->sp_uuid));
-			return rc;
-		}
+		D_INFO(DF_RB ": NOT stopping rebuild force=%u opc %u(%s), rc=%d\n", DP_RB_RGT(rgt),
+		       force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
 	}
 
 	/* admin stop command does not usually terminate op:Fail_reclaim, but it is always
