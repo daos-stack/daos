@@ -205,15 +205,13 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     if (distro && compiler) {
         pragma_names << "build-${distro}-${compiler}"
     }
-    Boolean skip_due_to_pragma = false
-    pragma_names.any { name ->
+    Boolean any_pragma_skip = pragma_names.any { name ->
         if (skip_pragma_set(name)) {
             println("[${env.STAGE_NAME}] Skipping build stage due to \"Skip-${name}: true\" pragma")
-            skip_due_to_pragma = true
             return true
         }
     }
-    if (skip_due_to_pragma) {
+    if (any_pragma_skip) {
         return true
     }
 
