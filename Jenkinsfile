@@ -240,49 +240,12 @@ Boolean skip_unit_test_stage(String name) {
     return false
 }
 
-Boolean code_coverage_enabled() {
-    // Determine if code coverage is enabled for the build
-    return !skip_build_stage('bullseye', 'covc')
-    // if (paramsValue('CI_CODE_COVERAGE', true) == true) {
-    //     env.COVFN_DISABLED = 'false'
-    // }
-    // return env.COVFN_DISABLED == 'false'
-}
-
-String code_coverage_build_args() {
-    // Get additional build args for code coverage, if enabled
-    if (!code_coverage_enabled()) {
-        return ''
-    }
-    return " --build-arg COMPILER=covc --build-arg CODE_COVERAGE=true"
-}
-
-String code_coverage_scons_args() {
-    // Get additional scons args for code coverage, if enabled
-    if (!code_coverage_enabled()) {
-        return ''
-    }
-    return ' COMPILER=covc'
-}
-
 String add_daos_pkgs() {
     // Get the additional daos package names to install in functional test stages
     // if (code_coverage_enabled()) {
     //     return 'tests-internal,-code-coverage'
     // }
     return 'tests-internal'
-}
-
-Map unit_test_post_args(String name) {
-    // Get the arguments for unitTestPost
-    Map args = [artifacts: ["${name}_logs/"]]
-    if (code_coverage_enabled()) {
-        // args['artifacts'].add("covc_${name}_logs/")
-        // args['artifacts'].add('covc_vm_test/**')
-        args['ignore_failure'] = true
-        args['code_coverage'] = true
-    }
-    return args
 }
 
 String getScriptOutput(String script, String args='') {
@@ -301,12 +264,12 @@ String getScriptOutput(String script, String args='') {
 Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     // Run stage w/o any conditionals
     println("[${env.STAGE_NAME}] Determining if stage should be run (params: ${params}, pragmas: ${pragmas}, otherCondition: ${otherCondition})")
-    if (params.isEmpty() && pragmas.isEmpty()) {
-        return true
-    }
     if (!otherCondition) {
         println("[${env.STAGE_NAME}] Skipping stage due to otherCondition=false")
         return false
+    }
+    if (params.isEmpty() && pragmas.isEmpty()) {
+        return true
     }
 
     String skipMsgParams = ''
@@ -379,6 +342,10 @@ Boolean runBuildStage(String distro='', String compiler='gcc') {
         }
     }
     return runStage(params, pragmas)
+}
+
+Boolean bullseyeOverride() {
+    return runStage(['CI_FULL_BULLSEYE_REPORT': true], [:])
 }
 
 /**
@@ -556,6 +523,9 @@ def scriptedSummaryStage(Map kwargs = [:]) {
         stage("${name}") {
             if (runCondition) {
                 node('docker_runner') {
+                    println("[${name}] Check out from version control")
+                    checkoutScm(pruneStaleBranch: true)
+
                     def dockerImage = docker.build(dockerTag, dockerBuildArgs)
                     try {
                         dockerImage.inside() {
@@ -677,6 +647,9 @@ pipeline {
         booleanParam(name: 'CI_BUILD_BULLSEYE',
                      defaultValue: true,
                      description: 'Build sources and RPMs with Bullseye code coverage')
+        booleanParam(name: 'CI_FULL_BULLSEYE_REPORT',
+                     defaultValue: false,
+                     description: 'Use this build to generate a full Bullseye code coverage report')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -906,6 +879,7 @@ pipeline {
                             name: 'Build on EL 8.8',
                             distro:'el8',
                             compiler: 'gcc',
+                            runCondition: runBuildStage('el8', 'gcc') && !bullseyeOverride(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -928,6 +902,7 @@ pipeline {
                             name: 'Build on EL 9.6',
                             distro:'el9',
                             compiler: 'gcc',
+                            runCondition: runBuildStage('el9', 'gcc') && !bullseyeOverride(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -952,6 +927,7 @@ pipeline {
                             distro:'leap15',
                             rpmDistro: 'suse.lp155',
                             compiler: 'gcc',
+                            runCondition: runBuildStage('leap15', 'gcc') && !bullseyeOverride(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -972,7 +948,7 @@ pipeline {
                             name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
                             distro:'leap15',
                             compiler: 'icc',
-                            runCondition: runBuildStage('leap15_icc'),
+                            runCondition: runBuildStage('leap15_icc') && !bullseyeOverride(),
                             buildRpms: false,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -994,7 +970,7 @@ pipeline {
                             name: 'Build on EL 8.8 with Bullseye',
                             distro:'el8',
                             compiler: 'covc',
-                            runCondition: runBuildStage('bullseye', 'covc') && code_coverage_enabled(),
+                            runCondition: runBuildStage('bullseye', 'covc'),
                             buildRpms: true,
                             release: "${env.DAOS_RELVAL}.bullseye",
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -1030,7 +1006,7 @@ pipeline {
                 stage('Unit Test on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -1053,7 +1029,7 @@ pipeline {
                 stage('Unit Test bdev on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -1076,7 +1052,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
+                        expression { params.CI_NLT_TEST && !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -1118,7 +1094,7 @@ pipeline {
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -1144,7 +1120,7 @@ pipeline {
                 stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -1199,7 +1175,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                }
+                } // stage('Unit Test with Bullseye on EL 8.8')
                 stage('NLT with Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1237,7 +1213,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                }
+                } // stage('NLT with Bullseye on EL 8.8')
             }
             // steps {
             //     script {
@@ -1433,7 +1409,7 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
@@ -1477,7 +1453,7 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label vm9_label('EL9')
@@ -1499,7 +1475,7 @@ pipeline {
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1522,7 +1498,7 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label vm9_label('Ubuntu')
@@ -1544,7 +1520,7 @@ pipeline {
                 stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         dockerfile {
@@ -1600,7 +1576,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1621,7 +1597,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() && !bullseyeOverride() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1825,15 +1801,17 @@ pipeline {
                             name: 'Bullseye Report',
                             distro: 'el8',
                             compiler: 'covc',
-                            runCondition: code_coverage_enabled(),
+                            runCondition: runBullseyeStage(),
                             nodeLabel: 'docker_runner',
-                            dockerBuildArgs: dockerBuildArgs(
-                                repo_type: 'stable',
-                                deps_build: false,
-                                parallel_build: true) +
-                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                ' --build-arg REPOS="' + daosRepos() + '"' +
-                                code_coverage_build_args(),
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                                             ' --build-arg COMPILER=covc' +
+                                             ' --build-arg CODE_COVERAGE=true' +
+                                             ' -f utils/docker/Dockerfile.el.8 .',
                             installScript: './ci/summary/install_pkgs.sh',
                             runScriptArgs: [
                                 label: 'Generate Bullseye Report',
