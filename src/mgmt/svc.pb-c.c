@@ -1286,7 +1286,7 @@ static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[13] =
     offsetof(Mgmt__JoinReq, secondary_nctxs),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1687,7 +1687,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[8] =
+static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9] =
 {
   {
     "provider",
@@ -1785,8 +1785,21 @@ static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[8
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "client_firewall_mode",
+    10,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, client_firewall_mode),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__client_net_hint__field_indices_by_name[] = {
+  8,   /* field[8] = client_firewall_mode */
   3,   /* field[3] = crt_timeout */
   2,   /* field[2] = domain */
   6,   /* field[6] = env_vars */
@@ -1800,7 +1813,7 @@ static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[2 + 1] =
 {
   { 1, 0 },
   { 5, 3 },
-  { 0, 8 }
+  { 0, 9 }
 };
 const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
 {
@@ -1810,7 +1823,7 @@ const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
   "Mgmt__ClientNetHint",
   "mgmt",
   sizeof(Mgmt__ClientNetHint),
-  8,
+  9,
   mgmt__client_net_hint__field_descriptors,
   mgmt__client_net_hint__field_indices_by_name,
   2,  mgmt__client_net_hint__number_ranges,
@@ -2134,7 +2147,7 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     offsetof(Mgmt__GetAttachInfoResp, ms_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2639,7 +2652,7 @@ static const ProtobufCFieldDescriptor mgmt__get_group_status_resp__field_descrip
     offsetof(Mgmt__GetGroupStatusResp, dead_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

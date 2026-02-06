@@ -45,6 +45,21 @@ def consolidate_pp(env, parsed_targets):
     return header
 
 
+def check_hg_firewall_def(context):
+    """scons check if mercury has firewall address support"""
+
+    context.Message('Checking if mercury has firewall address support ')
+
+    src = """
+    #include <mercury_types.h>
+    static int val __attribute__((unused)) = HG_HOSTFIREWALL;
+    """
+
+    rc = context.TryCompile(src, '.c')
+    context.Result(rc)
+    return rc
+
+
 def scons():
     """Scons function"""
 
@@ -90,6 +105,13 @@ def scons():
 
     cart_lib = denv.d_library('cart', [cart_targets, swim_targets], SHLIBVERSION=CART_VERSION)
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib, SHLIBVERSION=CART_VERSION)
+
+    check = Configure(denv,
+                      custom_tests={'HasFirewallSupport': check_hg_firewall_def})
+    # pylint: disable-next=no-member
+    if not check.HasFirewallSupport():
+        denv.AppendUnique(CCFLAGS=['-DHG_HOSTFIREWALL=0xdeadbeaf'])
+    check.Finish()
 
     Default(cart_lib)
     Export('cart_targets')

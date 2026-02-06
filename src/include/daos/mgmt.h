@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -46,6 +47,7 @@ struct dc_mgmt_sys_info {
 	uint32_t        provider_idx; /* Provider index (if more than one available) */
 	daos_size_t     numa_entries_nr;
 	daos_size_t    *numa_iface_idx_rr;
+	bool            client_firewall_mode;
 };
 
 /** Client system handle */

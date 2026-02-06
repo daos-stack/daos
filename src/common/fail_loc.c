@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,9 +14,10 @@
 #include <daos/common.h>
 #include <gurt/fault_inject.h>
 
-uint64_t daos_fail_loc;
-uint64_t daos_fail_value;
-uint64_t daos_fail_num;
+static uint64_t          daos_fail_loc;
+static __thread uint64_t daos_fail_loc_private;
+static uint64_t          daos_fail_value;
+static uint64_t          daos_fail_num;
 
 void
 daos_fail_loc_reset()
@@ -29,11 +31,14 @@ daos_fail_check(uint64_t fail_loc)
 {
 	struct d_fault_attr_t	*attr = NULL;
 	int			grp = 0;
+	uint64_t                *fail_loc_ptr = &daos_fail_loc;
 
-	if ((daos_fail_loc == 0 ||
-	    (daos_fail_loc & DAOS_FAIL_MASK_LOC) !=
-	     (fail_loc & DAOS_FAIL_MASK_LOC)) &&
-	     !d_fault_inject_is_enabled())
+	if (daos_fail_loc == 0)
+		fail_loc_ptr = &daos_fail_loc_private;
+
+	if ((*fail_loc_ptr == 0 ||
+	     (*fail_loc_ptr & DAOS_FAIL_MASK_LOC) != (fail_loc & DAOS_FAIL_MASK_LOC)) &&
+	    !d_fault_inject_is_enabled())
 		return 0;
 
 	/**
@@ -53,24 +58,25 @@ daos_fail_check(uint64_t fail_loc)
 	}
 
 	if (attr == NULL) {
-		D_DEBUG(DB_ANY, "No attr fail_loc="DF_X64" value="DF_U64
-			", input_loc ="DF_X64" idx %d\n", daos_fail_loc,
-			daos_fail_value, fail_loc, grp);
+		D_DEBUG(DB_ANY,
+			"No attr fail_loc=" DF_X64 " value=" DF_U64 ", input_loc =" DF_X64
+			" idx %d\n",
+			*fail_loc_ptr, daos_fail_value, fail_loc, grp);
 		return 0;
 	}
 
 	if (d_should_fail(attr)) {
-		D_DEBUG(DB_ANY, "*** fail_loc="DF_X64" value="DF_U64
-			", input_loc ="DF_X64" idx %d\n", daos_fail_loc,
-			daos_fail_value, fail_loc, grp);
+		D_DEBUG(DB_ANY,
+			"*** fail_loc=" DF_X64 " value=" DF_U64 ", input_loc =" DF_X64 " idx %d\n",
+			*fail_loc_ptr, daos_fail_value, fail_loc, grp);
 		return 1;
 	}
 
 	return 0;
 }
 
-void
-daos_fail_loc_set(uint64_t fail_loc)
+static bool
+parse_fail_loc(uint64_t fail_loc)
 {
 	struct d_fault_attr_t	attr_in = { 0 };
 	bool			attr_set = false;
@@ -84,7 +90,7 @@ daos_fail_loc_set(uint64_t fail_loc)
 	if (attr_in.fa_id >= DAOS_FAIL_MAX_GROUP) {
 		D_ERROR("invalid fail_loc "DF_X64" fa_id: %u\n", fail_loc,
 			attr_in.fa_id);
-		return;
+		return false;
 	}
 
 	attr_in.fa_probability_x = 1;
@@ -104,8 +110,27 @@ daos_fail_loc_set(uint64_t fail_loc)
 	if (attr_set)
 		d_fault_attr_set(attr_in.fa_id, attr_in);
 
+	return true;
+}
+
+void
+daos_fail_loc_set(uint64_t fail_loc)
+{
+	if (!parse_fail_loc(fail_loc))
+		return;
 	daos_fail_loc = fail_loc;
-	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
+	daos_fail_loc_private = 0;
+	D_DEBUG(DB_ANY, "*** global_fail_loc=" DF_X64 "\n", daos_fail_loc);
+}
+
+void
+daos_fail_loc_set_private(uint64_t fail_loc)
+{
+	if (!parse_fail_loc(fail_loc))
+		return;
+	daos_fail_loc         = 0;
+	daos_fail_loc_private = fail_loc;
+	D_DEBUG(DB_ANY, "*** private fail_loc=" DF_X64 "\n", daos_fail_loc);
 }
 
 /* set #nr shards as failure (nr within [1, 4]) */

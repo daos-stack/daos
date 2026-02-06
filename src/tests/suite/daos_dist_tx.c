@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +19,7 @@
 #define	DTX_TEST_SUB_REQS	32
 #define DTX_IO_SMALL		32
 #define DTX_NC_CNT		10
+#define DTX_IO_BULK_TRANSFER    100000
 
 D_CASSERT(DTX_NC_CNT % IOREQ_SG_IOD_NR == 0);
 
@@ -3047,6 +3049,188 @@ dtx_41(void **state)
 	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, true, true);
 }
 
+static void
+dtx_42(void **state)
+{
+	test_arg_t   *arg  = *state;
+	const char   *dkey = dts_dtx_dkey;
+	const char   *akey = dts_dtx_akey;
+	char         *fetch_buf;
+	daos_handle_t th = {0};
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	int           i;
+	int           subrequests = 2;
+	char         *write_bufs[subrequests];
+
+	FAULT_INJECTION_REQUIRED();
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("DTX42: client unreachable - retry - multiple SV update against the same obj "
+		      "with fault injection\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	arg->async = 0;
+	oid        = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	/* Repeatedly insert different SV for the same obj, overwrite. */
+	for (i = 0; i < subrequests; i++) {
+		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		assert_non_null(write_bufs[i]);
+
+		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &req);
+	}
+
+	MUST(daos_tx_commit(th, NULL));
+
+	D_ALLOC(fetch_buf, DTX_IO_BULK_TRANSFER);
+	assert_non_null(fetch_buf);
+
+	lookup_single(dkey, akey, 0, fetch_buf, DTX_IO_BULK_TRANSFER, DAOS_TX_NONE, &req);
+	/* The last value will be fetched. */
+	assert_memory_equal(write_bufs[subrequests - 1], fetch_buf, DTX_IO_BULK_TRANSFER);
+
+	for (i = 0; i < subrequests; i++) {
+		D_FREE(write_bufs[i]);
+	}
+	ioreq_fini(&req);
+	D_FREE(fetch_buf);
+
+	MUST(daos_tx_close(th, NULL));
+
+	par_barrier(PAR_COMM_WORLD);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	par_barrier(PAR_COMM_WORLD);
+}
+
+static void
+dtx_43(void **state)
+{
+	test_arg_t   *arg  = *state;
+	const char   *dkey = dts_dtx_dkey;
+	const char   *akey = dts_dtx_akey;
+	char         *write_bufs[DTX_TEST_SUB_REQS];
+	char         *fetch_buf;
+	daos_handle_t th = {0};
+	daos_obj_id_t oids[DTX_TEST_SUB_REQS];
+	struct ioreq *reqs[DTX_TEST_SUB_REQS];
+	int           i;
+
+	FAULT_INJECTION_REQUIRED();
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("DTX43: client unreachable - retry - multiple SV update against multiple "
+		      "objs with fault injection\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CLIENT_UNREACHABLE | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+	arg->async = 0;
+
+	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
+		D_ALLOC(reqs[i], sizeof(struct ioreq));
+		ioreq_init(reqs[i], arg->coh, oids[i], DAOS_IOD_SINGLE, arg);
+
+		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		assert_non_null(write_bufs[i]);
+
+		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, reqs[i]);
+	}
+
+	MUST(daos_tx_commit(th, NULL));
+
+	D_ALLOC(fetch_buf, DTX_IO_BULK_TRANSFER);
+	assert_non_null(fetch_buf);
+
+	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
+		lookup_single(dkey, akey, 0, fetch_buf, DTX_IO_BULK_TRANSFER, DAOS_TX_NONE,
+			      reqs[i]);
+		assert_memory_equal(write_bufs[i], fetch_buf, DTX_IO_BULK_TRANSFER);
+	}
+
+	for (i = 0; i < DTX_TEST_SUB_REQS; i++) {
+		D_FREE(write_bufs[i]);
+		ioreq_fini(reqs[i]);
+		D_FREE(reqs[i]);
+	}
+	D_FREE(fetch_buf);
+	MUST(daos_tx_close(th, NULL));
+
+	par_barrier(PAR_COMM_WORLD);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	par_barrier(PAR_COMM_WORLD);
+}
+
+static void
+dtx_44(void **state)
+{
+	test_arg_t   *arg  = *state;
+	const char   *dkey = dts_dtx_dkey;
+	const char   *akey = dts_dtx_akey;
+	char         *fetch_buf;
+	daos_handle_t th = {0};
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	int           i;
+	int           subrequests = 1000;
+	char         *write_bufs[subrequests];
+
+	FAULT_INJECTION_REQUIRED();
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("DTX44: client unreachable - retry - multiple SV update against the same obj "
+		      "with fault injection and bulk transfer of large body\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_CLIENT_UNREACHABLE_CPD_BODY | DAOS_FAIL_ONCE);
+	par_barrier(PAR_COMM_WORLD);
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	arg->async = 0;
+	oid        = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	/* Repeatedly insert different SV for the same obj, overwrite. */
+	for (i = 0; i < subrequests; i++) {
+		D_ALLOC(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		assert_non_null(write_bufs[i]);
+
+		dts_buf_render(write_bufs[i], DTX_IO_BULK_TRANSFER);
+		insert_single(dkey, akey, 0, write_bufs[i], DTX_IO_BULK_TRANSFER, th, &req);
+	}
+
+	MUST(daos_tx_commit(th, NULL));
+
+	D_ALLOC(fetch_buf, DTX_IO_BULK_TRANSFER);
+	assert_non_null(fetch_buf);
+
+	lookup_single(dkey, akey, 0, fetch_buf, DTX_IO_BULK_TRANSFER, DAOS_TX_NONE, &req);
+	/* The last value will be fetched. */
+	assert_memory_equal(write_bufs[subrequests - 1], fetch_buf, DTX_IO_BULK_TRANSFER);
+
+	for (i = 0; i < subrequests; i++) {
+		D_FREE(write_bufs[i]);
+	}
+	ioreq_fini(&req);
+	D_FREE(fetch_buf);
+
+	MUST(daos_tx_close(th, NULL));
+
+	par_barrier(PAR_COMM_WORLD);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	par_barrier(PAR_COMM_WORLD);
+}
+
 static test_arg_t *saved_dtx_arg;
 
 static int
@@ -3104,95 +3288,63 @@ dtx_sub_teardown(void **state)
 }
 
 static const struct CMUnitTest dtx_tests[] = {
-	{"DTX0: SV fetch against EC obj",
-	 dtx_0, NULL, test_case_teardown},
-	{"DTX1: multiple SV update against the same obj",
-	 dtx_1, NULL, test_case_teardown},
-	{"DTX2: multiple EV update against the same obj",
-	 dtx_2, NULL, test_case_teardown},
-	{"DTX3: Multiple small SV update against multiple objs",
-	 dtx_3, NULL, test_case_teardown},
-	{"DTX4: Multiple large EV update against multiple objs",
-	 dtx_4, NULL, test_case_teardown},
-	{"DTX5: Multiple small SV update on multiple EC objs",
-	 dtx_5, NULL, test_case_teardown},
-	{"DTX6: Multiple large EV update on multiple EC objs",
-	 dtx_6, NULL, test_case_teardown},
-	{"DTX7: SV update plus punch",
-	 dtx_7, NULL, test_case_teardown},
-	{"DTX8: EV update plus punch",
-	 dtx_8, NULL, test_case_teardown},
-	{"DTX9: conditional insert/update",
-	 dtx_9, NULL, test_case_teardown},
-	{"DTX10: conditional punch",
-	 dtx_10, NULL, test_case_teardown},
-	{"DTX11: read only transaction",
-	 dtx_11, NULL, test_case_teardown},
-	{"DTX12: zero copy flag",
-	 dtx_12, NULL, test_case_teardown},
-	{"DTX13: DTX status machnie",
-	 dtx_13, NULL, test_case_teardown},
-	{"DTX14: restart because of conflict with others",
-	 dtx_14, NULL, test_case_teardown},
-	{"DTX15: restart because of stale pool map",
-	 dtx_15, NULL, test_case_teardown},
-	{"DTX16: resend commit because of lost CPD request",
-	 dtx_16, NULL, test_case_teardown},
-	{"DTX17: resend commit because of lost CPD reply",
-	 dtx_17, NULL, test_case_teardown},
-	{"DTX18: spread read time-stamp when commit",
-	 dtx_18, NULL, test_case_teardown},
-	{"DTX19: Misc rep and EC object update in same TX",
-	 dtx_19, NULL, test_case_teardown},
+    {"DTX0: SV fetch against EC obj", dtx_0, NULL, test_case_teardown},
+    {"DTX1: multiple SV update against the same obj", dtx_1, NULL, test_case_teardown},
+    {"DTX2: multiple EV update against the same obj", dtx_2, NULL, test_case_teardown},
+    {"DTX3: Multiple small SV update against multiple objs", dtx_3, NULL, test_case_teardown},
+    {"DTX4: Multiple large EV update against multiple objs", dtx_4, NULL, test_case_teardown},
+    {"DTX5: Multiple small SV update on multiple EC objs", dtx_5, NULL, test_case_teardown},
+    {"DTX6: Multiple large EV update on multiple EC objs", dtx_6, NULL, test_case_teardown},
+    {"DTX7: SV update plus punch", dtx_7, NULL, test_case_teardown},
+    {"DTX8: EV update plus punch", dtx_8, NULL, test_case_teardown},
+    {"DTX9: conditional insert/update", dtx_9, NULL, test_case_teardown},
+    {"DTX10: conditional punch", dtx_10, NULL, test_case_teardown},
+    {"DTX11: read only transaction", dtx_11, NULL, test_case_teardown},
+    {"DTX12: zero copy flag", dtx_12, NULL, test_case_teardown},
+    {"DTX13: DTX status machnie", dtx_13, NULL, test_case_teardown},
+    {"DTX14: restart because of conflict with others", dtx_14, NULL, test_case_teardown},
+    {"DTX15: restart because of stale pool map", dtx_15, NULL, test_case_teardown},
+    {"DTX16: resend commit because of lost CPD request", dtx_16, NULL, test_case_teardown},
+    {"DTX17: resend commit because of lost CPD reply", dtx_17, NULL, test_case_teardown},
+    {"DTX18: spread read time-stamp when commit", dtx_18, NULL, test_case_teardown},
+    {"DTX19: Misc rep and EC object update in same TX", dtx_19, NULL, test_case_teardown},
 
-	{"DTX20: atomicity - either all done or none done",
-	 dtx_20, NULL, test_case_teardown},
-	{"DTX21: atomicity - internal transaction",
-	 dtx_21, NULL, test_case_teardown},
-	{"DTX22: TX isolation - invisible partial modification",
-	 dtx_22, NULL, test_case_teardown},
-	{"DTX23: server start epoch - refuse TX with old epoch",
-	 dtx_23, NULL, test_case_teardown},
-	{"DTX24: async batched commit",
-	 dtx_24, NULL, test_case_teardown},
+    {"DTX20: atomicity - either all done or none done", dtx_20, NULL, test_case_teardown},
+    {"DTX21: atomicity - internal transaction", dtx_21, NULL, test_case_teardown},
+    {"DTX22: TX isolation - invisible partial modification", dtx_22, NULL, test_case_teardown},
+    {"DTX23: server start epoch - refuse TX with old epoch", dtx_23, NULL, test_case_teardown},
+    {"DTX24: async batched commit", dtx_24, NULL, test_case_teardown},
 
-	{"DTX25: uncertain status check - committable",
-	 dtx_25, NULL, test_case_teardown},
-	{"DTX26: uncertain status check - non-committable",
-	 dtx_26, NULL, test_case_teardown},
-	{"DTX27: uncertain status check - miss commit",
-	 dtx_27, NULL, test_case_teardown},
-	{"DTX28: uncertain status check - miss abort",
-	 dtx_28, NULL, test_case_teardown},
+    {"DTX25: uncertain status check - committable", dtx_25, NULL, test_case_teardown},
+    {"DTX26: uncertain status check - non-committable", dtx_26, NULL, test_case_teardown},
+    {"DTX27: uncertain status check - miss commit", dtx_27, NULL, test_case_teardown},
+    {"DTX28: uncertain status check - miss abort", dtx_28, NULL, test_case_teardown},
 
-	{"DTX29: uncertain status check - fetch re-entry",
-	 dtx_29, NULL, test_case_teardown},
-	{"DTX30: uncertain status check - enumeration re-entry",
-	 dtx_30, NULL, test_case_teardown},
-	{"DTX31: uncertain status check - punch re-entry",
-	 dtx_31, NULL, test_case_teardown},
-	{"DTX32: uncertain status check - update re-entry",
-	 dtx_32, NULL, test_case_teardown},
-	{"DTX33: uncertain status check - query key re-entry",
-	 dtx_33, NULL, test_case_teardown},
-	{"DTX34: uncertain status check - CPD RPC re-entry",
-	 dtx_34, NULL, test_case_teardown},
+    {"DTX29: uncertain status check - fetch re-entry", dtx_29, NULL, test_case_teardown},
+    {"DTX30: uncertain status check - enumeration re-entry", dtx_30, NULL, test_case_teardown},
+    {"DTX31: uncertain status check - punch re-entry", dtx_31, NULL, test_case_teardown},
+    {"DTX32: uncertain status check - update re-entry", dtx_32, NULL, test_case_teardown},
+    {"DTX33: uncertain status check - query key re-entry", dtx_33, NULL, test_case_teardown},
+    {"DTX34: uncertain status check - CPD RPC re-entry", dtx_34, NULL, test_case_teardown},
 
-	{"DTX35: resync during reopen container",
-	 dtx_35, NULL, test_case_teardown},
-	{"DTX36: resync - DTX entry for read only ops",
-	 dtx_36, dtx_sub_setup, dtx_sub_teardown},
-	{"DTX37: resync - leader failed during prepare",
-	 dtx_37, dtx_sub_setup, dtx_sub_teardown},
-	{"DTX38: resync - lost whole redundancy groups",
-	 dtx_38, dtx_sub_rf0_setup, dtx_sub_teardown},
-	{"DTX39: not restart the transaction with fixed epoch",
-	 dtx_39, dtx_sub_rf1_setup, dtx_sub_teardown},
+    {"DTX35: resync during reopen container", dtx_35, NULL, test_case_teardown},
+    {"DTX36: resync - DTX entry for read only ops", dtx_36, dtx_sub_setup, dtx_sub_teardown},
+    {"DTX37: resync - leader failed during prepare", dtx_37, dtx_sub_setup, dtx_sub_teardown},
+    {"DTX38: resync - lost whole redundancy groups", dtx_38, dtx_sub_rf0_setup, dtx_sub_teardown},
+    {"DTX39: not restart the transaction with fixed epoch", dtx_39, dtx_sub_rf1_setup,
+     dtx_sub_teardown},
 
-	{"DTX40: uncertain check - miss commit with delay",
-	 dtx_40, NULL, test_case_teardown},
-	{"DTX41: uncertain check - miss abort with delay",
-	 dtx_41, NULL, test_case_teardown},
+    {"DTX40: uncertain check - miss commit with delay", dtx_40, NULL, test_case_teardown},
+    {"DTX41: uncertain check - miss abort with delay", dtx_41, NULL, test_case_teardown},
+    {"DTX42: client unreachable - retry - multiple SV update against the same obj with fault "
+     "injection",
+     dtx_42, NULL, test_case_teardown},
+    {"DTX43: client unreachable - retry - multiple SV update against multiple objs with fault "
+     "injection",
+     dtx_43, NULL, test_case_teardown},
+    {"DTX44: client unreachable - retry - multiple SV update against the same obj "
+     "with fault injection and bulk transfer of large body",
+     dtx_44, NULL, test_case_teardown},
 };
 
 static int

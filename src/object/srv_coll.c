@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -184,7 +185,7 @@ obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
 	sgl.sg_iovs = iov;
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &ocpi->ocpi_tgt_bulk, NULL, NULL,
-			       DAOS_HDL_INVAL, &sgls, 1, 1, NULL);
+			       DAOS_HDL_INVAL, &sgls, 1, 1, NULL, false);
 	if (rc != 0) {
 		D_ERROR("Failed to prepare bulk transfer for coll_punch, size %u: "DF_RC"\n",
 			ocpi->ocpi_bulk_tgt_sz, DP_RC(rc));
