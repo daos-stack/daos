@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -110,7 +110,8 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			sysCfg: &system.MockSysConfig{
 				GetfsTypeErr: []error{errors.New("mock GetfsType")},
 			},
-			expMkfs: true,
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"GetfsType retries with parent if dir doesn't exist": {
 			req: pathReq,
@@ -145,16 +146,18 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			sysCfg: &system.MockSysConfig{
 				MkfsErr: errors.New("mock mkfs"),
 			},
-			expErr:  errors.New("mock mkfs"),
-			expMkfs: true,
+			expErr:      errors.New("mock mkfs"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"Mount fails": {
 			req: deviceReq,
 			mountCfg: &storage.MockMountProviderConfig{
 				MountErr: errors.New("mock Mount"),
 			},
-			expErr:  errors.New("mock Mount"),
-			expMkfs: true,
+			expErr:      errors.New("mock Mount"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"remove old data dir fails": {
 			req: deviceReq,
@@ -172,8 +175,9 @@ func TestMetadata_Provider_Format(t *testing.T) {
 					}
 				}
 			},
-			expErr:  errors.New("removing old control metadata subdirectory"),
-			expMkfs: true,
+			expErr:      errors.New("removing old control metadata subdirectory"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"create data dir fails": {
 			req: deviceReq,
@@ -191,16 +195,18 @@ func TestMetadata_Provider_Format(t *testing.T) {
 					}
 				}
 			},
-			expErr:  errors.New("creating control metadata subdirectory"),
-			expMkfs: true,
+			expErr:      errors.New("creating control metadata subdirectory"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"chown data dir fails": {
 			req: deviceReq,
 			sysCfg: &system.MockSysConfig{
 				ChownErr: errors.New("mock chown"),
 			},
-			expErr:  errors.New("mock chown"),
-			expMkfs: true,
+			expErr:      errors.New("mock chown"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"Unmount fails": {
 			req: deviceReq,
@@ -208,19 +214,21 @@ func TestMetadata_Provider_Format(t *testing.T) {
 				IsMountedRes: true,
 				UnmountErr:   errors.New("mock Unmount"),
 			},
-			expErr:  errors.New("mock Unmount"),
-			expMkfs: true,
+			expErr:      errors.New("mock Unmount"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"device success": {
-			req:     deviceReq,
-			expMkfs: true,
+			req:         deviceReq,
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"preserve existing label": {
 			req: deviceReq,
 			sysCfg: &system.MockSysConfig{
 				GetDeviceLabelRes: "old_label",
 			},
-			expMkfsOpts: []string{"-L", "old_label"},
+			expMkfsOpts: []string{"-q", "-L", "old_label"},
 			expMkfs:     true,
 		},
 		"path only doesn't attempt device format": {

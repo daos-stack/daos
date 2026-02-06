@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -60,8 +60,9 @@ const (
 // ControlMetadata describes configuration options for control plane metadata storage on the
 // DAOS server.
 type ControlMetadata struct {
-	Path       string `yaml:"path,omitempty"`
-	DevicePath string `yaml:"device,omitempty"`
+	Path                  string `yaml:"path,omitempty"`
+	DevicePath            string `yaml:"device,omitempty"`
+	AllowSpdkConfOverride bool   `yaml:"allow_spdk_conf_override"`
 }
 
 // Directory returns the full path to the directory where the control plane metadata is saved.

@@ -487,6 +487,13 @@
    fun:racecall
 }
 {
+   MemoryRangeSet ShadowSet
+   Memcheck:Value8
+   fun:ShadowSet
+   fun:_ZN6__tsanL14MemoryRangeSetEmmNS_9RawShadowE
+   fun:racecall
+}
+{
    FI leak 8
    Memcheck:Leak
    match-leak-kinds: reachable
@@ -506,6 +513,14 @@
    ...
 }
 {
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:hg_dlog_mkcount64
+   ...
+}
+{
    FI leak 9
    Memcheck:Leak
    match-leak-kinds: possible
@@ -521,25 +536,11 @@
    fun:crt_hg_class_init
 }
 {
-   Tcp provider
-   Memcheck:Param
-   sendmsg(msg.msg_iov[1])
-   ...
-   fun:sendmsg
-   fun:ofi_sockapi_sendv_socket
-   fun:ofi_bsock_sendv
-   ...
-   fun:fi_senddata
-   ...
-}
-{
    Tcp provider with ofi rxm
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
    ...
    fun:ofi_bsock_sendv
-   ...
-   fun:fi_tsend
    ...
 }
 {
@@ -547,11 +548,7 @@
    Memcheck:Param
    sendmsg(msg.msg_iov[2])
    ...
-   fun:sendmsg
-   fun:ofi_sockapi_sendv_socket
    fun:ofi_bsock_sendv
-   ...
-   fun:fi_tsend
    ...
 }
 {
@@ -771,20 +768,23 @@
    fun:racecall
 }
 {
-   DAOS-17006 - mercury leak
+   getpwnam_r() leak
    Memcheck:Leak
-   match-leak-kinds: reachable
+   fun:*alloc
+   ...
+   fun:getpwnam_r*
+}
+{
+   getpwuid_r() leak
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:getpwuid_r*
+}
+{
+   localtime() leak
+   Memcheck:Leak
    fun:malloc
-   fun:hg_dlog_mkcount64
-   fun:hg_core_counters_init
-   fun:hg_core_init
-   fun:HG_Core_init_opt2
-   fun:HG_Init_opt2
-   fun:crt_hg_class_init
-   fun:crt_hg_ctx_init
-   fun:crt_context_provider_create
-   fun:daos_eq_lib_init
-   fun:daos_init
-   fun:_cgo_b590e4e2531a_Cfunc_daos_init
-   fun:runtime.asmcgocall.abi0
+   ...
+   fun:__tz_convert
 }

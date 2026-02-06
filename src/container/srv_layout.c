@@ -73,16 +73,16 @@ struct daos_prop_entry cont_prop_entries_default_v0[CONT_PROP_NUM_V0] = {
 		.dpe_val	= 1,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM,
-		.dpe_val	= DAOS_PROP_CO_CSUM_OFF,
+		.dpe_val	= DAOS_PROP_CO_CSUM_CRC32,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM_CHUNK_SIZE,
 		.dpe_val	= 32 * 1024, /** 32K */
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM_SERVER_VERIFY,
-		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
+		.dpe_val	= DAOS_PROP_CO_CSUM_SV_ON,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
-		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RF3,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
 		.dpe_val	= DAOS_PROP_CO_REDUN_RANK,

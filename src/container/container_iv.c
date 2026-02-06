@@ -1587,19 +1587,22 @@ cont_iv_prop_fetch_ult(void *data)
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "cont_iv_fetch failed");
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
+			  DF_CONT ": cont_iv_fetch failed", DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 
 	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, &prop_fetch);
 	if (rc) {
-		D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": cont_iv_prop_g2l failed",
+			 DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_prop_copy(prop, prop_fetch);
 	if (rc) {
-		D_ERROR("daos_prop_copy failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": daos_prop_copy failed",
+			 DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
 

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,6 +8,7 @@
 #include <wordexp.h>
 #include <getopt.h>
 #include <gurt/common.h>
+#include <daos_srv/bio.h>
 #include "daos_errno.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
@@ -51,6 +52,11 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 	}
 
 	strncpy(vos_file_parts->vf_vos_file, tok, ARRAY_SIZE(vos_file_parts->vf_vos_file) - 1);
+
+	if (strcmp(vos_file_parts->vf_vos_file, "rdb-pool") == 0) {
+		vos_file_parts->vf_target_idx = BIO_SYS_TGT_ID;
+		goto done;
+	}
 
 	/*
 	 * file name should be vos-N ... split on "-"
@@ -446,8 +452,12 @@ key_parse_str(const char *input, daos_key_t *key)
 			key_len++;
 		}
 	}
-	if (size == 0)
+	if (size == 0) {
+		if (key_len == 0) {
+			return -DER_INVAL;
+		}
 		size = key_len;
+	}
 	if (size < key_len)
 		return -DER_INVAL;
 

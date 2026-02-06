@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -123,10 +122,11 @@ func newPoolRebuildStatus(drs *C.struct_daos_rebuild_status) *daos.PoolRebuildSt
 	}
 
 	return &daos.PoolRebuildStatus{
-		Status:  int32(drs.rs_errno),
-		Objects: uint64(drs.rs_obj_nr),
-		Records: uint64(drs.rs_rec_nr),
-		State:   compatRebuildState(),
+		Status:   int32(drs.rs_errno),
+		Objects:  uint64(drs.rs_obj_nr),
+		Records:  uint64(drs.rs_rec_nr),
+		State:    compatRebuildState(),
+		Degraded: (drs.rs_flags & C.DAOS_RSF_DEGRADED) != 0,
 	}
 }
 
@@ -407,6 +407,10 @@ func PoolQuery(ctx context.Context, sysName, poolID string, queryMask daos.PoolQ
 		}
 	}
 
+	if err := poolInfo.UpdateRebuildStatus(); err != nil {
+		return nil, err
+	}
+
 	return poolInfo, nil
 }
 
@@ -665,11 +669,11 @@ func GetPoolList(ctx context.Context, req GetPoolListReq) ([]*daos.PoolInfo, err
 	log := logging.FromContext(ctx)
 	log.Debugf("GetPoolList(%+v)", req)
 
-	if req.SysName == "" {
-		req.SysName = build.DefaultSystemName
+	var cSysName *C.char
+	if req.SysName != "" {
+		cSysName = C.CString(req.SysName)
+		defer freeString(cSysName)
 	}
-	cSysName := C.CString(req.SysName)
-	defer freeString(cSysName)
 
 	var cPools []C.daos_mgmt_pool_info_t
 	for {
