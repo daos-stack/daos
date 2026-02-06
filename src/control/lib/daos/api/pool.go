@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -670,11 +669,11 @@ func GetPoolList(ctx context.Context, req GetPoolListReq) ([]*daos.PoolInfo, err
 	log := logging.FromContext(ctx)
 	log.Debugf("GetPoolList(%+v)", req)
 
-	if req.SysName == "" {
-		req.SysName = build.DefaultSystemName
+	var cSysName *C.char
+	if req.SysName != "" {
+		cSysName = C.CString(req.SysName)
+		defer freeString(cSysName)
 	}
-	cSysName := C.CString(req.SysName)
-	defer freeString(cSysName)
 
 	var cPools []C.daos_mgmt_pool_info_t
 	for {

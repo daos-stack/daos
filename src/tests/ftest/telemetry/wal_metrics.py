@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -143,7 +143,7 @@ class WalMetrics(TestWithTelemetry):
         wal_metrics = list(self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS)
 
         self.log_step('Creating a pool with check pointing disabled (dmg pool create)')
-        add_pool(self, properties='checkpoint:disabled')
+        add_pool(self, properties='rd_fac:0,space_rb:0,checkpoint:disabled')
 
         self.log_step(
             'Collect WAL checkpoint metrics after creating a pool w/o check pointing '
@@ -160,7 +160,8 @@ class WalMetrics(TestWithTelemetry):
             self.fail('WAL check point metrics not zero after creating a pool w/o check pointing')
 
         self.log_step('Creating a pool with timed check pointing (dmg pool create)')
-        pool = add_pool(self, properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
+        pool = add_pool(
+            self, properties=f'rd_fac:0,space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
 
         self.log_step(
             'Collect WAL checkpoint metrics after creating a pool w/ check pointing '

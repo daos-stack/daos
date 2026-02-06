@@ -289,8 +289,8 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 	}
 
 	if (status->dtx_resync_version != resync_ver)
-		D_INFO(DF_RB " rank %d, update dtx_resync_version from %d to %d", DP_RB_RGT(rgt),
-		       rank, status->dtx_resync_version, resync_ver);
+		D_DEBUG(DB_REBUILD, DF_RB " rank %d, update dtx_resync_version from %d to %d",
+			DP_RB_RGT(rgt), rank, status->dtx_resync_version, resync_ver);
 	status->dtx_resync_version = resync_ver;
 	if (flags & SCAN_DONE)
 		status->scan_done = 1;
@@ -1605,6 +1605,12 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 			if (delay_sec != (uint64_t)(-1))
 				merge_task->dst_schedule_time = daos_gettime_coarse() + delay_sec;
 		}
+		/* For the case of new rebuild task in queue, and then rebuild stop's fail reclaim
+		 * complete and re-scheduled the original rebuild task with delay -1.
+		 */
+		if (merge_pre_task->dst_schedule_time != (uint64_t)(-1) &&
+		    delay_sec == (uint64_t)(-1))
+			merge_task = merge_pre_task;
 	} else if (merge_post_task != NULL && merge_post_task->dst_rebuild_op == rebuild_op) {
 		if ((merge_post_task->dst_schedule_time == (uint64_t)(-1) &&
 		     delay_sec == (uint64_t)(-1)) ||
@@ -1854,6 +1860,25 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			 * fails, it will be used to discard all of the previous rebuild data
 			 * (reclaim - 1 see obj_reclaim()), but keep the in-flight I/O data.
 			 */
+			if (rgt->rgt_stop_admin) {
+				rc = ds_rebuild_schedule(
+				    pool, task->dst_reclaim_ver - 1 /* map_ver */,
+				    rgt->rgt_stable_epoch, task->dst_new_layout_version,
+				    &task->dst_tgts, RB_OP_FAIL_RECLAIM,
+				    task->dst_rebuild_op /* retry_rebuild_op */,
+				    task->dst_map_ver /* retry_map_ver */, rgt->rgt_stop_admin,
+				    task, delay_sec);
+				DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
+					  DF_RB ": errno " DF_RC ", schedule %u(%s)",
+					  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno),
+					  RB_OP_FAIL_RECLAIM, RB_OP_STR(RB_OP_FAIL_RECLAIM));
+				D_GOTO(complete, rc);
+			}
+
+			/* revert pool map and defer scheduling a retry until Fail_reclaim is done
+			 */
+			retry_rebuild_task(task, rgt, &retry_opc);
+
 			rc = ds_rebuild_schedule(
 			    pool, task->dst_reclaim_ver - 1 /* map_ver */, rgt->rgt_stable_epoch,
 			    task->dst_new_layout_version, &task->dst_tgts, RB_OP_FAIL_RECLAIM,
@@ -1863,10 +1888,6 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 				  DF_RB ": errno " DF_RC ", schedule %u(%s)", DP_RB_RGT(rgt),
 				  DP_RC(rgt->rgt_status.rs_errno), RB_OP_FAIL_RECLAIM,
 				  RB_OP_STR(RB_OP_FAIL_RECLAIM));
-
-			/* revert pool map and defer scheduling a retry until Fail_reclaim is done
-			 */
-			retry_rebuild_task(task, rgt, &retry_opc);
 			D_GOTO(complete, rc);
 		}
 
@@ -1926,6 +1947,23 @@ complete:
 		DL_CDEBUG(rc1, DLOG_ERR, DLOG_INFO, rc1, DF_RB ": updated, state %d errno " DF_RC,
 			  DP_RB_RGT(rgt), rgt->rgt_status.rs_state,
 			  DP_RC(rgt->rgt_status.rs_errno));
+
+		/* re-schedule the stopped original rebuild task with delay -1, to be merged with
+		 * following rebuild task, to avoid losing the task->dst_tgts.
+		 */
+		if (task->dst_retry_rebuild_op == RB_OP_REBUILD) {
+			rc = ds_rebuild_schedule(
+			    pool, task->dst_retry_map_ver, rgt->rgt_reclaim_epoch,
+			    task->dst_new_layout_version, &task->dst_tgts,
+			    task->dst_retry_rebuild_op, RB_OP_NONE /* retry_rebuild_op */,
+			    0 /* retry_map_ver */, false /* stop_admin */, task,
+			    -1 /* delay_sec */);
+			DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
+				  DF_RB ": errno " DF_RC ", schedule retry %u(%s) with delay -1",
+				  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno),
+				  task->dst_retry_rebuild_op,
+				  RB_OP_STR(task->dst_retry_rebuild_op));
+		}
 	} else if ((task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) &&
 		   (task->dst_retry_rebuild_op != RB_OP_NONE)) {
 		/* Fail_reclaim done (and a stop command wasn't received during) - retry rebuild. */
@@ -2906,8 +2944,9 @@ rebuild_tgt_status_check_ult(void *arg)
 				rpt->rt_reported_rec_cnt = status.rec_count;
 				rpt->rt_reported_size = status.size;
 				if (iv.riv_dtx_resyc_version > reported_dtx_resyc_ver) {
-					D_INFO(DF_RB "reported riv_dtx_resyc_version %d",
-					       DP_RB_RPT(rpt), iv.riv_dtx_resyc_version);
+					D_DEBUG(DB_REBUILD,
+						DF_RB "reported riv_dtx_resyc_version %d",
+						DP_RB_RPT(rpt), iv.riv_dtx_resyc_version);
 					reported_dtx_resyc_ver = iv.riv_dtx_resyc_version;
 				}
 			} else {
