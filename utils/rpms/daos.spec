@@ -10,7 +10,7 @@
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4.0-7
+%global mercury_version   2.4.1
 %global libfabric_version 1.20
 %global argobots_version 1.2-3
 %global __python %{__python3}
@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       15%{?relval}%{?dist}
+Release:       16%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -132,7 +132,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury >= %{mercury_version}
+Requires: mercury-libfabric >= %{mercury_version}
 
 
 %description
@@ -163,7 +163,7 @@ Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 2.1.0-6%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
-Requires: mercury >= %{mercury_version}
+Requires: mercury-libfabric >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
@@ -184,7 +184,7 @@ This package contains DAOS administrative tools (e.g. dmg).
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury >= %{mercury_version}
+Requires: mercury-libfabric >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
@@ -635,6 +635,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Feb 05 2026 Jerome Soumagne <jerome.soumagne@hpe.com> 2.6.4-16
+- Require mercury-libfabric to always install libfabric plugin
+- Bump mercury min version to 2.4.1
+
 * Fri Jan 16 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-15
 - Bump version
 

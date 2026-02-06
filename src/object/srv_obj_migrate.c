@@ -2773,6 +2773,17 @@ out:
 	return rc;
 }
 
+static inline void
+free_mrones(struct enum_unpack_arg *unpack_arg)
+{
+	struct migrate_one *mrone, *tmp;
+
+	d_list_for_each_entry_safe(mrone, tmp, &unpack_arg->merge_list, mo_list) {
+		d_list_del_init(&mrone->mo_list);
+		migrate_one_destroy(mrone);
+	}
+}
+
 static int
 migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 {
@@ -3055,6 +3066,8 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		/* Restore leader flag to always try the leader first */
 		enum_flags |= DIOF_TO_LEADER;
 	}
+
+	free_mrones(&unpack_arg);
 
 	if (buf != NULL && buf != stack_buf)
 		D_FREE(buf);
