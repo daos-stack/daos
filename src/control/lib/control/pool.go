@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -812,6 +812,9 @@ func getPoolRanksResp(ctx context.Context, rpcClient UnaryInvoker, req *PoolRank
 	if len(req.Ranks) == 0 {
 		return nil, errors.New("no ranks in request")
 	}
+
+	// Set timeout to 5 minutes per rank to allow sufficient time for operation
+	req.SetTimeout(time.Duration(len(req.Ranks)) * DefaultPoolTimeout)
 
 	results := []*PoolRankResult{}
 	for _, rank := range req.Ranks {
