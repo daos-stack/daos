@@ -345,8 +345,7 @@ Boolean runBuildStage(String distro='', String compiler='gcc') {
 }
 
 Boolean bullseyeOverride() {
-    return paramsValue('CI_FULL_BULLSEYE_REPORT', true) == true
-    // return runStage(['CI_FULL_BULLSEYE_REPORT': true])
+    return runStage(['CI_FULL_BULLSEYE_REPORT': true])
 }
 
 /**
@@ -429,7 +428,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
             }
             else {
                 println("[${name}] Skipping build stage")
-                Utils.markStageSkippedForConditional("${name}")
+                // Utils.markStageSkippedForConditional("${name}")
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -486,7 +485,7 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
             }
             else {
                 println("[${name}] Skipping unit test stage")
-                Utils.markStageSkippedForConditional("${name}")
+                // Utils.markStageSkippedForConditional("${name}")
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -547,7 +546,7 @@ def scriptedSummaryStage(Map kwargs = [:]) {
             }
             else {
                 println("[${name}] Skipping summary stage")
-                Utils.markStageSkippedForConditional("${name}")
+                // Utils.markStageSkippedForConditional("${name}")
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
