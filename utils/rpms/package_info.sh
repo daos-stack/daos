@@ -65,7 +65,7 @@ export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
 export fused_version="1.0.0"
 export fused_release="3${distro_name}"
 export fused_full="${fused_version}-${fused_release}"
-export bullseye_version="9.23.8"
+export bullseye_version="9.24.0"
 export bullseye_release="1${distro_name}"
 export bullseye_full="${bullseye_version}-${bullseye_release}"
 

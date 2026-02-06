@@ -345,7 +345,8 @@ Boolean runBuildStage(String distro='', String compiler='gcc') {
 }
 
 Boolean bullseyeOverride() {
-    return runStage(['CI_FULL_BULLSEYE_REPORT': true], [:])
+    return paramsValue('CI_FULL_BULLSEYE_REPORT', true) == true
+    // return runStage(['CI_FULL_BULLSEYE_REPORT': true])
 }
 
 /**
