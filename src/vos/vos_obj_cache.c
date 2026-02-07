@@ -623,6 +623,10 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 	return rc;
 }
 
+/*
+ * The legacy function is being phased out. It is currently used to hold an object for fetch and
+ * iteration operations. Update and punch operations use vos_obj_acquire() to hold an object.
+ */
 int
 vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t *epr,
 	     daos_epoch_t bound, uint64_t flags, uint32_t intent, struct vos_object **obj_p,
