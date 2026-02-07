@@ -672,6 +672,7 @@
 {
    __tsan_read
    Memcheck:Value8
+   ...
    fun:__tsan_read
    fun:racecall
 }

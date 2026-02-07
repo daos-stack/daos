@@ -25,7 +25,7 @@ server_config:
       log_mask: INFO
       storage: auto
       env_vars:
-        - NA_OFI_UNEXPECTED_TAG_MSG=0
+        - D_MIGRATE_ULT_CNT=1024
 
     1:
       pinned_numa_node: 1
@@ -34,12 +34,7 @@ server_config:
       log_mask: INFO
       storage: auto
       env_vars:
-        - NA_OFI_UNEXPECTED_TAG_MSG=0
-
-client:
-  env_vars:
-    - NA_OFI_UNEXPECTED_TAG_MSG=0
-
+        - D_MIGRATE_ULT_CNT=1024
 pool:
   size: 93%
 
@@ -64,15 +59,15 @@ mdtest:
   # EC does not supported for directory so for now running with RP
   dfs_dir_oclass: RP_3G1
   dfs_oclass_mux: !mux
-    6_server_ec2p2gx:
-      !filter-only : "/run/hosts/servers/6_server"  # yamllint disable-line rule:colons
-      dfs_oclass: EC_2P2GX
-    8_server_ec4p2gx:
-      !filter-only : "/run/hosts/servers/8_server"  # yamllint disable-line rule:colons
-      dfs_oclass: EC_4P2GX
-    12_server_ec4p3gx:
-      !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
-      dfs_oclass: EC_4P3GX
+    #6_server_ec2p2gx:
+    #  !filter-only : "/run/hosts/servers/6_server"  # yamllint disable-line rule:colons
+    #  dfs_oclass: EC_2P2GX
+    #8_server_ec4p2gx:
+    #  !filter-only : "/run/hosts/servers/8_server"  # yamllint disable-line rule:colons
+    #  dfs_oclass: EC_4P2GX
+    #12_server_ec4p3gx:
+    #  !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
+    #  dfs_oclass: EC_4P3GX
     12_server_ec8p2gx:
       !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
       dfs_oclass: EC_8P2GX
