@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -200,6 +200,15 @@ func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 	}
 
 	return p.Sys.IsMounted(p.engineStorage.ControlMetadata.Path)
+}
+
+// AllowSpdkConfOverride returns true if override of SPDK JSON config file (daos_nvme.conf) has been
+// explicitly enabled within the ControlMetadata section of the server config file.
+func (p *Provider) AllowSpdkConfOverride() bool {
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		return false
+	}
+	return p.engineStorage.ControlMetadata.AllowSpdkConfOverride
 }
 
 // PrepareScm calls into storage SCM provider to attempt to configure PMem devices to be usable by
@@ -580,6 +589,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		AccelProps:       cfg.AccelProps,
 		SpdkRpcSrvProps:  cfg.SpdkRpcSrvProps,
 		AutoFaultyProps:  cfg.AutoFaultyProps,
+		SpdkIobufProps:   cfg.SpdkIobufProps,
 	}
 
 	for idx, tier := range cfg.Tiers.BdevConfigs() {

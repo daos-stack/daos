@@ -1,6 +1,6 @@
 """
   (C) Copyright 2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -359,7 +359,7 @@ class ReplayTests(TestWithServers):
         """
         frequency = 5
         container = self.create_container(
-            properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
+            properties=f'rd_fac:0,space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
         self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
 
         self.log_step('Write data to the container (ior)')

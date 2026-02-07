@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -107,13 +107,16 @@ func (p *Provider) setupMountPoint(req storage.MetadataFormatRequest) error {
 		return errors.Wrap(err, "checking existing device label")
 	}
 
-	var opts []string
+	opts := []string{
+		// Quiet mode
+		"-q",
+	}
 	if label != "" {
 		p.log.Debugf("preserving existing device label %q for %q", label, req.Device)
 		opts = append(opts, "-L", label)
 	}
 
-	p.log.Debugf("formatting device %q", req.Device)
+	p.log.Debugf("mkfs.%s %q with options: %s", defaultDevFS, req.Device, strings.Join(opts, " "))
 	if err := p.sys.Mkfs(system.MkfsReq{
 		Filesystem: defaultDevFS,
 		Device:     req.Device,
