@@ -1838,6 +1838,7 @@ migrate_one_destroy(struct migrate_one *mrone)
 
 	D_ASSERT(d_list_empty(&mrone->mo_list));
 	daos_iov_free(&mrone->mo_dkey);
+	daos_iov_free(&mrone->mo_csum_iov);
 
 	if (mrone->mo_iods_update_ephs) {
 		for (i = 0; i < mrone->mo_iod_alloc_num; i++) {
