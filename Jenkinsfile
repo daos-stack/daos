@@ -200,14 +200,18 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
         }
     }
 
-    // Skip the stage if any Skip-build-<distro>-<compiler> pragmas are true
-    String pragma_names = ['build']
+    // Skip the stage if any Skip-build[-<distro>-<compiler>] pragmas are true
+    List<String> pragma_names = ['build']
     if (distro && compiler) {
         pragma_names << "build-${distro}-${compiler}"
     }
-    Boolean any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
+    Boolean any_pragma_skip = pragma_names.any { name ->
+        if (skip_pragma_set(name)) {
+            println("[${env.STAGE_NAME}] Skipping build stage due to \"Skip-${name}: true\" pragma")
+            return true
+        }
+    }
     if (any_pragma_skip) {
-        println("[${env.STAGE_NAME}] Skipping build stage for due to Skip-[${pragma_names}] pragma")
         return true
     }
 
@@ -876,13 +880,13 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label vm9_label('EL8')
                     }
                     steps {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -904,8 +908,8 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -926,8 +930,8 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -948,7 +952,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -971,7 +975,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
