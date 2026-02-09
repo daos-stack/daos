@@ -941,7 +941,7 @@ close:
 	if (cont_child != NULL) {
 		cont_child->sc_rebuilding = 0;
 		ABT_cond_broadcast(cont_child->sc_rebuild_cond);
-		ds_cont_child_put(cont_child);
+		ds_cont_child_put(&cont_child);
 	}
 
 	D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " iterate cont done: " DF_RC "\n", DP_RB_RPT(rpt),

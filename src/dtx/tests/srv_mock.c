@@ -81,7 +81,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback, void *ar
 }
 
 void
-ds_cont_child_put(struct ds_cont_child *cont)
+ds_cont_child_put(struct ds_cont_child **cont)
 {
 	assert_true(false);
 }
@@ -94,7 +94,7 @@ dss_xstream_exiting(struct dss_xstream *dxs)
 }
 
 void
-ds_cont_child_get(struct ds_cont_child *cont)
+ds_cont_child_get(struct ds_cont_child *cont, struct ds_cont_child **cont_out)
 {
 	assert_true(false);
 }

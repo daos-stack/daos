@@ -61,6 +61,7 @@ ds_cont_srv_close(struct ds_pool_child *pool_child);
  */
 struct ds_cont_child {
 	struct daos_llink	 sc_list;
+	struct d_ref_tracker	 sc_ref_tracker;
 	daos_handle_t		 sc_hdl;	/* vos_container handle */
 	uuid_t			 sc_uuid;	/* container UUID */
 	uuid_t			 sc_pool_uuid;	/* pool UUID */
@@ -234,8 +235,8 @@ int ds_cont_csummer_init(struct ds_cont_child *cont);
 int ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		      uuid_t cont_uuid);
 
-void ds_cont_child_put(struct ds_cont_child *cont);
-void ds_cont_child_get(struct ds_cont_child *cont);
+void ds_cont_child_put(struct ds_cont_child **cont);
+void ds_cont_child_get(struct ds_cont_child *cont, struct ds_cont_child **cont_out);
 
 int
 ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid, bool locked,

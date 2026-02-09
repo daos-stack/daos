@@ -1507,8 +1507,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 
 			arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
 			uuid_copy(arg.eab_co_uuid, ioc->ioc_coc->sc_uuid);
+			d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3000);
 			rc = dss_ult_execute(obj_fetch_ec_agg_boundary, &arg, NULL, NULL,
 					     DSS_XS_SYS, 0, 0);
+			d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3001);
 			if (rc) {
 				DL_ERROR(rc, DF_CONT ", " DF_UOID " fetch ec_agg_boundary failed.",
 					 DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),
@@ -1565,6 +1567,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			rc = obj_fetch_shadow(ioc, orw->orw_oid, orw->orw_epoch, cond_flags, dkey,
 					      orw->orw_dkey_hash, iods_nr, iods,
 					      orw->orw_tgt_idx, dth, &shadows);
+			d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3002);
 			if (rc) {
 				D_ERROR(DF_UOID" Fetch shadow failed: "DF_RC
 					"\n", DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1588,6 +1591,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
 				     orw->orw_epoch, dkey, iods_nr, iods,
 				     cond_flags | fetch_flags, shadows, &ioh, dth);
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3003);
 		daos_recx_ep_list_free(shadows, iods_nr);
 		if (rc) {
 			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
@@ -1627,6 +1631,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			if (rc)
 				goto out;
 		}
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3004);
 
 		if (ec_deg_fetch) {
 			D_ASSERT(!get_parity_list);
@@ -1636,6 +1641,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		rc = obj_singv_ec_rw_filter(orw->orw_oid, &ioc->ioc_oca, tgt_off,
 					    iods, offs, orw->orw_epoch, orw->orw_flags,
 					    iods_nr, false, ec_deg_fetch, &recov_lists);
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3005);
 		if (rc != 0) {
 			D_ERROR(DF_UOID " obj_singv_ec_rw_filter failed: " DF_RC "\n",
 				DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -1676,6 +1682,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	time = daos_get_ntime();
 	biod = vos_ioh2desc(ioh);
 	rc   = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rma ? rpc->cr_ctx : NULL, CRT_BULK_RW);
+	d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3006);
 	if (rc) {
 		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(orw->orw_oid),
 			DP_RC(rc));
@@ -1699,6 +1706,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		}
 
 		rc = obj_fetch_csum_init(ioc->ioc_coc, orw, orwo);
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3007);
 		if (rc) {
 			D_ERROR(DF_UOID " fetch csum init failed: %d.\n", DP_UOID(orw->orw_oid),
 				rc);
@@ -1729,6 +1737,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
 				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL);
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3008);
 		if (rc == 0) {
 			bio_iod_flush(biod);
 
@@ -1758,11 +1767,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 
 	if (obj_rpc_is_update(rpc)) {
 		rc = vos_dedup_verify(ioh);
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3009);
 		if (rc)
 			goto post;
 
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
 					 biod, ioc->ioc_coc->sc_csummer, iods_nr);
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3010);
 		if (rc != 0)
 			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
 				DF_RC"\n",
@@ -1786,6 +1797,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			obj_iod_recx_daos2vos(iods_nr, iods, &ioc->ioc_oca);
 
 		rc = obj_fetch_create_maps(rpc, biod, iods, iods_nr, skips);
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3011);
 	}
 
 	if (rc == -DER_CSUM)
@@ -1793,6 +1805,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 post:
 	time = daos_get_ntime();
 	rc = bio_iod_post_async(biod, rc);
+	d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3012);
 	bio_post_latency = daos_get_ntime() - time;
 out:
 	/* The DTX has been aborted during long time bulk data transfer. */
@@ -1804,6 +1817,7 @@ out:
 	 */
 	if (rc == 0 && obj_rpc_is_update(rpc) && sched_cur_seq() != sched_seq) {
 		rc = vos_dtx_validation(dth);
+		d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3013);
 
 		/* For solo update, it will be handled via one-phase transaction.
 		 * If there is CPU yield after its epoch generated, we will renew
@@ -1831,8 +1845,10 @@ out:
 	/* re-generate the recx_list if some akeys skipped */
 	if (rc == 0 && skips != NULL && orwo->orw_rels.ca_arrays != NULL && orw->orw_nr != iods_nr)
 		rc = obj_rw_recx_list_post(orw, orwo, skips, rc);
+	d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3014);
 
 	rc = obj_rw_complete(rpc, ioc, ioh, rc, dth);
+	d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3015);
 	if (rc == 0) {
 		/* Update latency after getting fetch/update IO size by obj_rw_complete */
 		if (obj_rpc_is_update(rpc))
@@ -1841,6 +1857,7 @@ out:
 		else
 			obj_update_latency(ioc->ioc_opc, BIO_LATENCY, bio_pre_latency,
 					   ioc->ioc_io_size);
+	d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 3016);
 	}
 	if (iods_dup != NULL)
 		daos_iod_recx_free(iods_dup, iods_nr);
@@ -2047,6 +2064,7 @@ obj_local_rw_internal_wrap(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dt
 	rc = obj_get_iods_offs(orw->orw_oid, &orw->orw_iod_array, &ioc->ioc_oca,
 			       orw->orw_dkey_hash, ioc->ioc_layout_ver, &iods,
 			       &offs, &skips, &csums, &csum_info, &nr);
+	d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 300);
 	if (rc == 0)
 		rc = obj_local_rw_internal(rpc, ioc, iods, csums, offs, skips, nr, dth);
 
@@ -2079,6 +2097,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 
 again:
 	rc = obj_local_rw_internal_wrap(rpc, ioc, dth);
+	d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 30 + retry);
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
 		if (++retry < 3) {
 			rc = dtx_refresh(dth, ioc->ioc_coc);
@@ -2092,6 +2111,7 @@ again:
 			    DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count);
 		}
 	}
+	d_ref_tracker_set_user(&ioc->ioc_coc->sc_ref_tracker, &ioc->ioc_coc, 35);
 
 	return rc;
 }
@@ -2157,8 +2177,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 
 	/* normal container open handle with ds_cont_child attached */
 	if (coh->sch_cont != NULL) {
-		ds_cont_child_get(coh->sch_cont);
-		coc = coh->sch_cont;
+		ds_cont_child_get(coh->sch_cont, &coc);
 		if (uuid_compare(cont_uuid, coc->sc_uuid) == 0)
 			D_GOTO(out, rc = 0);
 
@@ -2196,13 +2215,13 @@ out:
 	D_ASSERT(coc->sc_pool != NULL);
 	ioc->ioc_map_ver = coc->sc_pool->spc_map_version;
 	ioc->ioc_vos_coh = coc->sc_hdl;
-	ioc->ioc_coc	 = coc;
 	ioc->ioc_coh	 = coh;
 	ioc->ioc_layout_ver = coc->sc_props.dcp_obj_version;
+	D_REF_TRACKER_MOVE(&coc->sc_ref_tracker, &ioc->ioc_coc, &coc);
 	return 0;
 failed:
 	if (coc != NULL)
-		ds_cont_child_put(coc);
+		ds_cont_child_put(&coc);
 	ds_cont_hdl_put(coh);
 	return rc;
 }
@@ -2218,7 +2237,7 @@ obj_ioc_fini(struct obj_io_context *ioc, int err)
 	if (ioc->ioc_coc != NULL) {
 		if (ioc->ioc_update_ec_ts && err == 0)
 			ds_cont_ec_timestamp_update(ioc->ioc_coc);
-		ds_cont_child_put(ioc->ioc_coc);
+		ds_cont_child_put(&ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
 	}
 	if (ioc->ioc_rpc) {
@@ -2987,9 +3006,13 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_epoch		epoch = {0};
 	int				rc;
 	bool				need_abort = false;
+	struct timespec			ts;
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
+
+	rc = d_gettime_coarse(&ts);
+	D_ASSERTF(rc == 0, "d_gettime_coarse failed: " DF_RC "\n", DP_RC(rc));
 
 	rc = obj_ioc_begin(orw->orw_oid.id_pub, orw->orw_map_ver,
 			   orw->orw_pool_uuid, orw->orw_co_hdl,
@@ -2998,6 +3021,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		D_ASSERTF(rc < 0, "unexpected error# "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+	d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 1);
 
 	D_DEBUG(DB_IO,
 		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
@@ -3017,6 +3041,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
 		dtx_flags |= DTX_EPOCH_OWNER;
 	}
+	d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 2);
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle	*dth;
@@ -3068,9 +3093,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,
 			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
+		d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 3);
 		if (rc == 0) {
 			rc = obj_local_rw(rpc, &ioc, dth);
+			d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 4);
 			rc = dtx_end(dth, ioc.ioc_coc, rc);
+			d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 5);
 		}
 
 		D_GOTO(out, rc);
@@ -3082,6 +3110,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
 	if (rc != 0)
 		D_GOTO(out, rc);
+	d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 6);
 
 	version = orw->orw_map_ver;
 	max_ver = orw->orw_map_ver;
@@ -3111,6 +3140,7 @@ again:
 		ioc.ioc_lost_reply = 1;
 		D_GOTO(out, rc);
 	}
+	d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 7);
 
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
@@ -3123,6 +3153,7 @@ again:
 					    DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
+	d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 8);
 
 	epoch.oe_value = orw->orw_epoch;
 	epoch.oe_first = orw->orw_epoch_first;
@@ -3148,6 +3179,7 @@ again:
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, NULL /* dce */, &dlh);
+	d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 9);
 	if (rc != 0) {
 		D_ERROR(DF_UOID ": Failed to start DTX for update " DF_RC "\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -3161,12 +3193,23 @@ again:
 
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, 0, &exec_arg);
-
+	d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 10);
 	if (max_ver < dlh->dlh_rmt_ver)
 		max_ver = dlh->dlh_rmt_ver;
 
 	/* Stop the distributed transaction */
 	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
+	d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 11);
+	if (rc != 0) {
+		struct timespec now;
+
+		d_gettime_coarse(&now);
+		if (now.tv_sec - ts.tv_sec >= 3) {
+			D_WARN(DF_UOID ": Failed to end DTX for %u " DF_RC "\n",
+			       DP_UOID(orw->orw_oid), opc, DP_RC(rc));
+			ts = now;
+		}
+	}
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3207,6 +3250,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs = mbs;
 		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch);
+		d_ref_tracker_set_user(&ioc.ioc_coc->sc_ref_tracker, &ioc.ioc_coc, 12);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&orw->orw_dti), DP_RC(rc1));

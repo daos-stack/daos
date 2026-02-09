@@ -1598,7 +1598,7 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 				rc = 0;
 			}
 			if (cont_child)
-				ds_cont_child_put(cont_child);
+				ds_cont_child_put(&cont_child);
 			return rc;
 		}
 	} else {
@@ -1613,12 +1613,13 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 			}
 
 			if (cont_child)
-				ds_cont_child_put(cont_child);
+				ds_cont_child_put(&cont_child);
 			return rc;
 		}
 	}
 
 	*cont_p = cont_child;
+	d_ref_tracker_retrack(&cont_child->sc_ref_tracker, cont_p, &cont_child, __func__, __LINE__);
 	return rc;
 }
 
@@ -1712,7 +1713,7 @@ obj_close:
 	dsc_obj_close(oh);
 cont_put:
 	if (cont != NULL)
-		ds_cont_child_put(cont);
+		ds_cont_child_put(&cont);
 	return rc;
 }
 
@@ -2572,7 +2573,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 		 */
 		rc = migrate_get_cont_child(tls, arg->arg->cont_uuid, &cont, true);
 		if (cont != NULL)
-			ds_cont_child_put(cont);
+			ds_cont_child_put(&cont);
 
 		D_GOTO(put, rc = 0);
 	}
@@ -2634,7 +2635,7 @@ migrate_obj_punch_one(void *data)
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->punched_epoch,
 			   tls->mpt_version, VOS_OF_REPLAY_PC,
 			   NULL, 0, NULL, NULL);
-	ds_cont_child_put(cont);
+	ds_cont_child_put(&cont);
 put:
 	if (rc)
 		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate punch failed", DP_RB_MPT(tls),
@@ -3129,7 +3130,7 @@ migrate_obj_ult(void *data)
 		}
 
 		if (cont_child)
-			ds_cont_child_put(cont_child);
+			ds_cont_child_put(&cont_child);
 	}
 
 	for (i = 0; i < arg->snap_cnt; i++) {
@@ -3189,7 +3190,7 @@ free:
 			rc = 0;
 
 		if (cont_child)
-			ds_cont_child_put(cont_child);
+			ds_cont_child_put(&cont_child);
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
@@ -4008,7 +4009,7 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc)
 		DL_ERROR(rc, DF_RB " iterate container " DF_UUID " failed", DP_RB_MPT(tls),
 			 DP_UUID(entry->ie_couuid));
-	ds_cont_child_put(cont_child);
+	ds_cont_child_put(&cont_child);
 
 out:
 	if (daos_handle_is_valid(cont_toh))

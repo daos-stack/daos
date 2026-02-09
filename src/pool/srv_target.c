@@ -2568,7 +2568,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		DP_RC(rc));
 
 put:
-	ds_cont_child_put(cont);
+	ds_cont_child_put(&cont);
 	/* don't destroy vos container, to avoid ds_cont_tgt_refresh_agg_eph() failure,
 	 * later depend on container recovery process to handle it.
 	 */
