@@ -90,12 +90,10 @@ cat <<EOF > venv/pip.conf
 [global]
     progress_bar = off
     no_color = true
+    quiet = 1
 EOF
 
 pip install --upgrade pip
-
-pip config set global.progress_bar off
-pip config set global.no_color true
 
 pip install --requirement requirements-utest.txt
 
