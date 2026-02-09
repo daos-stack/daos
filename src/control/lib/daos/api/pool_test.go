@@ -955,11 +955,11 @@ func TestAPI_GetPoolList(t *testing.T) {
 			ctx:      test.Context(t),
 			expPools: defaultPoolInfoResp,
 		},
-		"default system name supplied": {
+		"empty system name supplied": {
 			ctx: test.Context(t),
 			req: GetPoolListReq{},
 			checkParams: func(t *testing.T) {
-				test.CmpAny(t, "sysName", build.DefaultSystemName, daos_mgmt_list_pools_SetSys)
+				test.CmpAny(t, "sysName", "", daos_mgmt_list_pools_SetSys)
 			},
 			expPools: defaultPoolInfoResp,
 		},

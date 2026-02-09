@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1416,6 +1416,40 @@ func TestConfig_SetNUMAAffinity(t *testing.T) {
 				"unexpected numa node in fabric config")
 			test.AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
 				"unexpected numa node in storage config")
+		})
+	}
+}
+
+func TestConfig_WithStorageSpdkIobufProps(t *testing.T) {
+	for name, tc := range map[string]struct {
+		smallPoolCount uint32
+		largePoolCount uint32
+	}{
+		"zero values": {
+			smallPoolCount: 0,
+			largePoolCount: 0,
+		},
+		"small pool count only": {
+			smallPoolCount: 1024,
+			largePoolCount: 0,
+		},
+		"large pool count only": {
+			smallPoolCount: 0,
+			largePoolCount: 512,
+		},
+		"both pool counts set": {
+			smallPoolCount: 2048,
+			largePoolCount: 1024,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := NewConfig().
+				WithStorageSpdkIobufProps(tc.smallPoolCount, tc.largePoolCount)
+
+			test.AssertEqual(t, tc.smallPoolCount, cfg.Storage.SpdkIobufProps.SmallPoolCount,
+				"unexpected small pool count")
+			test.AssertEqual(t, tc.largePoolCount, cfg.Storage.SpdkIobufProps.LargePoolCount,
+				"unexpected large pool count")
 		})
 	}
 }
