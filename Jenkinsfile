@@ -326,7 +326,7 @@ pipeline {
                      description: 'Run the Fault injection testing on EL 8 test stage')
         booleanParam(name: 'CI_TEST_EL_RPMs',
                      defaultValue: true,
-                     description: 'Run the Test RPMs on EL test stage')
+                     description: 'Run the Test RPMs on EL stage')
         booleanParam(name: 'CI_TEST_LEAP15_RPMs',
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15 test stage')
@@ -1041,7 +1041,7 @@ pipeline {
                 stage('Test RPMs on EL') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL_RPMs && !skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
