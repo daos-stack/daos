@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
- * (C) Copyright 2025 Google LLC.
+ * (C) Copyright 2025-2026 Google LLC.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -104,9 +104,7 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 			out *= 60 * 60;
 		else if (c == 'm' || c == 'M')
 			out *= 60;
-		else if (c == 's' || c == 'S')
-			true;
-		else
+		else if (c != 's' && c != 'S')
 			return EINVAL;
 	}
 
