@@ -275,7 +275,7 @@ String getScriptOutput(String script, String args='') {
  */
 Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     // Run stage w/o any conditionals
-    println("[${env.STAGE_NAME}] Determining if stage should be run (params: ${params}, pragmas: ${pragmas}, otherCondition: ${otherCondition})")
+    println("runStage: Should ${env.STAGE_NAME}] be run? (params: ${params}, pragmas: ${pragmas}, otherCondition: ${otherCondition})")
     if (!otherCondition) {
         println("[${env.STAGE_NAME}] Skipping stage due to otherCondition=false")
         return false
@@ -286,9 +286,9 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
 
     String skipMsgParams = ''
     for(entry in params) {
-        println("[${env.STAGE_NAME}] Checking parameter ${entry.key} for value ${entry.value}: ${paramsValue(entry.key, entry.value)}")
+        println("runStage: Checking parameter ${entry.key} equals value ${entry.value} for ${env.STAGE_NAME}: ${paramsValue(entry.key, entry.value)}")
         if (paramsValue(entry.key, entry.value) != entry.value) {
-            skipMsgParams = "Skipping stage due to ${entry.key} parameter not set to ${entry.value}"
+            skipMsgParams = "Skipping ${env.STAGE_NAME} due to ${entry.key} parameter not set to ${entry.value}"
             break
         }
     }
@@ -296,9 +296,9 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     String skipMsgPragmas = ''
     for(entry in pragmas) {
         String expected = entry.value.toString().toLowerCase()
-        println("[${env.STAGE_NAME}] Checking pragma ${entry.key} for value ${expected}: ${cachedCommitPragma(entry.key, expected).toLowerCase()}")
+        println("runStage: Checking pragma ${entry.key} equals value ${expected} for ${env.STAGE_NAME}: ${cachedCommitPragma(entry.key, expected).toLowerCase()}")
         if (cachedCommitPragma(entry.key, expected).toLowerCase() != expected) {
-            skipMsgPragmas = "Skipping stage due to ${entry.key} pragma not set to ${entry.value}"
+            skipMsgPragmas = "Skipping ${env.STAGE_NAME} due to ${entry.key} pragma not set to ${entry.value}"
             break
         }
     }
@@ -306,28 +306,29 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     if (startedByUser()) {
         // Manual build: check parameters first
         if (skipMsgParams) {
-            println("[${env.STAGE_NAME}] ${skipMsgParams}")
+            println("runStage: ${skipMsgParams}")
             return false
         }
         // Manual build: check commit pragmas second
         if (skipMsgPragmas) {
-            println("[${env.STAGE_NAME}] ${skipMsgPragmas}")
+            println("runStage: ${skipMsgPragmas}")
             return false
         }
     } else {
         // Normal build: check commit pragmas first
         if (skipMsgPragmas) {
-            println("[${env.STAGE_NAME}] ${skipMsgPragmas}")
+            println("runStage: ${skipMsgPragmas}")
             return false
         }
         // Normal build: check parameters second
         if (skipMsgParams) {
-            println("[${env.STAGE_NAME}] ${skipMsgParams}")
+            println("runStage: ${skipMsgParams}")
             return false
         }
     }
 
     // Otherwise run the stage
+    println("runStage: Running ${env.STAGE_NAME}]")
     return true
 }
 
@@ -358,7 +359,7 @@ Boolean runBuildStage(String distro='', String compiler='gcc') {
 }
 
 Boolean bullseyeOverride() {
-    return runStage(['CI_BULLSEYE_OVERRIDE': true])
+    return runStage(['CI_FULL_BULLSEYE_REPORT': true])
 }
 
 /**
@@ -661,7 +662,7 @@ pipeline {
         booleanParam(name: 'CI_BUILD_BULLSEYE',
                      defaultValue: true,
                      description: 'Build sources and RPMs with Bullseye code coverage')
-        booleanParam(name: 'CI_BULLSEYE_OVERRIDE',
+        booleanParam(name: 'CI_FULL_BULLSEYE_REPORT',
                      defaultValue: false,
                      description: 'Use this build to generate a full Bullseye code coverage report')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
@@ -1160,11 +1161,11 @@ pipeline {
                     when {
                         beforeAgent true
                         expression {
-                            runStage(params: ['CI_BUILD_BULLSEYE': true,
-                                              'CI_UNIT_TEST_BULLSEYE': true,
-                                              'CI_BUILD_PACKAGES_ONLY': false],
-                                     pragmas: ['Skip-unit-tests': false,
-                                               'Skip-unit-test-bullseye': false])
+                            runStage(['CI_BUILD_BULLSEYE': true,
+                                      'CI_UNIT_TEST_BULLSEYE': true,
+                                      'CI_BUILD_PACKAGES_ONLY': false],
+                                     ['Skip-unit-tests': false,
+                                      'Skip-unit-test-bullseye': false])
                         }
                     }
                     agent {
@@ -1193,11 +1194,11 @@ pipeline {
                 //     when {
                 //         beforeAgent true
                 //         expression {
-                //             runStage(params: ['CI_BUILD_BULLSEYE': true,
-                //                               'CI_UNIT_TEST_BULLSEYE': true,
-                //                               'CI_BUILD_PACKAGES_ONLY': false],
-                //                      pragmas: ['Skip-unit-tests': false,
-                //                                'Skip-unit-test-bullseye': false])
+                //             runStage(['CI_BUILD_BULLSEYE': true,
+                //                       'CI_UNIT_TEST_BULLSEYE': true,
+                //                       'CI_BUILD_PACKAGES_ONLY': false],
+                //                      ['Skip-unit-tests': false,
+                //                       'Skip-unit-test-bullseye': false])
                 //         }
                 //     }
                 //     agent {
@@ -1226,11 +1227,11 @@ pipeline {
                     when {
                         beforeAgent true
                         expression {
-                            runStage(params: ['CI_BUILD_BULLSEYE': true,
-                                              'CI_UNIT_TEST_BULLSEYE': true,
-                                              'CI_BUILD_PACKAGES_ONLY': false],
-                                     pragmas: ['Skip-unit-tests': false,
-                                               'Skip-nlt-bullseye': false])
+                            runStage(['CI_BUILD_BULLSEYE': true,
+                                      'CI_UNIT_TEST_BULLSEYE': true,
+                                      'CI_BUILD_PACKAGES_ONLY': false],
+                                     ['Skip-unit-tests': false,
+                                      'Skip-nlt-bullseye': false])
                         }
                     }
                     agent {
@@ -1847,7 +1848,7 @@ pipeline {
                             name: 'Bullseye Report',
                             distro: 'el8',
                             compiler: 'covc',
-                            runCondition: runStage(params: ['CI_BUILD_BULLSEYE': true]),
+                            runCondition: runStage(['CI_BUILD_BULLSEYE': true]),
                             nodeLabel: 'docker_runner',
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
