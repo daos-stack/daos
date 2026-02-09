@@ -476,6 +476,10 @@
 #    max_io_errs: 100
 #    max_csum_errs: 200
 #
+#  # Set SPDK iobuf tunable values. Defaults if unset are 8192 for small and 1024 for large.
+#  spdk_iobuf:
+#    small_pool_count: 16384
+#    large_pool_count: 2048
 #
 #-
 #  # Number of I/O service threads (and network endpoints) per engine.

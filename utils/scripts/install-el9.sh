@@ -65,7 +65,6 @@ dnf --nodocs install ${dnf_install_args} \
     ndctl-devel \
     numactl \
     numactl-devel \
-    openmpi-devel \
     openssl-devel \
     pandoc \
     patch \
@@ -83,6 +82,12 @@ dnf --nodocs install ${dnf_install_args} \
     which \
     ncurses-devel \
     yasm
+
+if [[ -z "${NO_OPENMPI_DEVEL+set}" ]]; then
+    # shellcheck disable=SC2086
+    dnf --nodocs install ${dnf_install_args} \
+    	openmpi-devel 
+fi
 
 ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
 # shellcheck disable=SC2086
