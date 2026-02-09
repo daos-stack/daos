@@ -1778,7 +1778,13 @@ def run_daos_cmd(conf,
         conf.valgrind_errors = True
         rc.returncode = 0
     if use_json:
-        rc.json = json.loads(rc.stdout.decode('utf-8'))
+        try:
+            rc.json = json.loads(rc.stdout.decode('utf-8'))
+        except json.JSONDecodeError:
+            print("Failed to decode json output")
+            print(f"command={exec_cmd}")
+            print(rc.stdout.decode('utf-8'))
+            raise
     dcr.rc = rc
     return dcr
 
