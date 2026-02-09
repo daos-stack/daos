@@ -7,10 +7,12 @@ server to help debug the issues and analyze the system behavior.
 
 ### Directly on server using daos_metrics command as sudo user
 
-- Example of collecting the pool query metrics on the servers using daos_metrics command
+- Example of collecting the pool query metrics on the servers using daos_metrics command.
+- daos_metrics -S will show telemetry data from First I/O Engine (default 0)
+- daos_metrics -S 1 will show telemetry data from Second I/O Engine, in case multiple engines are running per node.
 
 ```
-$ sudo daos_metrics -C | grep pool_query
+$ sudo daos_metrics -C -S 0 | grep pool_query
 ID: 0/pool/8259d3ff-523e-4a43-9248-26aba2a62f4c/ops/pool_query,0
 ID: 0/pool/8259d3ff-523e-4a43-9248-26aba2a62f4c/ops/pool_query_space,0
 $ sudo daos_metrics -C -S 1 | grep pool_query
@@ -113,36 +115,45 @@ connecting to 10.214.213.41:9191...
 
 ## Engine Metrics:
 
+Admin can set environment variable for pool and container name for below example.
+
+```
+export MY_POOL=Test_pool
+export MY_CONT=Test_cont
+export MY_MOUNT=/tmp/daos_mount
+```
+
+
 |Operation| Description | DAOS Command | Metrics Command | Output |
 |:---:| :---: | :---: | :---: |:------------: |
 |When engine started | Timestamp of last engine startup | None | `sudo daos_metrics -S 1 -C \| grep 'started_at' \| grep -v pool`|ID: 0/started_at,Tue Oct 28 23:21:24 2025|
 |When engine become ready | Timestamp when the engine became ready | None | `sudo daos_metrics -S 1 -C \| grep 'servicing_at'`|ID: 0/servicing_at,Tue Oct 28 23:21:33 2025|
-|Find Engine Rank ID | Rank ID of this engine | None | `sudo daos_metrics -S 1  -C  \| grep  '/rank' \| grep -v pool`|ID: 1/rank,276|
-|check if Engine is dead | engine_events_dead_ranks | None | `sudo daos_metrics -C \| grep '/dead'`| ID: 0/events/dead_ranks,1 |
-|last event on rank | Timestamp of last received event | None | `sudo daos_metrics -S 1  -C  \| grep  '/last_event'`| ID: 1/events/last_event_ts,Thu Jan  1 00:00:00 1970 |
+|Find Engine Rank ID | Rank ID of this engine | None | `sudo daos_metrics -S 1 -C \| grep  '/rank' \| grep -v pool`|ID: 1/rank,276|
+|check if Engine is dead | engine_events_dead_ranks | None | `sudo daos_metrics -S 1 -C \| grep '/dead'`| ID: 0/events/dead_ranks,1 |
+|last event on rank | Timestamp of last received event | None | `sudo daos_metrics -S 1 -C \| grep  '/last_event'`| ID: 1/events/last_event_ts,Thu Jan  1 00:00:00 1970 |
 
 ## Pool Metrics:
 
 |Operation| Description | DAOS Command | Metrics Command | Output |
 |:---:| :---: | :---: | :---: |:------------: |
-|With No Pools| Total number of processed pool connect operations | None | `sudo daos_metrics -C \| grep 'ops/pool'`|None|
-|After creating single pool| | dmg pool create <POOL_NAME> |  `sudo daos_metrics -C \| grep 'ops/pool'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_evict,0<br>ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_connect,0<br>ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_disconnect,0<br>ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_query,0<br>ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_query_space,0|
-|After querying the single pool without storage|   Total number of processed pool query operations | dmg pool query <POOL_NAME> -t |  `sudo daos_metrics -C \| grep 'ops/pool_query'` | ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_query,1|
-|After querying the single pool with storage |   Total number of processed pool query (with operation) operations | dmg pool query <POOL_NAME> |  `sudo daos_metrics -C \| grep 'ops/pool_query_space'` | ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_query_space,1|
-|After Creating Container| Total number of processed pool connect operations | daos cont create <POOL_NAME> <CONT_NAME>| `sudo daos_metrics -C \| grep 'ops/pool_connect'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_connect,1|
-|After Creating Container| Total number of processed pool disconnect operations | daos cont create <POOL_NAME> <CONT_NAME>| `sudo daos_metrics -C \| grep 'ops/pool_disconnect'`|ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_disconnect,1|
-|After Mounting FUSE Container| Total number of processed pool connect operations | dfuse -m <MOUNT_POINT> -p <POOL_NAME> -c <CONT_NAME>| `sudo daos_metrics -C \| grep 'ops/pool_connect'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_connect,2|
-|After Unmounting FUSE Container| Total number of processed pool disconnect operations | fusermount3 -u -m <MOUNT_POINT> | `sudo daos_metrics -C \| grep 'ops/pool_disconnect'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_disconnect,2|
-|After Pool evict |   Total number of pool handle evict operations | dmg pool evict <POOL_NAME> | `sudo daos_metrics -C \| grep 'ops/pool_evict'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_evict,2|
+|With No Pools| Total number of processed pool connect operations | None | `sudo daos_metrics -C -S 0 \| grep 'ops/pool'`|None|
+|After creating single pool| | dmg pool create $MY_POOL |  `sudo daos_metrics -C -S 0 \| grep 'ops/pool'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_evict,0<br>ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_connect,0<br>ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_disconnect,0<br>ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_query,0<br>ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_query_space,0|
+|After querying the single pool without storage|   Total number of processed pool query operations | dmg pool query $MY_POOL -t |  `sudo daos_metrics -C -S 0 \| grep 'ops/pool_query'` | ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_query,1|
+|After querying the single pool with storage |   Total number of processed pool query (with operation) operations | dmg pool query $MY_POOL |  `sudo daos_metrics -C -S 0 \| grep 'ops/pool_query_space'` | ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_query_space,1|
+|After Creating Container| Total number of processed pool connect operations | daos cont create $MY_POOL $MY_CONT| `sudo daos_metrics -C -S 0 \| grep 'ops/pool_connect'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_connect,1|
+|After Creating Container| Total number of processed pool disconnect operations | daos cont create $MY_POOL $MY_CONT| `sudo daos_metrics -C -S 0 \| grep 'ops/pool_disconnect'`|ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_disconnect,1|
+|After Mounting FUSE Container| Total number of processed pool connect operations | dfuse -m $MY_MOUNT -p $MY_POOL -c $MY_CONT| `sudo daos_metrics -C -S 0 \| grep 'ops/pool_connect'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_connect,2|
+|After Unmounting FUSE Container| Total number of processed pool disconnect operations | fusermount3 -u -m $MY_MOUNT | `sudo daos_metrics -C -S 0 \| grep 'ops/pool_disconnect'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_disconnect,2|
+|After Pool evict |   Total number of pool handle evict operations | dmg pool evict $MY_POOL | `sudo daos_metrics -C -S 0 \| grep 'ops/pool_evict'`| ID: 1/pool/55cc96d8-5c46-41f4-af29-881d293b6f6f/ops/pool_evict,2|
 
 ## Container Metrics:
 
 |Operation| Description | DAOS Command | Metrics Command | Output |
 |:---:| :---: | :---: | :---: |:------------: |
-| Container creation | Total number of successful container create operations | daos cont create <POOL_NAME> <CONT_NAME> --type='POSIX' | `sudo daos_metrics -C \| grep cont_create \| grep <POOL_UUID>`|ID: 0/pool/c22c6a6c-7e31-4788-90a4-a55d1083d57b/ops/cont_create,1|
-| Container query | Total number of successful container query operations | daos container query <POOL_NAME> <CONT_NAME> | `sudo daos_metrics -C \| grep cont_query \| grep <POOL_UUID>`|ID: 0/pool/c22c6a6c-7e31-4788-90a4-a55d1083d57b/ops/cont_query,4|
-| Container open | Total number of successful container open operations | dfuse -m <MOUNT_POINT> -p <POOL_NAME> -c <CONT_NAME> | `sudo daos_metrics -C \| grep cont_open \| grep <POOL_UUID>`|ID: 0/pool/c22c6a6c-7e31-4788-90a4-a55d1083d57b/ops/cont_open,3|
-| Container destroy | Total number of successful container destroy operations | daos cont destroy <POOL_NAME> <CONT_NAME> | `sudo daos_metrics -C \| grep cont_destroy \| grep <POOL_UUID>`|ID: 0/pool/c22c6a6c-7e31-4788-90a4-a55d1083d57b/ops/cont_destroy,1|
+| Container creation | Total number of successful container create operations | daos cont create $MY_POOL $MY_CONT --type='POSIX' | `sudo daos_metrics -C -S 0 \| grep cont_create \| grep <POOL_UUID>`|ID: 0/pool/c22c6a6c-7e31-4788-90a4-a55d1083d57b/ops/cont_create,1|
+| Container query | Total number of successful container query operations | daos container query $MY_POOL $MY_CONT | `sudo daos_metrics -C -S 0 \| grep cont_query \| grep <POOL_UUID>`|ID: 0/pool/c22c6a6c-7e31-4788-90a4-a55d1083d57b/ops/cont_query,4|
+| Container open | Total number of successful container open operations | dfuse -m $MY_MOUNT -p $MY_POOL -c $MY_CONT | `sudo daos_metrics -C -S 0 \| grep cont_open \| grep <POOL_UUID>`|ID: 0/pool/c22c6a6c-7e31-4788-90a4-a55d1083d57b/ops/cont_open,3|
+| Container destroy | Total number of successful container destroy operations | daos cont destroy $MY_POOL $MY_CONT | `sudo daos_metrics -C -S 0 \| grep cont_destroy \| grep <POOL_UUID>`|ID: 0/pool/c22c6a6c-7e31-4788-90a4-a55d1083d57b/ops/cont_destroy,1|
 
 ## I/O Metrics:
 
@@ -170,9 +181,7 @@ Below is the example on real system where ULT was stuck and not responding. You 
 **xs_3: 87624970 ms**\
 **xs_3: 72508 ULT**
 ```
-# sudo daos_metrics -C | grep -e cycle
-OR
-# daos_metrics
+# sudo daos_metrics -C -S 0 | grep -e cycle
  
         cycle_duration
             xs_0: 4 ms [min: 0, max: 736, avg: 1, sum: 4374707, stddev: 2, samples: 4337768]
@@ -232,7 +241,7 @@ For example, mention below, one of the NVMe was impacting the overall IO perform
 This metrics are available in different IO size ranges from 256B to 4GB so looks for matching IO size used for testing the performance. Below example we used IOR write size 4MB.
 
 ```
-#sudo daos_metrics -C | grep 'io/latency/update'
+#sudo daos_metrics -C -S 0 | grep 'io/latency/update'
 
 ID: 0/io/latency/update/4MB/tgt_0,16349826,733843,16349826,7329515.976190,42,307839671,4196687.177444 
 ID: 0/io/latency/update/4MB/tgt_1,1260,1147,2191,1463.423077,52,76098,273.640909 
@@ -251,7 +260,7 @@ ID: 0/io/latency/update/4MB/tgt_13,1477,1148,2204,1485.853659,41,60920,244.98311
 ID: 0/io/latency/update/4MB/tgt_14,1159,1159,2390,1523.333333,48,73120,318.466026 
 ID: 0/io/latency/update/4MB/tgt_15,1511,1165,2318,1447.608696,46,66590,253.351094
 
-#sudo daos_metrics -C | grep 'io/latency/fetch'
+#sudo daos_metrics -C -S 0 | grep 'io/latency/fetch'
 
 ID: 0/io/latency/fetch/4MB/tgt_0,1390,1099,2169,1380.785714,42,57993,202.810200 
 ID: 0/io/latency/fetch/4MB/tgt_1,1902,1413,2956,1845.769231,52,95980,313.043041 
@@ -278,14 +287,14 @@ ID: 0/io/latency/fetch/4MB/tgt_15,1740,1326,2420,1733.521739,46,79742,238.393674
 Many times, NVMe device has error which can also be an indication for slow performance or system stuck issue.
 
 ```
-#sudo daos_metrics -M | grep errs
+#sudo daos_metrics -S 0 -M | grep errs
   media_errs: 0 errs, desc: Number of unrecovered data integrity error, units: errs
   read_errs: 0 errs, desc: Number of errors reported to the engine on read commands, units: errs
   write_errs: 0 errs, desc: Number of errors reported to the engine on write commands, units: errs
   unmap_errs: 0 errs, desc: Number of errors reported to the engine on unmap/trim commands, units: errs
   checksum_mismatch: 0 errs, desc: Number of checksum mismatch detected by the engine, units: errs
 
-#sudo daos_metrics -C | grep nvm | grep err
+#sudo daos_metrics -C -S 0 | grep nvm | grep err
 ID: 0/nvme/0000:83:00.0/commands/media_errs,0
 ID: 0/nvme/0000:83:00.0/commands/read_errs,0
 ID: 0/nvme/0000:83:00.0/commands/write_errs,0
@@ -302,7 +311,7 @@ daos_metrics output is available in multiple units. for example, Counters, Gauge
 A counter is a cumulative metric that represents a single monotonically increasing counter whose value can only increase or be reset or to zero on restart.
 
 ```
-sudo daos_metrics -c -M -C
+sudo daos_metrics -c -S 0 -M -C
 name,value,min,max,mean,sample_size,sum,std_dev,description,units
 ID: 0/events/dead_ranks,0,,,,,,Number of dead rank events received,events
 ID: 0/net/uri/lookup_self,0,,,,,,total number of URI requests for self
@@ -315,7 +324,7 @@ ID: 0/net/ofi+tcp;ofi_rxm/hg/bulks/ctx_1,0,,,,,,Mercury-layer count of bulk tran
 A gauge is a metric that represents a single numerical value that can arbitrarily go up and down.
 
 ```
-sudo daos_metrics -g -M -C | more
+sudo daos_metrics -S 0 -g -M -C | more
 name,value,min,max,mean,sample_size,sum,std_dev,description,units
 ID: 0/rank,0,,,,,,Rank ID of this engine
 ID: 0/net/ofi+tcp;ofi_rxm/hg/active_rpcs/ctx_0,0,,,,,,Mercury-layer count of active RPCs,rpcs
@@ -326,7 +335,7 @@ ID: 0/net/ofi+tcp;ofi_rxm/hg/active_rpcs/ctx_3,0,,,,,,Mercury-layer count of act
 
 ## Metrics Unit output format
 
-Some Metrics units are in format where multiple values are display for number of samples. For example, update/fetch latency output.
+Gauge metrics units are in format where multiple values are display for number of samples. For example, update/fetch latency output.
 
 ```
         latency 
@@ -349,35 +358,8 @@ Some Metrics units are in format where multiple values are display for number of
 
 Metrics counter will be reset when system restarts or it can be reset using below command on individual servers.
 
-For Engine 0
+For Engine 0 & 1 (In case multiple engines are running on same node)
 ```
-sudo daos_metrics -e
-Item: xs_0 has unknown type: 0x800
-Item: xs_1 has unknown type: 0x800
-Item: xs_2 has unknown type: 0x800
-Item: xs_3 has unknown type: 0x800
-Item: xs_4 has unknown type: 0x800
-Item: xs_5 has unknown type: 0x800
-Item: xs_6 has unknown type: 0x800
-Item: xs_7 has unknown type: 0x800
-Item: xs_8 has unknown type: 0x800
-Item: xs_9 has unknown type: 0x800
-Item: xs_10 has unknown type: 0x800
-```
-
-For Engine 1 (In case multiple engines are running on same node)
-```
-daos_metrics -S 1 -e
-Item: xs_0 has unknown type: 0x800
-Item: xs_1 has unknown type: 0x800
-Item: xs_2 has unknown type: 0x800
-Item: xs_3 has unknown type: 0x800
-Item: xs_4 has unknown type: 0x800
-Item: xs_5 has unknown type: 0x800
-Item: xs_6 has unknown type: 0x800
-Item: xs_7 has unknown type: 0x800
-Item: xs_8 has unknown type: 0x800
-Item: xs_9 has unknown type: 0x800
-Item: xs_10 has unknown type: 0x800
+sudo daos_metrics -S 0 -e; sudo daos_metrics -S 1 -e
 ```
 
