@@ -1784,7 +1784,7 @@ def run_daos_cmd(conf,
 
 
 # pylint: disable-next=too-many-arguments
-def create_cont(conf, pool=None, ctype='NONE', label=None, path=None, oclass=None, dir_oclass=None,
+def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None, dir_oclass=None,
                 file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None, attrs=None):
     """Use 'daos' command to create a new container.
 
