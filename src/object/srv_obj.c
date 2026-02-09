@@ -2157,8 +2157,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 
 	/* normal container open handle with ds_cont_child attached */
 	if (coh->sch_cont != NULL) {
-		ds_cont_child_get(coh->sch_cont);
-		coc = coh->sch_cont;
+		ds_cont_child_get(coh->sch_cont, &coc);
 		if (uuid_compare(cont_uuid, coc->sc_uuid) == 0)
 			D_GOTO(out, rc = 0);
 
@@ -2196,13 +2195,13 @@ out:
 	D_ASSERT(coc->sc_pool != NULL);
 	ioc->ioc_map_ver = coc->sc_pool->spc_map_version;
 	ioc->ioc_vos_coh = coc->sc_hdl;
-	ioc->ioc_coc	 = coc;
 	ioc->ioc_coh	 = coh;
 	ioc->ioc_layout_ver = coc->sc_props.dcp_obj_version;
+	D_REF_TRACKER_MOVE(&coc->sc_ref_tracker, &ioc->ioc_coc, &coc);
 	return 0;
 failed:
 	if (coc != NULL)
-		ds_cont_child_put(coc);
+		ds_cont_child_put(&coc);
 	ds_cont_hdl_put(coh);
 	return rc;
 }
@@ -2218,7 +2217,7 @@ obj_ioc_fini(struct obj_io_context *ioc, int err)
 	if (ioc->ioc_coc != NULL) {
 		if (ioc->ioc_update_ec_ts && err == 0)
 			ds_cont_ec_timestamp_update(ioc->ioc_coc);
-		ds_cont_child_put(ioc->ioc_coc);
+		ds_cont_child_put(&ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
 	}
 	if (ioc->ioc_rpc) {

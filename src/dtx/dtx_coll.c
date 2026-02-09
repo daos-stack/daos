@@ -101,7 +101,7 @@ dtx_coll_prep_ult(void *arg)
 out:
 	D_FREE(mbs);
 	if (cont != NULL)
-		ds_cont_child_put(cont);
+		ds_cont_child_put(&cont);
 
 	rc = ABT_future_set(dcpa->dcpa_future, NULL);
 	D_ASSERT(rc == ABT_SUCCESS);
@@ -397,7 +397,7 @@ dtx_coll_local_one(void *args)
 out:
 	dcla->dcla_results[dmi->dmi_tgt_id] = rc;
 	if (cont != NULL)
-		ds_cont_child_put(cont);
+		ds_cont_child_put(&cont);
 
 	return 0;
 }

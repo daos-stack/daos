@@ -853,11 +853,12 @@ ds_cont_child_cache_destroy(struct daos_lru_cache *cache)
 }
 
 static void
-cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
+cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child **cont)
 {
-	D_DEBUG(DB_MD, DF_CONT ": ref=%u\n", DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		cont->sc_list.ll_ref);
-	daos_lru_ref_release(cache, &cont->sc_list);
+	D_DEBUG(DB_MD, DF_CONT ": ref=%u\n", DP_CONT((*cont)->sc_pool->spc_uuid, (*cont)->sc_uuid),
+		(*cont)->sc_list.ll_ref);
+	d_ref_tracker_untrack(&(*cont)->sc_ref_tracker, cont);
+	daos_lru_ref_release(cache, &(*cont)->sc_list);
 }
 
 /*
@@ -891,6 +892,7 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 	}
 
 	*cont = cont_child_obj(llink);
+	d_ref_tracker_track(&(*cont)->sc_ref_tracker, cont, __func__, __LINE__);
 	D_DEBUG(DB_MD, DF_CONT ": ref=%u\n", DP_CONT((*cont)->sc_pool->spc_uuid, (*cont)->sc_uuid),
 		(*cont)->sc_list.ll_ref);
 	return 0;
@@ -928,6 +930,7 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		dss_get_module_info()->dmi_tgt_id);
 
 	d_list_del_init(&cont_child->sc_link);
+	d_ref_tracker_untrack(&cont_child->sc_ref_tracker, &cont_child->sc_pool->spc_cont_list);
 
 	dtx_cont_deregister(cont_child);
 	D_ASSERT(cont_child->sc_dtx_registered == 0);
@@ -935,7 +938,7 @@ cont_child_stop(struct ds_cont_child *cont_child)
 	/* cont_stop_agg() may yield */
 	cont_stop_agg(cont_child);
 	D_ASSERT(cont_child_started(cont_child) == false);
-	ds_cont_child_put(cont_child);
+	daos_lru_ref_release(dsm_tls_get()->dt_cont_cache, &cont_child->sc_list);
 }
 
 void
@@ -1068,19 +1071,20 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		}
 
 		d_list_add_tail(&cont_child->sc_link, &pool_child->spc_cont_list);
-		ds_cont_child_get(cont_child);
+		daos_lru_ref_add(&cont_child->sc_list);
+		d_ref_tracker_track(&cont_child->sc_ref_tracker, &pool_child->spc_cont_list,
+				      __func__, __LINE__);
 		if (started)
 			*started = true;
 	}
 
 	if (!rc && cont_out != NULL) {
-		*cont_out = cont_child;
-		ds_cont_child_get(cont_child);
+		ds_cont_child_get(cont_child, cont_out);
 	}
 
 out:
 	/* Put the ref from cont_child_lookup() */
-	ds_cont_child_put(cont_child);
+	ds_cont_child_put(&cont_child);
 	return rc;
 }
 
@@ -1159,7 +1163,7 @@ cont_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	D_ASSERT(hdl->sch_cont != NULL);
 	D_DEBUG(DB_MD, DF_CONT ": dropping cont\n",
 		DP_CONT(hdl->sch_cont->sc_pool->spc_uuid, hdl->sch_cont->sc_uuid));
-	cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
+	cont_child_put(tls->dt_cont_cache, &hdl->sch_cont);
 	D_FREE(hdl);
 }
 
@@ -1342,14 +1346,14 @@ cont_child_destroy_one(void *vin)
 	if (cont->sc_open > 0) {
 		D_ERROR(DF_CONT": Container is still in open(%d)\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), cont->sc_open);
-		cont_child_put(tls->dt_cont_cache, cont);
+		cont_child_put(tls->dt_cont_cache, &cont);
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
 
 	if (cont->sc_destroying) {
 		D_DEBUG(DB_MD, DF_CONT ": Container is already being destroyed\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
-		cont_child_put(tls->dt_cont_cache, cont);
+		cont_child_put(tls->dt_cont_cache, &cont);
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
 	cont->sc_destroying = 1; /* nobody can take refcount anymore */
@@ -1398,9 +1402,12 @@ cont_child_destroy_one(void *vin)
 	 * This design ensures consistency by preventing concurrent access
 	 * to containers marked for destruction.
 	 */
+	DSS_REF_TRACKER_DECLARE_DUMPER(dumper);
+	DSS_REF_TRACKER_INIT_DUMPER(dumper, cont->sc_ref_tracker);
 	daos_lru_ref_noevict_wait(tls->dt_cont_cache, &cont->sc_list);
 	daos_lru_ref_evict(tls->dt_cont_cache, &cont->sc_list);
-	cont_child_put(tls->dt_cont_cache, cont);
+	DSS_REF_TRACKER_FINI_DUMPER(dumper);
+	cont_child_put(tls->dt_cont_cache, &cont);
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
@@ -1518,7 +1525,7 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		return rc;
 
 	if ((*ds_cont)->sc_stopping || (*ds_cont)->sc_destroying) {
-		cont_child_put(tls->dt_cont_cache, *ds_cont);
+		cont_child_put(tls->dt_cont_cache, ds_cont);
 		*ds_cont = NULL;
 		return -DER_SHUTDOWN;
 	}
@@ -1609,15 +1616,17 @@ ds_cont_local_close(uuid_t cont_hdl_uuid)
 }
 
 void
-ds_cont_child_get(struct ds_cont_child *cont)
+ds_cont_child_get(struct ds_cont_child *cont, struct ds_cont_child **cont_out)
 {
 	daos_lru_ref_add(&cont->sc_list);
+	d_ref_tracker_track(&cont->sc_ref_tracker, cont_out, __func__, __LINE__);
+	*cont_out = cont;
 	D_DEBUG(DB_MD, DF_CONT": ref=%u\n", DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		cont->sc_list.ll_ref);
 }
 
 void
-ds_cont_child_put(struct ds_cont_child *cont)
+ds_cont_child_put(struct ds_cont_child **cont)
 {
 	struct dsm_tls	*tls = dsm_tls_get();
 
@@ -1627,17 +1636,18 @@ ds_cont_child_put(struct ds_cont_child *cont)
 static void
 ds_dtx_resync(void *arg)
 {
-	struct ds_cont_child *cont = arg;
+	struct ds_cont_child **cont = arg;
 	int                   rc;
 
-	rc = dtx_resync(cont->sc_pool->spc_hdl, cont, cont->sc_pool->spc_map_version, false);
+	rc = dtx_resync((*cont)->sc_pool->spc_hdl, *cont, (*cont)->sc_pool->spc_map_version, false);
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont " DF_UUID "/" DF_UUID
 		       " that may affect subsequent "
 		       "operations: rc = " DF_RC "\n",
-		       DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), DP_RC(rc));
+		       DP_UUID((*cont)->sc_pool_uuid), DP_UUID((*cont)->sc_uuid), DP_RC(rc));
 
 	ds_cont_child_put(cont);
+	D_FREE(cont);
 }
 
 int
@@ -1769,6 +1779,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (rc < 0)
 		D_GOTO(err_hdl, rc);
 
+	d_ref_tracker_retrack(&cont->sc_ref_tracker, &hdl->sch_cont, &cont, __func__, __LINE__);
 	hdl->sch_cont = cont;
 	if (rc == 1) /* Container is created by above cont_child_create_start() call */
 		poh = hdl->sch_cont->sc_pool->spc_hdl;
@@ -1836,10 +1847,16 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		D_GOTO(err_cont, rc);
 	}
 
-	ds_cont_child_get(hdl->sch_cont);
-	rc = dss_ult_create(ds_dtx_resync, hdl->sch_cont, DSS_XS_SELF, 0, 0, NULL);
+	struct ds_cont_child **arg;
+	D_ALLOC_PTR(arg);
+	if (arg == NULL) {
+		ds_cont_child_put(&hdl->sch_cont);
+		goto err_dtx;
+	}
+	ds_cont_child_get(hdl->sch_cont, arg);
+	rc = dss_ult_create(ds_dtx_resync, arg, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
-		ds_cont_child_put(hdl->sch_cont);
+		ds_cont_child_put(&hdl->sch_cont);
 		D_GOTO(err_dtx, rc);
 	}
 
@@ -1888,10 +1905,12 @@ err_cont:
 	}
 err_hdl:
 	if (hdl != NULL) {
-		if (added)
+		if (added) {
 			cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
-		else
+		} else {
+			d_ref_tracker_untrack(&hdl->sch_cont->sc_ref_tracker, &hdl->sch_cont);
 			D_FREE(hdl);
+		}
 	}
 
 	return rc;
@@ -2236,7 +2255,7 @@ cont_snap_update_one(void *vin)
 	cont->sc_snapshots_nr = args->snap_count;
 	cont->sc_aggregation_max = DAOS_EPOCH_MAX;
 out_cont:
-	ds_cont_child_put(cont);
+	ds_cont_child_put(&cont);
 	return rc;
 }
 
@@ -2329,7 +2348,7 @@ cont_snap_notify_one(void *vin)
 	if (args->snap_opts & DAOS_SNAP_OPT_CR)
 		cont->sc_aggregation_max = d_hlc_get();
 out_cont:
-	ds_cont_child_put(cont);
+	ds_cont_child_put(&cont);
 	return rc;
 }
 
@@ -2928,7 +2947,7 @@ cont_child_prop_update(void *data)
 	}
 
 out:
-	ds_cont_child_put(child);
+	ds_cont_child_put(&child);
 	return rc;
 }
 
