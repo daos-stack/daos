@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -765,6 +765,20 @@ func TestPoolCommands(t *testing.T) {
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
 						propWithVal("self_heal", "exclude;rebuild"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set pool properties with self_heal value 'none'",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:none,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "none"),
 						propWithVal("space_rb", "42"),
 					},
 				}),
