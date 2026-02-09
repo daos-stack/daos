@@ -66,6 +66,10 @@ func TestListVosFiles(t *testing.T) {
 			args:   "/root/",
 			expRes: []string{},
 		},
+		"No match": {
+			args:   filepath.Join(tmpDir, "z"),
+			expRes: []string{},
+		},
 		"void director prefix": {
 			args: tmpDir + string(os.PathSeparator),
 			expRes: []string{
@@ -78,7 +82,7 @@ func TestListVosFiles(t *testing.T) {
 			},
 		},
 		"a pool directory prefix": {
-			args: tmpDir + string(os.PathSeparator) + "a",
+			args: filepath.Join(tmpDir, "a"),
 			expRes: []string{
 				filepath.Join(tmpDir, "a") + string(os.PathSeparator),
 				filepath.Join(tmpDir, "ab") + string(os.PathSeparator),
@@ -87,28 +91,28 @@ func TestListVosFiles(t *testing.T) {
 			},
 		},
 		"aa pool directory prefix": {
-			args: tmpDir + string(os.PathSeparator) + "aa",
+			args: filepath.Join(tmpDir, "aa"),
 			expRes: []string{
 				filepath.Join(tmpDir, "aac") + string(os.PathSeparator),
 				filepath.Join(tmpDir, "aaad") + string(os.PathSeparator),
 			},
 		},
 		"all vos files": {
-			args: tmpDir + string(os.PathSeparator) + "a" + string(os.PathSeparator),
+			args: filepath.Join(tmpDir, "a") + string(os.PathSeparator),
 			expRes: []string{
-				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-0",
-				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-1",
-				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-2",
-				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-10",
-				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-201",
-				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "rdb-pool",
+				filepath.Join(tmpDir, "a", "vos-0"),
+				filepath.Join(tmpDir, "a", "vos-1"),
+				filepath.Join(tmpDir, "a", "vos-2"),
+				filepath.Join(tmpDir, "a", "vos-10"),
+				filepath.Join(tmpDir, "a", "vos-201"),
+				filepath.Join(tmpDir, "a", "rdb-pool"),
 			},
 		},
 		"vos-1 prefix files": {
-			args: tmpDir + string(os.PathSeparator) + "a" + string(os.PathSeparator) + "vos-1",
+			args: filepath.Join(tmpDir, "a", "vos-1"),
 			expRes: []string{
-				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-1",
-				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-10",
+				filepath.Join(tmpDir, "a", "vos-1"),
+				filepath.Join(tmpDir, "a", "vos-10"),
 			},
 		},
 	} {
@@ -120,51 +124,51 @@ func TestListVosFiles(t *testing.T) {
 }
 
 func TestFilterSuggestions(t *testing.T) {
+	// The test cases are designed to cover various prefix scenarios.
+	// It should notably cover the case where the prefix is a single character that matches the
+	// second character of a suggestion, which is a special case in the appendSuggestion
+	// function:  Workaround to properly handle invalid prefix management done by the grumble
+	// completion engine.
+	var (
+		initialSuggestions    = []string{"-a", "--all", "-b", "--bar="}
+		additionalSuggestions = []string{"foo", "a", "ab", "aac", "aaad"}
+	)
+
 	for name, tc := range map[string]struct {
-		prefix                string
-		initialSuggestions    []string
-		additionalSuggestions []string
-		expRes                []string
+		prefix string
+		expRes []string
 	}{
 		"no prefix": {
-			prefix:                "",
-			initialSuggestions:    []string{"-a", "--all", "-b", "--bar="},
-			additionalSuggestions: []string{"foo", "a", "ab", "aac", "aaad"},
-			expRes:                []string{"-a", "--all", "-b", "--bar=", "foo", "a", "ab", "aac", "aaad"},
+			prefix: "",
+			expRes: []string{"-a", "--all", "-b", "--bar=", "foo", "a", "ab", "aac", "aaad"},
+		},
+		"no match prefix": {
+			prefix: "z",
+			expRes: []string{},
 		},
 		"with '-' prefix": {
-			prefix:                "-",
-			initialSuggestions:    []string{"-a", "--all", "-b", "--bar="},
-			additionalSuggestions: []string{"foo", "a", "ab", "aac", "aaad"},
-			expRes:                []string{"a", "--all", "b", "--bar="},
+			prefix: "-",
+			expRes: []string{"a", "--all", "b", "--bar="},
 		},
 		"with '--' prefix": {
-			prefix:                "--",
-			initialSuggestions:    []string{"-a", "--all", "-b", "--bar="},
-			additionalSuggestions: []string{"foo", "a", "ab", "aac", "aaad"},
-			expRes:                []string{"--all", "--bar="},
+			prefix: "--",
+			expRes: []string{"--all", "--bar="},
 		},
 		"with 'a' prefix": {
-			prefix:                "a",
-			initialSuggestions:    []string{"-a", "--all", "-b", "--bar="},
-			additionalSuggestions: []string{"foo", "a", "ab", "aac", "aaad"},
-			expRes:                []string{"", "b", "aac", "aaad"},
+			prefix: "a",
+			expRes: []string{"", "b", "aac", "aaad"},
 		},
 		"with 'aa' prefix": {
-			prefix:                "aa",
-			initialSuggestions:    []string{"-a", "--all", "-b", "--bar="},
-			additionalSuggestions: []string{"foo", "a", "ab", "aac", "aaad"},
-			expRes:                []string{"aac", "aaad"},
+			prefix: "aa",
+			expRes: []string{"aac", "aaad"},
 		},
 		"with 'aaa' prefix": {
-			prefix:                "aaa",
-			initialSuggestions:    []string{"-a", "--all", "-b", "--bar="},
-			additionalSuggestions: []string{"foo", "a", "ab", "aac", "aaad"},
-			expRes:                []string{"aaad"},
+			prefix: "aaa",
+			expRes: []string{"aaad"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			results := filterSuggestions(tc.prefix, tc.initialSuggestions, tc.additionalSuggestions)
+			results := filterSuggestions(tc.prefix, initialSuggestions, additionalSuggestions)
 			test.AssertStringsEqual(t, tc.expRes, results, "filterSuggestions results do not match expected")
 		})
 	}

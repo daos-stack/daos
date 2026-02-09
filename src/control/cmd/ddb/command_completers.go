@@ -63,6 +63,8 @@ func appendSuggestion(suggestions []string, suggestion string, prefix string) []
 }
 
 func filterSuggestions(prefix string, initialSuggestions, additionalSuggestions []string) (suggestions []string) {
+	suggestions = []string{}
+
 	for _, suggestion := range initialSuggestions {
 		suggestions = appendSuggestion(suggestions, suggestion, prefix)
 	}
