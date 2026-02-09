@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	vosRegexp = regexp.MustCompile(`^.+/(vos-[1-9]*[[:digit:]])|(rdb-pool)$`)
+	vosRegexp = regexp.MustCompile(`^.+/((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$`)
 )
 
 func listVosFiles(match string) (result []string) {

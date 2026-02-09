@@ -10,7 +10,7 @@ import (
 
 var (
 	testPoolDirs = [...]string{"a", "ab", "aac", "aaad"}
-	testVosFiles = [...]string{"vos-0", "vos-1", "vos-2", "vos-10", "vos-a", "rdb-pool", "rdb-666"}
+	testVosFiles = [...]string{"vos-0", "vos-1", "vos-2", "vos-10", "vos-201", "vos-000", "vos-a", "rdb-pool", "rdb-666"}
 )
 
 func createFile(t *testing.T, filePath string) {
@@ -100,6 +100,7 @@ func TestListVosFiles(t *testing.T) {
 				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-1",
 				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-2",
 				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-10",
+				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "vos-201",
 				filepath.Join(tmpDir, "a") + string(os.PathSeparator) + "rdb-pool",
 			},
 		},
