@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	vosRegexp = regexp.MustCompile(`^.+/vos-[1-9]*[[:digit:]]$`)
+	vosRegexp = regexp.MustCompile(`^.+/(vos-[1-9]*[[:digit:]])|(rdb-pool)$`)
 )
 
 func listVosFiles(match string) (result []string) {
@@ -40,55 +40,6 @@ func listVosFiles(match string) (result []string) {
 				continue
 			}
 			result = append(result, path)
-		}
-	}
-
-	return
-}
-
-func listPoolDirs(match string) (result []string) {
-	result = []string{}
-
-	matches, err := filepath.Glob(match + "*")
-	if err != nil {
-		return
-	}
-
-	for _, match := range matches {
-		path := filepath.Clean(match)
-		fi, err := os.Stat(path)
-		if err != nil {
-			continue
-		}
-		if !fi.Mode().IsDir() {
-			continue
-		}
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			continue
-		}
-		if len(entries) == 0 {
-			continue
-		}
-		has_dir := false
-		is_pool := false
-		for _, entry := range entries {
-			if entry.IsDir() {
-				has_dir = true
-				continue
-			}
-			if !entry.Type().Perm().IsRegular() {
-				continue
-			}
-			if !vosRegexp.MatchString(filepath.Join(path, entry.Name())) {
-				continue
-			}
-			result = append(result, path)
-			is_pool = true
-			break
-		}
-		if has_dir && !is_pool {
-			result = append(result, path+string(os.PathSeparator))
 		}
 	}
 
