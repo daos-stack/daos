@@ -7,6 +7,7 @@
 /**
  * This file implements functions shared with the control-plane.
  */
+
 #include <stdlib.h>
 #include <assert.h>
 #include <stdint.h>
@@ -44,9 +45,9 @@ copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
 }
 
 /**
- * Build DPDK CLI options string with per-facility log levels.
+ * Build DPDK CLI options string with per-facility log levels. Function is not thread safe.
  *
- * \param eal_level      Log level for EAL facility (1-8)
+ * \param eal_level      Log level for Environment Abstraction Layer facility (1-8)
  * \param default_level  Default log level for other facilities (1-8)
  *
  * \return Pointer to static buffer containing DPDK CLI options string,
@@ -58,9 +59,8 @@ dpdk_cli_build_opts(int eal_level, int default_level)
 	int ret;
 
 	/* Validate log levels */
-	if (eal_level < 1 || eal_level > 8 || default_level < 1 || default_level > 8) {
+	if (eal_level < 1 || eal_level > 8 || default_level < 1 || default_level > 8)
 		return NULL;
-	}
 
 	/* Build with custom EAL level, others at default */
 	ret = snprintf(dpdk_cli_opts_buffer, sizeof(dpdk_cli_opts_buffer),
@@ -101,9 +101,8 @@ dpdk_cli_build_opts(int eal_level, int default_level)
 		       default_level, default_level, default_level, default_level, default_level,
 		       default_level, default_level, default_level, default_level);
 
-	if (ret < 0 || ret >= sizeof(dpdk_cli_opts_buffer)) {
+	if (ret < 0 || ret >= sizeof(dpdk_cli_opts_buffer))
 		return NULL;
-	}
 
 	return dpdk_cli_opts_buffer;
 }

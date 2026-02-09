@@ -45,17 +45,6 @@
 /* Stop issuing new IO when queued blob IOs reach a threshold */
 #define BIO_BS_STOP_WATERMARK	(4000)
 
-/* Default SPDK log level (one of ERROR,WARN,NOTICE,INFO,DEBUG) */
-#define DAOS_SPDK_LOG_DEFAULT   SPDK_LOG_ERROR
-/* Max SPDK log level */
-#define DAOS_SPDK_LOG_MAX       SPDK_LOG_DEBUG
-/* Default DPDK log level: RTE_LOG_ERR */
-#define DAOS_DPDK_LOG_DEFAULT   4
-/* Min DPDK log level: RTE_LOG_EMERG */
-#define DAOS_DPDK_LOG_MIN       1
-/* Max DPDK log level: RTE_LOG_MAX */
-#define DAOS_DPDK_LOG_MAX       8
-
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -171,12 +160,7 @@ bio_spdk_env_init(void)
 		D_WARN("Invalid DAOS_DPDK_LOG_LEVEL=%u, using default (%u)\n", dpdk_level,
 		       DAOS_SPDK_LOG_DEFAULT);
 		spdk_level = DAOS_SPDK_LOG_DEFAULT;
-	} else {
-		D_INFO("SPDK log level is %u\n", spdk_level);
 	}
-
-	/* Set SPDK log print level to configured value */
-	spdk_log_set_print_level(spdk_level);
 
 	/* Check for DPDK log level from environment */
 	d_getenv_uint("DAOS_DPDK_LOG_LEVEL", &dpdk_level);
@@ -184,9 +168,12 @@ bio_spdk_env_init(void)
 		D_WARN("Invalid DAOS_DPDK_LOG_LEVEL=%u, using default (%u)\n", dpdk_level,
 		       DAOS_DPDK_LOG_DEFAULT);
 		dpdk_level = DAOS_DPDK_LOG_DEFAULT;
-	} else {
-		D_INFO("DPDK log level is %u\n", dpdk_level);
 	}
+
+	D_INFO("SPDK log level: %u, DPDK log level: %u\n", spdk_level, dpdk_level);
+
+	/* Set SPDK log print level to configured value */
+	spdk_log_set_print_level(spdk_level);
 
 	/* Build DPDK options with specified log level for all DPDK log facilities */
 	dpdk_opts = dpdk_cli_build_opts(dpdk_level, dpdk_level);

@@ -68,6 +68,17 @@
 
 #define NVME_ROLE_ALL		(NVME_ROLE_DATA | NVME_ROLE_META | NVME_ROLE_WAL)
 
+/* Default SPDK log level (one of ERROR,WARN,NOTICE,INFO,DEBUG) */
+#define DAOS_SPDK_LOG_DEFAULT           SPDK_LOG_ERROR
+/* Max SPDK log level */
+#define DAOS_SPDK_LOG_MAX               SPDK_LOG_DEBUG
+/* Default DPDK log level: RTE_LOG_ERR (dpdk/lib/eal/include/rte_log.h) */
+#define DAOS_DPDK_LOG_DEFAULT           4
+/* Min DPDK log level: RTE_LOG_EMERG */
+#define DAOS_DPDK_LOG_MIN               1
+/* Max DPDK log level: RTE_LOG_MAX */
+#define DAOS_DPDK_LOG_MAX               8
+
 /**
  * Current device health state (health statistics). Periodically updated in
  * bio_bs_monitor(). Used to determine faulty device status.
@@ -171,7 +182,7 @@ int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
  * DPDK log level (1-8): 1=EMERG, 2=ALERT, 3=CRIT, 4=ERR, 5=WARNING,
  *                       6=NOTICE, 7=INFO, 8=DEBUG
  *
- * \param eal_level      Log level for EAL facility (1-8)
+ * \param eal_level      Log level for Environment Abstraction Layer facility (1-8)
  * \param default_level  Default log level for other facilities (1-8)
  *
  * \return Pointer to static buffer containing DPDK CLI options string,

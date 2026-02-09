@@ -99,7 +99,8 @@ func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
-	envCtx := C.dpdk_cli_build_opts(4, 4)
+	// Use default logging level for all DPDK facilities.
+	envCtx := C.dpdk_cli_build_opts(C.DAOS_DPDK_LOG_DEFAULT, C.DAOS_DPDK_LOG_DEFAULT)
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(opts.PCIAllowList.Len()),
 		cAllowList)
