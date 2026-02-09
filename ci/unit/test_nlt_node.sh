@@ -32,10 +32,10 @@ touch venv/pip.conf
 pip config set global.progress_bar off
 pip config set global.no_color true
 
-pip install --quiet --upgrade pip
-pip install --progress-bar off --requirement requirements-utest.txt
+pip install --upgrade pip
+pip install --requirement requirements-utest.txt
 
-pip install --progress-bar off /opt/daos/lib/daos/python/
+pip install /opt/daos/lib/daos/python/
 
 # set high open file limit in the shell to avoid extra warning
 sudo prlimit --nofile=1024:262144 --pid $$

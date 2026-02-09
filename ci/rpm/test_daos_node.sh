@@ -105,8 +105,8 @@ FTEST=/usr/lib/daos/TESTING/ftest
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-pip install --quiet --upgrade pip
-pip install --progress-bar off -r $FTEST/requirements-ftest.txt
+pip install --upgrade pip
+pip install -r $FTEST/requirements-ftest.txt
 
 sudo PYTHONPATH="$FTEST/util"                        \
      "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \

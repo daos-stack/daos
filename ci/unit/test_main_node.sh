@@ -84,14 +84,14 @@ rm -rf "$test_log_dir"
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-# touch venv/pip.conf
-# pip config set global.progress_bar off
-# pip config set global.no_color true
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip config set global.no_color true
 
-pip install --quiet --upgrade pip
-pip install --progress-bar off --requirement requirements-utest.txt
+pip install --upgrade pip
+pip install --requirement requirements-utest.txt
 
-pip install --progress-bar off /opt/daos/lib/daos/python/
+pip install /opt/daos/lib/daos/python/
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
