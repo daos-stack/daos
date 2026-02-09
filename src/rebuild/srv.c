@@ -854,7 +854,8 @@ rebuild_leader_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_
 	iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
 	iv.riv_ver		= rgt->rgt_rebuild_ver;
 	iv.riv_global_scan_done = is_rebuild_global_scan_done(rgt);
-	iv.riv_global_done	= rgt->rgt_abort || is_rebuild_global_done(rgt);
+	iv.riv_global_done          = is_rebuild_global_done(rgt);
+	iv.riv_global_abort         = rgt->rgt_abort;
 	iv.riv_leader_term	= rgt->rgt_leader_term;
 	iv.riv_rebuild_gen	= rgt->rgt_rebuild_gen;
 	iv.riv_seconds          = rgt->rgt_status.rs_seconds;
@@ -1026,22 +1027,21 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		ABT_rwlock_unlock(pool->sp_lock);
 		map_ranks_fini(&rank_list);
 
-		if (rebuild_abort) {
+		if (rebuild_abort && !rgt->rgt_abort) { /* interrupted by another rebuild */
 			rgt->rgt_abort = 1;
 			rgt->rgt_status.rs_errno = -DER_STALE;
-			goto done;
 		}
 
-		/* leader send status to target engines if still running */
-		if (!rgt->rgt_abort && !is_rebuild_global_done(rgt) &&
-		    myrank == pool->sp_iv_ns->iv_master_rank)
+		/* leader send status to target engines even if it's interrupted and ensure
+		 * all engines clean up their running rebuild.
+		 */
+		if (!is_rebuild_global_done(rgt) && myrank == pool->sp_iv_ns->iv_master_rank)
 			rebuild_leader_status_notify(rgt, pool, op, myrank);
 
 		/* query the current rebuild status */
 		if (is_rebuild_global_done(rgt))
 			rs->rs_state = DRS_COMPLETED;
 
-	done:
 		if (rs->rs_state == DRS_COMPLETED)
 			str = rs->rs_errno ? "failed" : "completed";
 		else if (rgt->rgt_abort || rebuild_gst.rg_abort)
@@ -1063,7 +1063,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			 rgt->rgt_reclaim_epoch, rs->rs_seconds);
 
 		D_INFO("%s", sbuf);
-		if (rs->rs_state == DRS_COMPLETED || rebuild_gst.rg_abort || rgt->rgt_abort) {
+		if (rs->rs_state == DRS_COMPLETED || rebuild_gst.rg_abort) {
 			D_PRINT("%s", sbuf);
 			break;
 		}
@@ -2898,15 +2898,13 @@ rebuild_tgt_status_check_ult(void *arg)
 					   rpt->rt_reported_size;
 		}
 		iv.riv_status = status.status;
-		if (status.scanning == 0 || rpt->rt_abort ||
-		    status.status != 0) {
+		if (status.scanning == 0) {
 			iv.riv_scan_done = 1;
 			rpt->rt_scan_done = 1;
 		}
 
 		/* Only global scan is done, then pull is trustable */
-		if ((rpt->rt_global_scan_done && !status.rebuilding) ||
-		     rpt->rt_abort)
+		if (rpt->rt_global_scan_done && !status.rebuilding)
 			iv.riv_pull_done = 1;
 
 		/* Once the rebuild is globally done, the target
@@ -2965,12 +2963,17 @@ rebuild_tgt_status_check_ult(void *arg)
 			}
 		}
 
+		if (!rpt->rt_abort_notified && (rpt->rt_abort || rpt->rt_global_abort)) {
+			ds_migrate_abort(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
+			rpt->rt_abort_notified = 1;
+		}
+
 		D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
 			     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
 		       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
 		       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
 		       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
-		if (rpt->rt_global_done || rpt->rt_abort)
+		if (rpt->rt_global_done)
 			break;
 
 		sched_req_sleep(rpt->rt_ult, RBLD_CHECK_INTV);

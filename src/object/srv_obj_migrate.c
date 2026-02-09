@@ -3131,6 +3131,7 @@ struct migrate_stop_arg {
 	unsigned int version;
 	unsigned int generation;
 	unsigned int stop_count;
+	bool         stop_sync;
 	ABT_mutex    stop_lock;
 };
 
@@ -3139,14 +3140,19 @@ migrate_fini_one_ult(void *data)
 {
 	struct migrate_stop_arg *arg = data;
 	struct migrate_pool_tls *tls;
-	int			 rc;
+	int                      xid;
+	int                      rc = 0;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (tls == NULL)
 		return 0;
 
-	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
+	xid = dss_get_module_info()->dmi_xs_id;
+	D_ASSERT(xid != 0);
+
 	tls->mpt_fini = 1;
+	if (!arg->stop_sync)
+		goto out;
 
 	ABT_mutex_lock(arg->stop_lock);
 	arg->stop_count++;
@@ -3173,15 +3179,16 @@ migrate_fini_one_ult(void *data)
 		rc = 0;
 	}
 
+out:
 	migrate_pool_tls_put(tls); /* destroy */
-
-	D_INFO("migrate fini one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
+	D_INFO(DF_UUID "migration is %s ult(xs=%d) \n", DP_UUID(arg->pool_uuid),
+	       arg->stop_sync ? "aborting" : "stopped", xid);
 	return rc;
 }
 
 /* stop the migration */
-void
-ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generation)
+static void
+migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generation, bool sync)
 {
 	struct migrate_stop_arg arg;
 	int			 rc;
@@ -3189,6 +3196,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	arg.generation = generation;
+	arg.stop_sync  = sync;
 	arg.stop_count = 0;
 	rc             = ABT_mutex_create(&arg.stop_lock);
 	if (rc != ABT_SUCCESS) {
@@ -3200,11 +3208,26 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
-	D_ASSERT(atomic_load(&pool->sp_rebuilding) >= arg.stop_count);
-	atomic_fetch_sub(&pool->sp_rebuilding, arg.stop_count);
+	if (sync) {
+		D_ASSERT(atomic_load(&pool->sp_rebuilding) >= arg.stop_count);
+		atomic_fetch_sub(&pool->sp_rebuilding, arg.stop_count);
+	}
 	ABT_mutex_free(&arg.stop_lock);
 
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
+}
+
+void
+ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generation)
+{
+	migrate_stop(pool, version, generation, true);
+}
+
+/* abort the migration */
+void
+ds_migrate_abort(struct ds_pool *pool, unsigned int version, unsigned int generation)
+{
+	migrate_stop(pool, version, generation, false);
 }
 
 static int

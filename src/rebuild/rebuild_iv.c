@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,11 +196,12 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
 	dst_iv->riv_global_done = src_iv->riv_global_done;
+	dst_iv->riv_global_abort             = src_iv->riv_global_abort;
 	dst_iv->riv_global_scan_done = src_iv->riv_global_scan_done;
 	dst_iv->riv_stable_epoch = src_iv->riv_stable_epoch;
 	dst_iv->riv_global_dtx_resyc_version = src_iv->riv_global_dtx_resyc_version;
 
-	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done ||
+	if (dst_iv->riv_global_done || dst_iv->riv_global_abort || dst_iv->riv_global_scan_done ||
 	    dst_iv->riv_stable_epoch || dst_iv->riv_dtx_resyc_version) {
 		D_DEBUG(DB_REBUILD, DF_UUID"/%u/%u/"DF_U64" gsd/gd/stable/ver %d/%d/"DF_X64"/%u\n",
 			DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver,
@@ -215,6 +216,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			       DF_U64 "\n", rpt->rt_stable_epoch,
 			       dst_iv->riv_stable_epoch);
 		rpt->rt_global_done = dst_iv->riv_global_done;
+		rpt->rt_global_abort     = dst_iv->riv_global_abort;
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
 		old_ver = rpt->rt_global_dtx_resync_version;
 		if (rpt->rt_global_dtx_resync_version < dst_iv->riv_global_dtx_resyc_version)
