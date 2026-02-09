@@ -9,6 +9,7 @@
 #include <sys/mount.h>
 #include <string.h>
 #include <sys/vfs.h>
+#include <libpmemobj.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <vos_internal.h>
@@ -24,9 +25,10 @@
 						anchors, cb, NULL, args, NULL)
 
 int
-dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags)
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags, bool cow)
 {
 	struct vos_file_parts   path_parts = {0};
+	int                     cow_val;
 	int			rc;
 
 	/*
@@ -44,17 +46,31 @@ dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t
 		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
 	}
 
+	if (cow) {
+		cow_val = 1;
+		rc      = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
+		if (rc != 0) {
+			return daos_errno2der(errno);
+		}
+	}
+
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to initialize VOS with path '%s': "DF_RC"\n",
 			path_parts.vf_db_path, DP_RC(rc));
-		return rc;
+		goto exit;
 	}
 
 	rc = vos_pool_open(path, path_parts.vf_pool_uuid, flags, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
+	}
+
+exit:
+	if (cow) {
+		cow_val = 0;
+		pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
 	}
 
 	return rc;
