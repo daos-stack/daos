@@ -16,6 +16,8 @@
  * LICENSE file.
  */
 
+import org.jenkinsci.plugins.pipeline.modeldefinition.Utils
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
@@ -248,6 +250,15 @@ String add_daos_pkgs() {
     return 'tests-internal'
 }
 
+/**
+ * getScriptOutput
+ *
+ * Run a script and return the trimmed output.
+ *
+ * @param script    the script to run
+ * @param args      optional arguments to pass to the script
+ * @return          the trimmed output from the script
+ */
 String getScriptOutput(String script, String args='') {
     return sh(script: "${script} ${args}", returnStdout: true).trim()
 }
@@ -257,9 +268,10 @@ String getScriptOutput(String script, String args='') {
  *
  * Determine if the stage should be run.
  *
- * @param           Map of parameter names and expected values. Verify all match.
- * @pragmas         Map of commit pragma names and expected values. Verify all match.
- * @otherCondition  Additional condition to consider. Verify this is true.
+ * @param params          Map of parameter names and expected values. Verify all match.
+ * @param pragmas         Map of commit pragma names and expected values. Verify all match.
+ * @param otherCondition  Additional condition to consider. Verify this is true.
+ * @return                true if the stage should be run, false if it should be skipped
  */
 Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     // Run stage w/o any conditionals
@@ -324,9 +336,8 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
  *
  * Determine if the build stage should be run.
  *
- * @param kwargs Map containing the following arguments
- *  distro     the shorthand distro name; defaults to ''
- *  compiler   the compiler to use; defaults to 'gcc'
+ * @distro     the shorthand distro name; defaults to ''
+ * @compiler   the compiler to use; defaults to 'gcc'
  */
 Boolean runBuildStage(String distro='', String compiler='gcc') {
     Map params = ['CI_RPM_TEST_VERSION': '']
@@ -335,9 +346,11 @@ Boolean runBuildStage(String distro='', String compiler='gcc') {
         params["CI_BUILD_${distro.toUpperCase()}"] = true
         pragmas["Skip-build-${distro}"] = 'false'
         if (compiler) {
+            params["CI_BUILD_${distro.toUpperCase()}_${compiler.toUpperCase()}"] = true
             pragmas["Skip-build-${distro}-${compiler}"] = 'false'
         }
         if (compiler == 'covc') {
+            params['CI_BUILD_BULLSEYE'] = true
             pragmas['Skip-bullseye'] = 'false'
         }
     }
@@ -345,7 +358,7 @@ Boolean runBuildStage(String distro='', String compiler='gcc') {
 }
 
 Boolean bullseyeOverride() {
-    return runStage(['CI_FULL_BULLSEYE_REPORT': true])
+    return runStage(['CI_BULLSEYE_OVERRIDE': true])
 }
 
 /**
@@ -354,19 +367,20 @@ Boolean bullseyeOverride() {
  * Get a build stage in scripted syntax.
  *
  * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
- *  name                        the build stage name
- *  distro                      the shorthand distro name; defaults to 'el8'
- *  rpmDistro                   the distro to use for rpm building; defaults to distro
- *  compiler                    the compiler to use; defaults to 'gcc'
- *  runCondition                optional condition to determine if the stage should run; defaults
- *                                to runBuildStage(distro, compiler)
- *  buildRpms                   whether or not to build rpms; defaults to true
- *  release                     the DAOS RPM release value to use; defaults to env.DAOS_RELVAL
- *  dockerBuildArgs             optional docker build arguments
- *  sconsBuildArgs              optional scons build arguments
- *  artifacts                   optional artifacts name to archive; defaults to
+ *          name                the build stage name
+ *          distro              the shorthand distro name; defaults to 'el8'
+ *          rpmDistro           the distro to use for rpm building; defaults to distro
+ *          compiler            the compiler to use; defaults to 'gcc'
+ *          runCondition        optional additional condition to determine if the stage runs, used
+ *                                in conjunction with runBuildStage(distro, compiler); defaults
+ *                                to true
+ *          buildRpms           whether or not to build rpms; defaults to true
+ *          release             the DAOS RPM release value to use; defaults to env.DAOS_RELVAL
+ *          dockerBuildArgs     optional docker build arguments
+ *          sconsBuildArgs      optional scons build arguments
+ *          artifacts           optional artifacts name to archive; defaults to
  *                                "config.log-${distro}-${compiler}"
- *  uploadTarget                the distro to use when uploading rpms; defaults to distro
+ *          uploadTarget        the distro to use when uploading rpms; defaults to distro
  * @return a scripted stage to run in a pipeline
  */
 def scriptedBuildStage(Map kwargs = [:]) {
@@ -374,7 +388,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String distro = kwargs.get('distro', 'el8')
     String rpmDistro = kwargs.get('rpmDistro', distro)
     String compiler = kwargs.get('compiler', 'gcc')
-    Boolean runCondition = kwargs.get('runCondition', runBuildStage(distro, compiler))
+    Boolean runCondition = kwargs.get('runCondition', true)
     Boolean buildRpms = kwargs.get('buildRpms', true)
     String release = kwargs.get('release', env.DAOS_RELVAL)
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
@@ -388,7 +402,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     }
     return {
         stage("${name}") {
-            if (runCondition) {
+            if (runBuildStage(distro, compiler) && runCondition) {
                 node('docker_runner') {
                     println("[${name}] Check out from version control")
                     checkoutScm(pruneStaleBranch: true)
@@ -427,8 +441,8 @@ def scriptedBuildStage(Map kwargs = [:]) {
                 }
             }
             else {
-                println("[${name}] Skipping build stage")
-                // Utils.markStageSkippedForConditional("${name}")
+                println("[${name}] Marking build stage as skipped")
+                Utils.markStageSkippedForConditional("${name}")
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -441,13 +455,13 @@ def scriptedBuildStage(Map kwargs = [:]) {
  * Get a unit test stage in scripted syntax.
  *
  * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
- *  name                the unit test stage name
- *  runCondition        Optional additional condition to determine if the stage should run
- *  nodeLabel           the node label to use
- *  unitTestArgs        Map of arguments to pass to unitTest()
- *  stashArgs           Map of arguments to pass to optional stash() call
- *  unitTestPostArgs    Map of arguments to pass to unitTestPost()
- *  recordIssuesArgs    Map of arguments to pass to recordIssues()
+ *          name                the unit test stage name
+ *          runCondition        Optional additional condition to determine if the stage runs
+ *          nodeLabel           the node label to use
+ *          unitTestArgs        Map of arguments to pass to unitTest()
+ *          stashArgs           Map of arguments to pass to optional stash() call
+ *          unitTestPostArgs    Map of arguments to pass to unitTestPost()
+ *          recordIssuesArgs    Map of arguments to pass to recordIssues()
  * @return a scripted stage to run in a pipeline
  */
 def scriptedUnitTestStage(Map kwargs = [:]) {
@@ -484,8 +498,8 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
                 }
             }
             else {
-                println("[${name}] Skipping unit test stage")
-                // Utils.markStageSkippedForConditional("${name}")
+                println("[${name}] Marking unit test stage as skipped")
+                Utils.markStageSkippedForConditional("${name}")
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -498,14 +512,14 @@ def scriptedUnitTestStage(Map kwargs = [:]) {
  * Get a summary stage in scripted syntax.
  *
  * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
- *  name                        the summary stage name
- *  distro                      the shorthand distro name; defaults to 'el8'
- *  compiler                    the compiler to use; defaults to 'gcc'
- *  runCondition                Optional additional condition to determine if the stage should run
- *  dockerBuildArgs             optional docker build arguments
- *  installScript               optional script to install RPMs
- *  runScriptArgs               Map of arguments to pass to runScriptWithStashes()
- *  archiveArtifactsArgs        Map of arguments to pass to archiveArtifacts()
+ *          name                    the summary stage name
+ *          distro                  the shorthand distro name; defaults to 'el8'
+ *          compiler                the compiler to use; defaults to 'gcc'
+ *          runCondition            Optional additional condition to determine if the stage runs
+ *          dockerBuildArgs         optional docker build arguments
+ *          installScript           optional script to install RPMs
+ *          runScriptArgs           Map of arguments to pass to runScriptWithStashes()
+ *          archiveArtifactsArgs    Map of arguments to pass to archiveArtifacts()
  * @return a scripted stage to run in a pipeline
  */
 def scriptedSummaryStage(Map kwargs = [:]) {
@@ -545,8 +559,8 @@ def scriptedSummaryStage(Map kwargs = [:]) {
                 }
             }
             else {
-                println("[${name}] Skipping summary stage")
-                // Utils.markStageSkippedForConditional("${name}")
+                println("[${name}] Marking summary stage as skipped")
+                Utils.markStageSkippedForConditional("${name}")
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -647,7 +661,7 @@ pipeline {
         booleanParam(name: 'CI_BUILD_BULLSEYE',
                      defaultValue: true,
                      description: 'Build sources and RPMs with Bullseye code coverage')
-        booleanParam(name: 'CI_FULL_BULLSEYE_REPORT',
+        booleanParam(name: 'CI_BULLSEYE_OVERRIDE',
                      defaultValue: false,
                      description: 'Use this build to generate a full Bullseye code coverage report')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
@@ -879,7 +893,7 @@ pipeline {
                             name: 'Build on EL 8.8',
                             distro:'el8',
                             compiler: 'gcc',
-                            runCondition: runBuildStage('el8', 'gcc') && !bullseyeOverride(),
+                            runCondition: !bullseyeOverride(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -902,7 +916,7 @@ pipeline {
                             name: 'Build on EL 9.6',
                             distro:'el9',
                             compiler: 'gcc',
-                            runCondition: runBuildStage('el9', 'gcc') && !bullseyeOverride(),
+                            runCondition: !bullseyeOverride(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -927,7 +941,7 @@ pipeline {
                             distro:'leap15',
                             rpmDistro: 'suse.lp155',
                             compiler: 'gcc',
-                            runCondition: runBuildStage('leap15', 'gcc') && !bullseyeOverride(),
+                            runCondition: !bullseyeOverride(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -948,7 +962,7 @@ pipeline {
                             name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
                             distro:'leap15',
                             compiler: 'icc',
-                            runCondition: runBuildStage('leap15_icc') && !bullseyeOverride(),
+                            runCondition: !bullseyeOverride(),
                             buildRpms: false,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -970,7 +984,6 @@ pipeline {
                             name: 'Build on EL 8.8 with Bullseye',
                             distro:'el8',
                             compiler: 'covc',
-                            runCondition: runBuildStage('bullseye', 'covc'),
                             buildRpms: true,
                             release: "${env.DAOS_RELVAL}.bullseye",
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -1176,6 +1189,39 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test with Bullseye on EL 8.8')
+                // stage('Unit Test bdev with Bullseye on EL 8.8') {
+                //     when {
+                //         beforeAgent true
+                //         expression {
+                //             runStage(params: ['CI_BUILD_BULLSEYE': true,
+                //                               'CI_UNIT_TEST_BULLSEYE': true,
+                //                               'CI_BUILD_PACKAGES_ONLY': false],
+                //                      pragmas: ['Skip-unit-tests': false,
+                //                                'Skip-unit-test-bullseye': false])
+                //         }
+                //     }
+                //     agent {
+                //         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                //     }
+                //     steps {
+                //         job_step_update(
+                //             unitTest(timeout_time: 120,
+                //                      unstash_opt: true,
+                //                      inst_repos: daosRepos(),
+                //                      inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+                //                      compiler: 'covc',
+                //                      ignore_failure: true,
+                //                      coverage_stash: 'unit_test_bdev_bullseye'))
+                //     }
+                //     post {
+                //         always {
+                //             unitTestPost artifacts: ['unit_test_bdev_bullseye_logs/'],
+                //                          ignore_failure: true,
+                //                          compiler: 'covc'
+                //             job_status_update()
+                //         }
+                //     }
+                // } // stage('Unit Test bdev with Bullseye on EL 8.8')
                 stage('NLT with Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1200,7 +1246,7 @@ pipeline {
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_tests: false,
                                      ignore_failure: true,
-                                     coverage_stash: 'unit_test_bullseye'))
+                                     coverage_stash: 'nlt_bullseye'))
                         stash(name:'nltr-bullseye', includes:'nltr-bullseye.json', allowEmpty: true)
                     }
                     post {
@@ -1801,7 +1847,7 @@ pipeline {
                             name: 'Bullseye Report',
                             distro: 'el8',
                             compiler: 'covc',
-                            runCondition: runBullseyeStage(),
+                            runCondition: runStage(params: ['CI_BUILD_BULLSEYE': true]),
                             nodeLabel: 'docker_runner',
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,

@@ -47,6 +47,9 @@ case $STAGE_NAME in
     "Unit Test with Bullseye on "*)
       test_log_dir="unit_test_bullseye_logs"
       ;;
+    "Unit Test bdev with Bullseye on "*)
+      test_log_dir="unit_test_bdev_bullseye_logs"
+      ;;
     *)
       test_log_dir="unkown_test_logs"
       ;;
