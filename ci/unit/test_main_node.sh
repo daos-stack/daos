@@ -86,7 +86,13 @@ python3 -m venv venv
 source venv/bin/activate
 touch venv/pip.conf
 
-pip install --quiet --upgrade pip
+cat <<EOF > venv/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+EOF
+
+pip install --upgrade pip
 
 pip config set global.progress_bar off
 pip config set global.no_color true
