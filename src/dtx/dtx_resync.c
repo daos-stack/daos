@@ -755,7 +755,7 @@ again:
 		/* Since dtx_{cleanup,resync} might yield, let's reprobe anyway */
 		*acts |= VOS_ITER_CB_YIELD;
 
-	ds_cont_child_put(cont);
+	ds_cont_child_put(&cont);
 
 out:
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc, "%s DTX for " DF_UUID "/" DF_UUID,

@@ -355,7 +355,7 @@ out:
 	dout->do_sub_rets.ca_count = 0;
 
 	if (cont != NULL)
-		ds_cont_child_put(cont);
+		ds_cont_child_put(&cont);
 }
 
 static void

@@ -1867,7 +1867,7 @@ cont_refresh_track_eph_one(void *data)
 			rc = 0;
 	}
 
-	ds_cont_child_put(cont_child);
+	ds_cont_child_put(&cont_child);
 	return rc;
 }
 
