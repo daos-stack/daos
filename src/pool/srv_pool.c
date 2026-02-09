@@ -763,7 +763,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 
 static int
 init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, const char *group,
-		   const d_rank_list_t *ranks, daos_prop_t *prop, uint32_t ndomains,
+		   const d_rank_list_t *ranks, daos_prop_t *prop_orig, uint32_t ndomains,
 		   const uint32_t *domains)
 {
 	struct pool_buf	       *map_buf;
@@ -780,23 +780,58 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	uint32_t                svc_ops_max;
 	uint32_t                svc_ops_num;
 	uint64_t                rdb_size;
+	daos_prop_t	       *prop = NULL;
 	int			rc;
 	struct daos_prop_entry *entry;
 	uuid_t                  uuid;
+
+	/* duplicate the default properties, overwrite it with pool create
+	 * parameter and then write to pool meta data.
+	 */
+	prop = daos_prop_dup(&pool_prop_default, true /* pool */, false /* input */);
+	if (prop == NULL) {
+		D_ERROR("daos_prop_dup failed.\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_FAIL_POOL_CREATE_VERSION)) {
+		uint64_t fail_val = daos_fail_value_get();
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
+		D_ASSERT(entry != NULL);
+		entry->dpe_val = (uint32_t)fail_val;
+	}
+
+	rc = pool_prop_default_copy(prop, prop_orig);
+	if (rc) {
+		DL_ERROR(rc, "daos_prop_default_copy() failed");
+		D_GOTO(out_prop, rc);
+	}
 
 	rc = gen_pool_buf(NULL /* map */, &map_buf, map_version, ndomains, nnodes, ntargets,
 			  domains, dss_tgt_nr);
 	if (rc != 0) {
 		D_ERROR("failed to generate pool buf, "DF_RC"\n", DP_RC(rc));
-		goto out;
+		goto out_prop;
 	}
 
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
+	entry = daos_prop_entry_get(prop_orig, DAOS_PROP_PO_REDUN_FAC);
 	if (entry) {
+		/** if the user provided an explicit incompatible rd_fac, then fail gracefully */
 		if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
-			D_ERROR("ndomains(%u) could not meet redunc factor(%lu)\n",
+			D_ERROR("ndomains(%u) could not meet specified redunc factor(%lu)\n",
 				map_buf->pb_domain_nr, entry->dpe_val);
 			D_GOTO(out_map_buf, rc = -DER_INVAL);
+		}
+	} else {
+		/** if the default rd_fac cannot be satisfied, adjust it on the fly */
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
+		if (entry) {
+			if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
+				D_DEBUG(DB_MD, "ndomains(%u) could not meet default redunc factor(%lu)\n",
+					map_buf->pb_domain_nr, entry->dpe_val);
+				entry->dpe_val = (uint64_t) map_buf->pb_domain_nr - 1;
+			}
 		}
 	}
 
@@ -930,6 +965,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 
 out_map_buf:
 	pool_buf_free(map_buf);
+out_prop:
+	daos_prop_free(prop);
 out:
 	return rc;
 }
@@ -3970,7 +4007,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct rdb_tx		tx;
 	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
-	daos_prop_t	       *prop_dup = NULL;
 	daos_prop_t            *prop      = NULL;
 	d_rank_list_t          *tgt_ranks = NULL;
 	uint32_t                ndomains;
@@ -4048,38 +4084,13 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D_GOTO(out_tx, rc);
 	}
 
-	/* duplicate the default properties, overwrite it with pool create
-	 * parameter and then write to pool meta data.
-	 */
-	prop_dup = daos_prop_dup(&pool_prop_default, true /* pool */,
-				 false /* input */);
-	if (prop_dup == NULL) {
-		D_ERROR("daos_prop_dup failed.\n");
-		D_GOTO(out_tx, rc = -DER_NOMEM);
-	}
-
-	if (DAOS_FAIL_CHECK(DAOS_FAIL_POOL_CREATE_VERSION)) {
-		uint64_t fail_val = daos_fail_value_get();
-		struct daos_prop_entry *entry;
-
-		entry = daos_prop_entry_get(prop_dup, DAOS_PROP_PO_OBJ_VERSION);
-		D_ASSERT(entry != NULL);
-		entry->dpe_val = (uint32_t)fail_val;
-	}
-
-	rc = pool_prop_default_copy(prop_dup, prop);
-	if (rc) {
-		DL_ERROR(rc, "daos_prop_default_copy() failed");
-		D_GOTO(out_tx, rc);
-	}
-
 	/* Initialize the DB and the metadata for this pool. */
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 8;
 	rc = rdb_tx_create_root(&tx, &attr);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
-	rc = init_pool_metadata(&tx, &svc->ps_root, ntgts, NULL /* group */, tgt_ranks, prop_dup,
+	rc = init_pool_metadata(&tx, &svc->ps_root, ntgts, NULL /* group */, tgt_ranks, prop,
 				ndomains, domains);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
@@ -4092,7 +4103,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D_GOTO(out_tx, rc);
 
 out_tx:
-	daos_prop_free(prop_dup);
 	ds_cont_unlock_metadata(svc->ps_cont_svc);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -4153,6 +4163,26 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 
 	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
 			 sizeof(cb_info->bci_rc));
+	return 0;
+}
+
+static int
+pool_query_set_rebuild_status_degraded(struct pool_svc *svc, struct daos_rebuild_status *rebuild_st)
+{
+	unsigned int down_tgts = 0;
+	int          rc;
+
+	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+	rc = pool_map_find_down_tgts(svc->ps_pool->sp_map, NULL /* tgt_pp */, &down_tgts);
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+	if (rc != 0)
+		return rc;
+
+	if (down_tgts > 0)
+		rebuild_st->rs_flags |= DAOS_RSF_DEGRADED;
+	else
+		rebuild_st->rs_flags &= ~DAOS_RSF_DEGRADED;
+
 	return 0;
 }
 
@@ -4385,6 +4415,12 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		DL_ERROR(rc, DF_UUID ": permission denied for connect attempt for " DF_X64,
 			 DP_UUID(in->pci_op.pi_uuid), flags);
 		goto out_map_version;
+	}
+
+	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = pool_query_set_rebuild_status_degraded(svc, &out->pco_rebuild_st);
+		if (rc != 0)
+			goto out_map_version;
 	}
 
 	transfer_map = true;
@@ -5447,6 +5483,12 @@ pool_query_handler(crt_rpc_t *rpc, int handler_version)
 			D_ERROR("iv_prop verify failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_lock, rc);
 		}
+	}
+
+	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
+		rc = pool_query_set_rebuild_status_degraded(svc, &out->pqo_rebuild_st);
+		if (rc != 0)
+			goto out_lock;
 	}
 
 out_lock:

@@ -36,7 +36,7 @@ pool:
   svcn: 4
   rebuild_timeout: 120
   pool_query_timeout: 30
-  properties: "scrub:timed,scrub_freq:2"
+  properties: "rd_fac:0,space_rb:0,scrub:timed,scrub_freq:2"
 
 container:
   type: POSIX

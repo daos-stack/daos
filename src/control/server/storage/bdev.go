@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -61,6 +61,7 @@ const (
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
 	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
 	ConfSetAutoFaultyProps       = C.NVME_CONF_SET_AUTO_FAULTY
+	ConfIobufSetOptions          = "iobuf_set_options"
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -616,6 +617,7 @@ type (
 		AccelProps        AccelProps
 		SpdkRpcSrvProps   SpdkRpcServer
 		AutoFaultyProps   BdevAutoFaulty
+		SpdkIobufProps    SpdkIobuf
 		VMDEnabled        bool
 		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
 	}
