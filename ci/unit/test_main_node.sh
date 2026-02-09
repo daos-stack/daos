@@ -85,10 +85,12 @@ python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 touch venv/pip.conf
+
+pip install --quiet --upgrade pip
+
 pip config set global.progress_bar off
 pip config set global.no_color true
 
-pip install --upgrade pip
 pip install --requirement requirements-utest.txt
 
 pip install /opt/daos/lib/daos/python/
