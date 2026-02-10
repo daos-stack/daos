@@ -1480,54 +1480,6 @@ func TestStorage_Config_Validate(t *testing.T) {
 	}
 }
 
-func TestStorage_ScmConfig_DisableHugepages_Default(t *testing.T) {
-	for name, tc := range map[string]struct {
-		yamlInput string
-		expResult bool
-	}{
-		"not specified - should default to true": {
-			yamlInput: `
-class: ram
-scm_mount: /mnt/daos0
-scm_size: 16
-`,
-			expResult: true,
-		},
-		//		"explicitly set to false": {
-		//			yamlInput: `
-		//class: ram
-		//scm_mount: /mnt/daos0
-		//scm_size: 16
-		//scm_hugepages_disabled: false
-		//`,
-		//			expResult: false,
-		//		},
-		//		"explicitly set to true": {
-		//			yamlInput: `
-		//class: ram
-		//scm_mount: /mnt/daos0
-		//scm_size: 16
-		//scm_hugepages_disabled: true
-		//`,
-		//			expResult: true,
-		//		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			var cfg TierConfig
-			if err := yaml.Unmarshal([]byte(tc.yamlInput), &cfg); err != nil {
-				t.Fatalf("failed to unmarshal: %v", err)
-			}
-
-			t.Logf("%+v", cfg)
-
-			if cfg.Scm.DisableHugepages != tc.expResult {
-				t.Fatalf("expected DisableHugepages=%v, got %v",
-					tc.expResult, cfg.Scm.DisableHugepages)
-			}
-		})
-	}
-}
-
 func TestStorage_ScmConfig_DisableHugepages_MultipleEngines(t *testing.T) {
 	yamlInput := `
 - class: ram

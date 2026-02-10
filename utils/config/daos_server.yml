@@ -417,9 +417,8 @@
 #
 #    #scm_size: 0
 #
-#    # When class is set to ram, tmpfs will be mounted with hugepage
-#    # support, if the kernel supports it. If this is not desirable,
-#    # the behavior may be disabled here.
+#    # When class is set to ram, tmpfs will only be mounted with hugepage
+#    # support if the kernel supports it and this flag is explicitly set to false.
 #    # default: true
 #    scm_hugepages_disabled: false
 #
@@ -590,9 +589,8 @@
 #    #class: dcpm
 #    #scm_list: [/dev/pmem1]
 #
-#    # When class is set to ram, tmpfs will be mounted with hugepage
-#    # support, if the kernel supports it. If this is not desirable,
-#    # the behavior may be disabled here.
+#    # When class is set to ram, tmpfs will only be mounted with hugepage
+#    # support if the kernel supports it and this flag is explicitly set to false.
 #    # default: true
 #    scm_hugepages_disabled: false
 #
