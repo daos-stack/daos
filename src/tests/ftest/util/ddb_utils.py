@@ -289,19 +289,16 @@ class DdbCommand(DdbCommandBase):
     def prov_mem(self, db_path, tmpfs_mount):
         """Call ddb --vos_path "" prov_mem <db_path> <tmpfs_mount>.
 
-        Before calling this method, "" (two double quotes) needs to be set to
-        self.vos_path.
-
         Args:
             db_path (str): Path to the system database. e.g.,
                 /var/tmp/daos_testing/control_metadata/daos_control/engine0
-            tmpfs_mount (str): Path to the tmpfs mount point. Directory that needs to be
-                created beforehand. e.g., /mnt/daos_load
+            tmpfs_mount (str): Path to the tmpfs mount point. Directory that needs to be created
+                beforehand. e.g., /mnt/daos_load
 
         Returns:
-            CommandResult: groups of command results from the same hosts with the same
-                return status
+            CommandResult: groups of command results from the same hosts with the same return status
         """
+        self.vos_path.value = '""'
         cmd = ["prov_mem", db_path, tmpfs_mount]
         self.single_command.value = " ".join(cmd)
 
