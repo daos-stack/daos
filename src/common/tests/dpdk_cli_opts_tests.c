@@ -25,7 +25,7 @@ test_dpdk_cli_build_opts_valid(void **state)
 		assert_non_null(opts);
 
 		/* Verify the string contains the correct log level */
-		char expected[32];
+		char expected[64];
 		snprintf(expected, sizeof(expected), "--log-level=lib.eal:%d ", log_level);
 		assert_non_null(strstr(opts, expected));
 
