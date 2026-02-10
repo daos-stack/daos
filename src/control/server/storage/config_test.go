@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -956,6 +957,168 @@ acceleration:
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), string(bytes), defConfigCmpOpts()...); diff != "" {
 				t.Fatalf("bad yaml output (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_SpdkIobuf_FromYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input    string
+		expProps SpdkIobuf
+		expErr   error
+	}{
+		"iobuf section missing": {
+			input: ``,
+		},
+		"iobuf section empty": {
+			input: `
+spdk_iobuf:
+`,
+		},
+		"small_pool_count only": {
+			input: `
+spdk_iobuf:
+  small_pool_count: 1024
+`,
+			expProps: SpdkIobuf{
+				SmallPoolCount: 1024,
+			},
+		},
+		"large_pool_count only": {
+			input: `
+spdk_iobuf:
+  large_pool_count: 512
+`,
+			expProps: SpdkIobuf{
+				LargePoolCount: 512,
+			},
+		},
+		"both pool counts set": {
+			input: `
+spdk_iobuf:
+  small_pool_count: 2048
+  large_pool_count: 1024
+`,
+			expProps: SpdkIobuf{
+				SmallPoolCount: 2048,
+				LargePoolCount: 1024,
+			},
+		},
+		"zero values": {
+			input: `
+spdk_iobuf:
+  small_pool_count: 0
+  large_pool_count: 0
+`,
+			expProps: SpdkIobuf{
+				SmallPoolCount: 0,
+				LargePoolCount: 0,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := new(Config)
+			err := yaml.UnmarshalStrict([]byte(tc.input), cfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expProps, cfg.SpdkIobufProps, defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad props (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_SpdkIobuf_ToYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		props  SpdkIobuf
+		expOut string
+	}{
+		"empty": {
+			expOut: "{}\n",
+		},
+		"small_pool_count only": {
+			props: SpdkIobuf{
+				SmallPoolCount: 1024,
+			},
+			expOut: "small_pool_count: 1024\n",
+		},
+		"large_pool_count only": {
+			props: SpdkIobuf{
+				LargePoolCount: 512,
+			},
+			expOut: "large_pool_count: 512\n",
+		},
+		"both pool counts set": {
+			props: SpdkIobuf{
+				SmallPoolCount: 2048,
+				LargePoolCount: 1024,
+			},
+			expOut: "small_pool_count: 2048\nlarge_pool_count: 1024\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf, err := yaml.Marshal(&tc.props)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expOut, string(buf)); diff != "" {
+				t.Fatalf("bad output (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_SpdkIobuf_JSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		props  SpdkIobuf
+		expOut string
+	}{
+		"empty": {
+			expOut: `{}`,
+		},
+		"small_pool_count only": {
+			props: SpdkIobuf{
+				SmallPoolCount: 1024,
+			},
+			expOut: `{"small_pool_count":1024}`,
+		},
+		"large_pool_count only": {
+			props: SpdkIobuf{
+				LargePoolCount: 512,
+			},
+			expOut: `{"large_pool_count":512}`,
+		},
+		"both pool counts set": {
+			props: SpdkIobuf{
+				SmallPoolCount: 2048,
+				LargePoolCount: 1024,
+			},
+			expOut: `{"small_pool_count":2048,"large_pool_count":1024}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf, err := json.Marshal(&tc.props)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expOut, string(buf)); diff != "" {
+				t.Fatalf("bad output (-want +got):\n%s", diff)
+			}
+
+			// Test round-trip
+			var unmarshaled SpdkIobuf
+			if err := json.Unmarshal(buf, &unmarshaled); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.props, unmarshaled); diff != "" {
+				t.Fatalf("bad round-trip (-want +got):\n%s", diff)
 			}
 		})
 	}

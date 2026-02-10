@@ -589,6 +589,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		AccelProps:       cfg.AccelProps,
 		SpdkRpcSrvProps:  cfg.SpdkRpcSrvProps,
 		AutoFaultyProps:  cfg.AutoFaultyProps,
+		SpdkIobufProps:   cfg.SpdkIobufProps,
 	}
 
 	for idx, tier := range cfg.Tiers.BdevConfigs() {
