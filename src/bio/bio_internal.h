@@ -598,8 +598,7 @@ extern struct bio_faulty_criteria	glb_criteria;
 
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
-extern bool		bio_spdk_inited;
-extern bool                             bio_vmd_enabled;
+extern bool                             bio_spdk_inited;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern unsigned int	bio_numa_node;
