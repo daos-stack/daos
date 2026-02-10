@@ -189,7 +189,7 @@ test_parse_args(int argc, char **argv)
 			test.tg_test_mode = atoi(optarg);
 			if ((test.tg_test_mode != TEST_MODE_ASYNC) &&
 			    (test.tg_test_mode != TEST_MODE_SYNC)) {
-				printf("Unknown test_mode=%d specified, defautling to sync",
+				printf("Unknown test_mode=%d specified, defaulting to sync",
 				       test.tg_test_mode);
 				test.tg_test_mode = TEST_MODE_SYNC;
 			}
