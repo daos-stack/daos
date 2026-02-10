@@ -28,7 +28,6 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 python3.11 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-touch venv/pip.conf
 
 cat <<EOF > venv/pip.conf
 [global]
@@ -38,8 +37,8 @@ cat <<EOF > venv/pip.conf
 EOF
 
 pip install --upgrade pip
-pip install --requirement requirements-utest.txt
 
+pip install --requirement requirements-utest.txt
 pip install /opt/daos/lib/daos/python/
 
 # set high open file limit in the shell to avoid extra warning

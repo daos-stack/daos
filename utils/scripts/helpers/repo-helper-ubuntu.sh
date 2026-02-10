@@ -117,5 +117,6 @@ if [ -n "$REPO_FILE_URL" ]; then
     index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple
     progress_bar = off
     no_color = true
+    quiet = 1
 EOF
 fi

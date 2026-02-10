@@ -84,7 +84,6 @@ rm -rf "$test_log_dir"
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-touch venv/pip.conf
 
 cat <<EOF > venv/pip.conf
 [global]
@@ -96,7 +95,6 @@ EOF
 pip install --upgrade pip
 
 pip install --requirement requirements-utest.txt
-
 pip install /opt/daos/lib/daos/python/
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \

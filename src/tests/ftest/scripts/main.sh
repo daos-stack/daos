@@ -35,6 +35,7 @@ cat <<EOF > venv/pip.conf
 EOF
 
 pip install --upgrade pip
+
 pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then
