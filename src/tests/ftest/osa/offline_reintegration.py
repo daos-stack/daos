@@ -48,6 +48,12 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                                 operations.
             num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
+        # Figure out an additional unique rank to stop during rebuild.
+        # Used when self.test_during_rebuild is True
+        all_ranks = list(map(str, self.server_managers[0].ranks.keys()))
+        all_exclude_ranks = ','.join(ranks).split(',')
+        rank_during_rebuild = self.random.choice(list(set(all_ranks) - set(all_exclude_ranks)))
+
         # Create 'num_pool' number of pools
         pools = []
         if oclass is None:
@@ -95,8 +101,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 initial_free_space = self.pool.get_total_free_space(refresh=True)
                 if server_boot is False:
                     if (self.test_during_rebuild is True and index == 0):
-                        # Exclude the rank
-                        output = self.pool.exclude(rank)
+                        # Exclude an additional rank
+                        output = self.pool.exclude(rank_during_rebuild)
                         self.print_and_assert_on_rebuild_failure(output)
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
@@ -115,10 +121,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     output = self.dmg_command.system_stop(ranks=rank, force=True)
                     self.print_and_assert_on_rebuild_failure(output)
                     output = self.dmg_command.system_start(ranks=rank)
-                # Just try to reintegrate the rank
+                # Just try to reintegrate the additional rank
                 if (self.test_during_rebuild is True and index == 2):
-                    # Reintegrate the rank
-                    output = self.pool.reintegrate(rank)
+                    output = self.pool.reintegrate(rank_during_rebuild)
                 self.print_and_assert_on_rebuild_failure(output)
 
                 pver_exclude = self.pool.get_version(True)
