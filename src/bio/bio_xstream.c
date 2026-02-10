@@ -59,8 +59,8 @@ bool bio_scm_rdma;
 bool                bio_spdk_inited;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
-/* SPDK NVMe power management value */
-unsigned int        bio_spdk_power_mgmt_val = UINT32_MAX; /* bits 0-4 for pwr mgmt */
+/* SPDK NVMe power management value, use bits 0-4 as per NVMe spec */
+unsigned int        bio_spdk_power_mgmt_val = NVME_POWER_MGMT_UNINIT;
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
@@ -271,7 +271,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
 	d_getenv_uint("DAOS_NVME_POWER_MGMT", &bio_spdk_power_mgmt_val);
-	if (bio_spdk_power_mgmt_val != UINT32_MAX)
+	if (bio_spdk_power_mgmt_val != NVME_POWER_MGMT_UNINIT)
 		D_INFO("NVMe power management setting to be applied is %u\n",
 		       bio_spdk_power_mgmt_val);
 
