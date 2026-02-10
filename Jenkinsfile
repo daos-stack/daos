@@ -287,9 +287,9 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
 
     String skipMsgParams = ''
     for(entry in params) {
-        println("runStage: Checking parameter ${entry.key} equals value ${entry.value} for ${env.STAGE_NAME}: ${paramsValue(entry.key, entry.value)}")
+        println("runStage: Checking parameter ${entry.key} for ${env.STAGE_NAME}: '${entry.value}' ?= '${paramsValue(entry.key, entry.value)}'")
         if (paramsValue(entry.key, entry.value) != entry.value) {
-            skipMsgParams = "Skipping ${env.STAGE_NAME} due to ${entry.key} parameter not set to ${entry.value}"
+            skipMsgParams = "Skipping ${env.STAGE_NAME} due to '${entry.key}' parameter not set to '${entry.value}'"
             break
         }
     }
@@ -297,9 +297,9 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     String skipMsgPragmas = ''
     for(entry in pragmas) {
         String expected = entry.value.toString().toLowerCase()
-        println("runStage: Checking pragma ${entry.key} equals value ${expected} for ${env.STAGE_NAME}: ${cachedCommitPragma(entry.key, expected).toLowerCase()}")
+        println("runStage: Checking pragma ${entry.key} for ${env.STAGE_NAME}: '${expected}' ?= '${cachedCommitPragma(entry.key, expected).toLowerCase()}'")
         if (cachedCommitPragma(entry.key, expected).toLowerCase() != expected) {
-            skipMsgPragmas = "Skipping ${env.STAGE_NAME} due to ${entry.key} pragma not set to ${entry.value}"
+            skipMsgPragmas = "Skipping ${env.STAGE_NAME} due to '${entry.key}' pragma not set to '${entry.value}'"
             break
         }
     }
@@ -329,7 +329,7 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     }
 
     // Otherwise run the stage
-    println("runStage: Running ${env.STAGE_NAME}]")
+    println("runStage: Running ${env.STAGE_NAME}")
     return true
 }
 
