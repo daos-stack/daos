@@ -28,6 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/engine"
 )
 
 /*
@@ -35,11 +36,11 @@ import (
 */
 import "C"
 
-func exitWithError(log logging.Logger, err error) {
+func exitWithError(err error) {
 	cmdName := path.Base(os.Args[0])
-	log.Errorf("%s: %v", cmdName, err)
+	fmt.Fprintf(os.Stderr, "ERROR: %s: %v\n", cmdName, err)
 	if fault.HasResolution(err) {
-		log.Errorf("%s: %s", cmdName, fault.ShowResolutionFor(err))
+		fmt.Fprintf(os.Stderr, "ERROR: %s: %s", cmdName, fault.ShowResolutionFor(err))
 	}
 	os.Exit(1)
 }
@@ -50,8 +51,8 @@ type cliOptions struct {
 	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
 	VosPath   string `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
-	Debug     bool   `long:"debug" description:"Without this option, the console log level is set to ERROR. With this option, the console log level is set to INFO. For more detailed logs, provide the --log_dir path to log to a file."`
-	LogDir    string `long:"log_dir" description:"If provided, the file log level is set to DEBUG and are written to files in the provided directory. The log file for the CLI is 'ddb-cli.log' and the log file for the engine is 'ddb-engine.log'. If the directory does not exist or is not writable, an error is returned."`
+	Debug     string `long:"debug" description:"Logging log level (default to ERROR)"`
+	LogDir    string `long:"log_dir" description:"Directory to write log files to. If not provided, logs will only be written to the console."`
 	Args      struct {
 		RunCmd     string   `positional-arg-name:"ddb_command" description:"Optional ddb command to run. If not provided, the tool will run in interactive mode."`
 		RunCmdArgs []string `positional-arg-name:"ddb_command_args" description:"Arguments for the ddb command to run. If not provided, the command will be run without any arguments."`
@@ -125,7 +126,7 @@ func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 // the help command from the outside of the interactive mode.
 // This method extracts commands and their respective help (short) messages in the simplest possible way,
 // put them in columns and print them using the provided log.
-func printCommands(app *grumble.App, log *logging.LeveledLogger) {
+func printCommands(fd io.Writer, app *grumble.App) {
 	var output []string
 	for _, c := range app.Commands().All() {
 		if c.Name == "quit" {
@@ -134,27 +135,27 @@ func printCommands(app *grumble.App, log *logging.LeveledLogger) {
 		row := c.Name + columnize.DefaultConfig().Delim + c.Help
 		output = append(output, row)
 	}
-	log.Info(helpCommandsHeader + columnize.SimpleFormat(output) + "\n\n")
+	fmt.Fprintf(fd, helpCommandsHeader+columnize.SimpleFormat(output)+"\n\n")
 }
 
-func printGeneralHelp(app *grumble.App, generalMsg string, log *logging.LeveledLogger) {
-	log.Info(generalMsg + "\n") // standard help from go-flags
-	printCommands(app, log)     // list of commands
-	log.Info(helpTreePath)      // extra info on VOS Tree Path syntax
+func printGeneralHelp(app *grumble.App, generalMsg string) {
+	fmt.Println(generalMsg)       // standard help from go-flags
+	printCommands(os.Stdout, app) // list of commands
+	fmt.Printf(helpTreePath)      // extra info on VOS Tree Path syntax
 }
 
 // Ask grumble to generate a help message for the requested command.
 // Caveat: There is no known easy way of forcing grumble to use log to print the generated message
 // so the output goes directly to stdout.
 // Returns false in case the opts.Args.RunCmd is unknown.
-func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger) bool {
+func printCmdHelp(app *grumble.App, opts *cliOptions) bool {
 	err := runCmdStr(app, nil, string(opts.Args.RunCmd), "--help")
 	if err != nil {
 		if err.Error() == grumbleUnknownCmdErr {
-			log.Errorf("unknown command '%s'", string(opts.Args.RunCmd))
-			printCommands(app, log)
+			fmt.Fprintf(os.Stderr, "ERROR: Unknown command '%s'", string(opts.Args.RunCmd))
+			printCommands(os.Stderr, app)
 		} else {
-			log.Error(err.Error())
+			fmt.Fprintf(os.Stderr, "ERROR: %s", err.Error())
 		}
 		return false
 	}
@@ -163,16 +164,16 @@ func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger
 
 // Prints either general or command-specific help message.
 // Returns a reasonable return code in case the caller chooses to terminate the process.
-func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) int {
+func printHelp(generalMsg string, opts *cliOptions) int {
 	// ctx is not necessary since this instance of the app is not intended to run any of the commands
 	app := createGrumbleApp(nil)
 
 	if string(opts.Args.RunCmd) == "" {
-		printGeneralHelp(app, generalMsg, log)
+		printGeneralHelp(app, generalMsg)
 		return 0
 	}
 
-	if printCmdHelp(app, opts, log) {
+	if printCmdHelp(app, opts) {
 		return 0
 	} else {
 		return 1
@@ -185,21 +186,51 @@ func setenvIfNotSet(key, value string) {
 	}
 }
 
-// FIXME DAOS-18304: Use consistent console log level with golang and C codes: use ERROR level for
-// golang code in non-debug mode and INFO level in debug mode.
-func configureLogging(log *logging.LeveledLogger, opts *cliOptions) (*logging.LeveledLogger, error) {
-	if opts.Debug {
-		setenvIfNotSet("DD_STDERR", "INFO")
-	} else {
-		setenvIfNotSet("DD_STDERR", "ERR")
+func strToLogLevels(level string) (logging.LogLevel, engine.LogLevel, error) {
+	switch strings.ToUpper(level) {
+	case "TRACE":
+		return logging.LogLevelTrace, engine.LogLevelDbug, nil
+	case "DEBUG", "DBUG":
+		return logging.LogLevelDebug, engine.LogLevelDbug, nil
+	case "INFO":
+		return logging.LogLevelInfo, engine.LogLevelInfo, nil
+	case "NOTE", "NOTICE":
+		return logging.LogLevelNotice, engine.LogLevelNote, nil
+	case "WARN":
+		return logging.LogLevelNotice, engine.LogLevelWarn, nil
+	case "ERROR", "ERR":
+		return logging.LogLevelError, engine.LogLevelErr, nil
+	case "CRIT":
+		return logging.LogLevelError, engine.LogLevelCrit, nil
+	case "ALRT":
+		return logging.LogLevelError, engine.LogLevelAlrt, nil
+	case "FATAL", "EMRG":
+		return logging.LogLevelError, engine.LogLevelEmrg, nil
+	case "EMIT":
+		return logging.LogLevelError, engine.LogLevelEmit, nil
+	default:
+		return logging.LogLevelDisabled, engine.LogLevelUndefined, errors.Errorf("invalid log level %q", level)
 	}
+}
+
+func newLogger(opts *cliOptions) (*logging.LeveledLogger, error) {
+	level := "ERR"
+	if opts.Debug != "" {
+		level = opts.Debug
+	}
+	cliLogLevel, engineLogLevel, err := strToLogLevels(level)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error parsing log level")
+	}
+
+	consoleLog := logging.NewCommandLineLogger()
+	consoleLog.WithLogLevel(cliLogLevel)
+
+	setenvIfNotSet("D_LOG_MASK", engineLogLevel.String())
+	setenvIfNotSet("DD_STDERR", "ERR")
+
 	if opts.LogDir == "" {
-		if opts.Debug {
-			setenvIfNotSet("D_LOG_MASK", "INFO")
-		} else {
-			setenvIfNotSet("D_LOG_MASK", "ERR")
-		}
-		return log, nil
+		return consoleLog, nil
 	}
 
 	path := filepath.Clean(opts.LogDir)
@@ -211,7 +242,6 @@ func configureLogging(log *logging.LeveledLogger, opts *cliOptions) (*logging.Le
 		return nil, errors.Errorf("Debug path %q is not a directory", path)
 	}
 
-	setenvIfNotSet("D_LOG_MASK", "DEBUG")
 	setenvIfNotSet("D_LOG_FILE", filepath.Join(path, "ddb-engine.log"))
 
 	var fd *os.File
@@ -219,14 +249,16 @@ func configureLogging(log *logging.LeveledLogger, opts *cliOptions) (*logging.Le
 	if err != nil {
 		return nil, errors.Wrapf(err, "Error opening debug log file 'ddb-cli.log' in %q", path)
 	}
-	newLog := logging.NewCombinedLogger("DDB", fd)
-	newLog.WithLogLevel(logging.LogLevelTrace)
-	newLog.WithInfoLogger(log).WithNoticeLogger(log).WithErrorLogger(log)
 
-	return newLog, nil
+	consoleLog.WithLogLevel(logging.LogLevelError)
+	fileLog := logging.NewCombinedLogger("DDB", fd)
+	fileLog.WithLogLevel(cliLogLevel)
+	fileLog.WithErrorLogger(consoleLog)
+
+	return fileLog, nil
 }
 
-func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
+func parseOpts(args []string, opts *cliOptions) error {
 	p := flags.NewParser(opts, flags.HelpFlag|flags.IgnoreUnknown)
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS]"
@@ -239,29 +271,33 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 
 	if _, err := p.ParseArgs(args); err != nil {
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
-			os.Exit(printHelp(fe.Error(), opts, log))
+			os.Exit(printHelp(fe.Error(), opts))
 		}
 
 		return err
 	}
 
 	if opts.Version {
-		log.Infof("ddb version %s", build.DaosVersion)
-		return nil
+		opts.Args.RunCmd = "version"
+		opts.Args.RunCmdArgs = []string{}
+		opts.CmdFile = ""
 	}
 
 	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
 		return errors.New("Cannot use both command file and a command string")
 	}
 
-	if newLog, err := configureLogging(log, opts); err != nil {
-		return errors.Wrap(err, "Error configuring logging")
-	} else {
-		log = newLog
-	}
-
-	ctx, cleanup, err := InitDdb(log)
+	log, err := newLogger(opts)
 	if err != nil {
+		return errors.Wrap(err, "Error configuring logging")
+	}
+	log.Debug("Logging facilities initialized")
+
+	var (
+		ctx     *DdbContext
+		cleanup func()
+	)
+	if ctx, cleanup, err = InitDdb(log); err != nil {
 		return errors.Wrap(err, "Error initializing the DDB Context")
 	}
 	defer cleanup()
@@ -332,10 +368,9 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 
 func main() {
 	var opts cliOptions
-	log := logging.NewCommandLineLogger()
 
-	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
-		exitWithError(log, err)
+	if err := parseOpts(os.Args[1:], &opts); err != nil {
+		exitWithError(err)
 	}
 }
 
@@ -447,30 +482,17 @@ Mixed tree path examples:
 .Ve
 .Sp`
 
-const manDebugSection = `.SH LOGGING
-By default, the console output is filtered to show only \fBERROR\fR level messages and above. To adjust
-the verbosity or capture detailed logs for troubleshooting, use the following options:
-.SS Console Output
-The console is designed to remain readable during interactive use.
-.IP "*" 4
-.B Default:
-Displays \fBERROR\fR and \fBCRITICAL\fR logs.
-.IP "*" 4
-.B --debug Flag:
-Increases verbosity to include \fBINFO\fR logs.
-.TP
-.B Warning:
-Even with \fI--debug\fR enabled, \fBDEBUG\fR level logs are suppressed on the console to prevent output overflow
-and maintain interactivity.
-.SS File Logging
-For deep-dive troubleshooting, use the \fI--log_dir <path>\fR option. This sets the internal log
-level to \fBDEBUG\fR and redirects the full output to the specified directory.
-.TP "*" 4
-.BI ddb-cli.log:
-Captures logs related to the command line interface.
-.TP "*" 4
-.BI ddb-engine.log:
-Captures logs related to Core engine processes and logic.`
+const manLoggingSection = `.SH LOGGING
+The golang cli and the C engine use separate logging systems with different log levels.
+The \fI--debug=<log level>\fR option sets the log level for both systems to the closest matching
+levels.  The available log levels supported by this option are: \fBTRACE\fR, \fBDEBUG\fR (or
+\fBDBG\fR), \fBINFO\fR, \fBNOTICE\fR (or \fBNOTE\fR), \fBWARN\fR, \fBERROR\fR (or \fBERR\fR),
+\fBCRIT\fR, \fBALRT\fR, \fBFATAL\fR (or \fBEMRG\fr), and \fBEMIT\fR.  The default log level is
+\fBERROR\fR.
+
+To not pollute the console output, the logs can be redirected to a file using the
+\fI--log_dir=<path>\fR option.  However, \fBERROR\fR log messages or above will still be printed to
+the console regardless if the \fI--log_dir=<path>\fR option is used or not.`
 
 func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 	fmt.Fprintln(dest, manMacroSection)
@@ -499,7 +521,7 @@ func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 
 	fmt.Fprintln(dest, manPathSection)
 
-	fmt.Fprint(dest, manDebugSection)
+	fmt.Fprint(dest, manLoggingSection)
 }
 
 // Run the command in 'run' using the grumble app. shlex is used to parse the string into an argv/c format
