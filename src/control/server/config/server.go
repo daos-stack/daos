@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,6 +51,7 @@ type Server struct {
 	NrHugepages       int                       `yaml:"nr_hugepages"`        // total for all engines
 	SystemRamReserved int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages  bool                      `yaml:"disable_hugepages"`
+	AllowTHP          bool                      `yaml:"allow_thp"`
 	ControlLogMask    common.ControlLogLevel    `yaml:"control_log_mask"`
 	ControlLogFile    string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON    bool                      `yaml:"control_log_json,omitempty"`
@@ -267,6 +268,12 @@ func (cfg *Server) WithNrHugepages(nr int) *Server {
 // WithDisableHugepages disables the use of huge pages.
 func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 	cfg.DisableHugepages = disabled
+	return cfg
+}
+
+// WithAllowTHP allows DAOS server to run with transparent hugepage support enabled.
+func (cfg *Server) WithAllowTHP(allowed bool) *Server {
+	cfg.AllowTHP = allowed
 	return cfg
 }
 
@@ -747,6 +754,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenHelperStreamCount := -1
 	seenScmCls := storage.ClassNone
 	seenScmClsIdx := -1
+	seenScmHuge := false
+	seenScmHugeIdx := -1
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
@@ -793,6 +802,14 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			}
 			seenScmCls = scmConf.Class
 			seenScmClsIdx = idx
+
+			if seenScmHugeIdx != -1 && scmConf.Scm.DisableHugepages != seenScmHuge {
+				log.Debugf("scm_hugepages_disabled entry %v in %d doesn't match %d",
+					scmConf.Scm.DisableHugepages, idx, seenScmHugeIdx)
+				return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+			}
+			seenScmHuge = scmConf.Scm.DisableHugepages
+			seenScmHugeIdx = idx
 		}
 
 		bdevs := engine.Storage.GetBdevs()
