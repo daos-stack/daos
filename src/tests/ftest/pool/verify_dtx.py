@@ -28,7 +28,8 @@ class VerifyDTXMetrics(TestWithTelemetry):
         5. Verify DTX metrics
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw
+        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
         :avocado: tags=VerifyDTXMetrics,test_verify_dtx_metrics
         """
