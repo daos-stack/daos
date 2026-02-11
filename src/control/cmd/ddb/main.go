@@ -45,7 +45,7 @@ func exitWithError(log logging.Logger, err error) {
 
 type cliOptions struct {
 	Debug     bool       `long:"debug" description:"Enable debug output"`
-	DebugDir  string     `long:"debug_dir" description:"Directory path where to store debug log files."`
+	LogDir    string     `long:"log_dir" description:"Directory path where to store debug log files."`
 	WriteMode bool       `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
 	CmdFile   string     `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	SysdbPath string     `long:"db_path" short:"p" description:"Path to the sys db."`
@@ -232,18 +232,24 @@ func setenvIfNotSet(key, value string) {
 	}
 }
 
+// FIXME DAOS-18304: Use consistent console log level with golang and C codes: use ERROR level for
+// golang code in non-debug mode and INFO level in debug mode.
 func configureLogging(log *logging.LeveledLogger, opts *cliOptions) (*logging.LeveledLogger, error) {
-	if opts.DebugDir == "" {
-		setenvIfNotSet("DD_STDERR", "WARN")
+	if opts.Debug {
+		setenvIfNotSet("DD_STDERR", "INFO")
+	} else {
+		setenvIfNotSet("DD_STDERR", "ERR")
+	}
+	if opts.LogDir == "" {
 		if opts.Debug {
-			setenvIfNotSet("D_LOG_MASK", "WARN,DDB=INFO")
+			setenvIfNotSet("D_LOG_MASK", "INFO")
 		} else {
-			setenvIfNotSet("D_LOG_MASK", "ERR,DDB=WARN")
+			setenvIfNotSet("D_LOG_MASK", "ERR")
 		}
 		return log, nil
 	}
 
-	path := filepath.Clean(opts.DebugDir)
+	path := filepath.Clean(opts.LogDir)
 	fi, err := os.Stat(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Error accessing debug directory %q", path)
@@ -251,6 +257,9 @@ func configureLogging(log *logging.LeveledLogger, opts *cliOptions) (*logging.Le
 	if !fi.IsDir() {
 		return nil, errors.Errorf("Debug path %q is not a directory", path)
 	}
+
+	setenvIfNotSet("D_LOG_MASK", "DEBUG")
+	setenvIfNotSet("D_LOG_FILE", filepath.Join(path, "ddb-engine.log"))
 
 	var fd *os.File
 	fd, err = common.AppendFile(filepath.Join(path, "ddb-cli.log"))
@@ -260,14 +269,6 @@ func configureLogging(log *logging.LeveledLogger, opts *cliOptions) (*logging.Le
 	newLog := logging.NewCombinedLogger("DDB", fd)
 	newLog.WithLogLevel(logging.LogLevelTrace)
 	newLog.WithInfoLogger(log).WithNoticeLogger(log).WithErrorLogger(log)
-
-	if opts.Debug {
-		setenvIfNotSet("DD_STDERR", "WARN")
-	} else {
-		setenvIfNotSet("DD_STDERR", "ERROR")
-	}
-	setenvIfNotSet("D_LOG_MASK", "INFO,DDB=DEBUG")
-	setenvIfNotSet("D_LOG_FILE", filepath.Join(path, "ddb-engine.log"))
 
 	return newLog, nil
 }
