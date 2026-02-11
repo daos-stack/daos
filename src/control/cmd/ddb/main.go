@@ -51,7 +51,7 @@ type cliOptions struct {
 	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
 	VosPath   string `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
-	Debug     string `long:"debug" description:"Logging log level (default to ERROR)"`
+	Debug     string `long:"debug" description:"Logging log level (default to ERROR).  More details can be found in the ddb man page."`
 	LogDir    string `long:"log_dir" description:"Directory to write log files to. If not provided, logs will only be written to the console."`
 	Args      struct {
 		RunCmd     string   `positional-arg-name:"ddb_command" description:"Optional ddb command to run. If not provided, the tool will run in interactive mode."`
