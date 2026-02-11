@@ -9,6 +9,8 @@ package main
 
 import (
 	"bufio"
+	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -43,16 +45,16 @@ func exitWithError(log logging.Logger, err error) {
 }
 
 type cliOptions struct {
-	Debug     bool   `long:"debug" description:"Enable debug output"`
-	LogDir    string `long:"log_dir" description:"Directory path where to store debug log files."`
 	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
 	VosPath   string `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
+	Debug     bool   `long:"debug" description:"Without this option, the console log level is set to ERROR. With this option, the console log level is set to INFO. For more detailed logs, provide the --log_dir path to log to a file."`
+	LogDir    string `long:"log_dir" description:"If provided, the file log level is set to DEBUG and are written to files in the provided directory. The log file for the CLI is 'ddb-cli.log' and the log file for the engine is 'ddb-engine.log'. If the directory does not exist or is not writable, an error is returned."`
 	Args      struct {
-		RunCmd     string   `positional-arg-name:"ddb_command"`
-		RunCmdArgs []string `positional-arg-name:"ddb_command_args"`
+		RunCmd     string   `positional-arg-name:"ddb_command" description:"Optional ddb command to run. If not provided, the tool will run in interactive mode."`
+		RunCmdArgs []string `positional-arg-name:"ddb_command_args" description:"Arguments for the ddb command to run. If not provided, the command will be run without any arguments."`
 	} `positional-args:"yes"`
 }
 
@@ -61,35 +63,15 @@ Available commands:
 
 `
 
-const helpVosTreePath = `
-Path
+const ddbLongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
+a file in the VOS format. It offers both a command line and interactive
+shell mode. If neither a single command or '-f' option is provided, then
+the tool will run in interactive mode. In order to modify the VOS file,
+the '-w' option must be included.
 
-Many of the commands take a VOS tree path. The format for this path
-is [cont]/[obj]/[dkey]/[akey]/[extent].
-- cont - the full container uuid.
-- obj - the object id.
-- keys (akey, dkey) - there are multiple types of keys
-   -- string keys are simply the string value. If the size of the
-      key is greater than strlen(key), then the size is included at
-      the end of the string value. Example: 'akey{5}' is the key: akey
-      with a null terminator at the end.
-   -- number keys are formatted as '{[type]: NNN}' where type is
-      'uint8, uint16, uint32, or uint64'. NNN can be a decimal or
-      hex number. Example: '{uint32: 123456}'
-   -- binary keys are formatted as '{bin: 0xHHH}' where HHH is the hex
-      representation of the binary key. Example: '{bin: 0x1a2b}'
-- extent for array values - in the format {lo-hi}.
-
-To make it easier to navigate the tree, indexes can be
-used instead of the path part. The index is in the format [i]. Indexes
-and actual path values can be used together
-
-Example Paths:
-/3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
-[0]/[1]/[2]/[1]/[9]
-/[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
-
-`
+If the command requires it, the VOS file must be provided with the parameter 
+--vos-path. The VOS file will be opened before any commands are executed. See
+the command‑specific help for details.`
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
 
@@ -118,7 +100,7 @@ func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 			continue
 		}
 		log.Debugf("Running Command %q\n", lineStr)
-		err = runCmdStr(app, lineCmd[0], lineCmd[1:]...)
+		err = runCmdStr(app, nil, lineCmd[0], lineCmd[1:]...)
 		if err != nil {
 			return errors.Wrapf(err, "Failed running command %q", lineStr)
 		}
@@ -146,7 +128,6 @@ func printCommands(app *grumble.App, log *logging.LeveledLogger) {
 func printGeneralHelp(app *grumble.App, generalMsg string, log *logging.LeveledLogger) {
 	log.Info(generalMsg + "\n") // standard help from go-flags
 	printCommands(app, log)     // list of commands
-	log.Info(helpVosTreePath)   // extra info on VOS Tree Path syntax
 }
 
 // Ask grumble to generate a help message for the requested command.
@@ -154,7 +135,7 @@ func printGeneralHelp(app *grumble.App, generalMsg string, log *logging.LeveledL
 // so the output goes directly to stdout.
 // Returns false in case the opts.Args.RunCmd is unknown.
 func printCmdHelp(app *grumble.App, opts *cliOptions, log *logging.LeveledLogger) bool {
-	err := runCmdStr(app, string(opts.Args.RunCmd), "--help")
+	err := runCmdStr(app, nil, string(opts.Args.RunCmd), "--help")
 	if err != nil {
 		if err.Error() == grumbleUnknownCmdErr {
 			log.Errorf("unknown command '%s'", string(opts.Args.RunCmd))
@@ -237,17 +218,7 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS]"
 	p.ShortDescription = "daos debug tool"
-	p.LongDescription = `
-The DAOS Debug Tool (ddb) allows a user to navigate through and modify
-a file in the VOS format. It offers both a command line and interactive
-shell mode. If neither a single command or '-f' option is provided, then
-the tool will run in interactive mode. In order to modify the VOS file,
-the '-w' option must be included.
-
-If the command requires it, the VOS file must be provided with the parameter 
---vos-path. The VOS file will be opened before any commands are executed. See
-the command‑specific help for details.
-`
+	p.LongDescription = ddbLongDescription
 
 	// Set the traceback level such that a crash results in
 	// a coredump (when ulimit -c is set appropriately).
@@ -310,7 +281,7 @@ the command‑specific help for details.
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
 		if opts.Args.RunCmd != "" {
-			err := runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
+			err := runCmdStr(app, p, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
 			if err != nil {
 				log.Errorf("Error running command %q %s\n", string(opts.Args.RunCmd), err)
 			}
@@ -386,7 +357,171 @@ func createGrumbleApp(ctx *DdbContext) *grumble.App {
 	return app
 }
 
+const manMacroSection = `.\" Miscellaneous Helper macros
+.de Sp \" Vertical space (when we can't use .PP)
+.if t .sp .5v
+.if n .sp
+..
+.de Vb \" Begin verbatim text
+.ft CW
+.nf
+.ne \\$1
+..
+.de Ve \" End verbatim text
+.ft R
+.fi
+..
+.\" ========================================================================
+.\"`
+
+const manArgsHeader = `.SH ARGUMENTS
+.SS Application Arguments`
+
+const manCmdsHeader = `.SH COMMANDS
+.SS Available Commands`
+
+const manPathSection = `.SH PATH
+.SS VOS Tree Path
+Many of the commands take a VOS tree path. The format for this path is [cont]/[obj]/[dkey]/[akey]/[extent].
+.TP
+.B cont
+The full container uuid.
+.TP
+.B obj
+The object id.
+.TP
+.B keys (akey, dkey)
+There are multiple types of keys:
+.RS
+.IP "*" 4
+.B string keys
+are simply the string value. If the size of the key is greater than strlen(key), then
+the size is included at the end of the string value. Example: 'akey{5}' is the key: akey with a null
+terminator at the end.
+.IP "*" 4
+.B number keys
+are formatted as '{[type]: NNN}' where type is 'uint8, uint16, uint32, or uint64'. NNN
+can be a decimal or hex number. Example: '{uint32: 123456}'
+.IP "*" 4
+.B binary keys
+are formatted as '{bin: 0xHHH}' where HHH is the hex representation of the binary key.
+Example: '{bin: 0x1a2b}'
+.RE
+.TP
+.B extent
+For array values in the format {lo-hi}.
+.SS Index Tree Path
+.RE
+To make it easier to navigate the tree, indexes can be used instead of the path part. The index is
+in the format [i]. Indexes and actual path values can be used together
+.SS Path Examples
+VOS tree path examples:
+.Sp
+.Vb 1
+\&        /3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
+.Ve
+.Sp
+Index tree path examples:
+.Sp
+.Vb 1
+\&        [0]/[1]/[2]/[1]/[9]
+.Ve
+.Sp
+Mixed tree path examples:
+.Sp
+.Vb 1
+\&        /[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
+.Ve
+.Sp`
+
+const manDebugSection = `.SH LOGGING
+By default, the console output is filtered to show only \fBERROR\fR level messages and above. To adjust
+the verbosity or capture detailed logs for troubleshooting, use the following options:
+.SS Console Output
+The console is designed to remain readable during interactive use.
+.IP "*" 4
+.B Default:
+Displays \fBERROR\fR and \fBCRITICAL\fR logs.
+.IP "*" 4
+.B --debug Flag:
+Increases verbosity to include \fBINFO\fR logs.
+.TP
+.B Warning:
+Even with \fI--debug\fR enabled, \fBDEBUG\fR level logs are suppressed on the console to prevent output overflow
+and maintain interactivity.
+.SS File Logging
+For deep-dive troubleshooting, use the \fI--log_dir <path>\fR option. This sets the internal log
+level to \fBDEBUG\fR and redirects the full output to the specified directory.
+.TP "*" 4
+.BI ddb-cli.log:
+Captures logs related to the command line interface.
+.TP "*" 4
+.BI ddb-engine.log:
+Captures logs related to Core engine processes and logic.`
+
+func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
+	fmt.Fprintln(dest, manMacroSection)
+
+	parser.WriteManPage(dest)
+
+	fmt.Fprintln(dest, manArgsHeader)
+	for _, arg := range parser.Args() {
+		fmt.Fprintf(dest, ".TP\n.B %s\n%s\n", arg.Name, arg.Description)
+	}
+
+	fmt.Fprintln(dest, manCmdsHeader)
+	for _, cmd := range app.Commands().All() {
+		if cmd.Name == "manpage" {
+			continue
+		}
+
+		var cmdHelp string
+		if cmd.LongHelp != "" {
+			cmdHelp = cmd.LongHelp
+		} else {
+			cmdHelp = cmd.Help
+		}
+		fmt.Fprintf(dest, ".TP\n.B %s\n%s\n", cmd.Name, cmdHelp)
+	}
+
+	fmt.Fprintln(dest, manPathSection)
+
+	fmt.Fprint(dest, manDebugSection)
+}
+
 // Run the command in 'run' using the grumble app. shlex is used to parse the string into an argv/c format
-func runCmdStr(app *grumble.App, cmd string, args ...string) error {
+func runCmdStr(app *grumble.App, p *flags.Parser, cmd string, args ...string) error {
+	if p != nil {
+		app.AddCommand(&grumble.Command{
+			Name:      "manpage",
+			Help:      "Generate an application man page in groff format.",
+			LongHelp:  "Generate an application man page in groff format. This command is used internally to generate the man page for the application and is not intended for general use.",
+			HelpGroup: "",
+			Flags: func(a *grumble.Flags) {
+				a.String("o", "output", "", "Output file for the man page. If not provided, the man page will be printed to stdout.")
+			},
+			Run: func(c *grumble.Context) error {
+				dest := os.Stdout
+				if c.Flags.String("output") != "" {
+					fd, err := os.Create(c.Flags.String("output"))
+					if err != nil {
+						return errors.Wrapf(err, "Error creating file %q", c.Flags.String("output"))
+					}
+					defer func() {
+						err = fd.Close()
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Error closing file %q: %s\n", c.Flags.String("output"), err)
+						}
+					}()
+					dest = fd
+				}
+
+				fprintManPage(dest, app, p)
+				return nil
+			},
+			Completer: nil,
+		})
+	}
+
 	return app.RunCommand(append([]string{cmd}, args...))
 }
