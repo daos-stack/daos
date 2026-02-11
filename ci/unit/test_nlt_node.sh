@@ -44,8 +44,6 @@ prlimit -n
 nlt_args=()
 nlt_args+=(--max-log-size 1950MiB)
 nlt_args+=(--dfuse-dir /localhome/jenkins/)
-nlt_args+=(--log-usage-save nltir.xml)
-nlt_args+=(--log-usage-export nltr.json)
 
 : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
 if [ -d "${BULLSEYE_DIR}" ]; then
@@ -53,8 +51,13 @@ if [ -d "${BULLSEYE_DIR}" ]; then
     export PATH="${BULLSEYE_DIR}/bin:$PATH"
     cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
     ls -al "${COVFILE}"
+    nlt_args+=(--log-usage-save nltir-bullseye.xml)
+    nlt_args+=(--log-usage-export nltr-bullseye.json)
     nlt_args+=(--memcheck no)
     nlt_args+=(--log-base-dir nlt_bullseye_logs)
+else
+    nlt_args+=(--log-usage-save nltir.xml)
+    nlt_args+=(--log-usage-export nltr.json)
 fi
 
 if [ -e "${COVFILE:-}" ]; then

@@ -547,7 +547,7 @@ def scriptedSummaryStage(Map kwargs = [:]) {
                         dockerImage.inside() {
                             if (installScript) {
                                 sh label: 'Install RPMs',
-                                    script: installScript
+                                    script: "${installScript} ${distro}"
                             }
                             job_step_update(runScriptWithStashes(runScriptArgs))
                         }
