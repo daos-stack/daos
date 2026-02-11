@@ -186,6 +186,9 @@ func setenvIfNotSet(key, value string) {
 	}
 }
 
+// The golang cli and the C engine use separate logging systems with different log levels.
+// This function maps a string log level to the closest matching levels for both systems.
+// More details on the log levels can be found in the LOGGING section of the ddb man page.
 func strToLogLevels(level string) (logging.LogLevel, engine.LogLevel, error) {
 	switch strings.ToUpper(level) {
 	case "TRACE":
