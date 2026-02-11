@@ -118,7 +118,7 @@ Help Options:
                         then reset engine log masks to use the 'log_mask' value
                         set in the server config file (for each engine) at the
                         time of DAOS system format. Supported levels are FATAL,
-                        CRIT, ERR, WARN, NOTE, INFO, DEBUG
+                        CRIT, ERROR, WARN, NOTE, INFO, DEBUG
       -d, --streams=    Employ finer grained control over debug streams. Mask
                         bits are set as the first argument passed in
                         D_DEBUG(mask, ...) and this input string (DD_MASK) can
@@ -154,14 +154,14 @@ empty string if not set.
 
 Example usage:
 ```
-dmg server set-logmasks -m DEBUG,MEM=ERR -d mgmt,md -s server,mgmt,bio,common
+dmg server set-logmasks -m DEBUG,MEM=ERROR -d mgmt,md -s server,mgmt,bio,common
 ```
 
 This example would be a runtime equivalent to setting the following in the server config file:
 ```
 ...
 engines:
-- log_mask: DEBUG,MEM=ERR
+- log_mask: DEBUG,MEM=ERROR
   env_vars:
   - DD_SUBSYS=server,mgmt,bio,common
   - DD_MASK=mgmt,md

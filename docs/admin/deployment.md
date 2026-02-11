@@ -1372,7 +1372,7 @@ engines:
   nr_xs_helpers: 4
   fabric_iface: eth0
   fabric_iface_port: 32416
-  log_mask: ERR
+  log_mask: ERROR
   log_file: /var/log/daos/daos_engine1.log
   storage:
   -
