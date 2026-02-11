@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       16%{?relval}%{?dist}
+Release:       17%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -58,7 +58,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
-BuildRequires: libpmemobj-devel >= 2.1.0
+BuildRequires: libpmemobj-devel >= 2.1.2-1
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
@@ -156,11 +156,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.0-3.suse1500
+Requires: libpmemobj1 = 2.1.2-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.0-6%{?dist}
+Requires: libpmemobj = 2.1.2-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury-libfabric >= %{mercury_version}
@@ -635,6 +635,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Feb 11 2026  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.4-17
+- Pin PMDK (libpmemobj) version to 2.1.2-1
+
 * Thu Feb 05 2026 Jerome Soumagne <jerome.soumagne@hpe.com> 2.6.4-16
 - Require mercury-libfabric to always install libfabric plugin
 - Bump mercury min version to 2.4.1
