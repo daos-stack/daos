@@ -44,7 +44,8 @@ func exitWithError(log logging.Logger, err error) {
 }
 
 type cliOptions struct {
-	Debug     string     `long:"debug" description:"Directory path where to store debug log files."`
+	Debug     bool       `long:"debug" description:"Enable debug output"`
+	DebugDir  string     `long:"debug_dir" description:"Directory path where to store debug log files."`
 	WriteMode bool       `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
 	CmdFile   string     `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	SysdbPath string     `long:"db_path" short:"p" description:"Path to the sys db."`
@@ -225,45 +226,50 @@ func printHelp(generalMsg string, opts *cliOptions, log *logging.LeveledLogger) 
 	}
 }
 
-func configureLogging(log *logging.LeveledLogger, debugDir string) (*logging.LeveledLogger, error) {
-	if debugDir == "" {
-		if os.Getenv("D_LOG_MASK") == "" {
-			os.Setenv("D_LOG_MASK", "ERR,DDB=WARN")
-		}
-		if os.Getenv("DD_STDERR") == "" {
-			os.Setenv("DD_STDERR", "WARN")
+func setenvIfNotSet(key, value string) {
+	if os.Getenv(key) == "" {
+		os.Setenv(key, value)
+	}
+}
+
+func configureLogging(log *logging.LeveledLogger, opts *cliOptions) (*logging.LeveledLogger, error) {
+	if opts.DebugDir == "" {
+		setenvIfNotSet("DD_STDERR", "WARN")
+		if opts.Debug {
+			setenvIfNotSet("D_LOG_MASK", "WARN,DDB=INFO")
+		} else {
+			setenvIfNotSet("D_LOG_MASK", "ERR,DDB=WARN")
 		}
 		return log, nil
 	}
 
-	path := filepath.Clean(debugDir)
+	path := filepath.Clean(opts.DebugDir)
 	fi, err := os.Stat(path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Error accessing debug directory %q", debugDir)
+		return nil, errors.Wrapf(err, "Error accessing debug directory %q", path)
 	}
 	if !fi.IsDir() {
-		return nil, errors.Errorf("Debug path %q is not a directory", debugDir)
+		return nil, errors.Errorf("Debug path %q is not a directory", path)
 	}
+
 	var fd *os.File
 	fd, err = common.AppendFile(filepath.Join(path, "ddb-cli.log"))
 	if err != nil {
-		return nil, errors.Wrapf(err, "Error opening debug log file 'ddb-cli.log' in %q", debugDir)
+		return nil, errors.Wrapf(err, "Error opening debug log file 'ddb-cli.log' in %q", path)
 	}
-	logFile := logging.NewCombinedLogger("DDB", fd)
-	logFile.WithLogLevel(logging.LogLevelTrace)
-	logFile.WithInfoLogger(log).WithNoticeLogger(log).WithErrorLogger(log)
+	newLog := logging.NewCombinedLogger("DDB", fd)
+	newLog.WithLogLevel(logging.LogLevelTrace)
+	newLog.WithInfoLogger(log).WithNoticeLogger(log).WithErrorLogger(log)
 
-	if os.Getenv("D_LOG_MASK") == "" {
-		os.Setenv("D_LOG_MASK", "INFO,DDB=DEBUG")
+	if opts.Debug {
+		setenvIfNotSet("DD_STDERR", "WARN")
+	} else {
+		setenvIfNotSet("DD_STDERR", "ERROR")
 	}
-	if os.Getenv("DD_STDERR") == "" {
-		os.Setenv("DD_STDERR", "WARN")
-	}
-	if os.Getenv("D_LOG_FILE") == "" {
-		os.Setenv("D_LOG_FILE", filepath.Join(path, "ddb-engine.log"))
-	}
+	setenvIfNotSet("D_LOG_MASK", "INFO,DDB=DEBUG")
+	setenvIfNotSet("D_LOG_FILE", filepath.Join(path, "ddb-engine.log"))
 
-	return logFile, nil
+	return newLog, nil
 }
 
 func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
@@ -304,7 +310,7 @@ the command‑specific help for details.
 		return errors.New("Cannot use both command file and a command string")
 	}
 
-	if newLog, err := configureLogging(log, opts.Debug); err != nil {
+	if newLog, err := configureLogging(log, opts); err != nil {
 		return errors.Wrap(err, "Error configuring logging")
 	} else {
 		log = newLog
