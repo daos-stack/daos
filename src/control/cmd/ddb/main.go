@@ -63,6 +63,18 @@ Available commands:
 
 `
 
+const helpTreePath = `
+Path
+
+Many of the commands take a VOS tree path. The format for this path is
+[cont]/[obj]/[dkey]/[akey]/[extent].  To make it easier to navigate the tree, indexes can be used
+instead of the path part. The index is in the format [i]. Indexes and actual path values can be used
+together.
+
+More details on the path format can be found in the ddb man page.
+
+`
+
 const ddbLongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
 a file in the VOS format. It offers both a command line and interactive
 shell mode. If neither a single command or '-f' option is provided, then
@@ -128,6 +140,7 @@ func printCommands(app *grumble.App, log *logging.LeveledLogger) {
 func printGeneralHelp(app *grumble.App, generalMsg string, log *logging.LeveledLogger) {
 	log.Info(generalMsg + "\n") // standard help from go-flags
 	printCommands(app, log)     // list of commands
+	log.Info(helpTreePath)      // extra info on VOS Tree Path syntax
 }
 
 // Ask grumble to generate a help message for the requested command.
@@ -413,7 +426,7 @@ For array values in the format {lo-hi}.
 .SS Index Tree Path
 .RE
 To make it easier to navigate the tree, indexes can be used instead of the path part. The index is
-in the format [i]. Indexes and actual path values can be used together
+in the format [i]. Indexes and actual path values can be used together.
 .SS Path Examples
 VOS tree path examples:
 .Sp
