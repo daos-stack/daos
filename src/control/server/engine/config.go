@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -787,6 +787,13 @@ func (c *Config) WithStorageAutoFaultyCriteria(enable bool, maxIoErrs, maxCsumEr
 	c.Storage.AutoFaultyProps.Enable = enable
 	c.Storage.AutoFaultyProps.MaxIoErrs = maxIoErrs
 	c.Storage.AutoFaultyProps.MaxCsumErrs = maxCsumErrs
+	return c
+}
+
+// WithStorageSpdkIobufProps specifies SPDK I/O buffer pool settings in the I/O Engine.
+func (c *Config) WithStorageSpdkIobufProps(smallPoolCount, largePoolCount uint32) *Config {
+	c.Storage.SpdkIobufProps.SmallPoolCount = smallPoolCount
+	c.Storage.SpdkIobufProps.LargePoolCount = largePoolCount
 	return c
 }
 
