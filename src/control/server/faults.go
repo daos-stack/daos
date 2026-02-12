@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,6 +37,11 @@ var (
 		code.ServerVfioDisabled,
 		"disable_vfio: true in config while running as non-root user with NVMe devices",
 		"set disable_vfio: false or run daos_server as root",
+	)
+	FaultTransparentHugepageEnabled = serverFault(
+		code.ServerTransparentHugepageEnabled,
+		"transparent hugepage (THP) enabled on storage server, DAOS requires THP to be disabled",
+		"disable THP by adding 'transparent_hugepage=never' kernel parameter in the grub configuration file then reboot and restart daos_server",
 	)
 	FaultHarnessNotStarted = serverFault(
 		code.ServerHarnessNotStarted,
