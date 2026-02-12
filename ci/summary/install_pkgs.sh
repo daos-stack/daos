@@ -22,10 +22,10 @@ add_inst_repo() {
     local build_number="$3"
     local distro="$4"
     local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$distro/
-    dnf -y config-manager --add-repo="$repo_url"
+    sudo dnf -y config-manager --add-repo="$repo_url"
     repo="$(url_to_repo "$repo_url")"
     # PR-repos: should always be able to upgrade modular packages
-    dnf -y config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
+    sudo dnf -y config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
     disable_gpg_check "$repo_url"
 }
 
@@ -34,8 +34,8 @@ disable_gpg_check() {
 
     repo="$(url_to_repo "$url")"
     # bug in EL7 DNF: this needs to be enabled before it can be disabled
-    dnf -y config-manager --save --setopt="$repo".gpgcheck=1
-    dnf -y config-manager --save --setopt="$repo".gpgcheck=0
+    sudo dnf -y config-manager --save --setopt="$repo".gpgcheck=1
+    sudo dnf -y config-manager --save --setopt="$repo".gpgcheck=0
     # but even that seems to be not enough, so just brute-force it
     if [ -d /etc/yum.repos.d ] &&
        ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
