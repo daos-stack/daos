@@ -95,8 +95,7 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("interface   = %s\n", opt->cio_interface);
 	D_INFO("domain      = %s\n", opt->cio_domain);
 	D_INFO("port        = %s\n", opt->cio_port);
-	if (opt->cio_auth_key)
-		D_INFO("auth_key    = %s\n", opt->cio_auth_key);
+	D_INFO("auth_key    = %s\n", opt->cio_auth_key);
 	D_INFO("Flags: fault_inject = %d, use_credits = %d, use_sensors = %d, "
 	       "thread_mode_single = %d, progress_busy = %d, mem_device = %d\n",
 	       opt->cio_fault_inject, opt->cio_use_credits, opt->cio_use_sensors,
