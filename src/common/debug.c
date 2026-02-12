@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -242,7 +242,7 @@ failed_unlock:
 
 int daos_debug_init(char *logfile)
 {
-	/* for client side, by default use ERR level */
+	/* for client side, by default use ERROR level */
 	return daos_debug_init_ex(logfile, DLOG_ERR);
 }
 

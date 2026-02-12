@@ -14,7 +14,7 @@ daos_agent --config-path=<builddir>/utils/config/daos_agent.yml
 
 ==== client:
 # possible debug environment variable settings
-D_LOG_MASK=DEBUG,RPC=ERR,MEM=ERR
+D_LOG_MASK=DEBUG,RPC=ERROR,MEM=ERROR
 DD_SUBSYS=all
 DD_MASK=all
 

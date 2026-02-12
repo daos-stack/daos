@@ -124,7 +124,7 @@ CONNECT:
 	// Attempt to connect
 	sock, err = net.Dial("tcp", s.addr)
 	if err != nil {
-		log.Printf("[ERR] Error connecting to statsite! Err: %s", err)
+		log.Printf("[ERROR] Error connecting to statsite! Err: %s", err)
 		goto WAIT
 	}
 
@@ -142,12 +142,12 @@ CONNECT:
 			// Try to send to statsite
 			_, err := buffered.Write([]byte(metric))
 			if err != nil {
-				log.Printf("[ERR] Error writing to statsite! Err: %s", err)
+				log.Printf("[ERROR] Error writing to statsite! Err: %s", err)
 				goto WAIT
 			}
 		case <-ticker.C:
 			if err := buffered.Flush(); err != nil {
-				log.Printf("[ERR] Error flushing to statsite! Err: %s", err)
+				log.Printf("[ERROR] Error flushing to statsite! Err: %s", err)
 				goto WAIT
 			}
 		}

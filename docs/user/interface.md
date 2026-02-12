@@ -161,7 +161,7 @@ except DaosApiError as e:
 #### Logging
 
 The Python DAOS API exposes functionality to log messages to the DAOS client log.
-Messages can be logged as `INFO`, `DEBUG`, `WARN`, or `ERR` log levels.
+Messages can be logged as `INFO`, `DEBUG`, `WARN`, or `ERROR` log levels.
 The DAOS log object must be initialized with the environmental context in which to run:
 
 ```python

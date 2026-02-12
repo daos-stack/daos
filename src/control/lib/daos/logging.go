@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,7 +18,7 @@ const (
 	// UnsetLogMask defines an explicitly-unset log mask.
 	UnsetLogMask = "UNSET"
 	// DefaultDebugMask defines the basic debug mask.
-	DefaultDebugMask = "DEBUG,MEM=ERR,OBJECT=ERR,PLACEMENT=ERR"
+	DefaultDebugMask = "DEBUG,MEM=ERROR,OBJECT=ERROR,PLACEMENT=ERROR"
 	// DefaultInfoMask defines the basic info mask.
 	DefaultInfoMask = "INFO"
 	// DefaultErrorMask defines the basic error mask.

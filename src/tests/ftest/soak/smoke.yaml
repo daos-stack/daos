@@ -25,7 +25,7 @@ server_config:
       pinned_numa_node: 0
       nr_xs_helpers: 2
       log_file: daos_server0.log
-      log_mask: ERR
+      log_mask: ERROR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
       storage: auto
@@ -33,7 +33,7 @@ server_config:
       pinned_numa_node: 1
       nr_xs_helpers: 2
       log_file: daos_server1.log
-      log_mask: ERR
+      log_mask: ERROR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
       storage: auto

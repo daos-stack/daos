@@ -27,7 +27,7 @@ server_config:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       log_file: daos_server0.log
-      log_mask: DEBUG,MEM=ERR
+      log_mask: DEBUG,MEM=ERROR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
       storage: auto
@@ -35,7 +35,7 @@ server_config:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       log_file: daos_server1.log
-      log_mask: DEBUG,MEM=ERR
+      log_mask: DEBUG,MEM=ERROR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
       storage: auto

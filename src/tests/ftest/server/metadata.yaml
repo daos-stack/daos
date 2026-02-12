@@ -18,7 +18,7 @@ server_config:
       first_core: 0
       pinned_numa_node: 0
       log_file: daos_server0.log
-      log_mask: DEBUG,MEM=ERR
+      log_mask: DEBUG,MEM=ERROR
       env_vars:
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
@@ -33,7 +33,7 @@ server_config:
       first_core: 0
       pinned_numa_node: 1
       log_file: daos_server1.log
-      log_mask: DEBUG,MEM=ERR
+      log_mask: DEBUG,MEM=ERROR
       env_vars:
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
+// Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,8 +20,8 @@ import (
 )
 
 func Test_setLogMasksReqToPB(t *testing.T) {
-	masks := "ERR,mgmt=DEBUG"
-	badMasks := "ERR,mgmt=DEBUGX"
+	masks := "ERROR,mgmt=DEBUG"
+	badMasks := "ERROR,mgmt=DEBUGX"
 	streams := "EPC,MEM"
 	badStreams := "EPC,MEMX"
 	subsystems := "hg,lm"

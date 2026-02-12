@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3885,7 +3885,7 @@ co_op_dup_timing(void **state)
 	cprop->dpp_entries[0].dpe_val  = 8191;
 
 	/* Reduce engine logging since we're about to start timing operations. */
-	rc = dmg_server_set_logmasks(arg->dmg_config, "ERR" /* masks */, NULL /* streams */,
+	rc = dmg_server_set_logmasks(arg->dmg_config, "ERROR" /* masks */, NULL /* streams */,
 				     NULL /* subsystems */);
 	assert_success(rc);
 

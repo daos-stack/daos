@@ -1356,7 +1356,7 @@ engines:
   nr_xs_helpers: 4                                # count of I/O offload threads
   fabric_iface: eth0                              # network interface to use for this engine
   fabric_iface_port: 31416                        # network port
-  log_mask: ERR                                   # debug level to start with the engine with
+  log_mask: ERROR                                 # debug level to start with the engine with
   log_file: /var/log/daos/daos_engine0.log # where to store engine logs
   storage:
   -
@@ -1372,7 +1372,7 @@ engines:
   nr_xs_helpers: 4
   fabric_iface: eth0
   fabric_iface_port: 32416
-  log_mask: ERR
+  log_mask: ERROR
   log_file: /var/log/daos/daos_engine1.log
   storage:
   -
