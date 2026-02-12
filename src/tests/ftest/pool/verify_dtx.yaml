@@ -16,11 +16,6 @@ server_config:
       nr_xs_helpers: 0
       log_file: daos_server0.log
       storage: auto
-    1:
-      pinned_numa_node: 1
-      nr_xs_helpers: 0
-      log_file: daos_server1.log
-      storage: auto
   system_ram_reserved: 1
 
 pool: !mux
