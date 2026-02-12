@@ -16,26 +16,33 @@ the following steps are needed:
    for information about supported MLNX\_OFED releases.
 
 *  The `mercury-ucx` RPM package needs to be **manually** selected for
-   installation. The base `mercury` RPM package ships with no plugins.
-   The `mercury-ucx` RPM contains the UCX plugin that is required for
-   enabling UCX support.
-   This RPM **must** be used in InfiniBand environments when the intention
-   is to use UCX. Attempts to install this RPM in non-Infiniband environments
-   will fail, because it has a dependency on UCX packages.
+   installation:
+
+   - The base `mercury` RPM package ships with the libfabric plugin.
+     This RPM will be installed by default and is a dependency of the
+     `mercury-ucx` RPM.
+
+   - The additional `mercury-ucx` RPM is also provided. This RPM contains
+     the UCX plugin that is required for enabling UCX support.
+     This RPM **must** be used in
+     InfiniBand environments when the intention is to use
+     UCX.
+     Attempts to install this RPM in non-Infiniband environments
+     will fail, because it has a dependency on UCX packages.
 
 *  At DAOS **installation** time, to enable UCX support the
    `mercury-ucx` RPM package must be explicitly listed.
-   For example, using the `dnf`/`yum` package manager on EL8:
+   For example, using the `yum`/`dnf` package manager on EL8:
 
 ```bash
       # on DAOS_ADMIN nodes:
-      dnf install mercury-ucx daos-admin
+      yum install mercury-ucx daos-admin
 
       # on DAOS_SERVER nodes:
-      dnf install mercury-ucx daos-server
+      yum install mercury-ucx daos-server
 
       # on DAOS_CLIENT nodes:
-      dnf install mercury-ucx daos-client
+      yum install mercury-ucx daos-client
 ```
 
 After UCX support has been enabled by installing the `mercury-ucx`

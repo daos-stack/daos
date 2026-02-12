@@ -1,8 +1,4 @@
 %changelog
-* Fri Jan 16 2026  Jerome Soumagne <jerome.soumagne@hpe.com> 2.7.103-2
-- Drop libfabric-devel build requirement
-- Drop libfabric requirement that is already provided by mercury-libfabric
-
 * Fri Dec 19 2025 Dalton Bohning <dalton.bohning@hpe.com> 2.7.103-1
 - Bump version to 2.7.103
 

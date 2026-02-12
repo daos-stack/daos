@@ -1,10 +1,5 @@
 #!/bin/bash
-#
-#  (C) Copyright 2025 Google LLC
-#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
-#
-#  SPDX-License-Identifier: BSD-2-Clause-Patent
-#
+
 set -eu
 
 # No longer used but provided by pipeline-lib
@@ -29,7 +24,6 @@ pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
       $(utils/rpms/package_version.sh libfabric debug)               \
       $(utils/rpms/package_version.sh mercury dev)                   \
       $(utils/rpms/package_version.sh mercury debug)                 \
-      $(utils/rpms/package_version.sh mercury lib mercury_libfabric) \
       $(utils/rpms/package_version.sh pmdk lib pmemobj)              \
       $(utils/rpms/package_version.sh pmdk debug pmemobj)            \
       $(utils/rpms/package_version.sh pmdk debug pmem)               \

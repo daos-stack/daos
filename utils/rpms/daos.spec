@@ -12,6 +12,7 @@
 %global daos_build_args client test
 %endif
 %global mercury_version   2.4
+%global libfabric_version 1.15.1-1
 %global argobots_version 1.2
 %global __python %{__python3}
 %global daos_log_dir "/var/log/daos"
@@ -24,7 +25,7 @@
 
 Name:          daos
 Version:       2.7.103
-Release:       2%{?relval}%{?dist}
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -39,6 +40,7 @@ BuildRequires: python3-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
+BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
@@ -165,10 +167,12 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 2.1.0-1.suse1500
+Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 2.1.0-1%{?dist}
 %endif
+Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
@@ -191,6 +195,10 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
+Requires: libfabric >= %{libfabric_version}
+%if (0%{?suse_version} >= 1500)
+Requires: libfabric1 >= %{libfabric_version}
+%endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
 

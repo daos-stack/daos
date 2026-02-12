@@ -1048,8 +1048,7 @@ pipeline {
                     steps {
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
+                                    daos_pkg_version: daosPackagesVersion(next_version()))
                         )
                     }
                     post {
@@ -1101,8 +1100,7 @@ pipeline {
                     } */
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
+                                    daos_pkg_version: daosPackagesVersion(next_version()))
                         )
                     }
                     post {
