@@ -1191,45 +1191,45 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test with Bullseye on EL 8.8')
-                // stage('Unit Test bdev with Bullseye on EL 8.8') {
-                //     when {
-                //         beforeAgent true
-                //         expression {
-                //             runStage(['CI_BUILD_BULLSEYE': true,
-                //                       'CI_UNIT_TEST_BULLSEYE': true,
-                //                       'CI_BUILD_PACKAGES_ONLY': false],
-                //                      ['Skip-unit-tests': false,
-                //                       'Skip-unit-test-bullseye': false])
-                //         }
-                //     }
-                //     agent {
-                //         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                //     }
-                //     steps {
-                //         job_step_update(
-                //             unitTest(timeout_time: 120,
-                //                      unstash_opt: true,
-                //                      inst_repos: daosRepos(),
-                //                      inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
-                //                      compiler: 'covc',
-                //                      ignore_failure: true,
-                //                      coverage_stash: 'unit_test_bdev_bullseye'))
-                //     }
-                //     post {
-                //         always {
-                //             unitTestPost artifacts: ['unit_test_bdev_bullseye_logs/'],
-                //                          ignore_failure: true,
-                //                          compiler: 'covc'
-                //             job_status_update()
-                //         }
-                //     }
-                // } // stage('Unit Test bdev with Bullseye on EL 8.8')
-                stage('NLT with Bullseye on EL 8.8') {
+                stage('Unit Test bdev with Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
                         expression {
                             runStage(['CI_BUILD_BULLSEYE': true,
                                       'CI_UNIT_TEST_BULLSEYE': true,
+                                      'CI_BUILD_PACKAGES_ONLY': false],
+                                     ['Skip-unit-tests': false,
+                                      'Skip-unit-test-bullseye': false])
+                        }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 120,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
+                                     compiler: 'covc',
+                                     ignore_failure: true,
+                                     coverage_stash: 'unit_test_bdev_bullseye'))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_bdev_bullseye_logs/'],
+                                         ignore_failure: true,
+                                         compiler: 'covc'
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit Test bdev with Bullseye on EL 8.8')
+                stage('NLT with Bullseye on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression {
+                            runStage(['CI_BUILD_BULLSEYE': true,
+                                      'CI_NLT_TEST_BULLSEYE': true,
                                       'CI_BUILD_PACKAGES_ONLY': false],
                                      ['Skip-unit-tests': false,
                                       'Skip-nlt-bullseye': false])
