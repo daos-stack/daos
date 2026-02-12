@@ -2,8 +2,8 @@ launch:
   !filter-only : /run/pool/default    # yamllint disable-line rule:colons
 
 hosts:
-  test_servers: 5
-  test_clients: 3
+  test_servers: 3
+  test_clients: 1
 
 timeout: 600
 
