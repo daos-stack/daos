@@ -8,6 +8,7 @@ server_config:
   engines_per_host: 2
   engines:
     0:
+      targets: 4
       pinned_numa_node: 0
       nr_xs_helpers: 0
       log_file: daos_server0.log
@@ -22,6 +23,7 @@ server_config:
       storage: auto
 
     1:
+      targets: 4
       pinned_numa_node: 1
       nr_xs_helpers: 0
       log_file: daos_server1.log
@@ -37,7 +39,10 @@ server_config:
 
   transport_config:
     allow_insecure: true
-  system_ram_reserved: 64
+
+pool:
+  scm_size: 6G
+  nvme_size: 80G
 
 agent_config:
   transport_config:

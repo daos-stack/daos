@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -60,8 +60,9 @@ const (
 // ControlMetadata describes configuration options for control plane metadata storage on the
 // DAOS server.
 type ControlMetadata struct {
-	Path       string `yaml:"path,omitempty"`
-	DevicePath string `yaml:"device,omitempty"`
+	Path                  string `yaml:"path,omitempty"`
+	DevicePath            string `yaml:"device,omitempty"`
+	AllowSpdkConfOverride bool   `yaml:"allow_spdk_conf_override"`
 }
 
 // Directory returns the full path to the directory where the control plane metadata is saved.
@@ -1148,6 +1149,18 @@ type BdevAutoFaulty struct {
 	MaxCsumErrs uint32 `yaml:"max_csum_errs,omitempty" json:"max_csum_errs"`
 }
 
+// SpdkIobuf struct describes settings for DAOS I/O buffer pool configuration within the BIO
+// module of the engine process.
+type SpdkIobuf struct {
+	SmallPoolCount uint32 `yaml:"small_pool_count,omitempty" json:"small_pool_count,omitempty"`
+	LargePoolCount uint32 `yaml:"large_pool_count,omitempty" json:"large_pool_count,omitempty"`
+}
+
+// IsEmpty returns true if all struct values are zero.
+func (si *SpdkIobuf) IsEmpty() bool {
+	return si.SmallPoolCount == 0 && si.LargePoolCount == 0
+}
+
 // Config defines engine storage.
 type Config struct {
 	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
@@ -1160,6 +1173,7 @@ type Config struct {
 	AccelProps       AccelProps      `yaml:"acceleration,omitempty"`
 	SpdkRpcSrvProps  SpdkRpcServer   `yaml:"spdk_rpc_server,omitempty"`
 	AutoFaultyProps  BdevAutoFaulty  `yaml:"bdev_auto_faulty,omitempty"`
+	SpdkIobufProps   SpdkIobuf       `yaml:"spdk_iobuf,omitempty"`
 }
 
 // SetNUMAAffinity enables the assignment of NUMA affinity to tier configs.

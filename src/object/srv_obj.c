@@ -1405,7 +1405,8 @@ obj_fetch_ec_agg_boundary(struct obj_io_context *ioc, daos_unit_oid_t *uoid)
 
 	arg.eab_pool = ioc->ioc_coc->sc_pool->spc_pool;
 	uuid_copy(arg.eab_co_uuid, ioc->ioc_coc->sc_uuid);
-	rc = dss_ult_execute(obj_fetch_ec_agg_boundary_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(obj_fetch_ec_agg_boundary_ult, &arg, NULL, NULL, DSS_XS_SYS, 0,
+			     DSS_DEEP_STACK_SZ);
 	if (rc) {
 		DL_ERROR(rc, DF_CONT ", " DF_UOID " fetch ec_agg_boundary failed.",
 			 DP_CONT(ioc->ioc_coc->sc_pool_uuid, ioc->ioc_coc->sc_uuid),

@@ -1,6 +1,6 @@
 #
 # (C) Copyright 2024-2025 Google LLC
-# (C) Copyright 2024-2025 Enakta Labs Ltd
+# (C) Copyright 2024-2026 Enakta Labs Ltd
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -11,11 +11,14 @@ to access training data on DAOS DFS via POSIX container.
 In addition, it provides Checkpoint class to save and load PyTorch model checkpoints.
 """
 
+import errno
 import io
 import math
 import os
 import stat
+import sys
 from multiprocessing import Process, Queue
+from pathlib import Path
 
 from torch.utils.data import Dataset as TorchDataset
 from torch.utils.data import IterableDataset as TorchIterableDataset
@@ -372,15 +375,19 @@ class WriteBuffer(io.BufferedIOBase):
                 self._workers.append(worker)
 
     def _worker_fn(self, queue):
-        self._dfs.worker_init()
-        while True:
-            work = queue.get()
-            if work is None:
-                break
+        try:
+            self._dfs.worker_init()
+            while True:
+                work = queue.get()
+                if work is None:
+                    break
 
-            (offset, chunk) = work
-            self._dfs.write(self._path, self._mode, self._oflags,
-                            self._class_name, self._file_chunk_size, offset, chunk)
+                (offset, chunk) = work
+                self._dfs.write(self._path, self._mode, self._oflags,
+                                self._class_name, self._file_chunk_size, offset, chunk)
+        # pylint: disable=broad-exception-caught
+        except Exception as e:
+            sys.exit(getattr(e, 'errno', errno.EIO))
 
     def write(self, data):
         """ Writes data to the buffer."""
@@ -430,6 +437,11 @@ class WriteBuffer(io.BufferedIOBase):
             self._queue.put(None)
         for worker in self._workers:
             worker.join()
+
+        # lets see if any worker exited abnormally and if so, raise an error
+        for worker in self._workers:
+            if worker.exitcode != 0:
+                raise OSError(worker.exitcode, os.strerror(worker.exitcode))
 
         super().close()
 
@@ -619,13 +631,16 @@ class Checkpoint():
         stream.seek(0)
         return stream
 
-    def writer(self, file):
+    def writer(self, file, ensure_path=True):
         """ Returns write buffer to save the checkpoint file """
 
         if file is None:
             raise ValueError("file is required")
 
         path = os.path.join(self._prefix, file)
+        if ensure_path:
+            self._dfs.mkdirall(os.path.dirname(path))
+
         return WriteBuffer(self._dfs, path, self._mode, self._oflags,
                            self._class_name, self._file_chunk_size, self._transfer_chunk_size,
                            self._chunks_limit, self._workers)
@@ -810,3 +825,18 @@ class _Dfs():
         if ret != 0:
             raise OSError(ret, os.strerror(ret), path)
         return size
+
+    def mkdirall(self, path, mode=0o755):
+        """ Creates directory, making parent directories if needed """
+
+        path = os.path.normpath(path)
+        dirs = list(Path(path).parts)
+        if not dirs:
+            raise ValueError(f"invalid path: {path}")
+
+        parent = dirs.pop(0)
+        for name in dirs:
+            parent = os.path.join(parent, name)
+            ret = torch_shim.torch_mkdir(DAOS_MAGIC, self._dfs, parent, mode)
+            if ret not in (0, errno.EEXIST):
+                raise OSError(ret, os.strerror(ret), parent)

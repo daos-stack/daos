@@ -27,7 +27,7 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	rc = chk_engine_start(csi->csi_gen, csi->csi_ranks.ca_count, csi->csi_ranks.ca_arrays,
 			      csi->csi_policies.ca_count, csi->csi_policies.ca_arrays,
 			      csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays, csi->csi_api_flags,
-			      csi->csi_phase, csi->csi_leader_rank, csi->csi_flags,
+			      csi->csi_ns_ver, csi->csi_leader_rank, csi->csi_flags,
 			      csi->csi_iv_uuid, &clues);
 	if (rc > 0) {
 		D_ALLOC_PTR(rank);
@@ -249,18 +249,21 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 static void
 ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 {
-	struct chk_rejoin_in	*cri = crt_req_get(rpc);
-	struct chk_rejoin_out	*cro = crt_reply_get(rpc);
-	uuid_t			*pools = NULL;
-	int			 pool_nr = 0;
-	int			 rc;
+	struct chk_rejoin_in  *cri     = crt_req_get(rpc);
+	struct chk_rejoin_out *cro     = crt_reply_get(rpc);
+	uuid_t                *pools   = NULL;
+	d_rank_list_t         *ranks   = NULL;
+	int                    pool_nr = 0;
+	int                    rc;
 
 	rc = chk_leader_rejoin(cri->cri_gen, cri->cri_rank, cri->cri_iv_uuid, &cro->cro_flags,
-			       &pool_nr, &pools);
+			       &cro->cro_ns_ver, &pool_nr, &pools, &ranks);
 
 	cro->cro_status = rc;
 	if (rc == 0) {
-		cro->cro_pools.ca_count = pool_nr;
+		cro->cro_ranks.ca_count  = ranks->rl_nr;
+		cro->cro_ranks.ca_arrays = ranks->rl_ranks;
+		cro->cro_pools.ca_count  = pool_nr;
 		cro->cro_pools.ca_arrays = pools;
 	}
 

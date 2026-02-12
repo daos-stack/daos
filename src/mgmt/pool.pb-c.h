@@ -775,10 +775,14 @@ struct  _Mgmt__PoolRebuildStatus
   uint64_t objects;
   uint64_t records;
   Mgmt__PoolRebuildStatus__State derived_state;
+  /*
+   * data redundancy degraded
+   */
+  protobuf_c_boolean degraded;
 };
 #define MGMT__POOL_REBUILD_STATUS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_rebuild_status__descriptor) \
-    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY }
+    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0 }
 
 
 /*

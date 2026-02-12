@@ -1015,7 +1015,8 @@ class DaosServer():
         else:
             size = 1024 * 4
 
-        rc = self.run_dmg(['pool', 'create', 'NLT', '--scm-size', f'{size}M'])
+        rc = self.run_dmg(['pool', 'create', 'NLT', '--scm-size', f'{size}M', '--properties',
+                           'rd_fac:0,space_rb:0'])
         print(rc)
         assert rc.returncode == 0
         self.fetch_pools()
@@ -1838,6 +1839,8 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
 
     if attrs:
         cmd.extend(['--attrs', ','.join([f"{name}:{val}" for name, val in attrs.items()])])
+
+    cmd.extend(['--properties', 'cksum:off,srv_cksum:off,rd_fac:0'])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -2829,7 +2832,14 @@ class PosixTests():
         with open(fname, 'w'):
             pass
 
-        self.dfuse.il_cmd(['cat', fname], check_write=False)
+        self.dfuse.il_cmd([
+            'dd',
+            f'if={fname}',
+            'of=/dev/null',
+            'bs=4096',
+            'iflag=fullblock',
+            'status=none'
+        ], check_write=False, check_fstat=False)
 
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_il(self):
@@ -5049,7 +5059,7 @@ def create_and_read_via_il(dfuse, path):
         dfuse.il_cmd([
             'dd',
             f'if={fname}',
-            'of=/tmp/dd_sink',
+            'of=/dev/null',
             'bs=4096',
             'iflag=fullblock',
             'status=none'
@@ -6202,7 +6212,7 @@ def test_alloc_cont_create(server, conf, wf):
                 'create',
                 pool.id(),
                 '--properties',
-                f'srv_cksum:on,label:{cont_id}']
+                f'srv_cksum:on,label:{cont_id},rd_fac:0']
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf
