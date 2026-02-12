@@ -186,62 +186,6 @@ Map update_default_commit_pragmas() {
     }
 }
 
-Boolean skip_pragma_set(String name, String def_val='false') {
-    // Return whether or not the skip pragma is set
-    return cachedCommitPragma("Skip-${name}", def_val).toLowerCase() == 'true'
-}
-
-Boolean skip_build_stage(String distro='', String compiler='gcc') {
-    // Skip the stage if the CI_BUILD_<distro> parameter is not set
-    if (distro) {
-        String param_name = "CI_BUILD_${distro.toUpperCase()}"
-        if (startedByUser() && !paramsValue(param_name, false)) {
-            println("[${env.STAGE_NAME}] Skipping build stage due to ${param_name} parameter")
-            return true
-        }
-    }
-
-    // Skip the stage if any Skip-build[-<distro>-<compiler>] pragmas are true
-    List<String> pragma_names = ['build']
-    if (distro && compiler) {
-        pragma_names << "build-${distro}-${compiler}"
-    }
-    Boolean any_pragma_skip = pragma_names.any { name ->
-        if (skip_pragma_set(name)) {
-            println("[${env.STAGE_NAME}] Skipping build stage due to \"Skip-${name}: true\" pragma")
-            return true
-        }
-    }
-    if (any_pragma_skip) {
-        return true
-    }
-
-    // Skip the stage if a specific DAOS RPM version is specified
-    if (rpmTestVersion() != '') {
-        println("[${env.STAGE_NAME}] Skipping build stage for due to specific DAOS RPM version")
-        return true
-    }
-
-    // Otherwise run the build stage
-    return false
-}
-
-Boolean skip_unit_test_stage(String name) {
-    // Skip the unit test stage if the CI_UNIT_TEST_<name> parameter is not set
-    if (startedByUser() && !paramsValue("CI_UNIT_TEST_${name.toUpperCase()}", true)) {
-        println("[${env.STAGE_NAME}] Skipping unit test stage due to CI_UNIT_TEST_${name.toUpperCase()} parameter")
-        return true
-    }
-
-    // Skip the unit test stage if any Skip-unit-test-<name> pragmas are true
-    if (skip_pragma_set("unit-test-${name.toLowerCase()}")) {
-        println("[${env.STAGE_NAME}] Skipping unit test stage due to Skip-unit-test-${name.toLowerCase()} pragma")
-        return true
-    }
-
-    // Otherwise run the unit test stage
-    return false
-}
 
 String add_daos_pkgs() {
     // Get the additional daos package names to install in functional test stages
@@ -276,12 +220,13 @@ String getScriptOutput(String script, String args='') {
  */
 Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     // Run stage w/o any conditionals
-    println("runStage: Should ${env.STAGE_NAME}] be run? (params: ${params}, pragmas: ${pragmas}, otherCondition: ${otherCondition})")
+    println("runStage: Should ${env.STAGE_NAME} be run? (params: ${params}, pragmas: ${pragmas}, otherCondition: ${otherCondition})")
     if (!otherCondition) {
-        println("[${env.STAGE_NAME}] Skipping stage due to otherCondition=false")
+        println("runStage: Skipping ${env.STAGE_NAME} due to otherCondition=false")
         return false
     }
     if (params.isEmpty() && pragmas.isEmpty()) {
+        println("runStage: Running ${env.STAGE_NAME} due to no params/pragmas")
         return true
     }
 
@@ -338,8 +283,9 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
  *
  * Determine if the build stage should be run.
  *
- * @distro     the shorthand distro name; defaults to ''
- * @compiler   the compiler to use; defaults to 'gcc'
+ * @param distro     the shorthand distro name; defaults to ''
+ * @param compiler   the compiler to use; defaults to 'gcc'
+ * @return           true if the build stage should be run, false if it should be skipped
  */
 Boolean runBuildStage(String distro='', String compiler='gcc') {
     Map params = ['CI_RPM_TEST_VERSION': '']
@@ -356,6 +302,26 @@ Boolean runBuildStage(String distro='', String compiler='gcc') {
             pragmas['Skip-bullseye'] = 'false'
         }
     }
+    return runStage(params, pragmas)
+}
+
+/**
+ * runUnitTestStage
+ *
+ * Determine if the unit stage should be run.
+ *
+ * @param name     the unit test stage name
+ * @return         true if the unit test stage should be run, false if it should be skipped
+ */
+Boolean runUnitTestStage(String name) {
+    Map params = ["CI_${name.toUpperCase()}": true,
+                  'CI_BUILD_EL8': true,
+                  'CI_BUILD_PACKAGES_ONLY': false,
+                  'CI_RPM_TEST_VERSION': '']
+    Map pragmas = ["Skip-${name.toLowerCase()}": 'false',
+                   'Skip-build': 'false',
+                   'RPM-test-version': '',
+                   'Doc-only': 'false']
     return runStage(params, pragmas)
 }
 
@@ -452,63 +418,6 @@ def scriptedBuildStage(Map kwargs = [:]) {
 }
 
 /**
- * scriptedUnitTestStage
- *
- * Get a unit test stage in scripted syntax.
- *
- * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
- *          name                the unit test stage name
- *          runCondition        Optional additional condition to determine if the stage runs
- *          nodeLabel           the node label to use
- *          unitTestArgs        Map of arguments to pass to unitTest()
- *          stashArgs           Map of arguments to pass to optional stash() call
- *          unitTestPostArgs    Map of arguments to pass to unitTestPost()
- *          recordIssuesArgs    Map of arguments to pass to recordIssues()
- * @return a scripted stage to run in a pipeline
- */
-def scriptedUnitTestStage(Map kwargs = [:]) {
-    String name = kwargs.get('name', 'Unknown Unit Test')
-    Boolean runCondition = kwargs.get('runCondition', !skip_unit_test_stage(name))
-    String nodeLabel = kwargs.get('nodeLabel', params.CI_UNIT_VM1_LABEL)
-    Map unitTestArgs = kwargs.get('unitTestArgs', [:])
-    Map stashArgs = kwargs.get('stashArgs', [:])
-    Map unitTestPostArgs = kwargs.get('unitTestPostArgs', [:])
-    Map recordIssuesArgs = kwargs.get('recordIssuesArgs', [:])
-
-    return {
-        stage("${name}") {
-            if (runCondition) {
-                node(nodeLabel) {
-                    try {
-                        println("[${name}] Check out from version control")
-                        checkoutScm(pruneStaleBranch: true)
-                        // Execute the unit test
-                        job_step_update(unitTest(unitTestArgs))
-                        if (stashArgs) {
-                            stash(stashArgs)
-                        }
-                    } finally {
-                        // Always execute post actions
-                        if (unitTestPostArgs) {
-                            unitTestPost(unitTestPostArgs)
-                        }
-                        if (recordIssuesArgs) {
-                            recordIssues(recordIssuesArgs)
-                        }
-                        jobStatusUpdate(job_status_internal, name)
-                    }
-                }
-            }
-            else {
-                println("[${name}] Marking unit test stage as skipped")
-                Utils.markStageSkippedForConditional("${name}")
-            }
-            println("[${name}] Finished with ${job_status_internal}")
-        }
-    }
-}
-
-/**
  * scriptedSummaryStage
  *
  * Get a summary stage in scripted syntax.
@@ -567,6 +476,37 @@ def scriptedSummaryStage(Map kwargs = [:]) {
             println("[${name}] Finished with ${job_status_internal}")
         }
     }
+}
+
+/**
+ *
+ * getTestDaosPackages
+ *
+ * Get the DAOS packages for the functional test stages.
+ *
+ * @ param distro           the shorthand distro name; defaults to 'el8'
+ * @ param add_daos_pkgs    optional additional versioned daos-* package names to include
+ * @ param bullseye         whether or not the packages are bullseye versioned
+ * @ return a String of package names
+ */
+def getTestDaosPackages(String distro='el8', String add_daos_pkgs='', Boolean bullseye=false) {
+    String version = daosPackagesVersion(distro, next_version())
+    String packages = 'daos{,-{client,tests,server,serialize}'
+    if (add_daos_pkgs) {
+        packages += ",-${add_daos_pkgs}"
+    }
+    packages += '}'
+    if (version) {
+        if (distro.startsWith('ubuntu20')) {
+            packages += "=${version}"
+        } else {
+            packages += "-${version}"
+        }
+        if (bullseye) {
+            packages += ".bullseye"
+        }
+    }
+    return packages
 }
 
 pipeline {
@@ -681,7 +621,7 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST_BULLSEYE',
                      defaultValue: true,
                      description: 'Run the Unit Test with Bullseye code coverage test stage')
-        booleanParam(name: 'CI_NLT_TEST_BULLSEYE',
+        booleanParam(name: 'CI_NLT_BULLSEYE',
                      defaultValue: true,
                      description: 'Run the NLT test with Bullseye code coverage test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
@@ -1229,7 +1169,7 @@ pipeline {
                         beforeAgent true
                         expression {
                             runStage(['CI_BUILD_BULLSEYE': true,
-                                      'CI_NLT_TEST_BULLSEYE': true,
+                                      'CI_NLT_BULLSEYE': true,
                                       'CI_BUILD_PACKAGES_ONLY': false],
                                      ['Skip-unit-tests': false,
                                       'Skip-nlt-bullseye': false])
@@ -1263,188 +1203,6 @@ pipeline {
                     }
                 } // stage('NLT with Bullseye on EL 8.8')
             }
-            // steps {
-            //     script {
-            //         parallel(
-            //             'Unit Test on EL 8.8': scriptedUnitTestStage(
-            //                 name: 'Unit Test on EL 8.8',
-            //                 runCondition: params.CI_UNIT_TEST,
-            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-            //                 unitTestArgs: [
-            //                     timeout_time: 60,
-            //                     unstash_opt: true,
-            //                     inst_repos: daosRepos(),
-            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-            //                     testResults: 'test_results/*.xml',
-            //                     always_script: 'ci/unit/test_post_always.sh'
-            //                 ],
-            //                 unitTestPostArgs: [
-            //                     artifacts: ['unit_test_logs/']
-            //                 ]
-            //             ),
-            //             'Unit Test bdev on EL 8.8': scriptedUnitTestStage(
-            //                 name: 'Unit Test bdev on EL 8.8',
-            //                 runCondition: params.CI_UNIT_TEST,
-            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-            //                 unitTestArgs: [
-            //                     timeout_time: 60,
-            //                     unstash_opt: true,
-            //                     inst_repos: daosRepos(),
-            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-            //                     testResults: 'test_results/*.xml',
-            //                     always_script: 'ci/unit/test_post_always.sh'
-            //                 ],
-            //                 unitTestPostArgs: [
-            //                     artifacts: ['unit_test_bdev_logs/']
-            //                 ]
-            //             ),
-            //             'NLT on EL 8.8': scriptedUnitTestStage(
-            //                 name: 'NLT on EL 8.8',
-            //                 runCondition: params.CI_NLT_TEST,
-            //                 nodeLabel: params.CI_NLT_1_LABEL,
-            //                 unitTestArgs: [
-            //                     timeout_time: 60,
-            //                     unstash_opt: true,
-            //                     inst_repos: daosRepos(),
-            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-            //                     testResults: 'nlt-junit.xml',
-            //                     always_script: 'ci/unit/test_nlt_post.sh',
-            //                     with_valgrind: 'memcheck',
-            //                     valgrind_pattern: '*memcheck.xml',
-            //                     test_script: 'ci/unit/test_nlt.sh',
-            //                     unstash_tests: false
-            //                 ],
-            //                 stashArgs: [
-            //                     name: 'nltr',
-            //                     includes: 'nltr.json',
-            //                     allowEmpty: true
-            //                 ],
-            //                 unitTestPostArgs: [
-            //                     artifacts: ['nlt_logs/'],
-            //                     testResults: 'nlt-junit.xml',
-            //                     always_script: 'ci/unit/test_nlt_post.sh',
-            //                     with_valgrind: 'memcheck',
-            //                     valgrind_stash: 'el8-gcc-nlt-memcheck',
-            //                     NLT: true
-            //                 ],
-            //                 recordIssuesArgs: [
-            //                     enabledForFailure: true,
-            //                     failOnError: false,
-            //                     ignoreQualityGate: true,
-            //                     name: 'NLT server leaks',
-            //                     qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-            //                     tool: issues(pattern: 'nlt-server-leaks.json',
-            //                                  name: 'NLT server results',
-            //                                  id: 'NLT_server'),
-            //                     scm: 'daos-stack/daos'
-            //                 ]
-            //             ),
-            //             'Unit Test with memcheck on EL 8.8': scriptedUnitTestStage(
-            //                 name: 'Unit Test with memcheck on EL 8.8',
-            //                 runCondition: params.CI_UNIT_TEST_MEMCHECK,
-            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-            //                 unitTestArgs: [
-            //                     timeout_time: 160,
-            //                     unstash_opt: true,
-            //                     inst_repos: daosRepos(),
-            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-            //                     testResults: 'test_results/*.xml',
-            //                     always_script: 'ci/unit/test_post_always.sh',
-            //                     with_valgrind: 'memcheck',
-            //                     ignore_failure: true,
-            //                 ],
-            //                 unitTestPostArgs: [
-            //                     artifacts: ['unit_test_memcheck_logs.tar.gz',
-            //                                 'unit_test_memcheck_logs/**/*.log'],
-            //                     with_valgrind: 'memcheck',
-            //                     valgrind_stash: 'el8-gcc-unit-memcheck'
-            //                 ]
-            //             ),
-            //             'Unit Test bdev with memcheck on EL 8.8': scriptedUnitTestStage(
-            //                 name: 'Unit Test bdev with memcheck on EL 8.8',
-            //                 runCondition: params.CI_UNIT_TEST_MEMCHECK,
-            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-            //                 unitTestArgs: [
-            //                     timeout_time: 180,
-            //                     unstash_opt: true,
-            //                     inst_repos: daosRepos(),
-            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-            //                     testResults: 'test_results/*.xml',
-            //                     always_script: 'ci/unit/test_post_always.sh',
-            //                     with_valgrind: 'memcheck',
-            //                     ignore_failure: true,
-            //                 ],
-            //                 unitTestPostArgs: [
-            //                     artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
-            //                                 'unit_test_memcheck_bdev_logs/**/*.log'],
-            //                     with_valgrind: 'memcheck',
-            //                     valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
-            //                 ]
-            //             ),
-            //             'Unit Test with Bullseye on EL 8.8': scriptedUnitTestStage(
-            //                 name: 'Unit Test with Bullseye on EL 8.8',
-            //                 runCondition: params.CI_UNIT_TEST_BULLSEYE && code_coverage_enabled(),
-            //                 nodeLabel: cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL),
-            //                 unitTestArgs: [
-            //                     timeout_time: 120,
-            //                     unstash_opt: true,
-            //                     inst_repos: daosRepos(),
-            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
-            //                     testResults: 'test_results/*.xml',
-            //                     always_script: 'ci/unit/test_post_always.sh',
-            //                     ignore_failure: true,
-            //                     coverage_stash: 'unit_test_bullseye'
-            //                 ],
-            //                 unitTestPostArgs: [
-            //                     artifacts: ['unit_test_bullseye_logs/'],
-            //                     ignore_failure: true,
-            //                     code_coverage: true
-            //                 ]
-            //             ),
-            //             'NLT with Bullseye on EL 8.8': scriptedUnitTestStage(
-            //                 name: 'NLT with Bullseye on EL 8.8',
-            //                 runCondition: params.CI_NLT_TEST && code_coverage_enabled(),
-            //                 nodeLabel: params.CI_NLT_1_LABEL,
-            //                 unitTestArgs: [
-            //                     timeout_time: 120,
-            //                     unstash_opt: true,
-            //                     inst_repos: daosRepos(),
-            //                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
-            //                     testResults: 'nlt-junit.xml',
-            //                     always_script: 'ci/unit/test_nlt_post.sh',
-            //                     test_script: 'ci/unit/test_nlt.sh',
-            //                     unstash_tests: false,
-            //                     ignore_failure: true,
-            //                     code_coverage: true,
-            //                     coverage_stash: 'nlt-bullseye'
-            //                 ],
-            //                 stashArgs: [
-            //                     name: 'nltr-bullseye',
-            //                     includes: 'nltr-bullseye.json',
-            //                     allowEmpty: true
-            //                 ],
-            //                 unitTestPostArgs: [
-            //                     artifacts: ['nlt_logs/'],
-            //                     testResults: 'nlt-junit.xml',
-            //                     always_script: 'ci/unit/test_nlt_post.sh',
-            //                     code_coverage: true,
-            //                     NLT: true
-            //                 ],
-            //                 recordIssuesArgs: [
-            //                     enabledForFailure: true,
-            //                     failOnError: false,
-            //                     ignoreQualityGate: true,
-            //                     name: 'NLT server leaks',
-            //                     qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-            //                     tool: issues(pattern: 'nlt-server-leaks.json',
-            //                                  name: 'NLT server results',
-            //                                  id: 'NLT_server'),
-            //                     scm: 'daos-stack/daos'
-            //                 ]
-            //             )
-            //         ) // parallel
-            //     } // script
-            // } // steps
         } // stage('Unit Tests')
         stage('Test') {
             when {
@@ -1488,7 +1246,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), add_daos_pkgs()) + ' mercury-libfabric',
+                                inst_rpms: getTestDaosPackages('el8', add_daos_pkgs(), bullseyeOverride()) + ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
