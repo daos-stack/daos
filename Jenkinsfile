@@ -540,6 +540,32 @@ pipeline {
                 }
             }
         }
+        stage('Test') {
+            parallel {
+                stage('Functional on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('EL8')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional on EL 8.8')
+            }
+        }
         stage('Test Hardware') {
             when {
                 beforeAgent true
