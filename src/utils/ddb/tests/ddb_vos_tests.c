@@ -1088,7 +1088,7 @@ dv_test_setup(void **state)
 
 	active_entry_handler_called = 0;
 	committed_entry_handler_called = 0;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0, false));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0, true));
 	return 0;
 }
 
@@ -1110,7 +1110,7 @@ pool_flags_tests(void **state)
 	uint64_t                incompat_flags;
 
 	assert_success(
-	    dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, VOS_POF_FOR_FEATURE_FLAG, false));
+	    dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, VOS_POF_FOR_FEATURE_FLAG, true));
 	assert_success(dv_pool_get_flags(poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == 0);
 	assert(incompat_flags == 0);
