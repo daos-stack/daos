@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -57,7 +57,7 @@ class EcodCellSizeProperty(IorTestBase):
 
         for pool_cell_size in pool_cell_sizes:
             # Create the pool
-            self.pool = self.get_pool(properties=f"ec_cell_sz:{pool_cell_size}")
+            self.pool = self.get_pool(properties=f"rd_fac:0,space_rb:0,ec_cell_sz:{pool_cell_size}")
 
             # Verify pool EC cell size
             pool_prop_expected = int(self.pool.properties.value.split(":")[1])
@@ -72,7 +72,8 @@ class EcodCellSizeProperty(IorTestBase):
 
                 # Use the default pool property for container and do not update
                 if cont_cell != pool_prop_expected:
-                    self.container.properties.update(f"ec_cell_sz:{cont_cell}")
+                    self.container.properties.update(
+                        f"cksum:off,srv_cksum:off,ec_cell_sz:{cont_cell}")
 
                 # Create the container and open handle
                 self.container.create()
