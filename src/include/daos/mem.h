@@ -364,7 +364,10 @@ umem_cache_off2ptr(struct umem_store *store, umem_off_t offset)
 	D_ASSERTF(pgid <= cache->ca_md_pages, "pgid = %u, offset = %lu", pgid, offset);
 
 	base = cache->off2ptr[pgid];
-	D_ASSERTF(base != 0, "base addr = %lu", base);
+	if (base == 0) {
+		debug_dump(cache);
+	}
+	D_ASSERTF(base != 0, "base addr[%u] = %lu", pgid, base);
 
 	return (void *)((uintptr_t)base + ((offset - cache->ca_base_off) & cache->ca_page_mask));
 }
