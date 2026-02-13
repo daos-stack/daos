@@ -324,8 +324,9 @@ Boolean runUnitTestStage(String name) {
     return runStage(params, pragmas)
 }
 
-Boolean bullseyeOverride() {
-    return runStage(['CI_FULL_BULLSEYE_REPORT': true])
+Boolean bullseyeReport() {
+    // return runStage(['CI_FULL_BULLSEYE_REPORT': true])
+    return paramsValue('CI_FULL_BULLSEYE_REPORT', true) != true
 }
 
 /**
@@ -834,7 +835,7 @@ pipeline {
                             name: 'Build on EL 8.8',
                             distro:'el8',
                             compiler: 'gcc',
-                            runCondition: !bullseyeOverride(),
+                            runCondition: !bullseyeReport(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -857,7 +858,7 @@ pipeline {
                             name: 'Build on EL 9.6',
                             distro:'el9',
                             compiler: 'gcc',
-                            runCondition: !bullseyeOverride(),
+                            runCondition: !bullseyeReport(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -882,7 +883,7 @@ pipeline {
                             distro:'leap15',
                             rpmDistro: 'suse.lp155',
                             compiler: 'gcc',
-                            runCondition: !bullseyeOverride(),
+                            runCondition: !bullseyeReport(),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -903,7 +904,7 @@ pipeline {
                             name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
                             distro:'leap15',
                             compiler: 'icc',
-                            runCondition: !bullseyeOverride(),
+                            runCondition: !bullseyeReport(),
                             buildRpms: false,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -960,7 +961,7 @@ pipeline {
                 stage('Unit Test on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -983,7 +984,7 @@ pipeline {
                 stage('Unit Test bdev on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -1006,7 +1007,7 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() && !bullseyeOverride() }
+                        expression { params.CI_NLT_TEST && !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -1048,7 +1049,7 @@ pipeline {
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -1074,7 +1075,7 @@ pipeline {
                 stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -1214,7 +1215,7 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -1245,7 +1246,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getTestDaosPackages('el8', add_daos_pkgs(), bullseyeOverride()) + ' mercury-libfabric',
+                                inst_rpms: getTestDaosPackages('el8', add_daos_pkgs(), bullseyeReport()) + ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1258,7 +1259,7 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label vm9_label('EL9')
@@ -1280,7 +1281,7 @@ pipeline {
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1303,7 +1304,7 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label vm9_label('Ubuntu')
@@ -1325,7 +1326,7 @@ pipeline {
                 stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeOverride() }
+                        expression { !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         dockerfile {
@@ -1381,7 +1382,7 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() && !bullseyeOverride() }
+                        expression { params.CI_TEST_EL8_RPMs && !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1402,7 +1403,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() && !bullseyeOverride() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() && !bullseyeReport() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
