@@ -326,7 +326,7 @@ Boolean runUnitTestStage(String name) {
 
 Boolean bullseyeReport() {
     // return runStage(['CI_FULL_BULLSEYE_REPORT': true])
-    return paramsValue('CI_FULL_BULLSEYE_REPORT', true) != true
+    return (paramsValue('CI_FULL_BULLSEYE_REPORT', true) == true)
 }
 
 /**
