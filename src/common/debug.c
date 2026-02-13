@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -349,83 +349,4 @@ daos_path2str(const char *path)
 	return "<path too long>";
 }
 
-#endif
-
-// struct umem_cache {
-// 	struct umem_store *ca_store;
-// 	/** Base address of the page cache */
-// 	void            *ca_base;
-// 	/** Offset of first page */
-// 	uint32_t         ca_base_off;
-// 	/** Cache Mode */
-// 	uint32_t         ca_mode;
-// 	/** WAL replay status */
-// 	uint32_t         ca_replay_done;
-// 	/** Total MD pages */
-// 	uint32_t         ca_md_pages;
-// 	/** Total memory pages in cache */
-// 	uint32_t         ca_mem_pages;
-// 	/** Maximum non-evictable memory pages */
-// 	uint32_t         ca_max_ne_pages;
-// 	/** Page size */
-// 	uint32_t         ca_page_sz;
-// 	/** Page size shift */
-// 	uint32_t         ca_page_shift;
-// 	/** Page size mask */
-// 	uint32_t         ca_page_mask;
-// 	/** Per-page Bitmap size (in uint64_t) */
-// 	uint32_t         ca_bmap_sz;
-// 	/** Free list for unmapped page info */
-// 	d_list_t         ca_pgs_free;
-// 	/** Non-evictable & evictable dirty pages */
-// 	d_list_t         ca_pgs_dirty;
-// 	/** All Non-evictable[0] & evictable[1] pages */
-// 	d_list_t         ca_pgs_lru[2];
-// 	/** all the pages in the progress of flushing */
-// 	d_list_t         ca_pgs_flushing;
-// 	/** all the pages waiting for commit */
-// 	d_list_t         ca_pgs_wait_commit;
-// 	/** all the pages being pinned */
-// 	d_list_t         ca_pgs_pinned;
-// 	/** Highest committed transaction ID */
-// 	uint64_t         ca_commit_id;
-// 	/** Callback to tell if a page is evictable */
-// 	bool		 (*ca_evictable_fn)(void *arg, uint32_t pg_id);
-// 	/** Callback being called on page loaded/evicted */
-// 	int		 (*ca_evtcb_fn)(int event_type, void *arg, uint32_t pg_id);
-// 	/** Argument to the callback function */
-// 	void            *ca_fn_arg;
-// 	/** Page stats */
-// 	uint32_t         ca_pgs_stats[UMEM_PG_STATS_MAX];
-// 	/** Cache stats */
-// 	uint64_t	 ca_cache_stats[UMEM_CACHE_STATS_MAX];
-// 	/** How many waiters waiting on free page reserve */
-// 	uint32_t         ca_reserve_waiters;
-// 	/** Waitqueue for free page reserve: umem_cache_reserve() */
-// 	void            *ca_reserve_wq;
-// 	/** Waiters for evictable pages to be unpinned */
-// 	uint32_t         ca_unpin_waiters;
-// 	/** Waitqueue for waiters for evictable pages to be unpinned */
-// 	void            *ca_unpin_wq;
-// 	/** TODO: some other global status */
-// 	uint64_t        *ptr2off;
-// 	uintptr_t       *off2ptr;
-// 	/** MD page array, array index is page ID */
-// 	struct umem_page ca_pages[0];
-// };
-
-#ifdef DAOS_PMEM_BUILD
-#include <daos/mem.h>
-
-void
-debug_dump(void *cache_ptr)
-{
-	struct umem_cache *cache = cache_ptr;
-	uintptr_t          base;
-
-	for (unsigned i = 0; i <= cache->ca_md_pages; ++i) {
-		base = cache->off2ptr[i];
-		D_ERROR("off2ptr[%u] = %lx\n", i, base);
-	}
-}
 #endif

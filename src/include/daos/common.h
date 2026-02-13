@@ -1192,7 +1192,4 @@ explicit_bzero(void *s, size_t count) {
 }
 #endif /* NEED_EXPLICIT_BZERO */
 
-void
-debug_dump(void *cache);
-
 #endif /* __DAOS_COMMON_H__ */
