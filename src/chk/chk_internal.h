@@ -591,6 +591,14 @@ struct chk_pool_shard {
 	chk_pool_free_data_t	 cps_free_cb;
 };
 
+struct chk_engine_ult {
+	/* Link into chk_pool_rec::cpr_ult_list. */
+	d_list_t   ceu_link;
+	ABT_thread ceu_ult;
+	int        ceu_result;
+	char       ceu_data[0];
+};
+
 /* Check engine uses it to trace pools. Query logic uses it to organize the result. */
 struct chk_pool_rec {
 	/* Link into chk_instance::ci_pool_list. */
@@ -601,6 +609,8 @@ struct chk_pool_rec {
 	d_list_t		 cpr_shard_list;
 	/* The list of chk_pending_rec. */
 	d_list_t		 cpr_pending_list;
+	/* The list of active ULTs that are handling some inconsistency and maybe blocked. */
+	d_list_t                 cpr_ult_list;
 	uint32_t		 cpr_shard_nr;
 	uint32_t		 cpr_started:1,
 				 cpr_start_post:1,
@@ -1059,6 +1069,7 @@ chk_pool_put(struct chk_pool_rec *cpr)
 		D_ASSERT(cpr->cpr_thread == ABT_THREAD_NULL);
 		D_ASSERT(d_list_empty(&cpr->cpr_pending_list));
 		D_ASSERT(d_list_empty(&cpr->cpr_shutdown_link));
+		D_ASSERT(d_list_empty(&cpr->cpr_ult_list));
 
 		while ((cps = d_list_pop_entry(&cpr->cpr_shard_list, struct chk_pool_shard,
 					       cps_link)) != NULL) {
