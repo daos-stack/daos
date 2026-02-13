@@ -746,8 +746,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	int			rc = 0;
 
 	if (tls->mpt_fini) {
-		D_WARN("some one abort the rebuild "DF_UUID"\n",
-		       DP_UUID(mrone->mo_pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MRO(mrone));
 		D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
 	}
 
@@ -2005,7 +2004,7 @@ migrate_one_ult(void *arg)
 
 	tls = mrone->mo_tls;
 	if (tls->mpt_fini) {
-		D_WARN("some one abort the rebuild " DF_UUID "\n", DP_UUID(mrone->mo_pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MRO(mrone));
 		goto out;
 	}
 
@@ -2458,8 +2457,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 		iod_eph_total);
 
 	if (tls->mpt_fini) {
-		D_WARN("some one abort the rebuild "DF_UUID"\n",
-		       DP_UUID(iter_arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(out, rc = 0);
 	}
 	if (iod_eph_total == 0 || tls->mpt_fini) {
@@ -2617,8 +2615,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 		return rc;
 
 	if (tls->mpt_fini) {
-		D_WARN("some one abort the rebuild "DF_UUID"\n",
-		       DP_UUID(arg->arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(put, rc = 0);
 	}
 
@@ -2743,8 +2740,7 @@ migrate_obj_punch_one(void *data)
 
 	tls = arg->pool_tls;
 	if (tls->mpt_fini) {
-		D_WARN("some one abort the rebuild "DF_UUID"\n",
-		       DP_UUID(arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(out, rc = 0);
 	}
 
@@ -2793,8 +2789,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 	int			rc = 0;
 
 	if (tls->mpt_fini) {
-		D_WARN("some one abort the rebuild "DF_UUID"\n",
-		       DP_UUID(arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(out, rc = 0);
 	}
 	d_list_for_each_entry_safe(mrone, tmp, &unpack_arg->merge_list,
@@ -3196,8 +3191,7 @@ migrate_obj_ult(void *data)
 	migrate_obj_get(arg);
 	tls = arg->pool_tls;
 	if (tls->mpt_fini) {
-		D_WARN("some one abort the rebuild "DF_UUID"\n",
-		       DP_UUID(arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(free_notls, rc);
 	}
 
@@ -3955,7 +3949,7 @@ migrate_check_one(void *data)
 	arg->dms.dm_total_size += tls->mpt_size;
 	if (arg->dms.dm_status == 0)
 		arg->dms.dm_status = tls->mpt_status;
-	arg->total_ult_cnt = tls->mpt_tgt_obj_ult_cnt + tls->mpt_tgt_dkey_ult_cnt;
+	arg->total_ult_cnt += (tls->mpt_tgt_obj_ult_cnt + tls->mpt_tgt_dkey_ult_cnt);
 	arg->ult_running += tls->mpt_ult_running;
 	ABT_mutex_unlock(arg->status_lock);
 	D_DEBUG(DB_REBUILD,
