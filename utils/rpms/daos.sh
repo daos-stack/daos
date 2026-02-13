@@ -14,6 +14,7 @@ if [ -z "${SL_PREFIX:-}" ]; then
   exit 1
 fi
 
+code_coverage="${1:-false}"
 daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
@@ -426,6 +427,21 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 # Don't do autoreq, we know we need OpenMPI so add it explicitly
 build_package "daos-client-tests-openmpi" "noautoreq"
+
+# Code coverage
+if [[ "${code_coverage}" != "false" ]]; then
+  code_coverage_prefix="/opt/BullseyeCoverage"
+  EXTERNAL_DEPENDS=("${bullseye_normal}")
+  TARGET_PATH="${code_coverage_prefix}/daos"
+  list_files files "test.cov"
+  append_install_list "${files[@]}"
+
+  cat << EOF  > "${tmp}/post_install_bullseye"
+chmod 666 ${code_coverage_prefix}/daos/test.cov
+EOF
+  EXTRA_OPTS+=("--after-install" "${tmp}/post_install_bullseye")
+  build_package "daos-code-coverage"
+fi
 
 #shim packages
 PACKAGE_TYPE="empty"

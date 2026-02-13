@@ -7,46 +7,49 @@
 #
 set -eu
 
-# No longer used but provided by pipeline-lib
-# distro="$1"
-# quick_build="${2:-false}"
+distro="${1:-el8}"
+code_coverage="${2:-false}"
 
 OPENMPI_VER=""
 PY_MINOR_VER=""
 
-export DISTRO="el8" # should also work for el9
-pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
-      boost-python3$PY_MINOR_VER-devel                               \
-      capstone                                                       \
-      $(utils/rpms/package_version.sh argobots lib)                  \
-      $(utils/rpms/package_version.sh argobots debug)                \
-      $(utils/rpms/package_version.sh daos_spdk dev)                 \
-      $(utils/rpms/package_version.sh daos_spdk debug)               \
-      $(utils/rpms/package_version.sh isal dev)                      \
-      $(utils/rpms/package_version.sh isal_crypto lib)               \
-      $(utils/rpms/package_version.sh isal_crypto debug)             \
-      $(utils/rpms/package_version.sh libfabric dev)                 \
-      $(utils/rpms/package_version.sh libfabric debug)               \
-      $(utils/rpms/package_version.sh mercury dev)                   \
-      $(utils/rpms/package_version.sh mercury debug)                 \
-      $(utils/rpms/package_version.sh mercury lib mercury_libfabric) \
-      $(utils/rpms/package_version.sh pmdk lib pmemobj)              \
-      $(utils/rpms/package_version.sh pmdk debug pmemobj)            \
-      $(utils/rpms/package_version.sh pmdk debug pmem)               \
-      fuse3                                                          \
-      gotestsum                                                      \
-      hwloc-devel                                                    \
-      libasan                                                        \
-      libipmctl-devel                                                \
-      libyaml-devel                                                  \
-      numactl                                                        \
-      numactl-devel                                                  \
-      openmpi$OPENMPI_VER                                            \
-      patchelf                                                       \
-      pciutils-devel                                                 \
-      protobuf-c                                                     \
-      valgrind-devel"
+export DISTRO="${distro}"
+pkgs=("$(utils/rpms/package_version.sh argobots lib)")
+pkgs+=("boost-python3${PY_MINOR_VER}-devel")
+pkgs+=("capstone")
+pkgs+=("$(utils/rpms/package_version.sh argobots lib)")
+pkgs+=("$(utils/rpms/package_version.sh argobots debug)")
+pkgs+=("$(utils/rpms/package_version.sh daos_spdk dev)")
+pkgs+=("$(utils/rpms/package_version.sh daos_spdk debug)")
+pkgs+=("$(utils/rpms/package_version.sh isal dev)")
+pkgs+=("$(utils/rpms/package_version.sh isal_crypto lib)")
+pkgs+=("$(utils/rpms/package_version.sh isal_crypto debug)")
+pkgs+=("$(utils/rpms/package_version.sh libfabric dev)")
+pkgs+=("$(utils/rpms/package_version.sh libfabric debug)")
+pkgs+=("$(utils/rpms/package_version.sh mercury dev)")
+pkgs+=("$(utils/rpms/package_version.sh mercury debug)")
+pkgs+=("$(utils/rpms/package_version.sh mercury lib mercury_libfabric)")
+pkgs+=("$(utils/rpms/package_version.sh pmdk lib pmemobj)")
+pkgs+=("$(utils/rpms/package_version.sh pmdk debug pmemobj)")
+pkgs+=("$(utils/rpms/package_version.sh pmdk debug pmem)")
+pkgs+=("fuse3")
+pkgs+=("gotestsum")
+pkgs+=("hwloc-devel")
+pkgs+=("libasan")
+pkgs+=("libipmctl-devel")
+pkgs+=("libyaml-devel")
+pkgs+=("numactl")
+pkgs+=("numactl-devel")
+pkgs+=("openmpi${OPENMPI_VER}")
+pkgs+=("patchelf")
+pkgs+=("pciutils-devel")
+pkgs+=("protobuf-c")
+pkgs+=("valgrind-devel")
+
+if [ "${code_coverage}" == "true" ] ; then
+    pkgs+=("$(utils/rpms/package_version.sh bullseye normal)")
+fi
 
 # output with trailing newline suppressed
-echo  -e "$pkgs\c"
+printf '%s' "${pkgs[*]}"
 exit 0

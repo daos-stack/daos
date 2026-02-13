@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -177,8 +177,9 @@ class TestEnvironment():
         if self.insecure_mode is None:
             self.insecure_mode = "True"
         if self.bullseye_src is None:
-            self.bullseye_src = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
+            self.bullseye_src = "/opt/BullseyeCoverage/daos/test.cov"
+            # self.bullseye_src = os.path.join(
+            #     os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
         if self.bullseye_file is None:
             self.bullseye_file = os.path.join(os.sep, "tmp", "test.cov")
         if self.daos_prefix is None:

@@ -7,20 +7,33 @@ set -uex
 
 NODE="${NODELIST%%,*}"
 
-rm -rf nlt_logs
-mkdir nlt_logs
+case $STAGE_NAME in
+    "NLT on "*)
+      test_log_dir="nlt_logs"
+      ;;
+    "NLT with Bullseye on "*)
+      test_log_dir="nlt_bullseye_logs"
+      ;;
+    *)
+      echo "Unexpected STAGE_NAME '$STAGE_NAME' in test_nlt_post.sh"
+      exit 1
+      ;;
+esac
+
+rm -rf "$test_log_dir"
+mkdir "$test_log_dir"
 
 # Copy any log files.  Use rsync filters here to allow us to specify
 # all files we want to copy, as it's much more flexible than using
 # standard wildcards.
 rsync -v -dprt -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="include dnt*.log" --filter="include dnt*.log.bz2" \
-      --filter="include dnt_fi_*_logs" \
-      --filter="exclude *" nlt_logs/
+      --filter="include dnt_fi_*_logs" --filter="include test.cov" \
+      --filter="exclude *" "${test_log_dir}/"
 
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
       --filter="include nlt*.json" --filter="include dnt*.xml" \
-      --filter="include nltir.xml" --filter="include nltr.json" \
+      --filter="include nltir*.xml" --filter="include nltr*.json" \
       --filter="include nlt-junit.xml" --filter="exclude *" ./
 mkdir -p vm_test
 mv nlt-errors.json vm_test/
