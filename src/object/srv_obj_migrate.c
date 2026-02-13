@@ -48,6 +48,7 @@
 #define MIGR_INF_DATA_LWM       (1 << 28)
 
 #define ENV_MIGRATE_OBJ_CONCUR  "D_MIGRATE_OBJ_CONCUR"
+#define ENV_MIGRATE_KEY_CONCUR  "D_MIGRATE_KEY_CONCUR"
 
 /* Number of concurrent objects being migrated per engine, consider we have 4 resource
  * buckets, this number divided by 4 is the per-bucket concurrency.
@@ -55,15 +56,22 @@
  * Default=1600 means an engine can concurrently rebuild 100 EC(16+P) objects, which
  * has high enough concurrency and wouldn't cause network resource exhaustion.
  */
+;
+
 enum {
-	MIGR_OBJ_CONCUR_MIN = 400,
+	MIGR_OBJ_CONCUR_MIN = 800,
 	MIGR_OBJ_CONCUR_DEF = 1600,
-	MIGR_OBJ_CONCUR_MAX = 4000,
+	MIGR_OBJ_CONCUR_MAX = 3200,
 };
 
 enum {
-	MIGR_TGT_UNITS_MIN = 50,
-	MIGR_TGT_UNITS_DEF = 200,
+	/* OBJ_CUR + KEY_CUR is less than 1/3 of HW limit, the reason of being conservative
+	 * is because we don't have precise control and some data pattern (fragmented RDMA)
+	 * can lead to peak * workload.
+	 */
+	MIGR_KEY_CONCUR_MIN = (1600 - MIGR_OBJ_CONCUR_MIN),
+	MIGR_KEY_CONCUR_DEF = (4800 - MIGR_OBJ_CONCUR_DEF),
+	MIGR_KEY_CONCUR_MAX = (6400 - MIGR_OBJ_CONCUR_MAX),
 };
 
 enum {
@@ -2073,6 +2081,8 @@ again:
 	while (1) {
 		if (tls->mpt_fini) {
 			rc = migrate_pool_tls_get_status(tls);
+			if (shared_res)
+				ABT_mutex_unlock(rmg->rmg_mutex);
 			D_GOTO(out, rc);
 		}
 
@@ -4358,8 +4368,11 @@ int
 obj_migrate_init(void)
 {
 	unsigned int obj_units = MIGR_OBJ_CONCUR_DEF;
-	unsigned int tgt_units = MIGR_TGT_UNITS_DEF;
-	unsigned int bkt_units;
+	unsigned int key_units = MIGR_KEY_CONCUR_DEF;
+	unsigned int bkt_obj_units;
+	unsigned int bkt_key_units;
+	unsigned int tgt_obj_units;
+	unsigned int tgt_key_units;
 	int          i;
 	int          rc = 0;
 
@@ -4388,13 +4401,19 @@ obj_migrate_init(void)
 			obj_units = MIGR_OBJ_CONCUR_MAX;
 	}
 
-	bkt_units = obj_units / migr_eng_res.er_bucket_nr;
-	if (migr_eng_res.er_bucket_type == MIGR_BUCKET_PRIV)
-		tgt_units = bkt_units;
-	if (tgt_units > bkt_units)
-		tgt_units = bkt_units;
-	if (tgt_units * migr_eng_res.er_bucket_size < bkt_units)
-		tgt_units = bkt_units / migr_eng_res.er_bucket_size;
+	rc = d_getenv_uint(ENV_MIGRATE_KEY_CONCUR, &key_units);
+	if (rc == 0) {
+		if (key_units < MIGR_KEY_CONCUR_MIN)
+			key_units = MIGR_KEY_CONCUR_MIN;
+		if (key_units > MIGR_KEY_CONCUR_MAX)
+			key_units = MIGR_KEY_CONCUR_MAX;
+	}
+
+	bkt_obj_units = obj_units / migr_eng_res.er_bucket_nr;
+	bkt_key_units = key_units / migr_eng_res.er_bucket_nr;
+
+	tgt_obj_units = bkt_obj_units / MIN(2, migr_eng_res.er_bucket_size);
+	tgt_key_units = bkt_key_units / MIN(2, migr_eng_res.er_bucket_size);
 
 	memset(&migr_eng_res, 0, sizeof(migr_eng_res));
 
@@ -4409,16 +4428,15 @@ obj_migrate_init(void)
 		if (rc != ABT_SUCCESS)
 			D_GOTO(out, rc = dss_abterr2der(rc));
 
-		/* NB: only a setset of CONCUR RMGs are actually used */
-		rc = migr_res_init(rmg, MIGR_CC, "CONCUR", bkt_units);
+		rc = migr_res_init(rmg, MIGR_CC, "CONCUR", bkt_obj_units);
 		if (rc)
 			D_GOTO(out, rc);
 
-		rc = migr_res_init(rmg, MIGR_OBJ, "OBJ", tgt_units);
+		rc = migr_res_init(rmg, MIGR_OBJ, "OBJ", tgt_obj_units);
 		if (rc)
 			D_GOTO(out, rc);
 
-		rc = migr_res_init(rmg, MIGR_KEY, "KEY", tgt_units);
+		rc = migr_res_init(rmg, MIGR_KEY, "KEY", tgt_key_units);
 		if (rc)
 			D_GOTO(out, rc);
 
