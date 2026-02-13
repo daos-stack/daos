@@ -60,7 +60,7 @@ class EcodCellSizeProperty(IorTestBase):
             self.pool = self.get_pool(properties=f"rd_fac:0,space_rb:0,ec_cell_sz:{pool_cell_size}")
 
             # Verify pool EC cell size
-            pool_prop_expected = int(self.pool.properties.value.split(":")[1])
+            pool_prop_expected = int(self.pool.properties.value.split(",")[-1].split(":")[1])
             self.assertEqual(
                 pool_prop_expected, self.pool.get_property("ec_cell_sz"),
                 "pool get-prop ec_cell_sz does not match set property")
