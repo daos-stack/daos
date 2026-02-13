@@ -2097,7 +2097,7 @@ again:
 		if (tls->mpt_fini) {
 			rc = migrate_pool_tls_get_status(tls);
 			if (shared_res)
-				ABT_mutex_lock(rmg->rmg_mutex);
+				ABT_mutex_unlock(rmg->rmg_mutex);
 			D_GOTO(out, rc);
 		}
 
