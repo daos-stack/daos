@@ -651,6 +651,7 @@
 {
    tsan::MemoryAccessRange
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan18MemoryAccessRangeTILb0EEEvPNS_11ThreadStateEmmm
    ...
    fun:racecall
@@ -658,6 +659,7 @@
 {
    tsan::MemoryAccessRange
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
    ...
    fun:racecall
@@ -665,6 +667,7 @@
 {
    tsan::TraceRestartMemoryAccess
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan24TraceRestartMemoryAccessEPNS_11ThreadStateEmmmm
    ...
    fun:racecall
@@ -672,12 +675,14 @@
 {
    __tsan_read
    Memcheck:Value8
+   ...
    fun:__tsan_read
    fun:racecall
 }
 {
    __tsan_write
    Memcheck:Value8
+   ...
    fun:__tsan_write
    fun:racecall
 }
