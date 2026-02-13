@@ -22,21 +22,12 @@ fi
 if [ ! -e "$COVFILE" ]; then
   echo "Coverage file ${COVFILE} is missing"
   exit 1
-else
-  ls -al "${COVFILE}"
-  # covdir -m
 fi
 
 # Generate the html report
 rm -fr bullseye_code_coverage_report || true
 mkdir bullseye_code_coverage_report
-cp /opt/BullseyeCoverage/bin/bullseye_sources.tar.gz .
+cp /opt/BullseyeCoverage/daos/bullseye_sources.tar.gz .
 tar -xf bullseye_sources.tar.gz
 covhtml --srcdir . --file test.cov bullseye_code_coverage_report
 ls -al bullseye_code_coverage_report
-
-# rm -fr bullseye_code_coverage_report || true
-# mkdir bullseye_code_coverage_report
-# java -jar bullshtml.jar bullseye_code_coverage_report
-# ls -al bullseye_code_coverage_report
-
