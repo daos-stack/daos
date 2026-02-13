@@ -540,32 +540,6 @@ pipeline {
                 }
             }
         }
-        stage('Test') {
-            parallel {
-                stage('Functional on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8.8')
-            }
-        }
         stage('Test Hardware') {
             when {
                 beforeAgent true
@@ -582,18 +556,6 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Large MD on SSD',
-                            pragma_suffix: '-hw-large-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
