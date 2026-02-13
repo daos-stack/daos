@@ -59,6 +59,8 @@ bool bio_scm_rdma;
 bool                bio_spdk_inited;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
+/* SPDK NVMe power management value, use bits 0-4 as per NVMe spec */
+unsigned int        bio_spdk_power_mgmt_val = NVME_POWER_MGMT_UNINIT;
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
@@ -267,6 +269,11 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
+
+	d_getenv_uint("DAOS_NVME_POWER_MGMT", &bio_spdk_power_mgmt_val);
+	if (bio_spdk_power_mgmt_val != NVME_POWER_MGMT_UNINIT)
+		D_INFO("NVMe power management setting to be applied is %u\n",
+		       bio_spdk_power_mgmt_val);
 
 	d_getenv_uint("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
@@ -940,8 +947,8 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	 * Hold the SPDK bdev by an open descriptor, otherwise, the bdev
 	 * could be deconstructed by SPDK on device hot remove.
 	 */
-	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
-				d_bdev, &d_bdev->bb_desc);
+	rc =
+	    spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb, d_bdev, &d_bdev->bb_desc);
 	if (rc != 0) {
 		D_ERROR("Failed to hold bdev %s, %d\n", d_bdev->bb_name, rc);
 		rc = daos_errno2der(-rc);
@@ -949,6 +956,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	}
 
 	D_ASSERT(d_bdev->bb_desc != NULL);
+
 	/* Try to load blobstore without specifying 'bstype' first */
 	bs = load_blobstore(ctxt, d_bdev->bb_name, NULL, false, false,
 			    NULL, NULL);
@@ -1049,6 +1057,12 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			continue;
 
 		bdev_name = spdk_bdev_get_name(bdev);
+
+		/* Apply NVMe power management settings */
+		rc = bio_set_power_mgmt(ctxt, bdev_name);
+		if (rc != 0 && rc != -DER_NOTSUPPORTED)
+			D_WARN("Failed to set power management for device %s: " DF_RC "\n",
+			       bdev_name, DP_RC(rc));
 
 		rc = bdev_name2roles(bdev_name);
 		if (rc < 0) {
