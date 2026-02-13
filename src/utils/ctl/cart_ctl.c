@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,6 +55,7 @@ enum cmd_t {
 	CMD_SET_FI_ATTR,
 	CMD_LOG_SET,
 	CMD_LOG_ADD_MSG,
+	CMD_DUMP_COUNTERS,
 };
 
 struct cmd_info {
@@ -78,6 +80,7 @@ struct cmd_info cmds[] = {
     DEF_CMD(CMD_SET_FI_ATTR, CRT_OPC_CTL_FI_SET_ATTR),
     DEF_CMD(CMD_LOG_SET, CRT_OPC_CTL_LOG_SET),
     DEF_CMD(CMD_LOG_ADD_MSG, CRT_OPC_CTL_LOG_ADD_MSG),
+    DEF_CMD(CMD_DUMP_COUNTERS, CRT_OPC_CTL_DUMP_COUNTERS),
 };
 
 static char *
@@ -270,7 +273,7 @@ print_usage_msg(const char *msg)
 	msg("Usage: cart_ctl <cmd> --group-name name --rank "
 	    "start-end,start-end,rank,rank\n");
 	msg("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid, ");
-	msg("set_log, set_fi_attr, add_log_msg\n");
+	msg("set_log, set_fi_attr, add_log_msg, dump_counters\n");
 	msg("\nset_log:\n");
 	msg("\tSet log to mask passed via -l <mask> argument\n");
 	msg("\nget_uri_cache:\n");
@@ -281,6 +284,8 @@ print_usage_msg(const char *msg)
 	msg("\tPrint hostnames of specified ranks\n");
 	msg("\nget_pid:\n");
 	msg("\tReturn pids of the specified ranks\n");
+	msg("\ndump_counters:\n");
+	msg("\tDump mercury counters into the server log\n");
 	msg("\nset_fi_attr\n");
 	msg("\tset fault injection attributes for a fault ID. This command\n"
 	    "\tmust be accompanied by the option\n"
@@ -337,6 +342,8 @@ parse_args(int argc, char **argv)
 		ctl_gdata.cg_cmd_code = CMD_LOG_ADD_MSG;
 	else if (strcmp(argv[1], "use_daos_agent_env") == 0)
 		ctl_gdata.cg_use_daos_agent_env = true;
+	else if (strcmp(argv[1], "dump_counters") == 0)
+		ctl_gdata.cg_cmd_code = CMD_DUMP_COUNTERS;
 	else {
 		print_usage_msg("Invalid command\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -521,6 +528,10 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 
 		out = crt_reply_get(cb_info->cci_rpc);
 		msg("pid: %d\n", out->cgp_pid);
+	} break;
+
+	case CMD_DUMP_COUNTERS: {
+		msg("counters dumped into a server log\n");
 	} break;
 
 	default:
