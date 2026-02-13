@@ -220,7 +220,6 @@ String getScriptOutput(String script, String args='') {
  */
 Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     // Run stage w/o any conditionals
-    println("runStage: Should ${env.STAGE_NAME} be run? (params: ${params}, pragmas: ${pragmas}, otherCondition: ${otherCondition})")
     if (!otherCondition) {
         println("runStage: Skipping ${env.STAGE_NAME} due to otherCondition=false")
         return false
