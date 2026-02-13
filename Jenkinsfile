@@ -186,15 +186,6 @@ Map update_default_commit_pragmas() {
     }
 }
 
-
-String add_daos_pkgs() {
-    // Get the additional daos package names to install in functional test stages
-    // if (code_coverage_enabled()) {
-    //     return 'tests-internal,-code-coverage'
-    // }
-    return 'tests-internal'
-}
-
 /**
  * getScriptOutput
  *
@@ -491,11 +482,11 @@ def scriptedSummaryStage(Map kwargs = [:]) {
  */
 def getTestDaosPackages(String distro='el8', String add_daos_pkgs='', Boolean bullseye=false) {
     String version = daosPackagesVersion(distro, next_version())
-    String packages = 'daos{,-{client,tests,server,serialize}'
+    String packages = 'daos{,-{client,tests,server,serialize'
     if (add_daos_pkgs) {
-        packages += ",-${add_daos_pkgs}"
+        packages += ",${add_daos_pkgs}"
     }
-    packages += '}'
+    packages += '}}'
     if (version) {
         if (distro.startsWith('ubuntu20')) {
             packages += "=${version}"
@@ -506,6 +497,47 @@ def getTestDaosPackages(String distro='el8', String add_daos_pkgs='', Boolean bu
             packages += ".bullseye"
         }
     }
+    return packages
+}
+
+/**
+ *
+ * addPackages
+ *
+ * Get the additional packages for the functional test stages based on the provider and
+ * whether or not bullseye reporting is enabled.
+ *
+ * @ param ucx              whether or not to include UCX packages
+ * @ param bullseye         whether or not the packages are bullseye versioned
+ * @ return a String of package names
+ */
+String addPackages(Boolean ucx=false, Boolean bullseye=false) {
+    String packages = ''
+    if (ucx) {
+        packages += ' mercury-ucx'
+    } else {
+        packages += ' mercury-libfabric'
+    }
+    if (code_coverage) {
+        packages += ' bullseye'
+    }
+    return packages
+}
+
+/**
+ *
+ * getTestPackages
+ *
+ * Get the full list of packages for the functional test stages.
+ *
+ * @ param distro           the shorthand distro name; defaults to 'el8'
+ * @ param ucx              whether or not to include UCX packages
+ * @ param bullseye         whether or not the packages are bullseye versioned
+ * @ return a String of package names
+ */
+String getTestPackages(String distro, Boolean ucx=false, Boolean bullseye=false) {
+    String packages = getTestDaosPackages(distro, 'tests-internal', bullseye)
+    packages += addPackages(ucx, bullseye)
     return packages
 }
 
@@ -1224,7 +1256,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
+                                inst_rpms: getTestPackages('el8'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1246,7 +1278,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getTestDaosPackages('el8', add_daos_pkgs(), bullseyeReport()) + ' mercury-libfabric',
+                                inst_rpms: getTestPackages('el8', false, bullseyeReport()),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1268,7 +1300,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
+                                inst_rpms: getTestPackages('el9'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1290,7 +1322,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
+                                inst_rpms: getTestPackages('leap15'),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -1313,7 +1345,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
+                                inst_rpms: getTestPackages('ubuntu20'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1487,8 +1519,7 @@ pipeline {
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            other_daos_packages: add_daos_pkgs(),
+                            inst_rpms: getTestPackages(hwDistroTarget2(), false, bullseyeReport()),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1500,8 +1531,7 @@ pipeline {
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            other_daos_packages: add_daos_pkgs(),
+                            inst_rpms: getTestPackages(hwDistroTarget2(), false, bullseyeReport()),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
@@ -1513,8 +1543,7 @@ pipeline {
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: next_version(),
-                            other_daos_packages: add_daos_pkgs(),
+                            inst_rpms: getTestPackages(hwDistroTarget2(), false, bullseyeReport()),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1527,8 +1556,7 @@ pipeline {
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            other_daos_packages: add_daos_pkgs(),
+                            inst_rpms: getTestPackages(hwDistroTarget2(), false, bullseyeReport()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1541,8 +1569,7 @@ pipeline {
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            other_daos_packages: add_daos_pkgs(),
+                            inst_rpms: getTestPackages(hwDistroTarget2(), false, bullseyeReport()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1555,8 +1582,7 @@ pipeline {
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            other_daos_packages: add_daos_pkgs(),
+                            inst_rpms: getTestPackages(hwDistroTarget2(), true, bullseyeReport()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1569,8 +1595,7 @@ pipeline {
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            other_daos_packages: add_daos_pkgs(),
+                            inst_rpms: getTestPackages(hwDistroTarget2(), false, bullseyeReport()),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1582,8 +1607,7 @@ pipeline {
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            other_daos_packages: add_daos_pkgs(),
+                            inst_rpms: getTestPackages(hwDistroTarget2(), false, bullseyeReport()),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
