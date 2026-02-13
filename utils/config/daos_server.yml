@@ -378,7 +378,10 @@
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
-#
+#  # Currently supported values:
+#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
+#  #   FATAL, EMRG, EMIT
+#  #
 #  # default: ERR
 #  log_mask: INFO
 #
@@ -476,6 +479,10 @@
 #    max_io_errs: 100
 #    max_csum_errs: 200
 #
+#  # Set SPDK iobuf tunable values. Defaults if unset are 8192 for small and 1024 for large.
+#  spdk_iobuf:
+#    small_pool_count: 16384
+#    large_pool_count: 2048
 #
 #-
 #  # Number of I/O service threads (and network endpoints) per engine.
@@ -542,7 +549,10 @@
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
-#
+#  # Currently supported values:
+#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
+#  #   FATAL, EMRG, EMIT
+#  #
 #  # default: ERR
 #  log_mask: INFO
 #

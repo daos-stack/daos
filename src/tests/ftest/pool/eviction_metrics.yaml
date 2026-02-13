@@ -1,0 +1,42 @@
+launch:
+  !filter-only : /run/pool/default    # yamllint disable-line rule:colons
+
+hosts:
+  test_servers: 1
+  test_clients: 3
+
+timeout: 120
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage: auto
+
+pool: !mux
+  default:
+    size: 10G
+  md_on_ssd_p2:
+    size: 10G
+    mem_ratio: 25
+
+container:
+  type: POSIX
+  oclass: S1
+  dir_oclass: SX
+
+mdtest:
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
+  dfs_destroy: False
+  manager: "MPICH"
+  ppn: 32
+  test_dir: "/"
+  api: DFS
+  flags: "-C -F -G 27 -N 1 -Y -u -L"
+  branching_factor: 1
+  write_bytes: 3072
+  read_bytes: 3072

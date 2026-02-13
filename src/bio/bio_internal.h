@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +31,8 @@
  */
 #define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 #define NVME_MONITOR_SHORT_PERIOD   (3ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
+
+#define NVME_POWER_MGMT_UNINIT      UINT32_MAX
 
 struct bio_bulk_args {
 	void		*ba_bulk_ctxt;
@@ -598,14 +600,14 @@ extern struct bio_faulty_criteria	glb_criteria;
 
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
-extern bool		bio_spdk_inited;
-extern bool                             bio_vmd_enabled;
+extern bool                             bio_spdk_inited;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern unsigned int	bio_numa_node;
 extern unsigned int	bio_spdk_max_unmap_cnt;
 extern unsigned int	bio_max_async_sz;
 extern unsigned int                     bio_io_timeout;
+extern unsigned int                     bio_spdk_power_mgmt_val;
 
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		       uint64_t timeout);
@@ -720,6 +722,8 @@ void trigger_faulty_reaction(struct bio_blobstore *bbs);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 struct bio_dev_info *
 alloc_dev_info(uuid_t dev_id, struct bio_bdev *d_bdev, struct smd_dev_info *s_info);
+int
+bio_set_power_mgmt(struct bio_xs_context *ctxt, const char *bdev_name);
 
 /* bio_config.c */
 int

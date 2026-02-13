@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -242,6 +242,70 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 			} else {
 				co_prop = redun_lvl_prop;
 			}
+		}
+
+		/* Temporarily use old container property defaults due to DAOS-17946 */
+		/* Set DAOS_PROP_CO_CSUM to off if not already defined */
+		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_CSUM) == NULL) {
+			daos_prop_t *csum_prop = daos_prop_alloc(1);
+			if (csum_prop == NULL) {
+				D_ERROR("failed to allocate csum prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				return -DER_NOMEM;
+			}
+			csum_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+			csum_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_OFF;
+
+			daos_prop_t *new_merged_props = daos_prop_merge(co_prop, csum_prop);
+			if (new_merged_props == NULL) {
+				D_ERROR("failed to merge co_prop and csum_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				daos_prop_free(csum_prop);
+				return -DER_NOMEM;
+			}
+
+			/* Update co_prop to point to the newly merged properties */
+			if (merged_props) {
+				daos_prop_free(merged_props);
+				merged_props = new_merged_props;
+			} else {
+				merged_props = new_merged_props;
+			}
+			co_prop = merged_props;
+			daos_prop_free(csum_prop);
+		}
+		/* Set DAOS_PROP_CO_CSUM_SERVER_VERIFY to off if not already defined */
+		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_CSUM_SERVER_VERIFY) == NULL) {
+			daos_prop_t *csum_sv_prop = daos_prop_alloc(1);
+			if (csum_sv_prop == NULL) {
+				D_ERROR("failed to allocate csum_sv_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				return -DER_NOMEM;
+			}
+			csum_sv_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+			csum_sv_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_SV_OFF;
+
+			daos_prop_t *new_merged_props = daos_prop_merge(co_prop, csum_sv_prop);
+			if (new_merged_props == NULL) {
+				D_ERROR("failed to merge co_prop and csum_sv_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				daos_prop_free(csum_sv_prop);
+				return -DER_NOMEM;
+			}
+
+			/* Update co_prop to point to the newly merged properties */
+			if (merged_props) {
+				daos_prop_free(merged_props);
+				merged_props = new_merged_props;
+			} else {
+				merged_props = new_merged_props;
+			}
+			co_prop = merged_props;
+			daos_prop_free(csum_sv_prop);
 		}
 
 		D_ASSERT(co_prop != NULL);
@@ -1121,6 +1185,12 @@ daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
 }
 
+int
+daos_pool_get_prop(const uuid_t pool_uuid, const char *name, char **value_out)
+{
+	return dmg_pool_get_prop(dmg_config_file, NULL, pool_uuid, name, value_out);
+}
+
 void
 daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 		  const char *grp, d_rank_list_t *svc, d_rank_t rank)
@@ -1702,4 +1772,42 @@ test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_nu
 
 	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
 	assert_rc_equal(rc, 0);
+}
+
+/**
+ * Duplicate unescaped \a value, escaping every ';' with '\\'. The caller is
+ * responsible for freeing the returned string.
+ *
+ * \param[in]	value	self_heal value to escape
+ */
+char *
+test_escape_self_heal(const char *value)
+{
+	size_t      len = 0;
+	char       *new_value;
+	const char *src;
+	char       *dst;
+
+	for (src = value; *src != '\0'; src++) {
+		D_ASSERT(*src != '\\');
+		len++;
+		if (*src == ';')
+			len++; /* for '\\' */
+	}
+
+	D_ALLOC(new_value, len + 1 /* '\0' */);
+	D_ASSERT(new_value != NULL);
+
+	dst = new_value;
+	for (src = value; *src != '\0'; src++) {
+		if (*src == ';') {
+			*dst++ = '\\';
+			*dst++ = ';';
+		} else {
+			*dst++ = *src;
+		}
+	}
+	*dst = '\0';
+
+	return new_value;
 }

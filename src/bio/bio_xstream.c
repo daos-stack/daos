@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,8 +31,8 @@
 
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
-/* SPDK blob parameters */
-#define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
+/* Default cluster size in MB */
+#define DAOS_DEFAULT_CLUSTER_MB 128
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_INIT_PCT 50      /* Default per-xstream init chunks, in percentage */
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Default per-xstream max chunks, 1GB */
@@ -56,11 +56,11 @@ static unsigned int bio_chk_init_pct;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
 /* Whether SPDK inited */
-bool bio_spdk_inited;
-/* Whether VMD is enabled */
-bool                bio_vmd_enabled;
+bool                bio_spdk_inited;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
+/* SPDK NVMe power management value, use bits 0-4 as per NVMe spec */
+unsigned int        bio_spdk_power_mgmt_val = NVME_POWER_MGMT_UNINIT;
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
@@ -109,7 +109,6 @@ bio_spdk_conf_read(struct spdk_env_opts *opts)
 		return rc;
 	}
 	nvme_glb.bd_nvme_roles = roles;
-	bio_vmd_enabled        = vmd_enabled && (nvme_glb.bd_bdev_class == BDEV_CLASS_NVME);
 
 	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 	if (rc != 0) {
@@ -224,6 +223,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	char		*env;
 	int		 rc, fd;
 	unsigned int     size_mb = BIO_DMA_CHUNK_MB, io_timeout_secs = 0;
+	unsigned int     cluster_mb = DAOS_DEFAULT_CLUSTER_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -270,6 +270,11 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
+	d_getenv_uint("DAOS_NVME_POWER_MGMT", &bio_spdk_power_mgmt_val);
+	if (bio_spdk_power_mgmt_val != NVME_POWER_MGMT_UNINIT)
+		D_INFO("NVMe power management setting to be applied is %u\n",
+		       bio_spdk_power_mgmt_val);
+
 	d_getenv_uint("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
@@ -300,7 +305,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	}
 
 	if (nvme_conf && strlen(nvme_conf) > 0) {
-		fd = open(nvme_conf, O_RDONLY, 0600);
+		fd = open(nvme_conf, O_RDONLY);
 		if (fd < 0)
 			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
 			       nvme_conf, DP_RC(daos_errno2der(errno)));
@@ -323,8 +328,14 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks, prealloc %u chunks\n",
 	       bio_chk_cnt_max, size_mb, init_chk_cnt());
 
+	d_getenv_uint("DAOS_BS_CLUSTER_MB", &cluster_mb);
+	if (cluster_mb < 32 || cluster_mb > 1024) {
+		D_WARN("DAOS_BS_CLUSTER_MB %u is invalid, default %u is used\n", cluster_mb,
+		       DAOS_DEFAULT_CLUSTER_MB);
+		cluster_mb = DAOS_DEFAULT_CLUSTER_MB;
+	}
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
-	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
+	nvme_glb.bd_bs_opts.cluster_sz      = (cluster_mb << 20);
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	d_agetenv_str(&env, "VOS_BDEV_CLASS");
@@ -368,8 +379,9 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		nvme_glb.bd_bs_opts.cluster_sz = (1UL << 30);	/* 1GB */
 
-	D_INFO("MD on SSD is %s\n",
-	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
+	D_INFO("MD on SSD is %s, %u cluster size is used\n",
+	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled",
+	       nvme_glb.bd_bs_opts.cluster_sz);
 
 	bio_spdk_inited = true;
 
@@ -935,8 +947,8 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	 * Hold the SPDK bdev by an open descriptor, otherwise, the bdev
 	 * could be deconstructed by SPDK on device hot remove.
 	 */
-	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
-				d_bdev, &d_bdev->bb_desc);
+	rc =
+	    spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb, d_bdev, &d_bdev->bb_desc);
 	if (rc != 0) {
 		D_ERROR("Failed to hold bdev %s, %d\n", d_bdev->bb_name, rc);
 		rc = daos_errno2der(-rc);
@@ -944,6 +956,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	}
 
 	D_ASSERT(d_bdev->bb_desc != NULL);
+
 	/* Try to load blobstore without specifying 'bstype' first */
 	bs = load_blobstore(ctxt, d_bdev->bb_name, NULL, false, false,
 			    NULL, NULL);
@@ -1045,6 +1058,12 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 		bdev_name = spdk_bdev_get_name(bdev);
 
+		/* Apply NVMe power management settings */
+		rc = bio_set_power_mgmt(ctxt, bdev_name);
+		if (rc != 0 && rc != -DER_NOTSUPPORTED)
+			D_WARN("Failed to set power management for device %s: " DF_RC "\n",
+			       bdev_name, DP_RC(rc));
+
 		rc = bdev_name2roles(bdev_name);
 		if (rc < 0) {
 			D_ERROR("Failed to get role from bdev name '%s', "DF_RC"\n", bdev_name,
@@ -1067,10 +1086,10 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		/* A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible */
+		/* Clear any pre-existing VMD-LED state */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-		if ((rc != 0) && (rc != -DER_NOTSUPPORTED)) {
+		if (rc != 0) {
 			DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
 				 DP_UUID(d_bdev->bb_uuid));
 			return rc;
@@ -2016,22 +2035,15 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
-	if (!bio_vmd_enabled)
-		return;
-
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			/**
-			 * LED will be reset to faulty or normal state based on SSDs bio_bdevs.
-			 * A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible.
-			 */
+			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs. */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0) {
-				if (rc != -DER_NOTSUPPORTED)
-					DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
-						 DP_UUID(d_bdev->bb_uuid));
+				DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+					 DP_UUID(d_bdev->bb_uuid));
 				continue;
 			}
 

@@ -13,7 +13,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime/debug"
-	"sort"
 	"strings"
 	"unsafe"
 
@@ -47,11 +46,11 @@ type cliOptions struct {
 	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
+	VosPath   string `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
 	Args      struct {
-		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
-		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
-		RunCmdArgs []string   `positional-arg-name:"ddb_command_args"`
+		RunCmd     string   `positional-arg-name:"ddb_command"`
+		RunCmdArgs []string `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
 }
 
@@ -91,46 +90,6 @@ Example Paths:
 `
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
-
-type vosPathStr string
-
-func (pathStr vosPathStr) Complete(match string) (comps []flags.Completion) {
-	if match == "" || match == "/" {
-		match = defMntPrefix
-	}
-	for _, comp := range listDirVos(match) {
-		comps = append(comps, flags.Completion{Item: comp})
-	}
-	sort.Slice(comps, func(i, j int) bool { return comps[i].Item < comps[j].Item })
-
-	return
-}
-
-type ddbCmdStr string
-
-func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
-	// hack to get at command names
-	ctx, cleanup, err := InitDdb(nil)
-	if err != nil {
-		return
-	}
-	defer cleanup()
-
-	app := createGrumbleApp(ctx)
-	for _, cmd := range app.Commands().All() {
-		if match == "" || strings.HasPrefix(cmd.Name, match) {
-			comps = append(comps, flags.Completion{Item: cmd.Name})
-		}
-	}
-	sort.Slice(comps, func(i, j int) bool { return comps[i].Item < comps[j].Item })
-
-	return
-}
-
-func (cmdStr *ddbCmdStr) UnmarshalFlag(fv string) error {
-	*cmdStr = ddbCmdStr(fv)
-	return nil
-}
 
 func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 	file, err := os.Open(fileName)
@@ -229,18 +188,16 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS]"
 	p.ShortDescription = "daos debug tool"
-	p.LongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
+	p.LongDescription = `
+The DAOS Debug Tool (ddb) allows a user to navigate through and modify
 a file in the VOS format. It offers both a command line and interactive
 shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
 the '-w' option must be included.
 
-If the command requires it, the VOS file provided as the first positional
-parameter will be opened before any commands are executed. See the
-command‑specific help for details. When the VOS file is not required, it is
-ignored; however, it must still be supplied, and it may be empty (""), e.g.
-
-ddb "" ls --help
+If the command requires it, the VOS file must be provided with the parameter 
+--vos-path. The VOS file will be opened before any commands are executed. See
+the command‑specific help for details.
 `
 
 	// Set the traceback level such that a crash results in
@@ -260,6 +217,10 @@ ddb "" ls --help
 		return nil
 	}
 
+	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
+		return errors.New("Cannot use both command file and a command string")
+	}
+
 	if opts.Debug {
 		log.WithLogLevel(logging.LogLevelDebug)
 		log.Debug("debug output enabled")
@@ -272,26 +233,30 @@ ddb "" ls --help
 	defer cleanup()
 	app := createGrumbleApp(ctx)
 
-	if opts.Args.VosPath != "" {
+	if opts.SysdbPath != "" {
+		ctx.ctx.dc_db_path = C.CString(string(opts.SysdbPath))
+		defer C.free(unsafe.Pointer(ctx.ctx.dc_db_path))
+	}
+
+	if opts.VosPath != "" {
+		ctx.ctx.dc_pool_path = C.CString(string(opts.VosPath))
+		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
+
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "open") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "close") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "prov_mem") &&
+			!strings.HasPrefix(string(opts.Args.RunCmd), "smd_sync") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "rm_pool") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_list") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "dev_replace") {
-			log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-			if err := ddbOpen(ctx, string(opts.Args.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
-				return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+			log.Debugf("Connect to path: %s\n", opts.VosPath)
+			if err := ddbOpen(ctx, string(opts.VosPath), bool(opts.WriteMode)); err != nil {
+				return errors.Wrapf(err, "Error opening path: %s", opts.VosPath)
 			}
 		}
 	}
 
-	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
-		return errors.New("Cannot use both command file and a command string")
-	}
-
-	if opts.Args.VosPath != "" {
-		ctx.ctx.dc_pool_path = C.CString(string(opts.Args.VosPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
-	}
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
 		if opts.Args.RunCmd != "" {

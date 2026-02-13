@@ -79,7 +79,7 @@ enum {
 	/* smallest cell size */
 	DAOS_EC_CELL_MIN	= (4 << 10),
 	/* default cell size */
-	DAOS_EC_CELL_DEF	= (64 << 10),
+	DAOS_EC_CELL_DEF	= (128 << 10),
 	/* largest cell size */
 	DAOS_EC_CELL_MAX	= (1024 << 10),
 };
