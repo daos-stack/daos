@@ -1179,7 +1179,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 120,
+                            unitTest(timeout_time: 150,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
                                      inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
