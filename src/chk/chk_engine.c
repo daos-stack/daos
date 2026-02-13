@@ -263,28 +263,41 @@ chk_engine_post_repair(struct chk_pool_rec *cpr, int *result, bool update)
 	return *result != 0 ? *result : rc;
 }
 
-static int
-chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index, uint32_t status)
+struct chk_pm_orphan_args {
+	struct chk_pool_rec *cpoa_pool;
+	d_rank_t             cpoa_rank;
+	int                  cpoa_index;
+	uint32_t             cpoa_status;
+};
+
+static void
+chk_engine_pm_orphan_ult(void *args)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	d_rank_list_t			 ranks = { 0 };
-	struct chk_report_unit		 cru = { 0 };
-	char				*strs[2];
-	d_iov_t				 iovs[2];
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*details = NULL;
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	uint32_t			 options[2];
-	uint32_t			 option_nr = 0;
-	uint32_t			 detail_nr = 0;
-	int				 decision = -1;
-	int				 result = 0;
-	int				 rc = 0;
+	struct chk_engine_ult     *ult;
+	struct chk_pm_orphan_args *cpoa  = args;
+	struct chk_pool_rec       *cpr   = cpoa->cpoa_pool;
+	struct chk_instance       *ins   = cpr->cpr_ins;
+	struct chk_property       *prop  = &ins->ci_prop;
+	struct chk_bookmark       *cbk   = &cpr->cpr_bk;
+	d_rank_list_t              ranks = {0};
+	struct chk_report_unit     cru   = {0};
+	char                      *strs[2];
+	d_iov_t                    iovs[2];
+	d_sg_list_t                sgl;
+	d_sg_list_t               *details = NULL;
+	Chk__CheckInconsistClass   cla;
+	Chk__CheckInconsistAction  act;
+	char                       msg[CHK_MSG_BUFLEN] = {0};
+	uint64_t                   seq                 = 0;
+	uint32_t                   options[2];
+	uint32_t                   option_nr = 0;
+	uint32_t                   detail_nr = 0;
+	uint32_t                   status    = cpoa->cpoa_status;
+	d_rank_t                   rank      = cpoa->cpoa_rank;
+	int                        index     = cpoa->cpoa_index;
+	int                        decision  = -1;
+	int                        result    = 0;
+	int                        rc        = 0;
 
 	/*
 	 * NOTE: The subsequent check after handling orphan pm entry will not access the
@@ -454,32 +467,78 @@ report:
 	goto report;
 
 out:
-	return chk_engine_post_repair(cpr, &result, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
-chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct pool_component *comp,
-		       uint32_t status)
+chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index, uint32_t status)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	struct chk_report_unit		 cru = { 0 };
-	char				*strs[2];
-	d_iov_t				 iovs[2];
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*details = NULL;
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 suggested[CHK_MSG_BUFLEN] = { 0 };
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	uint32_t			 options[2];
-	uint32_t			 option_nr = 0;
-	uint32_t			 detail_nr = 0;
-	int				 decision = -1;
-	int				 result = 0;
-	int				 rc = 0;
+	struct chk_engine_ult     *ult;
+	struct chk_pm_orphan_args *args;
+	int                        rc;
+
+	D_ALLOC(ult, sizeof(*ult) + sizeof(*args));
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	args              = (struct chk_pm_orphan_args *)&ult->ceu_data[0];
+	args->cpoa_pool   = cpr;
+	args->cpoa_rank   = rank;
+	args->cpoa_index  = index;
+	args->cpoa_status = status;
+
+	ult->ceu_ult = ABT_THREAD_NULL;
+	d_list_add_tail(&ult->ceu_link, &cpr->cpr_ult_list);
+
+	rc = dss_ult_create(chk_engine_pm_orphan_ult, args, DSS_XS_SYS, 0, 0, &ult->ceu_ult);
+	if (rc != 0) {
+		d_list_del(&ult->ceu_link);
+		D_FREE(ult);
+		D_ERROR(DF_ENGINE " failed to create ULT to handle PM orphan for pool " DF_UUID
+				  ", rank %u, index %d, status %s: " DF_RC "\n",
+			DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid), rank, index,
+			pool_map_status2name(status), DP_RC(rc));
+	}
+
+	return rc;
+}
+
+struct chk_pm_dangling_args {
+	struct chk_pool_rec   *cpda_pool;
+	struct pool_map       *cpda_map;
+	struct pool_component *cpda_comp;
+	uint32_t               cpda_status;
+};
+
+static void
+chk_engine_pm_dangling_ult(void *args)
+{
+	struct chk_engine_ult       *ult;
+	struct chk_pm_dangling_args *cpda = args;
+	struct pool_map             *map  = cpda->cpda_map;
+	struct pool_component       *comp = cpda->cpda_comp;
+	struct chk_pool_rec         *cpr  = cpda->cpda_pool;
+	struct chk_instance         *ins  = cpr->cpr_ins;
+	struct chk_property         *prop = &ins->ci_prop;
+	struct chk_bookmark         *cbk  = &cpr->cpr_bk;
+	struct chk_report_unit       cru  = {0};
+	char                        *strs[2];
+	d_iov_t                      iovs[2];
+	d_sg_list_t                  sgl;
+	d_sg_list_t                 *details = NULL;
+	Chk__CheckInconsistClass     cla;
+	Chk__CheckInconsistAction    act;
+	char                         suggested[CHK_MSG_BUFLEN] = {0};
+	char                         msg[CHK_MSG_BUFLEN]       = {0};
+	uint64_t                     seq                       = 0;
+	uint32_t                     options[2];
+	uint32_t                     option_nr = 0;
+	uint32_t                     detail_nr = 0;
+	uint32_t                     status    = cpda->cpda_status;
+	int                          decision  = -1;
+	int                          result    = 0;
+	int                          rc        = 0;
 
 	D_ASSERTF(status == PO_COMP_ST_DOWNOUT || status == PO_COMP_ST_DOWN,
 		  "Unexpected pool map status %u\n", status);
@@ -636,20 +695,67 @@ report:
 	goto report;
 
 out:
-	return chk_engine_post_repair(cpr, &result, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
-chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *comp)
+chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct pool_component *comp,
+		       uint32_t status)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	struct chk_report_unit		 cru = { 0 };
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	int				 rc;
+	struct chk_engine_ult       *ult;
+	struct chk_pm_dangling_args *args;
+	int                          rc;
+
+	D_ALLOC(ult, sizeof(*ult) + sizeof(*args));
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	args              = (struct chk_pm_dangling_args *)&ult->ceu_data[0];
+	args->cpda_pool   = cpr;
+	args->cpda_map    = map;
+	args->cpda_comp   = comp;
+	args->cpda_status = status;
+
+	ult->ceu_ult = ABT_THREAD_NULL;
+	d_list_add_tail(&ult->ceu_link, &cpr->cpr_ult_list);
+
+	rc = dss_ult_create(chk_engine_pm_dangling_ult, args, DSS_XS_SYS, 0, 0, &ult->ceu_ult);
+	if (rc != 0) {
+		d_list_del(&ult->ceu_link);
+		D_FREE(ult);
+		D_ERROR(DF_ENGINE " failed to create ULT to handle PM dangling for pool " DF_UUID
+				  ", type %x, index %d, id %u, status %s: " DF_RC "\n",
+			DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid), comp->co_type,
+			comp->co_index, comp->co_id, pool_map_status2name(status), DP_RC(rc));
+	}
+
+	return rc;
+}
+
+struct chk_engine_unknown_args {
+	struct chk_pool_rec   *ceua_pool;
+	struct chk_cont_rec   *ceua_cont;
+	struct pool_component *ceua_comp;
+	uint32_t               ceua_exp_tgt_nr;
+};
+
+static void
+chk_engine_handle_unknown_ult(void *args)
+{
+	struct chk_engine_ult          *ult;
+	struct chk_engine_unknown_args *ceua = args;
+	struct chk_pool_rec            *cpr  = ceua->ceua_pool;
+	struct chk_cont_rec            *ccr  = ceua->ceua_cont;
+	struct pool_component          *comp = ceua->ceua_comp;
+	struct chk_instance            *ins  = cpr->cpr_ins;
+	struct chk_bookmark            *cbk  = &cpr->cpr_bk;
+	struct chk_report_unit          cru  = {0};
+	Chk__CheckInconsistClass        cla;
+	Chk__CheckInconsistAction       act;
+	char                            msg[CHK_MSG_BUFLEN] = {0};
+	uint64_t                        seq                 = 0;
+	int                             rc;
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
 	act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -664,22 +770,89 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	cru.cru_rank = dss_self_rank();
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = cpr->cpr_label;
-	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects unknown target entry in pool map for pool "
-		 DF_UUIDF", rank %u, index %u, status %u, skip it. You can change "
-		 "its status via DAOS debug tool if it is not for downgraded case.\n",
-		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, comp->co_status);
+
+	if (ccr != NULL) {
+		cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
+		if (ccr->ccr_label_prop != NULL && ccr->ccr_label_prop->dpp_entries != NULL)
+			cru.cru_cont_label = ccr->ccr_label_prop->dpp_entries[0].dpe_str;
+		snprintf(msg, CHK_MSG_BUFLEN - 1,
+			 "The container " DF_UUID " in the pool " DF_UUID
+			 " lost some shards: %u vs %u\n",
+			 DP_UUID(ccr->ccr_uuid), DP_UUID(cpr->cpr_uuid), ccr->ccr_tgt_nr,
+			 ceua->ceua_exp_tgt_nr);
+	} else {
+		D_ASSERT(comp != NULL);
+
+		snprintf(
+		    msg, CHK_MSG_BUFLEN - 1,
+		    "Check engine detects unknown target entry in pool map for pool " DF_UUIDF
+		    ", rank %u, index %u, status %u, skip it. You can change its status via DAOS "
+		    "debug tool if it is not for downgraded case.\n",
+		    DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, comp->co_status);
+	}
+
 	cru.cru_msg = msg;
 	cru.cru_result = 0;
 
 	rc = chk_engine_report(&cru, &seq, NULL);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" detects unknown target entry in pool map for pool "DF_UUIDF", rank %u, "
-		 "target %u, action %u (no interact), handle_rc 0, report_rc %d, decision 0\n",
-		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, act, rc);
+	if (ccr != NULL)
+		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+			 DF_ENGINE " detects incomplete container " DF_UUIDF "/" DF_UUID "shards "
+				   "%u vs %u, ignore it.\n",
+			 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid),
+			 ccr->ccr_tgt_nr, ceua->ceua_exp_tgt_nr);
+	else
+		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+			 DF_ENGINE " detects unknown target entry in pool map for pool " DF_UUIDF
+				   ", rank %u, target %u, ignore it, report_rc %d\n",
+			 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, rc);
 
-	return chk_engine_post_repair(cpr, &rc, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &rc, rc <= 0);
+}
+
+static int
+chk_engine_handle_unknown(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
+			  struct pool_component *comp, uint32_t exp_tgt_nr)
+{
+	struct chk_engine_ult          *ult;
+	struct chk_engine_unknown_args *args;
+	int                             rc;
+
+	D_ALLOC(ult, sizeof(*ult) + sizeof(*args));
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	args                  = (struct chk_engine_unknown_args *)&ult->ceu_data[0];
+	args->ceua_pool       = cpr;
+	args->ceua_cont       = ccr;
+	args->ceua_comp       = comp;
+	args->ceua_exp_tgt_nr = exp_tgt_nr;
+
+	ult->ceu_ult = ABT_THREAD_NULL;
+	d_list_add_tail(&ult->ceu_link, &cpr->cpr_ult_list);
+
+	rc = dss_ult_create(chk_engine_handle_unknown_ult, args, DSS_XS_SYS, 0, 0, &ult->ceu_ult);
+	if (rc != 0) {
+		d_list_del(&ult->ceu_link);
+		D_FREE(ult);
+		if (ccr != NULL)
+			D_ERROR(DF_ENGINE
+				" failed to create ULT to handle incomplete container " DF_UUID
+				"/" DF_UUID ", shards %d/%d: " DF_RC "\n",
+				DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid),
+				DP_UUID(ccr->ccr_uuid), ccr->ccr_tgt_nr, exp_tgt_nr, DP_RC(rc));
+		else
+			D_ERROR(DF_ENGINE
+				" failed to create ULT to handle PM unknown for pool " DF_UUID
+				", type %x, index %d, id %u, status %s: " DF_RC "\n",
+				DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid), comp->co_type,
+				comp->co_index, comp->co_id, pool_map_status2name(comp->co_status),
+				DP_RC(rc));
+	}
+
+	return rc;
 }
 
 static int
@@ -751,7 +924,7 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 				 *	 layout? It is better to keep it there with reporting it
 				 *	 to admin who can adjust the status via DAOS debug tool.
 				 */
-				rc = chk_engine_pm_unknown_target(cpr, comp);
+				rc = chk_engine_handle_unknown(cpr, NULL, comp, 0);
 			break;
 		}
 
@@ -948,6 +1121,45 @@ report:
 	return chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
+struct chk_cont_cleanup_args {
+	struct chk_pool_rec *ccca_pool;
+	struct chk_cont_rec *ccca_cont;
+	struct cont_svc     *ccca_svc;
+};
+
+static int
+chk_engine_cont_cleanup_one(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
+			    struct cont_svc *svc, void (*func)(void *))
+{
+	struct chk_engine_ult        *ult;
+	struct chk_cont_cleanup_args *args;
+	int                           rc;
+
+	D_ALLOC(ult, sizeof(*ult) + sizeof(*args));
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	args            = (struct chk_cont_cleanup_args *)&ult->ceu_data[0];
+	args->ccca_pool = cpr;
+	args->ccca_cont = ccr;
+	args->ccca_svc  = svc;
+
+	ult->ceu_ult = ABT_THREAD_NULL;
+	d_list_add_tail(&ult->ceu_link, &cpr->cpr_ult_list);
+
+	rc = dss_ult_create(func, args, DSS_XS_SYS, 0, 0, &ult->ceu_ult);
+	if (rc != 0) {
+		d_list_del(&ult->ceu_link);
+		D_FREE(ult);
+		D_ERROR(DF_ENGINE " failed to create ULT to cleanup container " DF_UUID "/" DF_UUID
+				  ": " DF_RC "\n",
+			DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid),
+			DP_RC(rc));
+	}
+
+	return rc;
+}
+
 static int
 chk_engine_cont_list_init(uuid_t pool, struct chk_cont_list_aggregator *aggregator)
 {
@@ -1005,27 +1217,32 @@ chk_engine_cont_list_remote_cb(struct chk_co_rpc_cb_args *cb_args)
 						    cb_args->cb_nr);
 }
 
-static int
-chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struct cont_svc *svc)
+static void
+chk_engine_cont_orphan_ult(void *args)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	struct chk_report_unit		 cru = { 0 };
-	char				*strs[2];
-	d_iov_t				 iovs[2];
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*details = NULL;
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	uint32_t			 options[2];
-	uint32_t			 option_nr = 0;
-	uint32_t			 detail_nr = 0;
-	int				 decision = -1;
-	int				 result = 0;
-	int				 rc = 0;
+	struct chk_engine_ult        *ult;
+	struct chk_cont_cleanup_args *ccca = args;
+	struct chk_pool_rec          *cpr  = ccca->ccca_pool;
+	struct chk_cont_rec          *ccr  = ccca->ccca_cont;
+	struct cont_svc              *svc  = ccca->ccca_svc;
+	struct chk_instance          *ins  = cpr->cpr_ins;
+	struct chk_property          *prop = &ins->ci_prop;
+	struct chk_bookmark          *cbk  = &cpr->cpr_bk;
+	struct chk_report_unit        cru  = {0};
+	char                         *strs[2];
+	d_iov_t                       iovs[2];
+	d_sg_list_t                   sgl;
+	d_sg_list_t                  *details = NULL;
+	Chk__CheckInconsistClass      cla;
+	Chk__CheckInconsistAction     act;
+	char                          msg[CHK_MSG_BUFLEN] = {0};
+	uint64_t                      seq                 = 0;
+	uint32_t                      options[2];
+	uint32_t                      option_nr = 0;
+	uint32_t                      detail_nr = 0;
+	int                           decision  = -1;
+	int                           result    = 0;
+	int                           rc        = 0;
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_CONT_NONEXIST_ON_PS;
 	act = prop->cp_policies[cla];
@@ -1168,7 +1385,8 @@ out:
 	/* NOTE: For orphan container, mark it as 'skip' since we do not support to add it back. */
 	ccr->ccr_skip = 1;
 
-	return chk_engine_post_repair(cpr, &result, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static daos_prop_t *
@@ -1271,29 +1489,34 @@ chk_engine_ccr2label(struct chk_cont_rec *ccr, bool prefer_target)
 	return NULL;
 }
 
-static int
-chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struct cont_svc *svc)
+static void
+chk_engine_cont_set_label_ult(void *args)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	daos_prop_t			*prop_tmp = NULL;
-	struct chk_report_unit		 cru = { 0 };
-	char				 strs[3][CHK_MSG_BUFLEN];
-	d_iov_t				 iovs[3];
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*details = NULL;
-	char				*label = NULL;
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	uint32_t			 options[3];
-	uint32_t			 option_nr = 0;
-	uint32_t			 detail_nr = 0;
-	int				 decision = -1;
-	int				 result = 0;
-	int				 rc = 0;
+	struct chk_engine_ult        *ult;
+	struct chk_cont_cleanup_args *ccca     = args;
+	struct chk_pool_rec          *cpr      = ccca->ccca_pool;
+	struct chk_cont_rec          *ccr      = ccca->ccca_cont;
+	struct cont_svc              *svc      = ccca->ccca_svc;
+	struct chk_instance          *ins      = cpr->cpr_ins;
+	struct chk_property          *prop     = &ins->ci_prop;
+	struct chk_bookmark          *cbk      = &cpr->cpr_bk;
+	daos_prop_t                  *prop_tmp = NULL;
+	struct chk_report_unit        cru      = {0};
+	char                          strs[3][CHK_MSG_BUFLEN];
+	d_iov_t                       iovs[3];
+	d_sg_list_t                   sgl;
+	d_sg_list_t                  *details = NULL;
+	char                         *label   = NULL;
+	Chk__CheckInconsistClass      cla;
+	Chk__CheckInconsistAction     act;
+	char                          msg[CHK_MSG_BUFLEN] = {0};
+	uint64_t                      seq                 = 0;
+	uint32_t                      options[3];
+	uint32_t                      option_nr = 0;
+	uint32_t                      detail_nr = 0;
+	int                           decision  = -1;
+	int                           result    = 0;
+	int                           rc        = 0;
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_CONT_BAD_LABEL;
 	act = prop->cp_policies[cla];
@@ -1554,7 +1777,8 @@ out:
 
 	daos_prop_free(prop_tmp);
 
-	return chk_engine_post_repair(cpr, &result, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
@@ -1603,10 +1827,7 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 	struct chk_instance          *ins = cpr->cpr_ins;
 	struct cont_svc              *svc;
 	struct chk_cont_rec          *ccr;
-	char                          msg[CHK_MSG_BUFLEN];
-	struct chk_cont_label_cb_args cclca = {0};
-	struct chk_report_unit        cru   = {0};
-	uint64_t                      seq;
+	struct chk_cont_label_cb_args cclca      = {0};
 	uint32_t                      exp_tgt_nr = 0;
 	int                           rc         = 0;
 	bool                          failout;
@@ -1639,7 +1860,7 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 			continue;
 		}
 
-		rc = chk_engine_cont_orphan(cpr, ccr, svc);
+		rc = chk_engine_cont_cleanup_one(cpr, ccr, svc, chk_engine_cont_orphan_ult);
 		if (rc != 0)
 			goto out;
 	}
@@ -1656,7 +1877,8 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 			continue;
 
 		if (!ccr->ccr_label_checked) {
-			rc = chk_engine_cont_set_label(cpr, ccr, svc);
+			rc = chk_engine_cont_cleanup_one(cpr, ccr, svc,
+							 chk_engine_cont_set_label_ult);
 			if (rc != 0)
 				goto out;
 		}
@@ -1664,24 +1886,7 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 		if (likely(ccr->ccr_tgt_nr >= exp_tgt_nr))
 			continue;
 
-		snprintf(
-		    msg, CHK_MSG_BUFLEN - 1,
-		    "The container " DF_UUID " in the pool " DF_UUID " lost some shards: %u/%u\n",
-		    DP_UUID(ccr->ccr_uuid), DP_UUID(cpr->cpr_uuid), ccr->ccr_tgt_nr, exp_tgt_nr);
-
-		cru.cru_msg        = msg;
-		cru.cru_gen        = cpr->cpr_bk.cb_gen;
-		cru.cru_cla        = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
-		cru.cru_act        = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		cru.cru_rank       = dss_self_rank();
-		cru.cru_pool       = (uuid_t *)&cpr->cpr_uuid;
-		cru.cru_pool_label = cpr->cpr_label;
-		cru.cru_cont       = (uuid_t *)&ccr->ccr_uuid;
-		if (ccr->ccr_label_prop != NULL && ccr->ccr_label_prop->dpp_entries != NULL)
-			cru.cru_cont_label = ccr->ccr_label_prop->dpp_entries[0].dpe_str;
-
-		seq = 0;
-		chk_engine_report(&cru, &seq, NULL);
+		chk_engine_handle_unknown(cpr, ccr, NULL, exp_tgt_nr);
 	}
 
 out:
@@ -1730,6 +1935,26 @@ chk_engine_pool_notify(struct chk_pool_rec *cpr)
 			 DP_ENGINE(ins), dss_self_rank(), DP_UUID(cpr->cpr_uuid),
 			 iv.ci_phase, iv.ci_ins_status, iv.ci_pool_status, rc);
 	}
+}
+
+static int
+chk_engine_wait_ults(struct chk_pool_rec *cpr)
+{
+	struct chk_engine_ult *ult;
+	int                    rc = 0;
+
+	while ((ult = d_list_pop_entry(&cpr->cpr_ult_list, struct chk_engine_ult, ceu_link)) !=
+	       NULL) {
+		if (ult->ceu_ult != ABT_THREAD_NULL)
+			ABT_thread_free(&ult->ceu_ult);
+
+		if (rc == 0)
+			rc = ult->ceu_result;
+
+		D_FREE(ult);
+	}
+
+	return rc;
 }
 
 static void
@@ -1790,6 +2015,11 @@ chk_engine_pool_ult(void *args)
 	/* Lookup for dangling entry in the pool map. */
 	rc = chk_engine_find_dangling_pm(cpr, map);
 	if (rc != 0 || cpr->cpr_skip || cpr->cpr_stop)
+		goto out;
+
+	/* Wait for the ULTs that handle orphan, dangling and unknown pool map components. */
+	rc = chk_engine_wait_ults(cpr);
+	if (rc != 0)
 		goto out;
 
 	if (cpr->cpr_map_refreshed) {
@@ -1871,6 +2101,10 @@ cont:
 		rc = ds_pool_svc_schedule_reconf(svc);
 
 out:
+	rc1 = chk_engine_wait_ults(cpr);
+	if (rc == 0)
+		rc = rc1;
+
 	chk_engine_cont_list_fini(&aggregator);
 	if (map != NULL)
 		pool_map_decref(map);
