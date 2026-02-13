@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/cmd/daos/pretty"
@@ -82,7 +83,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 
 	sysInfo, err := cmd.apiProvider.GetSystemInfo(ctx)
 	if err != nil {
-		cmd.Errorf("failed to query system information: %v", err)
+		return errors.Wrapf(err, "failed to query system information")
 	}
 	systemHealth.SystemInfo = sysInfo
 
@@ -171,7 +172,7 @@ func (cmd *netTestCmd) Execute(_ []string) error {
 	if sys == "" {
 		sysInfo, err := cmd.apiProvider.GetSystemInfo(ctx)
 		if err != nil {
-			cmd.Errorf("failed to query system information: %v", err)
+			return errors.Wrapf(err, "failed to query system information")
 		}
 		sys = sysInfo.Name
 	}

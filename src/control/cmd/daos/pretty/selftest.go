@@ -252,14 +252,8 @@ func PrintSelfTestConfig(out io.Writer, cfg *daos.SelfTestConfig, verbose bool) 
 			}
 			return txtfmt.TableRow{tagTitle: ranklist.RankSetFromRanks(ranklist.RanksFromUint32(t)).RangedString()}
 		}
-		grpName := func(cfg *daos.SelfTestConfig) string {
-			if cfg.GroupName == "" {
-				return "(null)"
-			}
-			return cfg.GroupName
-		}
 		cfgRows = append(cfgRows, []txtfmt.TableRow{
-			{"System Name": grpName(cfg)},
+			{"System Name": cfg.GroupName},
 			tagRow(cfg.EndpointTags),
 			{"Max In-Flight RPCs": fmt.Sprintf("%d", cfg.MaxInflightRPCs)},
 		}...)
