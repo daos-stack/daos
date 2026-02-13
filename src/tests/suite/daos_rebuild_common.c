@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1246,8 +1246,7 @@ rebuild_stop_with_dmg_internal(const char *cfg, const uuid_t uuid, const char *g
 	rc = dmg_pool_rebuild_stop(cfg, uuid, grp, force);
 	print_message("dmg pool rebuild stop " DF_UUID ", force=%d, rc=%d\n", DP_UUID(uuid), force,
 		      rc);
-	assert_rc_equal(rc, 0);
-	return 0;
+	return rc;
 }
 
 /* stop an in-progress rebuild with dmg pool rebuild stop command */
@@ -1255,14 +1254,18 @@ int
 rebuild_stop_with_dmg(void *data)
 {
 	test_arg_t *arg = data;
+	int         rc;
 
-	print_message("(before stopping) wait for rebuild to start for pool " DF_UUID "\n",
-		      DP_UUID(arg->pool.pool_uuid));
-	test_rebuild_wait_to_start(&arg, 1);
-	sleep(4);
-
-	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					      false);
+	/* Rebuild might be only queued (not yet launched) */
+	while (true) {
+		rc = rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid,
+						    arg->group, false);
+		if (rc != -DER_NONEXIST)
+			break;
+		print_message("waiting for stop command to run during active rebuild ...\n");
+		sleep(1);
+	}
+	return rc;
 }
 
 /* stop an in-progress rebuild with dmg pool rebuild stop command (force stop option) */
@@ -1270,14 +1273,18 @@ int
 rebuild_force_stop_with_dmg(void *data)
 {
 	test_arg_t *arg = data;
+	int         rc;
 
-	print_message("(before stopping) wait for rebuild to start for pool " DF_UUID "\n",
-		      DP_UUID(arg->pool.pool_uuid));
-	test_rebuild_wait_to_start(&arg, 1);
-	sleep(5);
-
-	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					      true);
+	/* Rebuild might be only queued (not yet launched) */
+	while (true) {
+		rc = rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid,
+						    arg->group, true);
+		if (rc != -DER_NONEXIST)
+			break;
+		print_message("waiting for force-stop command to run during active rebuild ...\n");
+		sleep(1);
+	}
+	return rc;
 }
 
 /* start/reesume a stopped rebuild with dmg pool rebuild start command */
@@ -1323,7 +1330,7 @@ rebuild_resume_wait_to_start(void *data)
 	rc = rebuild_start_with_dmg(data);
 	assert_rc_equal(rc, 0);
 
-	/* Verify that the rebuild is no longer stopped (has been restarted). */
+	/* Verify that the current rebuild is no longer stopped (has been restarted). */
 	test_rebuild_wait_to_start(&arg, 1);
 
 	return 0;
