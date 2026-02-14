@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -574,6 +574,7 @@ struct daos_prop_entry {
 /** default values for unset labels */
 #define DAOS_PROP_CO_LABEL_DEFAULT "container_label_not_set"
 #define DAOS_PROP_PO_LABEL_DEFAULT "pool_label_not_set"
+#define DAOS_PROP_CO_CSUM_CHUNK_SIZE_DEFAULT (32 * 1024) /* 32KiB */
 
 /**
  * Check if DAOS (pool or container property) label string is valid.
