@@ -214,7 +214,6 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     if (any_pragma_skip) {
         return true
     }
-
     // Skip the stage if a specific DAOS RPM version is specified
     if (rpmTestVersion() != '') {
         println("[${env.STAGE_NAME}] Skipping build stage for due to specific DAOS RPM version")
@@ -340,7 +339,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional on EL 8 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
