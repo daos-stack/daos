@@ -306,6 +306,10 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 
 	umem_cache_post_replay(hdl->do_store);
 
+	D_INFO("vos %s: heap %p meta_sz = %lu mem_sz = %lu", path, hdl->do_heap, store->stor_size,
+	       hdl->do_size_mem);
+	heap_dump_rtinfo(hdl->do_heap);
+
 #if VG_MEMCHECK_ENABLED
 	if (On_memcheck)
 		palloc_heap_vg_open(hdl->do_heap, 1);

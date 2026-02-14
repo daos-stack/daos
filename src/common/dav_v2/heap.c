@@ -134,6 +134,17 @@ struct heap_rt {
 	unsigned int                   soemb_cnt;
 };
 
+void
+heap_dump_rtinfo(struct palloc_heap *heap)
+{
+	struct heap_rt *rt = heap->rt;
+
+	D_INFO("heap %p: nzones=%u nzones_ne=%u nzones_e=%u exahusted=%u exhausted_ne=%u "
+	       "exhausted_e=%u unused_first=%u",
+	       heap, rt->nzones, rt->nzones_ne, rt->nzones_e, rt->zones_exhausted,
+	       rt->zones_exhausted_ne, rt->zones_exhausted_e, rt->zones_unused_first);
+}
+
 static void
 heap_reclaim_zone_garbage(struct palloc_heap *heap, struct bucket *bucket, uint32_t zone_id);
 
@@ -1480,8 +1491,11 @@ heap_populate_nemb_unused(struct palloc_heap *heap)
 	defb = mbrt_bucket_acquire(mb, DEFAULT_ALLOC_CLASS_ID);
 	while (bucket_alloc_block(defb, &m) == 0) {
 		rc = heap_mark_zone_unused(heap, m.zone_id);
-		if (!rc)
+		if (!rc) {
 			heap->rt->empty_nemb_cnt--;
+			D_INFO("heap %p: Marking NE zone %u as unused", heap, m.zone_id);
+			heap_dump_rtinfo(heap);
+		}
 
 		m          = MEMORY_BLOCK_NONE;
 		m.size_idx = MAX_CHUNK;
@@ -1556,6 +1570,9 @@ heap_populate_bucket(struct palloc_heap *heap, struct bucket *bucket)
 	heap_zone_init(heap, zone_id, 0, 0);
 	heap_mark_zone_used_persist(heap, zone_id);
 	heap_incr_empty_nemb_cnt(heap);
+
+	D_INFO("heap %p: Extended heap to zone %u", heap, zone_id);
+	heap_dump_rtinfo(heap);
 
 reclaim_garbage:
 	heap_reclaim_zone_garbage(heap, bucket, zone_id);
@@ -2309,6 +2326,8 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	heap_mark_zone_used_persist(heap, zone_id);
 	lw_tx_end(heap->p_ops.base, NULL);
 	umem_cache_unpin(heap->layout_info.store, pin_handle);
+	D_INFO("heap %p: Using zone %u as evictable MB", heap, zone_id);
+	heap_dump_rtinfo(heap);
 
 	*mb_id = zone_id;
 	rc     = 0;
@@ -2398,6 +2417,9 @@ heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rc     = 0;
 	heap_incr_empty_nemb_cnt(heap);
 	heap->rt->soemb_cnt++;
+
+	D_INFO("heap %p: Using zone %u as SOE MB", heap, zone_id);
+	heap_dump_rtinfo(heap);
 	goto out;
 
 error:
@@ -2537,6 +2559,7 @@ heap_load_nonevictable_zones(struct palloc_heap *heap)
 			continue;
 		if (!evictable) {
 			rc = heap_zone_load(heap, i);
+			D_INFO("heap %p : NE confirmed loaded %d", heap, i);
 			if (rc)
 				return rc;
 			zone = ZID_TO_ZONE(&heap->layout_info, i);
@@ -2791,9 +2814,12 @@ heap_recycle_soembs(struct palloc_heap *heap)
 		m.size_idx = MAX_CHUNK;
 		if (bucket_alloc_block(defb, &m) == 0) {
 			rc = heap_mark_zone_unused(heap, m.zone_id);
-			if (rc)
+			if (rc) {
 				mbrt_qbs_insertmb_force(&heap->rt->smbrt.qbs, mb, MB_U0_HINT);
-			else
+				D_INFO("heap %p: Marking SOE MB zone %u as unused", heap,
+				       m.zone_id);
+				heap_dump_rtinfo(heap);
+			} else
 				heap->rt->empty_nemb_cnt--;
 			mbrt_bucket_release(defb);
 			heap_mbrt_cleanup_mb(mb);
