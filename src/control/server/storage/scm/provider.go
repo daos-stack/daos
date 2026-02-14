@@ -1,5 +1,5 @@
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -440,20 +440,35 @@ func (p *Provider) mountDcpm(device, target string) (*storage.MountResponse, err
 // mountRamdisk attempts to mount a tmpfs-based ramdisk of the specified size at
 // the specified mountpoint.
 func (p *Provider) mountRamdisk(target string, params *storage.RamdiskParams) (*storage.MountResponse, error) {
+	kernelCfg, err := system.ParseKernelConfig()
+	if err != nil {
+		p.log.Debugf("failed to parse kernel config: %s", err)
+	}
+
+	return p.doMountRamdisk(target, params, kernelCfg)
+}
+
+// doMountRamdisk performs the actual ramdisk mount. It is separated from mountRamdisk
+// to allow unit testing with synthetic kernel config values.
+func (p *Provider) doMountRamdisk(target string, params *storage.RamdiskParams, kernelCfg map[string]string) (*storage.MountResponse, error) {
 	if params == nil {
 		return nil, FaultFormatMissingParam
 	}
 
-	var opts = []string{
+	var mountOpts []string
+
+	if system.IsKernelConfigEnabled(kernelCfg, "CONFIG_NUMA") {
 		// https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html
 		// mpol=prefer:Node prefers to allocate memory from the given Node
-		fmt.Sprintf("mpol=prefer:%d", params.NUMANode),
+		mountOpts = append(mountOpts, fmt.Sprintf("mpol=prefer:%d", params.NUMANode))
+	} else {
+		p.log.Debug("NUMA kernel support not detected; skipping tmpfs mpol option")
 	}
 	if params.Size > 0 {
-		opts = append(opts, fmt.Sprintf("size=%dg", params.Size))
+		mountOpts = append(mountOpts, fmt.Sprintf("size=%dg", params.Size))
 	}
 	if !params.DisableHugepages {
-		opts = append(opts, "huge=always")
+		mountOpts = append(mountOpts, "huge=always")
 	}
 
 	return p.mounter.Mount(storage.MountRequest{
@@ -461,7 +476,7 @@ func (p *Provider) mountRamdisk(target string, params *storage.RamdiskParams) (*
 		Target:     target,
 		Filesystem: ramFsType,
 		Flags:      defaultMountFlags,
-		Options:    strings.Join(opts, ","),
+		Options:    strings.Join(mountOpts, ","),
 	})
 }
 

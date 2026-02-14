@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -527,7 +527,6 @@ func TestProvider_Format(t *testing.T) {
 				Formatted:  true,
 				Mounted:    true,
 			},
-			expMountOpts: "mpol=prefer:0,size=1g,huge=always",
 		},
 		"ramdisk: hugepages disabled": {
 			request: &storage.ScmFormatRequest{
@@ -542,7 +541,6 @@ func TestProvider_Format(t *testing.T) {
 				Formatted:  true,
 				Mounted:    true,
 			},
-			expMountOpts: "mpol=prefer:0,size=1g",
 		},
 		"ramdisk: not mounted; mkdir fails": {
 			request: &storage.ScmFormatRequest{
@@ -892,6 +890,104 @@ func TestProvider_Format(t *testing.T) {
 						t.Fatalf("unexpected mount options (-want, +got):\n%s\n", diff)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestProvider_doMountRamdisk(t *testing.T) {
+	for name, tc := range map[string]struct {
+		target       string
+		params       *storage.RamdiskParams
+		kernelCfg    map[string]string
+		expMountOpts string
+		expErr       error
+	}{
+		"nil params": {
+			target: "/mnt/daos",
+			expErr: FaultFormatMissingParam,
+		},
+		"NUMA enabled": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     1,
+				NUMANode: 0,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA": "y",
+			},
+			expMountOpts: "mpol=prefer:0,size=1g,huge=always",
+		},
+		"NUMA enabled; different node": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     2,
+				NUMANode: 1,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA": "y",
+			},
+			expMountOpts: "mpol=prefer:1,size=2g,huge=always",
+		},
+		"NUMA disabled": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     1,
+				NUMANode: 0,
+			},
+			kernelCfg:    map[string]string{},
+			expMountOpts: "size=1g,huge=always",
+		},
+		"NUMA enabled; hugepages disabled": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:             1,
+				NUMANode:         0,
+				DisableHugepages: true,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA": "y",
+			},
+			expMountOpts: "mpol=prefer:0,size=1g",
+		},
+		"NUMA disabled; hugepages disabled": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:             1,
+				NUMANode:         0,
+				DisableHugepages: true,
+			},
+			kernelCfg:    map[string]string{},
+			expMountOpts: "size=1g",
+		},
+		"kernel config nil": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     1,
+				NUMANode: 0,
+			},
+			kernelCfg:    nil,
+			expMountOpts: "size=1g,huge=always",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mmc := &storage.MockMountProviderConfig{}
+			p := NewMockProvider(log, nil, nil)
+			p.mounter = storage.NewMockMountProvider(mmc)
+
+			_, err := p.doMountRamdisk(tc.target, tc.params, tc.kernelCfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			mmp := p.mounter.(*storage.MockMountProvider)
+			gotOpts, _ := mmp.GetMountOpts(tc.target)
+			if diff := cmp.Diff(tc.expMountOpts, gotOpts); diff != "" {
+				t.Fatalf("unexpected mount options (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
