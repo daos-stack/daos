@@ -240,6 +240,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 	// possible to construct an identical configuration with the helpers.
 	constructed := DefaultServer().
 		WithControlPort(10001).
+		WithControlInterface("eth0").
 		WithControlMetadata(storage.ControlMetadata{
 			Path:       "/home/daos_server/control_meta",
 			DevicePath: "/dev/sdb1",

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -169,6 +169,96 @@ func TestServer_checkFabricInterface(t *testing.T) {
 			err := checkFabricInterface(tc.name, tc.lookup)
 
 			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestServer_getFirstIPv4Addr(t *testing.T) {
+	for name, tc := range map[string]struct {
+		iface  netInterface
+		expIP  net.IP
+		expErr error
+	}{
+		"Addrs fails": {
+			iface: &mockInterface{
+				err: errors.New("mock Addrs error"),
+			},
+			expErr: errors.New("mock Addrs error"),
+		},
+		"no addresses": {
+			iface: &mockInterface{
+				addrs: []net.Addr{},
+			},
+			expErr: errors.New("no IPv4 addresses"),
+		},
+		"only IPv6 addresses": {
+			iface: &mockInterface{
+				addrs: []net.Addr{
+					&net.IPNet{IP: net.ParseIP("::1")},
+					&net.IPNet{IP: net.ParseIP("fe80::1")},
+				},
+			},
+			expErr: errors.New("no IPv4 addresses"),
+		},
+		"single IPv4 address": {
+			iface: &mockInterface{
+				addrs: []net.Addr{
+					&net.IPNet{IP: net.ParseIP("192.168.1.100")},
+				},
+			},
+			expIP: net.ParseIP("192.168.1.100").To4(),
+		},
+		"multiple IPv4 addresses - returns lowest": {
+			iface: &mockInterface{
+				addrs: []net.Addr{
+					&net.IPNet{IP: net.ParseIP("192.168.1.100")},
+					&net.IPNet{IP: net.ParseIP("10.0.0.5")},
+					&net.IPNet{IP: net.ParseIP("172.16.0.1")},
+				},
+			},
+			expIP: net.ParseIP("10.0.0.5").To4(),
+		},
+		"mixed IPv4 and IPv6 - returns lowest IPv4": {
+			iface: &mockInterface{
+				addrs: []net.Addr{
+					&net.IPNet{IP: net.ParseIP("::1")},
+					&net.IPNet{IP: net.ParseIP("192.168.1.100")},
+					&net.IPNet{IP: net.ParseIP("fe80::1")},
+					&net.IPNet{IP: net.ParseIP("10.0.0.5")},
+				},
+			},
+			expIP: net.ParseIP("10.0.0.5").To4(),
+		},
+		"non-IPNet addresses ignored": {
+			iface: &mockInterface{
+				addrs: []net.Addr{
+					&mockAddr{}, // not a *net.IPNet
+					&net.IPNet{IP: net.ParseIP("192.168.1.100")},
+				},
+			},
+			expIP: net.ParseIP("192.168.1.100").To4(),
+		},
+		"nil IP in IPNet ignored": {
+			iface: &mockInterface{
+				addrs: []net.Addr{
+					&net.IPNet{IP: nil},
+					&net.IPNet{IP: net.ParseIP("192.168.1.100")},
+				},
+			},
+			expIP: net.ParseIP("192.168.1.100").To4(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ip, err := getFirstIPv4Addr(tc.iface)
+
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if !tc.expIP.Equal(ip) {
+				t.Fatalf("expected IP %v, got %v", tc.expIP, ip)
+			}
 		})
 	}
 }
@@ -1725,6 +1815,69 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 			},
 			expErr: errors.New("mock resolve"),
 		},
+		"with control interface": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				ctlIface: &mockInterface{
+					addrs: []net.Addr{
+						&net.IPNet{IP: net.ParseIP("192.168.1.100")},
+					},
+				},
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("192.168.1.100").To4(), Port: 1234},
+		},
+		"control interface matches replica address": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				ctlIface: &mockInterface{
+					addrs: []net.Addr{
+						&net.IPNet{IP: net.ParseIP("127.0.0.1")},
+					},
+				},
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrResult: testTCPAddr,
+				},
+				lookupHost: func(addr string) ([]net.IP, error) {
+					t.Fatal("lookupHost should not be called when ctlIface is set")
+					return nil, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"control interface mismatches replica address": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				ctlIface: &mockInterface{
+					addrs: []net.Addr{
+						&net.IPNet{IP: net.ParseIP("10.0.0.50")},
+					},
+				},
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrResult: testTCPAddr,
+				},
+			},
+			expErr: config.FaultConfigControlInterfaceMismatch("10.0.0.50", "127.0.0.1"),
+		},
+		"control interface fails to get address": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				ctlIface: &mockInterface{
+					err: errors.New("mock interface error"),
+				},
+			},
+			expErr: errors.New("mock interface error"),
+		},
+		"control interface has no IPv4 addresses": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				ctlIface: &mockInterface{
+					addrs: []net.Addr{
+						&net.IPNet{IP: net.ParseIP("::1")},
+					},
+				},
+			},
+			expErr: errors.New("no IPv4 addresses"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if tc.params.lookupHost == nil {
@@ -1742,6 +1895,9 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 			addr, err := getControlAddr(tc.params)
 
 			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
 			test.AssertEqual(t, tc.expAddr.String(), addr.String(), "")
 		})
 	}
