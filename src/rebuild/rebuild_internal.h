@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -92,14 +92,10 @@ struct rebuild_tgt_pool_tracker {
 	/* new layout version for upgrade rebuild */
 	uint32_t		rt_new_layout_ver;
 
-	unsigned int		rt_lead_puller_running:1,
-				rt_abort:1,
-				/* re-report #rebuilt cnt per master change */
-				rt_re_report:1,
-				rt_finishing:1,
-				rt_scan_done:1,
-				rt_global_scan_done:1,
-				rt_global_done:1;
+	unsigned int             rt_lead_puller_running : 1, rt_abort : 1, rt_abort_notified : 1,
+	    /* re-report #rebuilt cnt per master change */
+	    rt_re_report : 1, rt_finishing : 1, rt_scan_done : 1, rt_global_abort : 1,
+	    rt_global_scan_done : 1, rt_global_done : 1;
 };
 
 struct rebuild_server_status {
@@ -325,11 +321,8 @@ struct rebuild_iv {
 	unsigned int	riv_master_rank;
 	unsigned int	riv_ver;
 	unsigned int	riv_rebuild_gen;
-	uint32_t	riv_global_done:1,
-			riv_global_scan_done:1,
-			riv_scan_done:1,
-			riv_pull_done:1,
-			riv_sync:1;
+	uint32_t        riv_global_done : 1, riv_global_abort : 1, riv_global_scan_done : 1,
+	    riv_scan_done : 1, riv_pull_done : 1, riv_sync : 1;
 	int		riv_status;
 
 };
