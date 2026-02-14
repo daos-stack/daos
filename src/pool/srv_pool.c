@@ -7965,6 +7965,46 @@ out:
 	return rc;
 }
 
+static bool
+ds_pool_reint_extend_allowed(struct pool_svc *svc)
+{
+	struct ds_pool     *pool          = svc->ps_pool;
+	struct pool_target *targets       = NULL;
+	uint32_t            down_tgts_cnt = 0;
+	int                 rc;
+	bool                ret = true;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_find_down_tgts(pool->sp_map, &targets, &down_tgts_cnt);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc) {
+		DL_ERROR(rc, DF_UUID " pool_map_find_down_tgts failed", DP_UUID(pool->sp_uuid));
+		ret = false;
+		goto out;
+	}
+	if (targets == NULL || down_tgts_cnt == 0) {
+		D_DEBUG(DB_REBUILD, DF_UUID " no DOWN tgt, REINT/EXTEND allowed",
+			DP_UUID(pool->sp_uuid));
+		goto out;
+	}
+
+	if (pool->sp_self_heal & DAOS_SELF_HEAL_DELAY_REBUILD) {
+		D_DEBUG(DB_REBUILD,
+			DF_UUID " with DOWN tgt in delay_rebuild node, "
+				"REINT/EXTEND allowed",
+			DP_UUID(pool->sp_uuid));
+		goto out;
+	}
+
+	ret = false;
+	D_INFO(DF_UUID " with %d DOWN tgts, REINT/EXTEND disallowed until rebuild done.",
+	       DP_UUID(pool->sp_uuid), down_tgts_cnt);
+
+out:
+	D_FREE(targets);
+	return ret;
+}
+
 void
 ds_pool_extend_handler(crt_rpc_t *rpc)
 {
@@ -7998,6 +8038,13 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	rc = pool_svc_lookup_leader(in->pei_op.pi_uuid, &svc, &out->peo_op.po_hint);
 	if (rc != 0)
 		goto out;
+
+	if (!ds_pool_reint_extend_allowed(svc)) {
+		rc = -DER_BUSY;
+		DL_ERROR(rc, DF_UUID "pool extend not allowed, wait rebuild done and try later.",
+			 DP_UUID(pool_uuid));
+		goto failed;
+	}
 
 	rc = pool_discard(rpc->cr_ctx, svc, &tgt_addr_list, false);
 	if (rc) {
@@ -8161,6 +8208,15 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 		goto out;
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT) {
+		if (!ds_pool_reint_extend_allowed(svc)) {
+			rc = -DER_BUSY;
+			DL_ERROR(rc,
+				 DF_UUID "pool reintegration not allowed, "
+					 "wait rebuild done and try later.",
+				 DP_UUID(in->pti_op.pi_uuid));
+			goto out_svc;
+		}
+
 		if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
 			rc = pool_discard(rpc->cr_ctx, svc, &list, true);
 		} else if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_INCREMENTAL) {
