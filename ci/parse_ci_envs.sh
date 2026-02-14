@@ -22,8 +22,12 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${TARGET:=centos9}"
       : "${REPO_SPEC:=el-9}"
       ;;
+    *SLES\ 15.7*|*sles15.7*)
+      : "${CHROOT_NAME:=opensuse-leap-15.6-x86_64}"
+      : "${TARGET:=sles15.7}"
+      ;;
     *Leap\ 15.6*|*leap15.6*|*opensuse15.6*|*sles15.6*)
-      : "${CHROOT_NAME:=opensuse-leap-15.5-x86_64}"
+      : "${CHROOT_NAME:=opensuse-leap-15.6-x86_64}"
       : "${TARGET:=leap15.6}"
       ;;
     *Leap\ 15.5*|*leap15.5*|*opensuse15.5*|*sles15.5*)

@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@zarzycki/SRE-3435') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -940,7 +940,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.6') {
+                stage('Functional on SLES 15.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -954,7 +954,7 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') + ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2',
-                                image_version: 'leap15.6'))
+                                image_version: 'sles15.7'))
                     }
                     post {
                         always {
@@ -962,7 +962,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.6')
+                } // stage('Functional on SLES 15.7')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1062,7 +1062,7 @@ pipeline {
                         }
                     }
                 } // stage('Test RPMs on EL 8.6')
-                stage('Test RPMs on Leap 15.5') {
+                stage('Test RPMs on Leap 15.6') {
                     when {
                         beforeAgent true
                         expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
@@ -1076,8 +1076,8 @@ pipeline {
                          * additionally for this use-case, can't override
                            ftest_arg with this :-(
                         script {
-                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.5',
+                            'Test RPMs on Leap 15.6': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.6',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
                                 next_version: next_version(),
@@ -1114,7 +1114,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on Leap 15.5')
+                } // stage('Test RPMs on Leap 15.6')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
