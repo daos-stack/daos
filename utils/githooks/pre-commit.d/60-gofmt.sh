@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright 2022-2024 Intel Corporation.
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -14,7 +14,8 @@ set -ue
 _print_githook_header "Gofmt"
 # shellcheck disable=SC1091
 
-go_files=$(_git_diff_cached_files '*.go')
+# Get staged Go files, excluding vendored dependencies
+go_files=$(_git_diff_cached_files '*.go' | grep -v -E '^src/control/vendor/' || true)
 
 if [ -z "$go_files" ]; then
     echo "No GO changes. Skipping"
