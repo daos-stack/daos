@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,37 +13,18 @@
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
+/*
+ * -----------------------------------------------
+ * Mock implementations
+ * -----------------------------------------------
+ */
+
+#define MOCKED_POOL_UUID_STR "12345678-1234-1234-1234-123456789012"
+
 static int
 fake_print(const char *fmt, ...)
 {
 	return 0;
-}
-
-#define assert_parsed_words2(str, count, ...) \
-	__assert_parsed_words2(str, count, (char *[])__VA_ARGS__)
-static void
-__assert_parsed_words2(const char *str, int count, char **expected_words)
-{
-	struct argv_parsed	parse_args = {0};
-	int			i;
-
-	assert_success(ddb_str2argv_create(str, &parse_args));
-	assert_int_equal(count, parse_args.ap_argc);
-
-	for (i = 0; i < parse_args.ap_argc; i++)
-		assert_string_equal(parse_args.ap_argv[i], expected_words[i]);
-
-	ddb_str2argv_free(&parse_args);
-}
-
-static void
-assert_parsed_fail(const char *str)
-{
-	struct argv_parsed	parse_args = {0};
-	int			rc;
-
-	rc = ddb_str2argv_create(str, &parse_args);
-	assert_rc_equal(-DER_INVAL, rc);
 }
 
 /*
@@ -52,105 +33,100 @@ assert_parsed_fail(const char *str)
  * -----------------------------------------------
  */
 
-#define assert_invalid_f_path(path, parts) assert_invalid(vos_path_parse(path, &parts))
-#define assert_f_path(path, parts) assert_success(vos_path_parse(path, &parts))
+static void
+vos_file_parse_test_errors(void **state)
+{
+	uuid_t                pool_uuid;
+	struct vos_file_parts parts = {0};
+	char                 *buf;
+	int                   rc;
+
+	rc = uuid_parse(MOCKED_POOL_UUID_STR, pool_uuid);
+	assert_rc_equal(rc, 0);
+
+	/* Test invalid vos paths not respecting regex */
+	rc = vos_path_parse("", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("/mnt/daos", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR, &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("//mnt/daos/" MOCKED_POOL_UUID_STR "/vos-1", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("/mnt/daos/g2345678-1234-1234-1234-123456789012/vos-1", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-01", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* Test invalid vos paths with too long db path */
+	D_ALLOC(buf, DB_PATH_SIZE + 64);
+	assert_non_null(buf);
+	memset(buf, 'a', DB_PATH_SIZE + 64);
+	buf[0] = '/';
+	memcpy(&buf[DB_PATH_SIZE], "/" MOCKED_POOL_UUID_STR "/vos-0",
+	       sizeof("/" MOCKED_POOL_UUID_STR "/vos-0"));
+	rc = vos_path_parse(buf, &parts);
+	D_FREE(buf);
+	assert_rc_equal(rc, -DER_INVAL);
+	D_FREE(buf);
+
+	/* Test invalid vos paths with too long vos file name */
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-999999999999", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	/* Test invalid vos paths with invalid target idx */
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-99999999999", &parts);
+	assert_rc_equal(rc, -DER_INVAL);
+}
 
 static void
-vos_file_parts_tests(void **state)
+vos_file_parse_test_success(void **state)
 {
-	struct vos_file_parts parts = {0};
-	uuid_t expected_uuid;
+	uuid_t                expected_uuid;
+	struct vos_file_parts parts;
+	int                   rc;
 
-	uuid_parse("12345678-1234-1234-1234-123456789012", expected_uuid);
+	rc = uuid_parse(MOCKED_POOL_UUID_STR, expected_uuid);
+	assert_rc_equal(rc, 0);
 
-	assert_invalid_f_path("", parts);
-	assert_invalid_f_path("/mnt/daos", parts);
-	assert_invalid_f_path("/mnt/daos/12345678-1234-1234-1234-123456789012", parts);
-
-	assert_f_path("/mnt/daos/12345678-1234-1234-1234-123456789012/vos-1", parts);
-
+	/* Test with absolute path */
+	rc = vos_path_parse("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", &parts);
+	assert_rc_equal(rc, 0);
 	assert_string_equal("/mnt/daos", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
-	assert_string_equal("vos-1", parts.vf_vos_file);
-	assert_int_equal(1, parts.vf_target_idx);
-}
+	assert_string_equal("vos-0", parts.vf_vos_file_name);
+	assert_int_equal(0, parts.vf_target_idx);
 
-static void
-string_to_argv_tests(void **state)
-{
-	assert_parsed_words2("one", 1, { "one" });
-	assert_parsed_words2("one two", 2, {"one", "two"});
-	assert_parsed_words2("one two three four five", 5, {"one", "two", "three", "four", "five"});
-	assert_parsed_words2("one 'two two two'", 2, {"one", "two two two"});
-	assert_parsed_words2("one 'two two two' three", 3, {"one", "two two two", "three"});
-	assert_parsed_words2("one \"two two two\" three", 3, {"one", "two two two", "three"});
+	/* Test with relative path */
+	memset(&parts, 0, sizeof(parts));
+	rc = vos_path_parse("mnt/daos/" MOCKED_POOL_UUID_STR "/vos-42", &parts);
+	assert_rc_equal(rc, 0);
+	assert_string_equal("mnt/daos", parts.vf_db_path);
+	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
+	assert_string_equal("vos-42", parts.vf_vos_file_name);
+	assert_int_equal(42, parts.vf_target_idx);
 
-	assert_parsed_fail("one>");
-	assert_parsed_fail("one<");
-	assert_parsed_fail("'one");
-	assert_parsed_fail(" \"one");
-	assert_parsed_fail("one \"two");
-}
+	/* Test with relative path */
+	rc = vos_path_parse("./" MOCKED_POOL_UUID_STR "/rdb-pool", &parts);
+	assert_rc_equal(rc, 0);
+	assert_string_equal(".", parts.vf_db_path);
+	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
+	assert_string_equal("rdb-pool", parts.vf_vos_file_name);
+	assert_int_equal(0, parts.vf_target_idx);
 
-#define assert_invalid_program_args(argc, ...) \
-	assert_rc_equal(-DER_INVAL, _assert_invalid_program_args(argc, ((char*[])__VA_ARGS__)))
-static int
-_assert_invalid_program_args(uint32_t argc, char **argv)
-{
-	struct program_args	pa;
-	struct ddb_ctx		ctx = {
-		.dc_io_ft.ddb_print_message = fake_print,
-		.dc_io_ft.ddb_print_error = fake_print
-	};
-
-	return ddb_parse_program_args(&ctx, argc, argv, &pa);
-}
-
-#define assert_program_args(expected_program_args, argc, ...) \
-	assert_success(_assert_program_args(&expected_program_args, argc, ((char*[])__VA_ARGS__)))
-static int
-_assert_program_args(struct program_args *expected_pa, uint32_t argc, char **argv)
-{
-	struct program_args	pa = {0};
-	int			rc;
-	struct ddb_ctx		ctx = {
-		.dc_io_ft.ddb_print_message = fake_print,
-		.dc_io_ft.ddb_print_error = fake_print
-	};
-
-	rc = ddb_parse_program_args(&ctx, argc, argv, &pa);
-	if (rc != 0)
-		return rc;
-
-
-	if (expected_pa->pa_r_cmd_run != NULL && pa.pa_r_cmd_run != NULL &&
-	    strcmp(expected_pa->pa_r_cmd_run, pa.pa_r_cmd_run) != 0) {
-		print_error("ERROR: %s != %s\n", expected_pa->pa_r_cmd_run, pa.pa_r_cmd_run);
-		return -DER_INVAL;
-	}
-
-	if (expected_pa->pa_cmd_file != NULL &&  pa.pa_cmd_file != NULL &&
-	    strcmp(expected_pa->pa_cmd_file, pa.pa_cmd_file) != 0) {
-		print_error("ERROR: %s != %s\n", expected_pa->pa_cmd_file, pa.pa_cmd_file);
-		return -DER_INVAL;
-	}
-
-	return 0;
-}
-
-static void
-parse_args_tests(void **state)
-{
-	struct program_args pa = {0};
-
-	assert_invalid_program_args(2, {"", "-z"});
-	assert_invalid_program_args(3, {"", "command1", "command2"});
-	pa.pa_r_cmd_run = "command";
-	assert_program_args(pa, 3, {"", "-R", "command"});
-	pa.pa_r_cmd_run = "";
-
-	pa.pa_cmd_file = "path";
-	assert_program_args(pa, 3, {"", "-f", "path"});
+	/* Test with null db path */
+	memset(&parts, 1, sizeof(parts));
+	rc = vos_path_parse(MOCKED_POOL_UUID_STR "/vos-909", &parts);
+	assert_rc_equal(rc, 0);
+	assert_string_equal("", parts.vf_db_path);
+	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
+	assert_string_equal("vos-909", parts.vf_vos_file_name);
+	assert_int_equal(909, parts.vf_target_idx);
 }
 
 #define assert_vtp_eq(a, b) \
@@ -398,9 +374,9 @@ int
 ddb_parse_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
-	    TEST(vos_file_parts_tests), TEST(string_to_argv_tests),      TEST(parse_args_tests),
-	    TEST(parse_dtx_id_tests),   TEST(keys_are_parsed_correctly), TEST(pool_flags_tests),
-	    TEST(date2cmt_time_tests),
+	    TEST(vos_file_parse_test_errors), TEST(vos_file_parse_test_success),
+	    TEST(parse_dtx_id_tests),         TEST(keys_are_parsed_correctly),
+	    TEST(pool_flags_tests),           TEST(date2cmt_time_tests),
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);

@@ -5,20 +5,23 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
 #include <sys/mount.h>
 #include <string.h>
 #include <sys/vfs.h>
+
 #include <daos_srv/vos.h>
-#include <gurt/debug.h>
-#include <vos_internal.h>
 #include <daos_srv/smd.h>
+#include <vos_internal.h>
 #include <bio_wal.h>
+
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb_mgmt.h"
 #include "ddb_vos.h"
 #include "ddb_spdk.h"
+
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
@@ -82,7 +85,7 @@ dv_pool_destroy(const char *path, const char *db_path)
 		return rc;
 	}
 
-	if (strncmp(path_parts.vf_vos_file, "rdb", 3) == 0)
+	if (strncmp(path_parts.vf_vos_file_name, "rdb", 3) == 0)
 		flags |= VOS_POF_RDB;
 
 	rc = vos_pool_destroy_ex(path, path_parts.vf_pool_uuid, flags);

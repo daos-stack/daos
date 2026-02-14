@@ -4,12 +4,17 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
 #include <wordexp.h>
 #include <getopt.h>
-#include <gurt/common.h>
+#include <regex.h>
+#include <errno.h>
+#include <string.h>
+
+#include <daos_errno.h>
 #include <daos_srv/bio.h>
-#include "daos_errno.h"
+
 #include "ddb_common.h"
 #include "ddb_parse.h"
 
@@ -21,139 +26,133 @@ safe_strcat(char *dst, const char *src, size_t dst_size)
 	strncat(dst, src, remaining_space);
 }
 
+static void
+print_regx_error(int rc, regex_t *preg, const char *regex_buf)
+{
+	char  *buf;
+	size_t buf_size;
+
+	buf_size = regerror(rc, preg, NULL, 0);
+	D_ALLOC_ARRAY(buf, buf_size);
+	D_ASSERT(buf != NULL);
+	regerror(rc, preg, buf, buf_size);
+	D_CRIT("Invalid regex '%s': %s", regex_buf, buf);
+	D_FREE(buf);
+}
+
 int
 vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 {
-	uint32_t	 path_len = strlen(path) + 1;
-	char		*path_copy;
-	char		*tok;
-	int		 rc = -DER_INVAL;
+	enum {
+		DB_PATH_IDX       = 1,
+		POOL_UUID_IDX     = 3,
+		VOS_FILE_NAME_IDX = 6,
+		TARGET_IDX_IDX    = 7,
+		RDB_POOL_IDX      = 9,
+		MATCH_SIZE        = 10,
+		POOL_UUID_LEN     = 36
+	};
+	const char *regex_buf =
+	    "^(/?([^/]+/)*)([0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})/"
+	    "((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$";
+	char      *endptr;
+	uint64_t   target_idx;
+	regex_t    preg;
+	char       pool_uuid[POOL_UUID_LEN + 1];
+	regmatch_t match[MATCH_SIZE];
+	size_t     vos_file_name_len;
+	int        rc;
 
 	D_ASSERT(path != NULL && vos_file_parts != NULL);
 
-	D_ALLOC(path_copy, path_len);
-	if (path_copy == NULL)
-		return -DER_NOMEM;
-	strcpy(path_copy, path);
-
-	tok = strtok(path_copy, "/");
-	while (tok != NULL && rc != 0) {
-		rc = uuid_parse(tok, vos_file_parts->vf_pool_uuid);
-		if (!SUCCESS(rc)) {
-			safe_strcat(vos_file_parts->vf_db_path, "/", DB_PATH_LEN);
-			safe_strcat(vos_file_parts->vf_db_path, tok, DB_PATH_LEN);
-		}
-		tok = strtok(NULL, "/");
-	}
-
-	if (rc != 0 || tok == NULL) {
-		D_ERROR("Incomplete path: %s\n", path);
-		D_GOTO(done, rc = -DER_INVAL);
-	}
-
-	strncpy(vos_file_parts->vf_vos_file, tok, ARRAY_SIZE(vos_file_parts->vf_vos_file) - 1);
-
-	if (strcmp(vos_file_parts->vf_vos_file, "rdb-pool") == 0) {
-		vos_file_parts->vf_target_idx = BIO_SYS_TGT_ID;
-		goto done;
-	}
-
-	/*
-	 * file name should be vos-N ... split on "-"
-	 * If not, might be test, just assume target of 0
-	 */
-	strtok(tok, "-");
-	tok = strtok(NULL, "-");
-	if (tok != NULL) {
-		D_WARN("vos file name not in correct format: %s\n", vos_file_parts->vf_vos_file);
-		vos_file_parts->vf_target_idx = atoi(tok);
-	}
-
-done:
-	if (!SUCCESS(rc)) {
-		/* Reset to if not valid */
-		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
-	}
-	D_FREE(path_copy);
-	return rc;
-}
-
-
-int
-ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args)
-{
-	wordexp_t *we;
-	int rc;
-
-	D_ALLOC_PTR(we);
-	if (we == NULL)
-		return -DER_NOMEM;
-
-	rc = wordexp(buf, we, WRDE_SHOWERR | WRDE_UNDEF);
+	rc = regcomp(&preg, regex_buf, REG_EXTENDED);
 	if (rc != 0) {
-		D_FREE(we);
-		return -DER_INVAL;
+		print_regx_error(rc, &preg, regex_buf);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
-	parse_args->ap_argc = we->we_wordc;
-	parse_args->ap_argv = we->we_wordv;
-	parse_args->ap_ctx = we;
-
-	return 0;
-}
-
-void
-ddb_str2argv_free(struct argv_parsed *parse_args)
-{
-	if (parse_args->ap_ctx != NULL) {
-		wordfree(parse_args->ap_ctx);
-		D_FREE(parse_args->ap_ctx);
+	rc = regexec(&preg, path, MATCH_SIZE, match, 0);
+	if (rc == REG_NOMATCH) {
+		D_ERROR("Innvalid VOS path: '%s'\n", path);
+		rc = -DER_INVAL;
+		goto out_preg;
 	}
-}
+	D_ASSERT(SUCCESS(rc));
 
-int
-ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct program_args *pa)
-{
-	struct option program_options[] = {
-	    {"write_mode", no_argument, NULL, 'w'},     {"run_cmd", required_argument, NULL, 'R'},
-	    {"cmd_file", required_argument, NULL, 'f'}, {"db_path", required_argument, NULL, 'p'},
-	    {"help", required_argument, NULL, 'h'},     {NULL}};
-	int		index = 0, opt;
-
-	optind = 0; /* Reinitialize getopt */
-	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "wR:f:p:h", program_options, &index)) != -1) {
-		switch (opt) {
-		case 'w':
-			pa->pa_write_mode = true;
-			break;
-		case 'R':
-			pa->pa_r_cmd_run = optarg;
-			break;
-		case 'f':
-			pa->pa_cmd_file = optarg;
-			break;
-		case 'p':
-			pa->pa_db_path = optarg;
-			break;
-		case 'h':
-			pa->pa_get_help = true;
-			break;
-		case '?':
-			ddb_errorf(ctx, "'%c'(0x%x) is unknown\n", optopt, optopt);
-		default:
-			return -DER_INVAL;
+	vos_file_parts->vf_db_path[0] = '\0';
+	if ((match[DB_PATH_IDX].rm_eo - match[DB_PATH_IDX].rm_so) != 0) {
+		D_ASSERT(match[DB_PATH_IDX].rm_so == 0);
+		if (match[DB_PATH_IDX].rm_eo > DB_PATH_SIZE) {
+			D_ERROR("DB path '%.*s' too long in VOS path '%s': get=%i, max=%i\n",
+				match[DB_PATH_IDX].rm_eo - 1, &path[match[DB_PATH_IDX].rm_so], path,
+				match[DB_PATH_IDX].rm_eo - 1, DB_PATH_SIZE - 1);
+			rc = -DER_INVAL;
+			goto out_preg;
 		}
+		memcpy(vos_file_parts->vf_db_path, path, match[DB_PATH_IDX].rm_eo - 1);
+		vos_file_parts->vf_db_path[match[DB_PATH_IDX].rm_eo - 1] = '\0';
 	}
 
-	if (argc - optind > 1) {
-		ddb_error(ctx, "Too many commands\n");
-		return -DER_INVAL;
+	D_ASSERT(match[POOL_UUID_IDX].rm_so != (regoff_t)-1);
+	D_ASSERT(match[POOL_UUID_IDX].rm_eo - match[POOL_UUID_IDX].rm_so == POOL_UUID_LEN);
+	memcpy(pool_uuid, &path[match[POOL_UUID_IDX].rm_so], POOL_UUID_LEN);
+	pool_uuid[POOL_UUID_LEN] = '\0';
+	rc                       = uuid_parse(pool_uuid, vos_file_parts->vf_pool_uuid);
+	if (!SUCCESS(rc)) {
+		D_CRIT("Invalid Pool UUID '%s' in VOS path '%s'\n", pool_uuid, path);
+		rc = -DER_INVAL;
+		goto out_preg;
 	}
-	if (argc - optind == 1)
-		pa->pa_pool_path = argv[optind];
 
-	return 0;
+	if (match[RDB_POOL_IDX].rm_so != (regoff_t)-1) {
+		D_ASSERT(match[VOS_FILE_NAME_IDX].rm_so == (regoff_t)-1);
+		memcpy(vos_file_parts->vf_vos_file_name, "rdb-pool", sizeof("rdb-pool"));
+		vos_file_parts->vf_target_idx = 0;
+		rc                            = -DER_SUCCESS;
+		goto out_preg;
+	}
+
+	D_ASSERT(match[VOS_FILE_NAME_IDX].rm_so != (regoff_t)-1);
+	vos_file_name_len = match[VOS_FILE_NAME_IDX].rm_eo - match[VOS_FILE_NAME_IDX].rm_so;
+	if (vos_file_name_len + 1 > VOS_FILE_NAME_SIZE) {
+		D_ERROR("VOS file name '%.*s' too long in VOS path '%s': get=%zu, max=%i\n",
+			(int)vos_file_name_len, &path[match[VOS_FILE_NAME_IDX].rm_so], path,
+			vos_file_name_len, VOS_FILE_NAME_SIZE - 1);
+		rc = -DER_INVAL;
+		goto out_preg;
+	}
+	memcpy(vos_file_parts->vf_vos_file_name, &path[match[VOS_FILE_NAME_IDX].rm_so],
+	       vos_file_name_len);
+	vos_file_parts->vf_vos_file_name[vos_file_name_len] = '\0';
+
+	D_ASSERT(match[TARGET_IDX_IDX].rm_so != (regoff_t)-1);
+	errno      = 0;
+	target_idx = strtoull(&path[match[TARGET_IDX_IDX].rm_so], &endptr, 10);
+	if (errno != 0 || endptr == &path[match[TARGET_IDX_IDX].rm_so] || *endptr != '\0') {
+		D_CRIT("Invalid target index '%s' in VOS path '%s': %s\n",
+		       &path[match[TARGET_IDX_IDX].rm_so], path, strerror(errno));
+		rc = -DER_INVAL;
+		goto out_preg;
+	}
+	if (target_idx > UINT32_MAX) {
+		D_ERROR("Target index " DF_U64
+			"' out of range in VOS path '%s': min=0 , max=%" PRIu32 "\n",
+			target_idx, path, UINT32_MAX);
+		rc = -DER_INVAL;
+		goto out_preg;
+	}
+	vos_file_parts->vf_target_idx = target_idx;
+
+	rc = -DER_SUCCESS;
+
+out_preg:
+	regfree(&preg);
+out:
+	/* Reset to zero if not valid */
+	if (!SUCCESS(rc))
+		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
+	return rc;
 }
 
 int
