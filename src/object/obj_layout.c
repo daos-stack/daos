@@ -115,8 +115,8 @@ obj_dump_grp_layout(daos_handle_t oh, uint32_t shard)
 	}
 
 	grp_idx = shard / obj->cob_grp_size;
-	D_INFO(DF_OID " shard %d, grp_idx %d, grp_size %d", DP_OID(obj->cob_md.omd_id), shard,
-	       grp_idx, obj->cob_grp_size);
+	D_INFO(DF_OID " shard %d, grp_idx %d, grp_size %d, map_ver %d", DP_OID(obj->cob_md.omd_id),
+	       shard, grp_idx, obj->cob_grp_size, obj->cob_version);
 	for (i = grp_idx * obj->cob_grp_size, nr = 0; nr < obj->cob_grp_size; i++, nr++) {
 		obj_shard = &obj->cob_shards->do_shards[i];
 		D_INFO("shard %d/%d/%d, tgt_id %d, rank %d, tgt_idx %d, "
