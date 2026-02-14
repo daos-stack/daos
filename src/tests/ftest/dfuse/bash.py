@@ -138,14 +138,6 @@ class DfuseBashCmd(TestWithServers):
             f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
             '--group_reporting --exitall_on_error --continue_on_error=none',
         ]
-        # If set, use the HTTPS_PROXY for curl command
-        https_proxy = os.environ.get('HTTPS_PROXY')
-        if https_proxy:
-            proxy_option = f'--proxy "{https_proxy}"'
-        else:
-            proxy_option = ''
-        cmd = f'curl "https://www.google.com" -o {fuse_root_dir}/download.html {proxy_option}'
-        commands.append(cmd)
 
         for cmd in commands:
             self.log_step(f'Running command: {cmd}')
