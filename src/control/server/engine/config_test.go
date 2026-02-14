@@ -140,7 +140,8 @@ func TestConfig_Constructed(t *testing.T) {
 				WithStorageClass("ram").
 				WithScmRamdiskSize(42).
 				WithScmMountPoint("/mnt/daostest").
-				WithScmDeviceList("/dev/a", "/dev/b"),
+				WithScmDeviceList("/dev/a", "/dev/b").
+				WithScmHugepagesDisabled(true),
 			storage.NewTierConfig().
 				WithStorageClass("kdev").
 				WithBdevDeviceCount(2).
