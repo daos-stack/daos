@@ -19,7 +19,7 @@
 #define CHUNKSIZE ((size_t)1024 * 256)	/* 256 kilobytes */
 #define MAX_MEMORY_BLOCK_SIZE (MAX_CHUNK * CHUNKSIZE)
 #define HEAP_SIGNATURE_LEN 16
-#define HEAP_SIGNATURE "MEMORY_HEAP_HDR\0"
+#define HEAP_SIGNATURE        "MEMORY_HEAP_HDR"
 #define ZONE_HEADER_MAGIC 0xC3F0A2D2
 #define ZONE_MIN_SIZE (sizeof(struct zone) + sizeof(struct chunk))
 #define ZONE_MAX_SIZE (sizeof(struct zone) + sizeof(struct chunk) * MAX_CHUNK)
