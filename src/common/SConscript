@@ -75,11 +75,15 @@ def scons():
     if not prereqs.test_requested():
         return
 
+    Import('daos_control_tgts')
+
     tlibenv = env.Clone(LIBS=[])
     tlibenv.require('argobots', 'isal', 'isal_crypto', 'protobufc')
-    tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
+    tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c', 'daos_control'])
+    tlibenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
 
     tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
+    tlibenv.Requires(tests_lib, daos_control_tgts)
 
     tlibenv.Install('$PREFIX/lib64/', tests_lib)
     tenv = denv.Clone()
