@@ -29,6 +29,7 @@ server_config:
 container:
   control_method: daos
   properties: "rd_fac:1"
+  type: NONE
 
 pool:
   scm_size: 1G

@@ -22,3 +22,4 @@ container:
   data_size: 32
   object_qty: 1
   record_qty: 1
+  type: NONE

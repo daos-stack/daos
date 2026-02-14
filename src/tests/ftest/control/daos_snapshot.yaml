@@ -18,6 +18,7 @@ pool:
   scm_size: 1G
 container:
   control_method: daos
+  type: NONE
 stress_test: !mux
   small:
     snapshot_count: 5

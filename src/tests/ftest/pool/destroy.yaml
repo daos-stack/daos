@@ -26,6 +26,7 @@ container:
   dkey_size: 4
   data_size: 9
   control_method: daos
+  type: NONE
 setnames:
   validsetname:
     setname: daos_server

@@ -29,6 +29,7 @@ server_config:
 #     allow_insecure: False
 container:
   control_method: daos
+  type: NONE
 pool_acl:
   scm_size: 134217728
   user_prefix: daos_ci

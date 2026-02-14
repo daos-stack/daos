@@ -18,6 +18,7 @@ server_config:
   system_ram_reserved: 1
 container:
   control_method: daos
+  type: NONE
 pool_acl:
   scm_size: 134217728
   user_prefix: daos_ci

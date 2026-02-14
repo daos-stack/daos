@@ -28,6 +28,7 @@ container:
   akey_size: 5
   dkey_size: 5
   data_size: 5
+  type: NONE
 rebuild:
   object_class: OC_RP_3G1
   rank: 3
