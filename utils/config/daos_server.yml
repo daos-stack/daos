@@ -364,7 +364,10 @@
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
-#
+#  # Currently supported values:
+#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
+#  #   FATAL, EMRG, EMIT
+#  #
 #  # default: ERR
 #  log_mask: INFO
 #
@@ -528,7 +531,10 @@
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
-#
+#  # Currently supported values:
+#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
+#  #   FATAL, EMRG, EMIT
+#  #
 #  # default: ERR
 #  log_mask: INFO
 #
