@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -99,6 +99,9 @@ typedef struct crt_init_options {
 
 	/** force busy wait (testing only, not in production) */
 	bool             cio_progress_busy;
+
+	/** use memory device */
+	bool             cio_mem_device;
 } crt_init_options_t;
 
 typedef int		crt_status_t;
