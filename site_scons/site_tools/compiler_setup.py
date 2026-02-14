@@ -35,6 +35,7 @@ def _base_setup(env):
     Include all our preferred compile options for the chosen
     compiler and build type.
     """
+    # pylint: disable=too-many-branches
     if GetOption('help') or GetOption('clean'):
         return
 
@@ -125,6 +126,11 @@ def _base_setup(env):
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
     env['BSETUP'] = compiler
+
+    if GetOption('code_coverage'):
+        env.AppendUnique(CXXFLAGS=['-fprofile-arcs', '-ftest-coverage'])
+        env.AppendUnique(CCFLAGS=['-fprofile-arcs', '-ftest-coverage'])
+        env.AppendUnique(CGO_CFLAGS=['-fprofile-arcs', '-ftest-coverage'])
 
 
 def _check_flag_helper(context, compiler, ext, flag):

@@ -93,6 +93,13 @@ def add_command_line_options():
                     use the specified relative sub-directory containing all \
                     dependencies as git submodules instead')
 
+    # generate code coverage
+    AddOption('--code-coverage',
+              action='store_true',
+              dest='code_coverage',
+              default=False,
+              help='enable code coverage analyze with gcov')
+
 
 def parse_and_save_conf(env, opts_file):
     """Parse daos.conf
@@ -468,6 +475,11 @@ def scons():
 
     # This will add a final 'DEPS' value to opts but it will not be persistent.
     prereqs.run_build(opts)
+
+    have_hdf5 = False
+    if prereqs.check_component('hdf5'):
+        have_hdf5 = True
+    Export('have_hdf5')
 
     if GetOption('build_deps') == 'only':
         prereqs.save_build_info()
