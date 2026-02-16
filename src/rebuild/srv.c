@@ -891,14 +891,62 @@ enum {
 };
 
 static bool
-rebuild_is_stoppable(struct rebuild_global_pool_tracker *rgt, bool force)
+rebuild_is_stoppable(struct rebuild_global_pool_tracker *rgt, bool force, int *rcp)
 {
-	if ((rgt->rgt_opc == RB_OP_REBUILD) || (rgt->rgt_opc == RB_OP_UPGRADE))
-		return true;
+	/* NAK if nothing is rebuilding */
+	if (rgt == NULL) {
+		*rcp = -DER_NONEXIST;
+		return false;
+	}
 
-	if ((rgt->rgt_opc == RB_OP_FAIL_RECLAIM) && force && (rgt->rgt_num_op_freclaim_fail > 0))
-		return true;
+	/* NAK if another rebuild is queued for the same pool (it would run after this one stopped)
+	 */
+	if (!d_list_empty(&rebuild_gst.rg_queue_list)) {
+		struct rebuild_task *task;
 
+		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
+			if (uuid_compare(task->dst_pool_uuid, rgt->rgt_pool_uuid) == 0) {
+				*rcp = -DER_NO_PERM;
+				return false;
+			}
+		}
+	}
+
+	if ((rgt->rgt_opc == RB_OP_REBUILD) || (rgt->rgt_opc == RB_OP_UPGRADE)) {
+		*rcp = 0;
+		return true;
+	}
+
+	/* Defer stop for many Fail_reclaim cases (until after it finishes). Do not return errors.
+	 * Only allow force-stop of repeating failures in Fail_reclaim
+	 */
+	if (rgt->rgt_opc == RB_OP_FAIL_RECLAIM && force) {
+		if (rgt->rgt_num_op_freclaim_fail == 0) {
+			D_INFO(DF_RB
+			       ": cannot force-stop op:Fail_reclaim with 0 failures - defer stop "
+			       "until after it finishes\n",
+			       DP_RB_RGT(rgt));
+			*rcp = 0;
+			return false;
+		}
+		D_INFO(DF_RB ": force-stop in op:Fail_reclaim after %u failures\n", DP_RB_RGT(rgt),
+		       rgt->rgt_num_op_freclaim_fail);
+		*rcp = 0;
+		return true;
+	} else if (rgt->rgt_opc == RB_OP_FAIL_RECLAIM) {
+		D_INFO(DF_RB ": defer stop until after op:Fail_reclaim finishes\n", DP_RB_RGT(rgt));
+		*rcp = 0;
+		return false;
+	}
+
+	/* NAK if this rebuild is Reclaim (i.e., it's effectively done) */
+	if (rgt->rgt_opc == RB_OP_RECLAIM) {
+		*rcp = -DER_BUSY;
+		return false;
+	}
+
+	/* Not expected */
+	*rcp = -DER_MISC;
 	return false;
 }
 
@@ -907,34 +955,35 @@ int
 ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 {
 	struct rebuild_global_pool_tracker *rgt;
+	int                                 rc = 0;
 
 	/* look up the running rebuild and mark it as aborted (and by the administrator) */
 	rgt = rebuild_global_pool_tracker_lookup(pool->sp_uuid, -1 /* ver */, -1 /* gen */);
-	if (rgt == NULL) {
-		/* nothing running, make it a no-op */
-		D_INFO(DF_UUID ": received request to stop rebuild - but nothing found to stop\n",
-		       DP_UUID(pool->sp_uuid));
-		return 0;
-	}
 
-	/* admin stop command does not terminate reclaim/fail_reclaim jobs (unless forced) */
-	if (rebuild_is_stoppable(rgt, force)) {
+	/* admin stop command only for specific cases (and force option for failing op:Fail_reclaim)
+	 */
+	if (rebuild_is_stoppable(rgt, force, &rc)) {
 		D_INFO(DF_RB ": stopping rebuild force=%u opc %u(%s)\n", DP_RB_RGT(rgt), force,
 		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
 		rgt->rgt_abort           = 1;
 		rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 	} else {
-		D_INFO(DF_RB ": NOT stopping rebuild during opc %u(%s)\n", DP_RB_RGT(rgt),
-		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
+		if (rgt) {
+			D_INFO(DF_RB ": NOT stopping rebuild force=%u opc %u(%s), rc=%d\n",
+			       DP_RB_RGT(rgt), force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
+		} else {
+			DL_INFO(rc, DF_UUID ": nothing found to stop", DP_UUID(pool->sp_uuid));
+			return rc;
+		}
 	}
 
-	/* admin stop command does not terminate op:Fail_reclaim, but it is remembered to avoid
-	 * retrying the original op:Rebuild.
+	/* admin stop command does not usually terminate op:Fail_reclaim, but it is always
+	 * remembered to avoid retrying the original op:Rebuild.
 	 */
 	if (rgt->rgt_abort || (rgt->rgt_opc == RB_OP_FAIL_RECLAIM))
 		rgt->rgt_stop_admin = 1;
 	rgt_put(rgt);
-	return 0;
+	return rc;
 }
 
 /*
