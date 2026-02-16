@@ -58,7 +58,11 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
+%if (0%{?suse_version} >= 1500)
+BuildRequires: libpmemobj1-devel >= 2.1.2-1
+%else
 BuildRequires: libpmemobj-devel >= 2.1.2-1
+%endif
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
