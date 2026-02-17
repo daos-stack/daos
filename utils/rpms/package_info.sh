@@ -104,9 +104,9 @@ set_lib_name mercury_libfabric lib mercury-libfabric mercury-libfabric mercury-l
 export mercury_libfabric_lib
 
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
-set_lib_name pmemobj dev libpmemobj libpmemobj1 libpmemobj1
+set_lib_name pmemobj dev libpmemobj libpmemobj libpmemobj
 set_lib_name pmem lib libpmem libpmem1 libpmem1
-set_lib_name pmem dev libpmem libpmem libpmem1
+set_lib_name pmem dev libpmem libpmem libpmem
 set_lib_name pmempool lib libpmempool libpmempool1 libpmempool1
 export pmem_lib
 export pmem_dev
