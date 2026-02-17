@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,6 +52,9 @@ struct ds_rsvc_class {
 	 * necessary).
 	 */
 	void (*sc_free)(struct ds_rsvc *svc);
+
+	/** Prepare for being inserted into the hash table. */
+	int (*sc_insert)(struct ds_rsvc *svc);
 
 	/**
 	 * Bootstrap (i.e., initialize) the DB with the argument passed to
