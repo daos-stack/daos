@@ -151,15 +151,44 @@ static int
 bio_spdk_env_init(void)
 {
 	struct spdk_env_opts opts;
+	const char          *dpdk_opts;
+	unsigned int         spdk_level = DAOS_SPDK_LOG_DEFAULT;
+	unsigned int         dpdk_level = DAOS_DPDK_LOG_DEFAULT;
 	int                  rc;
 
-	/* Only print error and more severe to stderr. */
-	spdk_log_set_print_level(SPDK_LOG_ERROR);
+	/* Check for SPDK log level from environment */
+	d_getenv_uint("DAOS_SPDK_LOG_LEVEL", &spdk_level);
+	if (spdk_level > DAOS_SPDK_LOG_MAX) {
+		D_WARN("Invalid DAOS_DPDK_LOG_LEVEL=%u, using default (%u)\n", dpdk_level,
+		       DAOS_SPDK_LOG_DEFAULT);
+		spdk_level = DAOS_SPDK_LOG_DEFAULT;
+	}
+
+	/* Check for DPDK log level from environment */
+	d_getenv_uint("DAOS_DPDK_LOG_LEVEL", &dpdk_level);
+	if (dpdk_level < DAOS_DPDK_LOG_MIN || dpdk_level > DAOS_DPDK_LOG_MAX) {
+		D_WARN("Invalid DAOS_DPDK_LOG_LEVEL=%u, using default (%u)\n", dpdk_level,
+		       DAOS_DPDK_LOG_DEFAULT);
+		dpdk_level = DAOS_DPDK_LOG_DEFAULT;
+	}
+
+	D_INFO("SPDK log level: %u, DPDK log level: %u\n", spdk_level, dpdk_level);
+
+	/* Set SPDK log print level to configured value */
+	spdk_log_set_print_level(spdk_level);
+
+	/* Build DPDK options with specified log level for all DPDK log facilities */
+	dpdk_opts = dpdk_cli_build_opts(dpdk_level, dpdk_level);
+	if (dpdk_opts == NULL) {
+		D_ERROR("Failed to build DPDK options\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	opts.opts_size = sizeof(opts);
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
-	opts.env_context = (char *)dpdk_cli_override_opts;
+	opts.env_context = (char *)dpdk_opts;
 
 	/**
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
