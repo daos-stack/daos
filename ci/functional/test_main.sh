@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -13,6 +13,12 @@ if [ -z "$TEST_TAG" ]; then
 fi
 
 test_tag="$TEST_TAG"
+
+: "${NODELIST:=localhost}"
+: "${TEST_RPMS:=false}"
+
+def_node_count="$(echo "$NODELIST" | awk -F, '{print NF}')"
+: "${NODE_COUNT:=$def_node_count}"
 
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
@@ -42,14 +48,17 @@ cluster_reboot () {
 test_cluster() {
     # Test that all nodes in the cluster are healthy
     clush -B -S -o '-i ci_key' -l root -w "${tnodes}"   \
-        "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}           \
+        "OPERATIONS_EMAIL=${OPERATIONS_EMAIL:-}         \
         FIRST_NODE=${first_node}                        \
         TEST_RPMS=${TEST_RPMS}                          \
         NODELIST=${tnodes}                              \
         BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
-        STAGE_NAME=\"$STAGE_NAME\"                      \
+        STAGE_NAME=\"${STAGE_NAME:-Unknown}\"           \
         JENKINS_URL=\"${JENKINS_URL:-}\"                \
         DAOS_DEVOPS_EMAIL=\"${DAOS_DEVOPS_EMAIL:-}\"    \
+        DAOS_INFINIBAND=${DAOS_INFINIBAND:-}            \
+        DAOS_NVME=${DAOS_NVME:-}                        \
+        DAOS_PMEM=${DAOS_PMEM:-}                        \
         $(cat ci/functional/test_main_prep_node.sh)"
 }
 
@@ -65,7 +74,7 @@ if ! test_cluster; then
             echo "Hardware test failed again after reboot"
         fi
     else
-        echo "Cluster reboot failed"        
+        echo "Cluster reboot failed"
     fi
 else
     hardware_ok=true
@@ -88,8 +97,10 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 
 # Setup the Jenkins build artifacts directory before running the tests to ensure
 # there is enough disk space to report the results.
-rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
-mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+if [ -n "${STAGE_NAME:-}" ]; then
+    rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+    mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+fi
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
@@ -98,24 +109,24 @@ rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 
 if "$hardware_ok"; then
-    if $TEST_RPMS; then
+    if "$TEST_RPMS"; then
         # shellcheck disable=SC2029
-        ssh -i ci_key -l jenkins "${first_node}"   \
-          "TEST_TAG=\"$test_tag\"                  \
-           TNODES=\"$tnodes\"                      \
-           FTEST_ARG=\"${FTEST_ARG:-}\"            \
-           WITH_VALGRIND=\"${WITH_VALGRIND:-}\"    \
-           STAGE_NAME=\"$STAGE_NAME\"              \
-           DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\"        \
+        ssh -i ci_key -l jenkins "${first_node}"      \
+          "TEST_TAG=\"$test_tag\"                     \
+           TNODES=\"$tnodes\"                         \
+           FTEST_ARG=\"${FTEST_ARG:-}\"               \
+           WITH_VALGRIND=\"${WITH_VALGRIND:-}\"       \
+           STAGE_NAME=\"${STAGE_NAME:-Unknown}\"      \
+           DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
            $(cat ci/functional/test_main_node.sh)"
     else
-        ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
+        ./ftest.sh "$test_tag" "$tnodes" "${FTEST_ARG:-}"
     fi
 fi
 
 # Now rename the previously collected hardware test data for Jenkins
 # to use them for Junit processing.
-: "${STAGE_NAME:=}"
+: "${STAGE_NAME:=unknown}"
 mkdir -p "${STAGE_NAME}/hardware_prep/"
 for node in ${tnodes//,/ }; do
     old_name="./hardware_prep_node_results.xml.$node"
