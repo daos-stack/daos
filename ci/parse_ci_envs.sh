@@ -23,7 +23,7 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${REPO_SPEC:=el-9}"
       ;;
     *SLES\ 15.7*|*sles15.7*)
-      : "${CHROOT_NAME:=opensuse-leap-15.6-x86_64}"
+      : "${CHROOT_NAME:=sles-15-sp7-x86_64}"
       : "${TARGET:=sles15.7}"
       ;;
     *Leap\ 15.6*|*leap15.6*|*opensuse15.6*|*sles15.6*)
