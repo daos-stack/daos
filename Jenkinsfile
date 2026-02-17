@@ -518,7 +518,7 @@ String addPackages(Boolean ucx=false, Boolean bullseye=false) {
     } else {
         packages += ' mercury-libfabric'
     }
-    if (code_coverage) {
+    if (bullseye) {
         packages += ' bullseye'
     }
     return packages
