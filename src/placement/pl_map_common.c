@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -255,13 +256,7 @@ is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
 			status = PO_COMP_ST_UPIN;
 		} else if (status == PO_COMP_ST_UP) {
 			if (comp->co_flags & PO_COMPF_DOWN2UP) {
-				/* PO_COMP_ST_UP status with PO_COMPF_DOWN2UP flag
-				 * is the case of delay_rebuild exclude+reint.
-				 * Cannot mark it as UPIN to avoid it be used for
-				 * rebuild enumerate/fetch, as the data will be
-				 * discarded in reintegrate.
-				 */
-				/* status = PO_COMP_ST_UPIN; */
+				status = PO_COMP_ST_UPIN;
 			} else {
 				if (comp->co_fseq <= 1)
 					status = PO_COMP_ST_NEW;
@@ -394,9 +389,14 @@ next_fail:
 	if (spare_avail) {
 		/* The selected spare target is up and ready */
 		l_shard->po_target = spare_tgt->ta_comp.co_id;
-		l_shard->po_fseq = f_shard->fs_fseq;
-		l_shard->po_rank = spare_tgt->ta_comp.co_rank;
-		l_shard->po_index = spare_tgt->ta_comp.co_index;
+		l_shard->po_fseq   = f_shard->fs_fseq;
+		l_shard->po_rank   = spare_tgt->ta_comp.co_rank;
+		l_shard->po_index  = spare_tgt->ta_comp.co_index;
+
+		if (pool_target_is_down2up(spare_tgt))
+			f_shard->fs_down2up = 1;
+		else
+			f_shard->fs_down2up = 0;
 
 		/*
 		 * Mark the shard as 'rebuilding' so that read will skip this shard.
@@ -406,6 +406,10 @@ next_fail:
 		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
 		    f_shard->fs_down2up || pool_target_down(spare_tgt))
 			l_shard->po_rebuilding = 1;
+
+		if (f_shard->fs_down2up && gen_mode != PRE_REBUILD)
+			l_shard->po_reintegrating = 1;
+
 	} else {
 		l_shard->po_shard = -1;
 		l_shard->po_target = -1;

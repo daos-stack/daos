@@ -1630,16 +1630,18 @@ rebuild_task_ult(void *arg)
 	uint32_t				map_dist_ver = 0;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	d_rank_t				myrank;
-	uint64_t				cur_ts = 0;
+	// uint64_t				cur_ts = 0;
 	uint32_t                                 obj_reclaim_ver = 0;
 	int					rc;
 
+#if 0
 	cur_ts = daos_gettime_coarse();
 	D_ASSERT(task->dst_schedule_time != (uint64_t)-1);
 	if (cur_ts < task->dst_schedule_time) {
 		D_INFO("rebuild task sleep " DF_U64 " second\n", task->dst_schedule_time - cur_ts);
 		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
 	}
+#endif
 
 	rc = ds_pool_lookup(task->dst_pool_uuid, &pool);
 	if (pool == NULL) {
@@ -1835,6 +1837,8 @@ rebuild_ults(void *arg)
 
 	while (!d_list_empty(&rebuild_gst.rg_queue_list) ||
 	       !d_list_empty(&rebuild_gst.rg_running_list)) {
+		uint64_t now;
+
 		if (rebuild_gst.rg_abort) {
 			D_DEBUG(DB_REBUILD, "abort rebuild\n");
 			break;
@@ -1848,6 +1852,7 @@ rebuild_ults(void *arg)
 			continue;
 		}
 
+		now  = daos_gettime_coarse();
 		task = d_list_entry(rebuild_gst.rg_queue_list.next, struct rebuild_task, dst_list);
 		while (&rebuild_gst.rg_queue_list != &task->dst_list) {
 			/* If a pool is already handling a rebuild operation,
@@ -1855,6 +1860,7 @@ rebuild_ults(void *arg)
 			 * one completes
 			 */
 			if (pool_is_rebuilding(task->dst_pool_uuid) ||
+			    task->dst_schedule_time > now ||
 			    task->dst_schedule_time == (uint64_t)-1) {
 				struct rebuild_task *head_task = task;
 
@@ -1887,7 +1893,7 @@ rebuild_ults(void *arg)
 			}
 
 		}
-		dss_sleep(0);
+		dss_sleep(100);
 	}
 
 	/* If there are still rebuild task in queue and running list, then
