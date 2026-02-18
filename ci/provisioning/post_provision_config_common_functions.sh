@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2022-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -322,7 +322,7 @@ post_provision_config_nodes() {
         rm -f "$REPOS_DIR"/*_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload          \
                      argobots cart daos daos-client dpdk      \
-                     libisa-l libpmemobj mercury mpich   \
+                     libisa-l libpmemobj libpmemobj1 mercury mpich \
                      pmix protobuf-c spdk libfabric libpmem        \
                      munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd
