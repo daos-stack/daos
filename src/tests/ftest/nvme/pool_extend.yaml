@@ -23,11 +23,13 @@ server_config:
       nr_xs_helpers: 1
       log_file: daos_server0.log
       storage: auto
+      log_mask: DEBUG,MEM=ERR,RPC=ERR,BULK=ERR,HG=ERR,GRP=ERR
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       log_file: daos_server1.log
       storage: auto
+      log_mask: DEBUG,MEM=ERR,RPC=ERR,BULK=ERR,HG=ERR,GRP=ERR
 
 pool:
   svcn: 4

@@ -2047,7 +2047,7 @@ rebuild_task_ult(void *arg)
 	uint32_t				map_dist_ver = 0;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	d_rank_t				myrank;
-	uint64_t				cur_ts = 0;
+	uint64_t                                 cur_ts          = 0;
 	uint32_t                                 obj_reclaim_ver = 0;
 	int					rc;
 
