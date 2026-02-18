@@ -594,7 +594,7 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 type ScmConfig struct {
 	MountPoint       string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
 	RamdiskSize      uint     `yaml:"scm_size,omitempty"`
-	DisableHugepages bool     `yaml:"scm_hugepages_disabled,omitempty"`
+	DisableHugepages bool     `yaml:"scm_hugepages_disabled"`
 	DeviceList       []string `yaml:"scm_list,omitempty"`
 	NumaNodeIndex    uint     `yaml:"-"`
 }

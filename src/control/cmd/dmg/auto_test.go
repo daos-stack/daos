@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -559,9 +559,11 @@ engines:
   storage:
   - class: dcpm
     scm_mount: /mnt/daos0
+    scm_hugepages_disabled: false
     scm_list:
     - /dev/pmem0
   - class: nvme
+    scm_hugepages_disabled: false
     bdev_list:
     - "0000:00:00.0"
     - "0000:01:00.0"
@@ -577,9 +579,11 @@ engines:
   storage:
   - class: dcpm
     scm_mount: /mnt/daos1
+    scm_hugepages_disabled: false
     scm_list:
     - /dev/pmem1
   - class: nvme
+    scm_hugepages_disabled: false
     bdev_list:
     - "0000:04:00.0"
     - "0000:05:00.0"

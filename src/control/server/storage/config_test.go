@@ -741,7 +741,8 @@ func TestStorage_BdevDeviceRoles_ToYAML(t *testing.T) {
 					NewTierConfig().
 						WithStorageClass("ram").
 						WithScmRamdiskSize(16).
-						WithScmMountPoint("/mnt/daos"),
+						WithScmMountPoint("/mnt/daos").
+						WithScmHugepagesDisabled(true),
 					NewTierConfig().
 						WithTier(1).
 						WithStorageClass("nvme").
@@ -754,7 +755,9 @@ storage:
 - class: ram
   scm_mount: /mnt/daos
   scm_size: 16
+  scm_hugepages_disabled: true
 - class: nvme
+  scm_hugepages_disabled: false
   bdev_list:
   - 0000:80:00.0
   bdev_roles:

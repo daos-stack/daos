@@ -212,17 +212,6 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			}
 			t.Logf("config B loaded from %s: %+v", testFile, string(configBPretty))
 
-			// Config A written from uncommented file with scm_hugepages_disabled: false
-			// set explicitly whereas when config B yaml gets written,
-			// scm_hugepages_disabled is omitted (omitempty) and therefore when read is
-			// set to true by default. Adjust configB because of this.
-			if len(configB.Engines) == 2 {
-				for _, e := range configB.Engines {
-					ramCfg := e.Storage.Tiers.ScmConfigs()[0]
-					ramCfg.Scm.DisableHugepages = false
-				}
-			}
-
 			if diff := cmp.Diff(configA, configB, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
