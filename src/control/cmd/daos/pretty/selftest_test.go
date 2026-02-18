@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -96,6 +97,7 @@ Client/Server Network Test Parameters
 		},
 		"custom - verbose": {
 			cfg: genCfg(func(cfg *daos.SelfTestConfig) {
+				cfg.GroupName = "daos_server_test"
 				cfg.EndpointRanks = []ranklist.Rank{0, 1, 2}
 				cfg.EndpointTags = []uint32{0, 1, 2}
 				cfg.SendSizes = []uint64{1024, 1024 * 1024}
@@ -109,7 +111,7 @@ Client/Server Network Test Parameters
   Send RPC Sizes    : [1.00 KiB 1.00 MiB]
   Reply RPC Sizes   : [2.00 MiB 2.00 GiB]
   RPCs Per Server   : 10000              
-  System Name       : daos_server        
+  System Name       : daos_server_test   
   Tags              : [0-2]              
   Max In-Flight RPCs: 16                 
 
@@ -292,6 +294,55 @@ Per-Target Latency Results
   0:0    0.00ms 15.00ms 22.50ms 27.00ms 28.50ms 29.70ms 30.00ms 15.00ms 8.66ms 20.0%  
   1:0    0.00ms 15.00ms 22.50ms 27.00ms 28.50ms 29.70ms 30.00ms 15.00ms 8.66ms 20.0%  
   2:0    0.00ms 15.00ms 22.50ms 27.00ms 28.50ms 29.70ms 30.00ms 15.00ms 8.66ms 20.0%  
+`,
+		},
+		"verbose with all failures": {
+			result: func() *daos.SelfTestResult {
+				cfg := &daos.SelfTestConfig{}
+				cfg.SetDefaults()
+				r := &daos.SelfTestResult{
+					MasterEndpoint: daos.SelfTestEndpoint{Rank: 3, Tag: 0},
+					TargetEndpoints: []daos.SelfTestEndpoint{
+						{Rank: 0, Tag: 0},
+						{Rank: 1, Tag: 0},
+						{Rank: 2, Tag: 0},
+					},
+					Repetitions:     cfg.Repetitions * 3,
+					SendSize:        cfg.SendSizes[0],
+					ReplySize:       cfg.ReplySizes[0],
+					BufferAlignment: cfg.BufferAlignment,
+					Duration:        8500 * time.Millisecond,
+					MasterLatency: &daos.EndpointLatency{
+						TotalRPCs: uint64(cfg.Repetitions),
+					},
+				}
+				for i := int64(1); i <= int64(r.Repetitions); i++ {
+					r.MasterLatency.AddValue(-1)
+					r.AddTargetLatency(ranklist.Rank(i%3), 0, -1)
+				}
+				return r
+			}(),
+			verbose: true,
+			expStr: `
+Client/Server Network Test Summary
+----------------------------------
+  Server Endpoints: [0-2]:0       
+  RPC Throughput  : 1176.47 RPC/s 
+  RPC Bandwidth   : 19.28 Mbps    
+  Average Latency : 0.00ms        
+  Client Endpoint : 3:0           
+  Duration        : 8.5s          
+  Repetitions     : 30000         
+  Send Size       : 1.00 KiB      
+  Reply Size      : 1.00 KiB      
+  Failed RPCs     : 30000 (100.0%)
+
+Per-Target Latency Results
+  Target Min    50% 75% 90% 95% 99% Max    Average StdDev Failed 
+  ------ ---    --- --- --- --- --- ---    ------- ------ ------ 
+  0:0    0.00ms N/A N/A N/A N/A N/A 0.00ms 0.00ms  0.00ms 100.0% 
+  1:0    0.00ms N/A N/A N/A N/A N/A 0.00ms 0.00ms  0.00ms 100.0% 
+  2:0    0.00ms N/A N/A N/A N/A N/A 0.00ms 0.00ms  0.00ms 100.0% 
 `,
 		},
 	} {
