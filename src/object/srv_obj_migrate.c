@@ -751,7 +751,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	int			rc = 0;
 
 	if (tls->mpt_fini) {
-		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(mrone->mo_pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MRO(mrone));
 		D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
 	}
 
@@ -1838,6 +1838,7 @@ migrate_one_destroy(struct migrate_one *mrone)
 
 	D_ASSERT(d_list_empty(&mrone->mo_list));
 	daos_iov_free(&mrone->mo_dkey);
+	daos_iov_free(&mrone->mo_csum_iov);
 
 	if (mrone->mo_iods_update_ephs) {
 		for (i = 0; i < mrone->mo_iod_alloc_num; i++) {
@@ -2017,7 +2018,7 @@ migrate_one_ult(void *arg)
 
 	tls = mrone->mo_tls;
 	if (tls->mpt_fini) {
-		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(mrone->mo_pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MRO(mrone));
 		goto out;
 	}
 
@@ -2473,8 +2474,8 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 	int			rc = 0;
 
 	if (tls->mpt_fini) {
-		D_WARN("someone aborted the rebuild " DF_UUID "dkey " DF_KEY "iod_nr %d\n",
-		       DP_UUID(iter_arg->pool_uuid), DP_KEY(dkey), iod_eph_total);
+		D_WARN("someone aborted the rebuild " DF_UUID " ver %d, dkey " DF_KEY "iod_nr %d\n",
+		       DP_UUID(iter_arg->pool_uuid), version, DP_KEY(dkey), iod_eph_total);
 		D_GOTO(out, rc = 0);
 	}
 	D_DEBUG(DB_REBUILD, DF_RB ": migrate dkey " DF_KEY " iod nr %d\n", DP_RB_MPT(tls),
@@ -2634,7 +2635,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 		return rc;
 
 	if (tls->mpt_fini) {
-		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(arg->arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(put, rc = 0);
 	}
 
@@ -2786,7 +2787,7 @@ migrate_obj_punch_one(void *data)
 
 	tls = arg->pool_tls;
 	if (tls->mpt_fini) {
-		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(out, rc = 0);
 	}
 
@@ -2813,6 +2814,17 @@ out:
 	return rc;
 }
 
+static inline void
+free_mrones(struct enum_unpack_arg *unpack_arg)
+{
+	struct migrate_one *mrone, *tmp;
+
+	d_list_for_each_entry_safe(mrone, tmp, &unpack_arg->merge_list, mo_list) {
+		d_list_del_init(&mrone->mo_list);
+		migrate_one_destroy(mrone);
+	}
+}
+
 static int
 migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 {
@@ -2823,7 +2835,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 	int			rc = 0;
 
 	if (tls->mpt_fini) {
-		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(out, rc = 0);
 	}
 	d_list_for_each_entry_safe(mrone, tmp, &unpack_arg->merge_list,
@@ -3099,6 +3111,8 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		enum_flags |= DIOF_TO_LEADER;
 	}
 
+	free_mrones(&unpack_arg);
+
 	if (buf != NULL && buf != stack_buf)
 		D_FREE(buf);
 
@@ -3228,7 +3242,7 @@ migrate_obj_ult(void *data)
 	migrate_obj_get(arg);
 	tls = arg->pool_tls;
 	if (tls->mpt_fini) {
-		D_WARN("someone aborted the rebuild " DF_UUID "\n", DP_UUID(arg->pool_uuid));
+		D_WARN(DF_RB " someone aborted the rebuild", DP_RB_MPT(tls));
 		D_GOTO(free_notls, rc);
 	}
 

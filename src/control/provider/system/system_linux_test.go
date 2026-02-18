@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ package system
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -202,39 +203,39 @@ func TestSystemLinux_GetfsType(t *testing.T) {
 	}
 }
 
-func TestSystemLinux_GetDeviceLabel(t *testing.T) {
-	validDev := func(t *testing.T) string {
-		t.Helper()
+func validDev(t *testing.T) string {
+	t.Helper()
 
-		// Only want numbered partitions, not whole disks
-		re := regexp.MustCompile(`^[a-zA-Z]+[0-9]+$`)
+	// Only want numbered partitions, not whole disks
+	re := regexp.MustCompile(`^[a-zA-Z]+[0-9]+$`)
 
-		sysRoot := "/sys/class/block/"
-		entries, err := os.ReadDir(sysRoot)
-		if err != nil {
-			t.Fatalf("unable to read %q: %v", sysRoot, err)
-		}
-
-		for _, entry := range entries {
-			if !re.MatchString(entry.Name()) {
-				continue
-			}
-
-			devPath := "/dev/" + entry.Name()
-			info, err := os.Stat(devPath)
-			if err != nil {
-				continue
-			}
-			if (info.Mode()&os.ModeDevice) != 0 && (info.Mode()&os.ModeCharDevice) == 0 {
-				t.Logf("using block device %q for test", devPath)
-				return devPath
-			}
-		}
-
-		t.Fatal("no valid block device found for test")
-		return ""
+	sysRoot := "/sys/class/block/"
+	entries, err := os.ReadDir(sysRoot)
+	if err != nil {
+		t.Fatalf("unable to read %q: %v", sysRoot, err)
 	}
 
+	for _, entry := range entries {
+		if !re.MatchString(entry.Name()) {
+			continue
+		}
+
+		devPath := "/dev/" + entry.Name()
+		info, err := os.Stat(devPath)
+		if err != nil {
+			continue
+		}
+		if (info.Mode()&os.ModeDevice) != 0 && (info.Mode()&os.ModeCharDevice) == 0 {
+			t.Logf("using block device %q for test", devPath)
+			return devPath
+		}
+	}
+
+	t.Fatal("no valid block device found for test")
+	return ""
+}
+
+func TestSystemLinux_GetDeviceLabel(t *testing.T) {
 	for name, tc := range map[string]struct {
 		path   string
 		expErr error
@@ -309,6 +310,82 @@ func TestSystemLinux_fsStrFromMagic(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.AssertEqual(t, tc.expResult, fsStrFromMagic(tc.magic), "")
+		})
+	}
+}
+
+func TestSystemLinux_Mkfs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        MkfsReq
+		expErr     error
+		expCmdName string
+		expCmdArgs []string
+	}{
+		"empty": {
+			req:    MkfsReq{},
+			expErr: errors.New("no filesystem"),
+		},
+		"bad filesystem": {
+			req: MkfsReq{
+				Filesystem: "moo",
+			},
+			expErr: errors.New("unable to find mkfs.moo"),
+		},
+		"bad device": {
+			req: MkfsReq{
+				Filesystem: "ext4",
+				Device:     "/notreal",
+			},
+			expErr: syscall.ENOENT,
+		},
+		"success": {
+			req: MkfsReq{
+				Filesystem: "ext4",
+				Device:     validDev(t), // real device, but actual mkfs command is mocked
+			},
+			expCmdName: "mkfs.ext4",
+			expCmdArgs: []string{validDev(t)},
+		},
+		"force": {
+			req: MkfsReq{
+				Filesystem: "ext4",
+				Device:     validDev(t),
+				Force:      true,
+			},
+			expCmdName: "mkfs.ext4",
+			expCmdArgs: []string{"-F", validDev(t)},
+		},
+		"options": {
+			req: MkfsReq{
+				Filesystem: "ext4",
+				Device:     validDev(t),
+				Options:    []string{"-L", "my_device"},
+			},
+			expCmdName: "mkfs.ext4",
+			expCmdArgs: []string{"-L", "my_device", validDev(t)},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := DefaultProvider()
+
+			var seenName string
+			var seenArgs []string
+			p.runCommand = func(name string, args ...string) ([]byte, error) {
+				seenName = name
+				seenArgs = args
+				return []byte{}, nil
+			}
+
+			err := p.Mkfs(tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			if seenName != "" {
+				// don't care where the binary was found, just that it was
+				seenName = filepath.Base(seenName)
+			}
+			test.AssertEqual(t, tc.expCmdName, seenName, "mkfs command name")
+			test.AssertEqual(t, tc.expCmdArgs, seenArgs, "mkfs args")
 		})
 	}
 }

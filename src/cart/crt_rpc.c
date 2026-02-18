@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -165,7 +165,7 @@ crt_proc_struct_crt_grp_cache(crt_proc_t proc, crt_proc_op_t proc_op,
 	return crt_proc_crt_grp_cache(proc, data);
 }
 
-/* !! All of the following 4 RPC definition should have the same input fields !!
+/* !! All of the following 5 RPC definition should have the same input fields !!
  * All of them are verified in one function:
  * int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
  */
@@ -173,6 +173,7 @@ CRT_RPC_DEFINE(crt_ctl_get_uri_cache, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_URI_CACHE)
 CRT_RPC_DEFINE(crt_ctl_ep_ls,         CRT_ISEQ_CTL, CRT_OSEQ_CTL_EP_LS)
 CRT_RPC_DEFINE(crt_ctl_get_host,      CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
 CRT_RPC_DEFINE(crt_ctl_get_pid,       CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
+CRT_RPC_DEFINE(crt_ctl_dump_counters, CRT_ISEQ_CTL, CRT_OSEQ_CTL_DUMP_COUNTERS)
 
 CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 

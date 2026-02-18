@@ -1,8 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +23,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/mgmt.h>
 #include <daos/placement.h>
 #include <daos/tls.h>
 #include "srv_internal.h"
