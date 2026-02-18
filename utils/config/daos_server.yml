@@ -198,16 +198,16 @@
 #socket_dir: ./.daos/daos_server
 #
 #
-## Number of hugepages to allocate for DMA buffer memory
+## Number of hugepages to allocate for DMA buffer memory (total value for all engines)
 #
-## Optional parameter that should only be set if overriding the automatically calculated value is #
-## #necessary. Specifies the number (not size) of hugepages to allocate for use by NVMe through
-## #SPDK. For optimum performance each target requires 1 GiB of hugepage space. The provided value
+## Optional parameter that should only be set if overriding the automatically calculated value is
+## necessary. Specifies the number (not size) of hugepages to allocate for use by NVMe through
+## SPDK. For optimum performance each target requires 1 GiB of hugepage space. The provided value
 ## should be calculated by dividing the total amount of hugepages memory required for all targets
 ## across all engines on a host by the system hugepage size. If not set here, the value will be
 ## automatically calculated based on the number of targets (using the default system hugepage size).
 #
-## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
+## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16384
 #
 ## default: 0
 #nr_hugepages: 0
@@ -228,7 +228,6 @@
 #allow_numa_imbalance: true
 #
 #
-
 ## Allow DAOS server to run with transparent hugepages (THP) enabled on the host machine.
 #
 ## WARNING: Transparent hugepages can conflict with how the DAOS server uses hugepages, and enabling
