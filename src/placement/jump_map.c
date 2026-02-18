@@ -1,7 +1,7 @@
 /**
  *
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -734,6 +734,13 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 					setbit(dom_cur_grp_real, domain - root);
 				if (pool_target_down(target))
 					layout->ol_shards[k].po_rebuilding = 1;
+
+				if (pool_target_is_down2up(target)) {
+					if (gen_mode == PRE_REBUILD)
+						layout->ol_shards[k].po_rebuilding = 1;
+					else
+						layout->ol_shards[k].po_reintegrating = 1;
+				}
 			}
 
 			if (is_extending != NULL && pool_target_is_up_or_drain(target))
