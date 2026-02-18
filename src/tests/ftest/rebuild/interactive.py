@@ -94,7 +94,7 @@ class RbldInteractive(TestWithServers):
             self.fail(f'Unsupported exclude_method: {exclude_method}')
 
         self.log_step(f'{exclude_method} - Wait for rebuild to start')
-        # pool.wait_for_rebuild_to_start(interval=1)
+        pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{exclude_method} - Manually stop rebuild')
         for i in range(3):
@@ -146,7 +146,7 @@ class RbldInteractive(TestWithServers):
             self.fail(f'Unsupported reint_method: {reint_method}')
 
         self.log_step(f'{reint_method} - Wait for rebuild to start')
-        # pool.wait_for_rebuild_to_start(interval=1)
+        pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{reint_method} - Manually stop rebuild')
         for i in range(3):
