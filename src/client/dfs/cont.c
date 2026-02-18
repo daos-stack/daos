@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,8 +189,14 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		}
 		if (attr->da_file_oclass_id)
 			dattr.da_file_oclass_id = attr->da_file_oclass_id;
-		if (attr->da_dir_oclass_id)
+		if (attr->da_dir_oclass_id) {
 			dattr.da_dir_oclass_id = attr->da_dir_oclass_id;
+			if (daos_cid_is_ec(dattr.da_dir_oclass_id)) {
+				D_WARN("EC object class for directories is not supported,"
+				       " reverting to use default");
+				dattr.da_dir_oclass_id = 0;
+			}
+		}
 
 		/** check non default mode */
 		if ((attr->da_mode & MODE_MASK) == DFS_RELAXED ||
