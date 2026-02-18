@@ -3640,7 +3640,6 @@ migrate_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_eph, 
 	rc       = migrate_res_hold(cont_arg->pool_tls, MIGR_OBJ, obj_arg->ioa_fanout, yielded);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID " enter migrate failed.", DP_UUID(cont_arg->cont_uuid));
-		migrate_res_release(cont_arg->pool_tls, MIGR_OBJ, obj_arg->ioa_fanout);
 		goto free;
 	}
 
