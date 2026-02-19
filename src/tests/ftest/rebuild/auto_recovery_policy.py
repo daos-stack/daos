@@ -9,7 +9,6 @@ from functools import partial
 
 from apricot import TestWithServers
 from data_utils import assert_val_in_list
-from exception_utils import CommandFailure
 from general_utils import list_to_str
 
 
@@ -106,16 +105,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         self.log_step(
             'Scenario 2 - Enable system self_heal and invoke dmg system self-heal eval')
         dmg.system_set_prop('self_heal:exclude;pool_exclude;pool_rebuild')
-        for idx in range(3):
-            try:
-                dmg.system_self_heal_eval()
-            except CommandFailure:
-                raise
-                # TODO workaround - see DAOS-18427
-                # self.log.error('dmg system self-heal eval failed - retrying in 1s')
-                # if idx == 2:
-                #     raise
-                # time.sleep(1)
+        dmg.system_self_heal_eval()
         self.server_managers[0].update_expected_states(ranks_x, ['stopped', 'excluded'])
 
         self.log_step('Scenario 2 - Verify ranks are excluded and rebuilt in the pool')
