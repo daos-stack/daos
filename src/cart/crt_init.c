@@ -96,10 +96,11 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("domain      = %s\n", opt->cio_domain);
 	D_INFO("port        = %s\n", opt->cio_port);
 	D_INFO("auth_key    = %s\n", opt->cio_auth_key);
-	D_INFO("Flags: fault_inject = %d, use_credits = %d, use_sensors = %d, "
-	       "thread_mode_single = %d, progress_busy = %d, mem_device = %d\n",
-	       opt->cio_fault_inject, opt->cio_use_credits, opt->cio_use_sensors,
-	       opt->cio_thread_mode_single, opt->cio_progress_busy, opt->cio_mem_device);
+	D_INFO("ep_credits  = %d\n", opt->cio_ep_credits);
+	D_INFO("Flags: fault_inject = %d, use_sensors = %d, thread_mode_single = %d, "
+	       "progress_busy = %d, mem_device = %d\n",
+	       opt->cio_fault_inject, opt->cio_use_sensors, opt->cio_thread_mode_single,
+	       opt->cio_progress_busy, opt->cio_mem_device);
 
 	if (opt->cio_use_expected_size)
 		D_INFO("max_expected_size = %d\n", opt->cio_max_expected_size);
@@ -160,10 +161,9 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 	       crt_init_options_t *opt)
 
 {
-	uint32_t ctx_num           = 0;
 	uint32_t max_expect_size   = 0;
 	uint32_t max_unexpect_size = 0;
-	uint32_t max_num_ctx       = CRT_SRV_CONTEXT_NUM;
+	uint32_t ctx_max_num       = 0;
 	int      i;
 	int      rc;
 
@@ -172,27 +172,29 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 		return rc;
 
 	if (crt_is_service()) {
-		ctx_num     = CRT_SRV_CONTEXT_NUM;
-		max_num_ctx = CRT_SRV_CONTEXT_NUM;
+		ctx_max_num = CRT_SRV_CONTEXT_NUM;
 	} else {
 		/* Only limit the number of contexts for clients */
-		crt_env_get(CRT_CTX_NUM, &ctx_num);
+		CRT_ENV_OPT_GET(opt, ctx_max_num, CRT_CTX_NUM);
 
 		/* Default setting to the number of cores */
-		if (opt)
-			max_num_ctx =
-			    ctx_num ? ctx_num : max(crt_gdata.cg_num_cores, opt->cio_ctx_max_num);
-		else
-			max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+		if (!ctx_max_num)
+			ctx_max_num = crt_gdata.cg_num_cores;
+
+		if (ctx_max_num > CRT_SRV_CONTEXT_NUM) {
+			D_WARN("ctx_max_num %u exceeds max %u, using max\n", ctx_max_num,
+			       CRT_SRV_CONTEXT_NUM);
+			ctx_max_num = CRT_SRV_CONTEXT_NUM;
+		}
+		/* To be able to run on VMs */
+		if (ctx_max_num < CRT_SRV_CONTEXT_NUM_MIN) {
+			D_WARN("ctx_max_num %u is less than min %u, using min\n", ctx_max_num,
+			       CRT_SRV_CONTEXT_NUM_MIN);
+			ctx_max_num = CRT_SRV_CONTEXT_NUM_MIN;
+		}
 	}
 
-	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
-		max_num_ctx = CRT_SRV_CONTEXT_NUM;
-	/* To be able to run on VMs */
-	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
-		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
-
-	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
+	D_DEBUG(DB_ALL, "Max number of contexts set to %u\n", ctx_max_num);
 
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;
@@ -205,7 +207,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 	prov_data->cpg_ctx_num        = 0;
 	prov_data->cpg_sep_mode       = false;
 	prov_data->cpg_contig_ports   = true;
-	prov_data->cpg_ctx_max_num    = max_num_ctx;
+	prov_data->cpg_ctx_max_num    = ctx_max_num;
 	prov_data->cpg_max_exp_size   = max_expect_size;
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary        = primary;
@@ -218,7 +220,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 	prov_data->cpg_last_remote_tag = 0;
 
 	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sizes: (%d/%d) max_ctx: %d\n", provider, primary,
-		max_expect_size, max_unexpect_size, max_num_ctx);
+		max_expect_size, max_unexpect_size, ctx_max_num);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 
@@ -261,8 +263,8 @@ crt_str_to_tc(const char *str)
 static int
 data_init(int server, crt_init_options_t *opt)
 {
-	uint32_t     timeout = 0;
-	uint32_t     credits;
+	uint32_t     crt_timeout    = 0;
+	uint32_t     ep_credits     = CRT_DEFAULT_CREDITS_PER_EP_CTX;
 	uint32_t     fi_univ_size   = 0;
 	uint32_t     mem_pin_enable = 0;
 	uint32_t     is_secondary;
@@ -310,24 +312,20 @@ data_init(int server, crt_init_options_t *opt)
 	}
 	crt_gdata.cg_provider_is_primary = (is_secondary) ? 0 : 1;
 
-	if (opt && opt->cio_crt_timeout != 0)
-		timeout = opt->cio_crt_timeout;
-	else
-		crt_env_get(CRT_TIMEOUT, &timeout);
+	CRT_ENV_OPT_GET(opt, crt_timeout, CRT_TIMEOUT);
+	crt_gdata.cg_timeout =
+	    (crt_timeout == 0 || crt_timeout > 3600) ? CRT_DEFAULT_TIMEOUT_S : crt_timeout;
 
-	if (timeout == 0 || timeout > 3600)
-		crt_gdata.cg_timeout = CRT_DEFAULT_TIMEOUT_S;
-	else
-		crt_gdata.cg_timeout = timeout;
 	crt_gdata.cg_swim_ctx_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
 
 	/* Override defaults and environment if option is set */
-	if (opt && opt->cio_use_credits) {
-		credits = opt->cio_ep_credits;
-	} else {
-		credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
-		crt_env_get(CRT_CREDIT_EP_CTX, &credits);
+	CRT_ENV_OPT_GET(opt, ep_credits, CRT_CREDIT_EP_CTX);
+	if (ep_credits > CRT_MAX_CREDITS_PER_EP_CTX) {
+		D_WARN("ep_credits %u exceeds max %u, using max\n", ep_credits,
+		       CRT_MAX_CREDITS_PER_EP_CTX);
+		ep_credits = CRT_MAX_CREDITS_PER_EP_CTX;
 	}
+	crt_gdata.cg_credit_ep_ctx = ep_credits;
 
 	/* Enable quotas by default only on clients */
 	crt_gdata.cg_rpc_quota = server ? 0 : CRT_QUOTA_RPCS_DEFAULT;
@@ -351,10 +349,6 @@ data_init(int server, crt_init_options_t *opt)
 	if (fi_univ_size == 0) {
 		d_setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
-
-	if (credits > CRT_MAX_CREDITS_PER_EP_CTX)
-		credits = CRT_MAX_CREDITS_PER_EP_CTX;
-	crt_gdata.cg_credit_ep_ctx = credits;
 
 	/** enable sensors if requested */
 	crt_gdata.cg_use_sensors = (opt && opt->cio_use_sensors);
@@ -751,6 +745,10 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	/* CXI doesn't use interface value, instead uses domain */
 	if (interface == NULL && prov != CRT_PROV_OFI_CXI)
 		D_WARN("No interface specified\n");
+
+	/* For PALS-enabled environments, auto-detect svc ID / VNI and use DAOS VNI */
+	if (prov == CRT_PROV_OFI_CXI && auth_key == NULL && getenv("SLINGSHOT_VNIS") != NULL)
+		auth_key = "0:0:2"; /* format is svc_id:vni:vni_idx */
 
 	crt_gdata.cg_primary_prov = prov;
 	/*

@@ -200,7 +200,7 @@ struct crt_event_cb_priv {
 /*
  * List of environment variables to read at CaRT library load time.
  * for integer envs use ENV()
- * for string ones ENV_STR() or ENV_STR_NO_PRINT()
+ * for string ones ENV_STR()
  **/
 #define CRT_ENV_LIST                                                                               \
 	ENV_STR(CRT_ATTACH_INFO_PATH)                                                              \
@@ -243,7 +243,8 @@ struct crt_event_cb_priv {
 	ENV(D_MRECV_BUF)                                                                           \
 	ENV(D_MRECV_BUF_COPY)                                                                      \
 	ENV_STR(D_PROVIDER)                                                                        \
-	ENV_STR_NO_PRINT(D_PROVIDER_AUTH_KEY)                                                      \
+	ENV_STR(D_PROVIDER_AUTH_KEY)                                                               \
+	ENV_STR(SLINGSHOT_VNIS)                                                                    \
 	ENV(D_QUOTA_RPCS)                                                                          \
 	ENV(D_QUOTA_BULKS)                                                                         \
 	ENV(FI_OFI_RXM_USE_SRX)                                                                    \
@@ -267,8 +268,6 @@ struct crt_event_cb_priv {
 	int   _rc_##x;                                                                             \
 	bool  _no_print_##x;
 
-#define ENV_STR_NO_PRINT(x) ENV_STR(x)
-
 struct crt_envs {
 	CRT_ENV_LIST;
 	bool inited;
@@ -276,7 +275,6 @@ struct crt_envs {
 
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 
 extern struct crt_envs crt_genvs;
 
@@ -303,16 +301,9 @@ crt_env_init(void)
 		crt_genvs._no_print_##x = false;                                                   \
 	} while (0);
 
-#define ENV_STR_NO_PRINT(x)                                                                        \
-	do {                                                                                       \
-		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
-		crt_genvs._no_print_##x = true;                                                    \
-	} while (0);
-
 	CRT_ENV_LIST;
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 
 	crt_genvs.inited = true;
 }
@@ -323,13 +314,11 @@ crt_env_fini(void)
 {
 #define ENV(x)           (void)
 #define ENV_STR(x)       d_freeenv_str(&crt_genvs._##x);
-#define ENV_STR_NO_PRINT ENV_STR
 
 	CRT_ENV_LIST
 
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 
 	crt_genvs.inited = false;
 }
@@ -357,20 +346,12 @@ crt_env_list_valid(void)
 		return false;                                                                      \
 	}
 
-/* if string env exceeds CRT_ENV_STR_MAX_SIZE - return false */
-#define ENV_STR_NO_PRINT(x)                                                                        \
-	if (crt_genvs._rc_##x == 0 && strlen(crt_genvs._##x) + 1 > CRT_ENV_STR_MAX_SIZE) {         \
-		D_ERROR("env '%s' exceeded max size %d\n", #x, CRT_ENV_STR_MAX_SIZE);              \
-		return false;                                                                      \
-	}
-
 	/* expand env list using the above ENV_* definitions */
 	CRT_ENV_LIST;
 	return true;
 
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 }
 
 /* dump environment variables from the CRT_ENV_LIST */
@@ -388,13 +369,10 @@ crt_env_dump(void)
 	if (!crt_genvs._rc_##x)                                                                    \
 		D_INFO("%s = %s\n", #x, crt_genvs._no_print_##x ? "****" : crt_genvs._##x);
 
-#define ENV_STR_NO_PRINT ENV_STR
-
 	CRT_ENV_LIST;
 
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 }
 
 /* structure of global fault tolerance data */

@@ -117,7 +117,7 @@
 #
 ## CART: Fabric authorization key
 ## If the fabric requires an authorization key, set it here to
-## be used on the server and clients.
+## be used on the server.
 #
 #fabric_auth_key: foo:bar
 #
