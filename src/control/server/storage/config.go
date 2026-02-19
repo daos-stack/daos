@@ -175,7 +175,7 @@ func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 
 // WithScmHugepagesDisabled disables hugepages for tmpfs.
 func (tc *TierConfig) WithScmHugepagesDisabled(b bool) *TierConfig {
-	tc.Scm.DisableHugepages = b
+	tc.Scm.DisableHugepages = &b
 	return tc
 }
 
@@ -239,26 +239,6 @@ func (tc *TierConfig) WithBdevDeviceRoles(bits int) *TierConfig {
 func (tc *TierConfig) WithNumaNodeIndex(idx uint) *TierConfig {
 	tc.SetNumaNodeIndex(idx)
 	return tc
-}
-
-// UnmarshalYAML sets SCM DisableHugepages to true unless configured otherwise.
-func (tc *TierConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	// Set defaults before unmarshaling
-	type Alias TierConfig
-	defaults := &Alias{}
-	defaults.Scm.DisableHugepages = true // Default to disabling hugepages
-
-	if err := unmarshal(defaults); err != nil {
-		return err
-	}
-
-	// For classes other than RAM, reset to zero value as setting is irrelevant.
-	if defaults.Class != ClassRam {
-		defaults.Scm.DisableHugepages = false
-	}
-
-	*tc = TierConfig(*defaults)
-	return nil
 }
 
 type TierConfigs []*TierConfig
@@ -594,7 +574,7 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 type ScmConfig struct {
 	MountPoint       string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
 	RamdiskSize      uint     `yaml:"scm_size,omitempty"`
-	DisableHugepages bool     `yaml:"scm_hugepages_disabled"`
+	DisableHugepages *bool    `yaml:"scm_hugepages_disabled,omitempty"`
 	DeviceList       []string `yaml:"scm_list,omitempty"`
 	NumaNodeIndex    uint     `yaml:"-"`
 }
