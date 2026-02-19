@@ -1288,10 +1288,34 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		return 0, 0, errors.New("invalid mem-ratio, should not be greater than one")
 	}
 
-	// Verify that the DAOS system is ready before attempting to query storage.
-	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
-		return 0, 0, err
+	// Verify that the DAOS system is ready before attempting to query storage and record joined.
+	queryResp, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{})
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "getMaxPoolSize: SystemQuery")
 	}
+	joinedRanks := []ranklist.Rank{}
+	for _, member := range queryResp.Members {
+		if member.State == system.MemberStateJoined {
+			joinedRanks = append(joinedRanks, member.Rank)
+		}
+	}
+
+	// Refuse if any requested ranks are not joined, update ranklist to contain only joined ranks.
+	approvedRanks := []ranklist.Rank{}
+	if len(createReq.Ranks) == 0 {
+		approvedRanks = joinedRanks
+	} else {
+		// Generate function to verify a rank is in the provided rank slice.
+		filterJoined := newFilterRankFunc(ranklist.RankList(joinedRanks))
+		for _, rank := range createReq.Ranks {
+			if !filterJoined(rank) {
+				return 0, 0, errors.Errorf("specified rank %d is not joined", rank)
+			}
+			approvedRanks = append(approvedRanks, rank)
+		}
+	}
+	filterRank := newFilterRankFunc(ranklist.RankList(approvedRanks))
+	createReq.Ranks = approvedRanks
 
 	scanReq := &StorageScanReq{
 		Usage:    true,
@@ -1307,8 +1331,6 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		return 0, 0, errors.New("Empty host storage response from StorageScan")
 	}
 
-	// Generate function to verify a rank is in the provided rank slice.
-	filterRank := newFilterRankFunc(ranklist.RankList(createReq.Ranks))
 	rankNVMeFreeSpace := make(rankFreeSpaceMap)
 	scmBytes := uint64(math.MaxUint64)
 	for _, key := range scanResp.HostStorage.Keys() {

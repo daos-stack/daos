@@ -3121,6 +3121,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 	for name, tc := range map[string]struct {
 		hostsConfigArray []MockHostStorageConfig
 		tgtRanks         []ranklist.Rank
+		memberStates     map[ranklist.Rank]system.MemberState
 		memRatio         float32
 		queryError       error
 		expScmBytes      uint64
@@ -3612,10 +3613,110 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			tgtRanks: []ranklist.Rank{1},
 			expError: errors.New("No SCM storage space available"),
 		},
+		"requested rank not joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateStopped,
+			},
+			expError: errors.New("specified rank 0 is not joined"),
+		},
+		"multiple requested ranks not joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName:   "bar",
+					ScmConfig:  []MockScmConfig{newScmCfg(1), newScmCfg(2)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0), newNvmeCfg(2, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0, 1, 2},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateStopped,
+				2: system.MemberStateExcluded,
+			},
+			expError: errors.New("specified rank 1 is not joined"),
+		},
+		"all requested ranks joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName:   "bar",
+					ScmConfig:  []MockScmConfig{newScmCfg(1), newScmCfg(2)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0), newNvmeCfg(2, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0, 1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateJoined,
+				2: system.MemberStateStopped,
+			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: humanize.TByte,
+		},
+		"no requested ranks; filters to joined ranks only": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName: "bar",
+					ScmConfig: []MockScmConfig{
+						newScmCfg(1, humanize.TByte),
+						newScmCfg(2),
+						newScmCfg(3, 50*humanize.GByte),
+					},
+					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(1, 0),
+						newNvmeCfg(2, 0),
+						newNvmeCfg(3, 0, 500*humanize.GByte),
+					},
+				},
+			},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateJoined,
+				2: system.MemberStateStopped,
+				3: system.MemberStateExcluded,
+			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: humanize.TByte,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
+
+			// Build SystemQueryResp with members based on memberStates
+			systemQueryResp := &mgmtpb.SystemQueryResp{}
+			if tc.memberStates != nil {
+				for rank, state := range tc.memberStates {
+					systemQueryResp.Members = append(systemQueryResp.Members, &mgmtpb.SystemMember{
+						Rank:  uint32(rank),
+						Uuid:  test.MockUUID(int32(rank)),
+						State: state.String(),
+						Addr:  fmt.Sprintf("10.0.0.%d:10001", rank),
+					})
+				}
+			}
 
 			mockInvokerConfig := &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -3623,7 +3724,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 						Responses: []*HostResponse{
 							{
 								Addr:    "foo",
-								Message: &mgmtpb.SystemQueryResp{},
+								Message: systemQueryResp,
 								Error:   tc.queryError,
 							},
 						},
