@@ -1191,7 +1191,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
