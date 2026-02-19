@@ -1680,11 +1680,9 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 						      mrone->mo_oid.id_shard))
 			mrone_recx_daos2_vos(mrone, mrone->mo_punch_iods, mrone->mo_punch_iod_num);
 
-		rc = vos_obj_update(cont->sc_hdl, mrone->mo_oid,
-				    mrone->mo_rec_punch_eph,
-				    mrone->mo_version, 0, &mrone->mo_dkey,
-				    mrone->mo_punch_iod_num,
-				    mrone->mo_punch_iods, NULL, NULL);
+		rc = vos_obj_update(cont->sc_hdl, mrone->mo_oid, mrone->mo_rec_punch_eph,
+				    mrone->mo_version, VOS_OF_REBUILD, &mrone->mo_dkey,
+				    mrone->mo_punch_iod_num, mrone->mo_punch_iods, NULL, NULL);
 		D_DEBUG(DB_REBUILD, DF_UOID" mrone %p punch %d eph "DF_U64
 			" records: "DF_RC"\n", DP_UOID(mrone->mo_oid), mrone,
 			mrone->mo_punch_iod_num, mrone->mo_rec_punch_eph,
