@@ -420,8 +420,7 @@ storage:
 				NewTierConfig().
 					WithStorageClass("ram").
 					WithScmRamdiskSize(16).
-					WithScmMountPoint("/mnt/daos").
-					WithScmHugepagesDisabled(true),
+					WithScmMountPoint("/mnt/daos"),
 				NewTierConfig().
 					WithTier(1).
 					WithStorageClass("nvme").
@@ -528,8 +527,7 @@ storage:
 				NewTierConfig().
 					WithStorageClass("ram").
 					WithScmRamdiskSize(16).
-					WithScmMountPoint("/mnt/daos").
-					WithScmHugepagesDisabled(true),
+					WithScmMountPoint("/mnt/daos"),
 				NewTierConfig().
 					WithTier(1).
 					WithStorageClass("nvme").
@@ -567,8 +565,7 @@ storage:
 				NewTierConfig().
 					WithStorageClass("ram").
 					WithScmRamdiskSize(16).
-					WithScmMountPoint("/mnt/daos").
-					WithScmHugepagesDisabled(true),
+					WithScmMountPoint("/mnt/daos"),
 				NewTierConfig().
 					WithTier(1).
 					WithStorageClass("nvme").
@@ -757,7 +754,6 @@ storage:
   scm_size: 16
   scm_hugepages_disabled: true
 - class: nvme
-  scm_hugepages_disabled: false
   bdev_list:
   - 0000:80:00.0
   bdev_roles:
@@ -1219,9 +1215,8 @@ storage:
 				&TierConfig{
 					Class: ClassRam,
 					Scm: ScmConfig{
-						MountPoint:       "/mnt/daos/1",
-						RamdiskSize:      16,
-						DisableHugepages: true,
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
 					},
 				},
 			},
@@ -1241,9 +1236,8 @@ storage:
 				&TierConfig{
 					Class: ClassRam,
 					Scm: ScmConfig{
-						MountPoint:       "/mnt/daos/1",
-						RamdiskSize:      16,
-						DisableHugepages: true,
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
 					},
 				},
 				&TierConfig{
@@ -1267,9 +1261,8 @@ storage:
 				&TierConfig{
 					Class: ClassRam,
 					Scm: ScmConfig{
-						MountPoint:       "/mnt/daos/1",
-						RamdiskSize:      16,
-						DisableHugepages: true,
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
 					},
 				},
 				&TierConfig{
@@ -1293,9 +1286,8 @@ storage:
 				&TierConfig{
 					Class: ClassRam,
 					Scm: ScmConfig{
-						MountPoint:       "/mnt/daos/1",
-						RamdiskSize:      16,
-						DisableHugepages: true,
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
 					},
 				},
 				&TierConfig{
@@ -1320,9 +1312,8 @@ storage:
 				&TierConfig{
 					Class: ClassRam,
 					Scm: ScmConfig{
-						MountPoint:       "/mnt/daos/1",
-						RamdiskSize:      16,
-						DisableHugepages: true,
+						MountPoint:  "/mnt/daos/1",
+						RamdiskSize: 16,
 					},
 				},
 				&TierConfig{
@@ -1480,35 +1471,5 @@ func TestStorage_Config_Validate(t *testing.T) {
 				t.Fatalf("unexpected ConfigOutputPath (-want +got):\n%s", diff)
 			}
 		})
-	}
-}
-
-func TestStorage_ScmConfig_DisableHugepages_MultipleEngines(t *testing.T) {
-	yamlInput := `
-- class: ram
-  scm_mount: /mnt/daos0
-  scm_size: 16
-- class: ram
-  scm_mount: /mnt/daos1
-  scm_size: 16
-  scm_hugepages_disabled: false
-`
-	var configs TierConfigs
-	if err := yaml.Unmarshal([]byte(yamlInput), &configs); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-
-	if len(configs) != 2 {
-		t.Fatalf("expected 2 configs, got %d", len(configs))
-	}
-
-	// First config should have DisableHugepages=true (default)
-	if !configs[0].Scm.DisableHugepages {
-		t.Fatalf("expected engine 0 DisableHugepages=true, got false")
-	}
-
-	// Second config explicitly set to false
-	if configs[1].Scm.DisableHugepages {
-		t.Fatalf("expected engine 1 DisableHugepages=false, got true")
 	}
 }

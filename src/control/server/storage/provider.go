@@ -285,8 +285,8 @@ func (p *Provider) MountScm() error {
 	switch cfg.Class {
 	case ClassRam:
 		disableHugepages := true
-		if scmCfg.DisableHugepages != nil {
-			disableHugepages = *scmCfg.DisableHugepages
+		if cfg.Scm.DisableHugepages != nil {
+			disableHugepages = *cfg.Scm.DisableHugepages
 		}
 		req.Ramdisk = &RamdiskParams{
 			Size:             cfg.Scm.RamdiskSize,
