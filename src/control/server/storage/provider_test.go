@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -342,6 +343,7 @@ func TestStorage_ProviderUpgradeBdevConfig(t *testing.T) {
 			ctx := test.MustLogContext(t, test.Context(t))
 
 			p := NewProvider(logging.FromContext(ctx), 0, tc.cfg, nil, nil, tc.bdevProv, nil)
+			p.setTopologyGetter(MockGetTopology)
 			gotErr := p.UpgradeBdevConfig(ctx, tc.ctrlrs)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {

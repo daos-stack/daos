@@ -13,7 +13,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime/debug"
-	"sort"
 	"strings"
 	"unsafe"
 
@@ -43,15 +42,15 @@ func exitWithError(log logging.Logger, err error) {
 }
 
 type cliOptions struct {
-	Debug     bool       `long:"debug" description:"enable debug output"`
-	WriteMode bool       `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
-	CmdFile   string     `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
-	SysdbPath string     `long:"db_path" short:"p" description:"Path to the sys db."`
-	VosPath   vosPathStr `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
-	Version   bool       `short:"v" long:"version" description:"Show version"`
+	Debug     bool   `long:"debug" description:"enable debug output"`
+	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
+	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
+	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
+	VosPath   string `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
+	Version   bool   `short:"v" long:"version" description:"Show version"`
 	Args      struct {
-		RunCmd     ddbCmdStr `positional-arg-name:"ddb_command"`
-		RunCmdArgs []string  `positional-arg-name:"ddb_command_args"`
+		RunCmd     string   `positional-arg-name:"ddb_command"`
+		RunCmdArgs []string `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
 }
 
@@ -91,46 +90,6 @@ Example Paths:
 `
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
-
-type vosPathStr string
-
-func (pathStr vosPathStr) Complete(match string) (comps []flags.Completion) {
-	if match == "" || match == "/" {
-		match = defMntPrefix
-	}
-	for _, comp := range listDirVos(match) {
-		comps = append(comps, flags.Completion{Item: comp})
-	}
-	sort.Slice(comps, func(i, j int) bool { return comps[i].Item < comps[j].Item })
-
-	return
-}
-
-type ddbCmdStr string
-
-func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
-	// hack to get at command names
-	ctx, cleanup, err := InitDdb(nil)
-	if err != nil {
-		return
-	}
-	defer cleanup()
-
-	app := createGrumbleApp(ctx)
-	for _, cmd := range app.Commands().All() {
-		if match == "" || strings.HasPrefix(cmd.Name, match) {
-			comps = append(comps, flags.Completion{Item: cmd.Name})
-		}
-	}
-	sort.Slice(comps, func(i, j int) bool { return comps[i].Item < comps[j].Item })
-
-	return
-}
-
-func (cmdStr *ddbCmdStr) UnmarshalFlag(fv string) error {
-	*cmdStr = ddbCmdStr(fv)
-	return nil
-}
 
 func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 	file, err := os.Open(fileName)
