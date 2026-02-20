@@ -56,7 +56,7 @@ Map nlt_test() {
         print 'Unstash failed, results from NLT stage will not be included'
     }
     sh label: 'Fault injection testing using NLT',
-       script: './ci/docker_nlt.sh --class-name el9.fault-injection fi'
+       script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
     List filesList = []
     filesList.addAll(findFiles(glob: '*.memcheck.xml'))
     int vgfail = 0
@@ -800,7 +800,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'nlt-memcheck'
+                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -859,11 +859,11 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
                                                      'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'unit-memcheck-bdev'
+                                         valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test bdev with memcheck on EL 8.8')
+                } // stage('Unit Test bdev with memcheck on EL 8')
             }
         }
         stage('Test') {
@@ -1035,7 +1035,7 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el9.fault-injection/',
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
                         }
@@ -1252,7 +1252,7 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['nlt-memcheck',
+            valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
                                                      'unit-memcheck',
                                                      'fault-inject-valgrind']
             job_status_update('final_status')
