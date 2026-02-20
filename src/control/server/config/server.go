@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,6 +58,7 @@ type deprecatedParams struct {
 type Server struct {
 	// control-specific
 	ControlPort        int                       `yaml:"port"`
+	ControlInterface   string                    `yaml:"control_iface,omitempty"`
 	TransportConfig    *security.TransportConfig `yaml:"transport_config"`
 	Engines            []*engine.Config          `yaml:"engines"`
 	BdevExclude        []string                  `yaml:"bdev_exclude,omitempty"`
@@ -228,6 +229,12 @@ func (cfg *Server) WithMgmtSvcReplicas(reps ...string) *Server {
 // WithControlPort sets the gRPC listener port.
 func (cfg *Server) WithControlPort(port int) *Server {
 	cfg.ControlPort = port
+	return cfg
+}
+
+// WithControlInterface sets the network interface for the control plane listener.
+func (cfg *Server) WithControlInterface(iface string) *Server {
+	cfg.ControlInterface = iface
 	return cfg
 }
 

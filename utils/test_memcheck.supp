@@ -165,7 +165,7 @@
    Memcheck:Leak
    match-leak-kinds: all
    ...
-   fun:?alloc
+   fun:*alloc
    ...
    fun:ompi_mpi_finalize
    ...
@@ -447,6 +447,14 @@
    fun:mem_map_get_map_1gb
    fun:spdk_mem_map_set_translation
    ...
+}
+{
+   setgrent() leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:*alloc
+   ...
+   fun:setgrent
 }
 {
    OPENSSL_init_crypto leak
