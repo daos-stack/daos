@@ -4,6 +4,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
 #include <ftw.h>
 #include <unistd.h>
@@ -13,7 +14,6 @@
 #include <sys/sysinfo.h>
 #include <linux/magic.h>
 
-#include <gurt/debug.h>
 #include <daos_srv/control.h>
 #include <daos_srv/smd.h>
 #include <daos_srv/mgmt_tgt_common.h>

@@ -5,16 +5,19 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
+
+#include <stdarg.h>
+#include <sys/stat.h>
 
 #include <daos/common.h>
 #include <daos/object.h>
+
+#include "ddb.h"
 #include "ddb_main.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb_vos.h"
-#include "ddb.h"
-#include <stdarg.h>
-#include <sys/stat.h>
 
 int
 ddb_init()

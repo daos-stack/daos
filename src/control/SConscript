@@ -109,7 +109,7 @@ def install_go_bin(env, name, libs=None, install_man=False):
         menv = env.Clone()
         # This runs code from the build area so needs LD_LIBRARY_PATH set.
         menv.d_enable_ld_path(["cart", "gurt", "client/api", "common", "client/dfs", "utils",
-                               "utils/self_test"])
+                               "utils/self_test", "vos", "common/dav_v2", "bio", "utils/ddb"])
         menv.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
         menv.Install('$PREFIX/share/man/man8', build_path)
 
@@ -217,7 +217,7 @@ def scons():
     # Add vos and dependent libs for ddb
     ddb_env.AppendENVPath("CGO_LDFLAGS", " -lvos -ldav_v2 -ldaos_common_pmem -lpmem "
                                          "-labt -lgurt -luuid -lbio -lssl -lcart", sep=" ")
-    install_go_bin(ddb_env, "ddb", ['ddb'])
+    install_go_bin(ddb_env, "ddb", ['ddb'], True)
 
 
 if __name__ == "SCons.Script":
