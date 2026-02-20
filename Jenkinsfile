@@ -339,9 +339,9 @@ pipeline {
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
-        booleanParam(name: 'CI_FUNCTIONAL_el9_VALGRIND_TEST',
+        booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
                      defaultValue: false,
-                     description: 'Run the Functional on EL 9 with Valgrind test stage')
+                     description: 'Run the Functional on EL 8 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
@@ -774,7 +774,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 9.7') {
+                stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { params.CI_NLT_TEST && !skipStage() }
@@ -839,7 +839,7 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test with memcheck on EL 9.7')
-                stage('Unit Test bdev with memcheck on EL 9.7') {
+                stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -863,7 +863,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test bdev with memcheck on EL 9.7')
+                } // stage('Unit Test bdev with memcheck on EL 8.8')
             }
         }
         stage('Test') {
@@ -874,13 +874,13 @@ pipeline {
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
-                stage('Functional on EL 9.7 with Valgrind') {
+                stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        label vm9_label('EL9')
+                        label vm9_label('EL8')
                     }
                     steps {
                         job_step_update(
@@ -895,7 +895,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 9.7 with Valgrind')
+                } // stage('Functional on EL 8.8 with Valgrind')
                 stage('Functional on EL 8.8') {
                     when {
                         beforeAgent true
@@ -985,14 +985,14 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 9.7') {
+                stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
@@ -1040,8 +1040,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing on EL 9.7')
-                stage('Test RPMs on EL') {
+                } // stage('Fault injection testing on EL 8.8')
+                stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1061,7 +1061,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on EL')
+                } // stage('Test RPMs on EL 9.6')
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
