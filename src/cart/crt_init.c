@@ -188,7 +188,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 		}
 		/* To be able to run on VMs */
 		if (ctx_max_num < CRT_SRV_CONTEXT_NUM_MIN) {
-			D_WARN("ctx_max_num %u is less than min %u, using min\n", ctx_max_num,
+			D_INFO("ctx_max_num %u is less than min %u, using min\n", ctx_max_num,
 			       CRT_SRV_CONTEXT_NUM_MIN);
 			ctx_max_num = CRT_SRV_CONTEXT_NUM_MIN;
 		}
