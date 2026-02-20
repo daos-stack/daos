@@ -1,9 +1,10 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
 #include "ddb_printer.h"
 
