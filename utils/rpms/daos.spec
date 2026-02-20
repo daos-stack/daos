@@ -61,8 +61,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
-BuildRequires: libpmemobj-devel >= 2.1.2-2
-BuildRequires: libpmemobj-devel < 2.1.2-3
+BuildRequires: libpmemobj-devel = 2.1.2-2
 %endif
 BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
@@ -165,12 +164,10 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.2-2
-Requires: libpmemobj1 < 2.1.2-3
+Requires: libpmemobj1 = 2.1.2-2
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.2-2
-Requires: libpmemobj < 2.1.2-3
+Requires: libpmemobj = 2.1.2-2
 %endif
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
