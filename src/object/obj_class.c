@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,9 @@ static struct daos_obj_class **oc_resil_array;
 
 static int oc_ident_array_sz;
 static int oc_resil_array_sz;
+
+#define D_GX_RESERVED_ENV "D_GX_RESERVED"
+static unsigned int            oc_gx_reserved;
 
 static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id,
 					       uint32_t *nr_grps);
@@ -253,17 +256,30 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 
 /**
  * To honor RF setting during failure cases, let's reserve RF
- * groups, so if some targets fail, there will be enough replacement
+ * domains, so if some targets fail, there will be enough replacement
  * targets to rebuild, so to avoid putting multiple shards in the same
  * domain, which may break the RF setting.
  *
- * Though let's keep reserve targets to be less than 30% of the total
- * targets.
+ * Though let's keep reserve targets to be no less 30% of the total targets,
+ * because otherwise layout computation will be more and more expensive.
  */
 static uint32_t
-reserve_grp_by_rf(uint32_t target_nr, uint32_t grp_size, uint32_t rf)
+reserve_grp_by_rf(uint32_t domain_nr, uint32_t target_nr, uint32_t grp_size, uint32_t rf)
 {
-	return min(((target_nr * 3) / 10) / grp_size, rf);
+	int tgt_per_dom;
+	int tgt_reserv;
+
+	if (oc_gx_reserved > 0)
+		return oc_gx_reserved;
+
+	D_ASSERT(target_nr >= domain_nr); /* unless pool map is corrupted */
+	tgt_per_dom = target_nr / domain_nr;
+
+	tgt_reserv = (target_nr * 3) / 10; /* 30 percent */
+	if (tgt_reserv < tgt_per_dom * rf)
+		tgt_reserv = tgt_per_dom * rf;
+
+	return (tgt_reserv + grp_size - 1) / grp_size;
 }
 
 int
@@ -303,7 +319,7 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum d
 
 	grp_size = daos_oclass_grp_size(&ca);
 	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX) {
-		uint32_t reserve_grp = reserve_grp_by_rf(target_nr, grp_size, rf_factor);
+		uint32_t reserve_grp = reserve_grp_by_rf(domain_nr, target_nr, grp_size, rf_factor);
 
 		ca.ca_grp_nr = max(1, (target_nr / grp_size));
 
@@ -751,13 +767,13 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 			*ord =  OR_RP_2;
 			grp_size = 2;
 		} else if (rdd == DAOS_OCH_RDD_EC) {
-			if (domain_nr >= 18) {
+			if (domain_nr >= 25) {
 				*ord = OR_RS_16P1;
 				grp_size = 17;
-			} else if (domain_nr >= 10) {
+			} else if (domain_nr >= 13) {
 				*ord = OR_RS_8P1;
 				grp_size = 9;
-			} else if (domain_nr >= 6) {
+			} else if (domain_nr >= 8) {
 				*ord = OR_RS_4P1;
 				grp_size = 5;
 			} else {
@@ -772,13 +788,13 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 	case DAOS_PROP_CO_REDUN_RF1:
 		if ((rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) &&
 		    domain_nr >= 3) {
-			if (domain_nr >= 18) {
+			if (domain_nr >= 25) {
 				*ord = OR_RS_16P1;
 				grp_size = 17;
-			} else if (domain_nr >= 10) {
+			} else if (domain_nr >= 13) {
 				*ord = OR_RS_8P1;
 				grp_size = 9;
-			} else if (domain_nr >= 6) {
+			} else if (domain_nr >= 8) {
 				*ord = OR_RS_4P1;
 				grp_size = 5;
 			} else {
@@ -793,13 +809,13 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 	case DAOS_PROP_CO_REDUN_RF2:
 		if ((rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) &&
 		    domain_nr >= 4) {
-			if (domain_nr >= 20) {
+			if (domain_nr >= 26) {
 				*ord = OR_RS_16P2;
 				grp_size = 18;
-			} else if (domain_nr >= 12) {
+			} else if (domain_nr >= 15) {
 				*ord = OR_RS_8P2;
 				grp_size = 10;
-			} else if (domain_nr >= 8) {
+			} else if (domain_nr >= 9) {
 				*ord = OR_RS_4P2;
 				grp_size = 6;
 			} else {
@@ -814,10 +830,10 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 	case DAOS_PROP_CO_REDUN_RF3:
 		if ((rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) &&
 		    domain_nr >= 10) {
-			if (domain_nr >= 22) {
+			if (domain_nr >= 28) {
 				*ord     = OR_RS_16P3;
 				grp_size = 19;
-			} else if (domain_nr >= 14) {
+			} else if (domain_nr >= 16) {
 				*ord     = OR_RS_8P3;
 				grp_size = 11;
 			} else {
@@ -865,7 +881,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 		grp_nr = max(256, target_nr * 50 / 100);
 		break;
 	case DAOS_OCH_SHD_EXT:
-		grp_nr = max(1024, target_nr * 80 / 100);
+		grp_nr = max(1024, target_nr * 70 / 100);
 		break;
 	default:
 		D_ERROR("Invalid sharding hint\n");
@@ -874,7 +890,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 
 	if (grp_nr == DAOS_OBJ_GRP_MAX || grp_nr * grp_size > target_nr) {
 		uint32_t max_grp     = target_nr / grp_size;
-		uint32_t reserve_grp = reserve_grp_by_rf(target_nr, grp_size, rf);
+		uint32_t reserve_grp = reserve_grp_by_rf(domain_nr, target_nr, grp_size, rf);
 
 		/* search for the highest scalability in the allowed range */
 		if (max_grp > reserve_grp)
@@ -947,6 +963,13 @@ obj_class_init(void)
 
 	if (oc_ident_array)
 		return 0;
+
+	oc_gx_reserved = 0;
+	d_getenv_uint(D_GX_RESERVED_ENV, &oc_gx_reserved);
+	if (oc_gx_reserved > 0) {
+		D_WARN("%s = %u, it should only be set for debugging\n", D_GX_RESERVED_ENV,
+		       oc_gx_reserved);
+	}
 
 	D_ALLOC_ARRAY(oc_ident_array, OC_NR);
 	if (!oc_ident_array)
