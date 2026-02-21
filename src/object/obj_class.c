@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,9 @@ static struct daos_obj_class **oc_resil_array;
 
 static int oc_ident_array_sz;
 static int oc_resil_array_sz;
+
+#define D_GX_RESERVED_ENV "D_GX_RESERVED"
+static unsigned int            oc_gx_reserved;
 
 static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id,
 					       uint32_t *nr_grps);
@@ -253,17 +256,48 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 
 /**
  * To honor RF setting during failure cases, let's reserve RF
- * groups, so if some targets fail, there will be enough replacement
+ * domains, so if some targets fail, there will be enough replacement
  * targets to rebuild, so to avoid putting multiple shards in the same
  * domain, which may break the RF setting.
  *
- * Though let's keep reserve targets to be less than 30% of the total
- * targets.
+ * Though let's keep reserve targets to be no less than 20% on small deployment (20 domains),
+ * or 30% on large deployment, because otherwise layout computation will be too expensive.
  */
+#define DOM_LARGE 20
+
 static uint32_t
-reserve_grp_by_rf(uint32_t target_nr, uint32_t grp_size, uint32_t rf)
+reserve_grp_by_rf(uint32_t domain_nr, uint32_t target_nr, uint32_t grp_size, uint32_t rf)
 {
-	return min(((target_nr * 3) / 10) / grp_size, rf);
+	unsigned tgt_per_dom;
+	unsigned rsv_small;
+	unsigned rsv_large;
+	unsigned rsv_tgts;
+
+	D_ASSERT(target_nr >= domain_nr && domain_nr >= 1); /* unless pool map is corrupted */
+	if (oc_gx_reserved > 0) {
+		rsv_tgts = min(oc_gx_reserved, domain_nr - 1);
+		goto out;
+	}
+
+	tgt_per_dom = target_nr / domain_nr;
+
+	rsv_small = (target_nr * 2) / 10; /* 20 percent for small deployment */
+	rsv_large = (target_nr * 3) / 10; /* 30 percent for large deployment */
+
+	if (domain_nr < DOM_LARGE) { /* small deployment */
+		rsv_tgts = rsv_small;
+	} else {
+		/* ensure object layout is not smaller than the case of (dom_nr < DOM_LARGE) */
+		if (DOM_LARGE * tgt_per_dom - rsv_small > target_nr - rsv_large)
+			rsv_tgts = rsv_small;
+		else
+			rsv_tgts = rsv_large;
+	}
+
+	if (rsv_tgts < tgt_per_dom * rf)
+		rsv_tgts = tgt_per_dom * rf;
+out:
+	return (rsv_tgts + grp_size - 1) / grp_size;
 }
 
 int
@@ -303,7 +337,7 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum d
 
 	grp_size = daos_oclass_grp_size(&ca);
 	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX) {
-		uint32_t reserve_grp = reserve_grp_by_rf(target_nr, grp_size, rf_factor);
+		uint32_t reserve_grp = reserve_grp_by_rf(domain_nr, target_nr, grp_size, rf_factor);
 
 		ca.ca_grp_nr = max(1, (target_nr / grp_size));
 
@@ -865,7 +899,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 		grp_nr = max(256, target_nr * 50 / 100);
 		break;
 	case DAOS_OCH_SHD_EXT:
-		grp_nr = max(1024, target_nr * 80 / 100);
+		grp_nr = max(1024, target_nr * 70 / 100);
 		break;
 	default:
 		D_ERROR("Invalid sharding hint\n");
@@ -874,7 +908,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 
 	if (grp_nr == DAOS_OBJ_GRP_MAX || grp_nr * grp_size > target_nr) {
 		uint32_t max_grp     = target_nr / grp_size;
-		uint32_t reserve_grp = reserve_grp_by_rf(target_nr, grp_size, rf);
+		uint32_t reserve_grp = reserve_grp_by_rf(domain_nr, target_nr, grp_size, rf);
 
 		/* search for the highest scalability in the allowed range */
 		if (max_grp > reserve_grp)
@@ -947,6 +981,13 @@ obj_class_init(void)
 
 	if (oc_ident_array)
 		return 0;
+
+	oc_gx_reserved = 0;
+	d_getenv_uint(D_GX_RESERVED_ENV, &oc_gx_reserved);
+	if (oc_gx_reserved > 0) {
+		D_INFO("%s = %u, setting it has global impact on all pools!\n", D_GX_RESERVED_ENV,
+		       oc_gx_reserved);
+	}
 
 	D_ALLOC_ARRAY(oc_ident_array, OC_NR);
 	if (!oc_ident_array)
