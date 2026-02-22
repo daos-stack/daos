@@ -31,36 +31,14 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
-/* Max in-flight transfer size per xstream */
-/* Set the total in-flight size to be 1/3 of MAX DMA size for
- * the moment, will adjust it later if needed.
- */
-#define MIGR_TGT_INF_DATA       (320 << 20)
-
-/* Threshold for very large transfers.
- * This may exceed the MIGR_TGT_INF_DATA limit to prevent starvation.
- * Only one such transfer is allowed at a time.
- */
-#define MIGR_INF_DATA_HULK      (1 << 28)
-
-/* Low water mark for DMA buffer usage, hulk transfer is allowed in this case.
- */
-#define MIGR_INF_DATA_LWM       (1 << 28)
-
-/* Distribute the global resource into 4 buckets to avoid high lock contention, meanwhile,
- * units owned by each bucket can remain the same for engine configuration with different
- * number of targets.
- */
-#define MIGR_RES_BUCKETS        8
-
-enum migr_bucket_type {
-	MIGR_BUCKET_PRIV,   /* private */
-	MIGR_BUCKET_MAP,    /* shared, N to 1 map */
-	MIGR_BUCKET_ROTATE, /* shared, rotating on buckets */
+enum migr_res_type {
+	MIGR_OBJ = 0,
+	MIGR_KEY,
+	MIGR_DATA,
+	MIGR_MAX,
 };
 
-#define ENV_MIGRATE_OBJ_CONCUR  "D_MIGRATE_OBJ_CONCUR"
-#define ENV_MIGRATE_KEY_CONCUR  "D_MIGRATE_KEY_CONCUR"
+#define ENV_MIGRATE_OBJ_CONCUR "D_MIGRATE_OBJ_CONCUR"
 
 /* Number of concurrent objects being migrated per engine, consider we have 8 resource
  * buckets, this number divided by 8 is the per-bucket concurrency.
@@ -68,54 +46,83 @@ enum migr_bucket_type {
  * Default=1600 means an engine can concurrently rebuild 100 EC(16+P) objects, which
  * has high enough concurrency and wouldn't cause network resource exhaustion.
  */
-;
-
 enum {
 	MIGR_OBJ_CONCUR_MIN = 800,
 	MIGR_OBJ_CONCUR_DEF = 1600,
 	MIGR_OBJ_CONCUR_MAX = 3200,
 };
 
+#define ENV_MIGRATE_KEY_CONCUR "D_MIGRATE_KEY_CONCUR"
+
+/* OBJ_CUR + KEY_CUR is less than 1/3 of HW limit, the reason of being conservative
+ * is because we don't have precise control and some data pattern (fragmented RDMA)
+ * can lead to peak * workload.
+ */
 enum {
-	/* OBJ_CUR + KEY_CUR is less than 1/3 of HW limit, the reason of being conservative
-	 * is because we don't have precise control and some data pattern (fragmented RDMA)
-	 * can lead to peak * workload.
-	 */
 	MIGR_KEY_CONCUR_MIN = (1600 - MIGR_OBJ_CONCUR_MIN),
 	MIGR_KEY_CONCUR_DEF = (4800 - MIGR_OBJ_CONCUR_DEF),
 	MIGR_KEY_CONCUR_MAX = (6400 - MIGR_OBJ_CONCUR_MAX),
 };
 
-enum {
-	MIGR_OBJ = 0,
-	MIGR_KEY,
-	MIGR_DATA,
-	MIGR_MAX,
-};
+/* Max in-flight transfer size per xstream */
+/* Set the total in-flight size to be 1/3 of MAX DMA size for
+ * the moment, will adjust it later if needed.
+ */
+#define MIGR_TGT_INF_DATA  (320 << 20)
+
+/* Threshold for very large transfers.
+ * This may exceed the MIGR_TGT_INF_DATA limit to prevent starvation.
+ * Only one such transfer is allowed at a time.
+ */
+#define MIGR_INF_DATA_HULK (1 << 28)
+
+/* Low water mark for DMA buffer usage, hulk transfer is allowed in this case.
+ */
+#define MIGR_INF_DATA_LWM  (1 << 28)
+
+/* Distribute the global resource into 4 buckets to avoid high lock contention, meanwhile,
+ * units owned by each bucket can remain the same for engine configuration with different
+ * number of targets.
+ */
+
+struct migr_res_manager;
 
 /* resource consumed by migration */
 struct migr_resource {
-	const char *res_name;
+	/* back reference to res_manager */
+	struct migr_res_manager *res_rmg;
 	/* upper limit of the resource */
-	long        res_limit;
+	long                     res_limit;
 	/* used resource amount in "unit" */
-	long        res_used;
+	long                     res_used;
 	/* last time logging starveling */
-	uint64_t    res_log_since;
-	/* resource type */
-	int         res_type;
+	uint64_t                 res_log_since;
 	/* active ULTs */
-	int         res_holders;
+	int                      res_holders;
 	/* number of waiters on this resource */
-	int         res_waiters;
-	/* Only used by MIGR_DATA, it always allows exactly one ULT to use unbounded
-	 * buffer for super large value (rare).
-	 */
-	int         res_hulk;
+	int                      res_waiters;
 	/* list head of all waiters */
-	d_list_t    res_waitq;
+	d_list_t                 res_waitq;
 	/* ABT_cond for waiters */
-	ABT_cond    res_cond;
+	ABT_cond                 res_cond;
+	/* serialization */
+	ABT_mutex                res_mutex;
+	/*
+	 * Begin: members specific for MIGR_DATA
+	 */
+	/* total number of occurred memory errors */
+	unsigned long            res_mem_err;
+	/* waited more than 10 minutes, serious errors */
+	unsigned long            res_mem_ser_err;
+	/* number of revived ULTs after running into memory error */
+	unsigned long            res_mem_revived;
+	/* number of waiting ULTs */
+	unsigned long            res_mem_waiting;
+	/* allows exactly one ULT to use unbounded buffer for super large value (rare). */
+	int                      res_hulk;
+	/*
+	 * End: members for MIGR_DATA
+	 */
 };
 
 /* anchor point of resource waiter */
@@ -129,34 +136,32 @@ struct migr_res_waiter {
 	uint64_t                 rw_wait_since;
 };
 
+#define MIGR_RES_BUCKETS 8
+
+enum migr_bucket_type {
+	MIGR_BUCKET_PRIV,   /* private */
+	MIGR_BUCKET_MAP,    /* shared, N to 1 map */
+	MIGR_BUCKET_ROTATE, /* shared, rotating on buckets */
+};
+
 /* migration resources manager */
 struct migr_res_manager {
-	ABT_mutex            rmg_mutex;
-	/* total number of occurred memory errors */
-	unsigned long        rmg_mem_err;
-	/* waited more than 10 minutes, serious errors */
-	unsigned long        rmg_mem_ser_err;
-	/* number of revived ULTs after running into memory error */
-	unsigned long        rmg_mem_revived;
-	/* number of waiting ULTs */
-	unsigned long        rmg_mem_waiting;
-	struct migr_resource rmg_resources[MIGR_MAX];
-};
-
-struct migr_engine_res {
+	enum migr_res_type    rmg_res_type;
 	/* type of bucket, see migr_bucket_type */
-	enum migr_bucket_type    er_bucket_type;
+	enum migr_bucket_type rmg_bkt_type;
 	/* number of resource sharing buckets */
-	int                      er_bucket_nr;
+	int                   rmg_bkt_nr;
 	/* number of targets sharing the same resource bucket */
-	int                      er_bucket_size;
+	int                   rmg_bkt_size;
 	/* round-robin bucket selector */
-	ATOMIC int               er_bucket_selector;
-	/* dss_tgt_nr resource managers */
-	struct migr_res_manager *er_rmgs;
+	ATOMIC int            rmg_bkt_selector;
+	/* resource name */
+	char                 *rmg_name;
+	/* all resource buckets */
+	struct migr_resource *rmg_res_buckets;
 };
 
-static struct migr_engine_res migr_eng_res;
+static struct migr_res_manager migr_res_managers[MIGR_MAX];
 
 struct migrate_one {
 	struct migrate_pool_tls  *mo_tls;
@@ -756,7 +761,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			 daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
 			 d_iov_t *csum_iov_fetch, struct migrate_pool_tls *tls)
 {
-	struct migr_res_manager *rmg       = tls->mpt_rmg;
+	struct migr_resource    *res       = tls->mpt_data_res;
 	uint32_t *extra_arg = NULL;
 	uint64_t                 then      = 0;
 	uint64_t                 now;
@@ -769,7 +774,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			  mrone->mo_epoch);
 		extra_arg = (uint32_t *)mrone->mo_epoch;
 	}
-	D_ASSERT(rmg != NULL);
+	D_ASSERT(res != NULL);
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
@@ -793,8 +798,8 @@ retry:
 		now = daos_gettime_coarse();
 		if (wait == MEM_NO_WAIT) {
 			wait = MEM_WAIT;
-			rmg->rmg_mem_waiting++;
-			rmg->rmg_mem_err++;
+			res->res_mem_waiting++;
+			res->res_mem_err++;
 			then = now;
 		}
 		/* sleep a few seconds before retry, give other layers a chance to
@@ -803,19 +808,19 @@ retry:
 		dss_sleep((10 + rand() % 20) * 1000);
 		if (wait != MEM_LONG_WAIT && now - then >= 600) {
 			wait = MEM_LONG_WAIT;   /* flagged as long waiter */
-			rmg->rmg_mem_ser_err++; /* counted as serious error */
+			res->res_mem_ser_err++; /* counted as serious error */
 			DL_ERROR(rc,
 				 DF_RB " waited for 10 minutes, total memory errors: %lu/%lu,"
 				       " total waiters: %lu, total revived: %lu\n",
-				 DP_RB_MRO(mrone), rmg->rmg_mem_ser_err, rmg->rmg_mem_err,
-				 rmg->rmg_mem_waiting, rmg->rmg_mem_revived);
+				 DP_RB_MRO(mrone), res->res_mem_ser_err, res->res_mem_err,
+				 res->res_mem_waiting, res->res_mem_revived);
 		}
 		D_GOTO(retry, rc);
 	}
 	if (wait != MEM_NO_WAIT) {
-		D_ASSERT(rmg->rmg_mem_waiting > 0);
-		rmg->rmg_mem_revived++;
-		rmg->rmg_mem_waiting--;
+		D_ASSERT(res->res_mem_waiting > 0);
+		res->res_mem_revived++;
+		res->res_mem_waiting--;
 	}
 	return rc;
 }
@@ -1965,10 +1970,16 @@ migrate_one_destroy(struct migrate_one *mrone)
 	D_FREE(mrone);
 }
 
-static bool
+static inline bool
+migr_res_is_private(struct migr_resource *res)
+{
+	return res->res_rmg->rmg_bkt_type == MIGR_BUCKET_PRIV;
+}
+
+static inline bool
 migr_res_is_hulk(struct migr_resource *res, long units)
 {
-	return res->res_type == MIGR_DATA && units >= MIGR_INF_DATA_HULK;
+	return res->res_rmg->rmg_res_type == MIGR_DATA && units >= MIGR_INF_DATA_HULK;
 }
 
 static bool
@@ -1994,7 +2005,7 @@ migr_res_has_starveling(struct migr_resource *res, uint64_t now)
 		D_DEBUG(DB_REBUILD,
 			DF_RB
 			" starving: res=%s, since=%lu, ask:limit=%lu:%lu, holders:waiters=%d:%d\n",
-			DP_RB_MPT(waiter->rw_tls), res->res_name, waiter->rw_wait_since,
+			DP_RB_MPT(waiter->rw_tls), res->res_rmg->rmg_name, waiter->rw_wait_since,
 			waiter->rw_units, res->res_limit, res->res_holders, res->res_waiters);
 		res->res_log_since = now;
 	}
@@ -2023,63 +2034,66 @@ migrate_res_wakeup(struct migr_resource *res, uint64_t units)
 	}
 }
 
-static struct migr_res_manager *
-migr_type2rmg(struct dss_module_info *dmi, int res_type, bool *shared_res)
+static struct migr_resource *
+migr_type2res(struct migrate_pool_tls *tls, int res_type)
 {
+	struct dss_module_info  *dmi = dss_get_module_info();
 	struct migr_res_manager *rmg;
+	struct migr_resource    *res;
 	int                      idx;
 
-	if (res_type == MIGR_DATA || migr_eng_res.er_bucket_type == MIGR_BUCKET_PRIV) {
-		rmg         = &migr_eng_res.er_rmgs[dmi->dmi_tgt_id];
-		*shared_res = false;
-		return rmg;
-	}
+	D_ASSERT(dmi->dmi_xs_id != 0);
 
-	if (migr_eng_res.er_bucket_type == MIGR_BUCKET_MAP) {
-		idx = dmi->dmi_tgt_id / migr_eng_res.er_bucket_size;
-		D_ASSERT(idx < migr_eng_res.er_bucket_nr);
-	} else /* rotation */ {
-		idx = atomic_fetch_add(&migr_eng_res.er_bucket_selector, 1);
-		idx %= migr_eng_res.er_bucket_nr;
+	rmg = &migr_res_managers[res_type];
+	if (rmg->rmg_bkt_type == MIGR_BUCKET_PRIV) {
+		D_ASSERT(dmi->dmi_tgt_id < rmg->rmg_bkt_nr);
+
+		res = &rmg->rmg_res_buckets[dmi->dmi_tgt_id];
+		if (res_type == MIGR_DATA) {
+			if (tls->mpt_data_res == NULL)
+				tls->mpt_data_res = res;
+			else
+				D_ASSERT(tls->mpt_data_res == res);
+		}
+		return res;
 	}
-	rmg         = &migr_eng_res.er_rmgs[idx];
-	*shared_res = true;
-	return rmg;
+	D_ASSERT(res_type != MIGR_DATA);
+
+	if (rmg->rmg_bkt_type == MIGR_BUCKET_MAP) {
+		idx = dmi->dmi_tgt_id / rmg->rmg_bkt_size;
+		D_ASSERT(idx < rmg->rmg_bkt_nr);
+	} else /* rotation */ {
+		idx = atomic_fetch_add(&rmg->rmg_bkt_selector, 1);
+		idx %= rmg->rmg_bkt_nr;
+	}
+	return &rmg->rmg_res_buckets[idx];
 }
 
 static int
 migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *yielded)
 {
-	struct dss_module_info  *dmi = dss_get_module_info();
-	struct migr_res_manager *rmg;
 	struct migr_resource    *res;
 	struct migr_res_waiter   waiter;
 	uint64_t                 now;
 	bool                     is_hulk;
-	bool                     shared_res;
 	bool                     locked = false;
 	int                      rc     = 0;
 
-	D_ASSERT(dmi->dmi_xs_id != 0);
-	rmg = migr_type2rmg(dmi, res_type, &shared_res);
-	if (tls->mpt_rmg == NULL && !shared_res)
-		tls->mpt_rmg = rmg;
-
-	if (shared_res) {
-		ABT_mutex_lock(rmg->rmg_mutex);
+	res = migr_type2res(tls, res_type);
+	if (!migr_res_is_private(res)) {
+		ABT_mutex_lock(res->res_mutex);
 		locked = true;
 	}
 	waiter.rw_tls        = tls;
 	waiter.rw_units      = units;
 	waiter.rw_wait_since = 0;
 
-	res     = &rmg->rmg_resources[res_type];
 	is_hulk = migr_res_is_hulk(res, units);
 	while (1) {
 		if (tls->mpt_fini) {
 			rc = migrate_pool_tls_get_status(tls);
-			if (shared_res)
-				ABT_mutex_unlock(rmg->rmg_mutex);
+			if (!migr_res_is_private(res))
+				ABT_mutex_unlock(res->res_mutex);
 			D_GOTO(out, rc);
 		}
 
@@ -2096,8 +2110,8 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 			break;
 		}
 
-		if (!shared_res) {
-			ABT_mutex_lock(rmg->rmg_mutex);
+		if (migr_res_is_private(res)) {
+			ABT_mutex_lock(res->res_mutex);
 			locked = true;
 		}
 
@@ -2105,11 +2119,11 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 		waiter.rw_wait_since = now;
 		d_list_add_tail(&waiter.rw_link, &res->res_waitq);
 
-		ABT_cond_wait(res->res_cond, rmg->rmg_mutex);
+		ABT_cond_wait(res->res_cond, res->res_mutex);
 
 		D_ASSERT(d_list_empty(&waiter.rw_link));
-		if (!shared_res)
-			ABT_mutex_unlock(rmg->rmg_mutex);
+		if (migr_res_is_private(res))
+			ABT_mutex_unlock(res->res_mutex);
 	}
 	res->res_holders++;
 
@@ -2125,14 +2139,12 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 		DF_RB " "
 		      "res=%s units:total:limit=%lu:%lu:%lu waiters:holders=%d:%d, waited=%s, "
 		      " obj_ults=%u, key_ults=%u, inf_data=" DF_U64 ")\n",
-		DP_RB_MPT(tls), res->res_name, units, res->res_used, res->res_limit,
+		DP_RB_MPT(tls), res->res_rmg->rmg_name, units, res->res_used, res->res_limit,
 		res->res_waiters, res->res_holders, !!waiter.rw_wait_since ? "yes" : "no",
 		tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt, tls->mpt_inflight_size);
 
-	if (shared_res) {
-		ABT_mutex_unlock(rmg->rmg_mutex);
-		shared_res = false;
-	}
+	if (!migr_res_is_private(res))
+		ABT_mutex_unlock(res->res_mutex);
 out:
 	if (yielded && !*yielded)
 		*yielded = locked;
@@ -2142,17 +2154,11 @@ out:
 static void
 migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 {
-	struct dss_module_info  *dmi = dss_get_module_info();
-	struct migr_res_manager *rmg;
-	struct migr_resource    *res;
-	bool                     shared_res;
+	struct migr_resource *res;
 
-	rmg = migr_type2rmg(dmi, res_type, &shared_res);
-	D_ASSERT(shared_res || rmg == tls->mpt_rmg);
-	if (shared_res)
-		ABT_mutex_lock(rmg->rmg_mutex);
-
-	res = &rmg->rmg_resources[res_type];
+	res = migr_type2res(tls, res_type);
+	if (!migr_res_is_private(res))
+		ABT_mutex_lock(res->res_mutex);
 
 	if (res_type == MIGR_OBJ) {
 		D_ASSERT(tls->mpt_tgt_obj_ult_cnt > 0);
@@ -2178,10 +2184,8 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 	if (res->res_waiters > 0)
 		migrate_res_wakeup(res, res->res_limit - res->res_used);
 
-	if (shared_res) {
-		ABT_mutex_unlock(rmg->rmg_mutex);
-		shared_res = false;
-	}
+	if (!migr_res_is_private(res))
+		ABT_mutex_unlock(res->res_mutex);
 }
 
 static void
@@ -3278,17 +3282,19 @@ struct migrate_stop_arg {
 	unsigned int generation;
 	unsigned int stop_count;
 	ABT_mutex    stop_lock;
-	bool         set_fini_only;
 };
 
 static int
 migrate_fini_one_ult(void *data)
 {
 	struct dss_module_info  *dmi = dss_get_module_info();
-	struct migr_res_manager *rmg;
 	struct migrate_stop_arg *arg = data;
 	struct migrate_pool_tls *tls;
+	struct migr_res_manager *rmg;
+	struct migr_resource    *res;
+	bool                     last_one;
 	int                      i;
+	int                      j;
 	int			 rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
@@ -3301,22 +3307,32 @@ migrate_fini_one_ult(void *data)
 	 * otherwise some UTLs could miss the mpt_fini check because they are waiting on
 	 * other xstreams.
 	 */
-	if (arg->set_fini_only) {
-		tls->mpt_fini = 1;
-		migrate_pool_tls_put(tls); /* lookup */
-		return 0;
-	}
-	D_ASSERT(tls->mpt_fini);
+	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(arg->stop_lock);
 	arg->stop_count++;
+	last_one = (arg->stop_count == dss_tgt_nr);
 	ABT_mutex_unlock(arg->stop_lock);
 
-	rmg = &migr_eng_res.er_rmgs[dmi->dmi_tgt_id];
 	for (i = 0; i < MIGR_MAX; i++) {
+		rmg = &migr_res_managers[i];
+
 		/* private resource has to be processed by ULT on the owner xstream */
-		if (migr_eng_res.er_bucket_type == MIGR_BUCKET_PRIV || i == MIGR_DATA)
-			migrate_res_wakeup(&rmg->rmg_resources[i], -1ULL);
+		if (rmg->rmg_bkt_type == MIGR_BUCKET_PRIV) {
+			/* locking is not required by private resource */
+			migrate_res_wakeup(&rmg->rmg_res_buckets[dmi->dmi_tgt_id], -1ULL);
+
+		} else if (last_one) { /* shared resource */
+			/* on behalf of all target xstreams, wakeup ULTs for shared resources. */
+			for (j = 0; j < rmg->rmg_bkt_nr; j++) {
+				res = &rmg->rmg_res_buckets[j];
+
+				/* locking is required by shared resource */
+				ABT_mutex_lock(res->res_mutex);
+				migrate_res_wakeup(res, -1ULL);
+				ABT_mutex_unlock(res->res_mutex);
+			}
+		}
 	}
 
 	migrate_pool_tls_put(tls); /* lookup */
@@ -3340,7 +3356,6 @@ void
 ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generation)
 {
 	struct migrate_stop_arg arg;
-	int                     i;
 	int                     rc;
 
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
@@ -3353,25 +3368,6 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 		return;
 	}
 
-	/* 1st round, set fini flag */
-	arg.set_fini_only = true;
-	ds_pool_thread_collective(pool->sp_uuid, 0, migrate_fini_one_ult, &arg, 0);
-	/* wakeup ULTs waiting on shared resources */
-	for (i = 0; i < dss_tgt_nr; i++) {
-		struct migr_res_manager *rmg = &migr_eng_res.er_rmgs[i];
-		int                      j;
-
-		for (j = 0; j < MIGR_MAX; j++) {
-			if (migr_eng_res.er_bucket_type != MIGR_BUCKET_PRIV && j != MIGR_DATA) {
-				ABT_mutex_lock(rmg->rmg_mutex);
-				migrate_res_wakeup(&rmg->rmg_resources[j], -1ULL);
-				ABT_mutex_unlock(rmg->rmg_mutex);
-			}
-		}
-	}
-
-	/* second round, xstreams wakeup local waiters and finalize other things */
-	arg.set_fini_only = false;
 	rc = ds_pool_thread_collective(pool->sp_uuid, 0, migrate_fini_one_ult, &arg, 0);
 	if (rc != 0)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
@@ -4356,17 +4352,17 @@ out:
 }
 
 static int
-migr_res_init(struct migr_res_manager *rmg, int type, const char *name, long limit)
+migr_res_init(struct migr_resource *res, struct migr_res_manager *rmg, long limit)
 {
-	struct migr_resource *res = &rmg->rmg_resources[type];
 	int rc;
 
 	memset(res, 0, sizeof(*res));
 	D_INIT_LIST_HEAD(&res->res_waitq);
-	res->res_name  = name;
-	res->res_type  = type;
+	res->res_rmg   = rmg;
 	res->res_limit = limit;
 	rc             = ABT_cond_create(&res->res_cond);
+	if (rc == 0)
+		rc = ABT_mutex_create(&res->res_mutex);
 
 	return (rc != ABT_SUCCESS) ? dss_abterr2der(rc) : 0;
 }
@@ -4374,37 +4370,92 @@ migr_res_init(struct migr_res_manager *rmg, int type, const char *name, long lim
 static void
 migr_res_fini(struct migr_resource *res)
 {
-	D_ASSERT(!res->res_name || d_list_empty(&res->res_waitq)); /* unset or drained */
+	D_ASSERT(!res->res_rmg || d_list_empty(&res->res_waitq)); /* unset or drained */
 	if (res->res_cond)
 		ABT_cond_free(&res->res_cond);
+	if (res->res_mutex)
+		ABT_mutex_free(&res->res_mutex);
+}
+
+static int
+migr_rmg_init(int type, int concur_max, uint64_t units)
+{
+	struct migr_res_manager *rmg;
+	char                    *name;
+	int                      bkt_nr;
+	int                      bkt_size;
+	int                      bkt_type;
+	int                      i;
+	int                      rc;
+
+	if (type == MIGR_OBJ) {
+		name = "OBJ";
+	} else if (type == MIGR_KEY) {
+		name = "KEY";
+	} else if (type == MIGR_DATA) {
+		name = "DATA";
+	} else {
+		name = "UNKNOWN";
+		D_GOTO(failed, rc = -DER_INVAL);
+	}
+	rmg = &migr_res_managers[type];
+
+	if (concur_max >= dss_tgt_nr) { /* concurrency can't be higher than target number */
+		bkt_nr   = dss_tgt_nr;
+		bkt_type = MIGR_BUCKET_PRIV;
+		bkt_size = 1;
+	} else {
+		bkt_nr   = concur_max;
+		bkt_size = dss_tgt_nr / concur_max;
+		bkt_type = (dss_tgt_nr % concur_max == 0) ? MIGR_BUCKET_MAP : MIGR_BUCKET_ROTATE;
+	}
+
+	D_ALLOC(rmg->rmg_res_buckets, bkt_nr * sizeof(*rmg->rmg_res_buckets));
+	if (!rmg->rmg_res_buckets)
+		D_GOTO(failed, rc = -DER_NOMEM);
+
+	rmg->rmg_name     = name;
+	rmg->rmg_res_type = type;
+	rmg->rmg_bkt_nr   = bkt_nr;
+	rmg->rmg_bkt_type = bkt_type;
+	rmg->rmg_bkt_size = bkt_size;
+
+	for (i = 0; i < bkt_nr; i++) {
+		rc = migr_res_init(&rmg->rmg_res_buckets[i], rmg, units / bkt_nr);
+		if (rc)
+			D_GOTO(failed, rc);
+	}
+	return 0;
+failed:
+	D_ERROR("Failed to initialize resource %s, error=%d\n", name, rc);
+	return rc;
+}
+
+static void
+migr_rmg_fini(int type)
+{
+	struct migr_res_manager *rmg;
+	int                      i;
+
+	rmg = &migr_res_managers[type];
+	if (!rmg->rmg_res_buckets)
+		return;
+
+	for (i = 0; i < rmg->rmg_bkt_nr; i++)
+		migr_res_fini(&rmg->rmg_res_buckets[i]);
+	memset(rmg, 0, sizeof(*rmg));
 }
 
 int
 obj_migrate_init(void)
 {
-	unsigned int obj_units = MIGR_OBJ_CONCUR_DEF;
-	unsigned int key_units = MIGR_KEY_CONCUR_DEF;
-	unsigned int bkt_obj_units;
-	unsigned int bkt_key_units;
-	int          i;
-	int          rc = 0;
+	unsigned obj_units = MIGR_OBJ_CONCUR_DEF;
+	unsigned key_units = MIGR_KEY_CONCUR_DEF;
+	int      rc;
 
 	D_CASSERT(MIGR_TGT_INF_DATA > MIGR_INF_DATA_LWM);
 	D_CASSERT(MIGR_TGT_INF_DATA > MIGR_INF_DATA_HULK);
 	D_ASSERT(dss_tgt_nr > 0);
-
-	if (dss_tgt_nr <= MIGR_RES_BUCKETS) {
-		migr_eng_res.er_bucket_type = MIGR_BUCKET_PRIV;
-		migr_eng_res.er_bucket_nr   = dss_tgt_nr;
-		migr_eng_res.er_bucket_size = 1;
-	} else {
-		migr_eng_res.er_bucket_nr   = MIGR_RES_BUCKETS;
-		migr_eng_res.er_bucket_size = dss_tgt_nr / MIGR_RES_BUCKETS;
-		if (dss_tgt_nr % MIGR_RES_BUCKETS != 0)
-			migr_eng_res.er_bucket_type = MIGR_BUCKET_ROTATE;
-		else
-			migr_eng_res.er_bucket_type = MIGR_BUCKET_MAP;
-	}
 
 	rc = d_getenv_uint(ENV_MIGRATE_OBJ_CONCUR, &obj_units);
 	if (rc == 0) {
@@ -4413,6 +4464,9 @@ obj_migrate_init(void)
 		if (obj_units > MIGR_OBJ_CONCUR_MAX)
 			obj_units = MIGR_OBJ_CONCUR_MAX;
 	}
+	rc = migr_rmg_init(MIGR_OBJ, MIGR_RES_BUCKETS, obj_units);
+	if (rc)
+		D_GOTO(out, rc);
 
 	rc = d_getenv_uint(ENV_MIGRATE_KEY_CONCUR, &key_units);
 	if (rc == 0) {
@@ -4421,35 +4475,14 @@ obj_migrate_init(void)
 		if (key_units > MIGR_KEY_CONCUR_MAX)
 			key_units = MIGR_KEY_CONCUR_MAX;
 	}
+	rc = migr_rmg_init(MIGR_KEY, MIGR_RES_BUCKETS, key_units);
+	if (rc)
+		D_GOTO(out, rc);
 
-	bkt_obj_units = obj_units / migr_eng_res.er_bucket_nr;
-	bkt_key_units = key_units / migr_eng_res.er_bucket_nr;
+	rc = migr_rmg_init(MIGR_DATA, dss_tgt_nr, MIGR_TGT_INF_DATA * dss_tgt_nr);
+	if (rc)
+		D_GOTO(out, rc);
 
-	memset(&migr_eng_res, 0, sizeof(migr_eng_res));
-
-	D_ALLOC(migr_eng_res.er_rmgs, sizeof(struct migr_res_manager) * dss_tgt_nr);
-	if (!migr_eng_res.er_rmgs)
-		return -DER_NOMEM;
-
-	for (i = 0; i < dss_tgt_nr; i++) {
-		struct migr_res_manager *rmg = &migr_eng_res.er_rmgs[i];
-
-		rc = ABT_mutex_create(&rmg->rmg_mutex);
-		if (rc != ABT_SUCCESS)
-			D_GOTO(out, rc = dss_abterr2der(rc));
-
-		rc = migr_res_init(rmg, MIGR_OBJ, "OBJ", bkt_obj_units);
-		if (rc)
-			D_GOTO(out, rc);
-
-		rc = migr_res_init(rmg, MIGR_KEY, "KEY", bkt_key_units);
-		if (rc)
-			D_GOTO(out, rc);
-
-		rc = migr_res_init(rmg, MIGR_DATA, "DATA", MIGR_TGT_INF_DATA);
-		if (rc)
-			D_GOTO(out, rc);
-	}
 	return 0;
 out:
 	obj_migrate_fini();
@@ -4460,18 +4493,7 @@ void
 obj_migrate_fini(void)
 {
 	int i;
-	int j;
 
-	if (migr_eng_res.er_rmgs) {
-		for (i = 0; i < dss_tgt_nr; i++) {
-			struct migr_res_manager *rmg = &migr_eng_res.er_rmgs[i];
-
-			for (j = 0; j < MIGR_MAX; j++)
-				migr_res_fini(&rmg->rmg_resources[j]);
-			if (rmg->rmg_mutex)
-				ABT_mutex_free(&rmg->rmg_mutex);
-		}
-		D_FREE(migr_eng_res.er_rmgs);
-	}
-	memset(&migr_eng_res, 0, sizeof(migr_eng_res));
+	for (i = 0; i < MIGR_MAX; i++)
+		migr_rmg_fini(i);
 }
