@@ -421,9 +421,9 @@ void test_rebuild_wait(test_arg_t **args, int args_cnt);
 void
 test_rebuild_wait_to_start(test_arg_t **args, int args_cnt);
 void
-test_rebuild_wait_to_start_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_version);
+test_rebuild_wait_to_start_next(test_arg_t **args, int args_cnt);
 void
-test_rebuild_wait_to_start_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_version);
+test_rebuild_wait_to_start_lower(test_arg_t **args, int args_cnt);
 void
     test_rebuild_wait_to_error(test_arg_t **args, int args_cnt);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
