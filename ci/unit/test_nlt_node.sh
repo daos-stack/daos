@@ -28,13 +28,17 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 python3.11 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-touch venv/pip.conf
-pip config set global.progress_bar off
-pip config set global.no_color true
+
+cat <<EOF > venv/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+    quiet = 1
+EOF
 
 pip install --upgrade pip
-pip install --requirement requirements-utest.txt
 
+pip install --requirement requirements-utest.txt
 pip install /opt/daos/lib/daos/python/
 
 # set high open file limit in the shell to avoid extra warning
