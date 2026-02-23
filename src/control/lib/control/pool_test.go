@@ -3114,6 +3114,24 @@ func newNvmeCfg(rank int, roles storage.OptionBits, size ...uint64) MockNvmeConf
 	}
 }
 
+// Helper to add joined members in SystemQueryResp for all ranks in hostsConfigArray.
+func getSysQueryRespMembers(cfg []MockHostStorageConfig, resp *mgmtpb.SystemQueryResp) {
+	rankSet := make(map[ranklist.Rank]bool)
+	for _, hostCfg := range cfg {
+		for _, scmCfg := range hostCfg.ScmConfig {
+			rankSet[scmCfg.Rank] = true
+		}
+	}
+	for rank := range rankSet {
+		resp.Members = append(resp.Members, &mgmtpb.SystemMember{
+			Rank:  uint32(rank),
+			Uuid:  test.MockUUID(int32(rank)),
+			State: system.MemberStateJoined.String(),
+			Addr:  fmt.Sprintf("10.0.0.%d:10001", rank),
+		})
+	}
+}
+
 func TestControl_getMaxPoolSize(t *testing.T) {
 	devStateFaulty := storage.NvmeStateFaulty
 	devStateNew := storage.NvmeStateNew
@@ -3737,20 +3755,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				}
 			} else {
 				// If memberStates not specified, create joined members for all ranks in hostsConfigArray
-				rankSet := make(map[ranklist.Rank]bool)
-				for _, hostCfg := range tc.hostsConfigArray {
-					for _, scmCfg := range hostCfg.ScmConfig {
-						rankSet[scmCfg.Rank] = true
-					}
-				}
-				for rank := range rankSet {
-					systemQueryResp.Members = append(systemQueryResp.Members, &mgmtpb.SystemMember{
-						Rank:  uint32(rank),
-						Uuid:  test.MockUUID(int32(rank)),
-						State: system.MemberStateJoined.String(),
-						Addr:  fmt.Sprintf("10.0.0.%d:10001", rank),
-					})
-				}
+				getSysQueryRespMembers(tc.hostsConfigArray, systemQueryResp)
 			}
 
 			mockInvokerConfig := &MockInvokerConfig{
@@ -3832,12 +3837,13 @@ func (invoker *MockRequestsRecorderInvoker) InvokeUnaryRPC(context context.Conte
 
 func TestControl_PoolCreateAllCmd(t *testing.T) {
 	for name, tc := range map[string]struct {
-		hostsConfigArray []MockHostStorageConfig
-		storageRatio     float64
-		tgtRanks         string
-		expPoolConfig    MockPoolRespConfig
-		expError         error
-		expWarning       string
+		hostsConfigArray  []MockHostStorageConfig
+		storageRatio      float64
+		tgtRanks          string
+		expPoolConfig     MockPoolRespConfig
+		expCreateReqRanks []ranklist.Rank
+		expError          error
+		expWarning        string
 	}{
 		"single server": {
 			storageRatio: 1,
@@ -4072,13 +4078,17 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			// Add joined members for ranks referenced in MockHostStorageConfig.
+			systemQueryResp := new(mgmtpb.SystemQueryResp)
+			getSysQueryRespMembers(tc.hostsConfigArray, systemQueryResp)
+
 			mockInvokerConfig := &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					{
 						Responses: []*HostResponse{
 							{
 								Addr:    "foo",
-								Message: &mgmtpb.SystemQueryResp{},
+								Message: systemQueryResp,
 							},
 						},
 					},
@@ -4155,20 +4165,14 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 				poolCreateRequest.TotalBytes,
 				uint64(0),
 				"Invalid size of TotalBytes attribute: disabled with manual allocation")
-			if tc.tgtRanks != "" {
-				test.AssertEqual(t,
-					ranklist.RankList(poolCreateRequest.Ranks).String(),
-					tc.expPoolConfig.Ranks,
-					"Invalid list of Ranks")
-			} else {
-				test.AssertEqual(t,
-					ranklist.RankList(poolCreateRequest.Ranks).String(),
-					"",
-					"Invalid list of Ranks")
-			}
 			test.AssertTrue(t,
 				poolCreateRequest.TierRatio == nil,
 				"Invalid size of TierRatio attribute: disabled with manual allocation")
+
+			test.AssertEqual(t,
+				poolCreateRequest.Ranks,
+				ranklist.MustCreateRankSet(tc.expPoolConfig.Ranks).Ranks(),
+				"Invalid list of Ranks")
 		})
 	}
 }
