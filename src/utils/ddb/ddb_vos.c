@@ -51,19 +51,19 @@ dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t
 	}
 
 	/**
-	 * When the user requests read‑only mode, DDB itself will not attempt to modify the state of
-	 * the pool. However, PMEMOBJ performs several operations that do modify the pool state
+	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
+	 * to modify the pool. However, PMEMOBJ performs several operations that do modify the pool
 	 * during open and/or close, for example:
 	 * - Internal bookkeeping required to ensure resilience in case of an ADR failure (SDS).
 	 * - ULOG replay, which restores the pool to a consistent state.
 	 * These mechanisms cannot be disabled because they are essential for PMEMOBJ to maintain
-	 * pool consistency.
+	 * the consistency of the pool.
 	 *
 	 * However, since none of these changes need to be persisted when the pool is opened in
-	 * read‑only mode, we can work around this by mapping the pool using copy‑on‑write.
-	 * Copy‑on‑write allows pages to be read normally, but when a page is modified, a new
-	 * private copy is allocated. As a result, any changes made to the mapped memory do not
-	 * propagate to the persistent medium.
+	 * read‑only mode (write_mode == false), we can work around this by mapping the pool using
+	 * copy‑on‑write. Copy‑on‑write allows pages to be read normally, but when a page is
+	 * modified, a new private copy is allocated. As a result, any changes made to
+	 * the mapped memory do not propagate to the persistent medium.
 	 */
 	if (!write_mode) {
 		cow_val = 1;
