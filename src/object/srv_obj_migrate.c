@@ -770,12 +770,12 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 			 daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
 			 d_iov_t *csum_iov_fetch, struct migrate_pool_tls *tls)
 {
-	struct migr_resource    *res       = tls->mpt_data_res;
+	struct migr_resource *res       = tls->mpt_data_res;
 	uint32_t *extra_arg = NULL;
-	uint64_t                 then      = 0;
-	uint64_t                 now;
+	uint64_t              then      = 0;
+	uint64_t              now;
 	int       rc;
-	int                      wait = MEM_NO_WAIT;
+	int                   wait = MEM_NO_WAIT;
 
 	/* pass rebuild epoch by extra_arg */
 	if (flags & DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
@@ -816,7 +816,7 @@ retry:
 		 */
 		dss_sleep((10 + rand() % 20) * 1000);
 		if (wait != MEM_LONG_WAIT && now - then >= 600) {
-			wait = MEM_LONG_WAIT;   /* flagged as long waiter */
+			wait = MEM_LONG_WAIT;        /* flagged as long waiter */
 			res->res_data.mem_ser_err++; /* counted as serious error */
 			DL_ERROR(rc,
 				 DF_RB " waited for 10 minutes, total memory errors: %lu/%lu,"
@@ -2087,12 +2087,12 @@ migr_type2res(struct migrate_pool_tls *tls, int res_type)
 static int
 migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *yielded)
 {
-	struct migr_resource    *res;
-	struct migr_res_waiter   waiter;
-	uint64_t                 now;
-	bool                     is_hulk;
-	bool                     locked = false;
-	int                      rc     = 0;
+	struct migr_resource  *res;
+	struct migr_res_waiter waiter;
+	uint64_t               now;
+	bool                   is_hulk;
+	bool                   locked = false;
+	int                    rc     = 0;
 
 	res = migr_type2res(tls, res_type);
 	if (!migr_res_is_private(res)) {
