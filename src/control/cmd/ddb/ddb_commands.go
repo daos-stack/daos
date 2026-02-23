@@ -10,9 +10,15 @@ package main
 
 import (
 	"math"
+	"unsafe"
 
 	"github.com/desertbit/grumble"
 )
+
+/*
+ #include <stdlib.h>
+*/
+import "C"
 
 func addAppCommands(app *grumble.App, ctx *DdbContext) {
 	// Command: ls
@@ -51,6 +57,10 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 			a.String("path", "Path to the vos file to open.")
 		},
 		Run: func(c *grumble.Context) error {
+			if c.Flags.String("db_path") != "" {
+				ctx.ctx.dc_db_path = C.CString(string(c.Flags.String("db_path")))
+				defer C.free(unsafe.Pointer(ctx.ctx.dc_db_path))
+			}
 			return ddbOpen(ctx, c.Args.String("path"), c.Flags.Bool("write_mode"))
 		},
 		Completer: openCompleter,
