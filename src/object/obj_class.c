@@ -260,8 +260,8 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
  * targets to rebuild, so to avoid putting multiple shards in the same
  * domain, which may break the RF setting.
  *
- * Though let's keep reserve targets to be no less 30% of the total targets,
- * because otherwise layout computation will be more and more expensive.
+ * Though let's keep reserve targets to be no less than 30% of the total targets,
+ * because otherwise layout computation will be too expensive.
  */
 static uint32_t
 reserve_grp_by_rf(uint32_t domain_nr, uint32_t target_nr, uint32_t grp_size, uint32_t rf)
@@ -967,7 +967,7 @@ obj_class_init(void)
 	oc_gx_reserved = 0;
 	d_getenv_uint(D_GX_RESERVED_ENV, &oc_gx_reserved);
 	if (oc_gx_reserved > 0) {
-		D_WARN("%s = %u, it should only be set for debugging\n", D_GX_RESERVED_ENV,
+		D_INFO("%s = %u, it should be set only for benchmarking\n", D_GX_RESERVED_ENV,
 		       oc_gx_reserved);
 	}
 
