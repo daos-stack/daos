@@ -80,11 +80,6 @@ enum {
  */
 #define MIGR_INF_DATA_LWM  (1 << 28)
 
-/* Distribute the global resource into 4 buckets to avoid high lock contention, meanwhile,
- * units owned by each bucket can remain the same for engine configuration with different
- * number of targets.
- */
-
 struct migr_res_manager;
 
 /* resource consumed by migration */
@@ -107,22 +102,25 @@ struct migr_resource {
 	ABT_cond                 res_cond;
 	/* serialization */
 	ABT_mutex                res_mutex;
-	/*
-	 * Begin: members specific for MIGR_DATA
-	 */
-	/* total number of occurred memory errors */
-	unsigned long            res_mem_err;
-	/* waited more than 10 minutes, serious errors */
-	unsigned long            res_mem_ser_err;
-	/* number of revived ULTs after running into memory error */
-	unsigned long            res_mem_revived;
-	/* number of waiting ULTs */
-	unsigned long            res_mem_waiting;
-	/* allows exactly one ULT to use unbounded buffer for super large value (rare). */
-	int                      res_hulk;
-	/*
-	 * End: members for MIGR_DATA
-	 */
+	/* members for specific resource type */
+	union {
+		/* MIGR_DATA only */
+		struct {
+			/* total number of occurred memory errors */
+			unsigned long mem_err;
+			/* waited more than 10 minutes, serious errors */
+			unsigned long mem_ser_err;
+			/* number of revived ULTs after running into memory error */
+			unsigned long mem_revived;
+			/* number of waiting ULTs */
+			unsigned long mem_waiting;
+			/* allows exactly one ULT to use unbounded buffer for super large
+			 * value (rare).
+			 */
+			int           mem_hulk;
+		} res_data;
+		/* may add other members for MIGR_OBJ and MIGR_KEY */
+	};
 };
 
 /* anchor point of resource waiter */
@@ -136,6 +134,10 @@ struct migr_res_waiter {
 	uint64_t                 rw_wait_since;
 };
 
+/* Distribute the global resource into 8 buckets to avoid high lock contention, meanwhile,
+ * units owned by each bucket can remain the same for engine configuration with different
+ * number of targets.
+ */
 #define MIGR_RES_BUCKETS 8
 
 enum migr_bucket_type {
@@ -161,6 +163,7 @@ struct migr_res_manager {
 	struct migr_resource *rmg_res_buckets;
 };
 
+/* per-engine resources */
 static struct migr_res_manager migr_res_managers[MIGR_MAX];
 
 struct migrate_one {
@@ -798,8 +801,8 @@ retry:
 		now = daos_gettime_coarse();
 		if (wait == MEM_NO_WAIT) {
 			wait = MEM_WAIT;
-			res->res_mem_waiting++;
-			res->res_mem_err++;
+			res->res_data.mem_waiting++;
+			res->res_data.mem_err++;
 			then = now;
 		}
 		/* sleep a few seconds before retry, give other layers a chance to
@@ -808,19 +811,19 @@ retry:
 		dss_sleep((10 + rand() % 20) * 1000);
 		if (wait != MEM_LONG_WAIT && now - then >= 600) {
 			wait = MEM_LONG_WAIT;   /* flagged as long waiter */
-			res->res_mem_ser_err++; /* counted as serious error */
+			res->res_data.mem_ser_err++; /* counted as serious error */
 			DL_ERROR(rc,
 				 DF_RB " waited for 10 minutes, total memory errors: %lu/%lu,"
 				       " total waiters: %lu, total revived: %lu\n",
-				 DP_RB_MRO(mrone), res->res_mem_ser_err, res->res_mem_err,
-				 res->res_mem_waiting, res->res_mem_revived);
+				 DP_RB_MRO(mrone), res->res_data.mem_ser_err, res->res_data.mem_err,
+				 res->res_data.mem_waiting, res->res_data.mem_revived);
 		}
 		D_GOTO(retry, rc);
 	}
 	if (wait != MEM_NO_WAIT) {
-		D_ASSERT(res->res_mem_waiting > 0);
-		res->res_mem_revived++;
-		res->res_mem_waiting--;
+		D_ASSERT(res->res_data.mem_waiting > 0);
+		res->res_data.mem_revived++;
+		res->res_data.mem_waiting--;
 	}
 	return rc;
 }
@@ -2098,10 +2101,10 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 		}
 
 		now = daos_gettime_coarse();
-		if (is_hulk && res->res_hulk == 0 && res->res_used < MIGR_INF_DATA_LWM) {
+		if (is_hulk && res->res_data.mem_hulk == 0 && res->res_used < MIGR_INF_DATA_LWM) {
 			/* skip the limit check and allow (only) one hulk transfer at a time */
 			res->res_used += units;
-			res->res_hulk = 1;
+			res->res_data.mem_hulk = 1;
 			break;
 
 		} else if (!is_hulk && !migr_res_has_starveling(res, now) &&
@@ -2177,8 +2180,8 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 	res->res_holders--;
 
 	if (migr_res_is_hulk(res, units)) {
-		D_ASSERT(res->res_hulk == 1);
-		res->res_hulk = 0;
+		D_ASSERT(res->res_data.mem_hulk == 1);
+		res->res_data.mem_hulk = 0;
 	}
 
 	if (res->res_waiters > 0)
