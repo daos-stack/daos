@@ -344,15 +344,15 @@ if [ -n "$FIRST_NODE" ] && ! grep /mnt/share /proc/mounts; then
     mount "$FIRST_NODE":/export/share /mnt/share
 fi
 
-# Defaulting the package to "(root)" for now as then Jenkins
-# will default to setting putting the outer stage name and
-# inner stage name in the full test name.
-ts="Hardware"
+# The package name defaults to "(root)" unless there is a dot in the
+# testsuite name, in which case the package name is the part before
+# the last dot in the testsuite name.
+pn="Hardware"
 tf="failures=\"$testfails\""
 te="errors=\"0\""
 tc="tests=\"$testruns\""
 
-junit_xml="<testsuite package=\"$ts\" name=\"$cn\" skipped=\"0\" $tf $te $tc>$nl
+junit_xml="<testsuite name=\"${pn}.${cn}\" skipped=\"0\" $tf $te $tc>$nl
 $testcases</testsuite>$nl"
 
 # Each junit file needs the same name for when they are collected.
