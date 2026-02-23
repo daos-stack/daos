@@ -242,12 +242,12 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
     if (startedByUser()) {
         // Manual build: check parameters first
         if (skipMsgParams) {
-            println("runStage: ${skipMsgParams}")
+            println("runStage: ${skipMsgParams} (started by user)")
             return false
         }
         // Manual build: check commit pragmas second
         if (skipMsgPragmas) {
-            println("runStage: ${skipMsgPragmas}")
+            println("runStage: ${skipMsgPragmas} (started by user)")
             return false
         }
     } else {
@@ -277,7 +277,7 @@ Boolean runStage(Map params=[:], Map pragmas=[:], Boolean otherCondition=true) {
  * @param compiler   the compiler to use; defaults to 'gcc'
  * @return           true if the build stage should be run, false if it should be skipped
  */
-Boolean runBuildStage(String distro='', String compiler='gcc') {
+Boolean runBuildStage(String distro='', String compiler='gcc', Boolean otherCondition=true) {
     Map params = ['CI_RPM_TEST_VERSION': '']
     Map pragmas = ['Skip-build': 'false', 'RPM-test-version': '', 'Doc-only': 'false']
     if (distro) {
@@ -292,7 +292,7 @@ Boolean runBuildStage(String distro='', String compiler='gcc') {
             pragmas['Skip-bullseye'] = 'false'
         }
     }
-    return runStage(params, pragmas)
+    return runStage(params, pragmas, otherCondition)
 }
 
 /**
@@ -361,7 +361,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     }
     return {
         stage("${name}") {
-            if (runBuildStage(distro, compiler) && runCondition) {
+            if (runBuildStage(distro, compiler, runCondition)) {
                 node('docker_runner') {
                     println("[${name}] Check out from version control")
                     checkoutScm(pruneStaleBranch: true)
