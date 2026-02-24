@@ -717,3 +717,102 @@ func TestControl_SystemCheckDeregPool(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_CheckLeaderForward(t *testing.T) {
+	defaultReq := &CheckLeaderReq{
+		CheckLeaderReq: mgmtpb.CheckLeaderReq{
+			Req: &mgmtpb.CheckLeaderReq_StartReq{},
+		},
+	}
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *CheckLeaderReq
+		expResp *CheckLeaderResp
+		expErr  error
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"no forwarded request": {
+			req:    &CheckLeaderReq{},
+			expErr: errors.New("no forwarded request"),
+		},
+		"gRPC fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			req:    defaultReq,
+			expErr: errors.New("MockInvoker error"),
+		},
+		"no MS response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					fromMS:    true,
+					Responses: []*HostResponse{},
+				},
+			},
+			req:    defaultReq,
+			expErr: errors.New("did not contain"),
+		},
+		"MS error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("", errors.New("MockInvoker response error"), nil),
+			},
+			req:    defaultReq,
+			expErr: errors.New("MockInvoker response error"),
+		},
+		"bad resp type": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					fromMS: true,
+					Responses: []*HostResponse{
+						{
+							Message: &MockMessage{},
+						},
+					},
+				},
+			},
+			req:    defaultReq,
+			expErr: errors.New("unexpected response type"),
+		},
+		"returned payload": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{
+						StartResp: &mgmtpb.CheckStartResp{
+							Status: daos.MiscError.Int32(),
+						},
+					},
+				}),
+			},
+			req: defaultReq,
+			expResp: &CheckLeaderResp{
+				CheckLeaderResp: mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{
+						StartResp: &mgmtpb.CheckStartResp{
+							Status: daos.MiscError.Int32(),
+						},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			invoker := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+			resp, err := CheckLeaderForward(ctx, invoker, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "response", tc.expResp, resp,
+				cmpopts.IgnoreUnexported(
+					mgmtpb.CheckLeaderResp{},
+					mgmtpb.CheckStartResp{},
+					mgmtpb.CheckStopResp{},
+					mgmtpb.CheckQueryResp{},
+					mgmtpb.DaosResp{},
+				),
+			)
+		})
+	}
+}
