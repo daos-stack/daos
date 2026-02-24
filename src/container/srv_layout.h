@@ -96,6 +96,9 @@ struct container_hdl {
  *
  * All keys are strings. Value types are specified for each key below.
  *
+ * The ds_cont_prop_ghce property had always have uint64_t value 0 before we
+ * start to repurpose it to store container_flags_t.
+ *
  * IMPORTANT! Please add new keys to this KVS like this:
  *
  *   extern d_iov_t ds_cont_prop_new_key;	comment_on_value_type
@@ -104,7 +107,8 @@ struct container_hdl {
  *   usage shall be described above in this comment following existing
  *   examples. If the value is another KVS, its type shall be the KVS name.
  */
-extern d_iov_t ds_cont_prop_ghce;		/* uint64_t */
+/* clang-format off */
+extern d_iov_t ds_cont_prop_ghce;		/* container_flags_t */
 extern d_iov_t ds_cont_prop_alloced_oid;	/* uint64_t */
 extern d_iov_t ds_cont_prop_label;		/* string */
 extern d_iov_t ds_cont_prop_layout_type;	/* uint64_t */
@@ -139,7 +143,13 @@ extern d_iov_t ds_cont_prop_cont_obj_version;	/* uint32_t */
 extern d_iov_t ds_cont_prop_nhandles;		/* uint32_t */
 extern d_iov_t ds_cont_prop_oit_oids;		/* snapshot OIT OID KVS */
 extern d_iov_t ds_cont_prop_ec_agg_eph;         /* uint64_t */
+/* clang-format on */
 /* Please read the IMPORTANT notes above before adding new keys. */
+
+/* Container flags like CONTAINER_F_DESTROYING */
+typedef uint64_t container_flags_t;
+
+#define CONTAINER_F_DESTROYING (1ULL << 0) /* container being destroyed */
 
 struct co_md_times {
 	uint64_t	otime;	/* container open time */
