@@ -108,6 +108,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemCheckEngineReport":  {ComponentServer},
 		"/mgmt.MgmtSvc/SystemCheckRegPool":       {ComponentServer},
 		"/mgmt.MgmtSvc/SystemCheckDeregPool":     {ComponentServer},
+		"/mgmt.MgmtSvc/CheckLeaderDrpc":          {ComponentServer},
 		"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
