@@ -27,6 +27,7 @@ rules:
     ignore: |
       /src/tests/ftest/
       /utils/config/
+      /src/utils/dlck/tests/fault_injection_dlck.yaml
 
 ignore: |
   /src/control/vendor/
