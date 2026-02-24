@@ -642,41 +642,18 @@ This LED activity visually indicates a fault and that the device needs to be rep
 longer in use by DAOS.
 The LED of the VMD device will remain in this state until replaced by a new device.
 
-!!! note
-    Full NVMe hot plug capability will be available and supported in DAOS 2.6 release.
-    Use is currently intended for testing only and is not supported for production.
-
-- To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
-and bound instead to a user-space driver so that the device can be used with DAOS.
-
-To rebind a SSD on a single host, run the following command (replace SSD PCI address and
-hostname with appropriate values):
+- If VMD is not enabled, then in order to use a newly added (hot-inserted) SSD it needs to be
+unbound from the kernel driver and bound instead to a user-space driver so that the device can be
+used with DAOS. To rebind an SSD on a single host, run the following command (replace SSD PCI
+address and hostname with appropriate values):
 ```bash
 $ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
 Command completed successfully
 ```
 
 The device will now be bound to a user-space driver (e.g. VFIO) and can be accessed by
-DAOS I/O engine processes (and used in the following `dmg storage replace nvme` command
-as a new device).
-
-- Once an engine is using a newly added (hot-inserted) SSD it can be added to the persistent
-NVMe config (stored on SCM) so that on engine restart the new device will be used.
-
-To update the engine's persistent NVMe config with the new SSD transport address, run the
-following command (replace SSD PCI address, engine index and hostname with appropriate values):
-```bash
-$ dmg storage nvme-add-device -a 0000:84:00.0 -e 0 -l wolf-167
-Command completed successfully
-```
-
-The optional [--tier-index|-t] command parameter can be used to specify which storage tier to
-insert the SSD into, if specified then the server will attempt to insert the device into the tier
-specified by the index, if not specified then the server will attempt to insert the device into
-the bdev tier with the lowest index value (the first bdev tier).
-
-The device will now be registered in the engine's persistent NVMe config so that when restarted,
-the newly added SSD will be used.
+DAOS I/O engine processes. Now the new device can be used in the following
+`dmg storage replace nvme` command.
 
 - Replace an excluded SSD with a New Device:
 ```bash
