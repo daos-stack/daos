@@ -16,8 +16,9 @@ test_tag="$TEST_TAG"
 
 : "${NODELIST:=localhost}"
 : "${TEST_RPMS:=false}"
+: "${STAGE_NAME:=unknown}"
 
-def_node_count="$(echo "$NODELIST" | awk -F, '{print NF}')"
+def_node_count="$(nodeset -c "$NODELIST")"
 : "${NODE_COUNT:=$def_node_count}"
 
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
@@ -53,7 +54,7 @@ test_cluster() {
         TEST_RPMS=${TEST_RPMS}                          \
         NODELIST=${tnodes}                              \
         BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
-        STAGE_NAME=\"${STAGE_NAME:-Unknown}\"           \
+        STAGE_NAME=\"${STAGE_NAME}\"                    \
         JENKINS_URL=\"${JENKINS_URL:-}\"                \
         DAOS_DEVOPS_EMAIL=\"${DAOS_DEVOPS_EMAIL:-}\"    \
         DAOS_INFINIBAND=${DAOS_INFINIBAND:-}            \
@@ -97,10 +98,9 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 
 # Setup the Jenkins build artifacts directory before running the tests to ensure
 # there is enough disk space to report the results.
-if [ -n "${STAGE_NAME:-}" ]; then
-    rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
-    mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
-fi
+# Even though STAGE_NAME forced to be set, shellcheck wants this syntax.
+rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
@@ -116,7 +116,7 @@ if "$hardware_ok"; then
            TNODES=\"$tnodes\"                         \
            FTEST_ARG=\"${FTEST_ARG:-}\"               \
            WITH_VALGRIND=\"${WITH_VALGRIND:-}\"       \
-           STAGE_NAME=\"${STAGE_NAME:-Unknown}\"      \
+           STAGE_NAME=\"${STAGE_NAME}\"               \
            DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
            $(cat ci/functional/test_main_node.sh)"
     else
@@ -126,7 +126,6 @@ fi
 
 # Now rename the previously collected hardware test data for Jenkins
 # to use them for Junit processing.
-: "${STAGE_NAME:=unknown}"
 mkdir -p "${STAGE_NAME}/hardware_prep/"
 for node in ${tnodes//,/ }; do
     old_name="./hardware_prep_node_results.xml.$node"
