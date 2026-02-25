@@ -582,18 +582,21 @@
 {
    __tsan_go_atomic64_load
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_load
    fun:racecall
 }
 {
    __tsan_go_atomic64_store
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_store
    fun:racecall
 }
 {
    __tsan_go_atomic64_compare_exchange
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_compare_exchange
    fun:racecall
 }
@@ -610,18 +613,21 @@
 {
    __tsan_write_pc
    Memcheck:Value8
+   ...
    fun:__tsan_write_pc
    fun:racecall
 }
 {
    __tsan_read_pc
    Memcheck:Value8
+   ...
    fun:__tsan_read_pc
    fun:racecall
 }
 {
    tsan::MemoryAccessRange
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan18MemoryAccessRangeTILb0EEEvPNS_11ThreadStateEmmm
    ...
    fun:racecall
@@ -629,6 +635,7 @@
 {
    tsan::MemoryAccessRange
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
    ...
    fun:racecall
@@ -636,6 +643,7 @@
 {
    tsan::TraceRestartMemoryAccess
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan24TraceRestartMemoryAccessEPNS_11ThreadStateEmmmm
    ...
    fun:racecall
@@ -643,12 +651,14 @@
 {
    __tsan_read
    Memcheck:Value8
+   ...
    fun:__tsan_read
    fun:racecall
 }
 {
    __tsan_write
    Memcheck:Value8
+   ...
    fun:__tsan_write
    fun:racecall
 }
@@ -671,18 +681,21 @@
 {
    __tsan_go_atomic32_load
    Memcheck:Addr4
+   ...
    fun:__tsan_go_atomic32_load
    fun:racecall
 }
 {
    __tsan_go_atomic32_store
    Memcheck:Addr4
+   ...
    fun:__tsan_go_atomic32_store
    fun:racecall
 }
 {
    __tsan_go_atomic32_compare_exchange
    Memcheck:Addr4
+   ...
    fun:__tsan_go_atomic32_compare_exchange
    fun:racecall
 }
@@ -734,12 +747,14 @@
 {
    __tsan_go_atomic32_fetch_add
    Memcheck:Addr4
+   ...
    fun:__tsan_go_atomic32_fetch_add
    fun:racecall
 }
 {
    __tsan_go_atomic64_fetch_add
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_fetch_add
    fun:racecall
 }
