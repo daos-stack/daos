@@ -45,9 +45,6 @@ ddb_iov_to_printable_buf(d_iov_t *iov, char buf[], uint32_t buf_len)
 	if (iov->iov_len == 0 || iov->iov_buf == NULL)
 		return 0;
 
-	if (ddb_can_print(iov))
-		return snprintf(buf, buf_len, "%.*s", (int)iov->iov_len, (char *)iov->iov_buf);
-
 	switch (iov->iov_len) {
 	case sizeof(uint8_t):
 		return snprintf(buf, buf_len, "uint8:0x%x", ((uint8_t *)iov->iov_buf)[0]);
@@ -63,6 +60,10 @@ ddb_iov_to_printable_buf(d_iov_t *iov, char buf[], uint32_t buf_len)
 		uint32_t	new_len;
 		uint32_t	result = 0;
 		int		i;
+
+		if (ddb_can_print(iov))
+			return snprintf(buf, buf_len, "%.*s", (int)iov->iov_len,
+					(char *)iov->iov_buf);
 
 		result += snprintf(buf, buf_len, "bin(%lu):0x", iov->iov_len);
 
