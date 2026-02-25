@@ -86,7 +86,6 @@ struct crt_prov_gdata {
 	bool                 cpg_primary;
 	bool                 cpg_contig_ports;
 	bool                 cpg_inited;
-	bool                 cpg_progress_busy;
 
 	/** Mutext to protect fields above */
 	pthread_mutex_t      cpg_mutex;
@@ -152,6 +151,12 @@ struct crt_gdata {
 
 	/** use single thread to access context */
 	bool                     cg_thread_mode_single;
+
+	/** use busy polling for progress */
+	bool                     cg_progress_busy;
+
+	/** use memory device */
+	bool                     cg_mem_device;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
@@ -232,6 +237,7 @@ struct crt_event_cb_priv {
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
 	ENV(D_THREAD_MODE_SINGLE)                                                                  \
 	ENV(D_PROGRESS_BUSY)                                                                       \
+	ENV(D_MEM_DEVICE)                                                                          \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
