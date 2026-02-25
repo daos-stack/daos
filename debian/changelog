@@ -1,8 +1,21 @@
+daos (2.6.4-17) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * pmemobj errors and warnings reported via DAOS logging system
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com>  Wed, 25 Feb 2026 12:00:00 +0200
+
+daos (2.6.4-16) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Require mercury-libfabric to always install libfabric plugin
+  * Bump mercury min version to 2.4.1
+
+ -- Jerome Soumagne <jerome.soumagne@hpe.com> Thu, 05 Feb 2026 12:00:00 +0200
+
 daos (2.6.4-15) unstable; urgency=medium
   [ Dalton Bohning ]
   * Bump version
 
- -- Dalton Bohning <dalton.bohning@hpe.com>  Fri, 16 Jan 2025 08:30:00 -0800
+ -- Dalton Bohning <dalton.bohning@hpe.com>  Fri, 16 Jan 2026 08:30:00 -0800
 
 daos (2.6.4-13) unstable; urgency=medium
   [ Phillip Henderson ]
