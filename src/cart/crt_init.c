@@ -452,6 +452,7 @@ crt_str_to_provider(const char *str_provider)
 			if (len > strlen(CRT_UCX_STR) && strchr(str_provider, '+')) {
 				D_STRNDUP(p, str_provider, len);
 				if (!p) {
+					/* Return provider unknown if allocation fails. */
 					return prov;
 				} else {
 					crt_na_dict[i].nad_alt_str   = crt_na_dict[i].nad_str;
