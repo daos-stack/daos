@@ -27,7 +27,15 @@ python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
+cat <<EOF > venv/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+    quiet = 1
+EOF
+
 pip install --upgrade pip
+
 pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then

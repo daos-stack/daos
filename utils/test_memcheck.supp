@@ -448,3 +448,19 @@
    fun:spdk_mem_map_set_translation
    ...
 }
+{
+   setgrent() leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:*alloc
+   ...
+   fun:setgrent
+}
+{
+   OPENSSL_init_crypto leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:OPENSSL_init_crypto
+}

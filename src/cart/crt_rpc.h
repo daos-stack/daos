@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -262,76 +262,44 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
  * this to ping the server waiting for start so needs to work before
  * proto_query() can be called.
  */
-#define CRT_INTERNAL_RPCS_LIST						\
-	X(CRT_OPC_URI_LOOKUP,						\
-		0, &CQF_crt_uri_lookup,					\
-		crt_hdlr_uri_lookup, NULL)				\
-	X(CRT_OPC_PROTO_QUERY,						\
-		0, &CQF_crt_proto_query,				\
-		crt_hdlr_proto_query, NULL)				\
-	X(CRT_OPC_CTL_LS,						\
-		0, &CQF_crt_ctl_ep_ls,					\
-		crt_hdlr_ctl_ls, NULL)					\
+#define CRT_INTERNAL_RPCS_LIST                                                                     \
+	X(CRT_OPC_URI_LOOKUP, 0, &CQF_crt_uri_lookup, crt_hdlr_uri_lookup, NULL)                   \
+	X(CRT_OPC_PROTO_QUERY, 0, &CQF_crt_proto_query, crt_hdlr_proto_query, NULL)                \
+	X(CRT_OPC_CTL_LS, 0, &CQF_crt_ctl_ep_ls, crt_hdlr_ctl_ls, NULL)
 
-#define CRT_FI_RPCS_LIST						\
-	X(CRT_OPC_CTL_FI_TOGGLE,					\
-		0, &CQF_crt_ctl_fi_toggle,				\
-		crt_hdlr_ctl_fi_toggle, NULL)				\
-	X(CRT_OPC_CTL_FI_SET_ATTR,					\
-		0, &CQF_crt_ctl_fi_attr_set,				\
-		crt_hdlr_ctl_fi_attr_set, NULL)				\
+#define CRT_FI_RPCS_LIST                                                                           \
+	X(CRT_OPC_CTL_FI_TOGGLE, 0, &CQF_crt_ctl_fi_toggle, crt_hdlr_ctl_fi_toggle, NULL)          \
+	X(CRT_OPC_CTL_FI_SET_ATTR, 0, &CQF_crt_ctl_fi_attr_set, crt_hdlr_ctl_fi_attr_set, NULL)
 
-#define CRT_ST_RPCS_LIST						\
-	X(CRT_OPC_SELF_TEST_BOTH_EMPTY,					\
-		0, NULL,						\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,				\
-		0, &CQF_crt_st_send_id_reply_iov,			\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,			\
-		0, &CQF_crt_st_send_iov_reply_empty,			\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_BOTH_IOV,					\
-		0, &CQF_crt_st_both_iov,				\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,			\
-		0, &CQF_crt_st_send_bulk_reply_iov,			\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,			\
-		0, &CQF_crt_st_send_iov_reply_bulk,			\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_BOTH_BULK,					\
-		0, &CQF_crt_st_both_bulk,				\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_OPEN_SESSION,				\
-		0, &CQF_crt_st_open_session,				\
-		crt_self_test_open_session_handler, NULL)		\
-	X(CRT_OPC_SELF_TEST_CLOSE_SESSION,				\
-		0, &CQF_crt_st_close_session,				\
-		crt_self_test_close_session_handler, NULL)		\
-	X(CRT_OPC_SELF_TEST_START,					\
-		0, &CQF_crt_st_start,					\
-		crt_self_test_start_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_STATUS_REQ,					\
-		0, &CQF_crt_st_status_req,				\
-		crt_self_test_status_req_handler, NULL)			\
+#define CRT_ST_RPCS_LIST                                                                           \
+	X(CRT_OPC_SELF_TEST_BOTH_EMPTY, 0, NULL, crt_self_test_msg_handler, NULL)                  \
+	X(CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV, 0, &CQF_crt_st_send_id_reply_iov,                   \
+	  crt_self_test_msg_handler, NULL)                                                         \
+	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY, 0, &CQF_crt_st_send_iov_reply_empty,             \
+	  crt_self_test_msg_handler, NULL)                                                         \
+	X(CRT_OPC_SELF_TEST_BOTH_IOV, 0, &CQF_crt_st_both_iov, crt_self_test_msg_handler, NULL)    \
+	X(CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV, 0, &CQF_crt_st_send_bulk_reply_iov,               \
+	  crt_self_test_msg_handler, NULL)                                                         \
+	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK, 0, &CQF_crt_st_send_iov_reply_bulk,               \
+	  crt_self_test_msg_handler, NULL)                                                         \
+	X(CRT_OPC_SELF_TEST_BOTH_BULK, 0, &CQF_crt_st_both_bulk, crt_self_test_msg_handler, NULL)  \
+	X(CRT_OPC_SELF_TEST_OPEN_SESSION, 0, &CQF_crt_st_open_session,                             \
+	  crt_self_test_open_session_handler, NULL)                                                \
+	X(CRT_OPC_SELF_TEST_CLOSE_SESSION, 0, &CQF_crt_st_close_session,                           \
+	  crt_self_test_close_session_handler, NULL)                                               \
+	X(CRT_OPC_SELF_TEST_START, 0, &CQF_crt_st_start, crt_self_test_start_handler, NULL)        \
+	X(CRT_OPC_SELF_TEST_STATUS_REQ, 0, &CQF_crt_st_status_req,                                 \
+	  crt_self_test_status_req_handler, NULL)
 
-#define CRT_CTL_RPCS_LIST						\
-	X(CRT_OPC_CTL_LOG_SET,						\
-		0, &CQF_crt_ctl_log_set,				\
-		crt_hdlr_ctl_log_set, NULL)				\
-	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
-		0, &CQF_crt_ctl_log_add_msg,				\
-		crt_hdlr_ctl_log_add_msg, NULL)				\
-	X(CRT_OPC_CTL_GET_URI_CACHE,					\
-		0, &CQF_crt_ctl_get_uri_cache,				\
-		crt_hdlr_ctl_get_uri_cache, NULL)			\
-	X(CRT_OPC_CTL_GET_HOSTNAME,					\
-		0, &CQF_crt_ctl_get_host,				\
-		crt_hdlr_ctl_get_hostname, NULL)			\
-	X(CRT_OPC_CTL_GET_PID,						\
-		0, &CQF_crt_ctl_get_pid,				\
-		crt_hdlr_ctl_get_pid, NULL)				\
+#define CRT_CTL_RPCS_LIST                                                                          \
+	X(CRT_OPC_CTL_LOG_SET, 0, &CQF_crt_ctl_log_set, crt_hdlr_ctl_log_set, NULL)                \
+	X(CRT_OPC_CTL_LOG_ADD_MSG, 0, &CQF_crt_ctl_log_add_msg, crt_hdlr_ctl_log_add_msg, NULL)    \
+	X(CRT_OPC_CTL_GET_URI_CACHE, 0, &CQF_crt_ctl_get_uri_cache, crt_hdlr_ctl_get_uri_cache,    \
+	  NULL)                                                                                    \
+	X(CRT_OPC_CTL_GET_HOSTNAME, 0, &CQF_crt_ctl_get_host, crt_hdlr_ctl_get_hostname, NULL)     \
+	X(CRT_OPC_CTL_GET_PID, 0, &CQF_crt_ctl_get_pid, crt_hdlr_ctl_get_pid, NULL)                \
+	X(CRT_OPC_CTL_DUMP_COUNTERS, 0, &CQF_crt_ctl_dump_counters, crt_hdlr_ctl_dump_counters,    \
+	  NULL)
 
 #define CRT_IV_RPCS_LIST						\
 	X(CRT_OPC_IV_FETCH,						\
@@ -579,6 +547,10 @@ CRT_RPC_DECLARE(crt_ctl_get_uri_cache, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_URI_CACHE)
 	((int32_t)		(cgh_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_ctl_get_host, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
+
+#define CRT_OSEQ_CTL_DUMP_COUNTERS /* output fields */ ((uint32_t)(rc)CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_dump_counters, CRT_ISEQ_CTL, CRT_OSEQ_CTL_DUMP_COUNTERS)
 
 #define CRT_OSEQ_CTL_GET_PID	/* output fields */		 \
 	((int32_t)		(cgp_pid)		CRT_VAR) \

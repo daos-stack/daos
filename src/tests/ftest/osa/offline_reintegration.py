@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -48,6 +48,12 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                                 operations.
             num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
+        # Figure out an additional unique rank to stop during rebuild.
+        # Used when self.test_during_rebuild is True
+        all_ranks = list(map(str, self.server_managers[0].ranks.keys()))
+        all_exclude_ranks = ','.join(ranks).split(',')
+        rank_during_rebuild = self.random.choice(list(set(all_ranks) - set(all_exclude_ranks)))
+
         # Create 'num_pool' number of pools
         pools = []
         if oclass is None:
@@ -82,7 +88,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
-        self.pool = self.random.choice(pools)  # nosec
+        self.pool = self.random.choice(pools)
         for loop in range(0, self.loop_test_cnt):
             self.log.info(
                 "==> (Loop %s/%s) Excluding ranks %s from %s",
@@ -95,8 +101,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 initial_free_space = self.pool.get_total_free_space(refresh=True)
                 if server_boot is False:
                     if (self.test_during_rebuild is True and index == 0):
-                        # Exclude rank 5
-                        output = self.pool.exclude("5")
+                        # Exclude an additional rank
+                        output = self.pool.exclude(rank_during_rebuild)
                         self.print_and_assert_on_rebuild_failure(output)
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
@@ -115,10 +121,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     output = self.dmg_command.system_stop(ranks=rank, force=True)
                     self.print_and_assert_on_rebuild_failure(output)
                     output = self.dmg_command.system_start(ranks=rank)
-                # Just try to reintegrate rank 5
+                # Just try to reintegrate the additional rank
                 if (self.test_during_rebuild is True and index == 2):
-                    # Reintegrate rank 5
-                    output = self.pool.reintegrate("5")
+                    output = self.pool.reintegrate(rank_during_rebuild)
                 self.print_and_assert_on_rebuild_failure(output)
 
                 pver_exclude = self.pool.get_version(True)
@@ -127,10 +132,12 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 # Check pool version incremented after pool exclude
                 # pver_exclude should be greater than
                 # pver_begin + 1 (1 target + exclude)
-                self.assertTrue(pver_exclude > (pver_begin + 1),
-                                "Pool Version Error: After exclude")
-                self.assertTrue(initial_free_space > free_space_after_exclude,
-                                "Expected free space after exclude is less than initial")
+                if not pver_exclude > (pver_begin + 1):
+                    self.fail(f"Pool version after exclude: {pver_exclude} !> {pver_begin + 1}")
+                if not initial_free_space > free_space_after_exclude:
+                    self.fail(
+                        "Expected free space after exclude: "
+                        f"{initial_free_space} !> {free_space_after_exclude}")
 
             # Reintegrate the ranks which was excluded
             self.log.info(
@@ -154,12 +161,14 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
                 pver_reint = self.pool.get_version(True)
                 self.log.info("Pool Version after reintegrate %d", pver_reint)
-                # Check pool version incremented after pool reintegrate
-                self.assertTrue(pver_reint > pver_exclude, "Pool Version Error:  After reintegrate")
-                self.assertTrue(free_space_after_reintegration > free_space_after_exclude,
-                                "Expected free space after reintegration is less than exclude")
+                if not pver_reint > pver_exclude:
+                    self.fail(f"Pool version after reintegrate: {pver_reint} !> {pver_exclude}")
+                if not free_space_after_reintegration > free_space_after_exclude:
+                    self.fail(
+                        "Expected free space after reintegrate: "
+                        f"{free_space_after_reintegration} !> {free_space_after_exclude}")
 
-            display_string = "{} space at the End".format(str(self.pool))
+            display_string = f"{str(self.pool)} space at the End"
             self.pool.display_pool_daos_space(display_string)
 
         # Finally check whether the written data can be accessed.
