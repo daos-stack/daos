@@ -3392,11 +3392,9 @@ chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bo
 	d_iov_t			 riov;
 	int			 rc;
 
-	rc = chk_pending_del(ins, seq, locked, &pending);
+	rc = chk_pending_lookup(ins, seq, locked, &pending);
 	if (rc != 0)
 		goto out;
-
-	D_ASSERT(pending->cpr_busy);
 
 	if (pending->cpr_on_leader) {
 		ABT_mutex_lock(pending->cpr_mutex);
@@ -3410,24 +3408,30 @@ chk_leader_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act, bo
 
 		if (cla != NULL)
 			*cla = pending->cpr_class;
+
+		chk_pending_del(ins, seq, locked, &pending);
 	} else {
 		d_iov_set(&riov, NULL, 0);
 		d_iov_set(&kiov, pending->cpr_uuid, sizeof(uuid_t));
 		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
-		if (rc == 0) {
+		if (rc == 0)
 			pool = (struct chk_pool_rec *)riov.iov_buf;
-			if (pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING)
-				pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-		} else {
+		else
 			rc = 0;
-		}
 
 		/* For locked case, check engines have already processed related interaction. */
 		if (!locked)
 			rc = chk_act_remote(ins->ci_ranks, ins->ci_bk.cb_gen, seq,
 					    pending->cpr_class, act, pending->cpr_rank, for_all);
 
-		chk_pending_destroy(pending);
+		if (rc == 0) {
+			chk_pending_destroy(ins, locked, pending);
+
+			if (pool != NULL &&
+			    pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+			    d_list_empty(&pool->cpr_pending_list))
+				pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+		}
 	}
 
 out:
@@ -3629,13 +3633,12 @@ again:
 	goto again;
 
 out:
-	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
-	    (rc != 0 || (cpr != NULL &&
-			 cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)))
-		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-
 	if ((rc != 0 || decision != NULL) && cpr != NULL)
-		chk_pending_destroy(cpr);
+		chk_pending_destroy(ins, false, cpr);
+
+	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+	    d_list_empty(&pool->cpr_pending_list))
+		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
 
 	return rc;
 }
