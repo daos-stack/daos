@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1461,7 +1461,7 @@ rebuild_object_with_csum_error(void **state)
 
 	/* test params */
 	daos_size_t	transfer_size = 1 * MB;
-	daos_size_t	block_size = 2L * GB;
+	daos_size_t      block_size    = 200L * MB;
 	daos_size_t	io_count = block_size / transfer_size;
 	uint32_t	iterations = 2;
 
@@ -1521,8 +1521,8 @@ rebuild_object_with_csum_error(void **state)
 	for (j = 0; j < iterations && rc == 0; j++) {
 		print_message("iteration: %d\n", j);
 		for (i = 0; i < io_count && rc == 0; i++) {
-			if (i % 100 == 0)
-				inject_corruption(arg->myrank, (i / 100) % ranks, arg->group, 2);
+			if (i % 10 == 0)
+				inject_corruption(arg->myrank, (i / 10) % ranks, arg->group, 2);
 			dkey_val = i;
 			rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 			if (rc != 0)
