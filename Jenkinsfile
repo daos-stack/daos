@@ -1207,7 +1207,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages
+                                inst_rpms: getFunctionalPackages(
                                     next_version(),
                                     'daos{,-{client,tests,server,serialize,tests-internal}',
                                     getAdditionalPackages(false, bullseyeReport())),
@@ -1232,7 +1232,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages
+                                inst_rpms: getFunctionalPackages(
                                     next_version(),
                                     'daos{,-{client,tests,server,serialize,tests-internal}',
                                     getAdditionalPackages(false, false)),
@@ -1257,7 +1257,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages
+                                inst_rpms: getFunctionalPackages(
                                     next_version(),
                                     'daos{,-{client,tests,server,serialize,tests-internal}',
                                     getAdditionalPackages(false, false)),
@@ -1283,7 +1283,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages
+                                inst_rpms: getFunctionalPackages(
                                     next_version(),
                                     'daos{,-{client,tests,server,serialize,tests-internal}',
                                     getAdditionalPackages(false, false)),
