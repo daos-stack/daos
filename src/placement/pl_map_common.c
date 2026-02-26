@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -377,6 +378,22 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 
 		f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 		f_shard->fs_status = spare_tgt->ta_comp.co_status;
+
+		/* For the case of 2nd remap, if the spare target is DOWN2UP need to set
+		 * fs_down2up flag, to make it be able to set shard's po_rebuilding flag
+		 * at the end.
+		 * One example case -
+		 * Target A is DOWN, rebuild completed and status changed to DOWNOUT
+		 * Target B is DOWN, rebuild started but not completed but admin do the reint,
+		 * its status change to UP and with DOWN2UP flag.
+		 *
+		 * In object layout calculation, one shard firstly located in Target A, but 1st
+		 * remap to Target B, but still need to do 2nd remap. In this case should set
+		 * fs_down2up flag which is not set in the 1st remap, to avoid not be able to set
+		 * shard's po_rebuilding flag so will cause read from it (invalid place).
+		 */
+		if (pool_target_is_down2up(spare_tgt))
+			f_shard->fs_down2up = 1;
 
 		d_list_del_init(&f_shard->fs_list);
 		remap_add_one(remap_list, f_shard);
