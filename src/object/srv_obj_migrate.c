@@ -3344,10 +3344,17 @@ migrate_fini_one_ult(void *data)
 	int                      j;
 	int			 rc;
 
-	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
-	if (tls != NULL)
-		tls->mpt_fini = 1;
+	if (tls == NULL)
+		return 0;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
+	/* This function should be called for twice:
+	 * the first call can set mpt_fini on all xstream, the second call wakeup all ULTs,
+	 * otherwise some UTLs could miss the mpt_fini check because they are waiting on
+	 * other xstreams.
+	 */
+	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(arg->stop_lock);
 	arg->stop_count++;
@@ -3374,8 +3381,6 @@ migrate_fini_one_ult(void *data)
 			}
 		}
 	}
-	if (tls == NULL)
-		return 0;
 
 	migrate_pool_tls_put(tls); /* lookup */
 	rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
