@@ -1715,6 +1715,7 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	for (i = 0; i < rank_nr; i++) {
 		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
 		ec_agg->ea_server_ephs[i].eph = 0;
+		ec_agg->ea_server_ephs[i].ee_update_ts = daos_gettime_coarse();
 	}
 	d_list_add(&ec_agg->ea_list, &cont_svc->cs_ec_agg_list);
 	*ec_aggp = ec_agg;
@@ -1772,8 +1773,10 @@ retry:
 
 	for (i = 0; i < ec_agg->ea_servers_num; i++) {
 		if (ec_agg->ea_server_ephs[i].rank == rank) {
-			if (ec_agg->ea_server_ephs[i].eph < eph)
+			if (ec_agg->ea_server_ephs[i].eph < eph) {
 				ec_agg->ea_server_ephs[i].eph = eph;
+				ec_agg->ea_server_ephs[i].ee_update_ts = daos_gettime_coarse();
+			}
 			break;
 		}
 	}
@@ -2002,6 +2005,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	daos_epoch_t        cur_eph, new_eph;
 	daos_epoch_t        min_eph;
 	d_rank_t            rank;
+	uint64_t            cur_ts;
 	int                 i;
 	int                 rc;
 
@@ -2034,6 +2038,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		}
 
 		min_eph = DAOS_EPOCH_MAX;
+		cur_ts  = daos_gettime_coarse();
 		for (i = 0; i < ec_agg->ea_servers_num; i++) {
 			rank = ec_agg->ea_server_ephs[i].rank;
 
@@ -2042,6 +2047,13 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 					DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), rank);
 				continue;
 			}
+
+			if (pool->sp_reclaim != DAOS_RECLAIM_DISABLED &&
+			    cur_ts > ec_agg->ea_server_ephs[i].ee_update_ts + 600)
+				D_WARN(DF_CONT ": Sluggish EC boundary report from rank %d, " DF_U64
+					       " Seconds.",
+				       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), rank,
+				       cur_ts - ec_agg->ea_server_ephs[i].ee_update_ts);
 
 			if (ec_agg->ea_server_ephs[i].eph < min_eph)
 				min_eph = ec_agg->ea_server_ephs[i].eph;
