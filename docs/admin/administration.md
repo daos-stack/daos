@@ -1024,6 +1024,11 @@ An examples workflow would be:
   rank will be created).
 - Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
 
+!!! note
+    `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. This
+    special case reduces a chance that a duplicate rank entry is introduced inadvertently because
+    the rank to be replaced is in the `AdminExcluded` state.
+
 ### System Erase
 
 To erase the DAOS sorage configuration, the `dmg system erase`
