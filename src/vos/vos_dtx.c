@@ -1444,8 +1444,11 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 * to rebuild. Related new IO corresponding to such non-committed DTX
 	 * has already been sent to the in-rebuilding target.
 	 */
-	if (intent == DAOS_INTENT_MIGRATION)
+	if (intent == DAOS_INTENT_MIGRATION) {
+		D_INFO("Skip non-committed DTX " DF_DTI " for obj " DF_UOID "\n",
+		       DP_DTI(&DAE_XID(dae)), DP_UOID(DAE_OID(dae)));
 		return ALB_UNAVAILABLE;
+	}
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
