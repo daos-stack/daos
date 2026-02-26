@@ -327,6 +327,9 @@ crt_env_fini(void)
 			*val = crt_genvs._##name;                                                  \
 	} while (0)
 
+/* Check if the env is set */
+#define crt_env_is_set(name) (crt_genvs._rc_##name == 0)
+
 /* Check envs that contain strings to not exceed CRT_ENV_STR_MAX_SIZE */
 static inline bool
 crt_env_list_valid(void)

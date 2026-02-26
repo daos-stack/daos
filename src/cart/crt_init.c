@@ -752,7 +752,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		D_WARN("No interface specified\n");
 
 	/* For PALS-enabled environments, auto-detect svc ID / VNI and use DAOS VNI */
-	if (prov == CRT_PROV_OFI_CXI && auth_key == NULL && getenv("SLINGSHOT_VNIS") != NULL)
+	if (prov == CRT_PROV_OFI_CXI && auth_key == NULL && crt_env_is_set(SLINGSHOT_VNIS))
 		auth_key = "0:0:2"; /* format is svc_id:vni:vni_idx, use hard-coded value to tell
 				       mercury to detect svc_id and vni from the env vars and use
 				       the DAOS VNI at index 2 */
