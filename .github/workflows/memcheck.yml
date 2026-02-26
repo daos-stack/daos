@@ -41,7 +41,7 @@
 name: Memory Usage Checking
 
 on:
-  # pull_request:
+  pull_request:
   workflow_dispatch:
     inputs:
       logLevel:
@@ -49,7 +49,12 @@ on:
         required: true
         default: 'info'
 
-permissions: {}
+permissions:
+  # Upload SARIF to the Security → Code scanning tab
+  security-events: write
+  # Post inline annotations on commits / PRs
+  checks: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -57,7 +62,7 @@ concurrency:
 
 jobs:
   build-daos_asan:
-    name: Build DAOS with Address Sanitizer
+    name: Unit Test DAOS with AddressSanitizer (ASan)
     if: github.repository == 'daos-stack/daos'
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -66,23 +71,189 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           submodules: 'recursive'
-      # TODO Use ./ci/gha_helper.py to set up the git hash and cache keys for the ASan build as
-      # well. Configuration examples can be found in ci2.yml.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # Resolve the correct ref and SHA to associate SARIF findings with.
+      # On pull_request: use the PR head ref/sha (real, browsable commit).
+      # On workflow_dispatch: use the current ref/sha (branch tip).
+      #
+      # We compute these in a dedicated step rather than using inline || because
+      # GitHub Actions expressions evaluate both sides before applying ||, which
+      # causes sha concatenation when both variables are non-empty (e.g. on a
+      # pull_request trigger where github.sha is the synthetic merge commit and
+      # github.event.pull_request.head.sha is the real head — both non-empty).
+      - name: Resolve SARIF ref and SHA
+        id: sarif_ref
+        run: |
+          if [ -n "${{ github.event.pull_request.head.sha }}" ]; then
+            echo "sha=${{ github.event.pull_request.head.sha }}"   >> "$GITHUB_OUTPUT"
+            echo "ref=refs/heads/${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}"   >> "$GITHUB_OUTPUT"
+            echo "ref=${{ github.ref }}"   >> "$GITHUB_OUTPUT"
+          fi
+
+      # TODO Use ./ci/gha_helper.py to set up the git hash and cache keys
+      # for the ASan build as well. Configuration examples can be found in
+      # ci2.yml.
       - name: Build daos in Docker
-        run: docker build .
-            --file utils/docker/Dockerfile.el.9
-            --build-arg COMPILER=gcc
-            --build-arg SANITIZERS=address
-            --build-arg DEPS_JOBS=$(nproc)
-            --build-arg DAOS_KEEP_SRC=yes
-            --build-arg DAOS_TARGET_TYPE=debug
-            --build-arg DAOS_JAVA_BUILD=no
+        run: |
+          docker build . \
+            --file utils/docker/Dockerfile.el.9 \
+            --build-arg COMPILER=gcc \
+            --build-arg SANITIZERS=address \
+            --build-arg DEPS_JOBS=$(nproc) \
+            --build-arg DAOS_KEEP_SRC=yes \
+            --build-arg DAOS_TARGET_TYPE=debug \
+            --build-arg DAOS_JAVA_BUILD=no \
             --tag build-asan
+
+      # Prepare host-side output directories that are bind-mounted into the
+      # container. The script always exits 0 so that reporting steps below
+      # always run regardless of test outcome.
+      - name: Prepare output directories
+        run: mkdir -p asan-logs test-results
+
       - name: Run Unit Testing
-        run: docker run
-            --privileged
-            --rm --user root
-            --workdir /home/daos
-            --name run-asan-unit_tests
-            build-asan
+        id: run_tests
+        run: |
+          docker run \
+            --privileged \
+            --rm --user root \
+            --workdir /home/daos \
+            --name run-asan-unit_tests \
+            --volume "$(pwd)/asan-logs:/home/daos/asan-logs" \
+            --volume "$(pwd)/test-results:/home/daos/test-results" \
+            build-asan \
             ./daos/utils/ci/run-unit_tests-asan.sh
+
+          # Read the structured status written by the script.
+          # Defaults handle the case where the file was not created.
+          RUNNER_RC=0
+          ASAN_DETECTED=0
+          FUNCTIONAL_FAILURE=0
+          if [ -f test-results/exit_status ]; then
+            # shellcheck source=/dev/null
+            source test-results/exit_status
+          fi
+          echo "runner_rc=${RUNNER_RC}"                   >> "$GITHUB_OUTPUT"
+          echo "asan_detected=${ASAN_DETECTED}"           >> "$GITHUB_OUTPUT"
+          echo "functional_failure=${FUNCTIONAL_FAILURE}" >> "$GITHUB_OUTPUT"
+
+      # The container runs as root, so the files it writes to the bind-mounted
+      # directories are owned by root. Fix permissions so that subsequent steps
+      # running as the host runner user can read and upload them.
+      - name: Fix permissions on container-written output
+        if: always()
+        run: |
+          sudo chmod -R a+rX asan-logs/ test-results/ || true
+
+      # ── ASan reporting (runs even on failure) ──────────────────────────
+
+      - name: Parse ASan reports and emit annotations
+        if: always()
+        run: |
+          python3 utils/ci/parse_asan_reports.py \
+            --report-dir  asan-logs \
+            --source-root "$(pwd)" \
+            --sarif-out   test-results/asan.sarif \
+            --summary-out test-results/asan_summary.md
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: test-results/asan.sarif
+          # Stable category prevents duplicate findings across re-runs.
+          category: asan
+          # Use the ref/sha resolved above to anchor findings to the real,
+          # browsable PR head commit rather than the synthetic merge commit.
+          ref: ${{ steps.sarif_ref.outputs.ref }}
+          sha: ${{ steps.sarif_ref.outputs.sha }}
+
+      # ── JUnit / functional-test reporting ─────────────────────────────
+
+      - name: Publish JUnit test results
+        if: always()
+        uses: mikepenz/action-junit-report@bccf2e31636835cf0874589931c4116687171386  # v6.4.0
+        with:
+          report_paths: 'test-results/**/*.xml'
+          check_name: 'Unit Test Results (ASan build)'
+          # Do not fail the job here; we do that explicitly below with a
+          # message that distinguishes ASan vs functional failures.
+          fail_on_failure: false
+          annotate_only: false
+          detailed_summary: true
+
+      # ── Combined job summary ───────────────────────────────────────────
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## DAOS Unit Tests — ASan Build"
+            echo ""
+
+            # ── Functional test result section ────────────────────────
+            FUNCTIONAL_FAILURE="${{ steps.run_tests.outputs.functional_failure }}"
+            if [ "${FUNCTIONAL_FAILURE}" = "1" ]; then
+              echo "### ❌ Functional test failures detected"
+              echo ""
+              echo "One or more unit tests failed for non-memory-safety reasons."
+              echo "See the **Unit Test Results** check above for the full list"
+              echo "of failed test cases with their cmocka output."
+            else
+              echo "### ✅ All functional unit tests passed"
+            fi
+            echo ""
+
+            # ── ASan result section ───────────────────────────────────
+            if [ -f test-results/asan_summary.md ]; then
+              cat test-results/asan_summary.md
+            else
+              echo "### ✅ AddressSanitizer — No memory-safety issues detected"
+            fi
+
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Upload all raw artifacts ───────────────────────────────────────
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: test-results-asan
+          # Includes: JUnit XML, ASan per-PID logs, SARIF, summary Markdown,
+          # exit_status, and per-test daos.log files.
+          path: |
+            test-results/
+            asan-logs/
+          retention-days: 14
+
+      # ── Fail the job with a precise, actionable message ───────────────
+      # This step runs last so that all reporting steps above always complete.
+
+      - name: Fail job on test errors
+        if: >
+          always() &&
+          (steps.run_tests.outputs.asan_detected == '1' ||
+           steps.run_tests.outputs.functional_failure == '1')
+        run: |
+          ASAN="${{ steps.run_tests.outputs.asan_detected }}"
+          FUNC="${{ steps.run_tests.outputs.functional_failure }}"
+
+          if [ "${ASAN}" = "1" ] && [ "${FUNC}" = "1" ]; then
+            msg="Both ASan memory-safety issues AND functional test failures"
+            msg="${msg} were detected. See the Security tab for ASan findings"
+            msg="${msg} and the Unit Test Results check for functional failures."
+          elif [ "${ASAN}" = "1" ]; then
+            msg="AddressSanitizer detected memory-safety issues."
+            msg="${msg} See the Security tab (Code scanning) and the"
+            msg="${msg} annotations above for exact file/line locations."
+          else
+            msg="Functional test failures detected (no ASan issues)."
+            msg="${msg} See the Unit Test Results check for the list of"
+            msg="${msg} failing test cases."
+          fi
+          echo "::error::${msg}"
+          exit 1
