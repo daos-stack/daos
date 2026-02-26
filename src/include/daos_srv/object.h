@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2022 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -93,7 +93,5 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 		  uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
 void
 ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
-void
-ds_migrate_abort(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 
 #endif /* __DAOS_SRV_OBJ_H__ */
