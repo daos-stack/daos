@@ -1,6 +1,6 @@
 # Copyright 2018-2024 Intel Corporation
 # Copyright 2025 Google LLC
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Leap based
@@ -122,7 +122,7 @@ COPY --chown=daos_server:daos_server utils/sl utils/sl
 
 # Build third party RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-	export DISTRO="suse.lp155" &&                                           \
+	export DISTRO="leap15" &&                                           \
 	utils/rpms/build_packages.sh deps &&                                    \
 	mkdir -p /home/daos/rpms &&                                             \
 	mv *.rpm /home/daos/rpms;                                               \
