@@ -1002,7 +1002,7 @@ crt_finalize(void)
 		for (i = 0; crt_na_dict[i].nad_str != NULL; i++)
 			if (crt_na_dict[i].nad_str_alloc) {
 				D_FREE(crt_na_dict[i].nad_str);
-				crt_na_dict[i].nad_str = crt_na_dict[i].nad_alt_str;
+				crt_na_dict[i].nad_str       = crt_na_dict[i].nad_alt_str;
 				crt_na_dict[i].nad_str_alloc = false;
 			}
 
