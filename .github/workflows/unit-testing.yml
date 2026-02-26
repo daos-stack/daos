@@ -1,8 +1,15 @@
-name: Unit testing
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
+
+name: Unit Testing
 
 on:
   pull_request:
+  workflow_dispatch:
 
+# Explicitly restrict the default GITHUB_TOKEN to no permissions.
+# All DAOS CI workflows follow this pattern (job-level permissions only),
+# consistent with bullseye-coverage.yml, ci2.yml, landing-builds.yml, etc.
 permissions: {}
 
 concurrency:
@@ -10,25 +17,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  Run_in_docker:
-    if: github.repository == 'daos-stack/daos'
-    runs-on: [self-hosted, docker]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-        with:
-          submodules: 'recursive'
-      - name: Build deps in Docker
-        run: docker build . --file utils/docker/Dockerfile.el.9
-            --build-arg DAOS_BUILD=no
-            --build-arg DEPS_JOBS=50
-      - name: Build daos in Docker
-        run: docker build . --file utils/docker/Dockerfile.el.9
-            --build-arg DEPS_JOBS=50
-            --build-arg DAOS_KEEP_SRC=yes
-            --build-arg DAOS_TARGET_TYPE=debug
-            --build-arg DAOS_JAVA_BUILD=yes
-            --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
-      - name: Run Unit Testing
-        run: docker run gha-amd-${{github.run_id}}-${{github.run_attempt}}
-            ./daos/utils/ci/run_unit_tests_in_gha.sh
+
+  standard:
+    uses: ./.github/workflows/unit-test-template.yml
+    with:
+      test_mode: 'standard'
+      sanitizers_build_arg: ''
+      image_tag: 'build-standard'
+      artifact_name: 'test-results-unit'
+      check_name: 'Unit Testing'
+    permissions:
+      checks: write
+      contents: read
+
+  asan:
+    uses: ./.github/workflows/unit-test-template.yml
+    with:
+      test_mode: 'asan'
+      sanitizers_build_arg: 'address'
+      image_tag: 'build-asan'
+      artifact_name: 'test-results-asan'
+      check_name: 'Unit Test Results (ASan build)'
+    permissions:
+      security-events: write
+      checks: write
+      contents: read
+
+  # TSan is incompatible with ASan (separate build required). Argobots ULT
+  # context switches may produce false race reports; add suppressions to
+  # utils/test_tsan.supp as they are identified.
+  tsan:
+    uses: ./.github/workflows/unit-test-template.yml
+    with:
+      test_mode: 'tsan'
+      sanitizers_build_arg: 'thread'
+      image_tag: 'build-tsan'
+      artifact_name: 'test-results-tsan'
+      check_name: 'Unit Test Results (TSan build)'
+    permissions:
+      security-events: write
+      checks: write
+      contents: read
+
+  # Uses a dedicated build image (SANITIZERS=undefined) so the UBSan runtime
+  # never shares a log_path with ASan, which would corrupt UBSan log files.
+  ubsan:
+    uses: ./.github/workflows/unit-test-template.yml
+    with:
+      test_mode: 'ubsan'
+      sanitizers_build_arg: 'undefined'
+      image_tag: 'build-ubsan'
+      artifact_name: 'test-results-ubsan'
+      check_name: 'Unit Test Results (UBSan build)'
+    permissions:
+      security-events: write
+      checks: write
+      contents: read

@@ -82,8 +82,14 @@ def _base_setup(env):
                     '-Wno-stringop-truncation']
 
         asan_flags = []
+        san_libs = []
+        # Sanitizer runtime libraries that must be linked explicitly.
+        # GCC injects them for pure-C targets but CGO bypasses that path.
+        _sanitizer_libs = {'undefined': '-lubsan', 'thread': '-ltsan'}
         for sanitizer in env['SANITIZERS'].split(','):
             asan_flags.append(f"-fsanitize={sanitizer}")
+            if sanitizer in _sanitizer_libs:
+                san_libs.append(_sanitizer_libs[sanitizer])
 
         env.AppendIfSupported(CCFLAGS=cc_flags + asan_flags)
 
@@ -91,6 +97,14 @@ def _base_setup(env):
             if flag in env["CCFLAGS"]:
                 env.AppendUnique(LINKFLAGS=flag)
                 print(f"Enabling {flag.split('=')[1]} sanitizer for C code")
+
+        for lib in san_libs:
+            env.AppendUnique(LINKFLAGS=lib)
+            # Also inject into CGO_LDFLAGS so that 'go build' (which invokes
+            # the C linker via CGO) includes the sanitizer runtime libraries.
+            # Without this, any Go binary that CGO-links a UBSan-compiled C
+            # archive gets "DSO missing from command line" for libubsan.so.1.
+            env.AppendENVPath('CGO_LDFLAGS', lib, sep=' ')
 
     if env.get('HEAP_PROFILER'):
         env.AppendUnique(LINKFLAGS="-ltcmalloc")
@@ -116,10 +130,8 @@ def _base_setup(env):
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
         env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
-    if env['CMOCKA_FILTER_SUPPORTED']:
-        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '1'})
-    else:
-        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
+    cmocka_val = '1' if env['CMOCKA_FILTER_SUPPORTED'] else '0'
+    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': cmocka_val})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
