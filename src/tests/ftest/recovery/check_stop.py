@@ -12,7 +12,7 @@ from recovery_utils import wait_for_check_complete
 
 
 class DMGCheckStopTest(TestWithServers):
-    """Test stopping checker during repair.
+    """Test stopping checker during repair..
 
     :avocado: recursive
     """
