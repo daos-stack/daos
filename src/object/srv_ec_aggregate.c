@@ -2632,9 +2632,15 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
 
+	if (dss_ult_exiting(cont->sc_ec_agg_req))
+		D_GOTO(out, rc = -DER_SHUTDOWN);
+
 	rc = dss_ult_execute(ec_agg_init_ult, agg_param, NULL, NULL, DSS_XS_SYS, 0, 0);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	if (dss_ult_exiting(cont->sc_ec_agg_req))
+		D_GOTO(out, rc = -DER_SHUTDOWN);
 
 	rc = dsc_pool_open(info->api_pool_uuid,
 			   info->api_poh_uuid, DAOS_PC_RW,
@@ -2644,6 +2650,9 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 		D_ERROR("dsc_pool_open failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	if (dss_ult_exiting(cont->sc_ec_agg_req))
+		D_GOTO(out, rc = -DER_SHUTDOWN);
 
 	rc = dsc_cont_open(info->api_pool_hdl, info->api_cont_uuid,
 			   info->api_coh_uuid, DAOS_COO_RW,
