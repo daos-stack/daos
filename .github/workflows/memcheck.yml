@@ -1,0 +1,43 @@
+name: Memory Usage Checking
+
+on:
+  # pull_request:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'info'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-daos_asan:
+    name: Build DAOS with Address Sanitizer
+    if: github.repository == 'daos-stack/daos'
+    # runs-on: [self-hosted, docker]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          submodules: 'recursive'
+      - name: Build deps in Docker
+        run: docker build . --file utils/docker/Dockerfile.el.9
+            --build-arg COMPILER=clang
+            --build-arg SANITIZERS=address
+            --build-arg DAOS_BUILD=no
+            --build-arg DEPS_JOBS=50
+      - name: Build daos in Docker
+        run: docker build . --file utils/docker/Dockerfile.el.9
+            --build-arg COMPILER=clang
+            --build-arg SANITIZERS=address
+            --build-arg DEPS_JOBS=50
+            --build-arg DAOS_KEEP_SRC=yes
+            --build-arg DAOS_TARGET_TYPE=debug
+            --build-arg DAOS_JAVA_BUILD=no
+            --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}

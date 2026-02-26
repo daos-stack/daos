@@ -153,6 +153,11 @@ def generate(env):
     if 'GOPROXY' not in env['ENV']:
         env['ENV']['GOPROXY'] = 'https://proxy.golang.org,direct'
 
+    # Configure CGO to use the same C compiler as SCons and to use the same flags and include paths.
+    env.d_cgo_bin = 'gcc'
+    if 'COMPILER' in env:
+        env.d_cgo_bin = env['COMPILER']
+
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 
 
