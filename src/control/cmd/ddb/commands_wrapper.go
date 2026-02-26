@@ -37,6 +37,15 @@ func freeString(s *C.char) {
 	C.free(unsafe.Pointer(s))
 }
 
+func SetCString(out **C.char, s string) func() {
+	cstr := C.CString(s)
+	*out = cstr
+
+	return func() {
+		C.free(unsafe.Pointer(cstr))
+	}
+}
+
 // InitDdb initializes the ddb context and returns a closure to finalize it.
 func InitDdb(log *logging.LeveledLogger) (*DdbContext, func(), error) {
 	// Must lock to OS thread because vos init/fini uses ABT init and finalize which must be called on the same thread

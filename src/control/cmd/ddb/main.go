@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
-	"unsafe"
 
 	"github.com/desertbit/columnize"
 	"github.com/desertbit/go-shlex"
@@ -30,11 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 )
-
-/*
- #include <stdlib.h>
-*/
-import "C"
 
 func exitWithError(err error) {
 	cmdName := path.Base(os.Args[0])
@@ -307,13 +301,13 @@ func parseOpts(args []string, opts *cliOptions) error {
 	app := createGrumbleApp(ctx)
 
 	if opts.SysdbPath != "" {
-		ctx.ctx.dc_db_path = C.CString(string(opts.SysdbPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_db_path))
+		cleanup := SetCString(&ctx.ctx.dc_db_path, string(opts.SysdbPath))
+		defer cleanup()
 	}
 
 	if opts.VosPath != "" {
-		ctx.ctx.dc_pool_path = C.CString(string(opts.VosPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
+		cleanup := SetCString(&ctx.ctx.dc_pool_path, string(opts.SysdbPath))
+		defer cleanup()
 
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "open") &&
