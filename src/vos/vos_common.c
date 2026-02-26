@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/smd.h>
 #include "vos_internal.h"
+#include "pmdk_log.h"
 
 struct vos_self_mode {
 	struct vos_tls		*self_tls;
@@ -607,6 +608,12 @@ vos_mod_init(void)
 
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = d_hlc_get();
+
+	rc = pmdk_log_attach();
+	if (rc != 0) {
+		D_ERROR("PMDK log initialization error\n");
+		return rc;
+	}
 
 	rc = vos_pool_settings_init(bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
