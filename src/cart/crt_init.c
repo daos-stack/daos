@@ -313,8 +313,13 @@ data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_provider_is_primary = (is_secondary) ? 0 : 1;
 
 	CRT_ENV_OPT_GET(opt, crt_timeout, CRT_TIMEOUT);
-	crt_gdata.cg_timeout =
-	    (crt_timeout == 0 || crt_timeout > 3600) ? CRT_DEFAULT_TIMEOUT_S : crt_timeout;
+	if (crt_timeout == 0)
+		crt_gdata.cg_timeout = CRT_TIMEOUT_DEFAULT;
+	else if (crt_timeout > CRT_TIMEOUT_MAX) {
+		D_WARN("crt_timeout %u exceeds max %u, using max\n", crt_timeout, CRT_TIMEOUT_MAX);
+		crt_gdata.cg_timeout = CRT_TIMEOUT_MAX;
+	} else
+		crt_gdata.cg_timeout = crt_timeout;
 
 	crt_gdata.cg_swim_ctx_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
 
@@ -748,7 +753,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	/* For PALS-enabled environments, auto-detect svc ID / VNI and use DAOS VNI */
 	if (prov == CRT_PROV_OFI_CXI && auth_key == NULL && getenv("SLINGSHOT_VNIS") != NULL)
-		auth_key = "0:0:2"; /* format is svc_id:vni:vni_idx */
+		auth_key = "0:0:2"; /* format is svc_id:vni:vni_idx, use hard-coded value to tell
+				       mercury to detect svc_id and vni from the env vars and use
+				       the DAOS VNI at index 2 */
 
 	crt_gdata.cg_primary_prov = prov;
 	/*
