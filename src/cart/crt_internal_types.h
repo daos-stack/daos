@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -191,6 +191,8 @@ struct crt_event_cb_priv {
 #define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
 #endif
 
+#define CRT_ENV_STR_MAX_SIZE 1024
+
 /*
  * List of environment variables to read at CaRT library load time.
  * for integer envs use ENV()
@@ -249,13 +251,13 @@ struct crt_event_cb_priv {
 #define ENV(x)                                                                                     \
 	unsigned int _##x;                                                                         \
 	int          _rc_##x;                                                                      \
-	int          _no_print_##x;
+	bool         _no_print_##x;
 
 /* char* env */
 #define ENV_STR(x)                                                                                 \
 	char *_##x;                                                                                \
 	int   _rc_##x;                                                                             \
-	int   _no_print_##x;
+	bool  _no_print_##x;
 
 #define ENV_STR_NO_PRINT(x) ENV_STR(x)
 
@@ -273,6 +275,7 @@ extern struct crt_envs crt_genvs;
 static inline void
 crt_env_fini(void);
 
+/* init cart env structure */
 static inline void
 crt_env_init(void)
 {
@@ -283,19 +286,19 @@ crt_env_init(void)
 #define ENV(x)                                                                                     \
 	do {                                                                                       \
 		crt_genvs._rc_##x       = d_getenv_uint(#x, &crt_genvs._##x);                      \
-		crt_genvs._no_print_##x = 0;                                                       \
+		crt_genvs._no_print_##x = false;                                                   \
 	} while (0);
 
 #define ENV_STR(x)                                                                                 \
 	do {                                                                                       \
 		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
-		crt_genvs._no_print_##x = 0;                                                       \
+		crt_genvs._no_print_##x = false;                                                   \
 	} while (0);
 
 #define ENV_STR_NO_PRINT(x)                                                                        \
 	do {                                                                                       \
 		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
-		crt_genvs._no_print_##x = 1;                                                       \
+		crt_genvs._no_print_##x = true;                                                    \
 	} while (0);
 
 	CRT_ENV_LIST;
@@ -306,6 +309,7 @@ crt_env_init(void)
 	crt_genvs.inited = true;
 }
 
+/* fini cart envs */
 static inline void
 crt_env_fini(void)
 {
@@ -322,7 +326,7 @@ crt_env_fini(void)
 	crt_genvs.inited = false;
 }
 
-/* Returns value if env was present at load time */
+/* Returns value if env was present at load time and is part of CRT_ENV_LIST */
 #define crt_env_get(name, val)                                                                     \
 	do {                                                                                       \
 		D_ASSERT(crt_genvs.inited);                                                        \
@@ -330,6 +334,38 @@ crt_env_fini(void)
 			*val = crt_genvs._##name;                                                  \
 	} while (0)
 
+/* Check envs that contain strings to not exceed CRT_ENV_STR_MAX_SIZE */
+static inline bool
+crt_env_list_valid(void)
+{
+/* Ignore non-string envs in this check */
+#define ENV(x)
+
+/* if string env exceeds CRT_ENV_STR_MAX_SIZE - return false */
+#define ENV_STR(x)                                                                                 \
+	if (crt_genvs._rc_##x == 0 && strlen(crt_genvs._##x) + 1 > CRT_ENV_STR_MAX_SIZE) {         \
+		D_ERROR("env '%s' (value='%s') exceeded max size %d\n", #x, crt_genvs._##x,        \
+			CRT_ENV_STR_MAX_SIZE);                                                     \
+		return false;                                                                      \
+	}
+
+/* if string env exceeds CRT_ENV_STR_MAX_SIZE - return false */
+#define ENV_STR_NO_PRINT(x)                                                                        \
+	if (crt_genvs._rc_##x == 0 && strlen(crt_genvs._##x) + 1 > CRT_ENV_STR_MAX_SIZE) {         \
+		D_ERROR("env '%s' exceeded max size %d\n", #x, CRT_ENV_STR_MAX_SIZE);              \
+		return false;                                                                      \
+	}
+
+	/* expand env list using the above ENV_* definitions */
+	CRT_ENV_LIST;
+	return true;
+
+#undef ENV
+#undef ENV_STR
+#undef ENV_STR_NO_PRINT
+}
+
+/* dump environment variables from the CRT_ENV_LIST */
 static inline void
 crt_env_dump(void)
 {
