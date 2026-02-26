@@ -324,9 +324,9 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
-        booleanParam(name: 'CI_FI_el9_TEST',
+        booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the Fault injection testing on EL 9 test stage')
+                     description: 'Run the Fault injection testing on EL 8 test stage')
         booleanParam(name: 'CI_TEST_EL_RPMs',
                      defaultValue: true,
                      description: 'Run the Test RPMs on EL stage')
@@ -985,14 +985,14 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 9') {
+                stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
@@ -1035,12 +1035,12 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el9.fault-injection/',
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing on EL 9')
+                } // stage('Fault injection testing on EL 8.8')
                 stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
