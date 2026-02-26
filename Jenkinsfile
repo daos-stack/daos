@@ -3,7 +3,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2024 Intel Corporation
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -664,7 +664,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9') {
+                stage('Build on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !params.CI_el9_NOBUILD && !skipStage() }
@@ -677,7 +677,9 @@ pipeline {
                                                                 deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=.6 '
+
                         }
                     }
                     steps {
@@ -714,7 +716,9 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
+                                                ' --build-arg POINT_RELEASE=.5 '
+
                         }
                     }
                     steps {
@@ -750,7 +754,9 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg COMPILER=icc'
+                                                ' --build-arg COMPILER=icc' +
+                                                ' --build-arg POINT_RELEASE=.5 '
+
                         }
                     }
                     steps {
