@@ -635,7 +635,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Feb 25 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.-17
+* Wed Feb 25 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.4-17
 - pmemobj errors and warnings reported via DAOS logging system
 
 * Thu Feb 05 2026 Jerome Soumagne <jerome.soumagne@hpe.com> 2.6.4-16
