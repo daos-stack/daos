@@ -1,0 +1,88 @@
+# We use GCC instead of Clang for AddressSanitizer (ASan) builds due to a
+# runtime conflict between Clang's ASan and UCX's bistro hook mechanism.
+#
+# Both Clang and GCC ASan provide equivalent bug detection capabilities (heap/
+# stack/global buffer overflows, use-after-free, double-free, etc.), so there
+# is no loss in detection quality by using GCC here.
+#
+# Root cause of the Clang incompatibility:
+#   Clang's ASan runtime aggressively intercepts mmap() at a low level. UCX's
+#   bistro mechanism also patches mmap() at runtime by rewriting function
+#   prologues via /proc/self/mem. These two interception layers conflict,
+#   resulting in:
+#     - "glibc detected an invalid stdio handle" (ASan corrupts glibc's stdio
+#       internal structures during initialization)
+#     - UCX bistro failing to install its mmap hook with "No such file or
+#       directory"
+#     - A segmentation fault in UCX as it calls through the corrupted hook
+#   GCC's ASan hooks mmap() more conservatively and does not trigger this
+#   conflict.
+#
+# If you want to experiment with Clang + ASan in the future, the following
+# may resolve the conflict:
+#
+#   Option 1 (recommended): Disable UCX's bistro hook mechanism entirely.
+#     export UCX_BISTRO_HOOKS=no
+#
+#   Option 2: Reduce ASan's interception aggressiveness.
+#     export ASAN_OPTIONS="intercept_intrin=0:detect_odr_violation=0"
+#
+#   Option 3: Ensure Clang's ASan runtime is the first library loaded.
+#     export LD_PRELOAD=$(clang -print-file-name=libclang_rt.asan.so)
+#
+#   Option 4: Combine options 1 and 2 for maximum compatibility.
+#     export UCX_BISTRO_HOOKS=no
+#     export ASAN_OPTIONS="alloc_dealloc_mismatch=0:intercept_intrin=0"
+#
+#   Note: These options have not been verified to fully resolve the issue.
+#   Use at your own risk and validate that ASan detection is still functional
+#   after applying them.
+
+name: Memory Usage Checking
+
+on:
+  # pull_request:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'info'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-daos_asan:
+    name: Build DAOS with Address Sanitizer
+    if: github.repository == 'daos-stack/daos'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          submodules: 'recursive'
+      # TODO Use ./ci/gha_helper.py to set up the git hash and cache keys for the ASan build as
+      # well. Configuration examples can be found in ci2.yml.
+      - name: Build daos in Docker
+        run: docker build .
+            --file utils/docker/Dockerfile.el.9
+            --build-arg COMPILER=gcc
+            --build-arg SANITIZERS=address
+            --build-arg DEPS_JOBS=$(nproc)
+            --build-arg DAOS_KEEP_SRC=yes
+            --build-arg DAOS_TARGET_TYPE=debug
+            --build-arg DAOS_JAVA_BUILD=no
+            --tag build-asan
+      - name: Run Unit Testing
+        run: docker run
+            --privileged
+            --rm --user root
+            --workdir /home/daos
+            --name run-asan-unit_tests
+            build-asan
+            ./daos/utils/ci/run-unit_tests-asan.sh
