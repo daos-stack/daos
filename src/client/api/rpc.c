@@ -192,7 +192,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	rproto->array_size = count;
 	rproto->ep.ep_grp  = sys->sy_group;
 	rproto->base_opc = base_opc;
-	rproto->timeout    = 30;
+	rproto->timeout    = 10;
 
 	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc, ver_array, count, rproto->timeout,
 				      query_cb, rproto, ctx);
