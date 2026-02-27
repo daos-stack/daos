@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/vfs.h>
 
+#include <libpmemobj.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/smd.h>
 #include <vos_internal.h>
@@ -27,9 +28,11 @@
 						anchors, cb, NULL, args, NULL)
 
 int
-dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags)
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
+	     bool write_mode)
 {
 	struct vos_file_parts   path_parts = {0};
+	int                     cow_val;
 	int			rc;
 
 	/*
@@ -47,17 +50,47 @@ dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t
 		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
 	}
 
+	/**
+	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
+	 * to modify the pool. However, PMEMOBJ performs several operations that do modify the pool
+	 * during open and/or close, for example:
+	 * - Internal bookkeeping required to ensure resilience in case of an ADR failure (SDS).
+	 * - ULOG replay, which restores the pool to a consistent state.
+	 * These mechanisms cannot be disabled because they are essential for PMEMOBJ to maintain
+	 * the consistency of the pool.
+	 *
+	 * However, since none of these changes need to be persisted when the pool is opened in
+	 * read‑only mode (write_mode == false), we can work around this by mapping the pool using
+	 * copy‑on‑write. Copy‑on‑write allows pages to be read normally, but when a page is
+	 * modified, a new private copy is allocated. As a result, any changes made to
+	 * the mapped memory do not propagate to the persistent medium.
+	 */
+	if (!write_mode) {
+		cow_val = 1;
+		rc      = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
+		if (rc != 0) {
+			return daos_errno2der(errno);
+		}
+	}
+
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to initialize VOS with path '%s': "DF_RC"\n",
 			path_parts.vf_db_path, DP_RC(rc));
-		return rc;
+		goto exit;
 	}
 
 	rc = vos_pool_open(path, path_parts.vf_pool_uuid, flags, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
+	}
+
+exit:
+	if (!write_mode) {
+		/** Restore the default value. */
+		cow_val = 0;
+		pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
 	}
 
 	return rc;
