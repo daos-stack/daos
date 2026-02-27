@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -192,7 +192,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	rproto->array_size = count;
 	rproto->ep.ep_grp  = sys->sy_group;
 	rproto->base_opc = base_opc;
-	rproto->timeout    = 3;
+	rproto->timeout    = 10;
 
 	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc, ver_array, count, rproto->timeout,
 				      query_cb, rproto, ctx);
