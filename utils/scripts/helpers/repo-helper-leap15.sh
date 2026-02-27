@@ -10,8 +10,8 @@ set -uex
 : "${BASE_DISTRO:=opensuse/leap:15.6}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
-: "${REPOSITORY_NAME:=artifactory}"
 : "${DAOS_LAB_CA_FILE_URL:=}"
+: "${REPOSITORY_NAME:=artifactory}"
 
 # shellcheck disable=SC2120
 disable_repos () {
@@ -88,6 +88,11 @@ if command -v dnf; then
 else
     repos_dir=/etc/zypp/repos.d/
 fi
+echo "BASE_DISTRO: {BASE_DISTRO}"
+echo "MAJOR_VER: {MAJOR_VER}"
+echo "REPOSITORY_NAME: {REPOSITORY_NAME}"
+echo "REPO_FILE_URL: {REPO_FILE_URL}"
+echo "repos_dir: {repos_dir}"
 if [ -n "$REPO_FILE_URL" ]; then
     install_curl
     install_optional_ca
