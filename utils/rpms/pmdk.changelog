@@ -1,4 +1,7 @@
 %changelog
+* Thu Feb 19 2026  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.1.2-2
+- Fix the name of libpmemobj-devel for leap
+
 * Wed Nov 05 2025  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.1.2-1
 - Update to release 2.1.2
 

@@ -24,7 +24,7 @@
 
 Name:          daos
 Version:       2.7.104
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -61,7 +61,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
-BuildRequires: libpmemobj-devel >= 2.1.0
+BuildRequires: libpmemobj-devel = 2.1.2-2
 %endif
 BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
@@ -164,10 +164,10 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.0-1.suse1500
+Requires: libpmemobj1 = 2.1.2-2
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.0-1%{?dist}
+Requires: libpmemobj = 2.1.2-2
 %endif
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig

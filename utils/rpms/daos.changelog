@@ -1,4 +1,7 @@
 %changelog
+* Thu Feb 19 2026  Tomasz Gromadzki <tomasz.gromadzki@intel.com> - 2.7.104-2
+- Update PMDK to release 2.1.2-2 - fix the name of libpmemobj-devel for leap
+
 * Tue Feb 10 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.7.104-1
 - Bump version to 2.7.104
 
