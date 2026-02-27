@@ -513,6 +513,14 @@
    ...
 }
 {
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:hg_dlog_mkcount64
+   ...
+}
+{
    FI leak 9
    Memcheck:Leak
    match-leak-kinds: possible
@@ -528,25 +536,11 @@
    fun:crt_hg_class_init
 }
 {
-   Tcp provider
-   Memcheck:Param
-   sendmsg(msg.msg_iov[1])
-   ...
-   fun:sendmsg
-   fun:ofi_sockapi_sendv_socket
-   fun:ofi_bsock_sendv
-   ...
-   fun:fi_senddata
-   ...
-}
-{
    Tcp provider with ofi rxm
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
    ...
    fun:ofi_bsock_sendv
-   ...
-   fun:fi_tsend
    ...
 }
 {
@@ -554,11 +548,7 @@
    Memcheck:Param
    sendmsg(msg.msg_iov[2])
    ...
-   fun:sendmsg
-   fun:ofi_sockapi_sendv_socket
    fun:ofi_bsock_sendv
-   ...
-   fun:fi_tsend
    ...
 }
 {
@@ -616,18 +606,21 @@
 {
    __tsan_go_atomic64_load
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_load
    fun:racecall
 }
 {
    __tsan_go_atomic64_store
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_store
    fun:racecall
 }
 {
    __tsan_go_atomic64_compare_exchange
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_compare_exchange
    fun:racecall
 }
@@ -644,18 +637,21 @@
 {
    __tsan_write_pc
    Memcheck:Value8
+   ...
    fun:__tsan_write_pc
    fun:racecall
 }
 {
    __tsan_read_pc
    Memcheck:Value8
+   ...
    fun:__tsan_read_pc
    fun:racecall
 }
 {
    tsan::MemoryAccessRange
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan18MemoryAccessRangeTILb0EEEvPNS_11ThreadStateEmmm
    ...
    fun:racecall
@@ -663,6 +659,7 @@
 {
    tsan::MemoryAccessRange
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
    ...
    fun:racecall
@@ -670,6 +667,7 @@
 {
    tsan::TraceRestartMemoryAccess
    Memcheck:Value8
+   ...
    fun:_ZN6__tsan24TraceRestartMemoryAccessEPNS_11ThreadStateEmmmm
    ...
    fun:racecall
@@ -677,12 +675,14 @@
 {
    __tsan_read
    Memcheck:Value8
+   ...
    fun:__tsan_read
    fun:racecall
 }
 {
    __tsan_write
    Memcheck:Value8
+   ...
    fun:__tsan_write
    fun:racecall
 }
@@ -705,18 +705,21 @@
 {
    __tsan_go_atomic32_load
    Memcheck:Addr4
+   ...
    fun:__tsan_go_atomic32_load
    fun:racecall
 }
 {
    __tsan_go_atomic32_store
    Memcheck:Addr4
+   ...
    fun:__tsan_go_atomic32_store
    fun:racecall
 }
 {
    __tsan_go_atomic32_compare_exchange
    Memcheck:Addr4
+   ...
    fun:__tsan_go_atomic32_compare_exchange
    fun:racecall
 }
@@ -768,30 +771,35 @@
 {
    __tsan_go_atomic32_fetch_add
    Memcheck:Addr4
+   ...
    fun:__tsan_go_atomic32_fetch_add
    fun:racecall
 }
 {
    __tsan_go_atomic64_fetch_add
    Memcheck:Addr8
+   ...
    fun:__tsan_go_atomic64_fetch_add
    fun:racecall
 }
 {
-   DAOS-17006 - mercury leak
+   getpwnam_r() leak
    Memcheck:Leak
-   match-leak-kinds: reachable
+   fun:*alloc
+   ...
+   fun:getpwnam_r*
+}
+{
+   getpwuid_r() leak
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:getpwuid_r*
+}
+{
+   localtime() leak
+   Memcheck:Leak
    fun:malloc
-   fun:hg_dlog_mkcount64
-   fun:hg_core_counters_init
-   fun:hg_core_init
-   fun:HG_Core_init_opt2
-   fun:HG_Init_opt2
-   fun:crt_hg_class_init
-   fun:crt_hg_ctx_init
-   fun:crt_context_provider_create
-   fun:daos_eq_lib_init
-   fun:daos_init
-   fun:_cgo_b590e4e2531a_Cfunc_daos_init
-   fun:runtime.asmcgocall.abi0
+   ...
+   fun:__tz_convert
 }

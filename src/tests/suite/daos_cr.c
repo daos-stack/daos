@@ -1350,7 +1350,7 @@ cr_engine_interaction(void **state)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	/* Former connection for the pool has been evicted by checkre. Let's re-connect the pool. */
+	/* Former connection for the pool has been evicted by checker. Let's re-connect the pool. */
 	rc = cr_cont_get_label(state, &pool, &cont, true, &label);
 	assert_rc_equal(rc, 0);
 
@@ -1732,7 +1732,7 @@ cr_stop_engine_interaction(void **state)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	/* Former connection for the pool has been evicted by checkre. Let's re-connect the pool. */
+	/* Former connection for the pool has been evicted by checker. Let's re-connect the pool. */
 	rc = cr_cont_get_label(state, &pool, &cont, true, &label);
 	assert_rc_equal(rc, 0);
 
@@ -3848,6 +3848,202 @@ cr_maintenance_mode(void **state)
 	cr_cleanup(arg, &pool, 1);
 }
 
+/*
+ * 1. Exclude rank 0.
+ * 2. Create pool without inconsistency.
+ * 3. Start checker without options.
+ * 4. Query checker, it should be completed instead of being blocked.
+ * 5. Switch to normal mode and cleanup.
+ */
+static void
+cr_lost_rank0(void **state)
+{
+	test_arg_t            *arg  = *state;
+	struct test_pool       pool = {0};
+	struct daos_check_info dci  = {0};
+	int                    rc;
+
+	print_message("CR29: CR with rank 0 excluded at the beginning\n");
+
+	print_message("CR: excluding the rank 0 ...\n");
+	rc = dmg_system_exclude_rank(dmg_config_file, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_create(state, &pool, false, TCC_NONE);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Reint the rank for subsequent test. */
+	rc = cr_rank_reint(0, true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
+	cr_cleanup(arg, &pool, 1);
+}
+
+/*
+ * 1. Create pool.
+ * 2. Fault injection to generate inconsistent pool label.
+ * 3. Set fail_loc to fail interaction report.
+ * 4. Start checker with option "--failout=on" and "POOL_BAD_LABEL:CIA_INTERACT". Should not crash.
+ * 5. Query checker, instance should failed, pool should be "failed".
+ * 6. Reset fail_loc.
+ * 7. Switch to normal mode to verify the pool label.
+ * 8. Cleanup.
+ */
+static void
+cr_leader_report_fail(void **state)
+{
+	test_arg_t            *arg   = *state;
+	struct test_pool       pool  = {0};
+	struct daos_check_info dci   = {0};
+	char                  *label = NULL;
+	int                    rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("CR30: Leader handle report failure\n");
+
+	rc = cr_pool_create(state, &pool, false, TCC_POOL_BAD_LABEL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	/* Inject fail_loc to fail interaction report. */
+	rc = cr_debug_set_params(arg, DAOS_CHK_REPORT_FAILURE | DAOS_FAIL_ALWAYS);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_FAILOUT | TCSF_RESET, 0, NULL, "POOL_BAD_LABEL:CIA_INTERACT");
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_FAILED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_FAILED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_debug_set_params(arg, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	print_message("CR: getting label for pool " DF_UUID " after check\n",
+		      DP_UUID(pool.pool_uuid));
+	rc = dmg_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
+	assert_rc_equal(rc, 0);
+
+	D_ASSERTF(strcmp(label, pool.label) != 0,
+		  "Pool (" DF_UUID ") label should not be repaired: %s\n", DP_UUID(pool.pool_uuid),
+		  label);
+
+	D_FREE(label);
+	cr_dci_fini(&dci);
+	cr_cleanup(arg, &pool, 1);
+}
+
+/*
+ * 1. Create pool and container.
+ * 2. Fault injection to make container label inconsistent.
+ * 3. Set fail_loc to fail interaction report.
+ * 4. Start checker with option "--failout=on" and "CONT_BAD_LABEL:CIA_INTERACT". Should not crash.
+ * 5. Query checker, instance should failed, pool should be "failed".
+ * 6. Reset fail_loc.
+ * 7. Switch to normal mode to verify the container label.
+ * 8. Cleanup.
+ */
+static void
+cr_engine_report_fail(void **state)
+{
+	test_arg_t            *arg   = *state;
+	struct test_pool       pool  = {0};
+	struct test_cont       cont  = {0};
+	struct daos_check_info dci   = {0};
+	char                  *label = NULL;
+	int                    rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("CR31: Engine handle report failure\n");
+
+	rc = cr_pool_create(state, &pool, true, TCC_NONE);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_cont_create(state, &pool, &cont, 1);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	/* Inject fail_loc to fail interaction report. */
+	rc = cr_debug_set_params(arg, DAOS_CHK_REPORT_FAILURE | DAOS_FAIL_ALWAYS);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_FAILOUT | TCSF_RESET, 0, NULL, "CONT_BAD_LABEL:CIA_INTERACT");
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_FAILED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_FAILED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_debug_set_params(arg, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	/* Former connection for the pool has been evicted by checker. Let's re-connect the pool. */
+	rc = cr_cont_get_label(state, &pool, &cont, true, &label);
+	assert_rc_equal(rc, 0);
+
+	D_ASSERTF(strcmp(label, cont.label) != 0,
+		  "Cont (" DF_UUID ") label should not be repaired: %s\n", DP_UUID(cont.uuid),
+		  label);
+
+	D_FREE(label);
+	cr_dci_fini(&dci);
+	cr_cleanup(arg, &pool, 1);
+}
+
 /* clang-format off */
 static const struct CMUnitTest cr_tests[] = {
 	{ "CR1: start checker for specified pools",
@@ -3906,6 +4102,12 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_handle_fail_pool2, async_disable, test_case_teardown},
 	{ "CR28: maintenance mode after dry-run check",
 	  cr_maintenance_mode, async_disable, test_case_teardown},
+	{ "CR29: CR with rank 0 excluded at the beginning",
+	  cr_lost_rank0, async_disable, test_case_teardown},
+	{ "CR30: Leader handle report failure",
+	  cr_leader_report_fail, async_disable, test_case_teardown},
+	{ "CR31: Engine handle report failure",
+	  cr_engine_report_fail, async_disable, test_case_teardown},
 };
 /* clang-format on */
 

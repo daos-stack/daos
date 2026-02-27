@@ -1,8 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC1113
 # /*
-#  * (C) Copyright 2016-2024 Intel Corporation.
-#  * Copyright 2025 Hewlett Packard Enterprise Development LP
+#  * Copyright 2016-2024 Intel Corporation.
+#  * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -27,7 +27,15 @@ python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
+cat <<EOF > venv/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+    quiet = 1
+EOF
+
 pip install --upgrade pip
+
 pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then
@@ -58,7 +66,7 @@ unset D_PROVIDER
 # Disable D_INTERFACE to allow launch.py to pick the fastest interface
 unset D_INTERFACE
 
-# At Oct2018 Longmond F2F it was decided that per-server logs are preferred
+# At Oct2018 Longmont F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.
 # shellcheck disable=SC2153
@@ -74,7 +82,7 @@ if ${SETUP_ONLY:-false}; then
     exit 0
 fi
 
-# need to increase the number of oopen files (on EL8 at least)
+# need to increase the number of open files (on EL8 at least)
 ulimit -n 4096
 
 # Clean stale job results

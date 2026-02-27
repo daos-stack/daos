@@ -291,7 +291,7 @@ chk_pending_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 			ABT_mutex_unlock(cpr->cpr_mutex);
 		} else {
 			ABT_mutex_unlock(cpr->cpr_mutex);
-			chk_pending_destroy(cpr);
+			chk_pending_destroy(NULL, cpr);
 		}
 	}
 
@@ -931,6 +931,27 @@ chk_pool_shard_cleanup(struct chk_instance *ins)
 }
 
 int
+chk_pending_lookup(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr)
+{
+	d_iov_t kiov;
+	d_iov_t riov;
+	int     rc;
+
+	d_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, &seq, sizeof(seq));
+
+	ABT_rwlock_rdlock(ins->ci_abt_lock);
+	rc = dbtree_lookup(ins->ci_pending_hdl, &kiov, &riov);
+	ABT_rwlock_unlock(ins->ci_abt_lock);
+	if (rc == 0)
+		*cpr = (struct chk_pending_rec *)riov.iov_buf;
+	else
+		*cpr = NULL;
+
+	return rc;
+}
+
+int
 chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
 		uint64_t seq, uint32_t rank, uint32_t cla, uint32_t option_nr, uint32_t *options,
 		struct chk_pending_rec **cpr)
@@ -985,12 +1006,14 @@ chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec *
 	d_iov_set(&kiov, &seq, sizeof(seq));
 
 	ABT_rwlock_wrlock(ins->ci_abt_lock);
-	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
+	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, cpr == NULL ? NULL : &riov);
 	ABT_rwlock_unlock(ins->ci_abt_lock);
-	if (rc == 0)
-		*cpr = (struct chk_pending_rec *)riov.iov_buf;
-	else
-		*cpr = NULL;
+	if (cpr != NULL) {
+		if (rc == 0)
+			*cpr = (struct chk_pending_rec *)riov.iov_buf;
+		else
+			*cpr = NULL;
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
 		 "Del pending record with gen "DF_X64", seq "DF_X64": "DF_RC"\n",
@@ -1028,27 +1051,11 @@ chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr)
 			ABT_mutex_unlock(cpr->cpr_mutex);
 		} else {
 			ABT_mutex_unlock(cpr->cpr_mutex);
-			chk_pending_destroy(cpr);
+			chk_pending_destroy(ins, cpr);
 		}
 	}
 
 	return rc;
-}
-
-void
-chk_pending_destroy(struct chk_pending_rec *cpr)
-{
-	D_ASSERT(d_list_empty(&cpr->cpr_pool_link));
-	D_ASSERT(d_list_empty(&cpr->cpr_rank_link));
-	D_ASSERT(d_list_empty(&cpr->cpr_ins_link));
-
-	if (cpr->cpr_cond != ABT_COND_NULL)
-		ABT_cond_free(&cpr->cpr_cond);
-
-	if (cpr->cpr_mutex != ABT_MUTEX_NULL)
-		ABT_mutex_free(&cpr->cpr_mutex);
-
-	D_FREE(cpr);
 }
 
 int
@@ -1073,8 +1080,7 @@ chk_policy_refresh(uint32_t policy_nr, struct chk_policy *policies, struct chk_p
 }
 
 int
-chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
-		 uint32_t policy_nr, struct chk_policy *policies,
+chk_prop_prepare(d_rank_t leader, uint32_t flags, uint32_t policy_nr, struct chk_policy *policies,
 		 d_rank_list_t *ranks, struct chk_property *prop)
 {
 	int rc = 0;
@@ -1086,11 +1092,8 @@ chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
 		prop->cp_flags &= ~CHK__CHECK_FLAG__CF_FAILOUT;
 	if (flags & CHK__CHECK_FLAG__CF_NO_AUTO)
 		prop->cp_flags &= ~CHK__CHECK_FLAG__CF_AUTO;
-	prop->cp_flags |= flags & ~(CHK__CHECK_FLAG__CF_RESET |
-				    CHK__CHECK_FLAG__CF_ORPHAN_POOL |
-				    CHK__CHECK_FLAG__CF_NO_FAILOUT |
-				    CHK__CHECK_FLAG__CF_NO_AUTO);
-	prop->cp_phase = phase;
+	prop->cp_flags |= flags & ~(CHK__CHECK_FLAG__CF_RESET | CHK__CHECK_FLAG__CF_ORPHAN_POOL |
+				    CHK__CHECK_FLAG__CF_NO_FAILOUT | CHK__CHECK_FLAG__CF_NO_AUTO);
 	if (ranks != NULL)
 		prop->cp_rank_nr = ranks->rl_nr;
 
@@ -1240,12 +1243,7 @@ chk_ins_cleanup(struct chk_instance *ins)
 	chk_stop_sched(ins);
 	ins->ci_inited = 0;
 
-	chk_iv_ns_cleanup(&ins->ci_iv_ns);
-
-	if (ins->ci_iv_group != NULL) {
-		crt_group_secondary_destroy(ins->ci_iv_group);
-		ins->ci_iv_group = NULL;
-	}
+	chk_iv_ns_destroy(ins);
 }
 
 int
@@ -1260,7 +1258,8 @@ chk_ins_init(struct chk_instance **p_ins)
 	if (ins == NULL)
 		D_GOTO(out_init, rc = -DER_NOMEM);
 
-	ins->ci_sched = ABT_THREAD_NULL;
+	ins->ci_sched         = ABT_THREAD_NULL;
+	ins->ci_dead_rank_ult = ABT_THREAD_NULL;
 
 	ins->ci_rank_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&ins->ci_rank_list);
@@ -1331,6 +1330,8 @@ chk_ins_fini(struct chk_instance **p_ins)
 
 	D_ASSERT(d_list_empty(&ins->ci_interaction_filter_list));
 	D_ASSERT(d_list_empty(&ins->ci_pool_shutdown_list));
+
+	D_ASSERT(ins->ci_dead_rank_ult == ABT_THREAD_NULL);
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);

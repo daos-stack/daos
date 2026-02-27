@@ -4,12 +4,14 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
 #include <wordexp.h>
 #include <getopt.h>
-#include <gurt/common.h>
+
+#include <daos_errno.h>
 #include <daos_srv/bio.h>
-#include "daos_errno.h"
+
 #include "ddb_common.h"
 #include "ddb_parse.h"
 
@@ -452,8 +454,12 @@ key_parse_str(const char *input, daos_key_t *key)
 			key_len++;
 		}
 	}
-	if (size == 0)
+	if (size == 0) {
+		if (key_len == 0) {
+			return -DER_INVAL;
+		}
 		size = key_len;
+	}
 	if (size < key_len)
 		return -DER_INVAL;
 

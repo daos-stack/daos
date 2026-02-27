@@ -56,11 +56,11 @@ static unsigned int bio_chk_init_pct;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
 /* Whether SPDK inited */
-bool bio_spdk_inited;
-/* Whether VMD is enabled */
-bool                bio_vmd_enabled;
+bool                bio_spdk_inited;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
+/* SPDK NVMe power management value, use bits 0-4 as per NVMe spec */
+unsigned int        bio_spdk_power_mgmt_val = NVME_POWER_MGMT_UNINIT;
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
@@ -109,7 +109,6 @@ bio_spdk_conf_read(struct spdk_env_opts *opts)
 		return rc;
 	}
 	nvme_glb.bd_nvme_roles = roles;
-	bio_vmd_enabled        = vmd_enabled && (nvme_glb.bd_bdev_class == BDEV_CLASS_NVME);
 
 	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 	if (rc != 0) {
@@ -152,15 +151,44 @@ static int
 bio_spdk_env_init(void)
 {
 	struct spdk_env_opts opts;
+	const char          *dpdk_opts;
+	unsigned int         spdk_level = DAOS_SPDK_LOG_DEFAULT;
+	unsigned int         dpdk_level = DAOS_DPDK_LOG_DEFAULT;
 	int                  rc;
 
-	/* Only print error and more severe to stderr. */
-	spdk_log_set_print_level(SPDK_LOG_ERROR);
+	/* Check for SPDK log level from environment */
+	d_getenv_uint("DAOS_SPDK_LOG_LEVEL", &spdk_level);
+	if (spdk_level > DAOS_SPDK_LOG_MAX) {
+		D_WARN("Invalid DAOS_DPDK_LOG_LEVEL=%u, using default (%u)\n", dpdk_level,
+		       DAOS_SPDK_LOG_DEFAULT);
+		spdk_level = DAOS_SPDK_LOG_DEFAULT;
+	}
+
+	/* Check for DPDK log level from environment */
+	d_getenv_uint("DAOS_DPDK_LOG_LEVEL", &dpdk_level);
+	if (dpdk_level < DAOS_DPDK_LOG_MIN || dpdk_level > DAOS_DPDK_LOG_MAX) {
+		D_WARN("Invalid DAOS_DPDK_LOG_LEVEL=%u, using default (%u)\n", dpdk_level,
+		       DAOS_DPDK_LOG_DEFAULT);
+		dpdk_level = DAOS_DPDK_LOG_DEFAULT;
+	}
+
+	D_INFO("SPDK log level: %u, DPDK log level: %u\n", spdk_level, dpdk_level);
+
+	/* Set SPDK log print level to configured value */
+	spdk_log_set_print_level(spdk_level);
+
+	/* Build DPDK options with specified log level for all DPDK log facilities */
+	dpdk_opts = dpdk_cli_build_opts(dpdk_level, dpdk_level);
+	if (dpdk_opts == NULL) {
+		D_ERROR("Failed to build DPDK options\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	opts.opts_size = sizeof(opts);
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
-	opts.env_context = (char *)dpdk_cli_override_opts;
+	opts.env_context = (char *)dpdk_opts;
 
 	/**
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
@@ -271,6 +299,11 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
+	d_getenv_uint("DAOS_NVME_POWER_MGMT", &bio_spdk_power_mgmt_val);
+	if (bio_spdk_power_mgmt_val != NVME_POWER_MGMT_UNINIT)
+		D_INFO("NVMe power management setting to be applied is %u\n",
+		       bio_spdk_power_mgmt_val);
+
 	d_getenv_uint("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
@@ -301,7 +334,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	}
 
 	if (nvme_conf && strlen(nvme_conf) > 0) {
-		fd = open(nvme_conf, O_RDONLY, 0600);
+		fd = open(nvme_conf, O_RDONLY);
 		if (fd < 0)
 			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
 			       nvme_conf, DP_RC(daos_errno2der(errno)));
@@ -943,8 +976,8 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	 * Hold the SPDK bdev by an open descriptor, otherwise, the bdev
 	 * could be deconstructed by SPDK on device hot remove.
 	 */
-	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
-				d_bdev, &d_bdev->bb_desc);
+	rc =
+	    spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb, d_bdev, &d_bdev->bb_desc);
 	if (rc != 0) {
 		D_ERROR("Failed to hold bdev %s, %d\n", d_bdev->bb_name, rc);
 		rc = daos_errno2der(-rc);
@@ -952,6 +985,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	}
 
 	D_ASSERT(d_bdev->bb_desc != NULL);
+
 	/* Try to load blobstore without specifying 'bstype' first */
 	bs = load_blobstore(ctxt, d_bdev->bb_name, NULL, false, false,
 			    NULL, NULL);
@@ -1053,6 +1087,12 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 		bdev_name = spdk_bdev_get_name(bdev);
 
+		/* Apply NVMe power management settings */
+		rc = bio_set_power_mgmt(ctxt, bdev_name);
+		if (rc != 0 && rc != -DER_NOTSUPPORTED)
+			D_WARN("Failed to set power management for device %s: " DF_RC "\n",
+			       bdev_name, DP_RC(rc));
+
 		rc = bdev_name2roles(bdev_name);
 		if (rc < 0) {
 			D_ERROR("Failed to get role from bdev name '%s', "DF_RC"\n", bdev_name,
@@ -1075,10 +1115,10 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		/* A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible */
+		/* Clear any pre-existing VMD-LED state */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-		if ((rc != 0) && (rc != -DER_NOTSUPPORTED)) {
+		if (rc != 0) {
 			DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
 				 DP_UUID(d_bdev->bb_uuid));
 			return rc;
@@ -2024,22 +2064,15 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
-	if (!bio_vmd_enabled)
-		return;
-
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			/**
-			 * LED will be reset to faulty or normal state based on SSDs bio_bdevs.
-			 * A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible.
-			 */
+			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs. */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0) {
-				if (rc != -DER_NOTSUPPORTED)
-					DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
-						 DP_UUID(d_bdev->bb_uuid));
+				DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+					 DP_UUID(d_bdev->bb_uuid));
 				continue;
 			}
 

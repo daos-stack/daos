@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1914,7 +1914,7 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = ds_pool_thread_collective(
 	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
-	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, rc,
+	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG, rc,
 		  DF_CONT ": refresh ec_agg_eph " DF_X64 ", "
 			  "stable_eph " DF_X64,
 		  DP_CONT(pool_uuid, cont_uuid), ec_agg_eph, stable_eph);
@@ -2266,7 +2266,8 @@ cont_svc_eph_track_leader_start(struct cont_svc *svc)
 	D_ASSERT(svc->cs_cont_ephs_leader_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-	svc->cs_cont_ephs_leader_req = sched_create_ult(&attr, cont_track_eph_leader_ult, svc, 0);
+	svc->cs_cont_ephs_leader_req =
+	    sched_create_ult(&attr, cont_track_eph_leader_ult, svc, DSS_DEEP_STACK_SZ);
 	if (svc->cs_cont_ephs_leader_req == NULL) {
 		D_ERROR(DF_UUID" Failed to create EC leader eph ULT.\n",
 			DP_UUID(svc->cs_pool_uuid));
