@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -2072,6 +2074,83 @@ func TestControl_SystemSelfHealEval(t *testing.T) {
 			}
 
 			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+		})
+	}
+}
+
+func TestControl_SystemSelfHealEval_RetryableErrors(t *testing.T) {
+	for name, testErr := range map[string]error{
+		"system unavailable":     system.ErrRaftUnavail,
+		"leader step-up":         system.ErrLeaderStepUpInProgress,
+		"connection closed":      FaultConnectionClosed(""),
+		"connection refused":     FaultConnectionRefused(""),
+		"not leader":             &system.ErrNotLeader{LeaderHint: "host1", Replicas: []string{"host2"}},
+		"not replica":            &system.ErrNotReplica{Replicas: []string{"host1", "host2"}},
+		"data plane not started": &fault.Fault{Code: code.ServerDataPlaneNotStarted},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", testErr, nil),
+					MockMSResponse("", nil, &mgmtpb.DaosResp{}),
+				},
+			})
+
+			gotResp, gotErr := SystemSelfHealEval(test.Context(t), client, &SystemSelfHealEvalReq{})
+			if gotErr != nil {
+				t.Fatalf("unexpected error: %v", gotErr)
+			}
+
+			expResp := new(SystemSelfHealEvalResp)
+			if diff := cmp.Diff(expResp, gotResp, cmpopts.IgnoreUnexported(SystemSelfHealEvalResp{})); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_SystemSelfHealEval_NonRetryableErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		testErr error
+		expErr  error
+	}{
+		"system uninitialized": {
+			testErr: system.ErrUninitialized,
+			expErr:  system.ErrUninitialized,
+		},
+		"generic error": {
+			testErr: errors.New("something went wrong"),
+			expErr:  errors.New("something went wrong"),
+		},
+		"connection bad host": {
+			testErr: FaultConnectionBadHost("badhost"),
+			expErr:  FaultConnectionBadHost("badhost"),
+		},
+		"connection no route": {
+			testErr: FaultConnectionNoRoute("10.0.0.1"),
+			expErr:  FaultConnectionNoRoute("10.0.0.1"),
+		},
+		"member exists": {
+			testErr: system.ErrRankExists(1),
+			expErr:  system.ErrRankExists(1),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", tc.testErr, nil),
+					MockMSResponse("", nil, &mgmtpb.DaosResp{}),
+				},
+			})
+
+			_, gotErr := SystemSelfHealEval(test.Context(t), client, &SystemSelfHealEvalReq{})
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
