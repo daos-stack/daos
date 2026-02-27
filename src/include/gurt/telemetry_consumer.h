@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,8 +75,9 @@ void d_tm_print_timer_snapshot(struct timespec *tms, char *name, int tm_type,
 void d_tm_print_duration(struct timespec *tms, struct d_tm_stats_t *stats,
 			 char *name, int tm_type, int format, int opt_fields,
 			 FILE *stream);
-void d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, char *name,
-		      int format, char *units, int opt_fields, FILE *stream);
+void
+      d_tm_print_gauge(uint64_t val, struct d_tm_stats_t *stats, struct d_tm_histogram_t *histogram,
+		       char *name, int format, char *units, int opt_fields, FILE *stream);
 void d_tm_print_metadata(char *desc, char *units, int format, FILE *stream);
 int d_tm_clock_id(int clk_id);
 char *d_tm_clock_string(int clk_id);
