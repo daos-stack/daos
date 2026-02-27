@@ -469,6 +469,13 @@ def scriptedSummaryStage(Map kwargs = [:]) {
     }
 }
 
+String daosVersionExtension() {
+    if (bullseyeReport()) {
+        return '.bullseye'
+    }
+    return ''
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -1209,8 +1216,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: getFunctionalPackages(
                                     next_version(),
-                                    'daos{,-{client,tests,server,serialize,tests-internal}',
-                                    getAdditionalPackages(false, bullseyeReport())),
+                                    getAdditionalPackages(false, bullseyeReport()),
+                                    daosVersionExtension()),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1233,9 +1240,7 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: getFunctionalPackages(
-                                    next_version(),
-                                    'daos{,-{client,tests,server,serialize,tests-internal}',
-                                    getAdditionalPackages(false, false)),
+                                    next_version(), getAdditionalPackages(false, false)),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1258,9 +1263,7 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: getFunctionalPackages(
-                                    next_version(),
-                                    'daos{,-{client,tests,server,serialize,tests-internal}',
-                                    getAdditionalPackages(false, false)),
+                                    next_version(), getAdditionalPackages(false, false)),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -1284,9 +1287,7 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: getFunctionalPackages(
-                                    next_version(),
-                                    'daos{,-{client,tests,server,serialize,tests-internal}',
-                                    getAdditionalPackages(false, false)),
+                                    next_version(), getAdditionalPackages(false, false)),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1462,8 +1463,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                'daos{,-{client,tests,server,serialize,tests-internal}',
-                                getAdditionalPackages(false, bullseyeReport())),
+                                getAdditionalPackages(false, bullseyeReport()),
+                                daosVersionExtension()),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1477,8 +1478,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                'daos{,-{client,tests,server,serialize,tests-internal}',
-                                getAdditionalPackages(false, bullseyeReport())),
+                                getAdditionalPackages(false, bullseyeReport()),
+                                daosVersionExtension()),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
@@ -1492,8 +1493,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                'daos{,-{client,tests,server,serialize,tests-internal}',
-                                getAdditionalPackages(false, bullseyeReport())),
+                                getAdditionalPackages(false, bullseyeReport()),
+                                daosVersionExtension()),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1508,8 +1509,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                'daos{,-{client,tests,server,serialize,tests-internal}',
-                                getAdditionalPackages(false, bullseyeReport())),
+                                getAdditionalPackages(false, bullseyeReport()),
+                                daosVersionExtension()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1525,8 +1526,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                'daos{,-{client,tests,server,serialize,tests-internal}',
-                                getAdditionalPackages(false, bullseyeReport())),
+                                getAdditionalPackages(false, bullseyeReport()),
+                                daosVersionExtension()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1542,8 +1543,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                'daos{,-{client,tests,server,serialize,tests-internal}',
-                                getAdditionalPackages(true, bullseyeReport())),
+                                getAdditionalPackages(false, bullseyeReport()),
+                                daosVersionExtension()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1558,8 +1559,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                'daos{,-{client,tests,server,serialize,tests-internal}',
-                                getAdditionalPackages(false, bullseyeReport())),
+                                getAdditionalPackages(false, bullseyeReport()),
+                                daosVersionExtension()),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1573,8 +1574,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                'daos{,-{client,tests,server,serialize,tests-internal}',
-                                getAdditionalPackages(false, bullseyeReport())),
+                                getAdditionalPackages(false, bullseyeReport()),
+                                daosVersionExtension()),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
