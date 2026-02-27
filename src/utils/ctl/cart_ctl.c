@@ -163,7 +163,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 		return;
 	}
 
-	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+	/* D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str); */
 
 	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
@@ -201,12 +201,14 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 	*num_ranks = num_ranks_l;
 }
 
+#define FI_ATTR_MAX_TOKENS 7
+
 static void
 ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 {
-	char *token;
-	char *endptr;
 	char *saveptr;
+	char *tokens[FI_ATTR_MAX_TOKENS];
+	int   idx, token_cnt = 0;
 
 	D_ASSERTF(arg_str != NULL, "arg_str is NULL.\n");
 	D_ASSERTF(fi_attr_in != NULL, "fi_attr_in is NULL.\n");
@@ -216,51 +218,36 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 
 	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
 
-	token = strtok_r(arg_str, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
+	tokens[token_cnt] = strtok_r(arg_str, ",", &saveptr);
+	do {
+		tokens[++token_cnt] = strtok_r(NULL, ",", &saveptr);
+	} while (tokens[token_cnt] != NULL && token_cnt < FI_ATTR_MAX_TOKENS);
 
-	fi_attr_in->fa_fault_id = strtoull(token, &endptr, 10);
+	if (token_cnt < FI_ATTR_MAX_TOKENS - 2 || token_cnt > FI_ATTR_MAX_TOKENS)
+		goto error_out;
 
-	/* get max_faults */
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
-
-	fi_attr_in->fa_max_faults = strtoull(token, &endptr, 10);
-
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
-
-	fi_attr_in->fa_probability_x = strtoull(token, &endptr, 10);
-
-	/* Workaround for DAOS-13900, make probability be a percentage */
-	if (fi_attr_in->fa_probability_x != 0)
+	fi_attr_in->fa_fault_id      = strtoull(tokens[0], NULL, 10);
+	fi_attr_in->fa_max_faults    = strtoull(tokens[1], NULL, 10);
+	fi_attr_in->fa_probability_x = strtoull(tokens[2], NULL, 10);
+	if (token_cnt >= FI_ATTR_MAX_TOKENS - 1) {
 		fi_attr_in->fa_probability_y = 1000;
-
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
-
-	fi_attr_in->fa_err_code = strtoull(token, &endptr, 10);
-
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
-
-	fi_attr_in->fa_interval = strtoull(token, &endptr, 10);
-
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		return;
-
-	fi_attr_in->fa_argument = token;
+		idx = 3;
+	} else {
+		fi_attr_in->fa_probability_y = strtoull(tokens[3], NULL, 10);
+		if (fi_attr_in->fa_probability_y == 0)
+			fi_attr_in->fa_probability_y = 1000;
+		idx = 4;
+	}
+	fi_attr_in->fa_err_code = strtoull(tokens[idx], NULL, 10);
+	fi_attr_in->fa_interval = strtoull(tokens[idx+1], NULL, 10);
+	if (idx+2 < token_cnt)
+		fi_attr_in->fa_argument = tokens[idx+2];
 	return;
 
 error_out:
-	error_exit("Error: --attr has wrong number of arguments, should "
-		   "be \t--attr fault_id,max_faults,probability,err_code\n");
+	error_exit("Error: --attr has wrong number/value of arguments,"
+		   " should be \t --attr fault_id,max_faults,probability_x,"
+		   "[probability_y](!=0),err_code,argument\n");
 	return;
 }
 
