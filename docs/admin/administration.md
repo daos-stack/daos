@@ -1025,9 +1025,10 @@ An examples workflow would be:
 - Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
 
 !!! note
-    `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. This
-    special case reduces a chance that a duplicate rank entry is introduced inadvertently because
-    the rank to be replaced is in the `AdminExcluded` state.
+    `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. The
+    subsequent state of the rank will then no longer be `AdminExcluded`. This special case reduces
+    a chance that a duplicate rank entry is introduced inadvertently because the rank to be replaced
+    is in the `AdminExcluded` state and so is recreated rather than replaced.
 
 ### System Erase
 
