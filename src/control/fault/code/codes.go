@@ -86,6 +86,7 @@ const (
 	ScmRamdiskLowMem
 	ScmRamdiskBadSize
 	ScmConfigTierMissing
+	ScmKernelConfigUnavailable
 )
 
 // Bdev fault codes

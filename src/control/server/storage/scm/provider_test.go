@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -527,7 +527,6 @@ func TestProvider_Format(t *testing.T) {
 				Formatted:  true,
 				Mounted:    true,
 			},
-			expMountOpts: "mpol=prefer:0,size=1g,huge=always",
 		},
 		"ramdisk: hugepages disabled": {
 			request: &storage.ScmFormatRequest{
@@ -542,7 +541,6 @@ func TestProvider_Format(t *testing.T) {
 				Formatted:  true,
 				Mounted:    true,
 			},
-			expMountOpts: "mpol=prefer:0,size=1g",
 		},
 		"ramdisk: not mounted; mkdir fails": {
 			request: &storage.ScmFormatRequest{
@@ -892,6 +890,207 @@ func TestProvider_Format(t *testing.T) {
 						t.Fatalf("unexpected mount options (-want, +got):\n%s\n", diff)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestProvider_doMountRamdisk(t *testing.T) {
+	for name, tc := range map[string]struct {
+		target       string
+		params       *storage.RamdiskParams
+		kernelCfg    map[string]string
+		expMountOpts string
+		expErr       error
+	}{
+		"nil params": {
+			target: "/mnt/daos",
+			expErr: FaultFormatMissingParam,
+		},
+		"NUMA and THP enabled": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     1,
+				NUMANode: 0,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA":                 "y",
+				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
+			},
+			expMountOpts: "mpol=prefer:0,size=1g,huge=always",
+		},
+		"NUMA and THP enabled; different node": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     2,
+				NUMANode: 1,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA":                 "y",
+				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
+			},
+			expMountOpts: "mpol=prefer:1,size=2g,huge=always",
+		},
+		"NUMA disabled; THP enabled": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     1,
+				NUMANode: 0,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
+			},
+			expMountOpts: "size=1g,huge=always",
+		},
+		"NUMA enabled; THP disabled": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     1,
+				NUMANode: 0,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA": "y",
+			},
+			expMountOpts: "mpol=prefer:0,size=1g",
+		},
+		"NUMA enabled; hugepages disabled in params": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:             1,
+				NUMANode:         0,
+				DisableHugepages: true,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA":                 "y",
+				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
+			},
+			expMountOpts: "mpol=prefer:0,size=1g",
+		},
+		"NUMA disabled; hugepages disabled in params": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:             1,
+				NUMANode:         0,
+				DisableHugepages: true,
+			},
+			kernelCfg:    map[string]string{},
+			expMountOpts: "size=1g",
+		},
+		"kernel config nil": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:     1,
+				NUMANode: 0,
+			},
+			kernelCfg:    nil,
+			expMountOpts: "size=1g",
+		},
+		"zero size": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				NUMANode: 0,
+			},
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA":                 "y",
+				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
+			},
+			expMountOpts: "mpol=prefer:0,huge=always",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mmc := &storage.MockMountProviderConfig{}
+			p := NewMockProvider(log, nil, nil)
+			p.mounter = storage.NewMockMountProvider(mmc)
+
+			_, err := p.doMountRamdisk(tc.target, tc.params, tc.kernelCfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			mmp := p.mounter.(*storage.MockMountProvider)
+			gotOpts, _ := mmp.GetMountOpts(tc.target)
+			if diff := cmp.Diff(tc.expMountOpts, gotOpts); diff != "" {
+				t.Fatalf("unexpected mount options (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestProvider_mountRamdisk(t *testing.T) {
+	testKernelConfig := "CONFIG_NUMA=y\nCONFIG_TRANSPARENT_HUGEPAGE=y\n"
+
+	for name, tc := range map[string]struct {
+		kernelCfg        map[string]string // pre-populated on provider
+		kernelConfigPath string            // override path passed via request
+		configContent    string            // content written to override file
+		badPath          bool              // set override path to nonexistent file
+		expErr           error
+		expMountOpts     string
+	}{
+		"kernel config cached at init": {
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA":                 "y",
+				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
+			},
+			expMountOpts: "mpol=prefer:0,size=1g,huge=always",
+		},
+		"no kernel config; no override path": {
+			expErr: FaultKernelConfigUnavailable,
+		},
+		"no kernel config; override path resolves": {
+			configContent: testKernelConfig,
+			expMountOpts:  "mpol=prefer:0,size=1g,huge=always",
+		},
+		"no kernel config; override path not found": {
+			badPath: true,
+			expErr:  errors.New("parsing kernel config"),
+		},
+		"kernel config cached; override path ignored": {
+			kernelCfg: map[string]string{
+				"CONFIG_NUMA": "y",
+			},
+			configContent: testKernelConfig,
+			// THP comes from cached config (missing), not override file
+			expMountOpts: "mpol=prefer:0,size=1g",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mmc := &storage.MockMountProviderConfig{}
+			p := NewMockProvider(log, nil, nil)
+			p.mounter = storage.NewMockMountProvider(mmc)
+			p.kernelCfg = tc.kernelCfg
+
+			kernelConfigPath := tc.kernelConfigPath
+			if tc.configContent != "" {
+				tmpDir, cleanup := test.CreateTestDir(t)
+				defer cleanup()
+				kernelConfigPath = test.CreateTestFile(t, tmpDir, tc.configContent)
+			} else if tc.badPath {
+				kernelConfigPath = "/nonexistent/kernel/config"
+			}
+
+			params := &storage.RamdiskParams{
+				Size:     1,
+				NUMANode: 0,
+			}
+
+			_, err := p.mountRamdisk("/mnt/daos", params, kernelConfigPath)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			mmp := p.mounter.(*storage.MockMountProvider)
+			gotOpts, _ := mmp.GetMountOpts("/mnt/daos")
+			if diff := cmp.Diff(tc.expMountOpts, gotOpts); diff != "" {
+				t.Fatalf("unexpected mount options (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
