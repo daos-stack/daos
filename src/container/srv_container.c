@@ -635,6 +635,22 @@ cont_create_existence_check(struct rdb_tx *tx, struct cont_svc *svc, uuid_t puui
 	return -DER_INVAL;
 }
 
+static uint64_t
+snap_csum_chunk_size_to_next_pow2(uint64_t csum_chunk_sz_in)
+{
+	int nlz;
+
+	if (csum_chunk_sz_in == 0)
+		return DAOS_PROP_CO_CSUM_CHUNK_SIZE_DEFAULT;
+	else if (csum_chunk_sz_in == 1)
+		return 1;
+	else if (csum_chunk_sz_in >= (1ULL << 31))
+		return 1ULL << 31; /* 2GiB max according to daos_prop_is_valid() */
+
+	nlz = __builtin_clzll(csum_chunk_sz_in - 1);
+	return 1ULL << (64 - nlz);
+}
+
 /* copy \a prop to \a prop_def (duplicated default prop) for cont_create */
 static int
 cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
@@ -671,7 +687,6 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 		case DAOS_PROP_CO_LAYOUT_VER:
 		case DAOS_PROP_CO_CSUM:
-		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 		case DAOS_PROP_CO_REDUN_LVL:
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
@@ -686,6 +701,14 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_PERF_DOMAIN:
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			entry_def->dpe_val = entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+			entry_def->dpe_val = snap_csum_chunk_size_to_next_pow2(entry->dpe_val);
+			if (entry_def->dpe_val != entry->dpe_val) {
+				D_DEBUG(DB_MD,
+					"csum_chunk_size adjusted from " DF_U64 " to " DF_U64 "\n",
+					entry->dpe_val, entry_def->dpe_val);
+			}
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			inherit_redunc_fac = false;
@@ -4028,6 +4051,18 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont, uint64_t se
 	if (entry) {
 		D_ERROR("container object version could be not set\n");
 		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
+	if (entry) {
+		uint64_t csum_chunk_sz_in = entry->dpe_val;
+
+		entry->dpe_val = snap_csum_chunk_size_to_next_pow2(csum_chunk_sz_in);
+		if (entry->dpe_val != csum_chunk_sz_in)
+			D_DEBUG(
+			    DB_MD,
+			    DF_CONT ": csum_chunk_size adjusted from " DF_U64 " to " DF_U64 "\n",
+			    DP_CONT(pool->sp_uuid, cont->c_uuid), csum_chunk_sz_in, entry->dpe_val);
 	}
 
 	if (!daos_prop_valid(prop_in, false, true))

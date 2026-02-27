@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -454,8 +454,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 			/** Chunk size is encoded on 32 bits */
 			val = prop->dpp_entries[i].dpe_val;
-			if (val >= (1ULL << 32)) {
-				D_ERROR("invalid chunk size " DF_U64 ". Should be < 2GiB\n", val);
+			if (val > (1ULL << 31)) {
+				D_ERROR("invalid chunk size " DF_U64 ". Should be <= 2GiB\n", val);
 				return false;
 			}
 			break;
