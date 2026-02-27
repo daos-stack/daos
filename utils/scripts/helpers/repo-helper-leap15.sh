@@ -88,11 +88,11 @@ if command -v dnf; then
 else
     repos_dir=/etc/zypp/repos.d/
 fi
-echo "BASE_DISTRO: {BASE_DISTRO}"
-echo "MAJOR_VER: {MAJOR_VER}"
-echo "REPOSITORY_NAME: {REPOSITORY_NAME}"
-echo "REPO_FILE_URL: {REPO_FILE_URL}"
-echo "repos_dir: {repos_dir}"
+echo "BASE_DISTRO: ${BASE_DISTRO}"
+echo "MAJOR_VER: ${MAJOR_VER}"
+echo "REPOSITORY_NAME: ${REPOSITORY_NAME}"
+echo "REPO_FILE_URL: ${REPO_FILE_URL}"
+echo "repos_dir: ${repos_dir}"
 if [ -n "$REPO_FILE_URL" ]; then
     install_curl
     install_optional_ca
