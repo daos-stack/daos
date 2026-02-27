@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,6 +74,7 @@ key_safe_str_tests(void **state)
 	assert_string_equal(small_buf, "///////");
 }
 
+/* clang-format off */
 static void
 key_printing_and_parsing_tests(void **state)
 {
@@ -80,32 +82,36 @@ key_printing_and_parsing_tests(void **state)
  * These tests will parse the first argument, then print it. The printed
  * value will be compared to the second (expected) argument.
  */
-#define assert_key_parsed_printed(parsed, printed) do {\
-	union itp_part_type __v = {0}; \
-	assert_true(ddb_parse_key(parsed, &__v.itp_key) > 0); \
-	itp_print_part_key(&g_ctx, &__v); \
-	assert_printed_exact(printed); \
-	dvt_fake_print_reset(); \
-	daos_iov_free(&__v.itp_key); \
-} while (0)
+#define assert_key_parsed_printed(parsed, printed, int_key)                             \
+	do {                                                                            \
+		struct indexed_tree_path_part __part = {0};                             \
+		assert_true(ddb_parse_key(parsed, &__part.itp_part_value.itp_key) > 0); \
+		__part.itp_otype = int_key ? DAOS_OT_MULTI_UINT64 : 0;                  \
+		itp_print_part_key(&g_ctx, &__part);                                    \
+		assert_printed_exact(printed);                                          \
+		dvt_fake_print_reset();                                                 \
+		daos_iov_free(&__part.itp_part_value.itp_key);                          \
+	} while (0)
 
-	assert_key_parsed_printed("akey", "akey");
-	assert_key_parsed_printed("akey{4}", "akey");
-	assert_key_parsed_printed("akey{64}", "akey{64}");
+	assert_key_parsed_printed("akey", "akey", false);
+	assert_key_parsed_printed("akey{4}", "akey", false);
+	assert_key_parsed_printed("akey{64}", "akey{64}", false);
 	/* binary should take size as input, but doesn't need it. It will always print it however */
-	assert_key_parsed_printed("{bin:0xabcdef1234}", "{bin(5):0xabcdef1234}");
-	assert_key_parsed_printed("{bin(5):0xabcdef1234}", "{bin(5):0xabcdef1234}");
+	assert_key_parsed_printed("{bin:0xabcdef1234}", "{bin(5):0xabcdef1234}", false);
+	assert_key_parsed_printed("{bin(5):0xabcdef1234}", "{bin(5):0xabcdef1234}", false);
 
 	/* Int types. Hex letters' case doesn't matter. Will always print as lower case */
-	assert_key_parsed_printed("{uint64:0xABCDEF1234}", "{uint64:0xabcdef1234}");
-	assert_key_parsed_printed("{uint32:0x12345678}", "{uint32:0x12345678}");
-	assert_key_parsed_printed("{uint16:0x1234}", "{uint16:0x1234}");
-	assert_key_parsed_printed("{uint8:0xAF}", "{uint8:0xaf}");
+	assert_key_parsed_printed("{uint64:10}", "{uint64:0xa}", true);
+	assert_key_parsed_printed("{uint64:0xABCDEF1234}", "{uint64:0xabcdef1234}", true);
+	assert_key_parsed_printed("{uint32:0x12345678}", "{uint32:0x12345678}", true);
+	assert_key_parsed_printed("{uint16:0x1234}", "{uint16:0x1234}", true);
+	assert_key_parsed_printed("{uint8:0xAF}", "{uint8:0xaf}", true);
 
 	/* Parsing doesn't handle too big of values yet, so will get truncated */
-	assert_key_parsed_printed("{uint8:0xFFFAAA}", "{uint8:0xaa}");
-	assert_key_parsed_printed("\\/", "\\/");
+	assert_key_parsed_printed("{uint8:0xFFFAAA}", "{uint8:0xaa}", true);
+	assert_key_parsed_printed("\\/", "\\/", false);
 }
+/* clang-format on */
 
 /* Test setting and printing the full path given the path parts structure */
 static void

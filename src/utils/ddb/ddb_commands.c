@@ -306,7 +306,7 @@ print_value_cb(void *cb_args, d_iov_t *value)
 		return 0;
 	}
 
-	ddb_iov_to_printable_buf(value, buf, ARRAY_SIZE(buf));
+	ddb_iov_to_printable_buf(value, buf, ARRAY_SIZE(buf), NULL);
 	ddb_printf(ctx, "Value (size: %lu):\n", value->iov_len);
 	ddb_printf(ctx, "%s\n", buf);
 	return 0;

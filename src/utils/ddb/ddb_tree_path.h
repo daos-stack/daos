@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,10 +52,11 @@ struct indexed_tree_path_part {
 		daos_unit_oid_t itp_oid;
 		daos_key_t	itp_key; /* akey or dkey */
 		daos_recx_t	itp_recx;
-	}		itp_part_value;
-	uint32_t        itp_part_idx;
-	bool            itp_has_part_idx;
-	bool            itp_has_part_value;
+	} itp_part_value;
+	uint32_t          itp_part_idx;
+	enum daos_otype_t itp_otype;
+	bool              itp_has_part_idx;
+	bool              itp_has_part_value;
 };
 
 struct dv_indexed_tree_path {
@@ -93,10 +95,14 @@ bool
      itp_idx_set(struct dv_indexed_tree_path *itp, enum path_parts part_key, uint32_t idx);
 
 /* Functions for setting parts as a specific path part (i.e. container, object, ... */
-bool itp_part_set_cont(union itp_part_type *part, void *part_value);
-bool itp_part_set_obj(union itp_part_type *part, void *part_value);
-bool itp_part_set_key(union itp_part_type *part, void *part_value);
-bool itp_part_set_recx(union itp_part_type *part, void *part_value);
+bool
+itp_part_set_cont(struct indexed_tree_path_part *part, void *part_value);
+bool
+itp_part_set_obj(struct indexed_tree_path_part *part, void *part_value);
+bool
+itp_part_set_key(struct indexed_tree_path_part *part, void *part_value);
+bool
+     itp_part_set_recx(struct indexed_tree_path_part *part, void *part_value);
 
 /* Functions for setting the parts (cont, obj, ...) of a indexed tree path */
 bool itp_set_cont(struct dv_indexed_tree_path *itp, uuid_t cont_uuid, uint32_t idx);
@@ -171,7 +177,8 @@ int itp_recx_idx(struct dv_indexed_tree_path *itp);
 void itp_print_indexes(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp);
 void itp_print_parts(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp);
 void itp_print_full(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp);
-void itp_print_part_key(struct ddb_ctx *ctx, union itp_part_type *key_part);
+void
+     itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part);
 
 /*
  * This function is used when printing keys. It checks each character in the buffer and will
