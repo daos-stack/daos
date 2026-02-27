@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2598,6 +2598,9 @@ pool_child_discard(void *data)
 	uint32_t		myrank;
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
+
+	if (1)
+		return 0;
 
 	myrank = dss_self_rank();
 	addr.pta_rank = myrank;
