@@ -1515,13 +1515,13 @@ find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	return 0;
 }
 
-static int cont_close_hdls(struct cont_svc *svc,
-			   struct cont_tgt_close_rec *recs, int nrecs,
-			   crt_context_t ctx);
+static int
+cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs, int nrecs, crt_context_t ctx,
+		bool remotely);
 
 static int
 evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, struct ds_pool_hdl *pool_hdl,
-	   crt_context_t ctx)
+	   crt_context_t ctx, bool remotely)
 {
 	struct find_hdls_by_cont_arg	arg;
 	int				rc;
@@ -1547,7 +1547,7 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, struct ds_pool_hdl 
 		goto out;
 	}
 
-	rc = cont_close_hdls(cont->c_svc, arg.fha_buf.rb_recs, arg.fha_buf.rb_nrecs, ctx);
+	rc = cont_close_hdls(cont->c_svc, arg.fha_buf.rb_recs, arg.fha_buf.rb_nrecs, ctx, remotely);
 
 out:
 	recs_buf_fini(&arg.fha_buf);
@@ -1561,19 +1561,28 @@ static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc,
 	     int cont_proto_ver)
 {
-	d_iov_t				key;
 	d_iov_t				val;
 	int				rc;
-	daos_prop_t		       *prop = NULL;
-	struct daos_prop_entry	       *lbl_ent;
+	daos_prop_t                    *prop = NULL;
 	struct d_ownership		owner;
 	uint32_t                        force;
-	struct daos_acl		       *acl;
-	bool				need_destroy_oid_oit_kvs = false;
+	struct daos_acl                *acl;
 
 	cont_destroy_in_get_data(rpc, opc_get(rpc->cr_opc), cont_proto_ver, &force, NULL);
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, force);
+
+	container_flags_t container_flags;
+	d_iov_set(&val, &container_flags, sizeof(container_flags));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
+	if (rc != 0)
+		goto out;
+	if (container_flags & CONTAINER_F_DESTROYING) {
+		D_DEBUG(DB_MD, DF_CONT ": destroying\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+		rc = -DER_NONEXIST;
+		goto out;
+	}
 
 	/* Reset recov_cont prop to notify on flight pool_recov_cont to retry. */
 	rc = ds_pool_prop_recov_cont_reset(tx, cont->c_svc->cs_rsvc);
@@ -1605,13 +1614,69 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out_prop, rc = -DER_NO_PERM);
 	}
 
-	rc = evict_hdls(tx, cont, force, NULL /* pool_hdl */, rpc->cr_ctx);
+	/*
+	 * Delete the handles from the DB. The ds_cont_hdl objects will be
+	 * destroyed by the CONT_TGT_DESTROY CoRPC.
+	 *
+	 * Replacing this generic call with a container-destroy-specific one
+	 * could optimize away things like the tracking of the number of
+	 * handles and the deletion of the entries in the handle index KVS.
+	 */
+	rc = evict_hdls(tx, cont, force, NULL /* pool_hdl */, rpc->cr_ctx, false /* remotely */);
 	if (rc != 0)
 		goto out_prop;
 
-	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
+	container_flags |= CONTAINER_F_DESTROYING;
+	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
+
+out_prop:
+	daos_prop_free(prop);
+out:
+	return rc;
+}
+
+static int
+cont_lookup_bylabel(struct rdb_tx *tx, const struct cont_svc *svc, const char *label,
+		    struct cont **cont);
+
+static int
+cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uuid,
+		  const char *label, crt_rpc_t *rpc, int cont_proto_ver)
+{
+	struct rdb_tx           tx;
+	struct cont            *cont;
+	d_iov_t                 key;
+	d_iov_t                 val;
+	int                     rc;
+	daos_prop_t            *prop = NULL;
+	struct daos_prop_entry *lbl_ent;
+	bool                    need_destroy_oid_oit_kvs = false;
+
+	rc = cont_destroy_bcast(rpc->cr_ctx, svc, uuid);
 	if (rc != 0)
-		goto out_prop;
+		goto out;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+	ABT_rwlock_wrlock(svc->cs_lock);
+
+	if (uuid_is_null(uuid))
+		rc = cont_lookup_bylabel(&tx, svc, label, &cont);
+	else
+		rc = cont_lookup(&tx, svc, uuid, &cont);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			/*
+			 * Because we released and reacquired svc->cs_lock when
+			 * calling cont_destroy_bcast...
+			 */
+			D_DEBUG(DB_MD, DF_CONT ": already destroyed: label=%s\n",
+				DP_CONT(svc->cs_pool_uuid, uuid), label);
+			rc = 0;
+		}
+		goto out_lock;
+	}
 
 	cont_track_eph_leader_delete(cont->c_svc, cont->c_uuid);
 
@@ -1621,50 +1686,53 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
                 d_iov_t value;
 
                 d_iov_set(&value, NULL, 0);
-                rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
-                if (rc && rc != -DER_NONEXIST) {
-                        DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
-                                 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
-                        goto out_prop;
-                }
-                /* There was a bug that oit oids might be created already see DAOS-14799 */
+		rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
+		if (rc && rc != -DER_NONEXIST) {
+			DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
+				 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+			goto out_cont;
+		}
+		/* There was a bug that oit oids might be created already see DAOS-14799 */
 		if (rc == 0)
 			need_destroy_oid_oit_kvs = true;
         }
 
 	/* Destroy oit oids index KVS. */
 	if (need_destroy_oid_oit_kvs) {
-		rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_oit_oids);
+		rc = rdb_tx_destroy_kvs(&tx, &cont->c_prop, &ds_cont_prop_oit_oids);
 		if (rc != 0)
-			goto out_prop;
+			goto out_cont;
 	}
 
 	/* Destroy the handle index KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
+	rc = rdb_tx_destroy_kvs(&tx, &cont->c_prop, &ds_cont_prop_handles);
 	if (rc != 0)
-		goto out_prop;
+		goto out_cont;
 
 	/* Destroy the user attribute KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_attr_user);
+	rc = rdb_tx_destroy_kvs(&tx, &cont->c_prop, &ds_cont_attr_user);
 	if (rc != 0)
-		goto out_prop;
+		goto out_cont;
 
 	/* Destroy the snapshot KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_snapshots);
+	rc = rdb_tx_destroy_kvs(&tx, &cont->c_prop, &ds_cont_prop_snapshots);
 	if (rc != 0)
-		goto out_prop;
+		goto out_cont;
 
 	/* Delete entry in container UUIDs KVS (if added during create) */
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop, true);
+	if (rc != 0)
+		goto out_cont;
+	D_ASSERT(prop != NULL);
 	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
 	if (lbl_ent) {
 		d_iov_set(&key, lbl_ent->dpe_str,
 			  strnlen(lbl_ent->dpe_str, DAOS_PROP_MAX_LABEL_BUF_LEN));
 		d_iov_set(&val, NULL, 0);
-		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
+		rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_uuids, &key, &val);
 		if (rc != -DER_NONEXIST) {
 			if (rc == 0) {
-				rc = rdb_tx_delete(tx, &cont->c_svc->cs_uuids,
-						   &key);
+				rc = rdb_tx_delete(&tx, &cont->c_svc->cs_uuids, &key);
 				if (rc != 0)
 					goto out_prop;
 				D_DEBUG(DB_MD, DF_CONT": deleted label: %s\n",
@@ -1679,13 +1747,22 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	/* Destroy the container attribute KVS. */
 	d_iov_set(&key, cont->c_uuid, sizeof(uuid_t));
-	rc = rdb_tx_destroy_kvs(tx, &cont->c_svc->cs_conts, &key);
+	rc = rdb_tx_destroy_kvs(&tx, &cont->c_svc->cs_conts, &key);
+	if (rc != 0)
+		goto out_prop;
+
+	rc = rdb_tx_commit(&tx);
 
 out_prop:
 	daos_prop_free(prop);
+out_cont:
+	cont_put(cont);
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
 out:
-	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying: rpc=%p label=%s: " DF_RC "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, uuid), rpc, label, DP_RC(rc));
 	return rc;
 }
 
@@ -2594,6 +2671,21 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		}
 	}
 
+	container_flags_t container_flags;
+	d_iov_set(&value, &container_flags, sizeof(container_flags));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ghce, &value);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to lookup ghce",
+			 DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		goto out;
+	}
+	D_INFO(DF_CONT ": container_flags=%lx\n", DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+	       container_flags);
+	if (container_flags & CONTAINER_F_DESTROYING) {
+		rc = -DER_CONT_NONEXIST;
+		goto out;
+	}
+
 	get_cont_prop_access_info(prop, &owner, &acl);
 
 	rc = ds_sec_cont_get_capabilities(flags, &pool_hdl->sph_cred, &owner, acl, &sec_capas);
@@ -2639,7 +2731,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 
 	if (flags & (DAOS_COO_EVICT | DAOS_COO_EVICT_ALL)) {
 		rc = evict_hdls(tx, cont, true /* force */,
-				(flags & DAOS_COO_EVICT_ALL) ? NULL : pool_hdl, rpc->cr_ctx);
+				(flags & DAOS_COO_EVICT_ALL) ? NULL : pool_hdl, rpc->cr_ctx,
+				true /* remotely */);
 		if (rc != 0) {
 			daos_prop_free(prop);
 			goto out;
@@ -2889,8 +2982,8 @@ out:
 
 /* Close an array of handles, possibly belonging to different containers. */
 static int
-cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
-		int nrecs, crt_context_t ctx)
+cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs, int nrecs, crt_context_t ctx,
+		bool remotely)
 {
 	struct rdb_tx		tx;
 	struct d_hash_table	txs_nhc;	/* TX per-container number of handles cache (HT). */
@@ -2904,11 +2997,13 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		" recs[0].hce="DF_U64"\n", DP_CONT(svc->cs_pool_uuid, NULL),
 		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
 
-	rc = cont_close_recs(ctx, svc, recs, nrecs);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to close %d recs: "DF_RC"\n",
-			DP_CONT(svc->cs_pool_uuid, NULL), nrecs, DP_RC(rc));
-		D_GOTO(out, rc);
+	if (remotely) {
+		rc = cont_close_recs(ctx, svc, recs, nrecs);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_CONT ": failed to close %d recs",
+				 DP_CONT(svc->cs_pool_uuid, NULL), nrecs);
+			goto out;
+		}
 	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
@@ -4419,8 +4514,8 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 		goto out_buf;
 
 	if (arg.cia_buf.rb_nrecs > 0)
-		rc = cont_close_hdls(svc, arg.cia_buf.rb_recs,
-				     arg.cia_buf.rb_nrecs, ctx);
+		rc = cont_close_hdls(svc, arg.cia_buf.rb_recs, arg.cia_buf.rb_nrecs, ctx,
+				     true /* remotely */);
 
 out_buf:
 	recs_buf_fini(&arg.cia_buf);
@@ -5737,9 +5832,10 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		uuid_copy(olbl_out->colo_uuid, cont->c_uuid);
 		break;
 	case CONT_DESTROY_BYLABEL:
+		/* TODO: Optimize away the destroy bcast if the dup_op and nonexist. */
+		cont_op_in_get_label(rpc, opc, cont_proto_ver, &clbl);
 		if (dup_op)
 			goto out_commit;
-		cont_op_in_get_label(rpc, opc, cont_proto_ver, &clbl);
 		rc = cont_lookup_bylabel(&tx, svc, clbl, &cont);
 		if (rc != 0)
 			goto out_commit;
@@ -5788,6 +5884,18 @@ out_contref:
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
+	if (rc != 0)
+		goto out;
+
+	switch (opc) {
+	case CONT_DESTROY:
+	case CONT_DESTROY_BYLABEL:
+		if (dup_op && op_val.ov_rc != 0)
+			goto out;
+		rc = cont_destroy_post(pool_hdl, svc, in->ci_uuid, clbl, rpc, cont_proto_ver);
+		break;
+	}
+
 out:
 	if ((rc == 0) && !dup_op) {
 		/* Propagate new snapshot list by IV */
