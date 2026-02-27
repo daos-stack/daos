@@ -332,7 +332,14 @@ class WarningsFactory():
 
         message = f"{preamble} {' '.join(sorted(symptoms))} {' '.join(sorted(locs))}"
 
-        self.add(line, sev, message, cat='Fault injection location', mtype=mtype)
+        try:
+            self.add(line, sev, message, cat='Fault injection location', mtype=mtype)
+        except FileNotFoundError as error:
+            raise FileNotFoundError(
+                f"Failed to load required file {log_file!r}."
+                f"Original error: {error}"
+            ) from error
+
         self.pending = []
 
     def add(self, line, sev, message, cat=None, mtype=None):
@@ -342,7 +349,10 @@ class WarningsFactory():
         Add it to the pending array, for later clarification
         """
         entry = {}
-        entry['fileName'] = line.filename
+        if line is not None:
+            entry['fileName'] = line.filename
+        else:
+            raise FileNotFoundError(f"Expected a line-like object, got {line!r}")
         if mtype:
             entry['type'] = mtype
         else:
@@ -352,7 +362,10 @@ class WarningsFactory():
         entry['lineStart'] = line.lineno
         # Jenkins no longer seems to display the description.
         entry['description'] = message
-        entry['message'] = f'{line.get_anon_msg()}\n{message}'
+        entry['message'] = (
+            f"{line.get_anon_msg()}\n{message}"
+            f"\n{line.get_log_name()}\n{line.to_str()}"
+        )
         entry['severity'] = sev
         self.issues.append(entry)
         if self.pending and self.pending[0][0].pid != line.pid:

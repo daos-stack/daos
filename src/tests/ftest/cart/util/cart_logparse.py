@@ -25,6 +25,13 @@ class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed."""
 
 
+class InvalidLogLine(Exception):
+    """Exception to be raised when CaRT log line cannot be parsed.
+    It is either corrupted or comes from another source such as
+    the DAOS server or the DAOS agent."""
+
+
+# Based on priorities defined in src/gurt/dlog.c: 118
 LOG_LEVELS = {
     'EMIT': 1,
     'FATAL': 2,
@@ -72,21 +79,20 @@ class LogLine():
 
     # pylint: disable=too-many-public-methods
 
-    @staticmethod
-    def is_valid(line):
-        """Return True if a valid CaRT log line is recognized."""
-        fields = line.split(None, 6)
-        return (
-            # pylint: disable=too-many-boolean-expressions
-            # CaRT log line contains at least 7 fields:
-            # <date> <time> <node_name> <TAG+PIDs> <FAC> <level> <message>
-            len(fields) == 7
-            # Valid date at the beginning: YYYY/MM/DD
-            and len(fields[0]) == 10 and fields[0][4] == '/' and fields[0][7] == '/'
-            # Valid time at the second position: hh:mm:ss.micros
-            and len(fields[1]) == 15 and fields[1][2] == ':' and fields[1][8] == '.'
-            # pylint: enable=too-many-boolean-expressions
-        )
+    # Match a date.
+    re_date = re.compile(r"^(?:\d{4}/)?(0[1-9]|1[0-2])/(0[1-9]|[12]\d|3[01])$")
+
+    # Match a time.
+    re_time = re.compile(r"^([01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{6}$")
+
+    # Match a Go file name with a line no
+    re_go_file_name = re.compile(r"^\S+.go:\d+:")
+
+    # Match a TAG.
+    re_tag = re.compile(r".+?\[(-?\d+)\/-?\d+\/\d+\]$")
+
+    # Address to search.
+    re_address = re.compile(r"0x7fcc8be52010")
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
@@ -106,37 +112,114 @@ class LogLine():
     # Match DF_CONT
     re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
-    def __init__(self, line):
-        # The format of log lines depends on the flags (DLOG_FLV_*) passed during initialization.
-        # All assumed flag settings are noted alongside the relevant logic that relies on those
-        # assumptions.
+    @staticmethod
+    def is_valid(line):
+        """Return True if a valid CaRT log line is recognized."""
+        fields = line.split(None, 6)
 
+        # CaRT log line contains exactly 7 fields:
+        # <level> <date> <time> <node_name> <TAG+PIDs> <FAC> <message>
+        # <level> <date> HH:MM:SS.micros <node_name> <TAG>[<PID>/<TID>/<UID>] <FAC> <message>
+
+        if len(fields) != 7:
+            return False
+
+        level, date, time, node_name, tag_pids, fac, message = fields
+
+        # Check for valid date: YYYY/MM/DD
+        if len(date) != 10 or date[4] != '/' or date[7] != '/':
+            return False
+
+        # Check for valid time: hh:mm:ss.micros
+        if len(time) != 15 or time[2] != ':' or time[8] != '.':
+            return False
+
+        # Validate level (must be 4 or 5 chars long)
+        if len(level) < 4 or len(level) > 5:
+            return False
+
+        # Exclude lines containing ".go:" in message
+        if ".go:" in message:
+            return False
+
+        # If all checks pass, the line is valid
+        return True
+
+    def __init__(self, line, log_name: str, pid_only=False):
+        """
+        Parse a CART log line and extract structured components such as log level, timestamp,
+        hostname, PID, TID, UID, facility, function name, etc.
+
+        This constructor validates the format of the log line and raises an exception if it
+        does not conform to the expected structure. If `pid_only` is set to True, only the PID
+        is extracted and the rest of the parsing is skipped.
+
+        Expected log line format:
+        <level> <date> HH:MM:SS.micros <node_name> <TAG>[<PID>/<TID>/<UID>] <FAC> <message>
+        where:
+        level - see LOG_LEVEL
+        date = [YYYY/]MM/DD
+        node_name - any string that can represent host name.
+        NOTE: It is assumed that node_name cannot contain ":" to distinguish the CaRT log line.
+        from the DAOS server log line with filename.go:line_no: in this field.
+
+        NOTE:
+        LogLine does not correctly interpret CaRT line without optional [<PID>/<TID>/<UID>] and
+        without <FAC> field. That means all flags DLOG_FLV_TAG, DLOG_FLV_LOGPID and DLOG_FLV_FAC
+        must be used in the CaRT log configuration.
+
+        message:= <filename>:<line_no>: <function_name>() <detail info>
+
+        Parameters:
+            line (str): The raw log line to be parsed.
+            pid_only (bool, optional): If True, only extract the PID and skip full parsing.
+                                       Defaults to False.
+        """
+        self.log_name = log_name
+        self.address = False
         fields = line.split()
-        # Work out the end of the fixed-width portion, and the beginning of the
-        # message. The hostname, pid, fac and level fields are all variable width.
-        idx = 0
-        for i in range(4):
-            idx += len(fields[i]) + 1
-        # Assuming DLOG_FLV_FAC is set in src/gurt/dlog.c - d_vlog()
-        # pylint: disable=wrong-spelling-in-comment
-        # snprintf(..., "%-4s ", facstr)
-        # pylint: enable=wrong-spelling-in-comment
-        idx += max(len(fields[4]), 4) + 1
-        idx += max(len(fields[5]), 4)
-        # Assuming DLOG_FLV_TAG and DLOG_FLV_LOGPID are set in src/gurt/dlog.c - d_vlog()
-        pidtid = fields[3][5:-1]
-        pid = pidtid.split("/")
-        self.pid = int(pid[0])
-        self._preamble = line[:idx]
-        self.fac = fields[4]
-        # Assuming DLOG_FLV_FAC is set in src/gurt/dlog.c - d_vlog()
+        # Check the line header and work out the beginning of the message.
+        # The level, date, time, hostname, pid and fac fields are all variable width.
+        # 6 header fields and at least 3 message fields (file info, function name, detail info)
+        # Shorter line may be either invalid or not CART log line
+        # e.g. origin from DAOS server or DAOS agent).
+        if len(fields) < 9:
+            raise InvalidLogLine(f"Log line too short to parse expected fields: {line!r}")
         try:
-            self.level = LOG_LEVELS[fields[5]]
+            self.level = LOG_LEVELS[fields[0]]
         except KeyError as error:
-            raise InvalidLogFile(fields[5]) from error
-
-        self.time_stamp = fields[0] + ' ' + fields[1]
-        self.hostname = fields[2]
+            raise InvalidLogLine(
+                f"Unrecognized log level \"{fields[0]!r}\" in the line: {line!r}"
+            ) from error
+        if self.re_date.fullmatch(fields[1]) is None:
+            raise InvalidLogLine(f"Invalid date \"{fields[1]!r}\" in the log line: {line!r}")
+        if self.re_time.fullmatch(fields[2]) is None:
+            raise InvalidLogLine(f"Invalid time \"{fields[2]!r}\" in the log line: {line!r}")
+        self.time_stamp = fields[1] + ' ' + fields[2]
+        # Reject DAOS server log lines that include .go file references
+        # Server log line contains the following fields:
+        # <LEVEL> YYYY/MM/DD HH:MM:SS.ffffff <file name>.go:<line no>: <message>
+        if self.re_go_file_name.fullmatch(fields[3]):
+            raise InvalidLogLine(
+                f"Invalid host name: \"{fields[3]!r}\" "
+                f"- probably it is a DAOS server's (not CaRT) log line: {line!r}"
+            )
+        self.hostname = fields[3]
+        # Assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c: 658
+        # Assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c: 659
+        match = self.re_tag.search(fields[4])
+        if match is None:
+            raise InvalidLogLine(
+                f"Invalid TAG (PID/TID/UID) \"{fields[4]!r}\" in the log line: {line!r}"
+            )
+        self.pid = int(match.group(1))
+        if self.re_address.search(line):
+            self.address = True
+        if pid_only:
+            return
+        # Assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c: 675
+        self.fac = fields[5]
+        self._preamble = self.time_stamp + ' ' + self.fac
         self._fields = fields[6:]
         try:
             if self._fields[1][-2:] == '()':
@@ -164,13 +247,14 @@ class LogLine():
                 self.descriptor = desc
         self._msg = ' '.join(self._fields)
 
+    def get_log_name(self):
+        return self.log_name
+
     def to_str(self, mark=False):
         """Convert the object to a string"""
-        pre = self._preamble.split(' ', 4)
-        preamble = ' '.join([pre[0], pre[1], pre[4]])
         if mark:
-            return '{} ** {}'.format(preamble, self._msg)
-        return '{}    {}'.format(preamble, self._msg)
+            return '{} ** {}'.format(self._preamble, self._msg)
+        return '{}    {}'.format(self._preamble, self._msg)
 
     def __getattr__(self, attr):
         if attr == 'parent':
@@ -194,7 +278,7 @@ class LogLine():
                 return int(lineno)
             except (IndexError, ValueError):
                 pass
-        raise AttributeError
+        raise AttributeError(f"{self._preamble!r}")
 
     def get_msg(self):
         """Return the message part of a line, stripping up to and including the filename"""
@@ -227,7 +311,8 @@ class LogLine():
             if not field:
                 r = self.re_pointer.fullmatch(entry)
                 if r:
-                    field = '0x...{}'.format(r.group(1))
+                    # field = '0x...{}'.format(r.group(1))
+                    field = entry
             if not field:
                 r = self.re_pid.fullmatch(entry)
                 if r:
@@ -558,14 +643,11 @@ class LogIter():
     def _load_data(self):
         """Load all data into memory"""
         pids = OrderedDict()
-
         index = 0
         for line in self._fd:
             index += 1
-            if not LogLine.is_valid(line):
-                self._data.append(LogRaw(line))
-            else:
-                l_obj = LogLine(line)
+            try:
+                l_obj = LogLine(line, self.fname)
                 l_pid = l_obj.pid
                 self._data.append(l_obj)
                 if l_pid in pids:
@@ -573,6 +655,8 @@ class LogIter():
                 else:
                     pids[l_pid] = {'line_count': 1, 'first_index': index}
                 pids[l_pid]['last_index'] = index
+            except InvalidLogLine:
+                self._data.append(LogRaw(line))
         self._pids = pids
 
     def _load_pids(self):
@@ -583,19 +667,17 @@ class LogIter():
         position = 0
         for line in self._fd:
             index += 1
-            if not LogLine.is_valid(line):
-                position += len(line)
-                continue
-            fields = line.split(None, 3)
-            pidtid = fields[3][5:-1]
-            pid = pidtid.split("/")
-            l_pid = int(pid[0])
-            if l_pid in pids:
-                pids[l_pid]['line_count'] += 1
-            else:
-                pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
-            pids[l_pid]['last_index'] = index
             position += len(line)
+            try:
+                l_obj = LogLine(line, self.fname)
+                l_pid = l_obj.pid
+                if l_pid in pids:
+                    pids[l_pid]['line_count'] += 1
+                else:
+                    pids[l_pid] = {'line_count': 1, 'file_pos': position, 'first_index': index}
+                pids[l_pid]['last_index'] = index
+            except InvalidLogLine:
+                continue
         self._pids = pids
 
     def new_iter(self, pid=None, stateful=False, trace_only=False, raw=False):
@@ -656,7 +738,7 @@ class LogIter():
                 raise StopIteration
             if not LogLine.is_valid(line):
                 return LogRaw(line)
-            return LogLine(line)
+            return LogLine(line, self.fname)
 
         try:
             line = self._data[self._offset]
@@ -671,7 +753,12 @@ class LogIter():
             self._iter_index += 1
 
             if self._pid is not None and self._iter_index > self._iter_last_index:
-                assert self._iter_count == self._iter_pid['line_count']  # nosec
+                if self._iter_count != self._iter_pid['line_count']:
+                    raise InvalidLogFile(
+                        f"In file: {self.fname!r} "
+                        f"the assert \"self._iter_count == self._iter_pid['line_count'] \" failed "
+                        f" with values {self._iter_count!r} != {self._iter_pid['line_count']!r}"
+                    )
                 raise StopIteration
 
             line = self.__lnext()

@@ -625,7 +625,7 @@ dss_crt_hlc_error_cb(void *arg)
 }
 
 static void
-server_id_cb(uint32_t *tid, uint64_t *uid)
+server_id_cb(pid_t *tid, uint64_t *uid)
 {
 	if (uid != NULL && dss_abt_init) {
 		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
