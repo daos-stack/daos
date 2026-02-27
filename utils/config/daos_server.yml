@@ -56,6 +56,20 @@
 #port: 10001
 #
 #
+## Network interface for the control plane listener
+#
+## Bind the control plane to a specific network interface. When set, the server
+## will use the first IPv4 address on this interface for binding the control
+## plane listener and for reporting its address to other system components.
+## This is useful in environments with multiple network interfaces where you
+## want to restrict control plane traffic to a specific network.
+#
+## If not set, the default behavior is to bind to 0.0.0.0 (all interfaces).
+#
+## default: (not set - binds to all interfaces)
+#control_iface: eth0
+#
+#
 ## Transport credentials specifying certificates to secure communications
 #
 #transport_config:
@@ -198,16 +212,16 @@
 #socket_dir: ./.daos/daos_server
 #
 #
-## Number of hugepages to allocate for DMA buffer memory
+## Number of hugepages to allocate for DMA buffer memory (total value for all engines)
 #
-## Optional parameter that should only be set if overriding the automatically calculated value is #
-## #necessary. Specifies the number (not size) of hugepages to allocate for use by NVMe through
-## #SPDK. For optimum performance each target requires 1 GiB of hugepage space. The provided value
+## Optional parameter that should only be set if overriding the automatically calculated value is
+## necessary. Specifies the number (not size) of hugepages to allocate for use by NVMe through
+## SPDK. For optimum performance each target requires 1 GiB of hugepage space. The provided value
 ## should be calculated by dividing the total amount of hugepages memory required for all targets
 ## across all engines on a host by the system hugepage size. If not set here, the value will be
 ## automatically calculated based on the number of targets (using the default system hugepage size).
 #
-## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
+## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16384
 #
 ## default: 0
 #nr_hugepages: 0
@@ -228,7 +242,6 @@
 #allow_numa_imbalance: true
 #
 #
-
 ## Allow DAOS server to run with transparent hugepages (THP) enabled on the host machine.
 #
 ## WARNING: Transparent hugepages can conflict with how the DAOS server uses hugepages, and enabling
@@ -378,7 +391,10 @@
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
-#
+#  # Currently supported values:
+#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
+#  #   FATAL, EMRG, EMIT
+#  #
 #  # default: ERR
 #  log_mask: INFO
 #
@@ -476,6 +492,10 @@
 #    max_io_errs: 100
 #    max_csum_errs: 200
 #
+#  # Set SPDK iobuf tunable values. Defaults if unset are 8192 for small and 1024 for large.
+#  spdk_iobuf:
+#    small_pool_count: 16384
+#    large_pool_count: 2048
 #
 #-
 #  # Number of I/O service threads (and network endpoints) per engine.
@@ -542,7 +562,10 @@
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
-#
+#  # Currently supported values:
+#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
+#  #   FATAL, EMRG, EMIT
+#  #
 #  # default: ERR
 #  log_mask: INFO
 #

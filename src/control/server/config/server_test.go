@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -240,6 +240,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 	// possible to construct an identical configuration with the helpers.
 	constructed := DefaultServer().
 		WithControlPort(10001).
+		WithControlInterface("eth0").
 		WithControlMetadata(storage.ControlMetadata{
 			Path:       "/home/daos_server/control_meta",
 			DevicePath: "/dev/sdb1",
@@ -297,7 +298,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/var/log/daos/daos_engine.0.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(false).
-			WithStorageAutoFaultyCriteria(true, 100, 200),
+			WithStorageAutoFaultyCriteria(true, 100, 200).
+			WithStorageSpdkIobufProps(16384, 2048),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -325,7 +327,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/var/log/daos/daos_engine.1.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(false).
-			WithStorageAutoFaultyCriteria(false, 0, 0),
+			WithStorageAutoFaultyCriteria(false, 0, 0).
+			WithStorageSpdkIobufProps(0, 0),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
@@ -334,7 +337,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		t.Logf("default: %+v", defaultCfg.Engines[i])
 	}
 
-	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
+	if diff := cmp.Diff(constructed, defaultCfg, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
 	}
 }

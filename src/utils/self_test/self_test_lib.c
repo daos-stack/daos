@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -176,10 +176,13 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 
 	d_rank_list_free(rank_list);
 
-	ret = crt_rank_self_set(max_rank + 1, 1 /* group_version_min */);
-	if (ret != 0) {
-		D_ERROR("crt_rank_self_set failed; ret = %d\n", ret);
-		return ret;
+	/* when running as a server set the rank to next highest one unused */
+	if (listen) {
+		ret = crt_rank_self_set(max_rank + 1, 1 /* group_version_min */);
+		if (ret != 0) {
+			D_ERROR("crt_rank_self_set failed; ret = %d\n", ret);
+			return ret;
+		}
 	}
 
 	return 0;

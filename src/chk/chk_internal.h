@@ -742,6 +742,8 @@ int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t 
 
 void chk_pool_shard_cleanup(struct chk_instance *ins);
 
+int chk_pending_lookup(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
+
 int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
 		    uint64_t seq, uint32_t rank, uint32_t cla, uint32_t option_nr,
 		    uint32_t *options, struct chk_pending_rec **cpr);
@@ -749,8 +751,6 @@ int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *ran
 int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
 
 int chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr);
-
-void chk_pending_destroy(struct chk_pending_rec *cpr);
 
 int chk_policy_refresh(uint32_t policy_nr, struct chk_policy *policies, struct chk_property *prop);
 
@@ -983,6 +983,26 @@ chk_destroy_tree(daos_handle_t *toh, struct btr_root *root)
 		 */
 		*toh = DAOS_HDL_INVAL;
 		memset(root, 0, sizeof(*root));
+	}
+}
+
+static inline void
+chk_pending_destroy(struct chk_instance *ins, struct chk_pending_rec *cpr)
+{
+	if (d_list_empty(&cpr->cpr_pool_link)) {
+		D_ASSERT(d_list_empty(&cpr->cpr_rank_link));
+		D_ASSERT(d_list_empty(&cpr->cpr_ins_link));
+
+		if (cpr->cpr_cond != ABT_COND_NULL)
+			ABT_cond_free(&cpr->cpr_cond);
+
+		if (cpr->cpr_mutex != ABT_MUTEX_NULL)
+			ABT_mutex_free(&cpr->cpr_mutex);
+
+		D_FREE(cpr);
+	} else {
+		cpr->cpr_busy = 0;
+		chk_pending_del(ins, cpr->cpr_seq, NULL);
 	}
 }
 

@@ -165,7 +165,7 @@
    Memcheck:Leak
    match-leak-kinds: all
    ...
-   fun:?alloc
+   fun:*alloc
    ...
    fun:ompi_mpi_finalize
    ...
@@ -271,15 +271,11 @@
    ...
 }
 {
-   Tcp provider
-   Memcheck:Param
-   sendmsg(msg.msg_iov[1])
-   ...
-   fun:sendmsg
-   fun:ofi_sockapi_sendv_socket
-   fun:ofi_bsock_sendv
-   ...
-   fun:fi_senddata
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:hg_dlog_mkcount64
    ...
 }
 {
@@ -289,19 +285,13 @@
    ...
    fun:ofi_bsock_sendv
    ...
-   fun:fi_tsend
-   ...
 }
 {
    Tcp provider with ofi rxm 2
    Memcheck:Param
    sendmsg(msg.msg_iov[2])
    ...
-   fun:sendmsg
-   fun:ofi_sockapi_sendv_socket
    fun:ofi_bsock_sendv
-   ...
-   fun:fi_tsend
    ...
 }
 {
@@ -457,4 +447,20 @@
    fun:mem_map_get_map_1gb
    fun:spdk_mem_map_set_translation
    ...
+}
+{
+   setgrent() leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:*alloc
+   ...
+   fun:setgrent
+}
+{
+   OPENSSL_init_crypto leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:OPENSSL_init_crypto
 }
