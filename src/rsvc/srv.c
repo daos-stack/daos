@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1042,10 +1042,19 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 	if (rc != 0)
 		goto out;
 
+	if (rsvc_class(class)->sc_insert != NULL) {
+		rc = rsvc_class(class)->sc_insert(svc);
+		if (rc != 0) {
+			D_DEBUG(DB_MD, "%s: sc_insert: " DF_RC "\n", svc->s_name, DP_RC(rc));
+			goto err_svc_started;
+		}
+	}
+
 	rc = d_hash_rec_insert(&rsvc_hash, svc->s_id.iov_buf, svc->s_id.iov_len,
 			       &svc->s_entry, true /* exclusive */);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, "%s: insert: "DF_RC"\n", svc->s_name, DP_RC(rc));
+err_svc_started:
 		stop(svc, mode == DS_RSVC_CREATE /* destroy */);
 		goto out;
 	}

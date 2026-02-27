@@ -1910,6 +1910,20 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	D_FREE(svc);
 }
 
+static int
+pool_svc_insert_cb(struct ds_rsvc *rsvc)
+{
+	struct pool_svc *svc = pool_svc_obj(rsvc);
+
+	/*
+	 * While we were starting svc, there might be a ds_pool_stop call who
+	 * is waiting for us to put svc->ps_pool.
+	 */
+	if (svc->ps_pool->sp_stopping)
+		return -DER_CANCELED;
+	return 0;
+}
+
 /*
  * Update svc->ps_pool with map_buf and map_version. This ensures that
  * svc->ps_pool matches the latest pool map.
@@ -2727,16 +2741,19 @@ out:
 	return rc;
 }
 
+/* clang-format off */
 static struct ds_rsvc_class pool_svc_rsvc_class = {
 	.sc_name	= pool_svc_name_cb,
 	.sc_locate	= pool_svc_locate_cb,
 	.sc_alloc	= pool_svc_alloc_cb,
 	.sc_free	= pool_svc_free_cb,
+	.sc_insert	= pool_svc_insert_cb,
 	.sc_step_up	= pool_svc_step_up_cb,
 	.sc_step_down	= pool_svc_step_down_cb,
 	.sc_drain	= pool_svc_drain_cb,
 	.sc_map_dist	= pool_svc_map_dist_cb
 };
+/* clang-format on */
 
 void
 ds_pool_rsvc_class_register(void)
