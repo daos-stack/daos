@@ -28,8 +28,5 @@ group_repo_post() {
 distro_custom() {
     # TODO: This code is not exiting on failure.
 
-    # Use a more recent python version for unit testing, this allows us to also test installing
-    # pydaos into virtual environments.
-    dnf -y install python39 python39-devel
     dnf -y install python3.11 python3.11-devel
 }
