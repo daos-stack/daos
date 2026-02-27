@@ -7,6 +7,7 @@
  */
 
 #include <pthread.h>
+#include <unistd.h>
 
 #include "dfuse_common.h"
 #include "dfuse.h"
@@ -26,9 +27,33 @@ dfuse_progress_thread(void *arg)
 	daos_event_t    *dev[128];
 	int              to_consume = 1;
 
+#define DFUSE_POLL_BACKOFF_START  5    /* Start backoff after N empty polls */
+#define DFUSE_POLL_BACKOFF_MAX_MS 1000 /* Maximum backoff: 1 second */
+
 	while (1) {
 		int rc;
 		int i;
+		uint64_t now = d_timeus_secdiff(0);
+
+		/* Adaptive backoff: sleep if we've had consecutive empty polls */
+		if (eqt->de_consecutive_empty_polls >= DFUSE_POLL_BACKOFF_START) {
+			uint32_t backoff_ms =
+			    eqt->de_consecutive_empty_polls * 10; /* 10ms per empty poll */
+			if (backoff_ms > DFUSE_POLL_BACKOFF_MAX_MS)
+				backoff_ms = DFUSE_POLL_BACKOFF_MAX_MS;
+
+			/* Only sleep if it's been a while since last event */
+			if (eqt->de_last_event_time == 0 ||
+			    (now - eqt->de_last_event_time) > 1000000) { /* 1 second */
+				usleep(backoff_ms * 1000); /* usleep takes microseconds */
+				D_DEBUG(DB_TRACE,
+					"dfuse progress thread backoff: %u ms "
+					"(empty polls: %u)",
+					backoff_ms, eqt->de_consecutive_empty_polls);
+			}
+		}
+
+		eqt->de_last_poll_time = now;
 
 		for (i = 0; i < to_consume; i++) {
 cont:
@@ -57,6 +82,10 @@ cont:
 
 		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_NOWAIT, 128, &dev[0]);
 		if (rc >= 1) {
+			/* Found events - reset adaptive state */
+			eqt->de_last_event_time         = d_timeus_secdiff(0);
+			eqt->de_consecutive_empty_polls = 0;
+
 			for (i = 0; i < rc; i++) {
 				struct dfuse_event *ev;
 
@@ -67,8 +96,11 @@ cont:
 		} else if (rc < 0) {
 			DFUSE_TRA_WARNING(eqt, "Error from daos_eq_poll, " DF_RC, DP_RC(rc));
 			to_consume = 0;
+			eqt->de_consecutive_empty_polls++;
 		} else {
+			/* No events found */
 			to_consume = 0;
+			eqt->de_consecutive_empty_polls++;
 		}
 	}
 	return NULL;
@@ -1208,6 +1240,11 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
 
 		eqt->de_handle = dfuse_info;
+
+		/* Initialize adaptive polling state */
+		eqt->de_last_event_time         = 0;
+		eqt->de_consecutive_empty_polls = 0;
+		eqt->de_last_poll_time          = 0;
 
 		DFUSE_TRA_UP(eqt, dfuse_info, "event_queue");
 
