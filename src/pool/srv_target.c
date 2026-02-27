@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2628,6 +2628,8 @@ pool_child_discard(void *data)
 	if (child == NULL)
 		return -DER_AGAIN;
 
+	ds_cont_child_wait_ec_agg_pause(child, 0);
+
 	param.ip_hdl = child->spc_hdl;
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
@@ -2761,12 +2763,15 @@ ds_pool_tgt_discard_ult(void *data)
 		D_GOTO(free, rc = 0);
 	}
 
+	atomic_fetch_add(&pool->sp_rebuilding, 1);
+
 	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
 				  DSS_ULT_DEEP_STACK);
 
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;
+	atomic_fetch_sub(&pool->sp_rebuilding, 1);
 	ds_pool_put(pool);
 free:
 	tgt_discard_arg_free(arg);
