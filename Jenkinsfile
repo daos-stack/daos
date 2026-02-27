@@ -343,10 +343,10 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional on EL 8 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: false,
@@ -774,7 +774,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8.8') {
+                stage('NLT on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { params.CI_NLT_TEST && !skipStage() }
@@ -839,7 +839,7 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test with memcheck on EL 8.8')
-                stage('Unit Test bdev with memcheck on EL 8.8') {
+                stage('Unit Test bdev with memcheck on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -859,11 +859,11 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
                                                      'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+                                         valgrind_stash: 'el9-gcc-unit-memcheck-bdev'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test bdev with memcheck on EL 8')
+                } // stage('Unit Test bdev with memcheck on EL 9.7')
             }
         }
         stage('Test') {
@@ -990,14 +990,14 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8.8') {
+                stage('Fault injection testing on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
+                            filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
@@ -1040,12 +1040,12 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                            archiveArtifacts artifacts: 'nlt_logs/el9.fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing on EL 8.8')
+                } // stage('Fault injection testing on EL 9.7')
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
