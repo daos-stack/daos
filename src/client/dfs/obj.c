@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,7 +81,16 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 
 		/** what is the default oclass files and dirs will be created with in this dir */
 		if (obj->d.oclass) {
-			info->doi_dir_oclass_id  = obj->d.oclass;
+			/** if parent oclass is EC, dir would be chosen as container default */
+			if (!daos_cid_is_ec(obj->d.oclass)) {
+				info->doi_dir_oclass_id = obj->d.oclass;
+			} else {
+				if (dfs->attr.da_dir_oclass_id)
+					info->doi_dir_oclass_id = dfs->attr.da_dir_oclass_id;
+				else
+					rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0,
+								 0, &info->doi_dir_oclass_id);
+			}
 			info->doi_file_oclass_id = obj->d.oclass;
 		} else {
 			if (dfs->attr.da_dir_oclass_id)
