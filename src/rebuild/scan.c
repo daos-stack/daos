@@ -656,8 +656,8 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 	}
 
 	if (myrank == target->ta_comp.co_rank)
-		rc = rebuild_object_local(rpt, co_uuid, oid, target->ta_comp.co_index, shard,
-					  eph, punched_eph);
+		rc = rebuild_object_local(rpt, co_uuid, oid, target->ta_comp.co_index, shard, eph,
+					  punched_eph);
 	else
 		rc = rebuild_object_insert(rpt, co_uuid, oid, tgt, shard, eph, punched_eph);
 

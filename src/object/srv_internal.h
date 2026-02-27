@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,7 +26,7 @@
 
 extern struct dss_module_key obj_module_key;
 
-struct migr_res_manager;
+struct migr_resource;
 
 /* Per pool attached to the migrate tls(per xstream) */
 struct migrate_pool_tls {
@@ -80,7 +80,7 @@ struct migrate_pool_tls {
 	/* The current in-flight data size */
 	uint64_t                 mpt_inflight_size;
 
-	struct migr_res_manager *mpt_rmg;
+	struct migr_resource    *mpt_data_res;
 
 	/* reference count for the structure */
 	uint64_t                 mpt_refcount;
