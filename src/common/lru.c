@@ -27,6 +27,8 @@ lru_hop_rec_addref(struct d_hash_table *htable, d_list_t *link)
 	struct daos_llink *llink = link2llink(link);
 
 	llink->ll_ref++;
+	if (llink->ll_wait_evict && llink->ll_ops->lop_wakeup)
+		D_ERROR("trying to get new ref while destroying\n");
 }
 
 static bool

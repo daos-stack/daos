@@ -691,6 +691,8 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
+	D_ASSERT(svc->cs_destroying == false);
+
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
@@ -737,6 +739,7 @@ ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid)
 			DP_UUID(svc->cs_pool_uuid), rc);
 		return;
 	}
+	D_ASSERT(svc->cs_destroying == false);
 
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
