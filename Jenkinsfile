@@ -1619,7 +1619,7 @@ pipeline {
                                           'nlt_bullseye']
                             ],
                             archiveArtifactsArgs: [
-                                artifacts: 'bullseye_report/*',
+                                artifacts: 'bullseye_code_coverage_report/*',
                                 allowEmptyArchive: false
                             ]
                         )
