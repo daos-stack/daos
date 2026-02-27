@@ -51,6 +51,10 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 			a.String("path", "Path to the vos file to open.")
 		},
 		Run: func(c *grumble.Context) error {
+			if c.Flags.String("db_path") != "" {
+				cleanup := SetCString(&ctx.ctx.dc_db_path, c.Flags.String("db_path"))
+				defer cleanup()
+			}
 			return ddbOpen(ctx, c.Args.String("path"), c.Flags.Bool("write_mode"))
 		},
 		Completer: openCompleter,
