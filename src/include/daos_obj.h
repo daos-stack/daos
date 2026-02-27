@@ -845,6 +845,24 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		d_sg_list_t *sgls, daos_event_t *ev);
 
 /**
+ * Set the object be read-only, after it finishes the object become immutable.
+ * Server-side can start flattening the read-only object.
+ *
+ * \param[in]	oh	Object open handle.
+ * \param[in]	th	Optional transaction handle to update with.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_obj_set_ro(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
+
+/**
  * Distribution key enumeration.
  *
  * \param[in]	oh	Object open handle.
