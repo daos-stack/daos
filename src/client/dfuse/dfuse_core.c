@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
- * (C) Copyright 2025 Google LLC.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1350,6 +1350,8 @@ dfuse_read_event_size(void *arg, size_t size)
 		ev->de_sgl.sg_iovs     = &ev->de_iov;
 		ev->de_sgl.sg_nr       = 1;
 	}
+
+	D_INIT_LIST_HEAD(&ev->de_read_slaves);
 
 	rc = daos_event_init(&ev->de_ev, ev->de_eqt->de_eq, NULL);
 	if (rc != -DER_SUCCESS) {

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,7 +20,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = active_ie_init(ie, NULL);
+	rc = active_ie_init(ie);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(free, rc = daos_der2errno(rc));
 
@@ -35,7 +36,13 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
 		fi_out.cache_readdir = 1;
 
-		if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout))
+		/**
+		 * Set keep_check to 1 to avoid the dir cache being invalidated during
+		 * concurrent opendir.
+		 **/
+		if ((ie->ie_dcache_last_update.tv_sec == 0 &&
+		     atomic_load_relaxed(&dfuse_info->di_fh_count) > 1) ||
+		    dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout))
 			fi_out.keep_cache = 1;
 	}
 
