@@ -19,5 +19,7 @@ if ! getent passwd "$USERNAME" > /dev/null 2>&1 ; then
 	exit 1
 fi
 
-echo "Add user $USERNAME to /etc/passwd"
-getent passwd "$USERNAME" >> /etc/passwd
+if ! grep --quiet "^$USERNAME:" /etc/passwd ; then
+	echo "Add user $USERNAME to /etc/passwd"
+	getent passwd "$USERNAME" >> /etc/passwd
+fi

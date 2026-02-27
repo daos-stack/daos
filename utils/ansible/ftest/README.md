@@ -35,6 +35,7 @@ this README.md file:
 
 ```bash
 python3 -m pip install --user --requirement requirements.txt
+ansible-galaxy collection install --upgrade community.general
 ```
 
 ### Ssh Authorization
@@ -74,12 +75,15 @@ The inventory should also contain a set of mandatory and optional variables.
 - **daos\_ofi\_provider**: optional variable (default value: ofi+tcp;ofi_rxm) defining the network
   provider to be used by the DAOS engines.  It also defines which network rpms driver to install
   (e.g. ib mellanox driver).
-- **daos\_ofi\_interface**: optional variable only used by the node of the daos\_dev group defining
-  the network interface to use.  When this variable is not defined, the network interface is
-  arbitrarily selected by DAOS.
 - **daos\_hugepages\_nb**: optional variable (default value: 4096) only used by the nodes of the
   *daos\_servers* group.  This variable defines the number of hugepages to be allocated by the linux
-  kernel.
+  kernel.  If equal to 0, hugepages allocated will be automatically computed according to the number
+  of CPU cores available on the node.
+- **daos\_ofi\_interface**: optional variable (default value: None) defining the network interface
+  to use with the launch.py python script.  When this variable is not defined, the network interface is
+  arbitrarily selected by DAOS.
+- **daos_http_proxy**: optional variable defining the http proxy to use for downloading external
+  dependencies
 
 Different file format (e.g. YAML, INI, etc.) and file tree structure are supported to define an
 ansible inventory.  The following simple ansible inventory describe for example in one YAML file
@@ -89,6 +93,7 @@ a simple DAOS functional platform composed of two nodes which are assuming sever
 all:
   vars:
     daos_runtime_dir: /home/foo/daos
+    daos_http_proxy: http://myproxy.net:8080
   children:
     daos_dev:
       vars:
@@ -116,13 +121,16 @@ ansible-inventory --graph --vars --inventory my-inventory.yml
   |  |--wolf-999
   |  |  |--{daos_hugepages_nb = 8182}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
+  |  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |--@daos_dev:
   |  |--wolf-666
   |  |  |--{daos_hugepages_nb = 8182}
   |  |  |--{daos_ofi_interface = eth0}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
   |  |  |--{daos_source_dir = /home/foo/work/daos}
+  |  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |  |--{daos_ofi_interface = eth0}
+  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |  |--{daos_source_dir = /home/foo/work/daos}
   |--@daos_servers:
   |  |--wolf-666
@@ -130,9 +138,11 @@ ansible-inventory --graph --vars --inventory my-inventory.yml
   |  |  |--{daos_ofi_interface = eth0}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
   |  |  |--{daos_source_dir = /home/foo/work/daos}
+  |  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |  |--wolf-999
   |  |  |--{daos_hugepages_nb = 8182}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
+  |  |  |--{daos_http_proxy = http://myproxy.net:8080}
   |  |--{daos_hugepages_nb = 8182}
   |--@ungrouped:
   |--{daos_runtime_dir = /home/foo/daos}
