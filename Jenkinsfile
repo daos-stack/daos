@@ -327,9 +327,9 @@ pipeline {
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault injection testing on EL 8 test stage')
-        booleanParam(name: 'CI_TEST_EL8_RPMs',
+        booleanParam(name: 'CI_TEST_EL_RPMs',
                      defaultValue: true,
-                     description: 'Run the Test RPMs on EL 8 test stage')
+                     description: 'Run the Test RPMs on EL stage')
         booleanParam(name: 'CI_TEST_LEAP15_RPMs',
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15 test stage')
@@ -581,7 +581,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9.6') {
+                stage('Build on EL 9') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -597,7 +597,7 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.6 '
+                                                ' --build-arg POINT_RELEASE=.7 '
                         }
                     }
                     steps {
@@ -730,7 +730,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8.8') {
+                stage('Unit Test on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -752,7 +752,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8.8') {
+                stage('Unit Test bdev on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -814,7 +814,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test with memcheck on EL 8.8') {
+                stage('Unit Test with memcheck on EL 9.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -834,11 +834,11 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck'
+                                         valgrind_stash: 'unit-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8.8')
+                } // stage('Unit Test with memcheck on EL 9.7')
                 stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1046,10 +1046,10 @@ pipeline {
                         }
                     }
                 } // stage('Fault injection testing on EL 8.8')
-                stage('Test RPMs on EL 8.6') {
+                stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1066,7 +1066,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on EL 8.6')
+                } // stage('Test RPMs on EL 9.6')
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
@@ -1260,7 +1260,7 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
-                                                     'el8-gcc-unit-memcheck',
+                                                     'unit-memcheck',
                                                      'fault-inject-valgrind']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
