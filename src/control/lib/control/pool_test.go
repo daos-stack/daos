@@ -3114,19 +3114,39 @@ func newNvmeCfg(rank int, roles storage.OptionBits, size ...uint64) MockNvmeConf
 	}
 }
 
+// Helper to add joined members in SystemQueryResp for all ranks in hostsConfigArray.
+func getSysQueryRespMembers(cfg []MockHostStorageConfig, resp *mgmtpb.SystemQueryResp) {
+	rankSet := make(map[ranklist.Rank]bool)
+	for _, hostCfg := range cfg {
+		for _, scmCfg := range hostCfg.ScmConfig {
+			rankSet[scmCfg.Rank] = true
+		}
+	}
+	for rank := range rankSet {
+		resp.Members = append(resp.Members, &mgmtpb.SystemMember{
+			Rank:  uint32(rank),
+			Uuid:  test.MockUUID(int32(rank)),
+			State: system.MemberStateJoined.String(),
+			Addr:  fmt.Sprintf("10.0.0.%d:10001", rank),
+		})
+	}
+}
+
 func TestControl_getMaxPoolSize(t *testing.T) {
 	devStateFaulty := storage.NvmeStateFaulty
 	devStateNew := storage.NvmeStateNew
 
 	for name, tc := range map[string]struct {
-		hostsConfigArray []MockHostStorageConfig
-		tgtRanks         []ranklist.Rank
-		memRatio         float32
-		queryError       error
-		expScmBytes      uint64
-		expNvmeBytes     uint64
-		expError         error
-		expDebug         string
+		hostsConfigArray  []MockHostStorageConfig
+		tgtRanks          []ranklist.Rank
+		memberStates      map[ranklist.Rank]system.MemberState
+		memRatio          float32
+		queryError        error
+		expCreateReqRanks []ranklist.Rank
+		expScmBytes       uint64
+		expNvmeBytes      uint64
+		expError          error
+		expDebug          string
 	}{
 		"single server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3136,8 +3156,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: humanize.TByte,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"single MD-on-SSD server; no mem-ratio specified; defaults to 1.0": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3152,8 +3173,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: humanize.TByte,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"single MD-on-SSD server; invalid mem-ratio; high": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3200,9 +3222,10 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			memRatio:     1,
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: humanize.TByte,
+			memRatio:          1,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"single MD-on-SSD server; phase-2 mode (mem-file-sz < meta-blob-sz)": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3217,9 +3240,10 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			memRatio:     0.5,
-			expScmBytes:  200 * humanize.GByte, // Double meta-blob-sz due to mem-ratio.
-			expNvmeBytes: humanize.TByte,
+			memRatio:          0.5,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       200 * humanize.GByte, // Double meta-blob-sz due to mem-ratio.
+			expNvmeBytes:      humanize.TByte,
 		},
 		"single ephemeral server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3229,8 +3253,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: humanize.TByte,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"double server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3286,8 +3311,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			expScmBytes:  50 * humanize.GByte,
-			expNvmeBytes: 700 * humanize.GByte,
+			expCreateReqRanks: ranklist.RankList{0, 1, 2, 3},
+			expScmBytes:       50 * humanize.GByte,
+			expNvmeBytes:      700 * humanize.GByte,
 		},
 		"double server; rank filter": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3367,8 +3393,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: uint64(0),
+			expCreateReqRanks: []ranklist.Rank{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      uint64(0),
 		},
 		"No NVMe; double server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3449,8 +3476,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: 100 * humanize.TByte,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      100 * humanize.TByte,
 		},
 		"invalid response message": {
 			hostsConfigArray: []MockHostStorageConfig{{}},
@@ -3528,8 +3556,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: uint64(0),
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      uint64(0),
 		},
 		"unmounted SCM device": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3599,6 +3628,11 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0)},
 				},
 			},
+			tgtRanks: []ranklist.Rank{0, 1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateJoined,
+			},
 			expError: errors.New("without SCM device and at least one SMD device"),
 		},
 		"no SCM": {
@@ -3610,12 +3644,119 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				},
 			},
 			tgtRanks: []ranklist.Rank{1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				1: system.MemberStateJoined,
+			},
 			expError: errors.New("No SCM storage space available"),
+		},
+		"requested rank not joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateStopped,
+			},
+			expError: errors.New("specified rank 0 is not joined"),
+		},
+		"multiple requested ranks not joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName:   "bar",
+					ScmConfig:  []MockScmConfig{newScmCfg(1), newScmCfg(2)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0), newNvmeCfg(2, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0, 1, 2},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateStopped,
+				2: system.MemberStateExcluded,
+			},
+			expError: errors.New("specified rank 1 is not joined"),
+		},
+		"all requested ranks joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName:   "bar",
+					ScmConfig:  []MockScmConfig{newScmCfg(1), newScmCfg(2)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0), newNvmeCfg(2, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0, 1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateJoined,
+				2: system.MemberStateStopped,
+			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: humanize.TByte,
+		},
+		"no requested ranks; filters to joined ranks only": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName: "bar",
+					ScmConfig: []MockScmConfig{
+						newScmCfg(1, humanize.TByte),
+						newScmCfg(2),
+						newScmCfg(3, 50*humanize.GByte),
+					},
+					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(1, 0),
+						newNvmeCfg(2, 0),
+						newNvmeCfg(3, 0, 500*humanize.GByte),
+					},
+				},
+			},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateJoined,
+				2: system.MemberStateStopped,
+				3: system.MemberStateExcluded,
+			},
+			expCreateReqRanks: ranklist.RankList{0, 1},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
+
+			// Build SystemQueryResp with members based on memberStates
+			systemQueryResp := &mgmtpb.SystemQueryResp{}
+			if tc.memberStates != nil {
+				for rank, state := range tc.memberStates {
+					systemQueryResp.Members = append(systemQueryResp.Members, &mgmtpb.SystemMember{
+						Rank:  uint32(rank),
+						Uuid:  test.MockUUID(int32(rank)),
+						State: state.String(),
+						Addr:  fmt.Sprintf("10.0.0.%d:10001", rank),
+					})
+				}
+			} else {
+				// If memberStates not specified, create joined members for all ranks in hostsConfigArray
+				getSysQueryRespMembers(tc.hostsConfigArray, systemQueryResp)
+			}
 
 			mockInvokerConfig := &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -3623,7 +3764,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 						Responses: []*HostResponse{
 							{
 								Addr:    "foo",
-								Message: &mgmtpb.SystemQueryResp{},
+								Message: systemQueryResp,
 								Error:   tc.queryError,
 							},
 						},
@@ -3661,6 +3802,13 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				return
 			}
 
+			if tc.expCreateReqRanks == nil {
+				tc.expCreateReqRanks = tc.tgtRanks
+			}
+			if diff := cmp.Diff(tc.expCreateReqRanks, createReq.Ranks); diff != "" {
+				t.Fatalf("Unexpected ranks in create request (-want, +got):\n%s\n", diff)
+			}
+
 			test.AssertEqual(t, tc.expScmBytes, scmBytes,
 				fmt.Sprintf("Invalid SCM pool size, want %s got %s",
 					humanize.Bytes(tc.expScmBytes), humanize.Bytes(scmBytes)))
@@ -3689,12 +3837,13 @@ func (invoker *MockRequestsRecorderInvoker) InvokeUnaryRPC(context context.Conte
 
 func TestControl_PoolCreateAllCmd(t *testing.T) {
 	for name, tc := range map[string]struct {
-		hostsConfigArray []MockHostStorageConfig
-		storageRatio     float64
-		tgtRanks         string
-		expPoolConfig    MockPoolRespConfig
-		expError         error
-		expWarning       string
+		hostsConfigArray  []MockHostStorageConfig
+		storageRatio      float64
+		tgtRanks          string
+		expPoolConfig     MockPoolRespConfig
+		expCreateReqRanks []ranklist.Rank
+		expError          error
+		expWarning        string
 	}{
 		"single server": {
 			storageRatio: 1,
@@ -3929,13 +4078,17 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			// Add joined members for ranks referenced in MockHostStorageConfig.
+			systemQueryResp := new(mgmtpb.SystemQueryResp)
+			getSysQueryRespMembers(tc.hostsConfigArray, systemQueryResp)
+
 			mockInvokerConfig := &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					{
 						Responses: []*HostResponse{
 							{
 								Addr:    "foo",
-								Message: &mgmtpb.SystemQueryResp{},
+								Message: systemQueryResp,
 							},
 						},
 					},
@@ -4012,20 +4165,14 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 				poolCreateRequest.TotalBytes,
 				uint64(0),
 				"Invalid size of TotalBytes attribute: disabled with manual allocation")
-			if tc.tgtRanks != "" {
-				test.AssertEqual(t,
-					ranklist.RankList(poolCreateRequest.Ranks).String(),
-					tc.expPoolConfig.Ranks,
-					"Invalid list of Ranks")
-			} else {
-				test.AssertEqual(t,
-					ranklist.RankList(poolCreateRequest.Ranks).String(),
-					"",
-					"Invalid list of Ranks")
-			}
 			test.AssertTrue(t,
 				poolCreateRequest.TierRatio == nil,
 				"Invalid size of TierRatio attribute: disabled with manual allocation")
+
+			test.AssertEqual(t,
+				poolCreateRequest.Ranks,
+				ranklist.MustCreateRankSet(tc.expPoolConfig.Ranks).Ranks(),
+				"Invalid list of Ranks")
 		})
 	}
 }
