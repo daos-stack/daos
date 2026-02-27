@@ -73,4 +73,16 @@ daos_version_get_protocol(const daos_version_t *ver)
 	return ver->protocol;
 }
 
+static inline uint32_t
+daos_version_to_uint32(daos_version_t *ver)
+{
+	return ver->raw;
+}
+
+static inline daos_version_t
+daos_version_from_uint32(uint32_t raw)
+{
+	return (daos_version_t){ .raw = raw };
+}
+
 #endif /* __DAOS_VERSION_H__ */
