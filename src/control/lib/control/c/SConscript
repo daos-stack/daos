@@ -1,0 +1,82 @@
+"""Build DAOS Control C Bindings Shared Library"""
+import os
+from os.path import join
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'base_env', 'prereqs')
+
+    # Add library and include paths so other components can find libdaos_control
+    env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(CPPPATH=[Dir('.'), Dir('.').srcnode()])
+    env.d_add_build_rpath()
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.AppendUnique(CPPPATH=[Dir('.'), Dir('.').srcnode()])
+    base_env.d_add_build_rpath()
+
+    if not prereqs.client_requested():
+        return
+
+    cenv = env.Clone()
+
+    if cenv.get("COMPILER") == 'covc':
+        cenv.Replace(CC='gcc', CXX='g++')
+
+    cenv.Tool('go_builder')
+
+    # Sets CGO_LDFLAGS for rpath options
+    cenv.d_add_rpaths("..", True, True)
+    cenv.require('protobufc')
+    cenv.AppendENVPath("CGO_CFLAGS", cenv.subst("$_CPPINCFLAGS"), sep=" ")
+
+    # Add library paths for CGO link step
+    cgolibs = cenv.subst("-L$BUILD_DIR/src/gurt "
+                         "-L$BUILD_DIR/src/cart "
+                         "-L$BUILD_DIR/src/common "
+                         "$_RPATH")
+    cenv.AppendENVPath("CGO_LDFLAGS", cgolibs, sep=" ")
+
+    gosrc = Dir('.').srcnode().abspath
+
+    build_lib = cenv.subst(join('$BUILD_DIR/src/control/lib/control/c', 'libdaos_control.so'))
+    build_hdr = cenv.subst(join('$BUILD_DIR/src/control/lib/control/c', 'libdaos_control.h'))
+
+    # Get version for ldflags
+    Import('daos_version', 'conf_dir')
+    ldflags_path = 'github.com/daos-stack/daos/src/control/build'
+    ldflags = f'-X {ldflags_path}.DaosVersion={daos_version} -X {ldflags_path}.ConfigDir={conf_dir}'
+
+    # Build as a C shared library using cgo (generates both .so and .h)
+    cmd = (f'cd {gosrc} && {cenv.d_go_bin} build -mod vendor '
+           f'-ldflags "{ldflags}" '
+           f'-buildmode=c-shared '
+           f'-o {build_lib} .')
+
+    # Collect Go source files and C headers from source directory as dependencies.
+    # The Go scanner will find additional dependencies (other Go packages, local C files).
+    # Use srcnode to get proper SCons File nodes from source dir, not build dir.
+    srcdir = Dir('.').srcnode()
+    sources = [srcdir.File(f) for f in os.listdir(gosrc) if f.endswith('.go') or f.endswith('.h')]
+    sources.append(cenv.d_go_bin)
+
+    targets = cenv.Command([build_lib, build_hdr], sources, cmd)
+    lib_target = targets[0]
+    hdr_target = targets[1]
+
+    # Ensure library dependencies are built first
+    cenv.Requires(targets, cenv.subst('$BUILD_DIR/src/common/libdaos_common.so'))
+    cenv.Requires(targets, cenv.subst('$BUILD_DIR/src/cart/libcart.so'))
+    cenv.Requires(targets, cenv.subst('$BUILD_DIR/src/gurt/libgurt.so'))
+
+    # Install the shared library and generated header
+    cenv.Install('$PREFIX/lib64', lib_target)
+    cenv.InstallAs('$PREFIX/include/daos/control.h', hdr_target)
+
+    # Export targets so other components can declare dependencies
+    daos_control_tgts = targets
+    Export('daos_control_tgts')
+
+
+if __name__ == "SCons.Script":
+    scons()
