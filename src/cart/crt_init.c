@@ -455,6 +455,9 @@ crt_str_to_provider(const char *str_provider)
 					/* Return provider unknown if allocation fails. */
 					return prov;
 				} else {
+					/* Store the default UCX provider string in the alt_str
+					 * to allow it to be restored if finalize is called.
+					 */
 					crt_na_dict[i].nad_alt_str   = crt_na_dict[i].nad_str;
 					crt_na_dict[i].nad_str       = p;
 					crt_na_dict[i].nad_str_alloc = true;
@@ -1003,6 +1006,7 @@ crt_finalize(void)
 			if (crt_na_dict[i].nad_str_alloc) {
 				D_FREE(crt_na_dict[i].nad_str);
 				crt_na_dict[i].nad_str       = crt_na_dict[i].nad_alt_str;
+				crt_na_dict[i].nad_alt_str   = NULL;
 				crt_na_dict[i].nad_str_alloc = false;
 			}
 
