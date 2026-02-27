@@ -180,8 +180,9 @@ class TestEnvironment():
         if self.insecure_mode is None:
             self.insecure_mode = "True"
         if self.bullseye_src is None:
-            self.bullseye_src = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
+            self.bullseye_src = "/opt/BullseyeCoverage/daos/test.cov"
+            # self.bullseye_src = os.path.join(
+            #     os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
         if self.bullseye_file is None:
             self.bullseye_file = os.path.join(os.sep, "tmp", "test.cov")
         if self.daos_prefix is None:
