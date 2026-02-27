@@ -22,69 +22,93 @@ ddb_can_print(d_iov_t *iov)
 	uint32_t len = iov->iov_len;
 	int	 i;
 
-	for (i = 0 ; i < len ; i++) {
+	for (i = 0; i < len; i++) {
 		if (str[i] == '\0')
 			return true;
-		if (!isprint(str[i]) && str[i] != '\n' && str[i] != '\r')
+
+		if (!isprint(str[i]))
 			return false;
 	}
+
 	return true;
 }
 
 /*
- * Converts contents of an iov to something that is more printable.
+ * Converts contents of an @iov to something that is more printable.
  *
- * Returns number of characters that would have been written if buf_len was long
- * enough, not including null terminator
+ * Returns number of characters that would have been written if @buf is large enough,
+ * not including the null terminator.
  */
-int
-ddb_iov_to_printable_buf(d_iov_t *iov, char buf[], uint32_t buf_len)
+uint32_t
+ddb_iov_to_printable_buf(d_iov_t *iov, char buf[], uint32_t buf_len, const char *prefix)
 {
+	char     tmp[32];
+	uint32_t new_len;
+	uint32_t result = 0;
+	int      i;
+
 	if (iov->iov_len == 0 || iov->iov_buf == NULL)
 		return 0;
 
 	if (ddb_can_print(iov))
 		return snprintf(buf, buf_len, "%.*s", (int)iov->iov_len, (char *)iov->iov_buf);
 
-	switch (iov->iov_len) {
-	case sizeof(uint8_t):
-		return snprintf(buf, buf_len, "uint8:0x%x", ((uint8_t *)iov->iov_buf)[0]);
-	case sizeof(uint16_t):
-		return snprintf(buf, buf_len, "uint16:0x%04hx", ((uint16_t *)iov->iov_buf)[0]);
-	case sizeof(uint32_t):
-		return snprintf(buf, buf_len, "uint32:0x%x", ((uint32_t *)iov->iov_buf)[0]);
-	case sizeof(uint64_t):
-		return snprintf(buf, buf_len, "uint64:0x%lx", ((uint64_t *)iov->iov_buf)[0]);
-	default:
-	{
-		char		tmp_buf[32];
-		uint32_t	new_len;
-		uint32_t	result = 0;
-		int		i;
+	if (prefix != NULL)
+		result = snprintf(buf, buf_len, "%s", prefix);
 
-		result += snprintf(buf, buf_len, "bin(%lu):0x", iov->iov_len);
-
-		for (i = 0; i < iov->iov_len; i++) {
-			new_len = snprintf(tmp_buf, ARRAY_SIZE(tmp_buf), "%02x",
-					   ((uint8_t *)iov->iov_buf)[i]);
-			if (new_len + result > buf_len) {
-				/* Buffer not big enough */
-				result += new_len;
-			} else {
-				result += sprintf(buf + result, "%s", tmp_buf);
-			}
-		}
-
-		if (result > buf_len) {
-			buf[buf_len - 1] = '\0';
-			buf[buf_len - 2] = '.';
-			buf[buf_len - 3] = '.';
-			buf[buf_len - 4] = '.';
-
-		}
-		return result;
+	for (i = 0; i < iov->iov_len; i++) {
+		new_len = snprintf(tmp, ARRAY_SIZE(tmp), "%02x", ((uint8_t *)iov->iov_buf)[i]);
+		if (new_len + result > buf_len)
+			result += new_len; /* Buffer is not big enough. */
+		else
+			result += sprintf(buf + result, "%s", tmp);
 	}
+
+	if (result > buf_len) {
+		buf[buf_len - 1] = '\0';
+		for (i = 2; buf_len >= i && i <= 4; i++)
+			buf[buf_len - i] = '.';
 	}
+
+	return result;
+}
+
+/*
+ * Converts contents of an @key to something that is more printable.
+ *
+ * Returns number of characters that would have been written if @buf is long enough,
+ * not including the null terminator.
+ */
+uint32_t
+ddb_key_to_printable_buf(daos_key_t *key, enum daos_otype_t otype, char buf[], uint32_t buf_len)
+{
+	char tmp[32];
+
+	if (key->iov_len == 0 || key->iov_buf == NULL)
+		return 0;
+
+	if (ddb_key_is_lexical(otype))
+		return snprintf(buf, buf_len, "%.*s", (int)key->iov_len, (char *)key->iov_buf);
+
+	if (ddb_key_is_int(otype)) {
+		switch (key->iov_len) {
+		case sizeof(uint8_t):
+			return snprintf(buf, buf_len, "uint8:0x%x", ((uint8_t *)key->iov_buf)[0]);
+		case sizeof(uint16_t):
+			return snprintf(buf, buf_len, "uint16:0x%04hx",
+					((uint16_t *)key->iov_buf)[0]);
+		case sizeof(uint32_t):
+			return snprintf(buf, buf_len, "uint32:0x%x", ((uint32_t *)key->iov_buf)[0]);
+		case sizeof(uint64_t):
+			return snprintf(buf, buf_len, "uint64:0x%lx",
+					((uint64_t *)key->iov_buf)[0]);
+			/* Fall through. */
+		}
+	}
+
+	snprintf(tmp, ARRAY_SIZE(tmp), "bin(%lu):0x", key->iov_len);
+
+	return ddb_iov_to_printable_buf(key, buf, buf_len, tmp);
 }
 
 void
@@ -113,22 +137,22 @@ ddb_print_key(struct ddb_ctx *ctx, struct ddb_key *key, uint32_t indent)
 
 	memset(buf, 0, buf_len);
 
-	ddb_iov_to_printable_buf(&key->ddbk_key, buf, buf_len);
+	ddb_key_to_printable_buf(&key->ddbk_key, key->ddbk_otype, buf, buf_len);
 
 	print_indent(ctx, indent);
-	if (ddb_can_print(&key->ddbk_key)) {
-		ddb_printf(ctx, DF_IDX" '%s' (%lu)%s\n",
-			   DP_IDX(key->ddbk_idx),
-			   buf,
-			   key->ddbk_key.iov_len,
-			   key->ddbk_child_type == VOS_ITER_SINGLE ? " (SV)" :
-			   key->ddbk_child_type == VOS_ITER_RECX ? " (ARRAY)" : "");
-		return;
-	}
 
-	ddb_printf(ctx, DF_IDX" {%s}%s\n", DP_IDX(key->ddbk_idx), buf,
-		   key->ddbk_child_type == VOS_ITER_SINGLE ? " (SV)" :
-		   key->ddbk_child_type == VOS_ITER_RECX ? " (ARRAY)" : "");
+	if (ddb_key_is_lexical(key->ddbk_otype) ||
+	    (!ddb_key_is_int(key->ddbk_otype) && ddb_can_print(&key->ddbk_key)))
+		ddb_printf(ctx, DF_IDX " '%s' (%lu)%s\n", DP_IDX(key->ddbk_idx), buf,
+			   key->ddbk_key.iov_len,
+			   key->ddbk_child_type == VOS_ITER_SINGLE ? " (SV)"
+			   : key->ddbk_child_type == VOS_ITER_RECX ? " (ARRAY)"
+								   : "");
+	else
+		ddb_printf(ctx, DF_IDX " {%s}%s\n", DP_IDX(key->ddbk_idx), buf,
+			   key->ddbk_child_type == VOS_ITER_SINGLE ? " (SV)"
+			   : key->ddbk_child_type == VOS_ITER_RECX ? " (ARRAY)"
+								   : "");
 }
 
 void
