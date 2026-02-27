@@ -23,6 +23,7 @@ pool:
 
 container:
   properties: cksum:crc16,cksum_size:16384
+  type: NONE
 
 dkeys:
   no_of_dkeys: 50

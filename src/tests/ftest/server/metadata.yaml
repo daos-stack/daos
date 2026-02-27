@@ -55,6 +55,7 @@ container:
   control_method: API
   silent: true
   register_cleanup: False
+  type: NONE
 
 ior:
   np: 1

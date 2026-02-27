@@ -19,3 +19,4 @@ pool:
   scm_size: 1073741824
 container:
   control_method: daos
+  type: NONE

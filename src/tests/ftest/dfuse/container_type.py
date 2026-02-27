@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -40,14 +41,10 @@ class DfuseContainerCheck(TestWithServers):
         pool = self.get_pool(connect=False)
 
         for cont_type in cont_types:
-            description = f"{cont_type if cont_type == 'POSIX' else 'non-POSIX'}"
+            description = f"type={cont_type}"
             # Get container params
             self.log_step(f'Creating a {description} container')
-            container = self.get_container(pool, create=False)
-            # create container
-            if cont_type == 'POSIX':
-                container.type.update(cont_type)
-            container.create()
+            container = self.get_container(pool, type=cont_type)
 
             # Attempt to mount the dfuse mount point - this should only succeed
             # with a POSIX container
