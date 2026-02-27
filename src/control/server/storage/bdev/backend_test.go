@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1112,6 +1112,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2)),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
 					},
 				},
@@ -1174,6 +1175,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(3)),
 					},
 				},
 				{
@@ -1202,6 +1204,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(5)),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4)),
 					},
 				},
@@ -1259,6 +1262,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(2)),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4)),
 					},
 				},

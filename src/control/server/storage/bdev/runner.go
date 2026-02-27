@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -131,6 +132,7 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 func (s *spdkSetupScript) Unbind(req *storage.BdevPrepareRequest) error {
 	s.env = map[string]string{
 		"PATH":            os.Getenv("PATH"),
+		pciAllowListEnv:   req.PCIAllowList,
 		pciBlockListEnv:   req.PCIBlockList,
 		driverOverrideEnv: noDriver,
 	}
