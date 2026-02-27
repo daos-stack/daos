@@ -27,7 +27,7 @@ fi
 # Generate the html report
 rm -fr bullseye_code_coverage_report || true
 mkdir bullseye_code_coverage_report
-cp /opt/BullseyeCoverage/daos/bullseye_sources.tar.gz .
-tar -xf bullseye_sources.tar.gz
-covhtml --srcdir . --file test.cov bullseye_code_coverage_report
-ls -al bullseye_code_coverage_report
+cd bullseye_code_coverage_report
+mkdir sources
+tar -xf /opt/BullseyeCoverage/daos/bullseye_sources.tar.gz -C sources/
+covhtml --srcdir sources --file "${COVFILE}" .
