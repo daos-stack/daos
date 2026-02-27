@@ -721,13 +721,12 @@ out_unlock:
  * Returns:
  *
  *   < 0			error; end the operation
- *   RSVC_CLIENT_RECHOOSE	task reinited; return 0 from completion cb
+ *   RSVC_CLIENT_RECHOOSE	retriable error; retry the operation
  *   RSVC_CLIENT_PROCEED	OK; proceed to process the reply
  */
 static int
-pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
-			      int rc_crt, struct pool_op_out *out,
-			      tse_task_t *task)
+pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep, int rc_crt,
+			      struct pool_op_out *out)
 {
 	int rc;
 
@@ -899,7 +898,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 	int			   rc = task->dt_result;
 	struct daos_rebuild_status *rs;
 
-	rc = pool_rsvc_client_complete_rpc(tpriv->pool, &arg->rpc->cr_ep, rc, &pco->pco_op, task);
+	rc = pool_rsvc_client_complete_rpc(tpriv->pool, &arg->rpc->cr_ep, rc, &pco->pco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -1184,8 +1183,7 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &pdo->pdo_op, task);
+	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &pdo->pdo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -1867,8 +1865,7 @@ pool_query_cb(tse_task_t *task, void *data)
 	bool                            reinit = false;
 	int				rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
-					   &out_v5->pqo_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc, &out_v5->pqo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2589,8 +2586,7 @@ pool_list_cont_cb(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc,
-					   &out->plco_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc, &out->plco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2755,8 +2751,7 @@ pool_filter_cont_cb(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->fca_pool, &arg->rpc->cr_ep, rc,
-					   &out->pfco_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->fca_pool, &arg->rpc->cr_ep, rc, &out->pfco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2949,8 +2944,7 @@ pool_query_target_cb(tse_task_t *task, void *data)
 	out = crt_reply_get(arg->rpc);
 	rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
-					   &out->pqio_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc, &out->pqio_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -3115,8 +3109,7 @@ pool_req_complete(tse_task_t *task, void *data)
 	bool                     reinit  = false;
 	int			 rc	 = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(pool, &args->pra_rpc->cr_ep,
-					   rc, op_out, task);
+	rc = pool_rsvc_client_complete_rpc(pool, &args->pra_rpc->cr_ep, rc, op_out);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -3646,8 +3639,7 @@ pool_svc_stop_cb(tse_task_t *task, void *data)
 	bool                            reinit = false;
 	int				rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dsa_pool, &arg->rpc->cr_ep, rc,
-					   &out->pso_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dsa_pool, &arg->rpc->cr_ep, rc, &out->pso_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
