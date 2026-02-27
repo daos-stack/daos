@@ -1084,6 +1084,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 
 		if (rebuild_abort) {
 			rgt->rgt_abort = 1;
+			rgt->rgt_abort_by_newrb  = 1;
 			rgt->rgt_status.rs_errno = -DER_STALE;
 			goto done;
 		}
@@ -1912,6 +1913,11 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		 * original. Scheduling any retry is deferred until fail_reclaim is actually done.
 		 */
 		if (rgt->rgt_init_scan) {
+			if (rgt->rgt_abort_by_newrb) {
+				D_INFO(DF_RB " skip fail_reclaim", DP_RB_RGT(rgt));
+				goto retry_rb;
+			}
+
 			/* NB: dst_reclaim_ver is the minimum rebuild target version, once rebuild
 			 * fails, it will be used to discard all of the previous rebuild data
 			 * (reclaim - 1 see obj_reclaim()), but keep the in-flight I/O data.
@@ -1947,6 +1953,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			D_GOTO(complete, rc);
 		}
 
+retry_rb:
 		/* Determine if original rebuild needs a retry, and if so revert pool map. */
 		retry_rebuild_task(task, rgt, &retry_opc);
 
