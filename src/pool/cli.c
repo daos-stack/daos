@@ -1153,9 +1153,45 @@ dc_pool_connect(tse_task_t *task)
 			args->pool ?: "<compat>", DP_UUID(tpriv->pool->dp_pool_hdl), args->flags);
 	}
 
-	rc = dc_pool_connect_internal(task, args->info, label, args->poh);
-	if (rc)
-		goto out_pool;
+	/* Implement retry logic for server availability */
+	if (args->retry_timeout != 0) {
+		time_t start_time  = time(NULL);
+		time_t elapsed     = 0;
+		int    retry_count = 0;
+
+		while (true) {
+			rc = dc_pool_connect_internal(task, args->info, label, args->poh);
+			if (rc == 0) {
+				D_DEBUG(DB_MD, "pool connect succeeded after %d retries\n",
+					retry_count);
+				break;
+			}
+
+			/* Check if this is a retryable error (server unavailable) */
+			if (rc != -DER_UNREACH && rc != -DER_TIMEDOUT && rc != -DER_HG) {
+				D_ERROR("pool connect failed with non-retryable error: " DF_RC "\n",
+					DP_RC(rc));
+				goto out_pool;
+			}
+
+			elapsed = time(NULL) - start_time;
+			if (args->retry_timeout > 0 && elapsed >= args->retry_timeout) {
+				D_ERROR("pool connect retry timeout (%d seconds) exceeded\n",
+					args->retry_timeout);
+				goto out_pool;
+			}
+
+			retry_count++;
+			D_WARN("pool connect failed (attempt %d), retrying in 1 second... " DF_RC
+			       "\n",
+			       retry_count, DP_RC(rc));
+			sleep(1);
+		}
+	} else {
+		rc = dc_pool_connect_internal(task, args->info, label, args->poh);
+		if (rc)
+			goto out_pool;
+	}
 
 	return rc;
 

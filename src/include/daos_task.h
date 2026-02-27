@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -156,6 +157,8 @@ typedef struct {
 	const char		*grp;
 	/** Connect mode represented by the DAOS_PC_ bits. */
 	unsigned int		 flags;
+	/** Retry timeout in seconds: 0=no retry, -1=indefinite, >0=retry for N seconds */
+	int                      retry_timeout;
 	/** Returned open handle. */
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */
