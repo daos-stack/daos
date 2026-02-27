@@ -1150,6 +1150,30 @@ pipeline {
             steps {
                 script {
                     parallel(
+                        'Functional Hardware Large': getFunctionalTestStage(
+                            name: 'Functional Hardware Large',
+                            pragma_suffix: '-hw-large',
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                            next_version: next_version(),
+                            stage_tags: 'hw,large',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto',
+                            run_if_pr: false,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Large MD on SSD',
+                            pragma_suffix: '-hw-large-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                            next_version: next_version(),
+                            stage_tags: 'hw,large',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto_md_on_ssd',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
@@ -1225,30 +1249,6 @@ pipeline {
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Large': getFunctionalTestStage(
-                            name: 'Functional Hardware Large',
-                            pragma_suffix: '-hw-large',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Large MD on SSD',
-                            pragma_suffix: '-hw-large-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
