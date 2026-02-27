@@ -50,8 +50,8 @@ export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
 export argobots_release="4${distro_name}"
 export argobots_full="${argobots_version}-${argobots_release}"
-export pmdk_version="2.1.2"
-export pmdk_release="1${distro_name}"
+export pmdk_version="2.1.3"
+export pmdk_release="0${distro_name}"
 export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.31.1"
 export isal_release="8${distro_name}"
@@ -104,9 +104,9 @@ set_lib_name mercury_libfabric lib mercury-libfabric mercury-libfabric mercury-l
 export mercury_libfabric_lib
 
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
-set_lib_name pmemobj dev libpmemobj libpmemobj1 libpmemobj1
+set_lib_name pmemobj dev libpmemobj libpmemobj libpmemobj
 set_lib_name pmem lib libpmem libpmem1 libpmem1
-set_lib_name pmem dev libpmem libpmem libpmem1
+set_lib_name pmem dev libpmem libpmem libpmem
 set_lib_name pmempool lib libpmempool libpmempool1 libpmempool1
 export pmem_lib
 export pmem_dev

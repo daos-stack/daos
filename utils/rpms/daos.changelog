@@ -1,4 +1,7 @@
 %changelog
+* Wed Feb 18 2026 Oksana Salyk <oksana.salyk@hpe.com> 2.7.104-2
+- Update PMDK to release 2.1.3
+
 * Tue Feb 10 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.7.104-1
 - Bump version to 2.7.104
 
