@@ -176,6 +176,7 @@ bio_spdk_env_init(void)
 
 	/* Set SPDK log print level to configured value */
 	spdk_log_set_print_level(spdk_level);
+	spdk_log_set_flag("all");
 
 	/* Build DPDK options with specified log level for all DPDK log facilities */
 	dpdk_opts = dpdk_cli_build_opts(dpdk_level, dpdk_level);

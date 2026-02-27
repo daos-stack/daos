@@ -382,6 +382,7 @@ def define_components(reqs):
                            '--with-shared',
                            '--without-nvme-cuse',
                            '--without-crypto',
+                           '--enable-debug',
                            f'--target-arch={spdk_arch}'] + spdk_conf,
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
