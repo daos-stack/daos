@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -77,10 +77,10 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 #endif
 	}
 
-	dfuse_cache_evict_dir(dfuse_info, parent);
+	dfuse_cache_evict_dir(parent);
 
 	if (newparent) {
-		dfuse_cache_evict_dir(dfuse_info, newparent);
+		dfuse_cache_evict_dir(newparent);
 	} else {
 		newparent = parent;
 	}
