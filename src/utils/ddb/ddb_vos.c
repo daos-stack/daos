@@ -371,19 +371,19 @@ vos_vtp_compare(struct dv_indexed_tree_path *vtp, vos_iter_entry_t *entry, enum 
 }
 
 static void
-set_oid(vos_iter_entry_t *entry, union itp_part_type *part)
+set_oid(vos_iter_entry_t *entry, struct indexed_tree_path_part *part)
 {
 	itp_part_set_obj(part, &entry->ie_oid);
 }
 
 static void
-set_key(vos_iter_entry_t *entry, union itp_part_type *part)
+set_key(vos_iter_entry_t *entry, struct indexed_tree_path_part *part)
 {
 	itp_part_set_key(part, &entry->ie_key);
 }
 
 static void
-set_recx(vos_iter_entry_t *entry, union itp_part_type *part)
+set_recx(vos_iter_entry_t *entry, struct indexed_tree_path_part *part)
 {
 	itp_part_set_recx(part, &entry->ie_orig_recx);
 }
@@ -391,18 +391,16 @@ set_recx(vos_iter_entry_t *entry, union itp_part_type *part)
 static void
 vos_itp_set(struct dv_indexed_tree_path *itp, vos_iter_entry_t *entry, enum path_parts part_key)
 {
-	void (*set_fn[PATH_PART_END])(vos_iter_entry_t *entry, union itp_part_type *part) = {
+	void (*set_fn[PATH_PART_END])(vos_iter_entry_t              *entry,
+				      struct indexed_tree_path_part *part) = {
 	    NULL, /* Won't set containers */
-	    set_oid,
-	    set_key,
-	    set_key,
-	    set_recx,
+	    set_oid, set_key, set_key, set_recx,
 	};
 
 	D_ASSERT(part_key < PATH_PART_END);
 	D_ASSERT(set_fn[part_key] != NULL);
 
-	set_fn[part_key](entry, &itp->itp_parts[part_key].itp_part_value);
+	set_fn[part_key](entry, &itp->itp_parts[part_key]);
 	itp->itp_parts[part_key].itp_has_part_value = true;
 }
 
@@ -702,8 +700,7 @@ dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj)
 	 * obj_class_fini();
 	*/
 
-	obj->ddbo_otype = daos_obj_id2type(oid);
-	get_object_type(obj->ddbo_otype, obj->ddbo_otype_str);
+	get_object_type(daos_obj_id2type(oid), obj->ddbo_otype_str);
 }
 
 static int
@@ -739,9 +736,10 @@ handle_dkey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	itp_unset_dkey(&ctx->itp); /* make sure dkey is freed from any previous handle */
 	itp_set_dkey(&ctx->itp, &entry->ie_key, ctx->dkey_seen);
 
-	dkey.ddbk_path = &ctx->itp;
-	dkey.ddbk_idx = ctx->dkey_seen++;
-	dkey.ddbk_key = entry->ie_key;
+	dkey.ddbk_path       = &ctx->itp;
+	dkey.ddbk_idx        = ctx->dkey_seen++;
+	dkey.ddbk_key        = entry->ie_key;
+	dkey.ddbk_otype      = daos_obj_id2type(ctx->current_obj.id_pub);
 	dkey.ddbk_child_type = entry->ie_child_type;
 
 	ctx->current_dkey = entry->ie_key;
@@ -765,9 +763,10 @@ handle_akey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	itp_set_akey(&ctx->itp, &entry->ie_key, ctx->akey_seen);
 	itp_unset_recx(&ctx->itp);
 
-	akey.ddbk_path = &ctx->itp;
-	akey.ddbk_idx = ctx->akey_seen++;
-	akey.ddbk_key = entry->ie_key;
+	akey.ddbk_path       = &ctx->itp;
+	akey.ddbk_idx        = ctx->akey_seen++;
+	akey.ddbk_key        = entry->ie_key;
+	akey.ddbk_otype      = daos_obj_id2type(ctx->current_obj.id_pub);
 	akey.ddbk_child_type = entry->ie_child_type;
 
 	ctx->current_akey = entry->ie_key;
@@ -888,9 +887,10 @@ dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 	vos_iter_type_t		type;
 	struct ddb_iter_ctx	ctx = {0};
 
-	ctx.handlers = handlers;
+	ctx.handlers     = handlers;
 	ctx.handler_args = handler_args;
-	ctx.poh = poh;
+	ctx.poh          = poh;
+	ctx.current_obj  = path->vtp_oid;
 	itp_copy(&ctx.itp, itp);
 
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;

@@ -304,58 +304,55 @@ itp_parse(const char *path, struct dv_indexed_tree_path *itp)
 }
 
 bool
-itp_part_set_cont(union itp_part_type *part, void *part_value)
+itp_part_set_cont(struct indexed_tree_path_part *part, void *part_value)
 {
 	const uint8_t *cont_uuid = part_value;
 
 	if (cont_uuid == NULL || uuid_is_null(cont_uuid))
 		return false;
 
-	uuid_copy(part->itp_uuid, cont_uuid);
+	uuid_copy(part->itp_part_value.itp_uuid, cont_uuid);
 	return true;
 }
 
 bool
-itp_part_set_obj(union itp_part_type *part, void *part_value)
+itp_part_set_obj(struct indexed_tree_path_part *part, void *part_value)
 {
 	daos_unit_oid_t *oid = part_value;
 
 	if (daos_unit_oid_is_null(*oid))
 		return false;
 
-	part->itp_oid = *oid;
+	part->itp_part_value.itp_oid = *oid;
+	part->itp_otype              = daos_obj_id2type(oid->id_pub);
 	return true;
 }
 
 bool
-itp_part_set_key(union itp_part_type *part, void *part_value)
+itp_part_set_key(struct indexed_tree_path_part *part, void *part_value)
 {
 	daos_key_t *key = part_value;
 
 	if (key->iov_len == 0)
 		return false;
-	daos_iov_copy(&part->itp_key, key);
+	daos_iov_copy(&part->itp_part_value.itp_key, key);
 	return true;
 }
 
 bool
-itp_part_set_recx(union itp_part_type *part, void *part_value)
+itp_part_set_recx(struct indexed_tree_path_part *part, void *part_value)
 {
 	daos_recx_t *recx = part_value;
 
 	if (recx->rx_nr == 0)
 		return false;
 
-	part->itp_recx = *recx;
+	part->itp_part_value.itp_recx = *recx;
 	return true;
 }
 
-static bool (*part_set_fn[PATH_PART_END])(union itp_part_type *part, void *part_value) = {
-	itp_part_set_cont,
-	itp_part_set_obj,
-	itp_part_set_key,
-	itp_part_set_key,
-	itp_part_set_recx,
+static bool (*part_set_fn[PATH_PART_END])(struct indexed_tree_path_part *part, void *part_value) = {
+    itp_part_set_cont, itp_part_set_obj, itp_part_set_key, itp_part_set_key, itp_part_set_recx,
 };
 
 bool
@@ -363,7 +360,7 @@ itp_part_value_set(struct dv_indexed_tree_path *itp, enum path_parts part_key, v
 {
 	struct indexed_tree_path_part *p = &itp->itp_parts[part_key];
 
-	if (part_set_fn[part_key](&p->itp_part_value, part_value)) {
+	if (part_set_fn[part_key](p, part_value)) {
 		p->itp_has_part_value = true;
 		return true;
 	}
@@ -779,15 +776,15 @@ dvp_is_empty(struct dv_tree_path *vtp)
  */
 
 void
-itp_print_part_cont(struct ddb_ctx *ctx, union itp_part_type *v)
+itp_print_part_cont(struct ddb_ctx *ctx, struct indexed_tree_path_part *v)
 {
-	ddb_printf(ctx, DF_UUIDF, DP_UUID(v->itp_uuid));
+	ddb_printf(ctx, DF_UUIDF, DP_UUID(v->itp_part_value.itp_uuid));
 }
 
 void
-itp_print_part_obj(struct ddb_ctx *ctx, union itp_part_type *v)
+itp_print_part_obj(struct ddb_ctx *ctx, struct indexed_tree_path_part *v)
 {
-	ddb_printf(ctx, DF_UOID, DP_UOID(v->itp_oid));
+	ddb_printf(ctx, DF_UOID, DP_UOID(v->itp_part_value.itp_oid));
 }
 
 bool
@@ -807,7 +804,8 @@ itp_key_safe_str(char *buf, size_t buf_len)
 		bool escaped = false;
 
 		if (tmp_idx + 1 >= tmp_end) { /* +1 for escape character if needed */
-			D_ERROR("Buffer was too small to hold the escape characters");
+			D_ERROR("Buffer (%ld) was too small to hold the escape characters\n",
+				buf_len);
 			return false;
 		}
 		for (e = 0; e < ARRAY_SIZE(escape_chars) && !escaped; ++e) {
@@ -828,20 +826,36 @@ itp_key_safe_str(char *buf, size_t buf_len)
 }
 
 void
-itp_print_part_key(struct ddb_ctx *ctx, union itp_part_type *key_part)
+itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 {
-	char	buf[DDB_MAX_PRITABLE_KEY];
-	d_iov_t *key_iov = &key_part->itp_key;
+	char     buf[DDB_MAX_PRITABLE_KEY];
+	d_iov_t *key_iov = &part->itp_part_value.itp_key;
+	char    *ptr     = buf;
+	uint32_t len;
 
-	ddb_iov_to_printable_buf(key_iov, buf, ARRAY_SIZE(buf));
-	if (ddb_can_print(key_iov)) {
+	len = ddb_key_to_printable_buf(key_iov, part->itp_otype, buf, ARRAY_SIZE(buf));
+	if (len > ARRAY_SIZE(buf)) {
+		len += 2; /* +2 for escape character if needed and null terminator. */
+		D_ALLOC(ptr, len);
+		if (ptr == NULL) {
+			D_ERROR("NOT enough DRAM for print key: len = %u\n", len);
+			return;
+		}
+
+		ddb_key_to_printable_buf(key_iov, part->itp_otype, ptr, len);
+	} else {
+		len = ARRAY_SIZE(buf);
+	}
+
+	if (ddb_key_is_lexical(part->itp_otype) ||
+	    (!ddb_key_is_int(part->itp_otype) && ddb_can_print(key_iov))) {
 		/* +1 to make sure there's room for a null terminator */
-		char key_str[key_part->itp_key.iov_len + 1];
+		char key_str[key_iov->iov_len + 1];
 
 		memcpy(key_str, key_iov->iov_buf, key_iov->iov_len);
 		key_str[key_iov->iov_len] = '\0';
 		/* buffer should be plenty big, but just in case ... */
-		if (!itp_key_safe_str(buf, ARRAY_SIZE(buf))) {
+		if (!itp_key_safe_str(ptr, len)) {
 			ddb_print(ctx, "(ISSUE PRINTING KEY)");
 			return;
 		}
@@ -849,27 +863,27 @@ itp_print_part_key(struct ddb_ctx *ctx, union itp_part_type *key_part)
 		 * parsing the string into a valid key will work
 		 */
 		if (key_iov->iov_len != strlen(key_str))
-			ddb_printf(ctx, "%s{%lu}", buf, key_iov->iov_len);
+			ddb_printf(ctx, "%s{%lu}", ptr, key_iov->iov_len);
 		else
-			ddb_printf(ctx, "%s", buf);
+			ddb_printf(ctx, "%s", ptr);
 	} else {
-		/* is an int or binary and already formatted in iov_to_pritable_buf */
-		ddb_printf(ctx, "{%s}", buf);
+		/* is an int or binary and already formatted in ddb_key_to_printable_buf */
+		ddb_printf(ctx, "{%s}", ptr);
 	}
+
+	if (ptr != buf)
+		D_FREE(ptr);
 }
 
 void
-itp_print_part_recx(struct ddb_ctx *ctx, union itp_part_type *v)
+itp_print_part_recx(struct ddb_ctx *ctx, struct indexed_tree_path_part *v)
 {
-	ddb_printf(ctx, DF_DDB_RECX, DP_DDB_RECX(v->itp_recx));
+	ddb_printf(ctx, DF_DDB_RECX, DP_DDB_RECX(v->itp_part_value.itp_recx));
 }
 
-static void (*print_fn[PATH_PART_END])(struct ddb_ctx *ctx, union itp_part_type *v) = {
-	itp_print_part_cont,
-	itp_print_part_obj,
-	itp_print_part_key,
-	itp_print_part_key,
-	itp_print_part_recx,
+static void (*print_fn[PATH_PART_END])(struct ddb_ctx *ctx, struct indexed_tree_path_part *v) = {
+    itp_print_part_cont, itp_print_part_obj,  itp_print_part_key,
+    itp_print_part_key,  itp_print_part_recx,
 };
 
 void
@@ -886,7 +900,7 @@ itp_print_parts(struct ddb_ctx *ctx, struct dv_indexed_tree_path *itp)
 		if (!itp->itp_parts[i].itp_has_part_value)
 			break;
 		ddb_print(ctx, "/");
-		print_fn[i](ctx, &itp->itp_parts[i].itp_part_value);
+		print_fn[i](ctx, &itp->itp_parts[i]);
 	}
 }
 
