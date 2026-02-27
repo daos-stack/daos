@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,7 +62,6 @@ test_run()
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
 
-	opt.cio_use_credits = 1;
 	opt.cio_ep_credits = test.tg_credits;
 
 	DBG_PRINT("Number of credits: %d Number of burst: %d\n",
