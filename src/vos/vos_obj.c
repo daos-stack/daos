@@ -490,7 +490,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	hold_flags = (flags & VOS_OF_COND_PUNCH) ? 0 : VOS_OBJ_CREATE;
 	hold_flags |= VOS_OBJ_VISIBLE;
 
-	rc = vos_obj_hold(cont, oid, &epr, bound, hold_flags, DAOS_INTENT_PUNCH, &obj, ts_set);
+	rc = vos_obj_acquire(cont, oid, true, &obj);
 	if (rc != 0)
 		goto reset;
 
@@ -842,8 +842,7 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
 	}
 
 restart:
-	rc = vos_obj_hold(cont, oid, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE,
-			  DAOS_INTENT_MARK, &obj, NULL);
+	rc = vos_obj_acquire(cont, oid, true, &obj);
 	if (rc != 0)
 		goto log;
 
