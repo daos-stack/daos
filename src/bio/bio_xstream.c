@@ -1714,7 +1714,7 @@ bio_xsctxt_init_by_config(struct common_cp_arg *cp_arg)
 	 * Initially, this was called internally spdk_subsystem_load_config() -> ... ->
 	 * spdk_rpc_initialize(). However, since commit
 	 * https://github.com/spdk/spdk/commit/fba209c7324a11b9230533144c02e7a66bc738ea (>=v24.01)
-	 * SPDK_RPC_STARTUP has become the initial value of the underlaying global variable and it
+	 * SPDK_RPC_STARTUP has become the initial value of the underlying global variable and it
 	 * is no longer reset automatically. This makes no difference for applications that
 	 * initialize SPDK only once during the lifetime of the process. But some BIO module
 	 * consumers—such as DDB—expect to be able to initialize, finalize, and then reinitialize
