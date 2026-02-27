@@ -164,4 +164,6 @@ int
 heap_incr_empty_nemb_cnt(struct palloc_heap *heap);
 int
 heap_decr_empty_nemb_cnt(struct palloc_heap *heap);
+void
+heap_dump_rtinfo(struct palloc_heap *heap);
 #endif /* __DAOS_COMMON_HEAP_H */

@@ -445,6 +445,7 @@ dav_wal_replay_heap_off2ptr(dav_obj_t *dav_hdl, uint64_t off)
 		errno = daos_der2errno(rc);
 		return NULL;
 	}
+	D_INFO("heap %p: replay at offset %lu zone %u", dav_hdl->do_heap, off, z_id);
 	return umem_cache_off2ptr(store, off);
 }
 
