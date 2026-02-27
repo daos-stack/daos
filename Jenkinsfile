@@ -316,22 +316,22 @@ pipeline {
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Unit Test on EL 8 test stage')
         booleanParam(name: 'CI_NLT_TEST',
                      defaultValue: true,
                      description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Fault injection testing on EL 8 test stage')
         booleanParam(name: 'CI_TEST_EL8_RPMs',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Test RPMs on EL 8 test stage')
         booleanParam(name: 'CI_TEST_LEAP15_RPMs',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Test RPMs on Leap 15 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
                      defaultValue: false,
@@ -343,7 +343,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional on EL 8 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
                      defaultValue: false,
@@ -363,7 +363,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium test stage')
         booleanParam(name: 'CI_medium_md_on_ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
         booleanParam(name: 'CI_medium_vmd_TEST',
                      defaultValue: false,
@@ -372,7 +372,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: false,
@@ -381,7 +381,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Large test stage')
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
@@ -393,7 +393,7 @@ pipeline {
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
-               defaultValue: 'ci_nlt_1',
+               defaultValue: 'ci_node-hsw-105',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
@@ -417,7 +417,7 @@ pipeline {
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
         string(name: 'CI_BUILD_DESCRIPTION',
-               defaultValue: '',
+               defaultValue: 'Only run NLT on ci_node-hsw-105',
                description: 'A description of the build')
     }
 
