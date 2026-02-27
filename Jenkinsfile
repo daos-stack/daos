@@ -225,6 +225,11 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
     return false
 }
 
+Boolean forceSkip() {
+    println('Stage skipped on purpose in jenkinsfile ...')
+    return false
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -390,7 +395,7 @@ pipeline {
                defaultValue: 'ci_ssd_vm1',
                description: 'Label to use for 1 VM node unit tests that need NVMe')
         string(name: 'FUNCTIONAL_VM_LABEL',
-               defaultValue: 'ci_vm9',
+               defaultValue: 'ci_vm_wlsc-209vm1-9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
@@ -417,7 +422,7 @@ pipeline {
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
         string(name: 'CI_BUILD_DESCRIPTION',
-               defaultValue: '',
+               defaultValue: 'ci_vm_wlsc-209vm1-9',
                description: 'A description of the build')
     }
 
@@ -638,6 +643,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('leap15') }
+                        expression { forceSkip() }
                     }
                     agent {
                         dockerfile {
@@ -688,6 +694,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('leap15', 'icc') }
+                        expression { forceSkip() }
                     }
                     agent {
                         dockerfile {
@@ -728,6 +735,7 @@ pipeline {
             when {
                 beforeAgent true
                 expression { !skipStage() }
+                expression { forceSkip() }
             }
             parallel {
                 stage('Unit Test on EL 8.8') {
@@ -878,6 +886,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
+                        expression { forceSkip() }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -947,6 +956,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
+                        expression { forceSkip() }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -971,6 +981,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
+                        expression { forceSkip() }
                     }
                     agent {
                         label vm9_label('Ubuntu')
@@ -994,6 +1005,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
+                        expression { forceSkip() }
                     }
                     agent {
                         dockerfile {
@@ -1071,6 +1083,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
+                        expression { forceSkip() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1126,6 +1139,7 @@ pipeline {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
+                expression { forceSkip() }
             }
             agent {
                 label params.CI_STORAGE_PREP_LABEL
@@ -1146,6 +1160,7 @@ pipeline {
             when {
                 beforeAgent true
                 expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
+                expression { forceSkip() }
             }
             steps {
                 script {
