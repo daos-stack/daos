@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
   (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -31,7 +31,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     cache_time = '2d'
     # Timeout in minutes.  This is per command so up to double this or more as there are two
     # scons commands which can both take a long time.
-    build_time = 60
+    build_time = 120
 
     dfuse_namespace = None
 
@@ -306,3 +306,35 @@ class DaosBuild(TestWithServers):
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
         """
         run_build_test(self, "nocache")
+
+    def test_dfuse_daos_build_wt_il(self):
+        """This test builds DAOS on a dfuse filesystem.
+
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,dfs,dfuse,ioil
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
+        """
+        run_build_test(self, "writethrough", il_lib='libioil.so')
+
+    def test_dfuse_daos_build_wt_pil4dfs(self):
+        """This test builds DAOS on a dfuse filesystem.
+
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,dfs,dfuse,pil4dfs
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
+        """
+        run_build_test(self, "nocache", il_lib='libpil4dfs.so')
