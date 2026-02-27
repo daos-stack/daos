@@ -129,7 +129,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	}
 
 	if (((position % K128) == 0) && ((len % K128) == 0)) {
-		DFUSE_TRA_INFO(oh, "allowing out-of-order pre read");
+		DFUSE_TRA_DEBUG(oh, "allowing out-of-order pre read");
 		/* Do not closely track the read position in this case, just the maximum,
 		 * later checks will determine if the file is read to the end.
 		 */
@@ -207,32 +207,27 @@ chunk_free(struct read_chunk_data *cd)
 }
 
 /* Called when the last open file handle on a inode is closed.  This needs to free everything which
- * is complete and for anything that isn't flag it for deletion in the callback.
+ * is complete and for anything that isn't flag it for deletion in the callback.  No locking is
+ * needed here as this is only called as active is being released.
  *
  * Returns true if the feature was used.
  */
 bool
-read_chunk_close(struct dfuse_inode_entry *ie)
+read_chunk_close(struct active_inode *active)
 {
 	struct read_chunk_data *cd, *cdn;
-	bool                    rcb = false;
 
-	D_SPIN_LOCK(&ie->ie_active->lock);
-	if (d_list_empty(&ie->ie_active->chunks))
-		goto out;
+	if (d_list_empty(&active->chunks))
+		return false;
 
-	rcb = true;
-
-	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunks, list) {
+	d_list_for_each_entry_safe(cd, cdn, &active->chunks, list) {
 		if (cd->complete) {
 			chunk_free(cd);
 		} else {
 			cd->exiting = true;
 		}
 	}
-out:
-	D_SPIN_UNLOCK(&ie->ie_active->lock);
-	return rcb;
+	return true;
 }
 
 static void
@@ -473,10 +468,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
 
+	atomic_fetch_add_relaxed(&oh->doh_ie->ie_active->read_count, 1);
+
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
-		oh->doh_linear_read     = false;
 
 		if (active->readahead)
 			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
