@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2435,6 +2435,7 @@ struct tgt_discard_arg {
 	uuid_t			     pool_uuid;
 	uint64_t		     epoch;
 	struct pool_target_addr_list tgt_list;
+	struct ds_pool_child        *pool_child;
 };
 
 struct child_discard_arg {
@@ -2586,12 +2587,13 @@ put:
 	return rc;
 }
 
-static int
+static void
 pool_child_discard(void *data)
 {
 	struct tgt_discard_arg	*arg = data;
 	struct child_discard_arg cont_arg;
-	struct ds_pool_child	*child;
+	struct ds_pool_child    *child  = arg->pool_child;
+	struct ds_pool          *pool   = child->spc_pool;
 	vos_iter_param_t	param = { 0 };
 	struct vos_iter_anchors	anchor = { 0 };
 	struct pool_target_addr addr;
@@ -2599,13 +2601,16 @@ pool_child_discard(void *data)
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
+	D_ASSERTF(!ds_pool_is_rebuilding(pool), DF_UUID " is already being reintegrated!\n",
+		  DP_UUID(arg->pool_uuid));
+
 	myrank = dss_self_rank();
 	addr.pta_rank = myrank;
 	addr.pta_target = dss_get_module_info()->dmi_tgt_id;
 	if (!pool_target_addr_found(&arg->tgt_list, &addr)) {
 		D_DEBUG(DB_TRACE, "skip discard %u/%u.\n", addr.pta_rank,
 			addr.pta_target);
-		return 0;
+		return;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
@@ -2624,10 +2629,6 @@ pool_child_discard(void *data)
 	 * It is important to note that manual reintegration may be initiated
 	 * before step 3, in which case, the function should return “DER_AGAIN."
 	 */
-	child = ds_pool_child_lookup(arg->pool_uuid);
-	if (child == NULL)
-		return -DER_AGAIN;
-
 	param.ip_hdl = child->spc_hdl;
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
@@ -2635,7 +2636,7 @@ pool_child_discard(void *data)
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
 
 	cont_arg.tgt_discard = arg;
-	child->spc_discard_done = 0;
+
 	do {
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 				 cont_discard_cb, NULL, &cont_arg, NULL);
@@ -2648,11 +2649,33 @@ pool_child_discard(void *data)
 	} while (1);
 
 	child->spc_discard_done = 1;
-
 	d_backoff_seq_fini(&backoff_seq);
 
-	ds_pool_child_put(child);
+	ABT_mutex_lock(pool->sp_mutex);
+	if (rc && pool->sp_discard_status == 0)
+		pool->sp_discard_status = rc;
+	ABT_mutex_unlock(pool->sp_mutex);
 
+	ds_pool_child_put(child);
+}
+
+static int
+pool_child_discard_async(void *data)
+{
+	struct tgt_discard_arg *arg = data;
+	struct ds_pool_child   *child;
+	int                     rc;
+
+	child = ds_pool_child_lookup(arg->pool_uuid);
+	if (child == NULL)
+		return -DER_AGAIN;
+
+	/* set barrier to avoid race with rebuild */
+	child->spc_discard_done = 0;
+	arg->pool_child         = child;
+	rc = dss_ult_create(pool_child_discard, arg, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, NULL);
+	if (rc)
+		ds_pool_child_put(child);
 	return rc;
 }
 
@@ -2749,6 +2772,7 @@ ds_pool_tgt_discard_ult(void *data)
 	struct ds_pool		*pool;
 	struct tgt_discard_arg	*arg = data;
 	uint32_t		ex_status;
+	int                      ref;
 	int			rc;
 
 	/* If discard failed, let's still go ahead, since reintegration might
@@ -2762,10 +2786,15 @@ ds_pool_tgt_discard_ult(void *data)
 	}
 
 	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
-	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
-				  DSS_ULT_DEEP_STACK);
+	/* It returns after pool_child_discard_async() is scheduled on all xstreams,
+	 * it wouldn't wait for completion of discard, but it can guarantee barriers
+	 * are set on all xstreams (ds_pool_child::spc_discard_done = 0).
+	 */
+	ds_pool_collective(arg->pool_uuid, ex_status, pool_child_discard_async, arg, 0, true);
 
-	pool->sp_need_discard = 0;
+	ref = atomic_fetch_sub(&pool->sp_need_discard, 1);
+	D_ASSERTF(ref >= 0);
+
 	pool->sp_discard_status = rc;
 	ds_pool_put(pool);
 free:
@@ -2801,7 +2830,13 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
-	pool->sp_need_discard = 1;
+	if (atomic_fetch_add(&pool->sp_need_discard, 1) > 1) {
+		atomic_fetch_sub(&pool->sp_need_discard, 1);
+		D_INFO(DF_UUID " XXX: discard is already in progress, \n", DP_UUID(arg->pool_uuid));
+		ds_pool_put(pool);
+		D_GOTO(out, rc = -DER_BUSY);
+	}
+
 	pool->sp_discard_status = 0;
 	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
 	if (rc == 0)
