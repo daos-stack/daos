@@ -3249,7 +3249,7 @@ migrate_obj_ult(void *data)
 	 * discard, or discard has been done. spc_discard_done means
 	 * discarding has been done in the current VOS target.
 	 */
-	if (tls->mpt_pool->spc_pool->sp_need_discard) {
+	if (atomic_load(&tls->mpt_pool->spc_pool->sp_need_discard) > 0) {
 		while(!tls->mpt_pool->spc_discard_done) {
 			D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n",
 				DP_RB_MPT(tls));
