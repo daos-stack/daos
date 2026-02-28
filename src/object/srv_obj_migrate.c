@@ -3182,6 +3182,7 @@ migrate_obj_ult(void *data)
 {
 	struct iter_obj_arg	*arg = data;
 	struct migrate_pool_tls	*tls = NULL;
+	struct ds_pool          *pool;
 	daos_epoch_range_t	epr;
 	daos_handle_t            coh = DAOS_HDL_INVAL;
 	struct cont_props        props;
@@ -3200,20 +3201,22 @@ migrate_obj_ult(void *data)
 	 * discard, or discard has been done. spc_discard_done means
 	 * discarding has been done in the current VOS target.
 	 */
-	if (tls->mpt_pool->spc_pool->sp_need_discard) {
-		while(!tls->mpt_pool->spc_discard_done) {
-			D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
-				DP_UUID(arg->pool_uuid));
-			dss_sleep(2 * 1000);
-			if (tls->mpt_fini)
-				D_GOTO(free_notls, rc);
-		}
-		if (tls->mpt_pool->spc_pool->sp_discard_status) {
-			rc = tls->mpt_pool->spc_pool->sp_discard_status;
-			D_DEBUG(DB_REBUILD, DF_UUID " discard failure: " DF_RC,
-				DP_UUID(arg->pool_uuid), DP_RC(rc));
+	pool = tls->mpt_pool->spc_pool;
+	while (atomic_load(&pool->sp_discarding) != 0) {
+		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(tls));
+		dss_sleep(2 * 1000);
+		if (tls->mpt_fini)
+			D_GOTO(free_notls, rc);
+
+		ABT_mutex_lock(pool->sp_mutex);
+		if (pool->sp_discard_status) {
+			rc = pool->sp_discard_status;
+			ABT_mutex_unlock(pool->sp_mutex);
+			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n", DP_RB_MPT(tls),
+				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
+		ABT_mutex_unlock(pool->sp_mutex);
 	}
 
 	rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0, NULL,
