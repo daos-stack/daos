@@ -26,18 +26,19 @@ def scons():
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
     pl_debug_tgt = denv.SharedObject(['pl_debug.c', 'place_obj_common.c'])
+    srv_pool_map_obj = denv.SharedObject(['../../pool/srv_pool_map.c'])
 
     libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm']
 
     ring_pl_test = denv.d_program('ring_pl_map', ring_test_tgt, LIBS=libraries)
 
     jump_pl_test = denv.d_program('jump_pl_map',
-                                  jump_test_tgt + ['../../pool/srv_pool_map.c'], LIBS=libraries)
+                                  jump_test_tgt + srv_pool_map_obj, LIBS=libraries)
 
     pl_bench = denv.d_program('pl_bench', pl_bench_tgt, LIBS=libraries)
 
     pl_debug = denv.d_program('pl_debug',
-                               pl_debug_tgt + ['../../pool/srv_pool_map.c'], LIBS=libraries)
+                               pl_debug_tgt + srv_pool_map_obj, LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', ring_pl_test)
     denv.Install('$PREFIX/bin/', jump_pl_test)
