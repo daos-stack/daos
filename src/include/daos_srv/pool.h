@@ -94,8 +94,8 @@ struct ds_pool {
 	 * rebuild job.
 	 */
 	uint32_t                 sp_rebuild_gen;
-	ATOMIC int               sp_need_discard;
 	ATOMIC int               sp_rebuilding;
+	ATOMIC int               sp_discarding;
 	/**
 	 * someone has already messaged this pool to for rebuild scan,
 	 * NB: all xstreams can do lockless-write on it but it's OK
@@ -192,8 +192,7 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1,
-			spc_no_storage:1; /* The pool shard has no storage. */
+	uint64_t                 spc_no_storage : 1; /* The pool shard has no storage. */
 
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
