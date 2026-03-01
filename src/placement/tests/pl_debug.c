@@ -16,6 +16,7 @@
  *   print_obj_class <hint>         - Print object classes matching hint
  *                                     hint: all | EC | EC(k+p) | RP | RP_<r> | shard
  *   gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
+ *              [type=<EC_8P2|RP_3|...> grp=<number|X>]
  *   set_down rank=<n>|node=<n>    - Set rank/node status to DOWN
  *   set_downout rank=<n>|node=<n> - Set rank/node status to DOWNOUT
  *   set_up rank=<n>|node=<n>      - Set rank/node status to UP
@@ -89,10 +90,14 @@ print_help(void)
 	       "                                  shard: S1/S2/.../SX classes\n"
 	       "                                  all: every registered class\n"
 	       "  gen_layout id=<number> [mode=<m>] [ver=<number>]\n"
+	       "             [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
 	       "                                Generate layout (OID lo=<number>)\n"
 	       "                                mode: pre_rebuild|0, current|1, post_rebuild|2\n"
 	       "                                      (default: pre_rebuild)\n"
 	       "                                ver:  pool map version (default: current)\n"
+	       "                                type+grp: override obj_class for this layout\n"
+	       "                                  e.g. type=EC_8P2 grp=2  -> EC_8P2G2\n"
+	       "                                       type=RP_3 grp=X    -> RP_3GX\n"
 	       "  set_down rank=<n>|node=<n>    Set rank/node to DOWN\n"
 	       "  set_downout rank=<n>|node=<n> Set rank/node to DOWNOUT\n"
 	       "  set_up rank=<n>|node=<n>      Set rank/node to UP\n"
@@ -394,15 +399,16 @@ cmd_gen_layout(const char *arg)
 	enum layout_gen_mode  mode = PRE_REBUILD;
 	uint32_t              ver = 0;   /* 0 means "use current map version" */
 	int                   grp, sz, index, rc;
+	char                  type_str[64] = {0}; /* type= value, e.g. "EC_8P2" */
+	char                  grp_str[16]  = {0}; /* grp= value, e.g. "2" or "X" */
+	daos_oclass_id_t      use_class;
+
+#define GEN_LAYOUT_USAGE \
+	"Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>]\n" \
+	"                  [ver=<number>] [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
 
 	if (arg == NULL || *arg == '\0') {
-		fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n");
-		return;
-	}
-
-	if (g_obj_class == OC_UNKNOWN) {
-		fprintf(stderr, "No object class set; run 'obj_class <name|id>' first\n"
-			"       (try 'print_obj_class EC' or 'print_obj_class RP' to see available classes)\n");
+		fprintf(stderr, GEN_LAYOUT_USAGE);
 		return;
 	}
 
@@ -461,22 +467,76 @@ cmd_gen_layout(const char *arg)
 				return;
 			}
 			ver = (uint32_t)v;
+		} else if (strncmp(tok, "type=", 5) == 0) {
+			const char *val = tok + 5;
+
+			if (strlen(val) >= sizeof(type_str)) {
+				fprintf(stderr, "type= value too long: %s\n", val);
+				return;
+			}
+			snprintf(type_str, sizeof(type_str), "%s", val);
+		} else if (strncmp(tok, "grp=", 4) == 0) {
+			const char *val = tok + 4;
+			char       *endp;
+
+			/* Accept a positive integer or "X" / "x" */
+			if (strcasecmp(val, "X") == 0) {
+				snprintf(grp_str, sizeof(grp_str), "X");
+			} else {
+				long v = strtol(val, &endp, 10);
+
+				if (*endp != '\0' || v <= 0) {
+					fprintf(stderr,
+						"Invalid grp value '%s'; expected a positive number or X\n",
+						val);
+					return;
+				}
+				snprintf(grp_str, sizeof(grp_str), "%ld", v);
+			}
 		} else {
 			fprintf(stderr, "Unknown gen_layout option: '%s'\n", tok);
-			fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n");
+			fprintf(stderr, GEN_LAYOUT_USAGE);
 			return;
 		}
 	}
 
 	if (!id_found) {
-		fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n");
+		fprintf(stderr, GEN_LAYOUT_USAGE);
 		return;
+	}
+
+	/* Resolve object class: type=+grp= override g_obj_class */
+	if (type_str[0] != '\0' && grp_str[0] != '\0') {
+		char class_name[sizeof(type_str) + sizeof(grp_str) + 2];
+
+		snprintf(class_name, sizeof(class_name), "%sG%s", type_str, grp_str);
+		use_class = daos_oclass_name2id(class_name);
+		if (use_class == OC_UNKNOWN) {
+			fprintf(stderr,
+				"Unknown object class '%s' (from type=%s grp=%s)\n"
+				"  Use 'print_obj_class EC' or 'print_obj_class RP' to list valid classes\n",
+				class_name, type_str, grp_str);
+			return;
+		}
+	} else if (type_str[0] != '\0' || grp_str[0] != '\0') {
+		fprintf(stderr,
+			"Both type= and grp= must be specified together\n"
+			"  e.g. type=EC_8P2 grp=2  or  type=RP_3 grp=X\n");
+		return;
+	} else {
+		if (g_obj_class == OC_UNKNOWN) {
+			fprintf(stderr,
+				"No object class set; run 'obj_class <name|id>' first\n"
+				"  (or pass type= and grp= to override, e.g. type=EC_8P2 grp=2)\n");
+			return;
+		}
+		use_class = g_obj_class;
 	}
 
 	oid.lo = lo_val;
 	oid.hi = 0;
 
-	rc = daos_obj_set_oid_by_class(&oid, 0, g_obj_class, 0);
+	rc = daos_obj_set_oid_by_class(&oid, 0, use_class, 0);
 	if (rc != 0) {
 		fprintf(stderr, "daos_obj_set_oid_by_class failed: %d\n", rc);
 		return;
@@ -493,9 +553,9 @@ cmd_gen_layout(const char *arg)
 		return;
 	}
 
-	daos_oclass_id2name(g_obj_class, name);
+	daos_oclass_id2name(use_class, name);
 	printf("Layout for OID lo=%" PRIu64 " class=%s (id=%u) mode=%s ver=%u:\n",
-	       lo_val, name, (unsigned int)g_obj_class,
+	       lo_val, name, (unsigned int)use_class,
 	       layout_gen_mode_names[mode], md.omd_ver);
 	printf("  groups=%u  group_size=%u  total_shards=%u\n",
 	       layout->ol_grp_nr, layout->ol_grp_size, layout->ol_nr);
@@ -519,6 +579,7 @@ cmd_gen_layout(const char *arg)
 	}
 
 	pl_obj_layout_free(layout);
+#undef GEN_LAYOUT_USAGE
 }
 
 /*
