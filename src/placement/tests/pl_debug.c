@@ -185,7 +185,7 @@ do_update(struct pool_target_id_list *tgts, int opc, int opc_second)
 	int    rc;
 
 	rc = ds_pool_map_tgts_update(zero_uuid, g_po_map, tgts, opc,
-				     false, NULL, true);
+				     true, NULL, true);
 	if (rc != 0) {
 		fprintf(stderr, "ds_pool_map_tgts_update opc=%d failed: %d\n",
 			opc, rc);
@@ -193,7 +193,7 @@ do_update(struct pool_target_id_list *tgts, int opc, int opc_second)
 	}
 	if (opc_second != PLD_NO_OPC) {
 		rc = ds_pool_map_tgts_update(zero_uuid, g_po_map, tgts, opc_second,
-					     false, NULL, true);
+					     true, NULL, true);
 		if (rc != 0) {
 			fprintf(stderr,
 				"ds_pool_map_tgts_update opc=%d failed: %d\n",
