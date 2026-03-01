@@ -12,7 +12,7 @@
  *
  * Interactive commands:
  *   obj_class <name|id>           - Set current object class
- *   gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>]
+ *   gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
  *   set_down rank=<n>|node=<n>    - Set rank/node status to DOWN
  *   set_downout rank=<n>|node=<n> - Set rank/node status to DOWNOUT
  *   set_up rank=<n>|node=<n>      - Set rank/node status to UP
@@ -24,7 +24,7 @@
  *   $ pl_debug -n 4 -r 2 -t 8
  *   pl_debug> obj_class OC_EC_4P1GX
  *   pl_debug> gen_layout id=42
- *   pl_debug> gen_layout id=42 mode=current
+ *   pl_debug> gen_layout id=42 mode=current ver=3
  *   pl_debug> set_down rank=0
  *   pl_debug> gen_layout id=42 mode=post_rebuild
  *   pl_debug> quit
@@ -72,10 +72,11 @@ print_help(void)
 {
 	printf("Commands:\n"
 	       "  obj_class <name|id>           Set current object class\n"
-	       "  gen_layout id=<number> [mode=<m>]\n"
+	       "  gen_layout id=<number> [mode=<m>] [ver=<number>]\n"
 	       "                                Generate layout (OID lo=<number>)\n"
 	       "                                mode: pre_rebuild|0, current|1, post_rebuild|2\n"
 	       "                                      (default: pre_rebuild)\n"
+	       "                                ver:  pool map version (default: current)\n"
 	       "  set_down rank=<n>|node=<n>    Set rank/node to DOWN\n"
 	       "  set_downout rank=<n>|node=<n> Set rank/node to DOWNOUT\n"
 	       "  set_up rank=<n>|node=<n>      Set rank/node to UP\n"
@@ -242,10 +243,11 @@ cmd_gen_layout(const char *arg)
 	char                 *tok, *save;
 	bool                  id_found = false;
 	enum layout_gen_mode  mode = PRE_REBUILD;
+	uint32_t              ver = 0;   /* 0 means "use current map version" */
 	int                   grp, sz, index, rc;
 
 	if (arg == NULL || *arg == '\0') {
-		fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>]\n");
+		fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n");
 		return;
 	}
 
@@ -294,15 +296,25 @@ cmd_gen_layout(const char *arg)
 					val);
 				return;
 			}
+		} else if (strncmp(tok, "ver=", 4) == 0) {
+			char         *endp;
+			unsigned long v;
+
+			v = strtoul(tok + 4, &endp, 0);
+			if (*endp != '\0' || v > UINT32_MAX) {
+				fprintf(stderr, "Invalid ver value: %s\n", tok + 4);
+				return;
+			}
+			ver = (uint32_t)v;
 		} else {
 			fprintf(stderr, "Unknown gen_layout option: '%s'\n", tok);
-			fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>]\n");
+			fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n");
 			return;
 		}
 	}
 
 	if (!id_found) {
-		fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>]\n");
+		fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n");
 		return;
 	}
 
@@ -316,7 +328,7 @@ cmd_gen_layout(const char *arg)
 	}
 
 	md.omd_id  = oid;
-	md.omd_ver = pool_map_get_version(g_pl_map->pl_poolmap);
+	md.omd_ver = (ver != 0) ? ver : pool_map_get_version(g_pl_map->pl_poolmap);
 	md.omd_pda = 0;
 
 	rc = pl_obj_place(g_pl_map, PLD_LAYOUT_VERSION, &md, (unsigned int)mode,
@@ -327,8 +339,9 @@ cmd_gen_layout(const char *arg)
 	}
 
 	daos_oclass_id2name(g_obj_class, name);
-	printf("Layout for OID lo=%" PRIu64 " class=%s (id=%u) mode=%s:\n",
-	       lo_val, name, (unsigned int)g_obj_class, layout_gen_mode_names[mode]);
+	printf("Layout for OID lo=%" PRIu64 " class=%s (id=%u) mode=%s ver=%u:\n",
+	       lo_val, name, (unsigned int)g_obj_class,
+	       layout_gen_mode_names[mode], md.omd_ver);
 	printf("  groups=%u  group_size=%u  total_shards=%u\n",
 	       layout->ol_grp_nr, layout->ol_grp_size, layout->ol_nr);
 
