@@ -26,7 +26,8 @@ def scons():
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
     pl_debug_tgt = denv.SharedObject(['pl_debug.c', 'place_obj_common.c'])
-    srv_pool_map_obj = denv.SharedObject(['../../pool/srv_pool_map.c'])
+    srv_pool_map_obj = denv.SharedObject(target='srv_pool_map',
+                                         source='../../pool/srv_pool_map.c')
 
     libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm']
 
