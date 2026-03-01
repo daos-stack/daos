@@ -55,6 +55,9 @@
 /* Layout version used by all placement tests */
 #define PLD_LAYOUT_VERSION 2
 
+/* Sentinel for the optional second map_update_opc argument: pass this to skip */
+#define PLD_NO_OPC (-1)
+
 /* ------------------------------------------------------------------ */
 /* Global state                                                         */
 /* ------------------------------------------------------------------ */
@@ -167,29 +170,31 @@ build_node_tgt_list(uint32_t node_id, struct pool_target_id_list *tgts)
 /* ------------------------------------------------------------------ */
 
 /*
- * Apply opc1 to every target in tgts via ds_pool_map_tgts_update().
- * If opc2 >= 0 apply it as a second step; pass opc2 = -1 to skip.
+ * Apply opc (a map_update_opc value) to every target in tgts via
+ * ds_pool_map_tgts_update().  If opc_second != PLD_NO_OPC, apply it as a
+ * second step afterwards (used for two-phase transitions such as DOWN →
+ * DOWNOUT or UP → UPIN).
  */
 static int
-do_update(struct pool_target_id_list *tgts, int opc1, int opc2)
+do_update(struct pool_target_id_list *tgts, int opc, int opc_second)
 {
 	uuid_t zero_uuid = {0};
 	int    rc;
 
-	rc = ds_pool_map_tgts_update(zero_uuid, g_po_map, tgts, opc1,
+	rc = ds_pool_map_tgts_update(zero_uuid, g_po_map, tgts, opc,
 				     false, NULL, true);
 	if (rc != 0) {
 		fprintf(stderr, "ds_pool_map_tgts_update opc=%d failed: %d\n",
-			opc1, rc);
+			opc, rc);
 		return rc;
 	}
-	if (opc2 >= 0) {
-		rc = ds_pool_map_tgts_update(zero_uuid, g_po_map, tgts, opc2,
+	if (opc_second != PLD_NO_OPC) {
+		rc = ds_pool_map_tgts_update(zero_uuid, g_po_map, tgts, opc_second,
 					     false, NULL, true);
 		if (rc != 0) {
 			fprintf(stderr,
 				"ds_pool_map_tgts_update opc=%d failed: %d\n",
-				opc2, rc);
+				opc_second, rc);
 			return rc;
 		}
 	}
@@ -368,10 +373,12 @@ cmd_gen_layout(const char *arg)
 
 /*
  * Parse "rank=<n>" or "node=<n>", build the target list, apply
- * opc1 (and optionally opc2 < 0 means skip), then refresh pl_map.
+ * opc (a map_update_opc value) to transition targets to the desired state,
+ * then optionally apply opc_second for a two-phase transition (e.g. DOWN →
+ * DOWNOUT or UP → UPIN).  Pass PLD_NO_OPC for opc_second to skip it.
  */
 static void
-cmd_set_state(const char *subcmd, const char *arg, int opc1, int opc2)
+cmd_set_state(const char *subcmd, const char *arg, int opc, int opc_second)
 {
 	struct pool_target_id_list tgts = {0};
 	unsigned long              id;
@@ -408,7 +415,7 @@ cmd_set_state(const char *subcmd, const char *arg, int opc1, int opc2)
 		return;
 	}
 
-	rc = do_update(&tgts, opc1, opc2);
+	rc = do_update(&tgts, opc, opc_second);
 	pool_target_id_list_free(&tgts);
 	if (rc != 0) {
 		fprintf(stderr, "%s: pool map update failed: %d\n", subcmd, rc);
@@ -476,14 +483,14 @@ run_repl(void)
 			cmd_gen_layout(arg);
 		} else if (strcmp(cmd, "set_down") == 0) {
 			/* UP/UPIN → DOWN */
-			cmd_set_state("set_down", arg, MAP_EXCLUDE, -1);
+			cmd_set_state("set_down", arg, MAP_EXCLUDE, PLD_NO_OPC);
 		} else if (strcmp(cmd, "set_downout") == 0) {
 			/* UP/UPIN → DOWN → DOWNOUT */
 			cmd_set_state("set_downout", arg,
 				      MAP_EXCLUDE, MAP_EXCLUDE_OUT);
 		} else if (strcmp(cmd, "set_up") == 0) {
 			/* DOWN/DOWNOUT → UP */
-			cmd_set_state("set_up", arg, MAP_REINT, -1);
+			cmd_set_state("set_up", arg, MAP_REINT, PLD_NO_OPC);
 		} else if (strcmp(cmd, "set_upin") == 0) {
 			/* DOWN/DOWNOUT → UP → UPIN */
 			cmd_set_state("set_upin", arg, MAP_REINT, MAP_ADD_IN);
