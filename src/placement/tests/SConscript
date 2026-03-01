@@ -25,6 +25,7 @@ def scons():
                                        'jump_map_dist.c',
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
+    pl_debug_tgt = denv.SharedObject(['pl_debug.c', 'place_obj_common.c'])
 
     libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm']
 
@@ -35,9 +36,13 @@ def scons():
 
     pl_bench = denv.d_program('pl_bench', pl_bench_tgt, LIBS=libraries)
 
+    pl_debug = denv.d_program('pl_debug',
+                               pl_debug_tgt + ['../../pool/srv_pool_map.c'], LIBS=libraries)
+
     denv.Install('$PREFIX/bin/', ring_pl_test)
     denv.Install('$PREFIX/bin/', jump_pl_test)
     denv.Install('$PREFIX/bin/', pl_bench)
+    denv.Install('$PREFIX/bin/', pl_debug)
 
 
 if __name__ == "SCons.Script":
