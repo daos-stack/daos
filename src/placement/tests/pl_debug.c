@@ -13,6 +13,7 @@
  *
  * Interactive commands:
  *   obj_class <name|id>           - Set current object class
+ *   print_obj_class [name|id]     - Print representative object classes, or name of one class
  *   gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
  *   set_down rank=<n>|node=<n>    - Set rank/node status to DOWN
  *   set_downout rank=<n>|node=<n> - Set rank/node status to DOWNOUT
@@ -60,13 +61,16 @@
 /* Sentinel for the optional second map_update_opc argument: pass this to skip */
 #define PLD_NO_OPC (-1)
 
+/* Buffer size for daos_oclass_names_list (covers all currently registered classes) */
+#define PLD_OCLASS_LIST_BUF_SIZE (64 << 10)
+
 /* ------------------------------------------------------------------ */
 /* Global state                                                         */
 /* ------------------------------------------------------------------ */
 
 static struct pool_map   *g_po_map;
 static struct pl_map     *g_pl_map;
-static daos_oclass_id_t   g_obj_class = OC_RP_3GX;
+static daos_oclass_id_t   g_obj_class = OC_UNKNOWN;
 
 /* ------------------------------------------------------------------ */
 /* Help                                                                 */
@@ -77,6 +81,8 @@ print_help(void)
 {
 	printf("Commands:\n"
 	       "  obj_class <name|id>           Set current object class\n"
+	       "  print_obj_class [name|id]     List representative classes (*G1/*G2/*G32/*GX)\n"
+	       "                                or print the name of a single class\n"
 	       "  gen_layout id=<number> [mode=<m>] [ver=<number>]\n"
 	       "                                Generate layout (OID lo=<number>)\n"
 	       "                                mode: pre_rebuild|0, current|1, post_rebuild|2\n"
@@ -239,6 +245,95 @@ cmd_obj_class(const char *arg)
 	printf("Object class set to: %s (id=%u)\n", name, (unsigned int)cid);
 }
 
+/*
+ * Returns true if the string 'str' ends with the suffix 'suffix'.
+ */
+static bool
+str_ends_with(const char *str, const char *suffix)
+{
+	size_t slen = strlen(str);
+	size_t plen = strlen(suffix);
+
+	return slen >= plen && strcmp(str + slen - plen, suffix) == 0;
+}
+
+/*
+ * Returns true if 'name' is a representative object class to display:
+ * G-family (*G1, *G2, *G32, *GX) and S-family single-replica equivalents.
+ */
+static bool
+is_representative_oclass(const char *name)
+{
+	/* G-family: classes ending in G1, G2, G32, or GX */
+	if (str_ends_with(name, "G1") || str_ends_with(name, "G2") ||
+	    str_ends_with(name, "G32") || str_ends_with(name, "GX"))
+		return true;
+
+	/* S-family (single-replica, no 'G' in name): S1, S2, S32, SX */
+	return strcmp(name, "S1") == 0 || strcmp(name, "S2") == 0 ||
+	       strcmp(name, "S32") == 0 || strcmp(name, "SX") == 0;
+}
+
+/*
+ * print_obj_class [name|id]
+ *
+ * With no argument: list representative classes (*G1, *G2, *G32, *GX).
+ * With an argument: look up that class and print its name and ID.
+ */
+static void
+cmd_print_obj_class(const char *arg)
+{
+	char          name[64] = {0};
+	daos_oclass_id_t cid;
+	char         *endp;
+	char         *buf;
+	char         *save;
+	char         *tok;
+
+	/* With an argument, look up a single class by name or ID */
+	if (arg != NULL && *arg != '\0') {
+		cid = (daos_oclass_id_t)strtoul(arg, &endp, 0);
+		if (*endp != '\0') {
+			cid = daos_oclass_name2id(arg);
+			if (cid == OC_UNKNOWN) {
+				fprintf(stderr, "Unknown object class: %s\n", arg);
+				return;
+			}
+		}
+		if (daos_oclass_id2name(cid, name) < 0) {
+			fprintf(stderr, "Invalid object class id: %u\n",
+				(unsigned int)cid);
+			return;
+		}
+		printf("%s  (id=%u)\n", name, (unsigned int)cid);
+		return;
+	}
+
+	/* No argument: list representative classes */
+	buf = malloc(PLD_OCLASS_LIST_BUF_SIZE);
+	if (buf == NULL) {
+		fprintf(stderr, "Out of memory\n");
+		return;
+	}
+
+	if (daos_oclass_names_list(PLD_OCLASS_LIST_BUF_SIZE, buf) < 0) {
+		fprintf(stderr, "daos_oclass_names_list failed\n");
+		free(buf);
+		return;
+	}
+
+	printf("Representative object classes (*G1, *G2, *G32, *GX):\n");
+	for (tok = strtok_r(buf, ", ", &save); tok != NULL;
+	     tok = strtok_r(NULL, ", ", &save)) {
+		if (is_representative_oclass(tok)) {
+			cid = daos_oclass_name2id(tok);
+			printf("  %-20s (id=%u)\n", tok, (unsigned int)cid);
+		}
+	}
+
+	free(buf);
+}
+
 static void
 cmd_gen_layout(const char *arg)
 {
@@ -256,6 +351,12 @@ cmd_gen_layout(const char *arg)
 
 	if (arg == NULL || *arg == '\0') {
 		fprintf(stderr, "Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n");
+		return;
+	}
+
+	if (g_obj_class == OC_UNKNOWN) {
+		fprintf(stderr, "No object class set; run 'obj_class <name|id>' first\n"
+			"       (try 'print_obj_class' to see available classes)\n");
 		return;
 	}
 
@@ -566,6 +667,8 @@ run_repl(void)
 			print_help();
 		} else if (strcmp(cmd, "obj_class") == 0) {
 			cmd_obj_class(arg);
+		} else if (strcmp(cmd, "print_obj_class") == 0) {
+			cmd_print_obj_class(arg);
 		} else if (strcmp(cmd, "gen_layout") == 0) {
 			cmd_gen_layout(arg);
 		} else if (strcmp(cmd, "set_down") == 0) {
