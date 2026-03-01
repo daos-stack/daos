@@ -6,6 +6,7 @@
  * pl_debug - Interactive placement debugging utility
  *
  * Usage: pl_debug -n <nodes> -r <ranks_per_node> -t <targets_per_rank>
+ *                [-h|--help]
  *
  * Constructs an in-memory pool map and jump placement map from the given
  * topology parameters.  NODE is used as the fault domain.
@@ -603,7 +604,8 @@ usage(const char *prog)
 		"Options:\n"
 		"  -n <number>  Number of nodes\n"
 		"  -r <number>  Number of ranks per node\n"
-		"  -t <number>  Number of targets per rank\n",
+		"  -t <number>  Number of targets per rank\n"
+		"  -h, --help   Show this help text\n",
 		prog);
 }
 
@@ -613,7 +615,12 @@ main(int argc, char *argv[])
 	int n = 0, r = 0, t = 0;
 	int opt, rc;
 
-	while ((opt = getopt(argc, argv, "n:r:t:h")) != -1) {
+	static struct option long_opts[] = {
+		{"help", no_argument, NULL, 'h'},
+		{NULL,   0,           NULL,  0 }
+	};
+
+	while ((opt = getopt_long(argc, argv, "n:r:t:h", long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'n':
 			n = atoi(optarg);
