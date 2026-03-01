@@ -13,7 +13,8 @@
  *
  * Interactive commands:
  *   obj_class <name|id>           - Set current object class
- *   print_obj_class [name|id]     - Print representative object classes, or name of one class
+ *   print_obj_class <hint>         - Print object classes matching hint
+ *                                     hint: all | EC | EC(k+p) | RP | RP_<r> | shard
  *   gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
  *   set_down rank=<n>|node=<n>    - Set rank/node status to DOWN
  *   set_downout rank=<n>|node=<n> - Set rank/node status to DOWNOUT
@@ -81,8 +82,12 @@ print_help(void)
 {
 	printf("Commands:\n"
 	       "  obj_class <name|id>           Set current object class\n"
-	       "  print_obj_class [name|id]     List representative classes (*G1/*G2/*G32/*GX)\n"
-	       "                                or print the name of a single class\n"
+	       "  print_obj_class <hint>        List classes matching hint\n"
+	       "                                hint: all | EC | EC(k+p) | RP | RP_<r> | shard\n"
+	       "                                  EC: all EC classes; EC(8+2): 8+2 EC classes\n"
+	       "                                  RP: all RP classes; RP_3: 3-way RP classes\n"
+	       "                                  shard: S1/S2/.../SX classes\n"
+	       "                                  all: every registered class\n"
 	       "  gen_layout id=<number> [mode=<m>] [ver=<number>]\n"
 	       "                                Generate layout (OID lo=<number>)\n"
 	       "                                mode: pre_rebuild|0, current|1, post_rebuild|2\n"
@@ -246,70 +251,87 @@ cmd_obj_class(const char *arg)
 }
 
 /*
- * Returns true if the string 'str' ends with the suffix 'suffix'.
+ * Returns true if 'oc_name' is a single-replica shard class (S1, S2, ... SX).
+ * These names have the form: 'S' followed by a decimal digit or 'X'.
  */
 static bool
-str_ends_with(const char *str, const char *suffix)
+is_shard_oclass(const char *oc_name)
 {
-	size_t slen = strlen(str);
-	size_t plen = strlen(suffix);
-
-	return slen >= plen && strcmp(str + slen - plen, suffix) == 0;
+	return oc_name[0] == 'S' && oc_name[1] != '\0' &&
+	       (oc_name[1] == 'X' || (oc_name[1] >= '0' && oc_name[1] <= '9'));
 }
 
 /*
- * Returns true if 'name' is a representative object class to display:
- * G-family (*G1, *G2, *G32, *GX) and S-family single-replica equivalents.
- */
-static bool
-is_representative_oclass(const char *name)
-{
-	/* G-family: classes ending in G1, G2, G32, or GX */
-	if (str_ends_with(name, "G1") || str_ends_with(name, "G2") ||
-	    str_ends_with(name, "G32") || str_ends_with(name, "GX"))
-		return true;
-
-	/* S-family (single-replica, no 'G' in name): S1, S2, S32, SX */
-	return strcmp(name, "S1") == 0 || strcmp(name, "S2") == 0 ||
-	       strcmp(name, "S32") == 0 || strcmp(name, "SX") == 0;
-}
-
-/*
- * print_obj_class [name|id]
+ * print_obj_class <hint>
  *
- * With no argument: list representative classes (*G1, *G2, *G32, *GX).
- * With an argument: look up that class and print its name and ID.
+ * Print the object classes that match the given hint.  The hint is
+ * mandatory.  Supported hints:
+ *
+ *   all       - every registered class
+ *   EC        - all Erasure Coding classes (EC_*)
+ *   EC(k+p)   - EC classes with k data + p parity cells (e.g. EC(8+2))
+ *   RP        - all Replication classes (RP_*)
+ *   RP_<r>    - replication classes with r replicas (e.g. RP_3)
+ *   shard     - single-replica shard classes (S1, S2, ... SX)
  */
 static void
 cmd_print_obj_class(const char *arg)
 {
-	char          name[64] = {0};
+	char             prefix[64];
+	char            *buf;
+	char            *save;
+	char            *tok;
+	long             k, p, rval;
+	char            *endp;
+	bool             ec_specific = false;
+	bool             rp_specific = false;
 	daos_oclass_id_t cid;
-	char         *endp;
-	char         *buf;
-	char         *save;
-	char         *tok;
 
-	/* With an argument, look up a single class by name or ID */
-	if (arg != NULL && *arg != '\0') {
-		cid = (daos_oclass_id_t)strtoul(arg, &endp, 0);
-		if (*endp != '\0') {
-			cid = daos_oclass_name2id(arg);
-			if (cid == OC_UNKNOWN) {
-				fprintf(stderr, "Unknown object class: %s\n", arg);
-				return;
-			}
-		}
-		if (daos_oclass_id2name(cid, name) < 0) {
-			fprintf(stderr, "Invalid object class id: %u\n",
-				(unsigned int)cid);
-			return;
-		}
-		printf("%s  (id=%u)\n", name, (unsigned int)cid);
+	if (arg == NULL || *arg == '\0') {
+		fprintf(stderr,
+			"Usage: print_obj_class <hint>\n"
+			"  hint: all | EC | EC(k+p) | RP | RP_<r> | shard\n"
+			"  Examples:\n"
+			"    print_obj_class EC         all EC classes\n"
+			"    print_obj_class EC(8+2)    8+2 EC classes (EC_8P2*)\n"
+			"    print_obj_class RP         all replication classes\n"
+			"    print_obj_class RP_3       3-way replication classes\n"
+			"    print_obj_class shard      single-replica S1/S2/.../SX\n"
+			"    print_obj_class all        every registered class\n");
 		return;
 	}
 
-	/* No argument: list representative classes */
+	/* Pre-parse the hint and build a prefix string for specific filters */
+	prefix[0] = '\0';
+	if (strcasecmp(arg, "all") == 0 || strcasecmp(arg, "EC") == 0 ||
+	    strcasecmp(arg, "RP") == 0 || strcasecmp(arg, "shard") == 0) {
+		/* nothing to pre-parse */
+	} else if (strncasecmp(arg, "EC(", 3) == 0) {
+		const char *hp = arg + 3;
+
+		k = strtol(hp, &endp, 10);
+		if (endp == hp || *endp != '+')
+			goto bad_hint;
+		hp = endp + 1;
+		p = strtol(hp, &endp, 10);
+		if (endp == hp || *endp != ')' || endp[1] != '\0')
+			goto bad_hint;
+		if (k <= 0 || p <= 0)
+			goto bad_hint;
+		snprintf(prefix, sizeof(prefix), "EC_%ldP%ldG", k, p);
+		ec_specific = true;
+	} else if (strncasecmp(arg, "RP_", 3) == 0) {
+		const char *hp = arg + 3;
+
+		rval = strtol(hp, &endp, 10);
+		if (endp == hp || *endp != '\0' || rval <= 0)
+			goto bad_hint;
+		snprintf(prefix, sizeof(prefix), "RP_%ldG", rval);
+		rp_specific = true;
+	} else {
+		goto bad_hint;
+	}
+
 	buf = malloc(PLD_OCLASS_LIST_BUF_SIZE);
 	if (buf == NULL) {
 		fprintf(stderr, "Out of memory\n");
@@ -322,16 +344,40 @@ cmd_print_obj_class(const char *arg)
 		return;
 	}
 
-	printf("Representative object classes (*G1, *G2, *G32, *GX):\n");
+	printf("Object classes matching '%s':\n", arg);
 	for (tok = strtok_r(buf, ", ", &save); tok != NULL;
 	     tok = strtok_r(NULL, ", ", &save)) {
-		if (is_representative_oclass(tok)) {
+		bool match;
+
+		if (strcasecmp(arg, "all") == 0) {
+			match = true;
+		} else if (strcasecmp(arg, "EC") == 0) {
+			match = strncmp(tok, "EC_", 3) == 0;
+		} else if (ec_specific) {
+			match = strncmp(tok, prefix, strlen(prefix)) == 0;
+		} else if (strcasecmp(arg, "RP") == 0) {
+			match = strncmp(tok, "RP_", 3) == 0;
+		} else if (rp_specific) {
+			match = strncmp(tok, prefix, strlen(prefix)) == 0;
+		} else {
+			/* shard */
+			match = is_shard_oclass(tok);
+		}
+
+		if (match) {
 			cid = daos_oclass_name2id(tok);
-			printf("  %-20s (id=%u)\n", tok, (unsigned int)cid);
+			printf("  %-24s (id=%u)\n", tok, (unsigned int)cid);
 		}
 	}
 
 	free(buf);
+	return;
+
+bad_hint:
+	fprintf(stderr,
+		"Unknown or invalid hint '%s'\n"
+		"  Valid hints: all | EC | EC(k+p) | RP | RP_<r> | shard\n"
+		"  Examples: EC, EC(8+2), RP, RP_3, shard, all\n", arg);
 }
 
 static void
@@ -356,7 +402,7 @@ cmd_gen_layout(const char *arg)
 
 	if (g_obj_class == OC_UNKNOWN) {
 		fprintf(stderr, "No object class set; run 'obj_class <name|id>' first\n"
-			"       (try 'print_obj_class' to see available classes)\n");
+			"       (try 'print_obj_class EC' or 'print_obj_class RP' to see available classes)\n");
 		return;
 	}
 
