@@ -17,6 +17,7 @@
  *   set_downout rank=<n>|node=<n> - Set rank/node status to DOWNOUT
  *   set_up rank=<n>|node=<n>      - Set rank/node status to UP
  *   set_upin rank=<n>|node=<n>    - Set rank/node status to UPIN
+ *   query rank=<n>|node=<n>       - Print status of all sub-components and targets
  *   help                          - Show this help text
  *   quit / exit                   - Exit the tool
  *
@@ -84,6 +85,7 @@ print_help(void)
 	       "  set_downout rank=<n>|node=<n> Set rank/node to DOWNOUT\n"
 	       "  set_up rank=<n>|node=<n>      Set rank/node to UP\n"
 	       "  set_upin rank=<n>|node=<n>    Set rank/node to UPIN\n"
+	       "  query rank=<n>|node=<n>       Print status of all sub-components and targets\n"
 	       "  help                          Show this help\n"
 	       "  quit / exit                   Exit pl_debug\n");
 }
@@ -427,6 +429,90 @@ cmd_set_state(const char *subcmd, const char *arg, int opc, int opc_second)
 	       pool_map_get_version(g_po_map));
 }
 
+/*
+ * Print the status of the specified rank domain and all of its targets.
+ */
+static void
+print_rank_status(const struct pool_domain *rank_dom)
+{
+	const struct pool_component *rc = &rank_dom->do_comp;
+	int                          j;
+
+	printf("  rank %u  id=%u  status=%-8s  ver=%u  targets=%u\n",
+	       rc->co_rank, rc->co_id,
+	       pool_comp_state2str(rc->co_status),
+	       rc->co_ver, rank_dom->do_target_nr);
+
+	for (j = 0; j < (int)rank_dom->do_target_nr; j++) {
+		const struct pool_component *tc = &rank_dom->do_targets[j].ta_comp;
+
+		printf("    target[%2d]  id=%4u  idx=%2u  status=%-8s  ver=%u  fseq=%u\n",
+		       j, tc->co_id, tc->co_index,
+		       pool_comp_state2str(tc->co_status),
+		       tc->co_ver, tc->co_fseq);
+	}
+}
+
+/*
+ * query rank=<n>  - print the rank's status and all its targets.
+ * query node=<n>  - print the node's status, then each rank and its targets.
+ */
+static void
+cmd_query(const char *arg)
+{
+	unsigned long id;
+	char         *endp;
+
+	if (arg == NULL) {
+		fprintf(stderr, "Usage: query rank=<n>|node=<n>\n");
+		return;
+	}
+
+	if (strncmp(arg, "rank=", 5) == 0) {
+		struct pool_domain *rank_dom;
+
+		id = strtoul(arg + 5, &endp, 0);
+		if (*endp != '\0') {
+			fprintf(stderr, "Invalid rank number: %s\n", arg + 5);
+			return;
+		}
+		rank_dom = pool_map_find_dom_by_rank(g_po_map, (uint32_t)id);
+		if (rank_dom == NULL) {
+			fprintf(stderr, "Rank %lu not found\n", id);
+			return;
+		}
+		printf("Pool map version: %u\n",
+		       pool_map_get_version(g_po_map));
+		print_rank_status(rank_dom);
+	} else if (strncmp(arg, "node=", 5) == 0) {
+		struct pool_domain *node_dom;
+		int                 i, rc;
+
+		id = strtoul(arg + 5, &endp, 0);
+		if (*endp != '\0') {
+			fprintf(stderr, "Invalid node number: %s\n", arg + 5);
+			return;
+		}
+		rc = pool_map_find_domain(g_po_map, PO_COMP_TP_NODE,
+					  (uint32_t)id, &node_dom);
+		if (rc != 1) {
+			fprintf(stderr, "Node %lu not found\n", id);
+			return;
+		}
+		printf("Pool map version: %u\n",
+		       pool_map_get_version(g_po_map));
+		printf("node %u  id=%u  status=%-8s  ver=%u  ranks=%u\n",
+		       (unsigned int)id, node_dom->do_comp.co_id,
+		       pool_comp_state2str(node_dom->do_comp.co_status),
+		       node_dom->do_comp.co_ver, node_dom->do_child_nr);
+
+		for (i = 0; i < (int)node_dom->do_child_nr; i++)
+			print_rank_status(&node_dom->do_children[i]);
+	} else {
+		fprintf(stderr, "Usage: query rank=<n>|node=<n>\n");
+	}
+}
+
 /* ------------------------------------------------------------------ */
 /* REPL                                                                 */
 /* ------------------------------------------------------------------ */
@@ -494,6 +580,8 @@ run_repl(void)
 		} else if (strcmp(cmd, "set_upin") == 0) {
 			/* DOWN/DOWNOUT → UP → UPIN */
 			cmd_set_state("set_upin", arg, MAP_REINT, MAP_ADD_IN);
+		} else if (strcmp(cmd, "query") == 0) {
+			cmd_query(arg);
 		} else {
 			fprintf(stderr,
 				"Unknown command: '%s'  (type 'help')\n", cmd);
