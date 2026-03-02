@@ -17,6 +17,7 @@
  *                                     hint: all | EC | EC(k+p) | RP | RP_<r> | shard
  *   gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
  *              [type=<EC_8P2|RP_3|...> grp=<number|X>]
+ *   diff_layout id=<number> [ver=<number>] [type=<EC_8P2|RP_3|...> grp=<number|X>]
  *   set_down rank=<n>|node=<n>    - Set rank/node status to DOWN
  *   set_downout rank=<n>|node=<n> - Set rank/node status to DOWNOUT
  *   set_up rank=<n>|node=<n>      - Set rank/node status to UP
@@ -32,6 +33,7 @@
  *   pl_debug> gen_layout id=42 mode=current ver=3
  *   pl_debug> set_down rank=0
  *   pl_debug> gen_layout id=42 mode=post_rebuild
+ *   pl_debug> diff_layout id=42
  *   pl_debug> quit
  */
 
@@ -94,10 +96,16 @@ print_help(void)
 	       "                                Generate layout (OID lo=<number>)\n"
 	       "                                mode: pre_rebuild|0, current|1, post_rebuild|2\n"
 	       "                                      (default: pre_rebuild)\n"
-	       "                                ver:  pool map version (default: current)\n"
+	       "                                ver:  pool map version (default: latest)\n"
 	       "                                type+grp: override obj_class for this layout\n"
 	       "                                  e.g. type=EC_8P2 grp=2  -> EC_8P2G2\n"
 	       "                                       type=RP_3 grp=X    -> RP_3GX\n"
+	       "  diff_layout id=<number> [ver=<number>]\n"
+	       "              [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
+	       "                                Show shards that need rebuild (pl_obj_find_rebuild)\n"
+	       "                                ver: pool map version (default: latest)\n"
+	       "                                Outputs shard ID, target ID, rank, status,\n"
+	       "                                and DOWN2UP flag for each rebuild shard\n"
 	       "  set_down rank=<n>|node=<n>    Set rank/node to DOWN\n"
 	       "  set_downout rank=<n>|node=<n> Set rank/node to DOWNOUT\n"
 	       "  set_up rank=<n>|node=<n>      Set rank/node to UP\n"
@@ -583,6 +591,202 @@ cmd_gen_layout(const char *arg)
 }
 
 /*
+ * diff_layout id=<number> [ver=<number>] [type=<...> grp=<...>]
+ *
+ * Calls pl_obj_find_rebuild() for the given object and pool map version
+ * and prints each rebuild shard together with the target's status and flags.
+ */
+static void
+cmd_diff_layout(const char *arg)
+{
+	daos_obj_id_t         oid     = {0};
+	struct daos_obj_md    md      = {0};
+	uint64_t              lo_val;
+	char                  arg_copy[1024];
+	char                 *tok, *save;
+	bool                  id_found = false;
+	uint32_t              ver      = 0; /* 0 → use latest map version */
+	char                  type_str[64] = {0};
+	char                  grp_str[16]  = {0};
+	daos_oclass_id_t      use_class;
+	uint32_t             *tgt_ids  = NULL;
+	uint32_t             *shard_ids = NULL;
+	int                   ntgt, i, rc;
+	unsigned int          array_size;
+	char                  name[64] = {0};
+
+#define DIFF_LAYOUT_USAGE \
+	"Usage: diff_layout id=<number> [ver=<number>]\n" \
+	"                   [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
+
+	if (arg == NULL || *arg == '\0') {
+		fprintf(stderr, DIFF_LAYOUT_USAGE);
+		return;
+	}
+
+	if (g_pl_map == NULL) {
+		fprintf(stderr, "Placement map unavailable\n");
+		return;
+	}
+
+	snprintf(arg_copy, sizeof(arg_copy), "%s", arg);
+	for (tok = strtok_r(arg_copy, " \t", &save); tok != NULL;
+	     tok = strtok_r(NULL, " \t", &save)) {
+		if (strncmp(tok, "id=", 3) == 0) {
+			char *endp;
+
+			lo_val = strtoull(tok + 3, &endp, 0);
+			if (*endp != '\0') {
+				fprintf(stderr, "Invalid id value: %s\n",
+					tok + 3);
+				return;
+			}
+			id_found = true;
+		} else if (strncmp(tok, "ver=", 4) == 0) {
+			char         *endp;
+			unsigned long v;
+
+			v = strtoul(tok + 4, &endp, 0);
+			if (*endp != '\0' || v > UINT32_MAX) {
+				fprintf(stderr, "Invalid ver value: %s\n",
+					tok + 4);
+				return;
+			}
+			ver = (uint32_t)v;
+		} else if (strncmp(tok, "type=", 5) == 0) {
+			const char *val = tok + 5;
+
+			if (strlen(val) >= sizeof(type_str)) {
+				fprintf(stderr, "type= value too long: %s\n",
+					val);
+				return;
+			}
+			snprintf(type_str, sizeof(type_str), "%s", val);
+		} else if (strncmp(tok, "grp=", 4) == 0) {
+			const char *val = tok + 4;
+			char       *endp;
+
+			if (strcasecmp(val, "X") == 0) {
+				snprintf(grp_str, sizeof(grp_str), "X");
+			} else {
+				long v = strtol(val, &endp, 10);
+
+				if (*endp != '\0' || v <= 0) {
+					fprintf(stderr,
+						"Invalid grp value '%s'; expected a positive number or X\n",
+						val);
+					return;
+				}
+				snprintf(grp_str, sizeof(grp_str), "%u",
+					 (unsigned int)v);
+			}
+		} else {
+			fprintf(stderr, "Unknown diff_layout option: '%s'\n",
+				tok);
+			fprintf(stderr, DIFF_LAYOUT_USAGE);
+			return;
+		}
+	}
+
+	if (!id_found) {
+		fprintf(stderr, DIFF_LAYOUT_USAGE);
+		return;
+	}
+
+	/* Resolve object class */
+	if (type_str[0] != '\0' && grp_str[0] != '\0') {
+		char class_name[sizeof(type_str) + sizeof(grp_str) + 2]; /* 'G' + NUL */
+
+		snprintf(class_name, sizeof(class_name), "%sG%s", type_str,
+			 grp_str);
+		use_class = daos_oclass_name2id(class_name);
+		if (use_class == OC_UNKNOWN) {
+			fprintf(stderr,
+				"Unknown object class '%s' (from type=%s grp=%s)\n",
+				class_name, type_str, grp_str);
+			return;
+		}
+	} else if (type_str[0] != '\0' || grp_str[0] != '\0') {
+		fprintf(stderr,
+			"Both type= and grp= must be specified together\n");
+		return;
+	} else {
+		if (g_obj_class == OC_UNKNOWN) {
+			fprintf(stderr,
+				"No object class set; run 'obj_class <name|id>' first\n");
+			return;
+		}
+		use_class = g_obj_class;
+	}
+
+	oid.lo = lo_val;
+	oid.hi = 0;
+	rc = daos_obj_set_oid_by_class(&oid, 0, use_class, 0);
+	if (rc != 0) {
+		fprintf(stderr, "daos_obj_set_oid_by_class failed: %d\n", rc);
+		return;
+	}
+
+	md.omd_id  = oid;
+	md.omd_ver = (ver != 0) ? ver : pool_map_get_version(g_pl_map->pl_poolmap);
+	md.omd_pda = 0;
+
+	/* Allocate output arrays sized to the total number of targets */
+	array_size = pool_map_target_nr(g_po_map);
+	D_ALLOC_ARRAY(tgt_ids, array_size);
+	D_ALLOC_ARRAY(shard_ids, array_size);
+	if (tgt_ids == NULL || shard_ids == NULL) {
+		fprintf(stderr, "Out of memory\n");
+		D_FREE(tgt_ids);
+		D_FREE(shard_ids);
+		return;
+	}
+
+	ntgt = pl_obj_find_rebuild(g_pl_map, PLD_LAYOUT_VERSION, &md, NULL,
+				   md.omd_ver, tgt_ids, shard_ids, array_size);
+	if (ntgt < 0) {
+		fprintf(stderr, "pl_obj_find_rebuild failed: %d\n", ntgt);
+		D_FREE(tgt_ids);
+		D_FREE(shard_ids);
+		return;
+	}
+
+	daos_oclass_id2name(use_class, name);
+	printf("Rebuild shards for OID lo=%" PRIu64 " class=%s ver=%u: %d shard(s)\n",
+	       lo_val, name, md.omd_ver, ntgt);
+
+	for (i = 0; i < ntgt; i++) {
+		struct pool_target *tgt  = NULL;
+		char                fbuf[64];
+
+		rc = pool_map_find_target(g_po_map, tgt_ids[i], &tgt);
+		if (rc != 1 || tgt == NULL) {
+			printf("  shard %3u: target_id=%4u  (target not found)\n",
+			       shard_ids[i], tgt_ids[i]);
+			continue;
+		}
+
+		printf("  shard %3u: target_id=%4u  rank=%4u  idx=%2u"
+		       "  status=%-8s",
+		       shard_ids[i],
+		       tgt->ta_comp.co_id,
+		       tgt->ta_comp.co_rank,
+		       tgt->ta_comp.co_index,
+		       pool_comp_state2str(tgt->ta_comp.co_status));
+
+		if (tgt->ta_comp.co_flags != 0)
+			printf("  flags=%s",
+			       fmt_comp_flags(tgt->ta_comp.co_flags, fbuf,
+					      sizeof(fbuf)));
+		printf("\n");
+	}
+
+	D_FREE(tgt_ids);
+	D_FREE(shard_ids);
+#undef DIFF_LAYOUT_USAGE
+}
+
+/*
  * Parse "rank=<n>" or "node=<n>", build the target list, apply
  * opc (a map_update_opc value) to transition targets to the desired state,
  * then optionally apply opc_second for a two-phase transition (e.g. DOWN →
@@ -832,6 +1036,8 @@ run_repl(void)
 			cmd_print_obj_class(arg);
 		} else if (strcmp(cmd, "gen_layout") == 0) {
 			cmd_gen_layout(arg);
+		} else if (strcmp(cmd, "diff_layout") == 0) {
+			cmd_diff_layout(arg);
 		} else if (strcmp(cmd, "set_down") == 0) {
 			/* UP/UPIN → DOWN */
 			cmd_set_state("set_down", arg, MAP_EXCLUDE, PLD_NO_OPC);
