@@ -56,7 +56,7 @@ Map nlt_test() {
         print 'Unstash failed, results from NLT stage will not be included'
     }
     sh label: 'Fault injection testing using NLT',
-       script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
+       script: './ci/docker_nlt.sh --class-name fault-injection fi'
     List filesList = []
     filesList.addAll(findFiles(glob: '*.memcheck.xml'))
     int vgfail = 0
@@ -323,10 +323,10 @@ pipeline {
                      description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
-                     description: 'Run the Unit Test with memcheck on EL test stage')
-        booleanParam(name: 'CI_FI_el8_TEST',
+                     description: 'Run the Unit Test with memcheck test stage')
+        booleanParam(name: 'CI_FI_TEST',
                      defaultValue: true,
-                     description: 'Run the Fault injection testing on EL 8 test stage')
+                     description: 'Run the Fault injection testing test stage')
         booleanParam(name: 'CI_TEST_EL_RPMs',
                      defaultValue: true,
                      description: 'Run the Test RPMs on EL stage')
@@ -529,7 +529,7 @@ pipeline {
                 expression { !skip_build_stage() }
             }
             parallel {
-                stage('Build on EL 8.8') {
+                stage('Build on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el8') }
@@ -544,7 +544,8 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el8 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=.10 '
                         }
                     }
                     steps {
@@ -634,7 +635,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5') {
+                stage('Build on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('leap15') }
@@ -684,7 +685,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('leap15', 'icc') }
@@ -1047,7 +1048,7 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el9.fault-injection/',
+                            archiveArtifacts artifacts: 'fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
                         }
