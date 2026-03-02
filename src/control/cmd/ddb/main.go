@@ -306,7 +306,7 @@ func parseOpts(args []string, opts *cliOptions) error {
 	}
 
 	if opts.VosPath != "" {
-		cleanup := SetCString(&ctx.ctx.dc_pool_path, string(opts.SysdbPath))
+		cleanup := SetCString(&ctx.ctx.dc_pool_path, string(opts.VosPath))
 		defer cleanup()
 
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
