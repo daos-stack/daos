@@ -2805,14 +2805,14 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	if (atomic_fetch_add(&pool->sp_discarding, 1) > 0) {
 		atomic_fetch_sub(&pool->sp_discarding, 1);
 		D_INFO(DF_UUID " XXX: discard is already in progress, \n", DP_UUID(arg->pool_uuid));
-		ds_pool_put(pool);
-		D_GOTO(out, rc = -DER_BUSY);
+		D_GOTO(out_put, rc = -DER_BUSY);
 	}
 	D_INFO(DF_UUID " discard started\n", DP_UUID(arg->pool_uuid));
 
-	/* XXX just return EAGAIN/EPERM? */
-	D_ASSERTF(!ds_pool_is_rebuilding(pool), DF_UUID " is already being reintegrated!\n",
-		  DP_UUID(arg->pool_uuid));
+	if (ds_pool_is_rebuilding(pool)) {
+		D_INFO(DF_UUID " is already being reintegrated!\n", DP_UUID(arg->pool_uuid));
+		D_GOTO(out_put, rc = -DER_BUSY);
+	}
 
 	ABT_mutex_lock(pool->sp_mutex);
 	pool->sp_discard_status = 0;
@@ -2831,6 +2831,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 out_sub:
 	/* all targets should have already started to discard, I can release my refcount */
 	atomic_fetch_sub(&pool->sp_discarding, 1);
+out_put:
 	ds_pool_put(pool);
 out:
 	out->ptdo_rc = rc;
