@@ -11,7 +11,7 @@ if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/libfabric.sh
   utils/rpms/mercury.sh
   utils/rpms/pmdk.sh
-  utils/rpms/spdk.sh
+  utils/rpms/daos-spdk.sh
   if [[ "${code_coverage}" != "false" ]]; then
     utils/rpms/bullseye.sh
   fi

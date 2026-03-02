@@ -46,26 +46,20 @@ typedef struct crt_init_options {
 	 * evnironment variable.
 	 */
 	int		cio_crt_timeout;
-	uint32_t	cio_sep_override:1,	/**< Deprecated */
-			cio_use_sep:1,		/**< Deprecated */
-			/** whether or not to inject faults */
-			cio_fault_inject:1,
-			/**
-			 * whether or not to override credits. When set
-			 * overrides CRT_CTX_EP_CREDITS envariable
-			 */
-			cio_use_credits:1,
-			/** whether or not to enable per-context sensors */
-			cio_use_sensors:1,
+	uint32_t        cio_sep_override : 1, /**< Deprecated */
+	    cio_use_sep                  : 1, /**< Deprecated */
+	    /** whether or not to inject faults */
+	    cio_fault_inject             : 1,
+	    /** whether or not to enable per-context sensors */
+	    cio_use_sensors              : 1,
 
-			/** whether or not to use expected sizes */
-			cio_use_expected_size:1,
-			cio_use_unexpected_size:1;
+	    /** whether or not to use expected sizes */
+	    cio_use_expected_size : 1, cio_use_unexpected_size : 1;
 
 	/** overrides the value of the environment variable CRT_CTX_NUM */
 	int		cio_ctx_max_num;
 
-	/** Used with cio_use_credits to set credit limit */
+	/** set credit limit */
 	int		cio_ep_credits;
 
 	/**
