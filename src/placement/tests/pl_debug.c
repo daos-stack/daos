@@ -491,7 +491,7 @@ cmd_gen_layout(const char *arg)
 						val);
 					return;
 				}
-				snprintf(grp_str, sizeof(grp_str), "%ld", v);
+				snprintf(grp_str, sizeof(grp_str), "%u", (unsigned int)v);
 			}
 		} else {
 			fprintf(stderr, "Unknown gen_layout option: '%s'\n", tok);
