@@ -1,9 +1,10 @@
 #!/usr/bin/groovy
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
-/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
+/* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -133,12 +134,16 @@ String vm9_label(String distro) {
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
-void rpm_test_post(String stage_name, String node) {
+void rpm_test_post(String stageName, String node) {
+    // Extract first node from coma-delimited list
+    String firstNode = node.split(',')[0].trim()
     sh label: 'Fetch and stage artifacts',
-       script: 'hostname; ssh -i ci_key jenkins@' + node + ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
-               'scp -i ci_key jenkins@' + node + ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
-               env.STAGE_NAME + '/"'
-    archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+       script: 'hostname; ssh -i ci_key jenkins@' + firstNode +
+               ' ls -ltar /tmp; mkdir -p "' +  stageName + '/" && ' +
+               'scp -i ci_key jenkins@' + firstNode +
+               ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
+               stageName + '/"'
+    archiveArtifacts artifacts: stageName + '/**'
     job_status_update()
 }
 
@@ -148,7 +153,7 @@ void rpm_test_post(String stage_name, String node) {
 Map update_default_commit_pragmas() {
     String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
                                     returnStdout: true).trim()
-    println("pragmas from gen_commit_pragmas.py:")
+    println('pragmas from gen_commit_pragmas.py:')
     println(default_pragmas_str)
     if (default_pragmas_str) {
         updatePragmas(default_pragmas_str, false)
@@ -851,7 +856,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-					 referenceJobName: 'daos-stack/daos/release%252F2.6',
+                                         referenceJobName: 'daos-stack/daos/release%252F2.6',
                                          valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
