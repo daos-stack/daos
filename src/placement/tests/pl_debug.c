@@ -15,9 +15,11 @@
  *   obj_class <name|id>           - Set current object class
  *   print_obj_class <hint>         - Print object classes matching hint
  *                                     hint: all | EC | EC(k+p) | RP | RP_<r> | shard
- *   gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
- *              [type=<EC_8P2|RP_3|...> grp=<number|X>]
- *   diff_layout id=<number> [ver=<number>] [type=<EC_8P2|RP_3|...> grp=<number|X>]
+ *   gen_oid id=<number> [type=<EC_8P2|RP_3|...> grp=<number|X>]
+ *                                 - Set current OID (required before gen_layout/diff_layout)
+ *   gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
+ *                                 - Generate layout for current OID
+ *   diff_layout [ver=<number>]    - Show rebuild shards for current OID
  *   set_down rank=<n>|node=<n>    - Set rank/node status to DOWN
  *   set_downout rank=<n>|node=<n> - Set rank/node status to DOWNOUT
  *   set_up rank=<n>|node=<n>      - Set rank/node status to UP
@@ -29,11 +31,12 @@
  * Smoke-test example:
  *   $ pl_debug -n 4 -r 2 -t 8
  *   pl_debug> obj_class OC_EC_4P1GX
- *   pl_debug> gen_layout id=42
- *   pl_debug> gen_layout id=42 mode=current ver=3
+ *   pl_debug> gen_oid id=42
+ *   pl_debug> gen_layout
+ *   pl_debug> gen_layout mode=current ver=3
  *   pl_debug> set_down rank=0
- *   pl_debug> gen_layout id=42 mode=post_rebuild
- *   pl_debug> diff_layout id=42
+ *   pl_debug> gen_layout mode=post_rebuild
+ *   pl_debug> diff_layout
  *   pl_debug> quit
  */
 
@@ -76,6 +79,17 @@ static struct pool_map   *g_po_map;
 static struct pl_map     *g_pl_map;
 static daos_oclass_id_t   g_obj_class = OC_UNKNOWN;
 
+/* Set by gen_oid; required before gen_layout / diff_layout */
+static daos_obj_id_t        g_oid       = {0};
+static bool                 g_oid_set   = false;
+static daos_oclass_id_t     g_oid_class = OC_UNKNOWN;
+
+/* Last layout from gen_layout; overwritten on each gen_layout call */
+static struct pl_obj_layout *g_layout   = NULL;
+
+/* Forward declaration – defined after cmd_set_state */
+static const char *fmt_comp_flags(uint32_t flags, char *buf, size_t bufsz);
+
 /* ------------------------------------------------------------------ */
 /* Help                                                                 */
 /* ------------------------------------------------------------------ */
@@ -91,18 +105,18 @@ print_help(void)
 	       "                                  RP: all RP classes; RP_3: 3-way RP classes\n"
 	       "                                  shard: S1/S2/.../SX classes\n"
 	       "                                  all: every registered class\n"
-	       "  gen_layout id=<number> [mode=<m>] [ver=<number>]\n"
-	       "             [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
-	       "                                Generate layout (OID lo=<number>)\n"
+	       "  gen_oid id=<number> [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
+	       "                                Set current OID (required before gen_layout/diff_layout)\n"
+	       "                                type+grp: override obj_class for this OID\n"
+	       "                                  e.g. type=EC_8P2 grp=2  -> EC_8P2G2\n"
+	       "                                       type=RP_3 grp=X    -> RP_3GX\n"
+	       "  gen_layout [mode=<m>] [ver=<number>]\n"
+	       "                                Generate layout for current OID\n"
 	       "                                mode: pre_rebuild|0, current|1, post_rebuild|2\n"
 	       "                                      (default: pre_rebuild)\n"
 	       "                                ver:  pool map version (default: latest)\n"
-	       "                                type+grp: override obj_class for this layout\n"
-	       "                                  e.g. type=EC_8P2 grp=2  -> EC_8P2G2\n"
-	       "                                       type=RP_3 grp=X    -> RP_3GX\n"
-	       "  diff_layout id=<number> [ver=<number>]\n"
-	       "              [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
-	       "                                Show shards that need rebuild (pl_obj_find_rebuild)\n"
+	       "                                Result is stored; overwritten on each call\n"
+	       "  diff_layout [ver=<number>]    Show shards that need rebuild (pl_obj_find_rebuild)\n"
 	       "                                ver: pool map version (default: latest)\n"
 	       "                                Outputs shard ID, target ID, rank, status,\n"
 	       "                                and DOWN2UP flag for each rebuild shard\n"
@@ -393,239 +407,32 @@ bad_hint:
 		"  Examples: EC, EC(8+2), RP, RP_3, shard, all\n", arg);
 }
 
-static void
-cmd_gen_layout(const char *arg)
-{
-	daos_obj_id_t        oid  = {0};
-	struct pl_obj_layout *layout = NULL;
-	struct daos_obj_md    md  = {0};
-	uint64_t              lo_val;
-	char                  name[64] = {0};
-	char                  arg_copy[1024];
-	char                 *tok, *save;
-	bool                  id_found = false;
-	enum layout_gen_mode  mode = PRE_REBUILD;
-	uint32_t              ver = 0;   /* 0 means "use current map version" */
-	int                   grp, sz, index, rc;
-	char                  type_str[64] = {0}; /* type= value, e.g. "EC_8P2" */
-	char                  grp_str[16]  = {0}; /* grp= value, e.g. "2" or "X" */
-	daos_oclass_id_t      use_class;
-
-#define GEN_LAYOUT_USAGE \
-	"Usage: gen_layout id=<number> [mode=<pre_rebuild|current|post_rebuild>]\n" \
-	"                  [ver=<number>] [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
-
-	if (arg == NULL || *arg == '\0') {
-		fprintf(stderr, GEN_LAYOUT_USAGE);
-		return;
-	}
-
-	if (g_pl_map == NULL) {
-		fprintf(stderr, "Placement map unavailable\n");
-		return;
-	}
-
-	/* Tokenise a copy of the argument string on whitespace */
-	snprintf(arg_copy, sizeof(arg_copy), "%s", arg);
-	for (tok = strtok_r(arg_copy, " \t", &save); tok != NULL;
-	     tok = strtok_r(NULL, " \t", &save)) {
-		if (strncmp(tok, "id=", 3) == 0) {
-			char *endp;
-
-			lo_val = strtoull(tok + 3, &endp, 0);
-			if (*endp != '\0') {
-				fprintf(stderr, "Invalid id value: %s\n", tok + 3);
-				return;
-			}
-			id_found = true;
-		} else if (strncmp(tok, "mode=", 5) == 0) {
-			const char *val = tok + 5;
-			char       *endp;
-			long        num;
-
-			/* Accept numeric values */
-			num = strtol(val, &endp, 0);
-			if (*endp == '\0') {
-				if (num < PRE_REBUILD || num > POST_REBUILD) {
-					fprintf(stderr,
-						"Invalid mode value %ld; valid: 0 (pre_rebuild), 1 (current), 2 (post_rebuild)\n",
-						num);
-					return;
-				}
-				mode = (enum layout_gen_mode)num;
-			} else if (strcasecmp(val, "pre_rebuild") == 0) {
-				mode = PRE_REBUILD;
-			} else if (strcasecmp(val, "current") == 0) {
-				mode = CURRENT;
-			} else if (strcasecmp(val, "post_rebuild") == 0) {
-				mode = POST_REBUILD;
-			} else {
-				fprintf(stderr,
-					"Unknown mode '%s'; valid: pre_rebuild, current, post_rebuild\n",
-					val);
-				return;
-			}
-		} else if (strncmp(tok, "ver=", 4) == 0) {
-			char         *endp;
-			unsigned long v;
-
-			v = strtoul(tok + 4, &endp, 0);
-			if (*endp != '\0' || v > UINT32_MAX) {
-				fprintf(stderr, "Invalid ver value: %s\n", tok + 4);
-				return;
-			}
-			ver = (uint32_t)v;
-		} else if (strncmp(tok, "type=", 5) == 0) {
-			const char *val = tok + 5;
-
-			if (strlen(val) >= sizeof(type_str)) {
-				fprintf(stderr, "type= value too long: %s\n", val);
-				return;
-			}
-			snprintf(type_str, sizeof(type_str), "%s", val);
-		} else if (strncmp(tok, "grp=", 4) == 0) {
-			const char *val = tok + 4;
-			char       *endp;
-
-			/* Accept a positive integer or "X" / "x" */
-			if (strcasecmp(val, "X") == 0) {
-				snprintf(grp_str, sizeof(grp_str), "X");
-			} else {
-				long v = strtol(val, &endp, 10);
-
-				if (*endp != '\0' || v <= 0) {
-					fprintf(stderr,
-						"Invalid grp value '%s'; expected a positive number or X\n",
-						val);
-					return;
-				}
-				snprintf(grp_str, sizeof(grp_str), "%u", (unsigned int)v);
-			}
-		} else {
-			fprintf(stderr, "Unknown gen_layout option: '%s'\n", tok);
-			fprintf(stderr, GEN_LAYOUT_USAGE);
-			return;
-		}
-	}
-
-	if (!id_found) {
-		fprintf(stderr, GEN_LAYOUT_USAGE);
-		return;
-	}
-
-	/* Resolve object class: type=+grp= override g_obj_class */
-	if (type_str[0] != '\0' && grp_str[0] != '\0') {
-		char class_name[sizeof(type_str) + sizeof(grp_str) + 2];
-
-		snprintf(class_name, sizeof(class_name), "%sG%s", type_str, grp_str);
-		use_class = daos_oclass_name2id(class_name);
-		if (use_class == OC_UNKNOWN) {
-			fprintf(stderr,
-				"Unknown object class '%s' (from type=%s grp=%s)\n"
-				"  Use 'print_obj_class EC' or 'print_obj_class RP' to list valid classes\n",
-				class_name, type_str, grp_str);
-			return;
-		}
-	} else if (type_str[0] != '\0' || grp_str[0] != '\0') {
-		fprintf(stderr,
-			"Both type= and grp= must be specified together\n"
-			"  e.g. type=EC_8P2 grp=2  or  type=RP_3 grp=X\n");
-		return;
-	} else {
-		if (g_obj_class == OC_UNKNOWN) {
-			fprintf(stderr,
-				"No object class set; run 'obj_class <name|id>' first\n"
-				"  (or pass type= and grp= to override, e.g. type=EC_8P2 grp=2)\n");
-			return;
-		}
-		use_class = g_obj_class;
-	}
-
-	oid.lo = lo_val;
-	oid.hi = 0;
-
-	rc = daos_obj_set_oid_by_class(&oid, 0, use_class, 0);
-	if (rc != 0) {
-		fprintf(stderr, "daos_obj_set_oid_by_class failed: %d\n", rc);
-		return;
-	}
-
-	md.omd_id  = oid;
-	md.omd_ver = (ver != 0) ? ver : pool_map_get_version(g_pl_map->pl_poolmap);
-	md.omd_pda = 0;
-
-	rc = pl_obj_place(g_pl_map, PLD_LAYOUT_VERSION, &md, (unsigned int)mode,
-			  NULL, &layout);
-	if (rc != 0) {
-		fprintf(stderr, "pl_obj_place failed: %d\n", rc);
-		return;
-	}
-
-	daos_oclass_id2name(use_class, name);
-	printf("Layout for OID lo=%" PRIu64 " class=%s (id=%u) mode=%s ver=%u:\n",
-	       lo_val, name, (unsigned int)use_class,
-	       layout_gen_mode_names[mode], md.omd_ver);
-	printf("  groups=%u  group_size=%u  total_shards=%u\n",
-	       layout->ol_grp_nr, layout->ol_grp_size, layout->ol_nr);
-
-	for (grp = 0; grp < layout->ol_grp_nr; ++grp) {
-		printf("  [group %d]\n", grp);
-		for (sz = 0; sz < layout->ol_grp_size; ++sz) {
-			struct pl_obj_shard shard;
-
-			index = grp * layout->ol_grp_size + sz;
-			shard = layout->ol_shards[index];
-			printf("    shard %2d: target_id=%4d  rank=%4u"
-			       "  tgt_idx=%2u  fseq=%u%s\n",
-			       shard.po_shard,
-			       shard.po_target,
-			       shard.po_rank,
-			       shard.po_index,
-			       shard.po_fseq,
-			       shard.po_rebuilding ? "  [rebuilding]" : "");
-		}
-	}
-
-	pl_obj_layout_free(layout);
-#undef GEN_LAYOUT_USAGE
-}
-
 /*
- * diff_layout id=<number> [ver=<number>] [type=<...> grp=<...>]
+ * gen_oid id=<number> [type=<...> grp=<...>]
  *
- * Calls pl_obj_find_rebuild() for the given object and pool map version
- * and prints each rebuild shard together with the target's status and flags.
+ * Sets the current OID (g_oid / g_oid_class) that gen_layout and diff_layout
+ * will operate on.  The object class is taken from type=/grp= if provided, or
+ * from g_obj_class (set by the obj_class command) otherwise.
  */
 static void
-cmd_diff_layout(const char *arg)
+cmd_gen_oid(const char *arg)
 {
-	daos_obj_id_t         oid     = {0};
-	struct daos_obj_md    md      = {0};
-	uint64_t              lo_val;
-	char                  arg_copy[1024];
-	char                 *tok, *save;
-	bool                  id_found = false;
-	uint32_t              ver      = 0; /* 0 → use latest map version */
-	char                  type_str[64] = {0};
-	char                  grp_str[16]  = {0};
-	daos_oclass_id_t      use_class;
-	uint32_t             *tgt_ids  = NULL;
-	uint32_t             *shard_ids = NULL;
-	int                   ntgt, i, rc;
-	unsigned int          array_size;
-	char                  name[64] = {0};
+	daos_obj_id_t    oid      = {0};
+	uint64_t         lo_val;
+	char             arg_copy[1024];
+	char            *tok, *save;
+	bool             id_found = false;
+	char             type_str[64] = {0};
+	char             grp_str[16]  = {0};
+	daos_oclass_id_t use_class;
+	char             name[64] = {0};
+	int              rc;
 
-#define DIFF_LAYOUT_USAGE \
-	"Usage: diff_layout id=<number> [ver=<number>]\n" \
-	"                   [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
+#define GEN_OID_USAGE \
+	"Usage: gen_oid id=<number> [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
 
 	if (arg == NULL || *arg == '\0') {
-		fprintf(stderr, DIFF_LAYOUT_USAGE);
-		return;
-	}
-
-	if (g_pl_map == NULL) {
-		fprintf(stderr, "Placement map unavailable\n");
+		fprintf(stderr, GEN_OID_USAGE);
 		return;
 	}
 
@@ -642,17 +449,6 @@ cmd_diff_layout(const char *arg)
 				return;
 			}
 			id_found = true;
-		} else if (strncmp(tok, "ver=", 4) == 0) {
-			char         *endp;
-			unsigned long v;
-
-			v = strtoul(tok + 4, &endp, 0);
-			if (*endp != '\0' || v > UINT32_MAX) {
-				fprintf(stderr, "Invalid ver value: %s\n",
-					tok + 4);
-				return;
-			}
-			ver = (uint32_t)v;
 		} else if (strncmp(tok, "type=", 5) == 0) {
 			const char *val = tok + 5;
 
@@ -681,19 +477,18 @@ cmd_diff_layout(const char *arg)
 					 (unsigned int)v);
 			}
 		} else {
-			fprintf(stderr, "Unknown diff_layout option: '%s'\n",
-				tok);
-			fprintf(stderr, DIFF_LAYOUT_USAGE);
+			fprintf(stderr, "Unknown gen_oid option: '%s'\n", tok);
+			fprintf(stderr, GEN_OID_USAGE);
 			return;
 		}
 	}
 
 	if (!id_found) {
-		fprintf(stderr, DIFF_LAYOUT_USAGE);
+		fprintf(stderr, GEN_OID_USAGE);
 		return;
 	}
 
-	/* Resolve object class */
+	/* Resolve object class: type=+grp= override g_obj_class */
 	if (type_str[0] != '\0' && grp_str[0] != '\0') {
 		char class_name[sizeof(type_str) + sizeof(grp_str) + 2]; /* 'G' + NUL */
 
@@ -702,18 +497,21 @@ cmd_diff_layout(const char *arg)
 		use_class = daos_oclass_name2id(class_name);
 		if (use_class == OC_UNKNOWN) {
 			fprintf(stderr,
-				"Unknown object class '%s' (from type=%s grp=%s)\n",
+				"Unknown object class '%s' (from type=%s grp=%s)\n"
+				"  Use 'print_obj_class EC' or 'print_obj_class RP' to list valid classes\n",
 				class_name, type_str, grp_str);
 			return;
 		}
 	} else if (type_str[0] != '\0' || grp_str[0] != '\0') {
 		fprintf(stderr,
-			"Both type= and grp= must be specified together\n");
+			"Both type= and grp= must be specified together\n"
+			"  e.g. type=EC_8P2 grp=2  or  type=RP_3 grp=X\n");
 		return;
 	} else {
 		if (g_obj_class == OC_UNKNOWN) {
 			fprintf(stderr,
-				"No object class set; run 'obj_class <name|id>' first\n");
+				"No object class set; run 'obj_class <name|id>' first\n"
+				"  (or pass type= and grp= to override, e.g. type=EC_8P2 grp=2)\n");
 			return;
 		}
 		use_class = g_obj_class;
@@ -727,7 +525,203 @@ cmd_diff_layout(const char *arg)
 		return;
 	}
 
-	md.omd_id  = oid;
+	g_oid       = oid;
+	g_oid_class = use_class;
+	g_oid_set   = true;
+
+	daos_oclass_id2name(use_class, name);
+	printf("OID set: lo=%" PRIu64 " hi=0x%" PRIx64 " class=%s (id=%u)\n",
+	       lo_val, oid.hi, name, (unsigned int)use_class);
+#undef GEN_OID_USAGE
+}
+
+/*
+ * gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
+ *
+ * Generates the placement layout for the current OID (set by gen_oid).
+ * The result is stored in g_layout, overwriting any previous layout.
+ */
+static void
+cmd_gen_layout(const char *arg)
+{
+	struct pl_obj_layout *layout = NULL;
+	struct daos_obj_md    md     = {0};
+	char                  name[64] = {0};
+	char                  arg_copy[1024];
+	char                 *tok, *save;
+	enum layout_gen_mode  mode = PRE_REBUILD;
+	uint32_t              ver  = 0; /* 0 → use latest map version */
+	int                   grp, sz, index, rc;
+
+#define GEN_LAYOUT_USAGE \
+	"Usage: gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n"
+
+	if (g_pl_map == NULL) {
+		fprintf(stderr, "Placement map unavailable\n");
+		return;
+	}
+
+	if (!g_oid_set) {
+		fprintf(stderr,
+			"No OID set; run 'gen_oid id=<number>' first\n");
+		return;
+	}
+
+	if (arg != NULL && *arg != '\0') {
+		snprintf(arg_copy, sizeof(arg_copy), "%s", arg);
+		for (tok = strtok_r(arg_copy, " \t", &save); tok != NULL;
+		     tok = strtok_r(NULL, " \t", &save)) {
+			if (strncmp(tok, "mode=", 5) == 0) {
+				const char *val = tok + 5;
+				char       *endp;
+				long        num;
+
+				num = strtol(val, &endp, 0);
+				if (*endp == '\0') {
+					if (num < PRE_REBUILD || num > POST_REBUILD) {
+						fprintf(stderr,
+							"Invalid mode value %ld; valid: 0 (pre_rebuild), 1 (current), 2 (post_rebuild)\n",
+							num);
+						return;
+					}
+					mode = (enum layout_gen_mode)num;
+				} else if (strcasecmp(val, "pre_rebuild") == 0) {
+					mode = PRE_REBUILD;
+				} else if (strcasecmp(val, "current") == 0) {
+					mode = CURRENT;
+				} else if (strcasecmp(val, "post_rebuild") == 0) {
+					mode = POST_REBUILD;
+				} else {
+					fprintf(stderr,
+						"Unknown mode '%s'; valid: pre_rebuild, current, post_rebuild\n",
+						val);
+					return;
+				}
+			} else if (strncmp(tok, "ver=", 4) == 0) {
+				char         *endp;
+				unsigned long v;
+
+				v = strtoul(tok + 4, &endp, 0);
+				if (*endp != '\0' || v > UINT32_MAX) {
+					fprintf(stderr,
+						"Invalid ver value: %s\n",
+						tok + 4);
+					return;
+				}
+				ver = (uint32_t)v;
+			} else {
+				fprintf(stderr,
+					"Unknown gen_layout option: '%s'\n",
+					tok);
+				fprintf(stderr, GEN_LAYOUT_USAGE);
+				return;
+			}
+		}
+	}
+
+	md.omd_id  = g_oid;
+	md.omd_ver = (ver != 0) ? ver : pool_map_get_version(g_pl_map->pl_poolmap);
+	md.omd_pda = 0;
+
+	rc = pl_obj_place(g_pl_map, PLD_LAYOUT_VERSION, &md, (unsigned int)mode,
+			  NULL, &layout);
+	if (rc != 0) {
+		fprintf(stderr, "pl_obj_place failed: %d\n", rc);
+		return;
+	}
+
+	/* Overwrite previous layout */
+	if (g_layout != NULL)
+		pl_obj_layout_free(g_layout);
+	g_layout = layout;
+
+	daos_oclass_id2name(g_oid_class, name);
+	printf("Layout for OID lo=%" PRIu64 " class=%s (id=%u) mode=%s ver=%u:\n",
+	       g_oid.lo, name, (unsigned int)g_oid_class,
+	       layout_gen_mode_names[mode], md.omd_ver);
+	printf("  groups=%u  group_size=%u  total_shards=%u\n",
+	       layout->ol_grp_nr, layout->ol_grp_size, layout->ol_nr);
+
+	for (grp = 0; grp < layout->ol_grp_nr; ++grp) {
+		printf("  [group %d]\n", grp);
+		for (sz = 0; sz < layout->ol_grp_size; ++sz) {
+			struct pl_obj_shard shard;
+
+			index = grp * layout->ol_grp_size + sz;
+			shard = layout->ol_shards[index];
+			printf("    shard %2d: target_id=%4d  rank=%4u"
+			       "  tgt_idx=%2u  fseq=%u%s\n",
+			       shard.po_shard,
+			       shard.po_target,
+			       shard.po_rank,
+			       shard.po_index,
+			       shard.po_fseq,
+			       shard.po_rebuilding ? "  [rebuilding]" : "");
+		}
+	}
+#undef GEN_LAYOUT_USAGE
+}
+
+/*
+ * diff_layout [ver=<number>]
+ *
+ * Calls pl_obj_find_rebuild() for the current OID (set by gen_oid) and
+ * prints each rebuild shard together with the target's status and flags.
+ */
+static void
+cmd_diff_layout(const char *arg)
+{
+	struct daos_obj_md    md      = {0};
+	char                  arg_copy[1024];
+	char                 *tok, *save;
+	uint32_t              ver     = 0; /* 0 → use latest map version */
+	uint32_t             *tgt_ids  = NULL;
+	uint32_t             *shard_ids = NULL;
+	int                   ntgt, i, rc;
+	unsigned int          array_size;
+	char                  name[64] = {0};
+
+#define DIFF_LAYOUT_USAGE \
+	"Usage: diff_layout [ver=<number>]\n"
+
+	if (g_pl_map == NULL) {
+		fprintf(stderr, "Placement map unavailable\n");
+		return;
+	}
+
+	if (!g_oid_set) {
+		fprintf(stderr,
+			"No OID set; run 'gen_oid id=<number>' first\n");
+		return;
+	}
+
+	if (arg != NULL && *arg != '\0') {
+		snprintf(arg_copy, sizeof(arg_copy), "%s", arg);
+		for (tok = strtok_r(arg_copy, " \t", &save); tok != NULL;
+		     tok = strtok_r(NULL, " \t", &save)) {
+			if (strncmp(tok, "ver=", 4) == 0) {
+				char         *endp;
+				unsigned long v;
+
+				v = strtoul(tok + 4, &endp, 0);
+				if (*endp != '\0' || v > UINT32_MAX) {
+					fprintf(stderr,
+						"Invalid ver value: %s\n",
+						tok + 4);
+					return;
+				}
+				ver = (uint32_t)v;
+			} else {
+				fprintf(stderr,
+					"Unknown diff_layout option: '%s'\n",
+					tok);
+				fprintf(stderr, DIFF_LAYOUT_USAGE);
+				return;
+			}
+		}
+	}
+
+	md.omd_id  = g_oid;
 	md.omd_ver = (ver != 0) ? ver : pool_map_get_version(g_pl_map->pl_poolmap);
 	md.omd_pda = 0;
 
@@ -751,9 +745,9 @@ cmd_diff_layout(const char *arg)
 		return;
 	}
 
-	daos_oclass_id2name(use_class, name);
+	daos_oclass_id2name(g_oid_class, name);
 	printf("Rebuild shards for OID lo=%" PRIu64 " class=%s ver=%u: %d shard(s)\n",
-	       lo_val, name, md.omd_ver, ntgt);
+	       g_oid.lo, name, md.omd_ver, ntgt);
 
 	for (i = 0; i < ntgt; i++) {
 		struct pool_target *tgt  = NULL;
@@ -1034,6 +1028,8 @@ run_repl(void)
 			cmd_obj_class(arg);
 		} else if (strcmp(cmd, "print_obj_class") == 0) {
 			cmd_print_obj_class(arg);
+		} else if (strcmp(cmd, "gen_oid") == 0) {
+			cmd_gen_oid(arg);
 		} else if (strcmp(cmd, "gen_layout") == 0) {
 			cmd_gen_layout(arg);
 		} else if (strcmp(cmd, "diff_layout") == 0) {
