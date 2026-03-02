@@ -53,7 +53,6 @@ struct vid_opts {
 struct led_msg_arg {
 	struct bio_xs_context *xs;
 	uuid_t                 dev_uuid;
-	Ctl__LedState          led_state;
 };
 
 /* Collect space utilization for blobstore */
@@ -744,24 +743,14 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 static void
 set_led_faulty(void *arg)
 {
-	struct led_msg_arg *led_msg = arg;
-	//	struct dss_module_info		*info = dss_get_module_info();
-	//	struct bio_xs_context		*bxc;
+	struct led_msg_arg *led_msg   = arg;
+	Ctl__LedState       led_state = CTL__LED_STATE__ON;
 	int                 rc;
 
 	D_ASSERT(led_msg->xs != NULL);
-	//	bbs->bb_owner_xs != NULL);
-	//	bxc = led_msg->bbs->bb_owner_xs;
-	//	if (bxc == NULL) {
-	//		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
-	//			info->dmi_xs_id, info->dmi_tgt_id);
-	//		D_FREE(led_msg);
-	//		return;
-	//	}
 
-	rc =
-	    bio_led_manage(led_msg->xs, NULL, led_msg->dev_uuid, (unsigned int)CTL__LED_ACTION__SET,
-			   (unsigned int *)&led_msg->led_state, 0);
+	rc = bio_led_manage(led_msg->xs, NULL, led_msg->dev_uuid,
+			    (unsigned int)CTL__LED_ACTION__SET, (unsigned int *)&led_state, 0);
 	if (rc != 0)
 		DL_ERROR(rc, "Failed to set LED to FAULTY state on device:" DF_UUID,
 			 DP_UUID(led_msg->dev_uuid));
@@ -780,13 +769,12 @@ send_set_led_faulty(struct bio_blobstore *bbs)
 		if (led_msg == NULL) {
 			D_ERROR("Failed to allocate LED message for device:" DF_UUID "\n",
 				DP_UUID(bbs->bb_dev->bb_uuid));
-		} else {
-			uuid_copy(led_msg->dev_uuid, bbs->bb_dev->bb_uuid);
-			led_msg->led_state = CTL__LED_STATE__ON;
-			led_msg->xs        = bbs->bb_owner_xs;
-			D_INFO("setting state %d", led_msg->led_state);
-			spdk_thread_send_msg(init_thread(), set_led_faulty, led_msg);
+			return;
 		}
+
+		uuid_copy(led_msg->dev_uuid, bbs->bb_dev->bb_uuid);
+		led_msg->xs = bbs->bb_owner_xs;
+		spdk_thread_send_msg(init_thread(), set_led_faulty, led_msg);
 	}
 }
 
