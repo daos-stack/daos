@@ -15,7 +15,7 @@
  *   obj_class <name|id>           - Set current object class
  *   print_obj_class <hint>         - Print object classes matching hint
  *                                     hint: all | EC | EC(k+p) | RP | RP_<r> | shard
- *   gen_oid id=<number> [type=<EC_8P2|RP_3|...> grp=<number|X>]
+ *   gen_oid id=<number> [class=<name|id>] [type=<EC_8P2|RP_3|...> grp=<number|X>]
  *                                 - Set current OID (required before gen_layout/diff_layout)
  *   gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
  *                                 - Generate layout for current OID
@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
 
@@ -105,9 +106,11 @@ print_help(void)
 	       "                                  RP: all RP classes; RP_3: 3-way RP classes\n"
 	       "                                  shard: S1/S2/.../SX classes\n"
 	       "                                  all: every registered class\n"
-	       "  gen_oid id=<number> [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
+	       "  gen_oid id=<number> [class=<name|id>] [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
 	       "                                Set current OID (required before gen_layout/diff_layout)\n"
-	       "                                type+grp: override obj_class for this OID\n"
+	       "                                class: object class name or numeric id\n"
+	       "                                  e.g. class=OC_EC_4P1GX  or  class=256\n"
+	       "                                type+grp: alternative way to specify class\n"
 	       "                                  e.g. type=EC_8P2 grp=2  -> EC_8P2G2\n"
 	       "                                       type=RP_3 grp=X    -> RP_3GX\n"
 	       "  gen_layout [mode=<m>] [ver=<number>]\n"
@@ -408,11 +411,13 @@ bad_hint:
 }
 
 /*
- * gen_oid id=<number> [type=<...> grp=<...>]
+ * gen_oid id=<number> [class=<name|id>] [type=<...> grp=<...>]
  *
  * Sets the current OID (g_oid / g_oid_class) that gen_layout and diff_layout
- * will operate on.  The object class is taken from type=/grp= if provided, or
- * from g_obj_class (set by the obj_class command) otherwise.
+ * will operate on.  The object class is resolved in priority order:
+ *   1. class=<name|id>        (direct class name or numeric id)
+ *   2. type=<...> grp=<...>   (composite name, e.g. EC_8P2G2)
+ *   3. g_obj_class            (set by the obj_class command)
  */
 static void
 cmd_gen_oid(const char *arg)
@@ -422,14 +427,18 @@ cmd_gen_oid(const char *arg)
 	char             arg_copy[1024];
 	char            *tok, *save;
 	bool             id_found = false;
+	char             class_str[64] = {0}; /* class= value, e.g. "OC_EC_4P1GX" or "256" */
 	char             type_str[64] = {0};
 	char             grp_str[16]  = {0};
 	daos_oclass_id_t use_class;
 	char             name[64] = {0};
+	char            *endp;
+	unsigned long    num;
 	int              rc;
 
 #define GEN_OID_USAGE \
-	"Usage: gen_oid id=<number> [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
+	"Usage: gen_oid id=<number> [class=<name|id>]\n" \
+	"               [type=<EC_8P2|RP_3|...> grp=<number|X>]\n"
 
 	if (arg == NULL || *arg == '\0') {
 		fprintf(stderr, GEN_OID_USAGE);
@@ -449,6 +458,15 @@ cmd_gen_oid(const char *arg)
 				return;
 			}
 			id_found = true;
+		} else if (strncmp(tok, "class=", 6) == 0) {
+			const char *val = tok + 6;
+
+			if (strlen(val) >= sizeof(class_str)) {
+				fprintf(stderr, "class= value too long: %s\n",
+					val);
+				return;
+			}
+			snprintf(class_str, sizeof(class_str), "%s", val);
 		} else if (strncmp(tok, "type=", 5) == 0) {
 			const char *val = tok + 5;
 
@@ -488,8 +506,37 @@ cmd_gen_oid(const char *arg)
 		return;
 	}
 
-	/* Resolve object class: type=+grp= override g_obj_class */
-	if (type_str[0] != '\0' && grp_str[0] != '\0') {
+	/* Resolve object class: class= > type=+grp= > g_obj_class */
+	if (class_str[0] != '\0') {
+		/* class= is mutually exclusive with type=/grp= */
+		if (type_str[0] != '\0' || grp_str[0] != '\0') {
+			fprintf(stderr,
+				"class= and type=/grp= are mutually exclusive\n");
+			return;
+		}
+		/* Accept numeric id or class name */
+		errno = 0;
+		num = strtoul(class_str, &endp, 0);
+
+		if (*endp == '\0') {
+			if (errno == ERANGE || num > UINT32_MAX) {
+				fprintf(stderr,
+					"class= numeric value out of range: %s\n",
+					class_str);
+				return;
+			}
+			use_class = (daos_oclass_id_t)num;
+		} else {
+			use_class = daos_oclass_name2id(class_str);
+			if (use_class == OC_UNKNOWN) {
+				fprintf(stderr,
+					"Unknown object class '%s'\n"
+					"  Use 'print_obj_class all' to list valid classes\n",
+					class_str);
+				return;
+			}
+		}
+	} else if (type_str[0] != '\0' && grp_str[0] != '\0') {
 		char class_name[sizeof(type_str) + sizeof(grp_str) + 2]; /* 'G' + NUL */
 
 		snprintf(class_name, sizeof(class_name), "%sG%s", type_str,
@@ -511,7 +558,7 @@ cmd_gen_oid(const char *arg)
 		if (g_obj_class == OC_UNKNOWN) {
 			fprintf(stderr,
 				"No object class set; run 'obj_class <name|id>' first\n"
-				"  (or pass type= and grp= to override, e.g. type=EC_8P2 grp=2)\n");
+				"  (or use class=<name|id>, or type= and grp= to specify)\n");
 			return;
 		}
 		use_class = g_obj_class;
