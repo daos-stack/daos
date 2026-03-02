@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,6 +47,13 @@ struct bio_dev_list_msg_arg {
 struct vid_opts {
 	struct spdk_pci_addr		 pci_addr;
 	uint16_t			 vid;
+};
+
+/* Used for managing LED on init xstream when auto-faulty is triggered */
+struct led_msg_arg {
+	struct bio_xs_context *xs;
+	uuid_t                 dev_uuid;
+	Ctl__LedState          led_state;
 };
 
 /* Collect space utilization for blobstore */
@@ -733,10 +740,60 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 	return false;
 }
 
+/* Callback to set LED on init xstream when auto-faulty is triggered */
+static void
+set_led_faulty(void *arg)
+{
+	struct led_msg_arg *led_msg = arg;
+	//	struct dss_module_info		*info = dss_get_module_info();
+	//	struct bio_xs_context		*bxc;
+	int                 rc;
+
+	D_ASSERT(led_msg->xs != NULL);
+	//	bbs->bb_owner_xs != NULL);
+	//	bxc = led_msg->bbs->bb_owner_xs;
+	//	if (bxc == NULL) {
+	//		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+	//			info->dmi_xs_id, info->dmi_tgt_id);
+	//		D_FREE(led_msg);
+	//		return;
+	//	}
+
+	rc =
+	    bio_led_manage(led_msg->xs, NULL, led_msg->dev_uuid, (unsigned int)CTL__LED_ACTION__SET,
+			   (unsigned int *)&led_msg->led_state, 0);
+	if (rc != 0)
+		DL_ERROR(rc, "Failed to set LED to FAULTY state on device:" DF_UUID,
+			 DP_UUID(led_msg->dev_uuid));
+
+	D_FREE(led_msg);
+}
+
+static void
+send_set_led_faulty(struct bio_blobstore *bbs)
+{
+	struct led_msg_arg *led_msg;
+
+	/* Set LED to FAULTY state on init xstream */
+	if (init_thread() != NULL) {
+		D_ALLOC_PTR(led_msg);
+		if (led_msg == NULL) {
+			D_ERROR("Failed to allocate LED message for device:" DF_UUID "\n",
+				DP_UUID(bbs->bb_dev->bb_uuid));
+		} else {
+			uuid_copy(led_msg->dev_uuid, bbs->bb_dev->bb_uuid);
+			led_msg->led_state = CTL__LED_STATE__ON;
+			led_msg->xs        = bbs->bb_owner_xs;
+			D_INFO("setting state %d", led_msg->led_state);
+			spdk_thread_send_msg(init_thread(), set_led_faulty, led_msg);
+		}
+	}
+}
+
 void
 auto_faulty_detect(struct bio_blobstore *bbs)
 {
-	struct smd_dev_info	*dev_info;
+	struct smd_dev_info     *dev_info;
 	int			 rc;
 
 	/* The in-memory device is already in FAULTY state */
@@ -775,14 +832,19 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 		smd_dev_free_info(dev_info);
 
 		rc = smd_dev_set_state(bbs->bb_dev->bb_uuid, SMD_DEV_FAULTY);
-		if (rc)
+		if (rc) {
 			DL_ERROR(rc, "Set device state failed.");
-		else
+		} else {
 			trigger_faulty_reaction(bbs);
+			send_set_led_faulty(bbs);
+		}
 	} else {
 		rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
-		if (rc)
+		if (rc) {
 			DL_ERROR(rc, "Failed to set FAULTY state.");
+		} else {
+			send_set_led_faulty(bbs);
+		}
 	}
 
 	if (rc == 0)
