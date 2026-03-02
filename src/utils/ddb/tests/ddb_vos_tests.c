@@ -14,6 +14,8 @@
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
+#include "../../placement/tests/place_obj_common.h"
+
 /*
  * The tests in this file depend on a VOS instance with a bunch of data written. The tests will
  * verify that different parts of the VOS tree can be navigated/iterated. The way the
@@ -1122,6 +1124,84 @@ pool_flags_tests(void **state)
 	assert_success(dv_pool_close(poh));
 }
 
+#define SHA256_DIGEST_LEN 64
+
+struct file_state {
+	struct stat stat;
+	char        digest[SHA256_DIGEST_LEN];
+};
+
+#define FILE_STATE_PRE  0
+#define FILE_STATE_POST 1
+
+/**
+ * Use sha256sum utility to get the sha256 digest of the file.
+ *
+ * \note sha256sum was used to avoid introducing libcrypto dependency.
+ */
+static void
+sha256sum(const char *file, char digest[SHA256_DIGEST_LEN])
+{
+	char cmd[1024];
+	snprintf(cmd, sizeof(cmd), "sha256sum \"%s\"", file);
+
+	FILE *fp = popen(cmd, "r");
+	assert_non_null(fp);
+
+	/** sha256sum prints: <64 hex chars>  <filename> */
+	assert_int_equal(fscanf(fp, "%" STR(SHA256_DIGEST_LEN) "s", digest), 1);
+
+	pclose(fp);
+}
+
+/**
+ * Simple sequence of operations:
+ * - stat + sha256sum
+ * - open
+ * - update a single value
+ * - close
+ * - stat + sha256sum
+ *
+ * \param[in]	tctx		Test context to get the pool name and access to the pool handle.
+ * \param[out]	fs		[0] state of the pool file at the beginning and [1] at the end.
+ * \param[in]	write_mode	Whether to open the pool in the write mode.
+ */
+static void
+helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_state fs[2],
+				   bool write_mode)
+{
+	const char *path = tctx->dvt_pmem_file;
+
+	assert_int_equal(stat(path, &fs[FILE_STATE_PRE].stat), 0);
+	sha256sum(path, fs[FILE_STATE_PRE].digest);
+
+	assert_success(dv_pool_open(path, NULL, &tctx->dvt_poh, 0, write_mode));
+	update_value_to_modify_tests((void **)&tctx);
+	assert_success(dv_pool_close(tctx->dvt_poh));
+
+	assert_int_equal(stat(path, &fs[FILE_STATE_POST].stat), 0);
+	sha256sum(path, fs[FILE_STATE_POST].digest);
+}
+
+static void
+read_only_vs_write_mode_test(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct file_state       fs[2];
+
+	/** In read‑only mode, the pool contents remain unchanged, and its mtime stays the same. */
+	helper_stat_open_modify_close_stat(tctx, fs, false /** read-only */);
+	assert_int_equal(fs[FILE_STATE_PRE].stat.st_mtime, fs[FILE_STATE_POST].stat.st_mtime);
+	assert_memory_equal(fs[FILE_STATE_PRE].digest, fs[FILE_STATE_PRE].digest,
+			    SHA256_DIGEST_LEN);
+
+	/** In write mode, the pool contents will change and its mtime will increase. */
+	helper_stat_open_modify_close_stat(tctx, fs, true /** read-write */);
+	assert_true(fs[FILE_STATE_PRE].stat.st_mtime < fs[FILE_STATE_POST].stat.st_mtime);
+	assert_memory_not_equal(fs[FILE_STATE_PRE].digest, fs[FILE_STATE_POST].digest,
+				SHA256_DIGEST_LEN);
+}
+
 /*
  * All these tests use the same VOS tree that is created at suit_setup. Therefore, tests
  * that modify the state of the tree (delete, add, etc) should be run after all others.
@@ -1151,6 +1231,8 @@ const struct CMUnitTest dv_test_cases[] = {
     TEST(dtx_abort_active_table),
     TEST(path_verify),
     {"pool_flag_update", pool_flags_tests, NULL, NULL},
+    {"read_only_vs_write_mode", read_only_vs_write_mode_test, NULL,
+     NULL}, /* don't want this test to run with setup */
 };
 
 int
