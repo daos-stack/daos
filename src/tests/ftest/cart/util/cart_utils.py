@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -232,7 +233,7 @@ class CartTest(TestWithoutServers):
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
         env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
-        env += " -x COVFILE=/tmp/test.cov"
+        self.test_env.add_to_env(env, 'bullseye_file')
 
         self.attach_dir = daos_test_shared_dir
         self.log_path = log_path

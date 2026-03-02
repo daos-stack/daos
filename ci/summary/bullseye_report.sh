@@ -30,4 +30,4 @@ mkdir bullseye_code_coverage_report
 cd bullseye_code_coverage_report
 mkdir sources
 tar -xf /opt/BullseyeCoverage/daos/bullseye_sources.tar.gz -C sources/
-covhtml --srcdir sources --file "${COVFILE}" .
+covhtml --title "Bullseye Coverage Report" --srcdir sources --file "${COVFILE}" .

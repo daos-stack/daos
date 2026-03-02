@@ -60,7 +60,7 @@ class DfuseCachingCheck(IorTestBase):
         self.log_step('Re-mount dfuse with caching enabled')
         self.dfuse.unmount(tries=1)
         self.dfuse.update_params(disable_caching=False)
-        self.dfuse.run()
+        self.dfuse.run(test_env=self.test_env)
 
         self.log_step('Discard first read performance with caching enabled')
         _ = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False, create_cont=False)

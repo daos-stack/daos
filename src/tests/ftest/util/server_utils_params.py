@@ -456,8 +456,7 @@ class EngineYamlParameters(YamlParameters):
             # pylint: disable-next=fixme
             # FIXME disable space cache since some tests need to verify instant pool space
             # changing, this global setting to individual test setting once in follow-on PR.
-            "DAOS_POOL_SPACE_CACHE_INTVL=0",
-            "COVFILE=/tmp/test.cov"],
+            "DAOS_POOL_SPACE_CACHE_INTVL=0"],
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],
         "ofi+verbs": [
@@ -568,6 +567,9 @@ class EngineYamlParameters(YamlParameters):
                 required_env_vars.update({
                     env.split("=", maxsplit=1)[0]: env.split("=", maxsplit=1)[1]
                     for env in self.REQUIRED_ENV_VARS[name]})
+
+        # Add the bullseye test.cov file
+        test.test_env.add_to_env(required_env_vars, 'bullseye_file')
 
         # Enable fault injection if configured
         if test.fault_injection.fault_file is not None:

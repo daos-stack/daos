@@ -315,11 +315,6 @@ Boolean runUnitTestStage(String name) {
     return runStage(params, pragmas)
 }
 
-Boolean bullseyeReport() {
-    // return runStage(['CI_FULL_BULLSEYE_REPORT': true])
-    return (paramsValue('CI_FULL_BULLSEYE_REPORT', true) == true)
-}
-
 /**
  * scriptedBuildStage
  *
@@ -422,6 +417,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
  *          installScript           optional script to install RPMs
  *          runScriptArgs           Map of arguments to pass to runScriptWithStashes()
  *          archiveArtifactsArgs    Map of arguments to pass to archiveArtifacts()
+ *          publishHtmlArgs         Map of arguments to pass to publishHTML()
  * @return a scripted stage to run in a pipeline
  */
 def scriptedSummaryStage(Map kwargs = [:]) {
@@ -433,6 +429,7 @@ def scriptedSummaryStage(Map kwargs = [:]) {
     String installScript = kwargs.get('installScript', '')
     Map runScriptArgs = kwargs.get('runScriptArgs', [:])
     Map archiveArtifactsArgs = kwargs.get('archiveArtifactsArgs', [:])
+    Map publishHtmlArgs = kwargs.get('publishHtmlArgs', [:])
     String dockerTag = jobStatusKey("${name}-${distro}-${compiler}").toLowerCase()
 
     return {
@@ -453,6 +450,9 @@ def scriptedSummaryStage(Map kwargs = [:]) {
                         }
                     } finally {
                         // Cleanup actions
+                        if (publishHtmlArgs) {
+                            publishHTML(publishHtmlArgs)
+                        }
                         if (archiveArtifactsArgs) {
                             archiveArtifacts(archiveArtifactsArgs)
                         }
@@ -470,7 +470,7 @@ def scriptedSummaryStage(Map kwargs = [:]) {
 }
 
 String daosVersionExtension() {
-    if (bullseyeReport()) {
+    if (paramsValue('CI_FULL_BULLSEYE_REPORT', false)) {
         return '.bullseye'
     }
     return ''
@@ -802,7 +802,7 @@ pipeline {
                             name: 'Build on EL 8.8',
                             distro:'el8',
                             compiler: 'gcc',
-                            runCondition: !bullseyeReport(),
+                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -825,7 +825,7 @@ pipeline {
                             name: 'Build on EL 9.6',
                             distro:'el9',
                             compiler: 'gcc',
-                            runCondition: !bullseyeReport(),
+                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -850,7 +850,7 @@ pipeline {
                             distro:'leap15',
                             rpmDistro: 'suse.lp155',
                             compiler: 'gcc',
-                            runCondition: !bullseyeReport(),
+                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -871,7 +871,7 @@ pipeline {
                             name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
                             distro:'leap15',
                             compiler: 'icc',
-                            runCondition: !bullseyeReport(),
+                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
                             buildRpms: false,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -928,7 +928,8 @@ pipeline {
                 stage('Unit Test on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -951,7 +952,8 @@ pipeline {
                 stage('Unit Test bdev on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -974,7 +976,9 @@ pipeline {
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() && !bullseyeReport() }
+                        expression {
+                            params.CI_NLT_TEST && !skipStage() &&
+                            !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -1016,7 +1020,8 @@ pipeline {
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -1042,7 +1047,8 @@ pipeline {
                 stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -1182,7 +1188,8 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -1216,7 +1223,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: getFunctionalPackages(
                                     next_version(),
-                                    getAdditionalPackages(false, bullseyeReport()),
+                                    getAdditionalPackages(
+                                        false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                     daosVersionExtension()),
                                 test_function: 'runTestFunctionalV2'))
                     }
@@ -1230,7 +1238,8 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label vm9_label('EL9')
@@ -1253,7 +1262,8 @@ pipeline {
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1277,7 +1287,8 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label vm9_label('Ubuntu')
@@ -1300,7 +1311,8 @@ pipeline {
                 stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && !bullseyeReport() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         dockerfile {
@@ -1356,7 +1368,9 @@ pipeline {
                 stage('Test RPMs on EL 8.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() && !bullseyeReport() }
+                        expression {
+                            params.CI_TEST_EL8_RPMs && !skipStage() &&
+                            !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1377,7 +1391,9 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() && !bullseyeReport() }
+                        expression {
+                            params.CI_TEST_LEAP15_RPMs && !skipStage() &&
+                            !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1463,7 +1479,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(false, bullseyeReport()),
+                                getAdditionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 daosVersionExtension()),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1478,7 +1495,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(false, bullseyeReport()),
+                                getAdditionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 daosVersionExtension()),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1493,7 +1511,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(false, bullseyeReport()),
+                                getAdditionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 daosVersionExtension()),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
@@ -1509,7 +1528,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(false, bullseyeReport()),
+                                getAdditionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 daosVersionExtension()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1526,7 +1546,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(false, bullseyeReport()),
+                                getAdditionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 daosVersionExtension()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1543,7 +1564,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(false, bullseyeReport()),
+                                getAdditionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 daosVersionExtension()),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1559,7 +1581,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(false, bullseyeReport()),
+                                getAdditionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 daosVersionExtension()),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1574,7 +1597,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(false, bullseyeReport()),
+                                getAdditionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 daosVersionExtension()),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1618,9 +1642,16 @@ pipeline {
                                           'unit_test_bdev_bullseye',
                                           'nlt_bullseye']
                             ],
-                            archiveArtifactsArgs: [
-                                artifacts: 'bullseye_code_coverage_report/*',
-                                allowEmptyArchive: false
+                            // archiveArtifactsArgs: [
+                            //     artifacts: 'bullseye_code_coverage_report/*',
+                            //     allowEmptyArchive: false
+                            // ]
+                            publishHtmlArgs: [
+                                target: [
+                                    reportDir: 'bullseye_code_coverage_report',
+                                    reportFiles: 'index.html',
+                                    reportName: 'Bullseye Coverage'
+                                ]
                             ]
                         )
                     ) // parallel

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -86,9 +86,9 @@ class DaosCoreBase(TestWithServers):
         daos_test_env["D_LOG_FILE"] = get_log_file(self.client_log)
         daos_test_env["D_LOG_MASK"] = self.get_test_param("test_log_mask", "DEBUG")
         daos_test_env["DD_MASK"] = "mgmt,io,md,epc,rebuild,test"
-        daos_test_env["COVFILE"] = "/tmp/test.cov"
         daos_test_env["POOL_SCM_SIZE"] = str(scm_size)
         daos_test_env["POOL_NVME_SIZE"] = str(nvme_size)
+        self.test_env.add_to_env(daos_test_env, 'bullseye_file')
         parameters = " ".join(filter(None, [f"-n {dmg_config_file}", f"-{subtest}", str(args)]))
         daos_test_cmd = get_cmocka_command(command, parameters)
         job = get_job_manager(self, "Orterun", daos_test_cmd, mpi_type="openmpi")

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -84,7 +85,7 @@ class IoctlPoolHandles(TestWithTelemetry):
         dfuse.unmount()
 
         self.log_step('Remount dfuse')
-        dfuse.run()
+        dfuse.run(test_env=self.test_env)
 
         self.log_step('Collecting pool/container metrics after remounting dfuse')
         self.telemetry.collect_data(metrics)

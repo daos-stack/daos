@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -59,21 +60,21 @@ class DfuseMUMount(TestWithServers):
         dfuse.update_params(multi_user=False)
         dfuse.run_user = 'root'
         dfuse.env["D_LOG_FILE"] = root_log_file
-        dfuse.run(check=False, mount_callback=_check_fail)
+        dfuse.run(check=False, mount_callback=_check_fail, test_env=self.test_env)
         dfuse.stop()
 
         self.log_step('Verify root cannot mount the container without ACLs in multi-user mode')
         dfuse.update_params(multi_user=True)
         dfuse.run_user = 'root'
         dfuse.env["D_LOG_FILE"] = root_log_file
-        dfuse.run(check=False, mount_callback=_check_fail)
+        dfuse.run(check=False, mount_callback=_check_fail, test_env=self.test_env)
         dfuse.stop()
 
         self.log_step('Mounting dfuse in single-user mode')
         dfuse.update_params(multi_user=False)
         dfuse.run_user = None  # Current user
         dfuse.env["D_LOG_FILE"] = dfuse_user_log_file
-        dfuse.run()
+        dfuse.run(test_env=self.test_env)
 
         self.log_step('Verify stat as dfuse user in single-user mode succeeds')
         command = 'stat {}'.format(root_dir)
@@ -88,7 +89,7 @@ class DfuseMUMount(TestWithServers):
         self.log_step('Re-mounting dfuse in multi-user mode')
         dfuse.stop()
         dfuse.update_params(multi_user=True)
-        dfuse.run()
+        dfuse.run(test_env=self.test_env)
 
         self.log_step('Verify stat as dfuse user in multi-user mode succeeds')
         command = 'stat {}'.format(root_dir)
@@ -114,14 +115,14 @@ class DfuseMUMount(TestWithServers):
         dfuse.update_params(multi_user=False)
         dfuse.run_user = 'root'
         dfuse.env["D_LOG_FILE"] = root_log_file
-        dfuse.run()
+        dfuse.run(test_env=self.test_env)
         dfuse.stop()
 
         self.log_step('Verify root can mount the container with ACLs in multi-user mode')
         dfuse.update_params(multi_user=True)
         dfuse.run_user = 'root'
         dfuse.env["D_LOG_FILE"] = dfuse_user_log_file
-        dfuse.run()
+        dfuse.run(test_env=self.test_env)
         dfuse.stop()
 
     def test_dfuse_mu_mount_uns(self):
@@ -210,7 +211,7 @@ class DfuseMUMount(TestWithServers):
 
             self.log_step('Restarting dfuse to pick up ACL changes')
             dfuse.stop()
-            dfuse.run()
+            dfuse.run(test_env=self.test_env)
 
             self.log_step('Verifying dfuse user can no longer read the container through dfuse')
             command = 'ls -l {}'.format(cont_path)

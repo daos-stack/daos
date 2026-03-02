@@ -1,6 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -227,7 +227,7 @@ class Dfuse(DfuseCommand):
             f"Error removing the {self.mount_dir.value} dfuse mount point with rmdir on the "
             f"following hosts: {rmdir_result.failed_hosts}")
 
-    def run(self, check=True, mount_callback=None):
+    def run(self, check=True, mount_callback=None, test_env=None):
         # pylint: disable=arguments-differ,arguments-renamed
         """Run the dfuse command.
 
@@ -235,6 +235,8 @@ class Dfuse(DfuseCommand):
             check (bool): Check if dfuse mounted properly after mount is executed.
             mount_callback (method, optional): method to pass CommandResult to
                 after mount. Default simply raises an exception on failure.
+            test_env (TestEnvironment, optional): environment variables for the test. Default is
+                None.
 
         Raises:
             CommandFailure: In case dfuse run command fails
@@ -249,8 +251,8 @@ class Dfuse(DfuseCommand):
         if 'D_LOG_MASK' not in self.env:
             self.env['D_LOG_MASK'] = 'INFO'
 
-        if 'COVFILE' not in self.env:
-            self.env['COVFILE'] = '/tmp/test.cov'
+        if test_env:
+            test_env.add_to_env(self.env, 'bullseye_file')
 
         # mark the instance as needing cleanup before starting setup
         self.__need_cleanup = True
@@ -471,7 +473,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
     # Start dfuse
     try:
         dfuse.bind_cores = test.params.get('cores', dfuse.namespace, None)
-        dfuse.run()
+        dfuse.run(test_env=test.test_env)
         test.register_cleanup(stop_dfuse, test=test, dfuse=dfuse)
     except CommandFailure as error:
         test.log.error("Failed to start dfuse on hosts %s", dfuse.hosts, exc_info=error)
