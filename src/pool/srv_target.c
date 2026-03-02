@@ -2612,15 +2612,16 @@ pool_child_discard(void *data)
 	} while (1);
 
 	d_backoff_seq_fini(&backoff_seq);
+	D_INFO(DF_UUID " discard completed rank/target=%u/%d, rc=%d\n",
+	       DP_UUID(cont_arg->ca_po_uuid), cont_arg->ca_addr.pta_rank,
+	       cont_arg->ca_addr.pta_target, rc);
+
 	if (rc) {
 		ABT_mutex_lock(pool->sp_mutex);
 		if (pool->sp_discard_status == 0)
 			pool->sp_discard_status = rc;
 		ABT_mutex_unlock(pool->sp_mutex);
 	}
-	D_INFO(DF_UUID " discard completed rank/target=%u/%d\n", DP_UUID(cont_arg->ca_po_uuid),
-	       cont_arg->ca_addr.pta_rank, cont_arg->ca_addr.pta_target);
-
 	atomic_fetch_sub(&pool->sp_discarding, 1);
 	ds_pool_child_put(cont_arg->ca_child);
 	D_FREE(cont_arg);
@@ -2669,12 +2670,10 @@ pool_child_discard_async(void *data)
 	cont_arg->ca_epoch = arg->epoch;
 	uuid_copy(cont_arg->ca_po_uuid, arg->pool_uuid);
 
-	pool = cont_arg->ca_child->spc_pool;
-	D_ASSERTF(!ds_pool_is_rebuilding(pool), DF_UUID " is already being reintegrated!\n",
-		  DP_UUID(arg->pool_uuid));
 	D_INFO(DF_UUID " discard started rank/target=%u/%u\n", DP_UUID(arg->pool_uuid),
 	       addr.pta_rank, addr.pta_target);
 
+	pool = cont_arg->ca_child->spc_pool;
 	atomic_fetch_add(&pool->sp_discarding, 1);
 	rc = dss_ult_create(pool_child_discard, cont_arg, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
@@ -2811,6 +2810,10 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	}
 	D_INFO(DF_UUID " discard started\n", DP_UUID(arg->pool_uuid));
 
+	/* XXX just return EAGAIN/EPERM? */
+	D_ASSERTF(!ds_pool_is_rebuilding(pool), DF_UUID " is already being reintegrated!\n",
+		  DP_UUID(arg->pool_uuid));
+
 	ABT_mutex_lock(pool->sp_mutex);
 	pool->sp_discard_status = 0;
 	ABT_mutex_unlock(pool->sp_mutex);
@@ -2821,11 +2824,11 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 		ABT_mutex_lock(pool->sp_mutex);
 		pool->sp_discard_status = rc;
 		ABT_mutex_unlock(pool->sp_mutex);
-		D_GOTO(out_put, rc);
+		D_GOTO(out_sub, rc);
 	}
 
 	rc = ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
-out_put:
+out_sub:
 	/* all targets should have already started to discard, I can release my refcount */
 	atomic_fetch_sub(&pool->sp_discarding, 1);
 	ds_pool_put(pool);
