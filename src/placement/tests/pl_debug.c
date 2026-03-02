@@ -639,26 +639,70 @@ cmd_set_state(const char *subcmd, const char *arg, int opc, int opc_second)
 }
 
 /*
+ * Build a human-readable string for pool_component_flags.
+ * Returns buf (always NUL-terminated, empty string when flags==0).
+ */
+static const char *
+fmt_comp_flags(uint32_t flags, char *buf, size_t bufsz)
+{
+	const uint32_t known = PO_COMPF_DOWN2UP | PO_COMPF_DOWN2OUT |
+			       PO_COMPF_CHK_DONE;
+	int            off   = 0;
+	int            n;
+
+	buf[0] = '\0';
+	if (flags == 0)
+		return buf;
+
+#define APPEND(fmt, ...)                                                         \
+	do {                                                                     \
+		n = snprintf(buf + off, bufsz - off, fmt, ##__VA_ARGS__);        \
+		if (n > 0)                                                       \
+			off = (off + n < (int)bufsz) ? off + n : (int)bufsz - 1; \
+	} while (0)
+
+	if (flags & PO_COMPF_DOWN2UP)
+		APPEND("%sDOWN2UP", off ? "|" : "");
+	if (flags & PO_COMPF_DOWN2OUT)
+		APPEND("%sDOWN2OUT", off ? "|" : "");
+	if (flags & PO_COMPF_CHK_DONE)
+		APPEND("%sCHK_DONE", off ? "|" : "");
+	if (flags & ~known)
+		APPEND("%s0x%x", off ? "|" : "", flags & ~known);
+
+#undef APPEND
+	return buf;
+}
+
+/*
  * Print the status of the specified rank domain and all of its targets.
  */
 static void
 print_rank_status(const struct pool_domain *rank_dom)
 {
 	const struct pool_component *rc = &rank_dom->do_comp;
+	char                         fbuf[64];
 	int                          j;
 
-	printf("  rank %u  id=%u  status=%-8s  ver=%u  targets=%u\n",
+	printf("  rank %u  id=%u  status=%-8s  ver=%u  targets=%u",
 	       rc->co_rank, rc->co_id,
 	       pool_comp_state2str(rc->co_status),
 	       rc->co_ver, rank_dom->do_target_nr);
+	if (rc->co_flags != 0)
+		printf("  flags=%s", fmt_comp_flags(rc->co_flags, fbuf, sizeof(fbuf)));
+	printf("\n");
 
 	for (j = 0; j < (int)rank_dom->do_target_nr; j++) {
 		const struct pool_component *tc = &rank_dom->do_targets[j].ta_comp;
 
-		printf("    target[%2d]  id=%4u  idx=%2u  status=%-8s  ver=%u  fseq=%u\n",
+		printf("    target[%2d]  id=%4u  idx=%2u  status=%-8s  ver=%u  fseq=%u",
 		       j, tc->co_id, tc->co_index,
 		       pool_comp_state2str(tc->co_status),
 		       tc->co_ver, tc->co_fseq);
+		if (tc->co_flags != 0)
+			printf("  flags=%s",
+			       fmt_comp_flags(tc->co_flags, fbuf, sizeof(fbuf)));
+		printf("\n");
 	}
 }
 
@@ -710,10 +754,20 @@ cmd_query(const char *arg)
 		}
 		printf("Pool map version: %u\n",
 		       pool_map_get_version(g_po_map));
-		printf("node %u  id=%u  status=%-8s  ver=%u  ranks=%u\n",
-		       (unsigned int)id, node_dom->do_comp.co_id,
-		       pool_comp_state2str(node_dom->do_comp.co_status),
-		       node_dom->do_comp.co_ver, node_dom->do_child_nr);
+		{
+			const struct pool_component *nc = &node_dom->do_comp;
+			char                         fbuf[64];
+
+			printf("node %u  id=%u  status=%-8s  ver=%u  ranks=%u",
+			       (unsigned int)id, nc->co_id,
+			       pool_comp_state2str(nc->co_status),
+			       nc->co_ver, node_dom->do_child_nr);
+			if (nc->co_flags != 0)
+				printf("  flags=%s",
+				       fmt_comp_flags(nc->co_flags, fbuf,
+						      sizeof(fbuf)));
+			printf("\n");
+		}
 
 		for (i = 0; i < (int)node_dom->do_child_nr; i++)
 			print_rank_status(&node_dom->do_children[i]);
