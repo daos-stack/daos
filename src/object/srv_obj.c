@@ -2465,7 +2465,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	if (!obj_is_modification_opc(opc) && (opc != DAOS_OBJ_RPC_CPD || flags & ORF_CPD_RDONLY))
 		return 0;
 
-	if (atomic_load(&pool->sp_rebuilding)) {
+	if (atomic_load_relaxed(&pool->sp_rebuilding)) {
 		uint32_t version;
 
 		ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD,
@@ -2482,7 +2482,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	 * vos discard to finish, which otherwise might discard these new in-flight
 	 * I/O update.
 	 */
-	if ((flags & ORF_REINTEGRATING_IO) && atomic_load(&pool->sp_discarding) > 0) {
+	if ((flags & ORF_REINTEGRATING_IO) && atomic_load_relaxed(&pool->sp_discarding) > 0) {
 		D_ERROR("reintegrating " DF_UUID " retry.\n", DP_UUID(pool->sp_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
