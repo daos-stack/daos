@@ -327,7 +327,7 @@ class DdbTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=recovery
-        :avocado: tags=DdbPMEMTest,ddb_cmd,test_recovery_ddb_rm
+        :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_rm
         """
         # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb prov_mem
         # documentation, but use daos_load_path here for clarity.
