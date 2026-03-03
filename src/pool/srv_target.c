@@ -2438,8 +2438,6 @@ struct tgt_discard_arg {
 };
 
 struct child_discard_arg {
-	struct ds_pool_child   *ca_child;
-	struct pool_target_addr ca_addr;
 	uint64_t                ca_epoch;
 	uuid_t                  ca_po_uuid;
 	uuid_t                  ca_co_uuid;
@@ -2585,58 +2583,21 @@ put:
 	return rc;
 }
 
-static void
+static int
 pool_child_discard(void *data)
 {
-	struct child_discard_arg *cont_arg = data;
-	struct ds_pool           *pool     = cont_arg->ca_child->spc_pool;
+	struct tgt_discard_arg  *arg = data;
+	struct child_discard_arg cont_arg;
+	struct ds_pool_child    *child;
 	vos_iter_param_t	param = { 0 };
-	struct vos_iter_anchors   anchor   = {0};
+	struct vos_iter_anchors  anchor = {0};
+	struct pool_target_addr  addr;
+	uint32_t                 myrank;
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
-	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
-				1 << 10 /* max (ms) */);
-	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
-
-	param.ip_hdl = cont_arg->ca_child->spc_hdl;
-	do {
-		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-				 cont_discard_cb, NULL, &cont_arg, NULL);
-		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
-			break;
-
-		D_DEBUG(DB_REBUILD, "retry by " DF_RC "/" DF_UUID "\n", DP_RC(rc),
-			DP_UUID(cont_arg->ca_po_uuid));
-		dss_sleep(d_backoff_seq_next(&backoff_seq));
-	} while (1);
-
-	d_backoff_seq_fini(&backoff_seq);
-	D_INFO(DF_UUID " discard completed rank/target=%u/%d, rc=%d\n",
-	       DP_UUID(cont_arg->ca_po_uuid), cont_arg->ca_addr.pta_rank,
-	       cont_arg->ca_addr.pta_target, rc);
-
-	if (rc) {
-		ABT_mutex_lock(pool->sp_mutex);
-		if (pool->sp_discard_status == 0)
-			pool->sp_discard_status = rc;
-		ABT_mutex_unlock(pool->sp_mutex);
-	}
-	atomic_fetch_sub(&pool->sp_discarding, 1);
-	ds_pool_child_put(cont_arg->ca_child);
-	D_FREE(cont_arg);
-}
-
-static int
-pool_child_discard_async(void *data)
-{
-	struct tgt_discard_arg   *arg = data;
-	struct ds_pool           *pool;
-	struct child_discard_arg *cont_arg;
-	struct pool_target_addr   addr;
-	int                       rc = 0;
-
-	addr.pta_rank   = dss_self_rank();
+	myrank          = dss_self_rank();
+	addr.pta_rank   = myrank;
 	addr.pta_target = dss_get_module_info()->dmi_tgt_id;
 	if (!pool_target_addr_found(&arg->tgt_list, &addr)) {
 		D_INFO(DF_UUID "discard skipped rank/target=%u/%u.\n", DP_UUID(arg->pool_uuid),
@@ -2644,10 +2605,8 @@ pool_child_discard_async(void *data)
 		return 0;
 	}
 
-	D_ALLOC_PTR(cont_arg);
-	if (!cont_arg)
-		return -DER_NOMEM;
-
+	D_INFO(DF_UUID " discard started rank/target=%u/%d\n", DP_UUID(arg->pool_uuid),
+	       addr.pta_rank, addr.pta_target);
 	/**
 	 * When a faulty device is replaced with a new one using the
 	 * “dmg storage replace nvme” command, the reintegration of
@@ -2661,29 +2620,35 @@ pool_child_discard_async(void *data)
 	 * It is important to note that manual reintegration may be initiated
 	 * before step 3, in which case, the function should return “DER_AGAIN."
 	 */
-	cont_arg->ca_child = ds_pool_child_lookup(arg->pool_uuid);
-	if (cont_arg->ca_child == NULL)
+	child = ds_pool_child_lookup(arg->pool_uuid);
+	if (child == NULL)
 		D_GOTO(out, rc = -DER_AGAIN);
 
-	/* set barrier to avoid race with rebuild */
-	cont_arg->ca_addr  = addr;
-	cont_arg->ca_epoch = arg->epoch;
-	uuid_copy(cont_arg->ca_po_uuid, arg->pool_uuid);
+	cont_arg.ca_epoch = arg->epoch;
+	uuid_copy(cont_arg.ca_po_uuid, arg->pool_uuid);
 
-	D_INFO(DF_UUID " discard started rank/target=%u/%u\n", DP_UUID(arg->pool_uuid),
-	       addr.pta_rank, addr.pta_target);
+	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
+				1 << 10 /* max (ms) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: " DF_RC "\n", DP_RC(rc));
 
-	pool = cont_arg->ca_child->spc_pool;
-	atomic_fetch_add(&pool->sp_discarding, 1);
-	rc = dss_ult_create(pool_child_discard, cont_arg, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, NULL);
-	if (rc)
-		atomic_fetch_sub(&pool->sp_discarding, 1);
+	param.ip_hdl = child->spc_hdl;
+	do {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor, cont_discard_cb, NULL,
+				 &cont_arg, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
+
+		D_DEBUG(DB_REBUILD, "retry by " DF_RC "/" DF_UUID "\n", DP_RC(rc),
+			DP_UUID(arg->pool_uuid));
+		dss_sleep(d_backoff_seq_next(&backoff_seq));
+	} while (1);
+
+	d_backoff_seq_fini(&backoff_seq);
 out:
-	if (rc) {
-		if (cont_arg->ca_child)
-			ds_pool_child_put(cont_arg->ca_child);
-		D_FREE(cont_arg);
-	}
+	D_INFO(DF_UUID " discard completed rank/target=%u/%d, rc=%d\n", DP_UUID(arg->pool_uuid),
+	       addr.pta_rank, addr.pta_target, rc);
+	if (child)
+		ds_pool_child_put(child);
 	return rc;
 }
 
@@ -2773,6 +2738,41 @@ ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(v
 	return ds_pool_collective(pool_uuid, ex_status, coll_func, arg, flags, false);
 }
 
+/* Discard the objects by epoch in this pool */
+static void
+ds_pool_tgt_discard_ult(void *data)
+{
+	struct ds_pool         *pool;
+	struct tgt_discard_arg *arg = data;
+	uint32_t                ex_status;
+	int                     discarding;
+	int                     rc;
+
+	/* If discard failed, let's still go ahead, since reintegration might
+	 * still succeed, though it might leave some garbage on the reintegration
+	 * target, the future scrub tool might fix it. XXX
+	 */
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (pool == NULL) {
+		D_INFO(DF_UUID " can not be found: %d\n", DP_UUID(arg->pool_uuid), rc);
+		D_GOTO(free, rc = 0);
+	}
+
+	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
+	rc        = ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
+					      DSS_ULT_DEEP_STACK);
+
+	ABT_mutex_lock(pool->sp_mutex);
+	pool->sp_discard_status = rc;
+	discarding              = atomic_fetch_sub(&pool->sp_discarding, 1);
+	D_ASSERT(discarding == 1);
+	ABT_mutex_unlock(pool->sp_mutex);
+
+	ds_pool_put(pool);
+free:
+	tgt_discard_arg_free(arg);
+}
+
 void
 ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 {
@@ -2781,7 +2781,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	struct pool_target_addr_list	pta_list;
 	struct tgt_discard_arg		*arg = NULL;
 	struct ds_pool			*pool;
-	uint32_t                         ex_status;
+	uint32_t                         discarding = 0;
 	int				rc;
 
 	pta_list.pta_number = in->ptdi_addrs.ca_count;
@@ -2802,35 +2802,33 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	}
 
-	if (atomic_fetch_add(&pool->sp_discarding, 1) > 0) {
-		atomic_fetch_sub(&pool->sp_discarding, 1);
-		D_INFO(DF_UUID " XXX: discard is already in progress, \n", DP_UUID(arg->pool_uuid));
-		D_GOTO(out_put, rc = -DER_BUSY);
-	}
-	D_INFO(DF_UUID " discard started\n", DP_UUID(arg->pool_uuid));
-
 	if (ds_pool_is_rebuilding(pool)) {
 		D_INFO(DF_UUID " is already being reintegrated!\n", DP_UUID(arg->pool_uuid));
 		D_GOTO(out_put, rc = -DER_BUSY);
 	}
 
 	ABT_mutex_lock(pool->sp_mutex);
+	if (!atomic_compare_exchange(&pool->sp_discarding, discarding, 1)) {
+		D_INFO(DF_UUID " XXX: discard(%d) is already in progress\n",
+		       DP_UUID(arg->pool_uuid), discarding);
+		ABT_mutex_unlock(pool->sp_mutex);
+		D_GOTO(out_put, rc = -DER_BUSY);
+	}
 	pool->sp_discard_status = 0;
 	ABT_mutex_unlock(pool->sp_mutex);
 
-	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
-	rc = ds_pool_collective(arg->pool_uuid, ex_status, pool_child_discard_async, arg, 0, true);
-	if (rc != 0) {
+	D_INFO(DF_UUID " discard is scheduled\n", DP_UUID(arg->pool_uuid));
+
+	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	if (rc == 0) {
+		arg = NULL; /* taken over by ds_pool_tgt_discard_ult */
+		rc  = ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
+	} else {
 		ABT_mutex_lock(pool->sp_mutex);
 		pool->sp_discard_status = rc;
+		atomic_fetch_sub(&pool->sp_discarding, 1);
 		ABT_mutex_unlock(pool->sp_mutex);
-		D_GOTO(out_sub, rc);
 	}
-
-	rc = ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
-out_sub:
-	/* all targets should have already started to discard, I can release my refcount */
-	atomic_fetch_sub(&pool->sp_discarding, 1);
 out_put:
 	ds_pool_put(pool);
 out:
