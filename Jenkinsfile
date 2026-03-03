@@ -874,7 +874,7 @@ pipeline {
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
-                stage('Functional on EL 8.8 with Valgrind') {
+                stage('Functional with Valgrind') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -888,7 +888,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
                                            ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'el8.8'))
                     }
                     post {
                         always {
@@ -896,8 +897,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8.8 with Valgrind')
-                stage('Functional on EL 8.8') {
+                } // stage('Functional with Valgrind')
+                stage('Functional on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -911,7 +912,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
                                            ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'el8.8'))
                     }
                     post {
                         always {
@@ -919,8 +921,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8.8')
-                stage('Functional on EL 9') {
+                } // stage('Functional on EL 8')
+                stage('Functional') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -934,7 +936,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
                                            ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -942,7 +945,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 9')
+                } // stage('Functional')
                 stage('Functional on Leap 15.6') {
                     when {
                         beforeAgent true
