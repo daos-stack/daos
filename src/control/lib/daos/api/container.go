@@ -27,7 +27,8 @@ import (
 
 #include "util.h"
 
-#cgo LDFLAGS: -ldaos_common
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 

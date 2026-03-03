@@ -19,7 +19,8 @@ import (
 /*
 #include <daos.h>
 
-#cgo LDFLAGS: -ldaos_common
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 
