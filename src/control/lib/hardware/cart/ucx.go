@@ -50,11 +50,6 @@ func getProviderSetFromUCXTransport(transport string) *hardware.FabricProviderSe
 			Priority: priority,
 		})
 	}
-	// Any interface with at least one provider should allow ucx+all
-	providers.Add(&hardware.FabricProvider{
-		Name:     "ucx+all",
-		Priority: ucxCatchallPriority,
-	})
 	return providers
 }
 

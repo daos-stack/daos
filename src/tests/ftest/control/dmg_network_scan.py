@@ -3,6 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import re
+import copy
+
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
@@ -32,9 +35,16 @@ class DmgNetworkScanTest(TestWithServers):
         server_provider = self.server_managers[0].get_config_value("provider")
         sys_info = []
         for entry in get_network_information(self.log, self.hostlist_servers, SUPPORTED_PROVIDERS):
-            if server_provider == entry.provider:
+            if server_provider == entry.provider or (server_provider[0:3] == "ucx" and server_provider[0:6] == entry.provider[0:6]):
                 entry.device = None
                 sys_info.append(entry)
+            if server_provider[0:3] == "ucx" and server_provider[0:6] == entry.provider[0:6]:
+                dup_entry = copy.deepcopy(entry)
+                dup_entry.provider = re.sub(r"mlx[0-9]+", "x", dup_entry.provider)
+                sys_info.append(dup_entry)
+                dup_entry2 = copy.deepcopy(entry)
+                dup_entry2.provider = entry.provider[0:6]
+                sys_info.append(dup_entry2)
         return sys_info
 
     def get_dmg_info(self):

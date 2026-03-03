@@ -18,7 +18,11 @@ SUPPORTED_PROVIDERS = (
     "ofi+cxi",
     "ofi+verbs;ofi_rxm",
     "ucx+dc_x",
+    "ucx+dc_mlx5",
+    "ucx+dc",
     "ucx+ud_x",
+    "ucx+ud_mlx5",
+    "ucx+ud",
     "ofi+tcp",
     "ofi+tcp;ofi_rxm",
     "ofi+opx"
@@ -342,7 +346,9 @@ def get_ucx_info(logger, hosts, supported=None, verbose=True):
 
                 # Add 'ucx+' to the provider and replace 'mlx[0-9]' with 'x'
                 transport = [
-                    "+".join(["ucx", re.sub(r"mlx[0-9]+", "x", item)]) for item in transport]
+                   "+".join(["ucx", item]) for item in transport]
+                # transport = [
+                #    "+".join(["ucx", re.sub(r"mlx[0-9]+", "x", item)]) for item in transport]
 
                 # Only include supported providers if a supported list is provided
                 if supported and transport[0] not in supported:
@@ -467,7 +473,7 @@ def get_network_information(logger, hosts, supported=None, verbose=True):
     Args:
         logger (Logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to find the network information
-        supported (list, optional): list of supported providers when if provided will limit the
+        supported (list, option): list of supported providers when if provided will limit the
             inclusion to only those providers specified. Defaults to None.
         verbose (bool, optional): display command details. Defaults to True.
 
