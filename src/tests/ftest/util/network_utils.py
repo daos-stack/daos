@@ -470,7 +470,7 @@ def get_network_information(logger, hosts, supported=None, verbose=True):
     Args:
         logger (Logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to find the network information
-        supported (list, option): list of supported providers when if provided will limit the
+        supported (list, optional): list of supported providers when if provided will limit the
             inclusion to only those providers specified. Defaults to None.
         verbose (bool, optional): display command details. Defaults to True.
 
