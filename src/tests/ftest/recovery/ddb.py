@@ -385,12 +385,6 @@ class DdbTest(TestWithServers):
                 "engine0")
             ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
 
-        # self.log_step("Find the vos file name.")
-        # vos_paths = self.server_managers[0].get_vos_files(pool)
-        # if not vos_paths:
-        #     self.fail("vos file wasn't found!")
-        # ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
-
         self.log_step("Call ddb rm to remove the akey.")
         if md_on_ssd:
             # "ddb rm" command for MD-on-SSD is quite different.
