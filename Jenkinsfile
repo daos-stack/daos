@@ -19,8 +19,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
-@Library(value='pipeline-lib@grom72/SRE-3534-enable-el9-in-functional-tests') _
-
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -58,7 +56,7 @@ Map nlt_test() {
         print 'Unstash failed, results from NLT stage will not be included'
     }
     sh label: 'Fault injection testing using NLT',
-       script: './ci/docker_nlt.sh --class-name fault-injection fi'
+       script: './ci/docker_nlt.sh --class-name el9.fault-injection fi'
     List filesList = []
     filesList.addAll(findFiles(glob: '*.memcheck.xml'))
     int vgfail = 0
@@ -1050,7 +1048,7 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'fault-injection/',
+                            archiveArtifacts artifacts: 'nlt_logs/el9.fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
                         }
