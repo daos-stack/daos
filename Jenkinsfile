@@ -317,7 +317,7 @@ pipeline {
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
-                     description: 'Run the Unit Test on EL test stage')
+                     description: 'Run the Unit Test test stage')
         booleanParam(name: 'CI_NLT_TEST',
                      defaultValue: true,
                      description: 'Run the NLT test stage')
