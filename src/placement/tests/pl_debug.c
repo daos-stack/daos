@@ -449,8 +449,6 @@ cmd_gen_oid(const char *arg)
 	for (tok = strtok_r(arg_copy, " \t", &save); tok != NULL;
 	     tok = strtok_r(NULL, " \t", &save)) {
 		if (strncmp(tok, "id=", 3) == 0) {
-			char *endp;
-
 			lo_val = strtoull(tok + 3, &endp, 0);
 			if (*endp != '\0') {
 				fprintf(stderr, "Invalid id value: %s\n",
@@ -478,7 +476,6 @@ cmd_gen_oid(const char *arg)
 			snprintf(type_str, sizeof(type_str), "%s", val);
 		} else if (strncmp(tok, "grp=", 4) == 0) {
 			const char *val = tok + 4;
-			char       *endp;
 
 			if (strcasecmp(val, "X") == 0) {
 				snprintf(grp_str, sizeof(grp_str), "X");
