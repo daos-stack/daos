@@ -33,6 +33,6 @@ distro_custom() {
         zypper mr -e daos-stack-daos-sl-15-stable-local-artifactory || true
         zypper mr -p 90 daos-stack-daos-sl-15-stable-local-artifactory || true
         zypper mr -p 90 daos-stack-deps-sl-15-stable-local-artifactory || true
-        zypper in -y -f daos-server daos-client daos-client-tests
+        zypper in -y -f libfabric1 mercury-libfabric mercury
     fi
 }
