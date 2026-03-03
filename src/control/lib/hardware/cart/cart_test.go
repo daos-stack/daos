@@ -180,10 +180,6 @@ func TestCart_Provider_GetFabricInterfaces(t *testing.T) {
 						&hardware.FabricProvider{
 							Name: "ucx+ud",
 						},
-						&hardware.FabricProvider{
-							Name:     "ucx+all",
-							Priority: ucxCatchallPriority,
-						},
 					),
 				},
 				&hardware.FabricInterface{
@@ -197,10 +193,6 @@ func TestCart_Provider_GetFabricInterfaces(t *testing.T) {
 						&hardware.FabricProvider{
 							Name:     "ucx+tcp",
 							Priority: ucxTCPPriority,
-						},
-						&hardware.FabricProvider{
-							Name:     "ucx+all",
-							Priority: ucxCatchallPriority,
 						},
 					),
 				},

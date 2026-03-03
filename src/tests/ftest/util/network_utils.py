@@ -344,7 +344,7 @@ def get_ucx_info(logger, hosts, supported=None, verbose=True):
                 if not transport or not device:
                     continue
 
-                # Add 'ucx+' to the provider and replace 'mlx[0-9]' with 'x'
+                # Add 'ucx+' to the provider
                 transport = ["+".join(["ucx", item]) for item in transport]
 
                 # Only include supported providers if a supported list is provided
