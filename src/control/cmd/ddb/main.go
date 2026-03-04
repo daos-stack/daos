@@ -192,23 +192,23 @@ func setenvIfNotSet(key, value string) {
 func strToLogLevels(level string) (logging.LogLevel, engine.LogLevel, error) {
 	switch strings.ToUpper(level) {
 	case "TRACE":
-		return logging.LogLevelTrace, engine.LogLevelDbug, nil
-	case "DEBUG", "DBUG":
-		return logging.LogLevelDebug, engine.LogLevelDbug, nil
+		return logging.LogLevelTrace, engine.LogLevelDebug, nil
+	case "DEBUG":
+		return logging.LogLevelDebug, engine.LogLevelDebug, nil
 	case "INFO":
 		return logging.LogLevelInfo, engine.LogLevelInfo, nil
 	case "NOTE", "NOTICE":
 		return logging.LogLevelNotice, engine.LogLevelNote, nil
 	case "WARN":
 		return logging.LogLevelNotice, engine.LogLevelWarn, nil
-	case "ERROR", "ERR":
+	case "ERROR":
 		return logging.LogLevelError, engine.LogLevelErr, nil
 	case "CRIT":
 		return logging.LogLevelError, engine.LogLevelCrit, nil
 	case "ALRT":
-		return logging.LogLevelError, engine.LogLevelAlrt, nil
-	case "FATAL", "EMRG":
-		return logging.LogLevelError, engine.LogLevelEmrg, nil
+		return logging.LogLevelError, engine.LogLevelAlert, nil
+	case "FATAL":
+		return logging.LogLevelError, engine.LogLevelFatal, nil
 	case "EMIT":
 		return logging.LogLevelError, engine.LogLevelEmit, nil
 	default:
