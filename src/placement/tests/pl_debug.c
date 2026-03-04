@@ -17,8 +17,8 @@
  *                                     hint: all | EC | EC(k+p) | RP | RP_<r> | shard
  *   gen_oid id=<number> [class=<name|id>] [type=<EC_8P2|RP_3|...> grp=<number|X>]
  *                                 - Set current OID (required before gen_layout/diff_layout)
- *   gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>] [output=<file>]
- *                                 - Generate layout for current OID
+ *   gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>] [output=<file>] [gr=<number|all>]
+ *                                 - Generate layout for current OID (first 4 groups by default)
  *   diff_layout [ver=<number>]    - Show rebuild shards for current OID
  *   set_down rank=<n>|node=<n>    - Set rank/node status to DOWN
  *   set_downout rank=<n>|node=<n> - Set rank/node status to DOWNOUT
@@ -114,12 +114,14 @@ print_help(void)
 	       "                                type+grp: alternative way to specify class\n"
 	       "                                  e.g. type=EC_8P2 grp=2  -> EC_8P2G2\n"
 	       "                                       type=RP_3 grp=X    -> RP_3GX\n"
-	       "  gen_layout [mode=<m>] [ver=<number>] [output=<file>]\n"
+	       "  gen_layout [mode=<m>] [ver=<number>] [output=<file>] [gr=<number|all>]\n"
 	       "                                Generate layout for current OID\n"
 	       "                                mode: pre_rebuild|0, current|1, post_rebuild|2\n"
 	       "                                      (default: pre_rebuild)\n"
 	       "                                ver:  pool map version (default: latest)\n"
 	       "                                output: write layout to <file> instead of stdout\n"
+	       "                                gr:   number of groups to print (default: 4);\n"
+	       "                                      gr=all or gr=0 prints all groups\n"
 	       "                                Result is stored; overwritten on each call\n"
 	       "  diff_layout [ver=<number>]    Show shards that need rebuild (pl_obj_find_rebuild)\n"
 	       "                                ver: pool map version (default: latest)\n"
@@ -582,12 +584,15 @@ cmd_gen_oid(const char *arg)
 }
 
 /*
- * gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>] [output=<file>]
+ * gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
+ *            [output=<file>] [gr=<number|all>]
  *
  * Generates the placement layout for the current OID (set by gen_oid).
  * The result is stored in g_layout, overwriting any previous layout.
  * If output=<file> is given, the layout is written to that file instead
  * of stdout.
+ * By default only the first 4 groups are printed; use gr=<n> to show n
+ * groups or gr=all (equivalently gr=0) to show all groups.
  */
 static void
 cmd_gen_layout(const char *arg)
@@ -599,13 +604,15 @@ cmd_gen_layout(const char *arg)
 	char                 *tok, *save;
 	enum layout_gen_mode  mode = PRE_REBUILD;
 	uint32_t              ver  = 0; /* 0 → use latest map version */
+	uint32_t              max_grps = 4; /* 0 → show all groups */
 	const char           *out_path = NULL;
 	FILE                 *out = stdout;
 	int                   grp, sz, index, rc;
 	struct timespec       ts_start, ts_end;
 
 #define GEN_LAYOUT_USAGE \
-	"Usage: gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>] [output=<file>]\n"
+	"Usage: gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]" \
+	" [output=<file>] [gr=<number|all>]\n"
 
 	if (g_pl_map == NULL) {
 		fprintf(stderr, "Placement map unavailable\n");
@@ -660,6 +667,24 @@ cmd_gen_layout(const char *arg)
 					return;
 				}
 				ver = (uint32_t)v;
+			} else if (strncmp(tok, "gr=", 3) == 0) {
+				const char *val = tok + 3;
+
+				if (strcasecmp(val, "all") == 0) {
+					max_grps = 0;
+				} else {
+					char         *endp;
+					unsigned long g;
+
+					g = strtoul(val, &endp, 0);
+					if (*endp != '\0' || g > UINT32_MAX) {
+						fprintf(stderr,
+							"Invalid gr value: %s\n",
+							val);
+						return;
+					}
+					max_grps = (uint32_t)g;
+				}
 			} else if (strncmp(tok, "output=", 7) == 0) {
 				out_path = tok + 7;
 			} else {
@@ -710,6 +735,12 @@ cmd_gen_layout(const char *arg)
 		layout->ol_grp_nr, layout->ol_grp_size, layout->ol_nr);
 
 	for (grp = 0; grp < layout->ol_grp_nr; ++grp) {
+		if (max_grps != 0 && (uint32_t)grp >= max_grps) {
+			fprintf(out, "  ... %u more group(s) not shown"
+				" (use gr=all or gr=<number> to see more)\n",
+				layout->ol_grp_nr - (uint32_t)grp);
+			break;
+		}
 		fprintf(out, "  [group %d]\n", grp);
 		for (sz = 0; sz < layout->ol_grp_size; ++sz) {
 			struct pl_obj_shard shard;
