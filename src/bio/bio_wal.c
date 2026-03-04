@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -728,10 +728,6 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 	biod_tx->bd_result = wal_tx->td_error;
 
 	if (wal_tx->td_error) {
-		/* Rollback unused ID */
-		if (wal_id_cmp(si, wal_tx->td_id, si->si_unused_id) < 0)
-			si->si_unused_id = wal_tx->td_id;
-
 		if (next != NULL) {
 			/* Propagate error to depended transactions, block incoming transactions */
 			si->si_tx_failed = 1;
