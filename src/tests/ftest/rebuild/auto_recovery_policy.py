@@ -65,7 +65,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         """Scenario 1: System Creation and default self_heal.
 
         Verify the default self_heal properties at the system and pool level.
-        
+
         See self.log_step() calls for test steps.
 
         Args:
@@ -96,7 +96,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
 
         Verify disabling self_heal prevents exclusions and rebuilds.
         Verify enabling self_heal allows exclusions and rebuilds.
-        
+
         See self.log_step() calls for test steps.
 
         Args:
@@ -150,8 +150,8 @@ class RbldAutoRecoveryPolicy(TestWithServers):
     def _verify_scenario_3(self, pool):
         """Scenario 3: Online System Maintenance.
 
-        Verify self_heal can be set such that ranks are exluded but not rebuilt.
-        
+        Verify self_heal can be set such that ranks are excluded but not rebuilt.
+
         See self.log_step() calls for test steps.
 
         Args:
@@ -211,7 +211,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         """Scenario 4: Offline System Maintenance.
 
         Verify disabling self_heal prevents exclusions even when the ranks restart.
-        
+
         See self.log_step() calls for test steps.
 
         Args:
@@ -262,7 +262,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         """Scenario 5: Normal System Restart.
 
         Verify disabling self_heal prevents exclusions even when the system restarts.
-        
+
         See self.log_step() calls for test steps.
 
         Args:
@@ -308,7 +308,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         """Scenario 6: Unexpected System Restart.
 
         Verify disabling self_heal immediately after unexpected system restart prevents exclusions.
-        
+
         See self.log_step() calls for test steps.
 
         Args:
@@ -358,7 +358,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
 
         Verify disabling self_heal on specific pools prevents exclusions and rebuilds for
             those pools only.
-        
+
         See self.log_step() calls for test steps.
 
         Args:
