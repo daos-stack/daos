@@ -48,6 +48,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <time.h>
 
 #include <daos/common.h>
 #include <daos/placement.h>
@@ -596,6 +597,7 @@ cmd_gen_layout(const char *arg)
 	enum layout_gen_mode  mode = PRE_REBUILD;
 	uint32_t              ver  = 0; /* 0 → use latest map version */
 	int                   grp, sz, index, rc;
+	struct timespec       ts_start, ts_end;
 
 #define GEN_LAYOUT_USAGE \
 	"Usage: gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n"
@@ -667,9 +669,11 @@ cmd_gen_layout(const char *arg)
 	md.omd_ver = (ver != 0) ? ver : pool_map_get_version(g_pl_map->pl_poolmap);
 	md.omd_pda = 0;
 
+	clock_gettime(CLOCK_MONOTONIC, &ts_start);
 	rc = pl_obj_place(g_pl_map, PLD_LAYOUT_VERSION, &md,
 			  (mode == PRE_REBUILD) ? DAOS_OO_RO : DAOS_OO_RW,
 			  NULL, &layout);
+	clock_gettime(CLOCK_MONOTONIC, &ts_end);
 	if (rc != 0) {
 		fprintf(stderr, "pl_obj_place failed: %d\n", rc);
 		return;
@@ -704,6 +708,9 @@ cmd_gen_layout(const char *arg)
 			       shard.po_rebuilding ? "  [rebuilding]" : "");
 		}
 	}
+	printf("  pl_obj_place time: %lld us\n",
+	       ((long long)(ts_end.tv_sec - ts_start.tv_sec) * 1000000000LL +
+		(ts_end.tv_nsec - ts_start.tv_nsec)) / 1000LL);
 #undef GEN_LAYOUT_USAGE
 }
 
