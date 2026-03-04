@@ -49,12 +49,6 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	d_bdev->bb_trigger_reint = 1;
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
-	/* Reset the LED of the VMD device once revived */
-	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__RESET,
-			    NULL, 0);
-	if (rc != 0)
-		DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed", DP_UUID(d_bdev->bb_uuid));
-
 	return 0;
 }
 

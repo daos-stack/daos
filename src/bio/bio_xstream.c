@@ -2059,7 +2059,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 }
 
 void
-bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
+bio_led_reset_on_timeout(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_bdev         *d_bdev;
 	int			 rc;
@@ -2125,7 +2125,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	/* Detect new plugged device, manage LED on init xstream */
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
-		bio_led_event_monitor(ctxt, now);
+		bio_led_reset_on_timeout(ctxt, now);
 	}
 
 	/* Detect stalled I/Os */

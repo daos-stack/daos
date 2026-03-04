@@ -49,12 +49,6 @@ struct vid_opts {
 	uint16_t			 vid;
 };
 
-/* Used for managing LED on init xstream when auto-faulty is triggered */
-struct led_msg_arg {
-	struct bio_xs_context *xs;
-	uuid_t                 dev_uuid;
-};
-
 /* Collect space utilization for blobstore */
 static void
 collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
@@ -739,45 +733,6 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 	return false;
 }
 
-/* Callback to set LED on init xstream when auto-faulty is triggered */
-static void
-set_led_faulty(void *arg)
-{
-	struct led_msg_arg *led_msg   = arg;
-	Ctl__LedState       led_state = CTL__LED_STATE__ON;
-	int                 rc;
-
-	D_ASSERT(led_msg->xs != NULL);
-
-	rc = bio_led_manage(led_msg->xs, NULL, led_msg->dev_uuid,
-			    (unsigned int)CTL__LED_ACTION__SET, (unsigned int *)&led_state, 0);
-	if (rc != 0)
-		DL_ERROR(rc, "Failed to set LED to FAULTY state on device:" DF_UUID,
-			 DP_UUID(led_msg->dev_uuid));
-
-	D_FREE(led_msg);
-}
-
-static void
-send_set_led_faulty(struct bio_blobstore *bbs)
-{
-	struct led_msg_arg *led_msg;
-
-	/* Set LED to FAULTY state on init xstream */
-	if (init_thread() != NULL) {
-		D_ALLOC_PTR(led_msg);
-		if (led_msg == NULL) {
-			D_ERROR("Failed to allocate LED message for device:" DF_UUID "\n",
-				DP_UUID(bbs->bb_dev->bb_uuid));
-			return;
-		}
-
-		uuid_copy(led_msg->dev_uuid, bbs->bb_dev->bb_uuid);
-		led_msg->xs = bbs->bb_owner_xs;
-		spdk_thread_send_msg(init_thread(), set_led_faulty, led_msg);
-	}
-}
-
 void
 auto_faulty_detect(struct bio_blobstore *bbs)
 {
@@ -820,19 +775,14 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 		smd_dev_free_info(dev_info);
 
 		rc = smd_dev_set_state(bbs->bb_dev->bb_uuid, SMD_DEV_FAULTY);
-		if (rc) {
+		if (rc)
 			DL_ERROR(rc, "Set device state failed.");
-		} else {
+		else
 			trigger_faulty_reaction(bbs);
-			send_set_led_faulty(bbs);
-		}
 	} else {
 		rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
-		if (rc) {
+		if (rc)
 			DL_ERROR(rc, "Failed to set FAULTY state.");
-		} else {
-			send_set_led_faulty(bbs);
-		}
 	}
 
 	if (rc == 0)
