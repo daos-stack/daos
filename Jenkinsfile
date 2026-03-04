@@ -903,7 +903,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8.8 with Valgrind')
-                stage('Functional on EL 8.8') {
+                stage('Functional on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -917,7 +917,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
                                            ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'el8.10'))
                     }
                     post {
                         always {
@@ -925,7 +926,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8.8')
+                } // stage('Functional on EL 8')
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
@@ -940,7 +941,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
                                            ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -949,7 +951,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.6') {
+                stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -972,7 +974,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.6')
+                } // stage('Functional on Leap 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -996,7 +998,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 9.7') {
+                stage('Fault injection testing') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1007,7 +1009,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true)
+                                                                deps_build: true) +
+                                                                ' --build-arg POINT_RELEASE=.7 '
                             args '--tmpfs /mnt/daos_0'
                         }
                     }
@@ -1051,7 +1054,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing on EL 9.7')
+                } // stage('Fault injection testing')
                 stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
