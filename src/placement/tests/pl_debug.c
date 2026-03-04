@@ -667,7 +667,8 @@ cmd_gen_layout(const char *arg)
 	md.omd_ver = (ver != 0) ? ver : pool_map_get_version(g_pl_map->pl_poolmap);
 	md.omd_pda = 0;
 
-	rc = pl_obj_place(g_pl_map, PLD_LAYOUT_VERSION, &md, (unsigned int)mode,
+	rc = pl_obj_place(g_pl_map, PLD_LAYOUT_VERSION, &md,
+			  (mode == PRE_REBUILD) ? DAOS_OO_RO : DAOS_OO_RW,
 			  NULL, &layout);
 	if (rc != 0) {
 		fprintf(stderr, "pl_obj_place failed: %d\n", rc);
