@@ -35,7 +35,7 @@ distro_custom() {
         zypper mr -p 90 daos-stack-deps-sl-15-stable-local-artifactory || true
         
         if [[ "${ID:-}" == "sles" ]]; then
-            zypper in -y -f libfabric1 mercury-libfabric mercury daos-server daos-client daos-client-tests
+            zypper in -y -f libfabric1 mercury-libfabric mercury daos-server daos-client daos-client-tests openmpi3 openmpi3-devel
         else
             zypper in -y -f libfabric1 mercury-libfabric mercury
         fi
