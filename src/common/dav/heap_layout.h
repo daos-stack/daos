@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2020, Intel Corporation */
+/*
+ * Copyright 2015-2020 Intel Corporation.
+ * Copyright 2026 Google LLC
+ */
 
 /*
  * heap_layout.h -- internal definitions for heap layout
