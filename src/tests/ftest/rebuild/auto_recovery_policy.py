@@ -13,10 +13,7 @@ from general_utils import list_to_str
 
 
 class RbldAutoRecoveryPolicy(TestWithServers):
-    """Rebuild test cases featuring IOR.
-
-    This class contains tests for pool rebuild that feature I/O going on
-    during the rebuild using IOR.
+    """Rebuild test cases related to Auto Recovery Policies.
 
     :avocado: recursive
     """
@@ -25,6 +22,16 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         """Jira ID: DAOS-17420.
 
         Test Description: Verify Rebuild Auto Recovery Policy
+
+        Scenario 1: System Creation and default self_heal.
+        Scenario 2: Disabling and Enabling Self-Heal.
+        Scenario 3: Online System Maintenance.
+        Scenario 4: Offline System Maintenance.
+        Scenario 5: Normal System Restart.
+        Scenario 6: Unexpected System Restart.
+        Scenario 7: Problematic Pools.
+
+        See each corresponding _verify_scenario_X method for detailed steps.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
@@ -57,6 +64,10 @@ class RbldAutoRecoveryPolicy(TestWithServers):
     def _verify_scenario_1(self, pool):
         """Scenario 1: System Creation and default self_heal.
 
+        Verify the default self_heal properties at the system and pool level.
+        
+        See self.log_step() calls for test steps.
+
         Args:
             pool (TestPool): The pool to use
         """
@@ -82,6 +93,11 @@ class RbldAutoRecoveryPolicy(TestWithServers):
 
     def _verify_scenario_2(self, pool):
         """Scenario 2: Disabling and Enabling Self-Heal.
+
+        Verify disabling self_heal prevents exclusions and rebuilds.
+        Verify enabling self_heal allows exclusions and rebuilds.
+        
+        See self.log_step() calls for test steps.
 
         Args:
             pool (TestPool): The pool to use
@@ -133,6 +149,10 @@ class RbldAutoRecoveryPolicy(TestWithServers):
 
     def _verify_scenario_3(self, pool):
         """Scenario 3: Online System Maintenance.
+
+        Verify self_heal can be set such that ranks are exluded but not rebuilt.
+        
+        See self.log_step() calls for test steps.
 
         Args:
             pool (TestPool): The pool to use
@@ -190,6 +210,10 @@ class RbldAutoRecoveryPolicy(TestWithServers):
     def _verify_scenario_4(self, pool):
         """Scenario 4: Offline System Maintenance.
 
+        Verify disabling self_heal prevents exclusions even when the ranks restart.
+        
+        See self.log_step() calls for test steps.
+
         Args:
             pool (TestPool): The pool to use
         """
@@ -237,6 +261,10 @@ class RbldAutoRecoveryPolicy(TestWithServers):
     def _verify_scenario_5(self, pool):
         """Scenario 5: Normal System Restart.
 
+        Verify disabling self_heal prevents exclusions even when the system restarts.
+        
+        See self.log_step() calls for test steps.
+
         Args:
             pool (TestPool): The pool to use
         """
@@ -278,6 +306,10 @@ class RbldAutoRecoveryPolicy(TestWithServers):
 
     def _verify_scenario_6(self, pool):
         """Scenario 6: Unexpected System Restart.
+
+        Verify disabling self_heal immediately after unexpected system restart prevents exclusions.
+        
+        See self.log_step() calls for test steps.
 
         Args:
             pool (TestPool): The pool to use
@@ -323,6 +355,11 @@ class RbldAutoRecoveryPolicy(TestWithServers):
 
     def _verify_scenario_7(self, pool):
         """Scenario 7: Problematic Pools.
+
+        Verify disabling self_heal on specific pools prevents exclusions and rebuilds for
+            those pools only.
+        
+        See self.log_step() calls for test steps.
 
         Args:
             pool (TestPool): The pool to use
