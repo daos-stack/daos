@@ -3327,7 +3327,8 @@ struct migrate_stop_arg {
 	uuid_t       pool_uuid;
 	unsigned int version;
 	unsigned int generation;
-	unsigned int stop_count;
+	unsigned int tls_stopped;
+	unsigned int res_stopped;
 	ABT_mutex    stop_lock;
 };
 
@@ -3346,13 +3347,16 @@ migrate_fini_one_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
-	if (tls != NULL)
+
+	ABT_mutex_lock(arg->stop_lock);
+	if (tls != NULL) {
+		arg->tls_stopped++;
 		tls->mpt_fini = 1;
+	}
 
 	/* need to check "last_one" even if TLS of this target is gone (NULL) */
-	ABT_mutex_lock(arg->stop_lock);
-	arg->stop_count++;
-	last_one = (arg->stop_count == dss_tgt_nr);
+	arg->res_stopped++;
+	last_one = (arg->res_stopped == dss_tgt_nr);
 	ABT_mutex_unlock(arg->stop_lock);
 
 	for (i = 0; i < MIGR_MAX; i++) {
@@ -3406,7 +3410,8 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	arg.generation = generation;
-	arg.stop_count = 0;
+	arg.tls_stopped = 0;
+	arg.res_stopped = 0;
 	rc             = ABT_mutex_create(&arg.stop_lock);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR(DF_UUID " migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
@@ -3417,8 +3422,8 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	if (rc != 0)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
-	D_ASSERT(atomic_load(&pool->sp_rebuilding) >= arg.stop_count);
-	atomic_fetch_sub(&pool->sp_rebuilding, arg.stop_count);
+	D_ASSERT(atomic_load(&pool->sp_rebuilding) >= arg.tls_stopped);
+	atomic_fetch_sub(&pool->sp_rebuilding, arg.tls_stopped);
 	ABT_mutex_free(&arg.stop_lock);
 
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
