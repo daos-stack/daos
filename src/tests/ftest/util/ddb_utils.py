@@ -34,11 +34,14 @@ class DdbCommandBase(CommandWithParameters):
         # Write mode that's necessary for the commands that alters the data such as load.
         self.write_mode = FormattedParameter("-w", default=False)
 
-        # Command to run on the VOS file that contains container, object info, etc.
-        self.single_command = BasicParameter(None, position=2)
+        # Path to the system database. Used for MD-on-SSD.
+        self.db_path = BasicParameter(None, position=1)
 
         # VOS file path.
-        self.vos_path = FormattedParameter("--vos_path {}", position=1)
+        self.vos_path = FormattedParameter("--vos_path {}", position=2)
+
+        # Command to run on the VOS file that contains container, object info, etc.
+        self.single_command = BasicParameter(None, position=3)
 
         # Members needed for run().
         self.verbose = verbose
@@ -280,5 +283,23 @@ class DdbCommand(DdbCommandBase):
         """
         self.write_mode.value = True
         self.single_command.value = " ".join(["dtx_cmt_clear", component_path])
+
+        return self.run()
+
+    def prov_mem(self, db_path, tmpfs_mount):
+        """Call ddb --vos_path "" prov_mem <db_path> <tmpfs_mount>.
+
+        Args:
+            db_path (str): Path to the system database. e.g.,
+                /var/tmp/daos_testing/control_metadata/daos_control/engine0
+            tmpfs_mount (str): Path to the tmpfs mount point. Directory that needs to be created
+                beforehand. e.g., /mnt/daos_load
+
+        Returns:
+            CommandResult: groups of command results from the same hosts with the same return status
+        """
+        self.vos_path.value = '""'
+        cmd = ["prov_mem", db_path, tmpfs_mount]
+        self.single_command.value = " ".join(cmd)
 
         return self.run()

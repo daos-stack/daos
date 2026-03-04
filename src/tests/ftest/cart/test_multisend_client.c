@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,15 +14,15 @@
 static void
 rpc_cb_common(const struct crt_cb_info *info)
 {
-	crt_bulk_t	*p_blk;
+	crt_bulk_t      blk;
 	int		rc;
 
-	p_blk = (crt_bulk_t *)info->cci_arg;
+	blk = (crt_bulk_t)info->cci_arg;
 
 	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n", info->cci_rc);
 
-	if (p_blk && *p_blk) {
-		rc = crt_bulk_free(*p_blk);
+	if (blk != CRT_BULK_NULL) {
+		rc = crt_bulk_free(blk);
 		if (rc)
 			D_ERROR("bulk free failed with %d\n", rc);
 	}
@@ -151,6 +151,7 @@ test_run()
 			/* TODO: for now rdma is disabled when forcing all rpcs to the same rank */
 			if (test.tg_force_rank == -1) {
 				rc = d_sgl_init(&sgl, 1);
+
 				D_ASSERTF(rc == 0, "d_sgl_init() failed; rc: %d\n", rc);
 
 				sgl.sg_iovs[0].iov_buf = dma_buff + (chunk_size * chunk_index);
@@ -165,14 +166,16 @@ test_run()
 				input->chunk_size = chunk_size;
 				input->chunk_index = chunk_index;
 				input->do_put = test.tg_do_put;
+
 			} else {
+				D_WARN("Disabling rdma transfer for forced rank for now\n");
 				input->chunk_size = 0;
 				input->bulk_hdl = CRT_BULK_NULL;
 				input->chunk_index = 0;
 				input->do_put = false;
 			}
 
-			rc = crt_req_send(rpc_req, rpc_cb_common, &bulk_hdl[chunk_index]);
+			rc = crt_req_send(rpc_req, rpc_cb_common, input->bulk_hdl);
 			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
 			if (test.tg_test_mode == TEST_MODE_SYNC)

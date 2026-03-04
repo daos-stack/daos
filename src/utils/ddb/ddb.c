@@ -1,20 +1,24 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
  * (C) Copyright 2025 Vdura Inc.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
+
 #include <ctype.h>
-#include <getopt.h>
-#include <gurt/debug.h>
-#include <daos_srv/vos.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <string.h>
 #include <time.h>
+#include <getopt.h>
+
+#include <daos_errno.h>
+#include <daos/common.h>
+#include <daos_srv/vos.h>
 
 #include "ddb.h"
-#include "daos/common.h"
-#include "daos_errno.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
 

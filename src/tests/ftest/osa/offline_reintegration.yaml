@@ -58,8 +58,8 @@ container:
   properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
 
 ior:
-  clientslots:
-    slots: 48
+  client_processes:
+    np: 2
   test_file: /testFile
   repetitions: 2
   dfs_destroy: false

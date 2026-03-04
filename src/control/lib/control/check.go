@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -602,6 +603,15 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		proto.Merge(rpt, pbReport)
 		resp.Reports = append(resp.Reports, rpt)
 	}
+
+	// Sort reports by class, then sequence for consistent ordering.
+	sort.Slice(resp.Reports, func(i, j int) bool {
+		if resp.Reports[i].Class != resp.Reports[j].Class {
+			return resp.Reports[i].Class < resp.Reports[j].Class
+		}
+		return resp.Reports[i].Seq < resp.Reports[j].Seq
+	})
+
 	return resp, nil
 }
 
