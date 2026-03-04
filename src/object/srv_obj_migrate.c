@@ -3297,11 +3297,10 @@ migrate_fini_one_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
-	if (tls == NULL)
-		return 0;
+	if (tls != NULL)
+		tls->mpt_fini = 1;
 
-	tls->mpt_fini = 1;
-
+	/* need to check "last_one" even if TLS of this target is gone (NULL) */
 	ABT_mutex_lock(arg->stop_lock);
 	arg->stop_count++;
 	last_one = (arg->stop_count == dss_tgt_nr);
@@ -3310,8 +3309,10 @@ migrate_fini_one_ult(void *data)
 	for (i = 0; i < MIGR_MAX; i++) {
 		rmg = &migr_res_managers[i];
 
-		/* private resource has to be processed by ULT on the owner xstream */
-		if (rmg->rmg_bkt_type == MIGR_BUCKET_PRIV) {
+		/* private resource has to be processed by ULT on the owner xstream.
+		 * NB: if TLS is gone, it means there is no waiters of this pool.
+		 */
+		if (tls != NULL && rmg->rmg_bkt_type == MIGR_BUCKET_PRIV) {
 			/* locking is not required by private resource */
 			migrate_res_wakeup(&rmg->rmg_res_buckets[dmi->dmi_tgt_id], -1ULL);
 
@@ -3327,6 +3328,9 @@ migrate_fini_one_ult(void *data)
 			}
 		}
 	}
+
+	if (tls == NULL)
+		return 0;
 
 	migrate_pool_tls_put(tls); /* lookup */
 	rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
