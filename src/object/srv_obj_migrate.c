@@ -3251,7 +3251,7 @@ migrate_obj_ult(void *data)
 	 * discarding has been done in the current VOS target.
 	 */
 	pool = tls->mpt_pool->spc_pool;
-	while (atomic_load_relaxed(&pool->sp_discarding) != 0) {
+	while (atomic_load(&pool->sp_discarding) != 0) {
 		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(tls));
 		dss_sleep(2 * 1000);
 		if (tls->mpt_fini)
