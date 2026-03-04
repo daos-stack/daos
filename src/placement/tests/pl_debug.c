@@ -17,7 +17,7 @@
  *                                     hint: all | EC | EC(k+p) | RP | RP_<r> | shard
  *   gen_oid id=<number> [class=<name|id>] [type=<EC_8P2|RP_3|...> grp=<number|X>]
  *                                 - Set current OID (required before gen_layout/diff_layout)
- *   gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
+ *   gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>] [output=<file>]
  *                                 - Generate layout for current OID
  *   diff_layout [ver=<number>]    - Show rebuild shards for current OID
  *   set_down rank=<n>|node=<n>    - Set rank/node status to DOWN
@@ -114,11 +114,12 @@ print_help(void)
 	       "                                type+grp: alternative way to specify class\n"
 	       "                                  e.g. type=EC_8P2 grp=2  -> EC_8P2G2\n"
 	       "                                       type=RP_3 grp=X    -> RP_3GX\n"
-	       "  gen_layout [mode=<m>] [ver=<number>]\n"
+	       "  gen_layout [mode=<m>] [ver=<number>] [output=<file>]\n"
 	       "                                Generate layout for current OID\n"
 	       "                                mode: pre_rebuild|0, current|1, post_rebuild|2\n"
 	       "                                      (default: pre_rebuild)\n"
 	       "                                ver:  pool map version (default: latest)\n"
+	       "                                output: write layout to <file> instead of stdout\n"
 	       "                                Result is stored; overwritten on each call\n"
 	       "  diff_layout [ver=<number>]    Show shards that need rebuild (pl_obj_find_rebuild)\n"
 	       "                                ver: pool map version (default: latest)\n"
@@ -581,10 +582,12 @@ cmd_gen_oid(const char *arg)
 }
 
 /*
- * gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]
+ * gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>] [output=<file>]
  *
  * Generates the placement layout for the current OID (set by gen_oid).
  * The result is stored in g_layout, overwriting any previous layout.
+ * If output=<file> is given, the layout is written to that file instead
+ * of stdout.
  */
 static void
 cmd_gen_layout(const char *arg)
@@ -596,11 +599,13 @@ cmd_gen_layout(const char *arg)
 	char                 *tok, *save;
 	enum layout_gen_mode  mode = PRE_REBUILD;
 	uint32_t              ver  = 0; /* 0 → use latest map version */
+	const char           *out_path = NULL;
+	FILE                 *out = stdout;
 	int                   grp, sz, index, rc;
 	struct timespec       ts_start, ts_end;
 
 #define GEN_LAYOUT_USAGE \
-	"Usage: gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>]\n"
+	"Usage: gen_layout [mode=<pre_rebuild|current|post_rebuild>] [ver=<number>] [output=<file>]\n"
 
 	if (g_pl_map == NULL) {
 		fprintf(stderr, "Placement map unavailable\n");
@@ -655,6 +660,8 @@ cmd_gen_layout(const char *arg)
 					return;
 				}
 				ver = (uint32_t)v;
+			} else if (strncmp(tok, "output=", 7) == 0) {
+				out_path = tok + 7;
 			} else {
 				fprintf(stderr,
 					"Unknown gen_layout option: '%s'\n",
@@ -662,6 +669,15 @@ cmd_gen_layout(const char *arg)
 				fprintf(stderr, GEN_LAYOUT_USAGE);
 				return;
 			}
+		}
+	}
+
+	if (out_path != NULL) {
+		out = fopen(out_path, "w");
+		if (out == NULL) {
+			fprintf(stderr, "Cannot open output file '%s': %s\n",
+				out_path, strerror(errno));
+			return;
 		}
 	}
 
@@ -676,6 +692,8 @@ cmd_gen_layout(const char *arg)
 	clock_gettime(CLOCK_MONOTONIC, &ts_end);
 	if (rc != 0) {
 		fprintf(stderr, "pl_obj_place failed: %d\n", rc);
+		if (out != stdout)
+			fclose(out);
 		return;
 	}
 
@@ -685,32 +703,39 @@ cmd_gen_layout(const char *arg)
 	g_layout = layout;
 
 	daos_oclass_id2name(g_oid_class, name);
-	printf("Layout for OID lo=%" PRIu64 " class=%s (id=%u) mode=%s ver=%u:\n",
-	       g_oid.lo, name, (unsigned int)g_oid_class,
-	       layout_gen_mode_names[mode], md.omd_ver);
-	printf("  groups=%u  group_size=%u  total_shards=%u\n",
-	       layout->ol_grp_nr, layout->ol_grp_size, layout->ol_nr);
+	fprintf(out, "Layout for OID lo=%" PRIu64 " class=%s (id=%u) mode=%s ver=%u:\n",
+		g_oid.lo, name, (unsigned int)g_oid_class,
+		layout_gen_mode_names[mode], md.omd_ver);
+	fprintf(out, "  groups=%u  group_size=%u  total_shards=%u\n",
+		layout->ol_grp_nr, layout->ol_grp_size, layout->ol_nr);
 
 	for (grp = 0; grp < layout->ol_grp_nr; ++grp) {
-		printf("  [group %d]\n", grp);
+		fprintf(out, "  [group %d]\n", grp);
 		for (sz = 0; sz < layout->ol_grp_size; ++sz) {
 			struct pl_obj_shard shard;
 
 			index = grp * layout->ol_grp_size + sz;
 			shard = layout->ol_shards[index];
-			printf("    shard %2d: target_id=%4d  rank=%4u"
-			       "  tgt_idx=%2u  fseq=%u%s\n",
-			       shard.po_shard,
-			       shard.po_target,
-			       shard.po_rank,
-			       shard.po_index,
-			       shard.po_fseq,
-			       shard.po_rebuilding ? "  [rebuilding]" : "");
+			fprintf(out, "    shard %2d: target_id=%4d  rank=%4u"
+				"  tgt_idx=%2u  fseq=%u%s\n",
+				shard.po_shard,
+				shard.po_target,
+				shard.po_rank,
+				shard.po_index,
+				shard.po_fseq,
+				shard.po_rebuilding ? "  [rebuilding]" : "");
 		}
 	}
-	printf("  pl_obj_place time: %lld us\n",
-	       ((long long)(ts_end.tv_sec - ts_start.tv_sec) * 1000000000LL +
-		(ts_end.tv_nsec - ts_start.tv_nsec)) / 1000LL);
+	fprintf(out, "  pl_obj_place time: %lld us\n",
+		((long long)(ts_end.tv_sec - ts_start.tv_sec) * 1000000000LL +
+		 (ts_end.tv_nsec - ts_start.tv_nsec)) / 1000LL);
+	if (out != stdout) {
+		if (fclose(out) != 0)
+			fprintf(stderr, "Error closing output file '%s': %s\n",
+				out_path, strerror(errno));
+		else
+			printf("Layout written to '%s'\n", out_path);
+	}
 #undef GEN_LAYOUT_USAGE
 }
 
