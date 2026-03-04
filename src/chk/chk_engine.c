@@ -246,6 +246,7 @@ chk_engine_post_repair(struct chk_pool_rec *cpr, int *result, bool update)
 		*result = 0;
 
 	if (*result != 0) {
+		chk_ins_set_fail(cpr->cpr_ins, cbk->cb_phase);
 		if (cpr->cpr_ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT) {
 			cbk->cb_time.ct_stop_time = time(NULL);
 			cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
@@ -1204,10 +1205,13 @@ chk_engine_cont_target_label_empty(struct chk_cont_rec *ccr)
 static inline bool
 chk_engine_cont_cs_label_empty(struct chk_cont_rec *ccr)
 {
-	if (daos_iov_empty(&ccr->ccr_label_cs))
+	d_iov_t *label = &ccr->ccr_label_cs;
+
+	if (daos_iov_empty(label))
 		return true;
 
-	if (strncmp(DAOS_PROP_NO_CO_LABEL, ccr->ccr_label_cs.iov_buf, DAOS_PROP_LABEL_MAX_LEN) == 0)
+	if (strlen(DAOS_PROP_NO_CO_LABEL) == label->iov_len &&
+	    strncmp(DAOS_PROP_NO_CO_LABEL, label->iov_buf, label->iov_len) == 0)
 		return true;
 
 	return false;
@@ -1579,8 +1583,8 @@ chk_engine_cont_label_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg
 
 	ccr = riov.iov_buf;
 	if (ccr->ccr_label_prop == NULL ||
-	    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str,
-		    DAOS_PROP_LABEL_MAX_LEN) != 0)
+	    key->iov_len != strlen(ccr->ccr_label_prop->dpp_entries[0].dpe_str) ||
+	    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str, key->iov_len) != 0)
 		rc = daos_iov_copy(&ccr->ccr_label_cs, key);
 	else
 		ccr->ccr_label_checked = 1;
@@ -3177,13 +3181,12 @@ out:
 static int
 chk_engine_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 {
-	struct chk_instance	*ins = chk_engine;
-	struct chk_pending_rec	*cpr = NULL;
-	struct chk_pending_rec	*tmp = NULL;
-	struct chk_pool_rec	*pool = NULL;
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
-	int			 rc;
+	struct chk_instance    *ins  = chk_engine;
+	struct chk_pending_rec *cpr  = NULL;
+	struct chk_pool_rec    *pool = NULL;
+	d_iov_t                 kiov;
+	d_iov_t                 riov;
+	int                     rc;
 
 	D_ASSERT(cru->cru_pool != NULL);
 
@@ -3220,14 +3223,9 @@ new_seq:
 			       cru->cru_detail_nr, cru->cru_details, *seq);
 	if (unlikely(rc == -DER_AGAIN)) {
 		D_ASSERT(cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT);
+		D_ASSERT(cpr != NULL);
 
-		rc = chk_pending_del(ins, *seq, &tmp);
-		if (rc == 0)
-			D_ASSERT(tmp == NULL);
-		else if (rc != -DER_NONEXIST)
-			goto log;
-
-		chk_pending_destroy(cpr);
+		chk_pending_destroy(ins, cpr);
 		cpr = NULL;
 
 		goto new_seq;
@@ -3273,11 +3271,12 @@ again:
 	goto again;
 
 out:
-	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING)
-		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-
 	if (cpr != NULL)
-		chk_pending_destroy(cpr);
+		chk_pending_destroy(ins, cpr);
+
+	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+	    d_list_empty(&pool->cpr_pending_list))
+		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
 
 	return rc;
 }

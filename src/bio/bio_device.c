@@ -15,6 +15,7 @@
 #include <spdk/env.h>
 #include <spdk/vmd.h>
 #include <spdk/nvme.h>
+#include <spdk/nvme_spec.h>
 
 #include "smd.pb-c.h"
 
@@ -1100,4 +1101,122 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 
 	return led_manage(xs_ctxt, pci_addr, (Ctl__LedAction)action, (Ctl__LedState *)state,
 			  duration);
+}
+
+struct power_mgmt_context_t {
+	const char  *bdev_name;
+	unsigned int set_val;
+	unsigned int inflights;
+};
+
+static void
+set_power_mgmt_completion(struct spdk_bdev_io *bdev_io, bool success, void *cb_arg)
+{
+	struct power_mgmt_context_t *pm_ctx = cb_arg;
+	int                          sc;
+	int                          sct;
+	uint32_t                     cdw0;
+
+	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
+	if (sc) {
+		D_ERROR("Set power management failed for device %s (value: 0x%x), NVMe status "
+			"code/type: 0x%x/0x%x",
+			pm_ctx->bdev_name, pm_ctx->set_val, sc, sct);
+		if (sc == SPDK_NVME_SC_INVALID_FIELD && sct == 0)
+			D_ERROR(" - INVALID_FIELD: Device may not support requested power state\n");
+		else
+			D_ERROR("\n");
+	} else {
+		D_INFO("Power management value set to 0x%x on device %s\n", pm_ctx->set_val,
+		       pm_ctx->bdev_name);
+	}
+
+	D_ASSERT(pm_ctx->inflights == 1);
+	pm_ctx->inflights--;
+	spdk_bdev_free_io(bdev_io);
+}
+
+int
+bio_set_power_mgmt(struct bio_xs_context *ctxt, const char *bdev_name)
+{
+	struct power_mgmt_context_t pm_ctx = {0};
+	struct spdk_nvme_cmd        cmd    = {0};
+	struct spdk_bdev           *bdev;
+	struct spdk_bdev_desc      *bdev_desc;
+	struct spdk_io_channel     *bdev_io_channel;
+	int                         rc = 0;
+
+	/* If default has not been overwritten, skip setting the value */
+	if (bio_spdk_power_mgmt_val == NVME_POWER_MGMT_UNINIT)
+		goto out;
+
+	/* Validate power state value is in valid range (5-bit field) */
+	if (bio_spdk_power_mgmt_val > 0x1F) {
+		D_ERROR("bio_spdk_power_mgmt_val %u exceeds 5-bit limit (0x1F)\n",
+			bio_spdk_power_mgmt_val);
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	D_ASSERT(bdev_name != NULL);
+
+	bdev = spdk_bdev_get_by_name(bdev_name);
+	if (bdev == NULL) {
+		D_ERROR("No bdev associated with device name %s\n", bdev_name);
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (get_bdev_type(bdev) != BDEV_CLASS_NVME) {
+		D_DEBUG(DB_MGMT, "Device %s is not NVMe, skipping power management\n", bdev_name);
+		rc = -DER_NOTSUPPORTED;
+		goto out;
+	}
+
+	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
+		D_DEBUG(DB_MGMT, "Bdev NVMe admin passthru not supported for %s\n", bdev_name);
+		rc = -DER_NOTSUPPORTED;
+		goto out;
+	}
+
+	/* Writable descriptor required for applying power management settings */
+	rc = spdk_bdev_open_ext(bdev_name, true, bio_bdev_event_cb, NULL, &bdev_desc);
+	if (rc != 0) {
+		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
+		rc = daos_errno2der(-rc);
+		goto out;
+	}
+
+	bdev_io_channel = spdk_bdev_get_io_channel(bdev_desc);
+	D_ASSERT(bdev_io_channel != NULL);
+
+	/* Build NVMe Set Features command for Power Management */
+	cmd.opc                                      = SPDK_NVME_OPC_SET_FEATURES;
+	cmd.nsid                                     = 0; /* 0 = controller-level feature */
+	cmd.cdw10_bits.set_features.fid              = SPDK_NVME_FEAT_POWER_MANAGEMENT;
+	cmd.cdw10_bits.set_features.sv               = 0; /* Don't save across resets */
+	cmd.cdw11_bits.feat_power_management.bits.ps = bio_spdk_power_mgmt_val;
+	cmd.cdw11_bits.feat_power_management.bits.wh = 0; /* Workload hint = 0 */
+
+	pm_ctx.bdev_name = bdev_name;
+	pm_ctx.set_val   = bio_spdk_power_mgmt_val;
+	pm_ctx.inflights = 1;
+
+	rc = spdk_bdev_nvme_admin_passthru(bdev_desc, bdev_io_channel, &cmd, NULL, 0,
+					   set_power_mgmt_completion, &pm_ctx);
+	if (rc != 0) {
+		D_ERROR("Failed to submit power management command to set 0x%x on %s, rc:%d\n",
+			bio_spdk_power_mgmt_val, bdev_name, rc);
+		rc = daos_errno2der(-rc);
+		goto out_chan;
+	}
+
+	rc = xs_poll_completion(ctxt, &pm_ctx.inflights, 0);
+	D_ASSERT(rc == 0);
+
+out_chan:
+	spdk_put_io_channel(bdev_io_channel);
+	spdk_bdev_close(bdev_desc);
+out:
+	return rc;
 }
