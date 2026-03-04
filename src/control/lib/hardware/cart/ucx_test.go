@@ -50,10 +50,6 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 				&hardware.FabricProvider{
 					Name: "ucx+custom",
 				},
-				&hardware.FabricProvider{
-					Name:     "ucx+all",
-					Priority: ucxCatchallPriority,
-				},
 			),
 		},
 		"dc": {
@@ -68,10 +64,6 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 				&hardware.FabricProvider{
 					Name: "ucx+dc",
 				},
-				&hardware.FabricProvider{
-					Name:     "ucx+all",
-					Priority: ucxCatchallPriority,
-				},
 			),
 		},
 		"tcp": {
@@ -80,10 +72,6 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 				&hardware.FabricProvider{
 					Name:     "ucx+tcp",
 					Priority: ucxTCPPriority,
-				},
-				&hardware.FabricProvider{
-					Name:     "ucx+all",
-					Priority: ucxCatchallPriority,
 				},
 			),
 		},
@@ -99,10 +87,6 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 				&hardware.FabricProvider{
 					Name: "ucx+rc",
 				},
-				&hardware.FabricProvider{
-					Name:     "ucx+all",
-					Priority: ucxCatchallPriority,
-				},
 			),
 		},
 		"add generic ud": {
@@ -116,10 +100,6 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 				},
 				&hardware.FabricProvider{
 					Name: "ucx+ud",
-				},
-				&hardware.FabricProvider{
-					Name:     "ucx+all",
-					Priority: ucxCatchallPriority,
 				},
 			),
 		},
