@@ -22,6 +22,7 @@ server_config:
 
 pool:
   size: 200G
+  properties: space_rb:8
 
 container:
   control_method: daos
