@@ -350,12 +350,10 @@ pipeline {
                      description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: false,
-                     description: 'Run the Functional on Leap 15 test stage' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+                     description: 'Run the Functional on Leap 15 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
-                     description: 'Run the Functional on Ubuntu 20.04 test stage' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+                     description: 'Run the Functional on Ubuntu 20.04 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_TEST_SKIP',
                      defaultValue: false,
                      description: 'Skip Functional Hardware (Test Hardware) stage')
