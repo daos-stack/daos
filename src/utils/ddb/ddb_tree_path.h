@@ -13,9 +13,9 @@
 #define DF_DDB_RECX	"{"DF_U64"-"DF_U64"}"
 #define DP_DDB_RECX(r)	(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
 
-#define INVALID_IDX          (-1)
-#define INVALID_PATH "INVALID PATH"
-#define DDB_MAX_PRITABLE_KEY 1024
+#define INVALID_IDX           (-1)
+#define INVALID_PATH          "INVALID PATH"
+#define DDB_MAX_PRINTABLE_KEY 1024
 
 #define ERROR_BASE 5000
 enum ddb_parse_error {

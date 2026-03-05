@@ -828,17 +828,17 @@ itp_key_safe_str(char *buf, size_t buf_len)
 void
 itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 {
-	char     buf[DDB_MAX_PRITABLE_KEY];
+	char     buf[DDB_MAX_PRINTABLE_KEY];
 	d_iov_t *key_iov = &part->itp_part_value.itp_key;
 	char    *ptr     = buf;
 	uint32_t len;
 
 	len = ddb_key_to_printable_buf(key_iov, part->itp_otype, buf, ARRAY_SIZE(buf));
 	if (len > ARRAY_SIZE(buf)) {
-		len += 2; /* +2 for escape character if needed and null terminator. */
+		len += 2; /* +2 for escape characters if needed. */
 		D_ALLOC(ptr, len);
 		if (ptr == NULL) {
-			D_ERROR("NOT enough DRAM for print key: len = %u\n", len);
+			D_ERROR("NOT enough DRAM for print key(1): len = %u\n", len);
 			return;
 		}
 
@@ -850,13 +850,21 @@ itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 	if (ddb_key_is_lexical(part->itp_otype) ||
 	    (!ddb_key_is_int(part->itp_otype) && ddb_can_print(key_iov))) {
 		/* +1 to make sure there's room for a null terminator */
-		char key_str[key_iov->iov_len + 1];
+		char *key_str;
+
+		D_ALLOC(key_str, key_iov->iov_len + 1);
+		if (key_str == NULL) {
+			D_ERROR("NOT enough DRAM for print key(2): len = %ld\n",
+				key_iov->iov_len + 1);
+			return;
+		}
 
 		memcpy(key_str, key_iov->iov_buf, key_iov->iov_len);
 		key_str[key_iov->iov_len] = '\0';
 		/* buffer should be plenty big, but just in case ... */
 		if (!itp_key_safe_str(ptr, len)) {
 			ddb_print(ctx, "(ISSUE PRINTING KEY)");
+			D_FREE(key_str);
 			return;
 		}
 		/* print the size with the string key if the size isn't strlen. That way
@@ -866,6 +874,7 @@ itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 			ddb_printf(ctx, "%s{%lu}", ptr, key_iov->iov_len);
 		else
 			ddb_printf(ctx, "%s", ptr);
+		D_FREE(key_str);
 	} else {
 		/* is an int or binary and already formatted in ddb_key_to_printable_buf */
 		ddb_printf(ctx, "{%s}", ptr);
