@@ -283,7 +283,7 @@ class PerServerFaultDomainTest(IorTestBase):
         self.log.info("Stop rank list = %s", ranks_to_stop)
 
         # Convert the list to string.
-        ranks_to_stop_str = ",".join(str(rank) for rank in ranks_to_stop)
+        ranks_to_stop_str = ",".join(map(str, ranks_to_stop))
         self.log.info("Ranks to stop = %s", ranks_to_stop_str)
 
         properties = self.params.get("rf_2", "/run/cont_property/*")
