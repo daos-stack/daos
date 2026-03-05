@@ -1198,19 +1198,34 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
 			  rsi->rsi_rebuild_ver, rpt->rt_rebuild_ver);
 
-		/* The same PS leader request rebuild with higher rsi_rebuild_gen.
-		 * Is the case of massive failure case, see pool_restart_rebuild_if_rank_wip().
+		/* New leader or same leader requests rebuild with higher rsi_rebuild_gen.
+		 * This can happen in two cases:
+		 * 1. Same leader: massive failure case, see pool_restart_rebuild_if_rank_wip().
+		 * 2. Leader switch + gen change: PS leader changed and the new leader
+		 *    starts rebuild with a higher gen. Must abort old rpt and start new
+		 *    one, otherwise the old status_check_ult keeps reporting with stale
+		 *    gen which gets silently dropped by the new leader's IV handler.
 		 */
-		if (rpt->rt_leader_rank == rsi->rsi_master_rank &&
-		    rpt->rt_leader_term == rsi->rsi_leader_term &&
-		    rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen) {
+		if (rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen &&
+		    rpt->rt_leader_term <= rsi->rsi_leader_term) {
 			/* rebuild_leader_status_notify(LAZY rebuild_iv_update),
 			 * it will set rpt->rt_global_done to abort rpt.
 			 * set rt_abort here just for safe.
 			 */
 			rpt->rt_abort = 1;
-			D_INFO(DF_RBF ", start new rebuild, gen %d -> %d.\n",
-			       DP_RBF_RPT(rpt), rpt->rt_rebuild_gen, rsi->rsi_rebuild_gen);
+			if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
+				D_INFO(DF_RBF ", leader switch + gen change, gen %d -> %d,"
+				       " new leader " DF_RBF "\n",
+				       DP_RBF_RPT(rpt), rpt->rt_rebuild_gen,
+				       rsi->rsi_rebuild_gen, DP_RBF_RSI(rsi));
+				rebuild_leader_abort(rsi->rsi_pool_uuid,
+						     rsi->rsi_rebuild_ver, -1,
+						     rpt->rt_leader_term);
+			} else {
+				D_INFO(DF_RBF ", start new rebuild, gen %d -> %d.\n",
+				       DP_RBF_RPT(rpt), rpt->rt_rebuild_gen,
+				       rsi->rsi_rebuild_gen);
+			}
 			rpt_put(rpt);
 			rpt = NULL;
 			goto tls_lookup;
