@@ -95,6 +95,7 @@ def log_environment(logger):
 
 class TestEnvironment():
     """Collection of test environment variables."""
+    # pylint: disable=too-many-public-methods
 
     __ENV_VAR_MAP = {
         'app_dir': 'DAOS_TEST_APP_DIR',
@@ -211,7 +212,7 @@ class TestEnvironment():
             raise TestEnvironmentException(f"Invalid environment variable name: {name}")
 
         if self.__ENV_VAR_MAP[name] not in env:
-            env[self.__ENV_VAR_MAP[name]] = getattr(self, name)
+            env[self.__ENV_VAR_MAP[name]] = os.environ.get(self.__ENV_VAR_MAP[name])
 
     def __set_value(self, key, value):
         """Set the test environment variable.

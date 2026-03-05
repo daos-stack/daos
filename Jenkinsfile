@@ -469,13 +469,6 @@ def scriptedSummaryStage(Map kwargs = [:]) {
     }
 }
 
-String daosVersionExtension() {
-    if (paramsValue('CI_FULL_BULLSEYE_REPORT', false)) {
-        return '.bullseye'
-    }
-    return ''
-}
-
 pipeline {
     agent { label 'lightweight' }
 
@@ -1223,9 +1216,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: getFunctionalPackages(
                                     next_version(),
-                                    getAdditionalPackages(
-                                        false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                    daosVersionExtension()),
+                                    false,
+                                    paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1248,8 +1240,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(
-                                    next_version(), getAdditionalPackages(false, false)),
+                                inst_rpms: getFunctionalPackages(next_version(), false, false)),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1272,8 +1263,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(
-                                    next_version(), getAdditionalPackages(false, false)),
+                                inst_rpms: getFunctionalPackages(next_version(), false, false)),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -1297,8 +1287,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(
-                                    next_version(), getAdditionalPackages(false, false)),
+                                inst_rpms: getFunctionalPackages(next_version(), false, false)),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1479,9 +1468,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                daosVersionExtension()),
+                                false,
+                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1495,9 +1483,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                daosVersionExtension()),
+                                false,
+                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
@@ -1511,9 +1498,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                daosVersionExtension()),
+                                false,
+                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1528,9 +1514,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                daosVersionExtension()),
+                                false,
+                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1546,9 +1531,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                daosVersionExtension()),
+                                false,
+                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1564,9 +1548,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                daosVersionExtension()),
+                                true,
+                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1581,9 +1564,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                daosVersionExtension()),
+                                false,
+                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1597,9 +1579,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             inst_rpms: getFunctionalPackages(
                                 next_version(),
-                                getAdditionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                daosVersionExtension()),
+                                false,
+                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1640,12 +1621,13 @@ pipeline {
                                 script: 'ci/summary/bullseye_report.sh',
                                 stashes: ['unit_test_bullseye',
                                           'unit_test_bdev_bullseye',
-                                          'nlt_bullseye']
+                                          'nlt_bullseye',
+                                          '']
                             ],
-                            // archiveArtifactsArgs: [
-                            //     artifacts: 'bullseye_code_coverage_report/*',
-                            //     allowEmptyArchive: false
-                            // ]
+                            archiveArtifactsArgs: [
+                                artifacts: 'bullseye_code_coverage_report/*',
+                                allowEmptyArchive: false
+                            ]
                             publishHtmlArgs: [
                                 target: [
                                     reportDir: 'bullseye_code_coverage_report',
@@ -1657,46 +1639,6 @@ pipeline {
                     ) // parallel
                 } // script
             } // steps
-            // parallel {
-            //     stage('Bullseye Report') {
-            //         when {
-            //             beforeAgent true
-            //             expression { code_coverage_enabled() }
-            //         }
-            //         agent {
-            //             dockerfile {
-            //                 filename 'utils/docker/Dockerfile.el.8'
-            //                 label 'docker_runner'
-            //                 additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-            //                                                     deps_build: false,
-            //                                                     parallel_build: true) +
-            //                                     ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-            //                                     ' --build-arg REPOS="' + daosRepos() + '"' +
-            //                                     code_coverage_build_args()
-            //             }
-            //         }
-            //         steps {
-            //             script {
-            //                 sh label: 'Install packages',
-            //                     script: './ci/summary/install_pkgs.sh'
-            //                 job_step_update(
-            //                     runScriptWithStashes(
-            //                         label: 'Generate Bullseye Report',
-            //                         script: 'ci/summary/bullseye_report.sh',
-            //                         stashes: ['unit_test_bullseye',
-            //                                   'unit_test_bdev_bullseye',
-            //                                   'nlt_bullseye']))
-            //             }
-            //         }
-            //         post {
-            //             always {
-            //                 archiveArtifacts artifacts: 'bullseye_report/*',
-            //                                  allowEmptyArchive: false
-            //                 job_status_update()
-            //             }
-            //         }
-            //     } // stage('Code Coverage Report')
-            // } // parallel
         } // stage('Test Summary')
     } // stages
     post {

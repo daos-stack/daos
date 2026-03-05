@@ -61,6 +61,7 @@ class ExecutableCommand(CommandWithParameters):
         self.output_check = "both"
         self.verbose = True
         self.env = EnvironmentVariables()
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
         # User to run the command as. "root" is equivalent to sudo
         self.run_user = run_user
@@ -480,8 +481,6 @@ class ExecutableCommand(CommandWithParameters):
         for namespace in ['/run/client/*', self.namespace]:
             if namespace is not None:
                 self.env.update_from_list(test.params.get("env_vars", namespace, None) or [])
-
-        test.test_env.add_to_env(self.env, 'bullseye_file')
 
     def _get_new(self):
         """Get a new object based upon this one.
