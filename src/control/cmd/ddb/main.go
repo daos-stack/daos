@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
-	"unsafe"
 
 	"github.com/desertbit/columnize"
 	"github.com/desertbit/go-shlex"
@@ -30,11 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 )
-
-/*
- #include <stdlib.h>
-*/
-import "C"
 
 func exitWithError(err error) {
 	cmdName := path.Base(os.Args[0])
@@ -193,7 +187,7 @@ func strToLogLevels(level string) (logging.LogLevel, engine.LogLevel, error) {
 	switch strings.ToUpper(level) {
 	case "TRACE":
 		return logging.LogLevelTrace, engine.LogLevelDebug, nil
-	case "DEBUG":
+	case "DEBUG", "DBUG":
 		return logging.LogLevelDebug, engine.LogLevelDebug, nil
 	case "INFO":
 		return logging.LogLevelInfo, engine.LogLevelInfo, nil
@@ -201,13 +195,13 @@ func strToLogLevels(level string) (logging.LogLevel, engine.LogLevel, error) {
 		return logging.LogLevelNotice, engine.LogLevelNote, nil
 	case "WARN":
 		return logging.LogLevelNotice, engine.LogLevelWarn, nil
-	case "ERROR":
+	case "ERROR", "ERR":
 		return logging.LogLevelError, engine.LogLevelErr, nil
 	case "CRIT":
 		return logging.LogLevelError, engine.LogLevelCrit, nil
 	case "ALRT":
 		return logging.LogLevelError, engine.LogLevelAlert, nil
-	case "FATAL":
+	case "FATAL", "EMRG":
 		return logging.LogLevelError, engine.LogLevelFatal, nil
 	case "EMIT":
 		return logging.LogLevelError, engine.LogLevelEmit, nil
@@ -307,13 +301,13 @@ func parseOpts(args []string, opts *cliOptions) error {
 	app := createGrumbleApp(ctx)
 
 	if opts.SysdbPath != "" {
-		ctx.ctx.dc_db_path = C.CString(string(opts.SysdbPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_db_path))
+		cleanup := SetCString(&ctx.ctx.dc_db_path, string(opts.SysdbPath))
+		defer cleanup()
 	}
 
 	if opts.VosPath != "" {
-		ctx.ctx.dc_pool_path = C.CString(string(opts.VosPath))
-		defer C.free(unsafe.Pointer(ctx.ctx.dc_pool_path))
+		cleanup := SetCString(&ctx.ctx.dc_pool_path, string(opts.VosPath))
+		defer cleanup()
 
 		if !strings.HasPrefix(string(opts.Args.RunCmd), "feature") &&
 			!strings.HasPrefix(string(opts.Args.RunCmd), "open") &&
