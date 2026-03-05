@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2256,11 +2256,12 @@ dfs_test_oclass_hints(void **state)
 	daos_oclass_id_t	cid;
 	daos_handle_t		coh;
 	dfs_t			*dfs_l;
-	dfs_obj_t		*obj;
+	dfs_obj_t               *obj, *dir;
 	daos_obj_id_t		oid;
 	daos_oclass_id_t	ecidx;
 	daos_prop_t             *prop = NULL;
 	dfs_attr_t		dattr = {0};
+	dfs_obj_info_t           oinfo = {0};
 	struct pl_map_attr      attr = {0};
 	int			rc;
 
@@ -2416,6 +2417,21 @@ dfs_test_oclass_hints(void **state)
 	rc = compare_oclass(coh, cid, OC_RP_2GX);
 	assert_rc_equal(rc, 0);
 
+	/** create a directory and set EC to be used on the directory */
+	rc = dfs_open(dfs_l, NULL, "d1", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0, NULL,
+		      &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_set_oclass(dfs_l, dir, 0, ecidx);
+	assert_int_equal(rc, 0);
+	/** get the dir info to query what oclass will be used */
+	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_2G1);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
+	assert_int_equal(rc, 0);
+	dfs_release(dir);
+
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
@@ -2467,6 +2483,21 @@ dfs_test_oclass_hints(void **state)
 	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
 	rc = compare_oclass(coh, cid, OC_RP_3GX);
 	assert_rc_equal(rc, 0);
+
+	/** create a directory and set EC to be used on the directory */
+	rc = dfs_open(dfs_l, NULL, "d1", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0, NULL,
+		      &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_set_oclass(dfs_l, dir, 0, ecidx);
+	assert_int_equal(rc, 0);
+	/** get the dir info to query what oclass will be used */
+	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_3G1);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
+	assert_int_equal(rc, 0);
+	dfs_release(dir);
 
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
@@ -2520,6 +2551,22 @@ dfs_test_oclass_hints(void **state)
 	rc = compare_oclass(coh, cid, OC_RP_4GX);
 	assert_rc_equal(rc, 0);
 
+	/** create a directory and set EC to be used on the directory */
+	rc = dfs_open(dfs_l, NULL, "d1", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0, NULL,
+		      &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_set_oclass(dfs_l, dir, 0, ecidx);
+	assert_int_equal(rc, 0);
+	/** get the dir info to query what oclass will be used */
+	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_4G1);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
+	assert_int_equal(rc, 0);
+	dfs_release(dir);
+
+	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);

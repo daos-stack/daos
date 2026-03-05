@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -402,6 +402,17 @@ static inline bool
 daos_oclass_is_ec(struct daos_oclass_attr *oca)
 {
 	return oca->ca_resil == DAOS_RES_EC;
+}
+
+static inline bool
+daos_cid_is_ec(daos_oclass_id_t cid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_id2attr(cid, NULL);
+	if (oca == NULL)
+		return false;
+	return daos_oclass_is_ec(oca);
 }
 
 static inline void
