@@ -749,8 +749,8 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 			opts->led_state = d_led_state;
 		else
 			/* Leave state as NA */
-			D_ERROR("LED state GET not supported for non-VMD device (type %s:%s)\n",
-				pci_dev_type, addr_buf);
+			D_INFO("LED state GET not supported for non-VMD device (type %s:%s)\n",
+			       pci_dev_type, addr_buf);
 		return;
 	case CTL__LED_ACTION__SET:
 		break;
