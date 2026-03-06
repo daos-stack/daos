@@ -7,18 +7,21 @@ set -uex
 
 NODE="${NODELIST%%,*}"
 
-case $STAGE_NAME in
-    "NLT on "*)
-      test_log_dir="nlt_logs"
-      ;;
-    "NLT with Bullseye on "*)
-      test_log_dir="nlt_bullseye_logs"
-      ;;
-    *)
-      echo "Unexpected STAGE_NAME '$STAGE_NAME' in test_nlt_post.sh"
-      exit 1
-      ;;
-esac
+test_log_dir="${1:-}"
+if [ -z "$test_log_dir" ]; then
+    case $STAGE_NAME in
+        "NLT on "*)
+          test_log_dir="nlt_logs"
+          ;;
+        "NLT with Bullseye on "*)
+          test_log_dir="nlt_bullseye_logs"
+          ;;
+        *)
+          echo "test_nlt_post: The test log directory argument is missing!"
+          exit 1
+          ;;
+    esac
+fi
 
 rm -rf "$test_log_dir"
 mkdir "$test_log_dir"

@@ -469,6 +469,45 @@ def scriptedSummaryStage(Map kwargs = [:]) {
     }
 }
 
+
+Boolean builtWithBullseye() {
+    Map status = job_status_internal['Build on EL 8.8 with Bullseye'] ?: [:]
+    println("[DEBUG] builtWithBullseye: status=${status}, status.result=${status.result}")
+    return status.result == 'SUCCESS'
+}
+
+Map unitTestArgs(String distro, Integer timeout) {
+    if (builtWithBullseye()) {
+        return [
+            always_script: 'ci/unit/test_post_always.sh unit_test_bullseye_logs',
+            timeout_time: timeout * 2,
+            unstash_opt: true,
+            inst_repos: daosRepos(),
+            inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro} true"),
+            compiler: 'covc',
+            coverage_stash: 'unit_test_bullseye')
+        ]
+    }
+    return [
+        always_script: 'ci/unit/test_post_always.sh unit_test_logs',
+        timeout_time: timeout,
+        unstash_opt: true,
+        inst_repos: daosRepos(),
+        inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro}"),
+        compiler: 'gcc'
+    ]
+}
+
+Map unitTestPostArgs() {
+    if (builtWithBullseye()) {
+        return [
+            artifacts: ['unit_test_bullseye_logs/'],
+            compiler: 'covc'
+        ]
+    }
+    return [artifacts: ['unit_test_logs/']]
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -922,26 +961,29 @@ pipeline {
                     when {
                         beforeAgent true
                         expression {
-                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
+                            runStage(['CI_BUILD_BULLSEYE': true,
+                                      'CI_UNIT_TEST_BULLSEYE': true,
+                                      'CI_BUILD_PACKAGES_ONLY': false],
+                                     ['Skip-unit-tests': false,
+                                      'Skip-unit-test-bullseye': false])
+                        }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                        label cachedCommitPragma(
+                            pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-                                     compiler: 'gcc'))
+                        job_step_update(unitTest(unitTestArgs('el8', 60)))
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_logs/']
+                            unitTestPost artifacts: ['unit_test_bullseye_logs/'],
+                                         ignore_failure: true,
+                                         compiler: 'covc'
                             job_status_update()
                         }
                     }
-                }
+                } // stage('Unit Test on EL 8.8')
                 stage('Unit Test bdev on EL 8.8') {
                     when {
                         beforeAgent true
@@ -995,7 +1037,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         always_script: 'ci/unit/test_nlt_post.sh nlt_logs',
                                          valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
@@ -1010,6 +1052,46 @@ pipeline {
                         }
                     }
                 }
+                stage('NLT with Bullseye on EL 8.8') {
+                    when {
+                        beforeAgent true
+                        expression {
+                            runStage(['CI_BUILD_BULLSEYE': true,
+                                      'CI_NLT_BULLSEYE': true,
+                                      'CI_BUILD_PACKAGES_ONLY': false],
+                                     ['Skip-unit-tests': false,
+                                      'Skip-nlt-bullseye': false])
+                        }
+                    }
+                    agent {
+                        label params.CI_NLT_1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 150,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: getScriptOutput(
+                                        'ci/unit/required_packages.sh el8 true'),
+                                     compiler: 'covc',
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_tests: false,
+                                     ignore_failure: true,
+                                     coverage_stash: 'nlt_bullseye'))
+                        stash(name:'nltr-bullseye', includes:'nltr-bullseye.json', allowEmpty: true)
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['nlt_bullseye_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 
+                                            'ci/unit/test_nlt_post.sh nlt_bullseye_logs',
+                                         compiler: 'covc',
+                                         NLT: true
+                            job_status_update()
+                        }
+                    }
+                } // stage('NLT with Bullseye on EL 8.8')
                 stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1064,39 +1146,6 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck on EL 8')
-                stage('Unit Test with Bullseye on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression {
-                            runStage(['CI_BUILD_BULLSEYE': true,
-                                      'CI_UNIT_TEST_BULLSEYE': true,
-                                      'CI_BUILD_PACKAGES_ONLY': false],
-                                     ['Skip-unit-tests': false,
-                                      'Skip-unit-test-bullseye': false])
-                        }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 120,
-                                     unstash_opt: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
-                                     compiler: 'covc',
-                                     ignore_failure: true,
-                                     coverage_stash: 'unit_test_bullseye'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_bullseye_logs/'],
-                                         ignore_failure: true,
-                                         compiler: 'covc'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test with Bullseye on EL 8.8')
                 stage('Unit Test bdev with Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1130,44 +1179,6 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with Bullseye on EL 8.8')
-                stage('NLT with Bullseye on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression {
-                            runStage(['CI_BUILD_BULLSEYE': true,
-                                      'CI_NLT_BULLSEYE': true,
-                                      'CI_BUILD_PACKAGES_ONLY': false],
-                                     ['Skip-unit-tests': false,
-                                      'Skip-nlt-bullseye': false])
-                        }
-                    }
-                    agent {
-                        label params.CI_NLT_1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 150,
-                                     unstash_opt: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
-                                     compiler: 'covc',
-                                     test_script: 'ci/unit/test_nlt.sh',
-                                     unstash_tests: false,
-                                     ignore_failure: true,
-                                     coverage_stash: 'nlt_bullseye'))
-                        stash(name:'nltr-bullseye', includes:'nltr-bullseye.json', allowEmpty: true)
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['nlt_bullseye_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         compiler: 'covc',
-                                         NLT: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('NLT with Bullseye on EL 8.8')
             }
         } // stage('Unit Tests')
         stage('Test') {
@@ -1240,7 +1251,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(next_version(), false, false)),
+                                inst_rpms: getFunctionalPackages(next_version(), false, false),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1263,7 +1274,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(next_version(), false, false)),
+                                inst_rpms: getFunctionalPackages(next_version(), false, false),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -1287,7 +1298,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(next_version(), false, false)),
+                                inst_rpms: getFunctionalPackages(next_version(), false, false),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {

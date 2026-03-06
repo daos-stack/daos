@@ -25,35 +25,40 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
   "DAOS_BASE=$DAOS_BASE             \
    $(cat "$mydir/test_post_always_node.sh")"
 
-case $STAGE_NAME in
-    "Unit Test on "*)
-      test_log_dir="unit_test_logs"
-      ;;
-    "Unit Test bdev on "*)
-      test_log_dir="unit_test_bdev_logs"
-      ;;
-    "NLT on "*)
-      test_log_dir="nlt_logs"
-      ;;
-    "NLT with Bullseye on "*)
-      test_log_dir="nlt_bullseye_logs"
-      ;;
-    "Unit Test with memcheck on "*)
-      test_log_dir="unit_test_memcheck_logs"
-      ;;
-    "Unit Test bdev with memcheck on "*)
-      test_log_dir="unit_test_memcheck_bdev_logs"
-      ;;
-    "Unit Test with Bullseye on "*)
-      test_log_dir="unit_test_bullseye_logs"
-      ;;
-    "Unit Test bdev with Bullseye on "*)
-      test_log_dir="unit_test_bdev_bullseye_logs"
-      ;;
-    *)
-      test_log_dir="unkown_test_logs"
-      ;;
-esac
+
+test_log_dir="${1:-}"
+if [ -z "$test_log_dir" ]; then
+    case $STAGE_NAME in
+        "Unit Test on "*)
+          test_log_dir="unit_test_logs"
+          ;;
+        "Unit Test bdev on "*)
+          test_log_dir="unit_test_bdev_logs"
+          ;;
+        "NLT on "*)
+          test_log_dir="nlt_logs"
+          ;;
+        "NLT with Bullseye on "*)
+          test_log_dir="nlt_bullseye_logs"
+          ;;
+        "Unit Test with memcheck on "*)
+          test_log_dir="unit_test_memcheck_logs"
+          ;;
+        "Unit Test bdev with memcheck on "*)
+          test_log_dir="unit_test_memcheck_bdev_logs"
+          ;;
+        "Unit Test with Bullseye on "*)
+          test_log_dir="unit_test_bullseye_logs"
+          ;;
+        "Unit Test bdev with Bullseye on "*)
+          test_log_dir="unit_test_bdev_bullseye_logs"
+          ;;
+        *)
+          echo "test_post_always: The test log directory argument is missing!"
+          exit 1
+          ;;
+    esac
+fi
 
 mkdir -p "$test_log_dir"
 
