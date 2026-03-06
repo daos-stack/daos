@@ -11,7 +11,7 @@ mpi_module: mpi/mpich-x86_64
 enable_sudo: true
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
-timeout: 30M
+timeout: 120M
 setup:
   start_servers: true
   start_agents: true
@@ -38,12 +38,18 @@ server_config:
         - FI_UNIVERSE_SIZE=2048
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
-pool_jobs:
-  size: 90%
+pool_jobs1:
+  size: 45%
+  properties: "scrub:timed,scrub_freq:120,space_rb:8"
+pool_jobs2:
+  size: 45%
+  properties: "scrub:timed,scrub_freq:120,space_rb:8"
 pool_reserved:
   size: 5%
-pool_racer:
-  size: 5%
+  properties: "scrub:timed,scrub_freq:120,space_rb:8"
+#pool_racer:
+#  size: 5%
+#  properties: "scrub:timed,scrub_freq:120,space_rb:8"
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -51,8 +57,8 @@ container:
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  file_oclass: EC_2P1GX
-  dir_oclass: RP_2GX
+  file_oclass: EC_2P2GX
+  dir_oclass: RP_3GX
   control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
@@ -69,18 +75,20 @@ container_reserved:
 # smoke test_params
 smoke:
   name: soak_smoke
-  # smoke test timeout in hours
+  single_test_pool: false
+  # smoke test timeout in hours 
   test_timeout:
-    test_soak_smoke: 0.4
+    test_soak_smoke: 2
   joblist:
     - ior_smoke
     - fio_smoke
     #- daos_racer
     - mdtest_smoke
-    - vpic_smoke
+    #- vpic_smoke
     - lammps_smoke
     - macsio_smoke
     - datamover_smoke
+    - e3smio_smoke
   # num of bytes to write to reserved container
   resv_bytes: 500
   enable_intercept_lib: true
@@ -117,7 +125,7 @@ ior_smoke:
     - '4k'
   segment_count: 1
   dfs_oclass:
-    - ["EC_2P1GX", "RP_2GX"]
+    - ["EC_2P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/soak_dfuse_ior/"
     disable_caching: true
@@ -152,7 +160,7 @@ fio_smoke:
       - 'rw'
       - 'randrw'
     oclass:
-      - ["EC_2P1GX", "RP_2GX"]
+      - ["EC_2P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
@@ -178,7 +186,7 @@ vpic_smoke:
     thread_count: 8
     cores: '0-7'
   oclass:
-    - ["EC_2P1GX", "RP_2GX"]
+    - ["EC_2P2GX", "RP_3GX"]
 lammps_smoke:
   job_timeout: 10
   nodesperjob:
@@ -197,7 +205,24 @@ lammps_smoke:
     thread_count: 8
     cores: '0-7'
   oclass:
-    - ["EC_2P1GX", "RP_2GX"]
+    - ["EC_2P2GX", "RP_3GX"]
+e3smio_smoke:
+  job_timeout: 20
+  nodesperjob:
+    - 4
+  taskspernode:
+    - 32
+  cmdline: "e3sm_io -r 10 -o can_I_out.h5 -a hdf5 -x canonical -k "
+  api:
+    - POSIX-LIBPIL4DFS
+  workdir: "/tmp/soak_dfuse_e3smio/"
+  dfuse:
+    mount_dir: "/tmp/soak_dfuse_e3smio/"
+    disable_caching: true
+    thread_count: 8
+    cores: '0-7'
+  oclass:
+    - ["EC_2P2GX", "RP_3GX"]
 mdtest_smoke:
   # maximum timeout for a single job in test in minutes
   job_timeout: 10
@@ -222,7 +247,7 @@ mdtest_smoke:
   depth:
     - 0
   dfs_oclass:
-    - ["EC_2P1G1", "RP_2G1"]
+    - ["EC_2P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/soak_dfuse_mdtest/"
@@ -247,7 +272,7 @@ macsio_smoke:
   num_dumps: 2
   debug_level: 1
   oclass:
-    - ["EC_2P1GX", "RP_2GX"]
+    - ["EC_2P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/soak_dfuse_macsio/"
     disable_caching: true
@@ -260,7 +285,7 @@ datamover_smoke:
   taskspernode:
     - 1
   oclass:
-    - ["EC_2P1GX", "RP_2GX"]
+    - ["EC_2P2GX", "RP_3GX"]
   dcp:
     bufsize: 1M
     chunksize: 1M

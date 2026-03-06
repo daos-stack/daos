@@ -12,6 +12,7 @@ import re
 import stat
 import threading
 import time
+import shutil
 from itertools import count, product
 
 from avocado.core.exceptions import TestFail
@@ -1513,20 +1514,37 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             mpirun_cmd.get_params(self)
             env = EnvironmentVariables()
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            if "mpich" in mpi_module:
+            if "mpich" in mpi_module and "e3smio" not in job_spec:
                 # Pass pool and container information to the commands
                 env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
             if self.enable_il and api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
             if self.enable_il and api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            self.log.info(f"<<APP COMMAND: {app_cmd}")
+            if 'e3sm_io' in app_cmd:
+                env["ROMIO_FSTYPE_FORCE"] = "daos:"
+                env["ROMIO_READ_AGGMETHOD"] = "0"
+                env["ROMIO_HINTS"] = os.path.join(apps_dir, 'romio_hints', 'romio_hints_e3smio')
+                input_file = os.path.join(apps_dir, 'E3SM-IO', 'datasets', 'map_i_case_16p.h5')
+
+                # Copy the file to the dfuse mount directory
+                destination = os.path.join(dfuse.mount_dir.value, os.path.basename(input_file))
+                #shutil.copy(input_file, destination)
+                cp_input_file_cmd = "cp {} {}; ls -l {}".format(input_file, destination, destination)
+                sbatch_cmds.append(cp_input_file_cmd)
+                self.log.info(f"Copied {input_file} to {destination}")
+
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.ppn.update(ppn)
             mpirun_cmd.hostlist.update("$HOSTLIST")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
-            cmdline = str(mpirun_cmd)
+            if 'e3sm_io' in app_cmd:
+                cmdline = str(mpirun_cmd) + " " + destination
+            else:
+                cmdline = str(mpirun_cmd)
             sbatch_cmds.append(str(cmdline))
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:

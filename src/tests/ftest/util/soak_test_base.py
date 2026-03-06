@@ -448,6 +448,8 @@ class SoakTestBase(TestWithServers):
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "lammps" in job:
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
+                    elif "e3smio" in job:
+                        commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "macsio" in job:
                         commands = create_macsio_cmdline(self, job, pool, ppn, npj)
                     elif "datamover" in job:
@@ -633,12 +635,25 @@ class SoakTestBase(TestWithServers):
         sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
         soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
+
         # Create local avocado log directory for this pass
-        os.makedirs(outputsoaktest_dir)
+        if not os.path.exists(outputsoaktest_dir):
+            os.makedirs(outputsoaktest_dir)
+
         # Create shared log directory for this pass
-        os.makedirs(sharedsoaktest_dir, exist_ok=True)
+        if not os.path.exists(sharedsoaktest_dir):
+            os.makedirs(sharedsoaktest_dir, exist_ok=True)
+
         # Create local test log directory for this pass
-        os.makedirs(soaktest_dir)
+        if not os.path.exists(soaktest_dir):
+            os.makedirs(soaktest_dir)
+
+        # Create local avocado log directory for this pass
+#        os.makedirs(outputsoaktest_dir)
+        # Create shared log directory for this pass
+#        os.makedirs(sharedsoaktest_dir, exist_ok=True)
+        # Create local test log directory for this pass
+#        os.makedirs(soaktest_dir)
         if self.enable_remote_logging:
             result = run_remote(self.log, self.hostlist_clients, f"mkdir -p {soaktest_dir}")
             if not result.passed:
@@ -774,13 +789,33 @@ class SoakTestBase(TestWithServers):
                     self.hostlist_servers - NodeSet(self.selected_host))
                 add_pools(self, ["pool_jobs"], ranks)
             elif not single_test_pool:
-                add_pools(self, ["pool_jobs"])
+                add_pools(self, ["pool_jobs1", "pool_jobs2"])
             elif single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
                 raise SoakTestError(
                     "<<FAILED: EXTEND requires single_test_pool set to false in test yaml")
             self.log.info("Current pools: %s", " ".join([pool.identifier for pool in self.pool]))
+
+            # Split the job list into two halves
+            mid_index = len(job_list) // 2
+            job_list_pool1 = job_list[:mid_index]
+            job_list_pool2 = job_list[mid_index:]
+
             try:
-                self.execute_jobs(job_list, self.pool[1])
+                # Submit jobs to the first job pool
+                self.log.info("Submitting jobs to the first job pool")
+                self.execute_jobs(job_list_pool1, self.pool[1])
+
+                # Submit jobs to the second job pool
+                self.log.info("Submitting jobs to the second job pool")
+                self.execute_jobs(job_list_pool2, self.pool[2])
+		
+                #self.execute_jobs(job_list, self.pool[1])
+
+                # Add a 30-minute sleep with a logging message
+                sleep_duration = 120 * 60  # 60 minutes in seconds
+                self.log.info("Sleeping for %s seconds (120 minutes) after executing jobs.", sleep_duration)
+                time.sleep(sleep_duration)
+
             except SoakTestError as error:
                 self.fail(error)
             # Check space after jobs done

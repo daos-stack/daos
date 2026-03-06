@@ -7,7 +7,7 @@ hosts:
   # client_reservation: daos-test
 orterun:
   allow_run_as_root: true
-# This timeout must be longer than the test_timeout param (+15minutes)
+# This timeout must be longer than the test_timeout param (+30minutes)
 timeout: 24H30M
 setup:
   start_servers: true
@@ -42,10 +42,12 @@ pool_jobs:
   size: 90%
   rebuild_timeout: 600
   pool_query_timeout: 120
+  properties: "scrub:timed,scrub_freq:120,space_rb:8"
 pool_reserved:
   size: 5%
   rebuild_timeout: 600
   pool_query_timeout: 120
+  properties: "scrub:timed,scrub_freq:120,space_rb:8"
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -82,6 +84,11 @@ soak_harassers:
     - ior_harasser
     - fio_harasser
     - mdtest_harasser
+    #- vpic_harasser
+    - lammps_harasser
+    - macsio_harasser
+    - datamover_harasser
+    - e3smio_harasser
   # one harrasser is run during each pass of soak jobs
   harasserlist:
     test_soak_offline_harassers:
@@ -175,6 +182,60 @@ fio_harasser:
   dfuse:
     mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
+vpic_harasser:
+  # Requires opeapi
+  job_timeout: 20
+  nodesperjob:
+    - 1
+  taskspernode:
+    - 32
+  cmdline: "${DAOS_TEST_APP_DIR}/vpic-install/bin/harris.Linux"
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
+  workdir: "/tmp/soak_dfuse_vpic/"
+  dfuse:
+    mount_dir: "/tmp/soak_dfuse_vpic/"
+    disable_caching: true
+  oclass:
+    - ["EC_2P1GX", "RP_2GX"]
+lammps_harasser:
+  job_timeout: 55
+  nodesperjob:
+    - 8
+  taskspernode:
+    - 32
+  cmdline: "${DAOS_TEST_APP_DIR}/lammps/src/lmp_mpi -i ${DAOS_TEST_APP_DIR}/lammps/bench/in.lj"
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
+  workdir: "/tmp/soak_dfuse_lammps/"
+  dfuse:
+    mount_dir: "/tmp/soak_dfuse_lammps/"
+    disable_caching: true
+    thread_count: 8
+    cores: '0-7'
+  oclass:
+    - ["EC_2P1GX", "RP_2GX"]
+e3smio_harasser:
+  job_timeout: 20
+  nodesperjob:
+    - 4
+  taskspernode:
+    - 32
+  cmdline: "e3sm_io -r 10 -o can_I_out.h5 -a hdf5 -x canonical -k "
+  api:
+    - POSIX-LIBPIL4DFS
+  workdir: "/tmp/soak_dfuse_e3smio/"
+  dfuse:
+    mount_dir: "/tmp/soak_dfuse_e3smio/"
+    disable_caching: true
+    thread_count: 8
+    cores: '0-7'
+  oclass:
+    - ["EC_2P1GX", "RP_2GX"]
 mdtest_harasser:
   # maximum timeout for a single job in test in minutes
   job_timeout: 30
@@ -207,6 +268,75 @@ mdtest_harasser:
   dfuse:
     mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
+macsio_harasser:
+  job_timeout: 30
+  nodesperjob:
+    - 1
+    - 4
+    - 8
+  taskspernode:
+    - 16
+  api:
+    - HDF5
+    - HDF5-VOL
+  interface: hdf5
+  parallel_file_mode: SIF 1
+  filebase: daos
+  units_prefix_system: decimal
+  part_size: 10M
+  avg_num_parts: 2.5
+  num_dumps: 2
+  debug_level: 1
+  oclass:
+    - ["SX","SX"]
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
+  dfuse:
+    mount_dir: "/tmp/soak_dfuse_macsio/"
+    disable_caching: true
+    thread_count: 8
+    cores: '0-7'
+datamover_harasser:
+  job_timeout: 10
+  nodesperjob:
+    - 8
+  taskspernode:
+    - 32
+  oclass:
+    - ["SX","SX"]
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
+  dcp:
+    bufsize: 1M
+    chunksize: 1M
+  ior_write:
+    api:
+      - DFS
+    flags: "-w -F -k"
+    signature: "5"
+    transfer_size:
+      - 1M
+    block_size:
+      - 4G
+    test_file: "daos:/testFile"
+    dfs_destroy: false
+  ior_read:
+    api:
+      - DFS
+    flags: "-r -R -F -k"
+    signature: "5"
+    transfer_size:
+      - 1M
+    block_size:
+      - 4G
+    test_file: "daos:/testFile"
+    dfs_destroy: false
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:
