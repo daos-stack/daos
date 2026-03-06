@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       16%{?relval}%{?dist}
+Release:       18%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -635,6 +635,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Mar 06 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-18
+- Bump version
+
 * Thu Feb 05 2026 Jerome Soumagne <jerome.soumagne@hpe.com> 2.6.4-16
 - Require mercury-libfabric to always install libfabric plugin
 - Bump mercury min version to 2.4.1
