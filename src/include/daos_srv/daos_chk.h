@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,9 +74,9 @@ typedef int (*chk_query_pool_cb_t)(struct chk_query_pool_shard *shard, uint32_t 
 
 typedef int (*chk_prop_cb_t)(void *buf, uint32_t policies[], int cnt, uint32_t flags);
 
-int chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		     struct chk_policy *policies, int pool_nr, uuid_t pools[],
-		     uint32_t api_flags, int phase);
+int
+chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct chk_policy *policies,
+		 int pool_nr, uuid_t pools[], uint32_t api_flags);
 
 int chk_leader_stop(int pool_nr, uuid_t pools[]);
 

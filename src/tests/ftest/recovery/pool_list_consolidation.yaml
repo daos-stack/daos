@@ -17,7 +17,7 @@ setup:
   start_servers_once: False
 
 pool:
-  size: 60G
+  size: 100G
 
 container:
   control_method: daos

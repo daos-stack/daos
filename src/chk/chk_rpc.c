@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -491,8 +492,8 @@ chk_sg_rpc_prepare(d_rank_t rank, crt_opcode_t opc, crt_rpc_t **req)
 
 int
 chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		 uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader, uint32_t flags,
+		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr, uuid_t pools[],
+		 uint32_t api_flags, uint32_t ns_ver, d_rank_t leader, uint32_t flags,
 		 uuid_t iv_uuid, chk_co_rpc_cb_t start_cb, void *args)
 {
 	struct chk_co_rpc_cb_args	cb_args = { 0 };
@@ -508,12 +509,12 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	if (rc != 0)
 		goto out;
 
-	csi = crt_req_get(req);
-	csi->csi_gen = gen;
-	csi->csi_flags = flags;
-	csi->csi_phase = phase;
+	csi                  = crt_req_get(req);
+	csi->csi_gen         = gen;
+	csi->csi_flags       = flags;
+	csi->csi_ns_ver      = ns_ver;
 	csi->csi_leader_rank = leader;
-	csi->csi_api_flags = api_flags;
+	csi->csi_api_flags   = api_flags;
 	uuid_copy(csi->csi_iv_uuid, iv_uuid);
 	csi->csi_ranks.ca_count = rank_nr;
 	csi->csi_ranks.ca_arrays = ranks;
@@ -569,9 +570,9 @@ out:
 		crt_req_decref(req);
 	}
 
-	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u start checker, gen "DF_X64", flags %x, phase %d, iv "DF_UUIDF":"DF_RC"\n",
-		 leader, gen, flags, phase, DP_UUID(iv_uuid), DP_RC(rc));
+	DL_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO, rc,
+		  "Rank %u start checker, gen " DF_X64 ", flags %x, ns_ver %d, iv " DF_UUIDF,
+		  leader, gen, flags, ns_ver, DP_UUID(iv_uuid));
 
 	return rc;
 }
@@ -982,7 +983,7 @@ out:
 
 int
 chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags,
-		  uint32_t *pool_nr, uuid_t **pools)
+		  uint32_t *ns_ver, uint32_t *pool_nr, uuid_t **pools, d_rank_list_t **ranks)
 {
 	crt_rpc_t		*req = NULL;
 	struct chk_rejoin_in	*cri;
@@ -1005,8 +1006,22 @@ chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uuid_t iv_uuid, 
 
 	cro = crt_reply_get(req);
 	rc = cro->cro_status;
-	if (rc == 0 && cro->cro_pools.ca_count > 0) {
-		*flags = cro->cro_flags;
+	if (rc != 0)
+		goto out;
+
+	*flags  = cro->cro_flags;
+	*ns_ver = cro->cro_ns_ver;
+
+	if (cro->cro_ranks.ca_count > 0) {
+		*ranks = d_rank_list_alloc(cro->cro_ranks.ca_count);
+		if (*ranks == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		memcpy((*ranks)->rl_ranks, cro->cro_ranks.ca_arrays,
+		       sizeof(d_rank_t) * cro->cro_ranks.ca_count);
+	}
+
+	if (cro->cro_pools.ca_count > 0) {
 		D_ALLOC(tmp, cro->cro_pools.ca_count);
 		if (tmp == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
