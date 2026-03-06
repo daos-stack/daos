@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -849,7 +849,8 @@ vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub)
 		return false;
 
 	for (i = 0; i < sub->vba_cnt; i++) {
-		idx = daos_array_find(super, super->vba_cnt, sub->vba_bkts[i], &bkt_sort_ops);
+		idx = daos_array_find(super->vba_bkts, super->vba_cnt, sub->vba_bkts[i],
+				      &bkt_sort_ops);
 		if (idx < 0)
 			return false;
 	}

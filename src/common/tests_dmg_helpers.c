@@ -1975,21 +1975,6 @@ out:
 }
 
 static int
-check_query_reports_cmp(const void *p1, const void *p2)
-{
-	const struct daos_check_report_info	*dcri1 = p1;
-	const struct daos_check_report_info	*dcri2 = p2;
-
-	if (dcri1->dcri_class > dcri2->dcri_class)
-		return 1;
-
-	if (dcri1->dcri_class < dcri2->dcri_class)
-		return -1;
-
-	return 0;
-}
-
-static int
 parse_check_query_pool(struct json_object *obj, uuid_t uuid, struct daos_check_info *dci)
 {
 	struct daos_check_pool_info	*dcpi;
@@ -2146,11 +2131,6 @@ reports:
 		if (rc != 0)
 			return rc;
 	}
-
-	/* Sort the inconsistency reports for easy verification. */
-	if (dci->dci_report_nr > 1)
-		qsort(dci->dci_reports, dci->dci_report_nr, sizeof(dci->dci_reports[0]),
-		      check_query_reports_cmp);
 
 	return 0;
 }

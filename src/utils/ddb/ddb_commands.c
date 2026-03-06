@@ -5,24 +5,24 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
-#include <daos/common.h>
-#include <daos_srv/vos.h>
 #include <sys/types.h>
 #include <time.h>
 
-#include "daos_errno.h"
-#include "daos_srv/vos_types.h"
-#include "daos_types.h"
+#include <daos.h>
+#include <daos_errno.h>
+#include <daos_types.h>
+#include <daos/common.h>
+#include <daos_srv/vos.h>
+#include <daos_srv/vos_types.h>
+
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb.h"
 #include "ddb_vos.h"
 #include "ddb_printer.h"
-#include "daos.h"
 #include "ddb_tree_path.h"
-#include "gurt/common.h"
-#include "gurt/debug.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 #define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"

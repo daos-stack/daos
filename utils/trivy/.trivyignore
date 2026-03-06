@@ -10,3 +10,6 @@ CVE-2025-48924
 
 ## CVE-2025-58057,MEDIUM,7.5,"netty-codec: netty-codec-compression: Netty's BrotliDecoder is vulnerable to DoS via zip bomb style attack","io.netty:netty-codec","4.1.100.Final","4.1.125.Final",https://avd.aquasec.com/nvd/cve-2025-58057
 CVE-2025-58057
+
+## CVE-2025-33042,MEDIUM,,"org.apache.avro/avro: Apache Avro Java SDK: Code injection on Java generated code","org.apache.avro:avro","1.11.4","1.12.1, 1.11.5",https://avd.aquasec.com/nvd/cve-2025-33042
+CVE-2025-33042
