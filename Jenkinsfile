@@ -485,7 +485,7 @@ Map unitTestArgs(String distro, Integer timeout) {
             inst_repos: daosRepos(),
             inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro} true"),
             compiler: 'covc',
-            coverage_stash: 'unit_test_bullseye')
+            coverage_stash: 'unit_test_bullseye'
         ]
     }
     return [
