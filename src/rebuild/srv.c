@@ -1114,6 +1114,18 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		ABT_rwlock_unlock(pool->sp_lock);
 		map_ranks_fini(&rank_list);
 
+		/* Abort orphaned rgt if the node is no longer the leader.
+		 * After PS leader switch, this rgt becomes orphaned and should be aborted.
+		 */
+		if (rgt->rgt_leader_term < pool->sp_iv_ns->iv_master_term &&
+		    (rgt->rgt_opc == RB_OP_FAIL_RECLAIM || rgt->rgt_opc == RB_OP_RECLAIM)) {
+			D_INFO(DF_RB " op %s: stale term " DF_U64 " < " DF_U64
+				     ", abort orphaned rgt\n",
+			       DP_RB_RGT(rgt), RB_OP_STR(rgt->rgt_opc), rgt->rgt_leader_term,
+			       pool->sp_iv_ns->iv_master_term);
+			rebuild_abort = true;
+		}
+
 		if (rebuild_abort) {
 			rgt->rgt_abort = 1;
 			rgt->rgt_status.rs_errno = -DER_STALE;
