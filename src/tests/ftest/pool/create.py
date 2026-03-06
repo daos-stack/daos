@@ -1,6 +1,6 @@
 """
 (C) Copyright 2021-2023 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -137,3 +137,23 @@ class PoolCreateTests(TestWithServers):
                 self.fail(
                     "Destroying a large capacity pool that spans across all but the first server "
                     "should succeed.")
+
+    def test_create_after_stop_rank(self):
+        """JIRA ID: DAOS-18621.
+
+        Test Description:
+            Create a single pool with 40% usage that utilizes all the persistent memory and all
+            the SSD capacity on all of the servers after stop rank 0.
+            Verify that pool creation succeed.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=pool
+        :avocado: tags=PoolCreateTests,test_create_after_stop_rank
+        """
+        # Stop rank 0 on server
+        self.server_managers[0].stop_ranks([0])
+
+        # Create 1 pool using 40% of the available capacity
+        pool = add_pool(self, namespace="/run/pool_3/*", create=False)
+        check_pool_creation(self, [pool], 120)

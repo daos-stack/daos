@@ -32,3 +32,6 @@ pool_2:
   size: 90%
   svcn: 1
   quantity: 1
+
+pool_3:
+  size: 40%
