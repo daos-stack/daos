@@ -426,24 +426,22 @@ bs_loaded:
 	return rc;
 }
 
-/* Used for managing LED on init xstream when auto-faulty is triggered */
 struct led_msg_arg {
 	struct bio_xs_context *xs;
-	Ctl__LedState          state;
 	uuid_t                 dev_uuid;
 };
 
-/* Callback to set LED on init xstream when auto-faulty is triggered */
 static void
-set_led(void *arg)
+set_led_faulty(void *arg)
 {
 	struct led_msg_arg *led_msg = arg;
+	Ctl__LedState       state   = CTL__LED_STATE__ON;
 	int                 rc;
 
 	D_ASSERT(led_msg->xs != NULL);
 
 	rc = bio_led_manage(led_msg->xs, NULL, led_msg->dev_uuid,
-			    (unsigned int)CTL__LED_ACTION__SET, (unsigned int *)&led_msg->state, 0);
+			    (unsigned int)CTL__LED_ACTION__SET, (unsigned int *)&state, 0);
 	if (rc != 0)
 		DL_ERROR(rc, "Failed to set LED to FAULTY state on device:" DF_UUID,
 			 DP_UUID(led_msg->dev_uuid));
@@ -452,26 +450,25 @@ set_led(void *arg)
 }
 
 static void
-send_set_led(struct bio_blobstore *bbs, Ctl__LedState led_state)
+send_set_led_faulty(struct bio_bdev *bb_dev)
 {
 	struct led_msg_arg    *led_msg;
 	struct bio_xs_context *init_xs;
 
-	/* Set LED to FAULTY state on init xstream */
+	/* Set LED init xstream */
 	init_xs = init_xs_context();
 	if (init_xs != NULL) {
 		D_ALLOC_PTR(led_msg);
 		if (led_msg == NULL) {
 			D_ERROR("Failed to allocate LED message for device:" DF_UUID "\n",
-				DP_UUID(bbs->bb_dev->bb_uuid));
+				DP_UUID(bb_dev->bb_uuid));
 			return;
 		}
 
-		uuid_copy(led_msg->dev_uuid, bbs->bb_dev->bb_uuid);
-		led_msg->xs    = init_xs;
-		led_msg->state = led_state;
+		uuid_copy(led_msg->dev_uuid, bb_dev->bb_uuid);
+		led_msg->xs = init_xs;
 		D_ASSERT(init_thread() != NULL);
-		spdk_thread_send_msg(init_thread(), set_led, led_msg);
+		spdk_thread_send_msg(init_thread(), set_led_faulty, led_msg);
 	}
 }
 
@@ -545,7 +542,7 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 			if (rc)
 				D_ERROR("Set device state failed. " DF_RC "\n", DP_RC(rc));
 
-			send_set_led(bbs, CTL__LED_STATE__ON);
+			send_set_led_faulty(bbs->bb_dev);
 		}
 	}
 	ABT_mutex_unlock(bbs->bb_mutex);
