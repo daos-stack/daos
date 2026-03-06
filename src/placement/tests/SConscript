@@ -29,6 +29,16 @@ def scons():
     srv_pool_map_obj = denv.SharedObject(target='srv_pool_map',
                                          source='../../pool/srv_pool_map.c')
 
+    # Compile placement source files directly into pl_debug (with unique target
+    # names to avoid conflicts with the objects built by src/placement/SConscript).
+    # This creates an explicit source-level dependency so that any change to
+    # jump_map.c or its siblings is immediately reflected when pl_debug is rebuilt,
+    # without requiring libdaos to be reinstalled first.
+    pl_debug_pl_srcs = []
+    for _src in ['pl_map', 'ring_map', 'jump_map', 'jump_map_versions', 'pl_map_common']:
+        pl_debug_pl_srcs.extend(
+            denv.SharedObject(target='pld_' + _src, source='../' + _src + '.c'))
+
     libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm']
 
     ring_pl_test = denv.d_program('ring_pl_map', ring_test_tgt, LIBS=libraries)
@@ -39,7 +49,8 @@ def scons():
     pl_bench = denv.d_program('pl_bench', pl_bench_tgt, LIBS=libraries)
 
     pl_debug = denv.d_program('pl_debug',
-                               pl_debug_tgt + srv_pool_map_obj, LIBS=libraries)
+                               pl_debug_tgt + pl_debug_pl_srcs + srv_pool_map_obj,
+                               LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', ring_pl_test)
     denv.Install('$PREFIX/bin/', jump_pl_test)
