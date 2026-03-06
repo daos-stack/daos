@@ -454,10 +454,12 @@ set_led(void *arg)
 static void
 send_set_led(struct bio_blobstore *bbs, Ctl__LedState led_state)
 {
-	struct led_msg_arg *led_msg;
+	struct led_msg_arg    *led_msg;
+	struct bio_xs_context *init_xs;
 
 	/* Set LED to FAULTY state on init xstream */
-	if (init_thread() != NULL) {
+	init_xs = init_xs_context();
+	if (init_xs != NULL) {
 		D_ALLOC_PTR(led_msg);
 		if (led_msg == NULL) {
 			D_ERROR("Failed to allocate LED message for device:" DF_UUID "\n",
@@ -466,8 +468,9 @@ send_set_led(struct bio_blobstore *bbs, Ctl__LedState led_state)
 		}
 
 		uuid_copy(led_msg->dev_uuid, bbs->bb_dev->bb_uuid);
-		led_msg->xs    = bbs->bb_owner_xs;
+		led_msg->xs    = init_xs;
 		led_msg->state = led_state;
+		D_ASSERT(init_thread() != NULL);
 		spdk_thread_send_msg(init_thread(), set_led, led_msg);
 	}
 }

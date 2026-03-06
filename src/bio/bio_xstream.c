@@ -75,6 +75,8 @@ struct bio_nvme_data {
 	int			 bd_xstream_cnt;
 	/* The thread responsible for SPDK bdevs init/fini */
 	struct spdk_thread	*bd_init_thread;
+	/* The xstream context for init thread */
+	struct bio_xs_context   *bd_init_xs;
 	/* Default SPDK blobstore options */
 	struct spdk_bs_opts	 bd_bs_opts;
 	/* All bdevs can be used by DAOS server */
@@ -267,6 +269,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	bio_numa_node = 0;
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
+	nvme_glb.bd_init_xs               = NULL;
 	nvme_glb.bd_nvme_conf = NULL;
 	nvme_glb.bd_bypass_health_collect = bypass_health_collect;
 	nvme_glb.bd_enable_rpc_srv = false;
@@ -450,6 +453,7 @@ bio_nvme_fini(void)
 	ABT_mutex_free(&nvme_glb.bd_mutex);
 	D_ASSERT(nvme_glb.bd_xstream_cnt == 0);
 	D_ASSERT(nvme_glb.bd_init_thread == NULL);
+	D_ASSERT(nvme_glb.bd_init_xs == NULL);
 	D_ASSERT(d_list_empty(&nvme_glb.bd_bdevs));
 	D_FREE(nvme_glb.bd_nvme_conf);
 }
@@ -466,6 +470,12 @@ inline struct spdk_thread *
 init_thread(void)
 {
 	return nvme_glb.bd_init_thread;
+}
+
+inline struct bio_xs_context *
+init_xs_context(void)
+{
+	return nvme_glb.bd_init_xs;
 }
 
 inline bool
@@ -1630,6 +1640,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 				ctxt->bxc_skip_draining = 1;
 
 			nvme_glb.bd_init_thread = NULL;
+			nvme_glb.bd_init_xs     = NULL;
 
 		} else if (nvme_glb.bd_xstream_cnt == 0) {
 			ABT_cond_broadcast(nvme_glb.bd_barrier);
@@ -1812,6 +1823,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		D_DEBUG(DB_MGMT, "SPDK bdev initialized, tgt_id:%d", tgt_id);
 
 		nvme_glb.bd_init_thread = ctxt->bxc_thread;
+		nvme_glb.bd_init_xs     = ctxt;
 		rc = init_bio_bdevs(ctxt);
 		if (rc != 0) {
 			D_ERROR("failed to init bio_bdevs, "DF_RC"\n",

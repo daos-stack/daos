@@ -614,6 +614,8 @@ int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		       void *event_ctx);
 struct spdk_thread *init_thread(void);
+struct bio_xs_context           *
+init_xs_context(void);
 void bio_release_bdev(void *arg);
 bool is_server_started(void);
 d_list_t *bio_bdev_list(void);
