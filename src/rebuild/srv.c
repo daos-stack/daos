@@ -2045,13 +2045,9 @@ rebuild_task_ult(void *arg)
 	int					rc;
 
 	cur_ts = daos_gettime_coarse();
+	/* rebuild_ults() prevents dequeuing the task until schedule time is reached. */
 	D_ASSERT(task->dst_schedule_time != (uint64_t)-1);
-	if (cur_ts < task->dst_schedule_time) {
-		/* Not expected if rebuld_ults() prevents dequeuing task until schedule time is
-		 * reached. */
-		D_INFO("rebuild task sleep " DF_U64 " second\n", task->dst_schedule_time - cur_ts);
-		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
-	}
+	D_ASSERT(cur_ts >= task->dst_schedule_time);
 
 	rc = ds_pool_lookup(task->dst_pool_uuid, &pool);
 	if (pool == NULL) {
