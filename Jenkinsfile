@@ -1651,7 +1651,7 @@ pipeline {
                             archiveArtifactsArgs: [
                                 artifacts: 'bullseye_code_coverage_report/*',
                                 allowEmptyArchive: false
-                            ]
+                            ],
                             publishHtmlArgs: [
                                 target: [
                                     reportDir: 'bullseye_code_coverage_report',
