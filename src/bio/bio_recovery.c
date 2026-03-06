@@ -489,15 +489,11 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	case BIO_BS_STATE_NORMAL:
 		if (bbs->bb_state != BIO_BS_STATE_SETUP)
 			rc = -DER_INVAL;
-		else
-			send_set_led(bbs, CTL__LED_STATE__OFF);
 		break;
 	case BIO_BS_STATE_FAULTY:
 		if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
 		    bbs->bb_state != BIO_BS_STATE_SETUP)
 			rc = -DER_INVAL;
-		else
-			send_set_led(bbs, CTL__LED_STATE__ON);
 		break;
 	case BIO_BS_STATE_TEARDOWN:
 		if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
@@ -545,6 +541,8 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 			rc = smd_dev_set_state(bbs->bb_dev->bb_uuid, SMD_DEV_FAULTY);
 			if (rc)
 				D_ERROR("Set device state failed. " DF_RC "\n", DP_RC(rc));
+
+			send_set_led(bbs, CTL__LED_STATE__ON);
 		}
 	}
 	ABT_mutex_unlock(bbs->bb_mutex);

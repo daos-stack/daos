@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -736,7 +736,7 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 void
 auto_faulty_detect(struct bio_blobstore *bbs)
 {
-	struct smd_dev_info     *dev_info;
+	struct smd_dev_info	*dev_info;
 	int			 rc;
 
 	/* The in-memory device is already in FAULTY state */
