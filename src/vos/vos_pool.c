@@ -1162,16 +1162,6 @@ pool_hop_free(struct d_ulink *hlink)
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
-	if (pool->vp_size != 0) {
-		rc = munlock((void *)pool->vp_umm.umm_base, pool->vp_size);
-		if (rc != 0)
-			D_WARN("Failed to unlock pool memory at "DF_X64": errno=%d (%s)\n",
-			       pool->vp_umm.umm_base, errno, strerror(errno));
-		else
-			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: "DF_U64" bytes at "DF_X64"\n",
-				pool->vp_size, pool->vp_umm.umm_base);
-	}
-
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
