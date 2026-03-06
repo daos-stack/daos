@@ -470,43 +470,43 @@ def scriptedSummaryStage(Map kwargs = [:]) {
 }
 
 
-Boolean builtWithBullseye() {
-    Map status = job_status_internal['Build on EL 8.8 with Bullseye'] ?: [:]
-    println("[DEBUG] builtWithBullseye: status=${status}, status.result=${status.result}")
-    return status.result == 'SUCCESS'
-}
+// Boolean builtWithBullseye() {
+//     Map status = job_status_internal['Build on EL 8.8 with Bullseye'] ?: [:]
+//     println("[DEBUG] builtWithBullseye: status=${status}, status.result=${status.result}")
+//     return status.result == 'SUCCESS'
+// }
 
-Map unitTestArgs(String distro, Integer timeout) {
-    if (builtWithBullseye()) {
-        return [
-            always_script: 'ci/unit/test_post_always.sh unit_test_bullseye_logs',
-            timeout_time: timeout * 2,
-            unstash_opt: true,
-            inst_repos: daosRepos(),
-            inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro} true"),
-            compiler: 'covc',
-            coverage_stash: 'unit_test_bullseye'
-        ]
-    }
-    return [
-        always_script: 'ci/unit/test_post_always.sh unit_test_logs',
-        timeout_time: timeout,
-        unstash_opt: true,
-        inst_repos: daosRepos(),
-        inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro}"),
-        compiler: 'gcc'
-    ]
-}
+// Map unitTestArgs(String distro, Integer timeout) {
+//     if (builtWithBullseye()) {
+//         return [
+//             always_script: 'ci/unit/test_post_always.sh unit_test_bullseye_logs',
+//             timeout_time: timeout * 2,
+//             unstash_opt: true,
+//             inst_repos: daosRepos(),
+//             inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro} true"),
+//             compiler: 'covc',
+//             coverage_stash: 'unit_test_bullseye'
+//         ]
+//     }
+//     return [
+//         always_script: 'ci/unit/test_post_always.sh unit_test_logs',
+//         timeout_time: timeout,
+//         unstash_opt: true,
+//         inst_repos: daosRepos(),
+//         inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro}"),
+//         compiler: 'gcc'
+//     ]
+// }
 
-Map unitTestPostArgs() {
-    if (builtWithBullseye()) {
-        return [
-            artifacts: ['unit_test_bullseye_logs/'],
-            compiler: 'covc'
-        ]
-    }
-    return [artifacts: ['unit_test_logs/']]
-}
+// Map unitTestPostArgs() {
+//     if (builtWithBullseye()) {
+//         return [
+//             artifacts: ['unit_test_bullseye_logs/'],
+//             compiler: 'covc'
+//         ]
+//     }
+//     return [artifacts: ['unit_test_logs/']]
+// }
 
 pipeline {
     agent { label 'lightweight' }
@@ -965,7 +965,8 @@ pipeline {
                                       'CI_UNIT_TEST_BULLSEYE': true,
                                       'CI_BUILD_PACKAGES_ONLY': false],
                                      ['Skip-unit-tests': false,
-                                      'Skip-unit-test-bullseye': false])
+                                      'Skip-unit-test-bullseye': false],
+                                     !docOnlyChange())
                         }
                     }
                     agent {
@@ -973,12 +974,18 @@ pipeline {
                             pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        job_step_update(unitTest(unitTestArgs('el8', 60)))
+                        job_step_update(
+                            unitTest(timeout_time: 120,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: getScriptOutput(
+                                        'ci/unit/required_packages.sh el8 true'),
+                                     compiler: 'covc',
+                                     coverage_stash: 'unit_test_bullseye'))
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_bullseye_logs/'],
-                                         ignore_failure: true,
+                            unitTestPost artifacts: ['unit_test_logs/'],
                                          compiler: 'covc'
                             job_status_update()
                         }
@@ -1007,7 +1014,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                }
+                } // stage('Unit Test bdev on EL 8.8')
                 stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1037,7 +1044,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh nlt_logs',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
@@ -1051,7 +1058,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                }
+                } // stage('NLT on EL 8.8')
                 stage('NLT with Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
@@ -1084,8 +1091,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_bullseye_logs/'],
                                          testResults: 'nlt-junit.xml',
-                                         always_script: 
-                                            'ci/unit/test_nlt_post.sh nlt_bullseye_logs',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
                                          compiler: 'covc',
                                          NLT: true
                             job_status_update()
@@ -1633,7 +1639,14 @@ pipeline {
                                 stashes: ['unit_test_bullseye',
                                           'unit_test_bdev_bullseye',
                                           'nlt_bullseye',
-                                          '']
+                                          'func-vm-cov',
+                                          'func-hw-medium-cov',
+                                          'func-hw-medium-md-on-ssd-cov',
+                                          'func-hw-medium-verbs-provider-cov',
+                                          'func-hw-medium-verbs-provider-md-on-ssd-cov',
+                                          'func-hw-medium-ucx-provider-cov',
+                                          'func-hw-large-cov',
+                                          'func-hw-large-md-on-ssd-cov']
                             ],
                             archiveArtifactsArgs: [
                                 artifacts: 'bullseye_code_coverage_report/*',
