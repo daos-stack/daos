@@ -835,7 +835,7 @@ itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 
 	len = ddb_key_to_printable_buf(key_iov, part->itp_otype, buf, ARRAY_SIZE(buf));
 	if (len > ARRAY_SIZE(buf)) {
-		len += 2; /* +2 for escape characters if needed. */
+		len += 1; /* +1 for null terminator if needed. */
 		D_ALLOC(ptr, len);
 		if (ptr == NULL) {
 			D_ERROR("NOT enough DRAM for print key(1): len = %u\n", len);
@@ -856,7 +856,7 @@ itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 		if (key_str == NULL) {
 			D_ERROR("NOT enough DRAM for print key(2): len = %ld\n",
 				key_iov->iov_len + 1);
-			return;
+			goto out;
 		}
 
 		memcpy(key_str, key_iov->iov_buf, key_iov->iov_len);
@@ -865,7 +865,7 @@ itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 		if (!itp_key_safe_str(ptr, len)) {
 			ddb_print(ctx, "(ISSUE PRINTING KEY)");
 			D_FREE(key_str);
-			return;
+			goto out;
 		}
 		/* print the size with the string key if the size isn't strlen. That way
 		 * parsing the string into a valid key will work
@@ -880,6 +880,7 @@ itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 		ddb_printf(ctx, "{%s}", ptr);
 	}
 
+out:
 	if (ptr != buf)
 		D_FREE(ptr);
 }
