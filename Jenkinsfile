@@ -469,44 +469,28 @@ def scriptedSummaryStage(Map kwargs = [:]) {
     }
 }
 
+// Determine if the Build with Bullseye was run and successful
+Boolean builtWithBullseye() {
+    Map status = job_status_internal['Build on EL 8.8 with Bullseye'] ?: [:]
+    println("[DEBUG] builtWithBullseye: status=${status}, status.result=${status.result}")
+    return status.result == 'SUCCESS'
+}
 
-// Boolean builtWithBullseye() {
-//     Map status = job_status_internal['Build on EL 8.8 with Bullseye'] ?: [:]
-//     println("[DEBUG] builtWithBullseye: status=${status}, status.result=${status.result}")
-//     return status.result == 'SUCCESS'
-// }
+// Get the inst_rpms argument for the unitTest method
+String unitTestInstRpms(String distro='el8') {
+    if (builtWithBullseye()) {
+        return getScriptOutput("ci/unit/required_packages.sh ${distro} true")
+    }
+    return getScriptOutput("ci/unit/required_packages.sh ${distro}")
+}
 
-// Map unitTestArgs(String distro, Integer timeout) {
-//     if (builtWithBullseye()) {
-//         return [
-//             always_script: 'ci/unit/test_post_always.sh unit_test_bullseye_logs',
-//             timeout_time: timeout * 2,
-//             unstash_opt: true,
-//             inst_repos: daosRepos(),
-//             inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro} true"),
-//             compiler: 'covc',
-//             coverage_stash: 'unit_test_bullseye'
-//         ]
-//     }
-//     return [
-//         always_script: 'ci/unit/test_post_always.sh unit_test_logs',
-//         timeout_time: timeout,
-//         unstash_opt: true,
-//         inst_repos: daosRepos(),
-//         inst_rpms: getScriptOutput("ci/unit/required_packages.sh ${distro}"),
-//         compiler: 'gcc'
-//     ]
-// }
-
-// Map unitTestPostArgs() {
-//     if (builtWithBullseye()) {
-//         return [
-//             artifacts: ['unit_test_bullseye_logs/'],
-//             compiler: 'covc'
-//         ]
-//     }
-//     return [artifacts: ['unit_test_logs/']]
-// }
+// Get the compiler argument for the unitTest method
+String unitTestCompiler() {
+    if (builtWithBullseye()) {
+        return 'covc'
+    }
+    return 'gcc'
+}
 
 pipeline {
     agent { label 'lightweight' }
@@ -611,15 +595,15 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
                      description: 'Run the Unit Test on EL 8 test stage')
+        booleanParam(name: 'CI_UNIT_TEST_BDEV',
+                     defaultValue: true,
+                     description: 'Run the Unit Test bdev on EL 8 test stage')
         booleanParam(name: 'CI_NLT_TEST',
                      defaultValue: true,
                      description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
-        booleanParam(name: 'CI_UNIT_TEST_BULLSEYE',
-                     defaultValue: true,
-                     description: 'Run the Unit Test with Bullseye code coverage test stage')
         booleanParam(name: 'CI_NLT_BULLSEYE',
                      defaultValue: true,
                      description: 'Run the NLT test with Bullseye code coverage test stage')
@@ -961,11 +945,10 @@ pipeline {
                     when {
                         beforeAgent true
                         expression {
-                            runStage(['CI_BUILD_BULLSEYE': true,
-                                      'CI_UNIT_TEST_BULLSEYE': true,
+                            runStage(['CI_UNIT_TEST': true,
                                       'CI_BUILD_PACKAGES_ONLY': false],
                                      ['Skip-unit-tests': false,
-                                      'Skip-unit-test-bullseye': false],
+                                      'Skip-unit-test': false],
                                      !docOnlyChange())
                         }
                     }
@@ -978,15 +961,14 @@ pipeline {
                             unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput(
-                                        'ci/unit/required_packages.sh el8 true'),
-                                     compiler: 'covc',
+                                     inst_rpms: unitTestInstRpms(),
+                                     compiler: unitTestCompiler(),
                                      coverage_stash: 'unit_test_bullseye'))
                     }
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_logs/'],
-                                         compiler: 'covc'
+                                         compiler: unitTestCompiler()
                             job_status_update()
                         }
                     }
@@ -995,22 +977,30 @@ pipeline {
                     when {
                         beforeAgent true
                         expression {
-                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
+                            runStage(['CI_UNIT_TEST_BDEV': true,
+                                      'CI_BUILD_PACKAGES_ONLY': false],
+                                     ['Skip-unit-tests': false,
+                                      'Skip-unit-test-bdev': false],
+                                     !docOnlyChange())
+                        }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_NVME_LABEL
+                        label cachedCommitPragma(
+                            pragma: 'VM1-NVME-label', def_val: params.CI_UNIT_VM1_NVME_LABEL)
                     }
                     steps {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
-                                     compiler: 'gcc'))
+                                     inst_rpms: unitTestInstRpms(),
+                                     compiler: unitTestCompiler(),
+                                     coverage_stash: 'unit_test_bdev_bullseye'))
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['unit_test_bdev_logs/']
+                            unitTestPost artifacts: ['unit_test_bdev_logs/'],
+                                         compiler: unitTestCompiler()
                             job_status_update()
                         }
                     }
@@ -1152,39 +1142,6 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck on EL 8')
-                stage('Unit Test bdev with Bullseye on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression {
-                            runStage(['CI_BUILD_BULLSEYE': true,
-                                      'CI_UNIT_TEST_BULLSEYE': true,
-                                      'CI_BUILD_PACKAGES_ONLY': false],
-                                     ['Skip-unit-tests': false,
-                                      'Skip-unit-test-bullseye': false])
-                        }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 120,
-                                     unstash_opt: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8 true'),
-                                     compiler: 'covc',
-                                     ignore_failure: true,
-                                     coverage_stash: 'unit_test_bdev_bullseye'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_bdev_bullseye_logs/'],
-                                         ignore_failure: true,
-                                         compiler: 'covc'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test bdev with Bullseye on EL 8.8')
             }
         } // stage('Unit Tests')
         stage('Test') {
@@ -1235,7 +1192,8 @@ pipeline {
                                     next_version(),
                                     false,
                                     paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                coverage_stash: 'func_vm_bullseye'))
                     }
                     post {
                         always {
@@ -1492,7 +1450,8 @@ pipeline {
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            coverage_stash: 'func_hw_medium_bullseye'
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
@@ -1507,7 +1466,8 @@ pipeline {
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            coverage_stash: 'func_hw_medium_md_on_ssd_bullseye'
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
@@ -1523,7 +1483,8 @@ pipeline {
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            coverage_stash: 'func_hw_medium_vmd_bullseye'
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
@@ -1540,7 +1501,8 @@ pipeline {
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            coverage_stash: 'func_hw_medium_verbs_provider_bullseye'
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
@@ -1557,7 +1519,8 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            coverage_stash: 'func_hw_medium_verbs_provider_md_on_ssd_bullseye'
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
@@ -1573,7 +1536,8 @@ pipeline {
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            coverage_stash: 'func_hw_medium_ucx_provider_bullseye'
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
@@ -1588,7 +1552,8 @@ pipeline {
                             default_nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            coverage_stash: 'func_hw_large_bullseye'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
@@ -1603,7 +1568,8 @@ pipeline {
                             default_nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            coverage_stash: 'func_hw_large_md_on_ssd_bullseye'
                         ),
                     )
                 }
@@ -1639,14 +1605,14 @@ pipeline {
                                 stashes: ['unit_test_bullseye',
                                           'unit_test_bdev_bullseye',
                                           'nlt_bullseye',
-                                          'func-vm-cov',
-                                          'func-hw-medium-cov',
-                                          'func-hw-medium-md-on-ssd-cov',
-                                          'func-hw-medium-verbs-provider-cov',
-                                          'func-hw-medium-verbs-provider-md-on-ssd-cov',
-                                          'func-hw-medium-ucx-provider-cov',
-                                          'func-hw-large-cov',
-                                          'func-hw-large-md-on-ssd-cov']
+                                          'func_vm_bullseye',
+                                          'func_hw_medium_bullseye',
+                                          'func_hw_medium_md_on_ssd_bullseye',
+                                          'func_hw_medium_verbs_provider_bullseye',
+                                          'func_hw_medium_verbs_provider_md_on_ssd_bullseye',
+                                          'func_hw_medium_ucx_provider_bullseye',
+                                          'func_hw_large_bullseye',
+                                          'func_hw_large_md_on_ssd_bullseye']
                             ],
                             archiveArtifactsArgs: [
                                 artifacts: 'bullseye_code_coverage_report/*',
