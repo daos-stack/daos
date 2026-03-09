@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -89,7 +90,7 @@ func (cmd *poolBaseCmd) PoolID() ui.LabelOrUUIDFlag {
 }
 
 // poolConnect is a convenience wrapper around poolConnectAPI.
-func poolConnect(poolID, sysName string, flags uint, query bool) (C.daos_handle_t, *C.daos_pool_info_t, error) {
+func poolConnect(poolID, sysName string, flags uint, query bool) (C.daos_handle_t, *daos.PoolInfo, error) {
 	var cSysName *C.char
 	if sysName != "" {
 		cSysName = C.CString(sysName)
@@ -102,12 +103,27 @@ func poolConnect(poolID, sysName string, flags uint, query bool) (C.daos_handle_
 	var hdl C.daos_handle_t
 	var infoPtr *C.daos_pool_info_t
 	if query {
-		infoPtr = &C.daos_pool_info_t{
-			pi_bits: C.ulong(daos.DefaultPoolQueryMask),
-		}
+		// C-allocated version of the handle and info is needed for the C code to write to it without
+		// triggering spurious false positives in Valgrind
+		infoPtr = (*C.daos_pool_info_t)(C.calloc(1, C.sizeof_daos_pool_info_t))
+		defer C.free(unsafe.Pointer(infoPtr))
+		infoPtr.pi_bits = C.ulong(daos.DefaultPoolQueryMask)
 	}
 
-	return hdl, infoPtr, poolConnectAPI(cPoolID, cSysName, C.uint(flags), &hdl, infoPtr)
+	cHdl := (*C.daos_handle_t)(C.calloc(1, C.sizeof_daos_handle_t))
+	defer C.free(unsafe.Pointer(cHdl))
+
+	err := poolConnectAPI(cPoolID, cSysName, C.uint(flags), cHdl, infoPtr)
+	if err != nil {
+		return hdl, nil, err
+	}
+	hdl = *cHdl
+	var poolInfo *daos.PoolInfo
+	if infoPtr != nil {
+		poolInfo = convertPoolInfo(infoPtr)
+	}
+
+	return hdl, poolInfo, err
 }
 
 // poolConnectAPI is a lower-level wrapper around daos_pool_connect().
@@ -142,12 +158,13 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 
 	switch {
 	case cmd.PoolID().HasLabel():
-		var poolInfo C.daos_pool_info_t
+		poolInfo := (*C.daos_pool_info_t)(C.calloc(1, C.sizeof_daos_pool_info_t))
+		defer C.free(unsafe.Pointer(poolInfo))
 		cLabel := C.CString(cmd.PoolID().Label)
 		defer freeString(cLabel)
 
 		cmd.Debugf("connecting to pool: %s", cmd.PoolID().Label)
-		if err := poolConnectAPI(cLabel, cSysName, flags, &cmd.cPoolHandle, &poolInfo); err != nil {
+		if err := poolConnectAPI(cLabel, cSysName, flags, &cmd.cPoolHandle, poolInfo); err != nil {
 			return err
 		}
 		var err error
@@ -269,7 +286,7 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *daos.PoolRebuil
 	return out
 }
 
-func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
+func convertPoolInfo(pinfo *C.daos_pool_info_t) *daos.PoolInfo {
 	poolInfo := new(daos.PoolInfo)
 
 	poolInfo.QueryMask = daos.PoolQueryMask(pinfo.pi_bits)
@@ -293,7 +310,7 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 		}
 	}
 
-	return poolInfo, nil
+	return poolInfo
 }
 
 func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
@@ -305,14 +322,15 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 	}()
 
 	var rc C.int
-	cPoolInfo := C.daos_pool_info_t{
-		pi_bits: C.uint64_t(queryMask),
-	}
+	cPoolInfo := (*C.daos_pool_info_t)(C.calloc(1, C.sizeof_daos_pool_info_t))
+	defer C.free(unsafe.Pointer(cPoolInfo))
+	cPoolInfo.pi_bits = C.uint64_t(queryMask)
+
 	if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) && queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
 		enaQm := queryMask
 		enaQm.ClearOptions(daos.PoolQueryOptionDisabledEngines)
 		cPoolInfo.pi_bits = C.uint64_t(enaQm)
-		rc = C.daos_pool_query(poolHdl, &enabledRanks, &cPoolInfo, nil, nil)
+		rc = C.daos_pool_query(poolHdl, &enabledRanks, cPoolInfo, nil, nil)
 		if err := daosError(rc); err != nil {
 			return nil, err
 		}
@@ -320,23 +338,21 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 		/* second query to just get disabled ranks */
 		rc = C.daos_pool_query(poolHdl, &disabledRanks, nil, nil, nil)
 	} else if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
-		rc = C.daos_pool_query(poolHdl, &enabledRanks, &cPoolInfo, nil, nil)
+		rc = C.daos_pool_query(poolHdl, &enabledRanks, cPoolInfo, nil, nil)
 	} else if queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
-		rc = C.daos_pool_query(poolHdl, &disabledRanks, &cPoolInfo, nil, nil)
+		rc = C.daos_pool_query(poolHdl, &disabledRanks, cPoolInfo, nil, nil)
 	} else {
-		rc = C.daos_pool_query(poolHdl, nil, &cPoolInfo, nil, nil)
+		rc = C.daos_pool_query(poolHdl, nil, cPoolInfo, nil, nil)
 	}
 
 	if err := daosError(rc); err != nil {
 		return nil, err
 	}
 
-	poolInfo, err := convertPoolInfo(&cPoolInfo)
-	if err != nil {
-		return nil, err
-	}
+	poolInfo := convertPoolInfo(cPoolInfo)
 	poolInfo.QueryMask = queryMask
 
+	var err error
 	if enabledRanks != nil {
 		poolInfo.EnabledRanks, err = rankSetFromC(enabledRanks)
 		if err != nil {
@@ -719,22 +735,14 @@ func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos
 
 		var pool *daos.PoolInfo
 		if queryEnabled {
-			poolHandle, poolInfo, err := poolConnect(poolUUID.String(), sysName, daos.PoolConnectFlagReadOnly, true)
+			poolHandle, pool, err := poolConnect(poolUUID.String(), sysName, daos.PoolConnectFlagReadOnly, true)
 			if err != nil {
 				log.Errorf("failed to connect to pool %q: %s", poolLabel, err)
 				continue
 			}
 
-			var qErr error
-			pool, qErr = convertPoolInfo(poolInfo)
-			if qErr != nil {
-				log.Errorf("failed to query pool %q: %s", poolLabel, qErr)
-			}
 			if err := poolDisconnectAPI(poolHandle); err != nil {
 				log.Errorf("failed to disconnect from pool %q: %s", poolLabel, err)
-			}
-			if qErr != nil {
-				continue
 			}
 
 			// Add a few missing pieces that the query doesn't fill in.
