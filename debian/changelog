@@ -1,3 +1,10 @@
+daos (2.6.4-19) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * Bump and pin PMDK (libpmemobj) version to 2.1.3
+  * Point https://github.com/daos-stack/pmdk as the main PMDK reference source.
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@hpe.com> Mon, 09 Mar 2026 12:00:00 +0100
+
 daos (2.6.4-18) unstable; urgency=medium
   [ Dalton Bohning ]
   * Bump version
