@@ -330,9 +330,9 @@ pipeline {
         booleanParam(name: 'CI_TEST_EL_RPMs',
                      defaultValue: true,
                      description: 'Run the Test RPMs on EL stage')
-        booleanParam(name: 'CI_TEST_LEAP15_RPMs',
+        booleanParam(name: 'CI_TEST_LEAP_RPMs',
                      defaultValue: true,
-                     description: 'Run the Test RPMs on Leap 15 test stage')
+                     description: 'Run the Test RPMs on Leap test stage')
         booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
                      defaultValue: false,
                      description: 'Skip all functional test stages (Test)')
@@ -1079,7 +1079,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
+                        expression { params.CI_TEST_LEAP_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
