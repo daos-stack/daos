@@ -2562,8 +2562,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	if (iod->iod_nr == 0) /* nothing to replicate, directly remove parity */
 		goto remove_parity;
 	iod_csums = oer->er_iod_csums.ca_arrays;
-	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi,
-			      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
+	rc        = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi,
+				     VOS_OF_REBUILD | VOS_OF_CRIT, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -2644,7 +2644,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	dkey = (daos_key_t *)&oea->ea_dkey;
 	if (parity_bulk != CRT_BULK_NULL) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid, oea->ea_epoch_range.epr_hi,
-				      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
+				      VOS_OF_REBUILD | VOS_OF_CRIT, dkey, 1, iod, iod_csums, 0,
+				      &ioh, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
