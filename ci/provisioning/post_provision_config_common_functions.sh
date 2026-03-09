@@ -323,7 +323,7 @@ post_provision_config_nodes() {
         rm -f "$REPOS_DIR"/*_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload          \
                      argobots cart daos daos-client daos-spdk dpdk \
-                     libisa-l libpmemobj mercury mpich   \
+                     libisa-l libpmemobj libpmemobj1 mercury mpich \
                      pmix protobuf-c spdk libfabric libpmem        \
                      munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd

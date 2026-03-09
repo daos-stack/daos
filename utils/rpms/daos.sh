@@ -184,7 +184,7 @@ EOF
   EXTRA_OPTS+=("--rpm-attr" "2755,root,daos_server:${bindir}/daos_server")
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${daos_spdk_full}" )
-  DEPENDS+=( "${pmemobj_lib} >= ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
+  DEPENDS+=( "${pmemobj_lib} = ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
   DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" "numactl" "pciutils" )
   build_package "daos-server"
 
