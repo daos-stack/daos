@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -800,5 +800,11 @@ void
 dss_chore_diy(struct dss_chore *chore);
 bool
 engine_in_check(void);
+
+int
+dss_vos_pool_create(const char *path, unsigned char *uuid, daos_size_t scm_size,
+		    daos_size_t blob_sz, unsigned int flags, uint32_t version, daos_handle_t *pool);
+int
+dss_vos_pool_open(const char *path, unsigned char *uuid, unsigned int flags, daos_handle_t *pool);
 
 #endif /* __DSS_API_H__ */

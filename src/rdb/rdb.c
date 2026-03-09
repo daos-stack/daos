@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,11 +59,10 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * basic system memory reservation and VOS_POF_EXCL for concurrent
 	 * access protection.
 	 */
-	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */,
-			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, vos_df_version, &pool);
+	rc = dss_vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */,
+				 VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, vos_df_version, &pool);
 	if (rc != 0)
 		goto out;
-	ABT_thread_yield();
 
 	/* Create and open the metadata container. */
 	rc = vos_cont_create(pool, (unsigned char *)uuid);
@@ -385,8 +385,8 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 	 * RDB pools specify VOS_POF_SMALL for basic system memory reservation
 	 * and VOS_POF_EXCL for concurrent access protection.
 	 */
-	rc = vos_pool_open(path, (unsigned char *)uuid,
-			   VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, &pool);
+	rc = dss_vos_pool_open(path, (unsigned char *)uuid,
+			       VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, &pool);
 	if (rc == -DER_ID_MISMATCH) {
 		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
 				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
@@ -399,7 +399,6 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 			path, DP_RC(rc));
 		goto err;
 	}
-	ABT_thread_yield();
 
 	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);
 	if (rc != 0) {

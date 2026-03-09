@@ -277,7 +277,7 @@ chk_pending_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 			ABT_mutex_unlock(cpr->cpr_mutex);
 		} else {
 			ABT_mutex_unlock(cpr->cpr_mutex);
-			chk_pending_destroy(cpr);
+			chk_pending_destroy(NULL, false, cpr);
 		}
 	}
 
@@ -900,6 +900,30 @@ chk_pool_shard_cleanup(struct chk_instance *ins)
 }
 
 int
+chk_pending_lookup(struct chk_instance *ins, uint64_t seq, bool locked,
+		   struct chk_pending_rec **cpr)
+{
+	d_iov_t kiov;
+	d_iov_t riov;
+	int     rc;
+
+	d_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, &seq, sizeof(seq));
+
+	if (!locked)
+		ABT_rwlock_rdlock(ins->ci_abt_lock);
+	rc = dbtree_lookup(ins->ci_pending_hdl, &kiov, &riov);
+	if (!locked)
+		ABT_rwlock_unlock(ins->ci_abt_lock);
+	if (rc == 0)
+		*cpr = (struct chk_pending_rec *)riov.iov_buf;
+	else
+		*cpr = NULL;
+
+	return rc;
+}
+
+int
 chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
 		uint64_t seq, uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr)
 {
@@ -951,14 +975,16 @@ chk_pending_del(struct chk_instance *ins, uint64_t seq, bool locked, struct chk_
 
 	if (!locked)
 		ABT_rwlock_wrlock(ins->ci_abt_lock);
-	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
+	rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, cpr == NULL ? NULL : &riov);
 	if (!locked)
 		ABT_rwlock_unlock(ins->ci_abt_lock);
 
-	if (rc == 0)
-		*cpr = (struct chk_pending_rec *)riov.iov_buf;
-	else
-		*cpr = NULL;
+	if (cpr != NULL) {
+		if (rc == 0)
+			*cpr = (struct chk_pending_rec *)riov.iov_buf;
+		else
+			*cpr = NULL;
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
 		 "Del pending record with gen "DF_X64", seq "DF_X64": "DF_RC"\n",
@@ -996,26 +1022,11 @@ chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr)
 			ABT_mutex_unlock(cpr->cpr_mutex);
 		} else {
 			ABT_mutex_unlock(cpr->cpr_mutex);
-			chk_pending_destroy(cpr);
+			chk_pending_destroy(ins, false, cpr);
 		}
 	}
 
 	return rc;
-}
-
-void
-chk_pending_destroy(struct chk_pending_rec *cpr)
-{
-	D_ASSERT(d_list_empty(&cpr->cpr_pool_link));
-	D_ASSERT(d_list_empty(&cpr->cpr_rank_link));
-
-	if (cpr->cpr_cond != ABT_COND_NULL)
-		ABT_cond_free(&cpr->cpr_cond);
-
-	if (cpr->cpr_mutex != ABT_MUTEX_NULL)
-		ABT_mutex_free(&cpr->cpr_mutex);
-
-	D_FREE(cpr);
 }
 
 int
