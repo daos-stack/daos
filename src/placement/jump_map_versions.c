@@ -81,11 +81,16 @@ tgt_isset_range(struct pool_target *tgts, uint8_t *tgts_used, uint32_t start_tgt
 {
 	uint32_t index;
 
-	for (index = start_tgt; index <= end_tgt; ++index) {
-		if (is_excluded_comp(&tgts[index].ta_comp, allow_version, gen_mode))
+	for (index = start_tgt; index <= end_tgt; /* index advanced in body */) {
+		/* Skip the entire byte if all 8 bits are set */
+		if (tgts_used[index >> 3] == 0xFF) {
+			index = (index | 7) + 1;
 			continue;
-		if (isclr(tgts_used, index))
+		}
+		if (!is_excluded_comp(&tgts[index].ta_comp, allow_version, gen_mode) &&
+		    isclr(tgts_used, index))
 			return false;
+		++index;
 	}
 
 	return true;
@@ -97,11 +102,16 @@ dom_isset_range(struct pool_domain *doms, uint8_t *doms_bits, uint32_t start_dom
 {
 	uint32_t index;
 
-	for (index = start_dom; index <= end_dom; ++index) {
-		if (is_excluded_comp(&doms[index].do_comp, allow_version, gen_mode))
+	for (index = start_dom; index <= end_dom; /* index advanced in body */) {
+		/* Skip the entire byte if all 8 bits are set */
+		if (doms_bits[index >> 3] == 0xFF) {
+			index = (index | 7) + 1;
 			continue;
-		if (isclr(doms_bits, index))
+		}
+		if (!is_excluded_comp(&doms[index].do_comp, allow_version, gen_mode) &&
+		    isclr(doms_bits, index))
 			return false;
+		++index;
 	}
 
 	return true;
@@ -114,12 +124,20 @@ dom_isset_2ranges(struct pool_domain *doms, uint8_t *doms_bits1, uint8_t *doms_b
 {
 	uint32_t index;
 
-	for (index = start_dom; index <= end_dom; ++index) {
-		if (is_excluded_comp(&doms[index].do_comp, allow_version, gen_mode))
+	for (index = start_dom; index <= end_dom; /* index advanced in body */) {
+		/*
+		 * If the OR of both bytes is 0xFF, every bit position has at
+		 * least one bitmap set, so isclr(bits1,i) && isclr(bits2,i)
+		 * cannot be true for any index in this byte — skip it entirely.
+		 */
+		if ((doms_bits1[index >> 3] | doms_bits2[index >> 3]) == 0xFF) {
+			index = (index | 7) + 1;
 			continue;
-
-		if (isclr(doms_bits1, index) && isclr(doms_bits2, index))
+		}
+		if (!is_excluded_comp(&doms[index].do_comp, allow_version, gen_mode) &&
+		    isclr(doms_bits1, index) && isclr(doms_bits2, index))
 			return false;
+		++index;
 	}
 
 	return true;
