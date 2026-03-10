@@ -90,6 +90,7 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tg
 	char       *pool_path          = NULL;
 	char       *rdb_path           = NULL;
 	bool        dummy_cancel_state = false;
+	mode_t      stored_mask        = umask(0);
 	int         rc;
 	int         fd;
 	struct stat statbuf;
@@ -101,6 +102,7 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tg
 	if (rc) {
 		D_ERROR("pool's path generation failed for " DF_UUID ": " DF_RC "\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
+		(void)umask(stored_mask);
 		return rc;
 	}
 
@@ -124,7 +126,7 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tg
 			DP_RC(rc));
 		goto out;
 	}
-	rc = mkdir(pool_newborns_path, 0700);
+	rc = mkdir(pool_newborns_path, 0770);
 	if (rc < 0 && errno != EEXIST) {
 		rc = daos_errno2der(errno);
 		D_ERROR("failed to created pool directory: " DF_RC "\n", DP_RC(rc));
@@ -182,6 +184,8 @@ out:
 	D_FREE(newborns_path);
 	D_FREE(pool_newborns_path);
 	D_FREE(pool_path);
+
+	(void)umask(stored_mask);
 
 	return rc;
 }

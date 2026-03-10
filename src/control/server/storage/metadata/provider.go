@@ -25,6 +25,7 @@ const defaultDevFS = "ext4"
 type (
 	// SystemProvider provides operating system capabilities.
 	SystemProvider interface {
+		Chmod(string, os.FileMode) error
 		Chown(string, int, int) error
 		Getfs(device string) (string, error)
 		GetfsType(path string) (*system.FsType, error)
@@ -196,12 +197,20 @@ func (p *Provider) isUsableFS(fs *system.FsType, path string) bool {
 }
 
 func (p *Provider) setupDataDir(req storage.MetadataFormatRequest) error {
+	perms := os.FileMode(0775)
+
 	if err := p.sys.RemoveAll(req.DataPath); err != nil {
 		return errors.Wrap(err, "removing old control metadata subdirectory")
 	}
 
-	if err := p.sys.Mkdir(req.DataPath, 0755); err != nil {
+	if err := p.sys.Mkdir(req.DataPath, perms); err != nil {
 		return errors.Wrap(err, "creating control metadata subdirectory")
+	}
+
+	// The requested permissions may have been reduced by the umask.
+	// Using chmod ensures the requested permissions are applied.
+	if err := p.sys.Chmod(req.DataPath, perms); err != nil {
+		return errors.Wrap(err, "setting control metadata subdirectory permissions")
 	}
 
 	if err := p.sys.Chown(req.DataPath, req.OwnerUID, req.OwnerGID); err != nil {
@@ -210,8 +219,14 @@ func (p *Provider) setupDataDir(req storage.MetadataFormatRequest) error {
 
 	for _, idx := range req.EngineIdxs {
 		engPath := storage.ControlMetadataEngineDir(req.DataPath, idx)
-		if err := p.sys.Mkdir(engPath, 0755); err != nil {
+		if err := p.sys.Mkdir(engPath, perms); err != nil {
 			return errors.Wrapf(err, "creating control metadata engine %d subdirectory", idx)
+		}
+
+		// The requested permissions may have been reduced by the umask.
+		// Using chmod ensures the final requested are applied.
+		if err := p.sys.Chmod(engPath, perms); err != nil {
+			return errors.Wrapf(err, "setting control metadata engine %d subdirectory permissions", idx)
 		}
 
 		if err := p.sys.Chown(engPath, req.OwnerUID, req.OwnerGID); err != nil {

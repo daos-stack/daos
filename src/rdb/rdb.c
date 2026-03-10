@@ -10,6 +10,8 @@
 
 #define D_LOGFAC	DD_FAC(rdb)
 
+#include <sys/stat.h>
+
 #include <daos_srv/rdb.h>
 
 #include <daos_srv/daos_mgmt_srv.h>
@@ -39,6 +41,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term,
 	   struct rdb_create_params *params, struct rdb_cbs *cbs, void *arg,
 	   struct rdb_storage **storagep)
 {
+	mode_t          stored_mask = umask(0);
 	daos_handle_t	pool;
 	daos_handle_t	mc;
 	d_iov_t		value;
@@ -61,6 +64,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term,
 	    path, (unsigned char *)uuid, params->rcp_size, 0 /* data_sz */, 0 /* meta_sz */,
 	    VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
 	    params->rcp_vos_df_version, &pool);
+	(void)umask(stored_mask);
 	if (rc != 0)
 		goto out;
 

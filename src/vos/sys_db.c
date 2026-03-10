@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -106,6 +106,7 @@ db_unlink(struct sys_db *db)
 static int
 db_open_create(struct sys_db *db, bool try_create)
 {
+	const mode_t       db_dir_mode = 0770;
 	struct vos_sys_db *vdb = db2vos(db);
 	d_iov_t		   key;
 	d_iov_t		   val;
@@ -113,7 +114,7 @@ db_open_create(struct sys_db *db, bool try_create)
 	int		   rc;
 
 	if (try_create) {
-		rc = mkdir(vdb->db_path, 0777);
+		rc = mkdir(vdb->db_path, db_dir_mode);
 		if (rc < 0 && errno != EEXIST) {
 			rc = daos_errno2der(errno);
 			goto failed;
@@ -126,6 +127,17 @@ db_open_create(struct sys_db *db, bool try_create)
 	} else if (access(vdb->db_file, R_OK | W_OK) != 0) {
 		rc = -DER_NO_PERM;
 		D_CRIT("No access to existing db file %s\n", vdb->db_file);
+		goto failed;
+	}
+	/**
+	 * The requested permissions may have been reduced by the umask.
+	 * Using chmod ensures the requested permissions are applied.
+	 */
+	rc = chmod(vdb->db_path, db_dir_mode);
+	if (rc == -1) {
+		rc = daos_errno2der(errno);
+		D_CRIT("failed to set directory permissions for %s: " DF_RC "\n", vdb->db_path,
+		       DP_RC(rc));
 		goto failed;
 	}
 	D_DEBUG(DB_IO, "Opening %s, try_create=%d\n", vdb->db_file, try_create);

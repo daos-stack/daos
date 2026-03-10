@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -86,8 +87,12 @@ func RecoverLocalReplica(log logging.Logger, cfg *DatabaseConfig) error {
 }
 
 func createRaftDir(dbPath string) error {
-	if err := os.Mkdir(dbPath, 0700); err != nil && !os.IsExist(err) {
+	var perm os.FileMode = 0770
+	if err := os.Mkdir(dbPath, perm); err != nil && !os.IsExist(err) {
 		return errors.Wrap(err, "failed to create raft directory")
+	}
+	if err := os.Chmod(dbPath, perm); err != nil {
+		return errors.Wrap(err, "failed to set permissions for raft directory")
 	}
 	return nil
 }

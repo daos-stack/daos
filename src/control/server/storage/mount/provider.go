@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +20,7 @@ import (
 )
 
 const (
-	defaultMountPointPerms = 0755
+	defaultMountPointPerms = 0775
 	defaultUnmountFlags    = 0
 )
 
@@ -175,6 +176,9 @@ func (p *Provider) MakeMountPath(path string, tgtUID, tgtGID int) error {
 			// subdir missing, attempt to create and chown
 			if err := p.sys.Mkdir(ps, defaultMountPointPerms); err != nil {
 				return errors.Wrapf(err, "failed to create directory %q", ps)
+			}
+			if err := p.sys.Chmod(ps, defaultMountPointPerms); err != nil {
+				return errors.Wrapf(err, "failed to set directory permissions for %q", ps)
 			}
 			if err := p.sys.Chown(ps, tgtUID, tgtGID); err != nil {
 				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d from %d.%d",

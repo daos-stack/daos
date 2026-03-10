@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -265,6 +265,13 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to init boltdb at %s", dbCfg.DBFilePath())
+	}
+
+	// Boltdb file permissions on create are set to 0600.
+	// The os.Chmod ensures the final permissions for both the user and their group are the same.
+	err = os.Chmod(dbCfg.DBFilePath(), 0660)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to set permissions for boltdb at %s", dbCfg.DBFilePath())
 	}
 
 	return &RaftComponents{

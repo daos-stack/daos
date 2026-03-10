@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -138,6 +138,13 @@ func writeFile(path string, data []byte, perm os.FileMode) (err error) {
 			os.Remove(path)
 		}
 	}()
+
+	// The requested permissions may have been reduced by the umask.
+	// Using chmod ensures the requested permissions are applied.
+	err = os.Chmod(path, perm)
+	if err != nil {
+		return
+	}
 
 	n, err := f.Write(data)
 	if err != nil {
