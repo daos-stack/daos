@@ -31,7 +31,6 @@ source ci/junit.sh
 
 : "${MLNX_VER_NUM:=3.2.1}"
 
-
 # This is tangled and needs a better fix as it has DISTRO being passed
 # as EL_8 for EL_9, yet other places expect DISTRO to really be EL_8 and
 # not EL_9.
