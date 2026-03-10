@@ -32,16 +32,16 @@ class DdbCommandBase(CommandWithParameters):
         self.host = server_host
 
         # Write mode that's necessary for the commands that alters the data such as load.
-        self.write_mode = FormattedParameter("-w", default=False)
+        self.write_mode = FormattedParameter("-w", default=False, position=1)
 
         # Path to the system database. Used for MD-on-SSD.
-        self.db_path = BasicParameter(None, position=1)
+        self.db_path = BasicParameter(None, position=2)
 
         # VOS file path.
-        self.vos_path = FormattedParameter("--vos_path {}", position=2)
+        self.vos_path = FormattedParameter("--vos_path {}", position=3)
 
         # Command to run on the VOS file that contains container, object info, etc.
-        self.single_command = BasicParameter(None, position=3)
+        self.single_command = BasicParameter(None, position=4)
 
         # Members needed for run().
         self.verbose = verbose
@@ -95,7 +95,7 @@ class DdbCommand(DdbCommandBase):
         self.vos_path.update(vos_path, "vos_path")
 
     def list_component(self, component_path=None):
-        """Call ddb -R "ls <component_path>"
+        """Call ddb ls <component_path>
 
         ls is similar to the Linux ls command. It lists objects inside the container,
         dkeys inside the object, and so on.
@@ -163,11 +163,11 @@ class DdbCommand(DdbCommandBase):
         return self.run()
 
     def remove_component(self, component_path):
-        """Call ddb -w -R "rm <component_path>"
+        """Call ddb -w rm <component_path>
 
         Args:
-            component_path (str): Component that comes after rm. e.g., [0]/[1] for first
-                container, second object.
+            component_path (str): Component that comes after rm. e.g., [0]/[1] for first container,
+                second object.
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
