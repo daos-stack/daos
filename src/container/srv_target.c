@@ -1357,13 +1357,6 @@ cont_child_destroy_one(void *vin)
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
-	if (cont->sc_open > 0) {
-		D_ERROR(DF_CONT": Container is still in open(%d)\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), cont->sc_open);
-		cont_child_put(tls->dt_cont_cache, cont);
-		D_GOTO(out_pool, rc = -DER_BUSY);
-	}
-
 	if (cont->sc_destroying) {
 		D_DEBUG(DB_MD, DF_CONT ": Container is already being destroyed\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
