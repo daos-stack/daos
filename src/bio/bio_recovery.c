@@ -436,9 +436,26 @@ set_led_faulty(void *arg)
 {
 	struct led_msg_arg *led_msg = arg;
 	Ctl__LedState       state   = CTL__LED_STATE__ON;
+	struct bio_bdev    *bdev;
 	int                 rc;
 
 	D_ASSERT(led_msg->xs != NULL);
+
+	/* Check if device is currently in IDENTIFY/blink state */
+	bdev = lookup_dev_by_id(led_msg->dev_uuid);
+	if (bdev != NULL && bdev->bb_led_identify_active) {
+		/*
+		 * Device LED is actively blinking for identification.
+		 * Skip setting FAULT LED to allow user-initiated identify to take precedence.
+		 * FAULT LED will be applied when identify completes (timer expires or reset).
+		 */
+		D_DEBUG(DB_MGMT,
+			"Device " DF_UUID " is in IDENTIFY state (LED blinking), "
+			"skipping FAULT LED change\n",
+			DP_UUID(led_msg->dev_uuid));
+		D_FREE(led_msg);
+		return;
+	}
 
 	rc = bio_led_manage(led_msg->xs, NULL, led_msg->dev_uuid,
 			    (unsigned int)CTL__LED_ACTION__SET, (unsigned int *)&state, 0);

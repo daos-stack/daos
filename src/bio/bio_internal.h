@@ -319,17 +319,19 @@ struct bio_bdev {
 	 * saved and when it is reached the prior LED state will be restored.
 	 */
 	uint64_t		 bb_led_expiry_time;
-	unsigned int		 bb_removed:1,
-				 bb_replacing:1,
-				 bb_trigger_reint:1,
-	/*
-	 * If a faulty device is replaced but still plugged, we'll keep
-	 * the 'faulty' information here, so that we know this device was
-	 * marked as faulty (at least before next server restart).
-	 */
-				bb_faulty:1,
-				bb_tgt_cnt_init:1,
-				bb_unmap_supported:1;
+	unsigned int             bb_removed : 1, bb_replacing : 1, bb_trigger_reint : 1,
+	    /*
+	     * If a faulty device is replaced but still plugged, we'll keep
+	     * the 'faulty' information here, so that we know this device was
+	     * marked as faulty (at least before next server restart).
+	     */
+	    bb_faulty              : 1,
+	    /*
+	     * Track if LED is actively blinking for device identification.
+	     * Set when IDENTIFY/QUICK_BLINK state is applied, cleared when
+	     * identify completes (timer expires or manual reset).
+	     */
+	    bb_led_identify_active : 1, bb_tgt_cnt_init : 1, bb_unmap_supported : 1;
 	/* bdev roles data/meta/wal */
 	unsigned int		bb_roles;
 };
