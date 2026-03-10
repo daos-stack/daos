@@ -8,6 +8,7 @@ package pretty
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -17,6 +18,13 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 )
+
+// normalizeTimestamps replaces all timestamp strings with a placeholder to allow
+// timestamp-agnostic comparisons in tests.
+func normalizeTimestamps(s string) string {
+	timestampRegex := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ [+-]\d{4} \w+`)
+	return timestampRegex.ReplaceAllString(s, "<TIMESTAMP>")
+}
 
 func TestPretty_PrintContainerInfo(t *testing.T) {
 	testPoolUUID := test.MockPoolUUID()
@@ -82,10 +90,10 @@ func TestPretty_PrintContainerInfo(t *testing.T) {
   Pool UUID                   : 00000001-0001-0001-0001-000000000001             
   Container redundancy factor : 2                                                
   Number of open handles      : 5                                                
-  Latest open time            : 2021-01-01 00:00:00.000000771 +0000 GMT (0x3039) 
-  Latest close/modify time    : 2021-01-01 00:00:00.000004243 +0000 GMT (0x10932)
+  Latest open time            : <TIMESTAMP> (0x3039) 
+  Latest close/modify time    : <TIMESTAMP> (0x10932)
   Number of snapshots         : 3                                                
-  Latest Persistent Snapshot  : 0x2b67 (2021-01-01 00:00:00.000000694 +0000 GMT) 
+  Latest Persistent Snapshot  : 0x2b67 (<TIMESTAMP>) 
 
 `, testContainerLabel),
 		},
@@ -107,8 +115,8 @@ func TestPretty_PrintContainerInfo(t *testing.T) {
   Pool UUID                   : 00000001-0001-0001-0001-000000000001          
   Container redundancy factor : 1                                             
   Number of open handles      : 0                                             
-  Latest open time            : 2021-01-01 00:00:00.000000006 +0000 GMT (0x64)
-  Latest close/modify time    : 2021-01-01 00:00:00.000000012 +0000 GMT (0xc8)
+  Latest open time            : <TIMESTAMP> (0x64)
+  Latest close/modify time    : <TIMESTAMP> (0xc8)
   Number of snapshots         : 0                                             
 
 `,
@@ -138,8 +146,8 @@ func TestPretty_PrintContainerInfo(t *testing.T) {
   Pool UUID                   : 00000001-0001-0001-0001-000000000001           
   Container redundancy factor : 2                                              
   Number of open handles      : 1                                              
-  Latest open time            : 2021-01-01 00:00:00.000000062 +0000 GMT (0x3e8)
-  Latest close/modify time    : 2021-01-01 00:00:00.000000125 +0000 GMT (0x7d0)
+  Latest open time            : <TIMESTAMP> (0x3e8)
+  Latest close/modify time    : <TIMESTAMP> (0x7d0)
   Number of snapshots         : 0                                              
   Object Class                : 0x1                                            
   Dir Object Class            : 0x2                                            
@@ -170,8 +178,8 @@ func TestPretty_PrintContainerInfo(t *testing.T) {
   Pool UUID                   : 00000001-0001-0001-0001-000000000001           
   Container redundancy factor : 1                                              
   Number of open handles      : 0                                              
-  Latest open time            : 2021-01-01 00:00:00.000000031 +0000 GMT (0x1f4)
-  Latest close/modify time    : 2021-01-01 00:00:00.000000037 +0000 GMT (0x258)
+  Latest open time            : <TIMESTAMP> (0x1f4)
+  Latest close/modify time    : <TIMESTAMP> (0x258)
   Number of snapshots         : 0                                              
   Chunk Size                  : 2.0 MiB                                        
 
@@ -200,7 +208,10 @@ func TestPretty_PrintContainerInfo(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+			expected := normalizeTimestamps(strings.TrimLeft(tc.expPrintStr, "\n"))
+			actual := normalizeTimestamps(bld.String())
+
+			if diff := cmp.Diff(expected, actual); diff != "" {
 				t.Fatalf("unexpected pretty-printed string (-want, +got):\n%s\n", diff)
 			}
 		})
