@@ -648,8 +648,7 @@ struct tgt_create_args {
 static void *
 tgt_create_preallocate(void *arg)
 {
-	struct tgt_create_args	*tca = arg;
-	mode_t                   stored_mask = umask(0);
+	struct tgt_create_args  *tca = arg;
 	int			 rc;
 
 	(void)dss_xstream_set_affinity(tca->tca_dx);
@@ -713,7 +712,6 @@ tgt_create_preallocate(void *arg)
 	}
 out:
 	tca->tca_rc = rc;
-	(void)umask(stored_mask);
 
 	return NULL;
 }
