@@ -252,7 +252,8 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	if (!SUCCESS(rc))
 		D_GOTO(done, rc);
 	if (open) {
-		rc = dv_pool_open(pa.pa_pool_path, pa.pa_db_path, &ctx.dc_poh, 0);
+		rc =
+		    dv_pool_open(pa.pa_pool_path, pa.pa_db_path, &ctx.dc_poh, 0, ctx.dc_write_mode);
 		if (!SUCCESS(rc))
 			D_GOTO(done, rc);
 	}
