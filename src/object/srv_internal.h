@@ -81,6 +81,8 @@ struct migrate_pool_tls {
 	uint64_t                 mpt_inflight_size;
 
 	struct migr_resource    *mpt_data_res;
+	struct migr_resource    *mpt_obj_res;
+	struct migr_resource    *mpt_key_res;
 
 	/* reference count for the structure */
 	uint64_t                 mpt_refcount;

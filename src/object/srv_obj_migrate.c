@@ -2077,9 +2077,20 @@ migr_type2res(struct migrate_pool_tls *tls, int res_type)
 	if (rmg->rmg_bkt_type == MIGR_BUCKET_MAP) {
 		idx = dmi->dmi_tgt_id / rmg->rmg_bkt_size;
 		D_ASSERT(idx < rmg->rmg_bkt_nr);
-	} else /* rotation */ {
-		idx = atomic_fetch_add(&rmg->rmg_bkt_selector, 1);
-		idx %= rmg->rmg_bkt_nr;
+	} else { /* MIGR_BUCKET_ROTATE */
+		struct migr_resource **cached;
+
+		/* For the rotation type, hold() and release() must use the same bucket.
+		 * Cache the chosen bucket in the per-pool TLS so every call from the same
+		 * ULT/pool always lands on the same bucket, avoiding hold/release mismatch.
+		 */
+		cached = (res_type == MIGR_OBJ) ? &tls->mpt_obj_res : &tls->mpt_key_res;
+		if (*cached == NULL) {
+			idx = atomic_fetch_add(&rmg->rmg_bkt_selector, 1);
+			idx %= rmg->rmg_bkt_nr;
+			*cached = &rmg->rmg_res_buckets[idx];
+		}
+		return *cached;
 	}
 	return &rmg->rmg_res_buckets[idx];
 }
@@ -2196,7 +2207,7 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 		res->res_data.mem_hulk = 0;
 	}
 
-	if (res->res_waiters > 0)
+	if (res->res_waiters > 0 && res->res_limit > res->res_used)
 		migrate_res_wakeup(res, res->res_limit - res->res_used);
 
 	if (!migr_res_is_private(res))
@@ -3646,8 +3657,10 @@ migrate_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_eph, 
 
 	D_ASSERT(tgt_idx == dss_get_module_info()->dmi_tgt_id);
 	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_XS_SELF, 0, MIGRATE_STACK_SIZE, NULL);
-	if (rc)
+	if (rc) {
+		migrate_res_release(cont_arg->pool_tls, MIGR_OBJ, obj_arg->ioa_fanout);
 		goto free;
+	}
 
 	val.epoch = eph;
 	val.shard = shard;
@@ -4848,6 +4861,7 @@ migr_rmg_fini(int type)
 
 	for (i = 0; i < rmg->rmg_bkt_nr; i++)
 		migr_res_fini(&rmg->rmg_res_buckets[i]);
+	D_FREE(rmg->rmg_res_buckets);
 	memset(rmg, 0, sizeof(*rmg));
 }
 
