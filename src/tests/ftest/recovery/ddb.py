@@ -301,3 +301,186 @@ class DdbTest(TestWithServers):
         container.open()
 
         report_errors(test=self, errors=errors)
+
+    def test_recovery_ddb_rm(self):
+        """Test ddb rm.
+
+        1. Create a pool and a container. Insert objects, dkeys, and akeys.
+        2. Stop the server to use ddb.
+        3. Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
+        4. Call ddb rm to remove the akey.
+        5. Restart the server to use the API.
+        6. Reset the object, container, and pool to use the API after server restart.
+        7. Call list_akey() in pydaos API to verify that the akey was removed.
+        8. Stop the server to use ddb.
+        9. Call ddb rm to remove the dkey.
+        10. Restart the server to use the API.
+        11. Reset the object, container, and pool to use the API after server restart.
+        12. Call list_dkey() in pydaos API to verify that the dkey was removed.
+        13. Stop the server to use ddb.
+        14. Call ddb rm to remove the object.
+        15. Restart the server to use daos command.
+        16. Reset the container and pool so that cleanup works.
+        17. Call "daos container list-objects <pool_uuid> <cont_uuid>" to verify that the object was
+        removed.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery
+        :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_rm
+        """
+        # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb prov_mem
+        # documentation, but use daos_load_path here for clarity.
+        daos_load_path = "/mnt/daos_load"
+        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
+        if md_on_ssd:
+            self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
+            self.run_cmd_check_result(command=f"mkdir {daos_load_path}")
+
+        self.log_step("Create a pool and a container.")
+        pool = self.get_pool(connect=True)
+        container = self.get_container(pool)
+
+        if md_on_ssd:
+            vos_path = '""'
+        else:
+            # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
+            vos_paths = self.server_managers[0].get_vos_files(pool)
+            if not vos_paths:
+                self.fail("vos file wasn't found!")
+            vos_path = vos_paths[0]
+
+        ddb_command = DdbCommand(
+            server_host=self.server_managers[0].hosts[0:1], path=self.bin, vos_path=vos_path)
+
+        self.log_step("Insert one object with one dkey and one akey with API.")
+        obj_dataset = insert_objects(
+            context=self.context, container=container, object_count=1, dkey_count=1, akey_count=2,
+            base_dkey=self.random_dkey, base_akey=self.random_akey, base_data=self.random_data)
+        ioreqs = obj_dataset[0]
+        dkeys_inserted = obj_dataset[1]
+        akeys_inserted = obj_dataset[2]
+
+        # For debugging/reference, check that the dkey and the akey we just inserted are returned
+        # from the API.
+        akeys_api = ioreqs[0].list_akey(dkey=dkeys_inserted[0])
+        self.log.info("akeys from API (before) = %s", akeys_api)
+        dkeys_api = ioreqs[0].list_dkey()
+        self.log.info("dkeys from API (before) = %s", dkeys_api)
+
+        # For debugging/reference, check that the object was inserted using daos command.
+        list_obj_out = self.get_daos_command().container_list_objects(
+            pool=pool.identifier, cont=container.uuid)
+        self.log.info("Object list (before) = %s", list_obj_out["response"])
+
+        self.log_step("Stop the server to use ddb.")
+        dmg_command = self.get_dmg_command()
+        dmg_command.system_stop()
+
+        db_path = None
+        if md_on_ssd:
+            self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
+            db_path = os.path.join(
+                self.server_managers[0].manager.job.yaml.metadata_params.path.value, "daos_control",
+                "engine0")
+            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
+
+        self.log_step("Call ddb rm to remove the akey.")
+        if md_on_ssd:
+            # "ddb rm" command for MD-on-SSD is quite different.
+            # PMEM: ddb /mnt/daos/<pool_uuid>/vos-0 rm <component_path>
+            # MD-on-SSD: ddb -w --db_path=/var/tmp/daos_testing/control_metadata/daos_control
+            # /engine0 --vos_path /mnt/daos_load/<pool_uuid>/vos-0 rm <component_path>
+            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
+            ddb_command.vos_path.update(
+                value=os.path.join(daos_load_path, pool.uuid.lower(), "vos-0"))
+        cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]/[0]")
+        self.log.info("rm akey stdout = %s", cmd_result.joined_stdout)
+
+        self.log_step("Restart the server to use the API.")
+        dmg_command.system_start()
+
+        self.log_step("Reset the object, container, and pool to use the API after server restart.")
+        ioreqs[0].obj.close()
+        container.close()
+        pool.disconnect()
+        pool.connect()
+        container.open()
+        ioreqs[0].obj.open()
+
+        self.log_step("Call list_akey() in pydaos API to verify that the akey was removed.")
+        akeys_api = ioreqs[0].list_akey(dkey=dkeys_inserted[0])
+        self.log.info("akeys from API (after) = %s", akeys_api)
+        errors = []
+        expected_len = len(akeys_inserted) - 1
+        actual_len = len(akeys_api)
+        if actual_len != expected_len:
+            msg = (f"Unexpected number of akeys after ddb rm! Expected = {expected_len}; "
+                   f"Actual = {actual_len}")
+            errors.append(msg)
+
+        self.log_step("Stop the server to use ddb.")
+        dmg_command.system_stop()
+
+        self.log_step("Call ddb rm to remove the dkey.")
+        cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]")
+        self.log.info("rm dkey stdout = %s", cmd_result.joined_stdout)
+
+        self.log_step("Restart the server to use the API.")
+        dmg_command.system_start()
+
+        self.log_step("Reset the object, container, and pool to use the API after server restart.")
+        ioreqs[0].obj.close()
+        container.close()
+        pool.disconnect()
+        pool.connect()
+        container.open()
+        ioreqs[0].obj.open()
+
+        self.log_step("Call list_dkey() in pydaos API to verify that the dkey was removed.")
+        dkeys_api = ioreqs[0].list_dkey()
+        self.log.info("dkeys from API (after) = %s", dkeys_api)
+        expected_len = len(dkeys_inserted) - 1
+        actual_len = len(dkeys_api)
+        if actual_len != expected_len:
+            msg = (f"Unexpected number of dkeys after ddb rm! Expected = {expected_len}; "
+                   f"Actual = {actual_len}")
+            errors.append(msg)
+
+        self.log_step("Stop the server to use ddb.")
+        dmg_command.system_stop()
+
+        self.log_step("Call ddb rm to remove the object.")
+        cmd_result = ddb_command.remove_component(component_path="[0]/[0]")
+        self.log.info("rm object stdout = %s", cmd_result.joined_stdout)
+
+        self.log_step("Restart the server to use daos command.")
+        dmg_command.system_start()
+
+        self.log_step("Reset the container and pool so that cleanup works.")
+        container.close()
+        pool.disconnect()
+        pool.connect()
+        container.open()
+
+        self.log_step("Call daos container list-objects to verify that the object was removed.")
+        list_obj_out = self.get_daos_command().container_list_objects(
+            pool=pool.identifier, cont=container.uuid)
+        obj_list = list_obj_out["response"]
+        self.log.info("Object list (after) = %s", obj_list)
+        expected_len = len(ioreqs) - 1
+        if obj_list:
+            actual_len = len(obj_list)
+        else:
+            actual_len = 0
+        if actual_len != expected_len:
+            msg = (f"Unexpected number of objects after ddb rm! Expected = {expected_len}; "
+                   f"Actual = {actual_len}")
+            errors.append(msg)
+
+        if md_on_ssd:
+            self.log_step(f"MD-on-SSD: Clean {daos_load_path}")
+            self.run_cmd_check_result(command=f"umount {daos_load_path}")
+            self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
+
+        report_errors(test=self, errors=errors)
