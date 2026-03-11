@@ -1191,7 +1191,7 @@ func TestConfig_UpdateMdOnSsdStackSize(t *testing.T) {
 				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeMdOnSsd),
 			expABTthreadStackSize: minABTThreadStackSizeMdOnSsd,
 		},
-		"config for md_on_ssd without thread size should sed ABT_THREAD_STACKSIZE": {
+		"config for md_on_ssd without thread size should set ABT_THREAD_STACKSIZE": {
 			cfg:                   validConfig(),
 			expABTthreadStackSize: minABTThreadStackSizeMdOnSsd,
 		},
@@ -1215,19 +1215,19 @@ func TestConfig_UpdateMdOnSsdStackSize(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			err := tc.cfg.UpdateABTEnvarsMdOnSsd()
 			test.CmpErr(t, tc.expErr, err)
-			if err == nil {
-				if tc.expABTthreadStackSize == 0 {
-					_, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
-					test.AssertTrue(t, err != nil, "Unexpected env var ABT_THREAD_STACKSIZE")
-				} else {
-					stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
-					test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
-					stackSizeVal, err := strconv.Atoi(stackSizeStr)
-					test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
-					test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
-						"Invalid ABT_THREAD_STACKSIZE value")
-				}
+			if err != nil {
+				return
 			}
+			stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
+			if tc.expABTthreadStackSize == 0 {
+				test.AssertTrue(t, err != nil, "Unexpected env var ABT_THREAD_STACKSIZE")
+				return
+			}
+			test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
+			stackSizeVal, err := strconv.Atoi(stackSizeStr)
+			test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
+			test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
+				"Invalid ABT_THREAD_STACKSIZE value")
 		})
 	}
 }
