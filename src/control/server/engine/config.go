@@ -368,28 +368,6 @@ func (c *Config) UpdatePMDKEnvarsStackSizeDCPM() error {
 	return nil
 }
 
-// Ensure at least 24KiB ABT stack size for md_on_ssd.
-func (c *Config) UpdateMdOnSsdStackSize() error {
-	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
-	if err != nil {
-		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
-			minABTThreadStackSizeMdOnSsd))
-		return nil
-	}
-	// Ensure at least 24KiB ABT stack size for an engine in md_on_ssd mode.
-	stackSizeValue, err := strconv.Atoi(stackSizeStr)
-	if err != nil {
-		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
-			stackSizeStr)
-	}
-	if stackSizeValue < minABTThreadStackSizeMdOnSsd {
-		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
-			"for MD on SSD, found %d", minABTThreadStackSizeMdOnSsd,
-			stackSizeValue)
-	}
-	return nil
-}
-
 // Ensure proper configuration of shutdown (SDS) state
 func (c *Config) UpdatePMDKEnvarsPMemobjConf(isDCPM bool) error {
 	pmemobjConfStr, pmemobjConfErr := c.GetEnvVar("PMEMOBJ_CONF")
@@ -438,6 +416,28 @@ func (c *Config) UpdatePMDKEnvars() error {
 
 	if isDCPM {
 		return c.UpdatePMDKEnvarsStackSizeDCPM()
+	}
+	return nil
+}
+
+// Ensure at least 24KiB ABT stack size for md_on_ssd.
+func (c *Config) UpdateMdOnSsdStackSize() error {
+	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+	if err != nil {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeMdOnSsd))
+		return nil
+	}
+	// Ensure at least 24KiB ABT stack size for an engine in md_on_ssd mode.
+	stackSizeValue, err := strconv.Atoi(stackSizeStr)
+	if err != nil {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+			stackSizeStr)
+	}
+	if stackSizeValue < minABTThreadStackSizeMdOnSsd {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for MD on SSD, found %d", minABTThreadStackSizeMdOnSsd,
+			stackSizeValue)
 	}
 	return nil
 }

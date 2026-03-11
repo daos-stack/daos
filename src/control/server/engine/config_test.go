@@ -1176,7 +1176,7 @@ func TestConfig_UpdateMdOnSsdStackSize(t *testing.T) {
 	}{
 		"empty config should not fail": {
 			cfg:                   MockConfig(),
-			expABTthreadStackSize: minABTThreadStackSizeDCPM,
+			expABTthreadStackSize: minABTThreadStackSizeMdOnSsd,
 		},
 		"valid config for md_on_ssd should not fail": {
 			cfg: validConfig().
