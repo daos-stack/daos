@@ -821,8 +821,8 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
  * check faulty state if is_faulty.
  */
 static int
-set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
-			   uint64_t *expiry_time, bool *is_faulty)
+set_timer_or_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
+			  uint64_t *expiry_time, bool *is_faulty)
 {
 	struct bio_dev_info	*dev_info = NULL, *tmp;
 	struct bio_bdev		*d_bdev = NULL;
@@ -846,41 +846,44 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 		return rc;
 	}
 
-	if (is_faulty != NULL)
-		*is_faulty = false;
-
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
 		if (dev_info->bdi_traddr == NULL) {
 			D_ERROR("No transport address for dev:"DF_UUID", unable to verify state\n",
 				DP_UUID(dev_info->bdi_dev_id));
-		} else if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
-			if ((is_faulty) && ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)) {
-				/* Set is_faulty return value */
-				*is_faulty = true;
-			} else {
-				d_bdev = lookup_dev_by_id(dev_info->bdi_dev_id);
-				if (d_bdev == NULL) {
-					D_ERROR("Failed to find dev "DF_UUID"\n",
-						DP_UUID(dev_info->bdi_dev_id));
-					rc = -DER_NONEXIST;
-					goto out;
-				}
-
-				if (expiry_time != NULL) {
-					/* Set timer if non-zero value supplied */
-					if (*expiry_time != 0)
-						d_bdev->bb_led_expiry_time = *expiry_time;
-					d_bdev->bb_led_identify_active = true;
-				} else {
-					/* Clear timer if no pointer supplied */
-					d_bdev->bb_led_expiry_time     = 0;
-					d_bdev->bb_led_identify_active = false;
-				}
-			}
+			continue;
 		}
+
+		if (strcmp(dev_info->bdi_traddr, tr_addr) != 0)
+			continue;
+
+		/* Keep faulty and timer operations mutually exclusive */
+		if (is_faulty != NULL) {
+			/* Set is_faulty return value */
+			*is_faulty = (dev_info->bdi_flags & NVME_DEV_FL_FAULTY) ? true : false;
+			/* Single bdev/ns per NVMe controller assumed so now complete */
+			break;
+		}
+
+		d_bdev = lookup_dev_by_id(dev_info->bdi_dev_id);
+		if (d_bdev == NULL) {
+			D_ERROR("Failed to find dev " DF_UUID "\n", DP_UUID(dev_info->bdi_dev_id));
+			rc = -DER_NONEXIST;
+			break;
+		}
+
+		if (expiry_time != NULL) {
+			/* Set timer with input value */
+			d_bdev->bb_led_expiry_time     = *expiry_time;
+			d_bdev->bb_led_identify_active = true;
+		} else {
+			/* Clear timer if no pointer supplied */
+			d_bdev->bb_led_expiry_time     = 0;
+			d_bdev->bb_led_identify_active = false;
+		}
+		/* Single bdev/ns per NVMe controller assumed so now complete */
+		break;
 	}
 
-out:
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
 		d_list_del(&dev_info->bdi_link);
 		bio_free_dev_info(dev_info);
@@ -891,74 +894,25 @@ out:
 
 static int
 set_timer(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, uint64_t expiry_time) {
-	return set_timer_and_check_faulty(xs_ctxt, pci_addr, &expiry_time, NULL);
+	return set_timer_or_check_faulty(xs_ctxt, pci_addr, &expiry_time, NULL);
 }
 
 static int
 clear_timer(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr)
 {
-	return set_timer_and_check_faulty(xs_ctxt, pci_addr, NULL, NULL);
+	return set_timer_or_check_faulty(xs_ctxt, pci_addr, NULL, NULL);
 }
-
-// static int
-// set_led_identify_flag(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, bool active)
-//{
-//	struct bio_dev_info	*dev_info = NULL, *tmp;
-//	struct bio_bdev		*d_bdev = NULL;
-//	d_list_t		 dev_list;
-//	int			 dev_list_cnt, rc;
-//	char			 tr_addr[ADDR_STR_MAX_LEN + 1];
-//
-//	rc = spdk_pci_addr_fmt(tr_addr, ADDR_STR_MAX_LEN + 1, &pci_addr);
-//	if (rc != 0) {
-//		D_ERROR("Failed to format PCI address (%s)\n", spdk_strerror(-rc));
-//		return -DER_INVAL;
-//	}
-//
-//	D_INIT_LIST_HEAD(&dev_list);
-//
-//	rc = bio_dev_list(xs_ctxt, &dev_list, &dev_list_cnt);
-//	if (rc != 0) {
-//		D_ERROR("Error getting BIO device list\n");
-//		return rc;
-//	}
-//
-//	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
-//		if (dev_info->bdi_traddr != NULL &&
-//		    strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
-//			d_bdev = lookup_dev_by_id(dev_info->bdi_dev_id);
-//			if (d_bdev == NULL) {
-//				D_ERROR("Failed to find dev "DF_UUID"\n",
-//					DP_UUID(dev_info->bdi_dev_id));
-//				rc = -DER_NONEXIST;
-//				goto out;
-//			}
-//
-//			d_bdev->bb_led_identify_active = active;
-//			D_DEBUG(DB_MGMT, "Device "DF_UUID" LED identify active=%d\n",
-//				DP_UUID(d_bdev->bb_uuid), active);
-//		}
-//	}
-//
-// out:
-//	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
-//		d_list_del(&dev_info->bdi_link);
-//		bio_free_dev_info(dev_info);
-//	}
-//
-//	return rc;
-// }
 
 static int
 check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, bool *is_faulty) {
-	return set_timer_and_check_faulty(xs_ctxt, pci_addr, NULL, is_faulty);
+	return set_timer_or_check_faulty(xs_ctxt, pci_addr, NULL, is_faulty);
 }
 
 static int
 led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__LedAction action,
 	   Ctl__LedState *state, uint64_t duration) {
 	struct led_opts		opts = { 0 };
-	bool			is_faulty;
+	bool                    is_faulty = false;
 	int			rc;
 
 	D_ASSERT(is_init_xstream(xs_ctxt));
@@ -984,18 +938,15 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 		opts.led_state = *state;
 		break;
 	case CTL__LED_ACTION__RESET:
-		opts.action = CTL__LED_ACTION__SET;
 		/* Check if any relevant bdevs are faulty, if yes set faulty, if no set normal */
-		is_faulty = false;
 		rc = check_faulty(xs_ctxt, pci_addr, &is_faulty);
 		if (rc != 0) {
 			D_ERROR("Reset LED failed during check for faulty devices (%d)\n", rc);
 			return rc;
 		}
-		if (is_faulty)
-			opts.led_state = CTL__LED_STATE__ON;
-		else
-			opts.led_state = CTL__LED_STATE__OFF;
+		/* Subsequent action converted to SET using the result state from check_faulty */
+		opts.action    = CTL__LED_ACTION__SET;
+		opts.led_state = (is_faulty) ? CTL__LED_STATE__ON : CTL__LED_STATE__OFF;
 		break;
 	default:
 		D_ERROR("invalid action supplied: %d\n", action);

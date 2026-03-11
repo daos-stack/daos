@@ -2078,7 +2078,7 @@ bio_led_reset_on_timeout(struct bio_xs_context *ctxt, uint64_t now)
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
-		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
+		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time <= now)) {
 			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs. */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);

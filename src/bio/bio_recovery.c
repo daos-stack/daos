@@ -441,7 +441,6 @@ set_led_faulty(void *arg)
 
 	D_ASSERT(led_msg->xs != NULL);
 
-	/* Check if device is currently in IDENTIFY/blink state */
 	bdev = lookup_dev_by_id(led_msg->dev_uuid);
 	if (bdev != NULL && bdev->bb_led_identify_active) {
 		/*
