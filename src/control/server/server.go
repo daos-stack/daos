@@ -117,6 +117,12 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		}
 	}
 
+	for _, ec := range cfg.Engines {
+		if err := ec.UpdateABTEnvarsMdOnSsd(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

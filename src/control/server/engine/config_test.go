@@ -1110,7 +1110,7 @@ func TestConfig_UpdatePMDKEnvarsStackSizeDCPM(t *testing.T) {
 	validConfig := func() *Config {
 		return MockConfig().WithStorage(
 			storage.NewTierConfig().
-				WithStorageClass("dcpm"))
+				WithStorageClass(storage.ClassDcpm.String()))
 	}
 
 	for name, tc := range map[string]struct {
@@ -1223,7 +1223,7 @@ func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
 func TestConfig_UpdatePMDKEnvarsPMemobjConfDCPM(t *testing.T) {
 	validConfig := func() *Config {
 		return MockConfig().WithStorage(
-			storage.NewTierConfig().WithStorageClass("dcpm"))
+			storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()))
 	}
 
 	for name, tc := range map[string]struct {
