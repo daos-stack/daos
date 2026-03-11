@@ -440,6 +440,7 @@ set_led_faulty(void *arg)
 	int                 rc;
 
 	D_ASSERT(led_msg->xs != NULL);
+	D_ASSERT(is_init_xstream(led_msg->xs));
 
 	bdev = lookup_dev_by_id(led_msg->dev_uuid);
 	if (bdev != NULL && bdev->bb_led_identify_active) {
@@ -450,7 +451,7 @@ set_led_faulty(void *arg)
 		 */
 		D_DEBUG(DB_MGMT,
 			"Device " DF_UUID " is in IDENTIFY state (LED blinking), "
-			"skipping FAULT LED change\n",
+			"skipping LED change to FAULT\n",
 			DP_UUID(led_msg->dev_uuid));
 		D_FREE(led_msg);
 		return;

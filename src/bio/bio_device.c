@@ -26,6 +26,7 @@ static int
 revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
 	struct bio_blobstore    *bbs;
+	Ctl__LedState            state = CTL__LED_STATE__OFF;
 	int			 rc;
 
 	D_ASSERT(d_bdev);
@@ -49,11 +50,25 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	d_bdev->bb_trigger_reint = 1;
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
+	if (d_bdev->bb_led_identify_active) {
+		/**
+		 * Device LED is actively blinking for identification. Skip setting NORMAL LED to
+		 * allow user-initiated identify to take precedence. NORMAL LED will be applied
+		 * when identify completes (timer expires or reset).
+		 */
+		D_DEBUG(DB_MGMT,
+			"Device " DF_UUID " is in IDENTIFY state (LED blinking), "
+			"skipping LED change to NORMAL\n",
+			DP_UUID(d_bdev->bb_uuid));
+		return 0;
+	}
+
 	/* Reset the LED of the VMD device once revived */
-	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__RESET,
-			    NULL, 0);
+	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__SET,
+			    (unsigned int *)&state, 0);
 	if (rc != 0)
-		DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed", DP_UUID(d_bdev->bb_uuid));
+		DL_ERROR(rc, "Failed to set LED to NORMAL state on device:" DF_UUID,
+			 DP_UUID(d_bdev->bb_uuid));
 
 	return 0;
 }
