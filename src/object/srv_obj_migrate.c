@@ -2103,6 +2103,7 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 	uint64_t               now;
 	bool                   is_hulk;
 	bool                   locked = false;
+	bool                   waited = false;
 	int                    rc     = 0;
 
 	res = migr_type2res(tls, res_type);
@@ -2130,7 +2131,7 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 			res->res_data.mem_hulk = 1;
 			break;
 
-		} else if (!is_hulk && !migr_res_has_starveling(res, now) &&
+		} else if (!is_hulk && (waited || !migr_res_has_starveling(res, now)) &&
 			   res->res_used + units <= res->res_limit) {
 			res->res_used += units;
 			break;
@@ -2142,7 +2143,10 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 		}
 
 		res->res_waiters++;
-		waiter.rw_wait_since = now;
+		if (!waited) {
+			waiter.rw_wait_since = now;
+			waited               = true;
+		}
 		d_list_add_tail(&waiter.rw_link, &res->res_waitq);
 
 		ABT_cond_wait(res->res_cond, res->res_mutex);
