@@ -30,9 +30,8 @@ server_config:
       storage: auto
 
 pool:
-  size: 90%
+  size: 100G
   pool_query_timeout: 30
-  properties: rd_fac:3
 
 cont_ior:
   type: POSIX
