@@ -563,7 +563,6 @@ class DdbTest(TestWithServers):
             file.write(new_data)
 
         self.log_step("Copy the created file to server node.")
-        self.log.debug(f"## hosts = {self.server_managers[0].hosts[0]}")
         result = distribute_files(
             self.log, self.server_managers[0].hosts[0], load_file_path, load_file_path, False)
         if not result.passed:
