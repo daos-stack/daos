@@ -16,7 +16,7 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
-timeout: 360
+timeout: 720
 pool:
   scm_size: 1G
 container:
