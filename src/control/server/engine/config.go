@@ -445,13 +445,7 @@ func (c *Config) UpdateMdOnSsdStackSize() error {
 // Ensure 24k for md_on_ssd configuration
 func (c *Config) UpdateABTEnvarsMdOnSsd() error {
 
-	if len(c.Storage.Tiers) == 0 {
-		return errors.New("Invalid config - no tier 0 defined")
-	}
-
-	isDCPM := c.Storage.Tiers[0].Class == storage.ClassDcpm
-
-	if !isDCPM {
+	if c.Storage.Tiers.HasBdevRoleMeta() {
 		return c.UpdateMdOnSsdStackSize()
 	}
 	return nil

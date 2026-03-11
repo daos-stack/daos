@@ -1166,28 +1166,36 @@ func TestConfig_UpdateMdOnSsdStackSize(t *testing.T) {
 	validConfig := func() *Config {
 		return MockConfig().WithStorage(
 			storage.NewTierConfig().
-				WithStorageClass(storage.ClassDcpm.String()))
+				WithStorageClass(storage.ClassRam.String()),
+			storage.NewTierConfig().
+				WithStorageClass(storage.ClassNvme.String()).
+				WithBdevDeviceRoles(storage.BdevRoleMeta))
 	}
-
 	for name, tc := range map[string]struct {
 		cfg                   *Config
 		expErr                error
 		expABTthreadStackSize int
 	}{
-		"empty config should not fail": {
+		"empty config should not set ABT_THREAD_STACKSIZE": {
 			cfg:                   MockConfig(),
-			expABTthreadStackSize: minABTThreadStackSizeMdOnSsd,
+			expABTthreadStackSize: 0,
 		},
-		"valid config for md_on_ssd should not fail": {
+		"non-md_on_ssd config should not set ABT_THREAD_STACKSIZE": {
+			cfg: MockConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassRam.String())),
+			expABTthreadStackSize: 0,
+		},
+		"valid config for md_on_ssd should set ABT_THREAD_STACKSIZE": {
 			cfg: validConfig().
 				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeMdOnSsd),
 			expABTthreadStackSize: minABTThreadStackSizeMdOnSsd,
 		},
-		"config for md_on_ssd without thread size should not fail": {
+		"config for md_on_ssd without thread size should sed ABT_THREAD_STACKSIZE": {
 			cfg:                   validConfig(),
 			expABTthreadStackSize: minABTThreadStackSizeMdOnSsd,
 		},
-		"config for md_on_ssd with stack size big enough should not fail": {
+		"config for md_on_ssd with stack size big enough should not change ABT_THREAD_STACKSIZE": {
 			cfg: validConfig().
 				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeMdOnSsd + 1),
 			expABTthreadStackSize: minABTThreadStackSizeMdOnSsd + 1,
@@ -1205,15 +1213,20 @@ func TestConfig_UpdateMdOnSsdStackSize(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			err := tc.cfg.UpdateMdOnSsdStackSize()
+			err := tc.cfg.UpdateABTEnvarsMdOnSsd()
 			test.CmpErr(t, tc.expErr, err)
 			if err == nil {
-				stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
-				test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
-				stackSizeVal, err := strconv.Atoi(stackSizeStr)
-				test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
-				test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
-					"Invalid ABT_THREAD_STACKSIZE value")
+				if tc.expABTthreadStackSize == 0 {
+					_, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
+					test.AssertTrue(t, err != nil, "Unexpected env var ABT_THREAD_STACKSIZE")
+				} else {
+					stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
+					test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
+					stackSizeVal, err := strconv.Atoi(stackSizeStr)
+					test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
+					test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
+						"Invalid ABT_THREAD_STACKSIZE value")
+				}
 			}
 		})
 	}
