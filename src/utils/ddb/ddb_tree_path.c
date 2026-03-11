@@ -803,19 +803,26 @@ itp_key_safe_str(char *buf, size_t buf_len)
 		int  e;
 		bool escaped = false;
 
-		if (tmp_idx + 1 >= tmp_end) { /* +1 for escape character if needed */
-			D_ERROR("Buffer (%ld) was too small to hold the escape characters\n",
-				buf_len);
-			return false;
-		}
 		for (e = 0; e < ARRAY_SIZE(escape_chars) && !escaped; ++e) {
 			if (buf[i] == escape_chars[e]) {
+				if (tmp_idx + 1 >= tmp_end) { /* +1 for escape character */
+					D_ERROR("Too small buffer (%ld) to hold escape character\n",
+						buf_len);
+					return false;
+				}
+
 				sprintf(tmp_idx, "\\%c", buf[i]);
 				tmp_idx += 2;
 				escaped = true;
 			}
 		}
 		if (!escaped) {
+			if (tmp_idx >= tmp_end) {
+				D_ERROR("Too small buffer (%ld) because former escape characters\n",
+					buf_len);
+				return false;
+			}
+
 			sprintf(tmp_idx, "%c", buf[i]);
 			tmp_idx++;
 		}
@@ -830,59 +837,31 @@ itp_print_part_key(struct ddb_ctx *ctx, struct indexed_tree_path_part *part)
 {
 	char     buf[DDB_MAX_PRINTABLE_KEY];
 	d_iov_t *key_iov = &part->itp_part_value.itp_key;
-	char    *ptr     = buf;
-	uint32_t len;
 
-	len = ddb_key_to_printable_buf(key_iov, part->itp_otype, buf, ARRAY_SIZE(buf));
-	if (len > ARRAY_SIZE(buf)) {
-		len += 1; /* +1 for null terminator if needed. */
-		D_ALLOC(ptr, len);
-		if (ptr == NULL) {
-			D_ERROR("NOT enough DRAM for print key(1): len = %u\n", len);
-			return;
-		}
-
-		ddb_key_to_printable_buf(key_iov, part->itp_otype, ptr, len);
-	} else {
-		len = ARRAY_SIZE(buf);
-	}
-
+	ddb_key_to_printable_buf(key_iov, part->itp_otype, buf, ARRAY_SIZE(buf));
 	if (ddb_key_is_lexical(part->itp_otype) ||
 	    (!ddb_key_is_int(part->itp_otype) && ddb_can_print(key_iov))) {
 		/* +1 to make sure there's room for a null terminator */
-		char *key_str;
-
-		D_ALLOC(key_str, key_iov->iov_len + 1);
-		if (key_str == NULL) {
-			D_ERROR("NOT enough DRAM for print key(2): len = %ld\n",
-				key_iov->iov_len + 1);
-			goto out;
-		}
+		char key_str[key_iov->iov_len + 1];
 
 		memcpy(key_str, key_iov->iov_buf, key_iov->iov_len);
 		key_str[key_iov->iov_len] = '\0';
 		/* buffer should be plenty big, but just in case ... */
-		if (!itp_key_safe_str(ptr, len)) {
+		if (!itp_key_safe_str(buf, ARRAY_SIZE(buf))) {
 			ddb_print(ctx, "(ISSUE PRINTING KEY)");
-			D_FREE(key_str);
-			goto out;
+			return;
 		}
 		/* print the size with the string key if the size isn't strlen. That way
 		 * parsing the string into a valid key will work
 		 */
 		if (key_iov->iov_len != strlen(key_str))
-			ddb_printf(ctx, "%s{%lu}", ptr, key_iov->iov_len);
+			ddb_printf(ctx, "%s{%lu}", buf, key_iov->iov_len);
 		else
-			ddb_printf(ctx, "%s", ptr);
-		D_FREE(key_str);
+			ddb_printf(ctx, "%s", buf);
 	} else {
-		/* is an int or binary and already formatted in ddb_key_to_printable_buf */
-		ddb_printf(ctx, "{%s}", ptr);
+		/* is an int or binary and already formatted in iov_to_pritable_buf */
+		ddb_printf(ctx, "{%s}", buf);
 	}
-
-out:
-	if (ptr != buf)
-		D_FREE(ptr);
 }
 
 void
