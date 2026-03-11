@@ -1189,7 +1189,6 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: getFunctionalPackages(
-                                    next_version(),
                                     false,
                                     paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 test_function: 'runTestFunctionalV2',
@@ -1215,7 +1214,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(next_version(), false, false),
+                                inst_rpms: getFunctionalPackages(false, false),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1238,7 +1237,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(next_version(), false, false),
+                                inst_rpms: getFunctionalPackages(false, false),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -1262,7 +1261,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(next_version(), false, false),
+                                inst_rpms: getFunctionalPackages(false, false),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1442,9 +1441,7 @@ pipeline {
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             inst_rpms: getFunctionalPackages(
-                                next_version(),
-                                false,
-                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1458,9 +1455,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             inst_rpms: getFunctionalPackages(
-                                next_version(),
-                                false,
-                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
@@ -1474,9 +1469,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             inst_rpms: getFunctionalPackages(
-                                next_version(),
-                                false,
-                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1491,9 +1484,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
-                                next_version(),
-                                false,
-                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1509,9 +1500,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
-                                next_version(),
-                                false,
-                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1527,9 +1516,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             inst_rpms: getFunctionalPackages(
-                                next_version(),
-                                true,
-                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                true, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1544,9 +1531,7 @@ pipeline {
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             inst_rpms: getFunctionalPackages(
-                                next_version(),
-                                false,
-                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1560,9 +1545,7 @@ pipeline {
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             inst_rpms: getFunctionalPackages(
-                                next_version(),
-                                false,
-                                paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
