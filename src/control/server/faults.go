@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -57,11 +57,6 @@ var (
 		code.ServerPoolHasContainers,
 		"cannot destroy a pool with existing containers",
 		"retry the operation with the recursive flag set to remove containers along with the pool",
-	)
-	FaultHugepagesDisabled = serverFault(
-		code.ServerHugepagesDisabled,
-		"the use of hugepages has been disabled in the server config",
-		"set false (or remove) disable_hugepages parameter in config and reformat storage, then retry the operation",
 	)
 )
 
