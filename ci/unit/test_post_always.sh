@@ -29,29 +29,23 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
 test_log_dir="${1:-}"
 if [ -z "$test_log_dir" ]; then
     case $STAGE_NAME in
-        "Unit Test on "*)
+        "Unit Test")
           test_log_dir="unit_test_logs"
           ;;
-        "Unit Test bdev on "*)
+        "Unit Test bdev")
           test_log_dir="unit_test_bdev_logs"
           ;;
-        "NLT on "*)
+        "NLT")
           test_log_dir="nlt_logs"
           ;;
-        "NLT with Bullseye on "*)
+        "NLT with Bullseye")
           test_log_dir="nlt_bullseye_logs"
           ;;
-        "Unit Test with memcheck on "*)
+        "Unit Test with memcheck")
           test_log_dir="unit_test_memcheck_logs"
           ;;
-        "Unit Test bdev with memcheck on "*)
+        "Unit Test bdev with memcheck")
           test_log_dir="unit_test_memcheck_bdev_logs"
-          ;;
-        "Unit Test with Bullseye on "*)
-          test_log_dir="unit_test_bullseye_logs"
-          ;;
-        "Unit Test bdev with Bullseye on "*)
-          test_log_dir="unit_test_bdev_bullseye_logs"
           ;;
         *)
           echo "test_post_always: The test log directory argument is missing!"
