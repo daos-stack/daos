@@ -47,9 +47,9 @@ class DlckCommand(CommandWithParameters):
         if pool_uuid:
             self.pool_uuid = FormattedParameter("--file={}", pool_uuid)
 
-        # NVMe config file path. (--nvme_cont nvme_conf_path)
+        # NVMe config file path. (--nvme nvme_conf)
         if nvme_conf:
-            self.nvme_conf = FormattedParameter("--nvme={}", nvme_conf)
+            self.nvme = FormattedParameter("--nvme={}", nvme_conf)
 
         # Storage mount point. (--storage storage_mount)
         if storage_mount:
@@ -60,7 +60,6 @@ class DlckCommand(CommandWithParameters):
 
         Returns:
             str: the command with all the defined parameters
-
         """
         value = super().__str__()
         if self.sudo:

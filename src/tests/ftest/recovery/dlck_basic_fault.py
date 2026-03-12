@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -37,7 +37,10 @@ class DlckBasicFaultTest(TestWithServers):
         if self.server_managers[0].manager.job.using_control_metadata:
             log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
             control_metadata_dir = os.path.join(log_dir, "control_metadata")
-            nvme_conf=os.path.join(control_metadata_dir, "daos_nvme.conf")
+            engine_path_dir = os.path.join(control_metadata_dir, "engine0")
+            nvme_conf=os.path.join(engine_path_dir, "daos_nvme.conf")
+            self.log.info(f"directory: {os.listdir(control_metadata_dir)}")
+            self.log.info(f"directory: {os.listdir(engine_path_dir)}")
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
         if fault_inject_file == "None set for now":
             self.fail("D_FI_CONFIG environment variable not set, cannot run fault injection test")
@@ -59,11 +62,11 @@ class DlckBasicFaultTest(TestWithServers):
             errors.append(f"dlck failed on {result.failed_hosts}")
         self.log.info("dlck basic test output:\n%s", result)
         # Now, run the other fault injection flags without rebooting or creating any new pools.
-        # Rebooting the servers or creating the new pools will result in injectung fault in
+        # Rebooting the servers or creating the new pools will result in injecting fault in
         # the wrong test code. Fault injections should done only for the dlck alone.
         for test_fault in fault_list:
             with open(fault_inject_file, 'w') as f:
-                f.write(f"fault_config:\n")
+                f.write("fault_config:\n")
                 count = 0
                 for key, value in faults_dict[test_fault].items():
                     if count == 0:
@@ -71,12 +74,10 @@ class DlckBasicFaultTest(TestWithServers):
                     else:
                         f.write(f"  {key}: \'{value}\'\n")  
                     count += 1           
-            f.close()
             self.log.info("Reading the updated fault injection file contents")
             with open(fault_inject_file, 'r') as f:
                 file_data = f.read()
                 self.log.info("\n%s", file_data)
-            f.close()
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
             if self.server_managers[0].manager.job.using_control_metadata:
@@ -88,7 +89,7 @@ class DlckBasicFaultTest(TestWithServers):
             result = dlck_cmd.run()
             if not result.passed:
                 errors.append(f"dlck failed on {result.failed_hosts}")
-            self.log.info("dlck basic test output:\n%s", result)
+            self.log.info(f"dlck basic test output: {result}")
         dmg.system_start()
         if not errors:
             self.fail("No Errors detected:\n{}".format("\n".join(errors)))
