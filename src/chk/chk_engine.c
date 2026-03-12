@@ -1886,7 +1886,9 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 		if (likely(ccr->ccr_tgt_nr >= exp_tgt_nr))
 			continue;
 
-		chk_engine_handle_unknown(cpr, ccr, NULL, exp_tgt_nr);
+		rc = chk_engine_handle_unknown(cpr, ccr, NULL, exp_tgt_nr);
+		if (rc != 0)
+			goto out;
 	}
 
 out:
