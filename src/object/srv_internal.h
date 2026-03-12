@@ -98,6 +98,11 @@ struct migrate_pool_tls {
 
 	/* migration init error */
 	int			mpt_init_err;
+
+	/* Watchdog: track progress to detect complete rebuild hang */
+	uint64_t                mpt_last_progress_obj_count; /* obj_count at last check */
+	uint64_t                mpt_last_progress_rec_count; /* rec_count at last check */
+	uint64_t                mpt_last_progress_ts;        /* time of last observed progress */
 };
 
 struct migrate_cont_hdl {
