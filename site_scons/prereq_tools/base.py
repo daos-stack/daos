@@ -1,6 +1,6 @@
 # Copyright 2016-2024 Intel Corporation
 # Copyright 2025 Google LLC
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -513,7 +513,7 @@ class PreReqComponent():
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
                               ['default', 'dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('COMPILER', "Set the compiler family to use", 'gcc',
-                              ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
+                              ['gcc', 'covc', 'clang'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with google sanitizers', None))
@@ -653,10 +653,7 @@ class PreReqComponent():
         compiler = self.__env.get('COMPILER')
 
         if self.__env.get('WARNING_LEVEL') == 'error':
-            if compiler == 'icc' and not self._has_icx:
-                warning_flag = '-Werror-all'
-            else:
-                warning_flag = '-Werror'
+            warning_flag = '-Werror'
             self.__env.AppendUnique(CCFLAGS=warning_flag)
 
         env = self.__env.Clone()

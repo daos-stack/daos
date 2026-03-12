@@ -129,11 +129,7 @@ def _base_setup(env):
 
 def _check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
-    if compiler in ["icc", "icpc"]:
-        flags = ["-diag-error=10006", "-diag-error=10148", "-Werror-all", flag]
-        # bug in older scons, need CFLAGS to exist, -O2 is default.
-        context.env.Replace(CFLAGS=['-O2'])
-    elif compiler in ["gcc", "g++"]:
+    if compiler in ["gcc", "g++"]:
         # pylint: disable=wrong-spelling-in-comment
         # remove -no- for test
         # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-

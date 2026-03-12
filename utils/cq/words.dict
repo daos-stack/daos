@@ -221,7 +221,6 @@ hugepage
 hugepages
 hwloc
 ib
-icc
 icx
 idx
 iface
