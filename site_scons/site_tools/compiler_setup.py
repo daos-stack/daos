@@ -114,12 +114,6 @@ def _base_setup(env):
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
-    if compiler == 'icx' and not GetOption('no_rpath'):
-        # Hack to add rpaths
-        for path in env['ENV']['LD_LIBRARY_PATH'].split(':'):
-            if 'oneapi' in path:
-                env.AppendUnique(RPATH_FULL=[path])
-
     if GetOption('preprocess'):
         # Could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)

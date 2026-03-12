@@ -470,7 +470,6 @@ class PreReqComponent():
         self.__env = env
         self.__dry_run = GetOption('no_exec')
         self.__require_optional = GetOption('require_optional')
-        self._has_icx = False
         self.download_deps = False
         self.fetch_only = False
         self.build_deps = False
