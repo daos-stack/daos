@@ -70,16 +70,6 @@ enum {
  */
 #define MIGR_TGT_INF_DATA  (320 << 20)
 
-/* Threshold for very large transfers.
- * This may exceed the MIGR_TGT_INF_DATA limit to prevent starvation.
- * Only one such transfer is allowed at a time.
- */
-#define MIGR_INF_DATA_HULK (1 << 28)
-
-/* Low water mark for DMA buffer usage, hulk transfer is allowed in this case.
- */
-#define MIGR_INF_DATA_LWM  (1 << 28)
-
 struct migr_res_manager;
 
 /* resource consumed by migration */
@@ -114,10 +104,6 @@ struct migr_resource {
 			unsigned long mem_revived;
 			/* number of waiting ULTs */
 			unsigned long mem_waiting;
-			/* allows exactly one ULT to use unbounded buffer for super large
-			 * value (rare).
-			 */
-			int           mem_hulk;
 		} res_data;
 		/* may add other members for MIGR_OBJ and MIGR_KEY */
 	};
@@ -267,6 +253,10 @@ struct iter_obj_arg {
 	uint32_t		generation;
 };
 
+static int
+migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid, daos_unit_oid_t oid,
+		       daos_epoch_t epoch, daos_epoch_t punched_epoch, unsigned int shard,
+		       unsigned int tgt_idx);
 void
 migrate_pool_tls_put(struct migrate_pool_tls *tls);
 
@@ -1991,12 +1981,6 @@ migr_res_is_private(struct migr_resource *res)
 	return res->res_rmg->rmg_bkt_type == MIGR_BUCKET_PRIV;
 }
 
-static inline bool
-migr_res_is_hulk(struct migr_resource *res, long units)
-{
-	return res->res_rmg->rmg_res_type == MIGR_DATA && units >= MIGR_INF_DATA_HULK;
-}
-
 static bool
 migr_res_has_starveling(struct migr_resource *res, uint64_t now)
 {
@@ -2096,50 +2080,31 @@ migr_type2res(struct migrate_pool_tls *tls, int res_type)
 }
 
 static int
-migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *yielded)
+migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units)
 {
 	struct migr_resource  *res;
 	struct migr_res_waiter waiter;
 	uint64_t               now;
-	bool                   is_hulk;
-	bool                   locked = false;
 	bool                   waited = false;
 	int                    rc     = 0;
 
-	res = migr_type2res(tls, res_type);
-	if (!migr_res_is_private(res)) {
-		ABT_mutex_lock(res->res_mutex);
-		locked = true;
-	}
 	waiter.rw_tls        = tls;
 	waiter.rw_units      = units;
 	waiter.rw_wait_since = 0;
 
-	is_hulk = migr_res_is_hulk(res, units);
+	res = migr_type2res(tls, res_type);
+	ABT_mutex_lock(res->res_mutex);
 	while (1) {
 		if (tls->mpt_fini) {
 			rc = migrate_pool_tls_get_status(tls);
-			if (!migr_res_is_private(res))
-				ABT_mutex_unlock(res->res_mutex);
 			D_GOTO(out, rc);
 		}
 
 		now = daos_gettime_coarse();
-		if (is_hulk && res->res_data.mem_hulk == 0 && res->res_used < MIGR_INF_DATA_LWM) {
-			/* skip the limit check and allow (only) one hulk transfer at a time */
-			res->res_used += units;
-			res->res_data.mem_hulk = 1;
-			break;
-
-		} else if (!is_hulk && (waited || !migr_res_has_starveling(res, now)) &&
-			   res->res_used + units <= res->res_limit) {
+		if ((waited || !migr_res_has_starveling(res, now)) &&
+		    (res->res_used + units <= res->res_limit)) {
 			res->res_used += units;
 			break;
-		}
-
-		if (migr_res_is_private(res)) {
-			ABT_mutex_lock(res->res_mutex);
-			locked = true;
 		}
 
 		res->res_waiters++;
@@ -2152,8 +2117,6 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 		ABT_cond_wait(res->res_cond, res->res_mutex);
 
 		D_ASSERT(d_list_empty(&waiter.rw_link));
-		if (migr_res_is_private(res))
-			ABT_mutex_unlock(res->res_mutex);
 	}
 	res->res_holders++;
 
@@ -2173,11 +2136,8 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units, bool *y
 		res->res_waiters, res->res_holders, !!waiter.rw_wait_since ? "yes" : "no",
 		tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt, tls->mpt_inflight_size);
 
-	if (!migr_res_is_private(res))
-		ABT_mutex_unlock(res->res_mutex);
 out:
-	if (yielded && !*yielded)
-		*yielded = locked;
+	ABT_mutex_unlock(res->res_mutex);
 	return rc;
 }
 
@@ -2187,8 +2147,7 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 	struct migr_resource *res;
 
 	res = migr_type2res(tls, res_type);
-	if (!migr_res_is_private(res))
-		ABT_mutex_lock(res->res_mutex);
+	ABT_mutex_lock(res->res_mutex);
 
 	if (res_type == MIGR_OBJ) {
 		D_ASSERT(tls->mpt_tgt_obj_ult_cnt > 0);
@@ -2206,16 +2165,10 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 	D_ASSERT(res->res_holders > 0);
 	res->res_holders--;
 
-	if (migr_res_is_hulk(res, units)) {
-		D_ASSERT(res->res_data.mem_hulk == 1);
-		res->res_data.mem_hulk = 0;
-	}
-
 	if (res->res_waiters > 0 && res->res_limit > res->res_used)
 		migrate_res_wakeup(res, res->res_limit - res->res_used);
 
-	if (!migr_res_is_private(res))
-		ABT_mutex_unlock(res->res_mutex);
+	ABT_mutex_unlock(res->res_mutex);
 }
 
 static void
@@ -2244,7 +2197,7 @@ migrate_one_ult(void *arg)
 
 	D_ASSERT(data_size != (daos_size_t)-1);
 
-	rc = migrate_res_hold(tls, MIGR_DATA, data_size * ioa->ioa_fanout, NULL);
+	rc = migrate_res_hold(tls, MIGR_DATA, data_size * ioa->ioa_fanout);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3067,7 +3020,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 			continue;
 		}
 
-		rc = migrate_res_hold(tls, MIGR_KEY, arg->ioa_fanout, NULL);
+		rc = migrate_res_hold(tls, MIGR_KEY, arg->ioa_fanout);
 		if (rc)
 			break;
 		d_list_del_init(&mrone->mo_list);
@@ -3381,8 +3334,11 @@ migrate_fini_one_ult(void *data)
 		 * NB: if TLS is gone, it means there is no waiters of this pool.
 		 */
 		if (tls != NULL && rmg->rmg_bkt_type == MIGR_BUCKET_PRIV) {
-			/* locking is not required by private resource */
-			migrate_res_wakeup(&rmg->rmg_res_buckets[dmi->dmi_tgt_id], -1ULL);
+			res = &rmg->rmg_res_buckets[dmi->dmi_tgt_id];
+
+			ABT_mutex_lock(res->res_mutex);
+			migrate_res_wakeup(res, -1ULL);
+			ABT_mutex_unlock(res->res_mutex);
 
 		} else if (last_one) { /* shared resource */
 			/* on behalf of all target xstreams, wakeup ULTs for shared resources. */
@@ -3600,7 +3556,7 @@ struct migrate_obj_val {
 /* This is still running on the main migration ULT */
 static int
 migrate_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_eph, unsigned int shard,
-	       unsigned int tgt_idx, struct iter_cont_arg *cont_arg, bool *yielded)
+	       unsigned int tgt_idx, struct iter_cont_arg *cont_arg)
 {
 	struct iter_obj_arg	*obj_arg;
 	struct migrate_pool_tls *tls = cont_arg->pool_tls;
@@ -3652,8 +3608,7 @@ migrate_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_eph, 
 	else
 		obj_arg->ioa_fanout = 1;
 
-	*yielded = false;
-	rc       = migrate_res_hold(cont_arg->pool_tls, MIGR_OBJ, obj_arg->ioa_fanout, yielded);
+	rc = migrate_res_hold(cont_arg->pool_tls, MIGR_OBJ, obj_arg->ioa_fanout);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID " enter migrate failed.", DP_UUID(cont_arg->cont_uuid));
 		goto free;
@@ -3688,14 +3643,12 @@ static int
 migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *data)
 {
 	struct iter_cont_arg		*arg = data;
-	daos_unit_oid_t			*oid = key_iov->iov_buf;
+	daos_unit_oid_t                  oid           = *(daos_unit_oid_t *)key_iov->iov_buf;
 	struct migrate_obj_val		*obj_val = val_iov->iov_buf;
 	daos_epoch_t			epoch = obj_val->epoch;
 	daos_epoch_t			punched_epoch = obj_val->punched_epoch;
 	unsigned int			tgt_idx = obj_val->tgt_idx;
-	unsigned int			shard = obj_val->shard;
-	d_iov_t				tmp_iov;
-	bool				yielded = false;
+	unsigned int                     shard         = obj_val->shard;
 	int				rc;
 
 	if (arg->pool_tls->mpt_fini)
@@ -3703,30 +3656,26 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 
 	D_DEBUG(DB_REBUILD,
 		DF_RB ": obj migrate " DF_UUID "/" DF_UOID " %" PRIx64 " eph " DF_U64 " start\n",
-		DP_RB_MPT(arg->pool_tls), DP_UUID(arg->cont_uuid), DP_UOID(*oid), ih.cookie, epoch);
-
-	rc = migrate_object(*oid, epoch, punched_epoch, shard, tgt_idx, arg, &yielded);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_RB ": obj " DF_UOID " migration failed", DP_RB_MPT(arg->pool_tls),
-			 DP_UOID(*oid));
-		return rc;
-	}
-
-	/* migrate_res_hold possibly yielded the ULT, let's re-probe before delete  */
-	if (yielded) {
-		d_iov_set(&tmp_iov, oid, sizeof(*oid));
-		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, &tmp_iov, NULL);
-		if (rc) {
-			D_ASSERT(rc != -DER_NONEXIST);
-			DL_ERROR(rc, DF_RB ": obj " DF_UOID " probe failed",
-				 DP_RB_MPT(arg->pool_tls), DP_UOID(*oid));
-			return rc;
-		}
-	}
+		DP_RB_MPT(arg->pool_tls), DP_UUID(arg->cont_uuid), DP_UOID(oid), ih.cookie, epoch);
 
 	rc = dbtree_iter_delete(ih, NULL);
 	if (rc) {
 		DL_ERROR(rc, DF_RB ": dbtree_iter_delete failed", DP_RB_MPT(arg->pool_tls));
+		return rc;
+	}
+
+	rc = migrate_object(oid, epoch, punched_epoch, shard, tgt_idx, arg);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_RB ": obj " DF_UOID " migration failed", DP_RB_MPT(arg->pool_tls),
+			 DP_UOID(oid));
+		if (rc != -DER_SHUTDOWN) {
+			/* NB: rebuild failed anyway, it's not even matter to do this for now,
+			 * but it could be necessary if we want to track rebuild progress
+			 * and support resume in the future.
+			 */
+			migrate_try_obj_insert(arg->pool_tls, arg->cont_uuid, oid, epoch,
+					       punched_epoch, shard, tgt_idx);
+		}
 		return rc;
 	}
 
@@ -3735,7 +3684,7 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 		dss_sleep(0);
 	}
 
-	/* re-probe the dbtree after deletion */
+	/* re-probe the dbtree after calling migrate_object, because it may have yielded */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION,
 			       NULL, NULL);
 	if (rc == -DER_NONEXIST)
@@ -3851,8 +3800,11 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 		rc = dbtree_iterate(root->tcr_root_hdl, DAOS_INTENT_MIGRATION,
 				    false, migrate_obj_iter_cb, &arg);
-		if (rc || tls->mpt_fini)
+		if (rc || tls->mpt_fini) {
+			if (tls->mpt_status == 0)
+				tls->mpt_status = rc ?: -DER_SHUTDOWN;
 			break;
+		}
 	}
 
 	D_DEBUG(DB_REBUILD, DF_RB ": iter cont " DF_UUID "/%" PRIx64 " finish.\n", DP_RB_MPT(tls),
@@ -4876,10 +4828,7 @@ obj_migrate_init(void)
 	unsigned key_units = MIGR_KEY_CONCUR_DEF;
 	int      rc;
 
-	D_CASSERT(MIGR_TGT_INF_DATA > MIGR_INF_DATA_LWM);
-	D_CASSERT(MIGR_TGT_INF_DATA > MIGR_INF_DATA_HULK);
 	D_ASSERT(dss_tgt_nr > 0);
-
 	rc = d_getenv_uint(ENV_MIGRATE_OBJ_CONCUR, &obj_units);
 	if (rc == 0) {
 		if (obj_units < MIGR_OBJ_CONCUR_MIN)
