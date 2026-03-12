@@ -734,7 +734,7 @@ bio_media_error(void *msg_arg)
 		dev_state->bio_unmap_errs++;
 		d_tm_inc_counter(bdh->bdh_unmap_errs, 1);
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: "DF_UUID" unmap error logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " unmap error logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_WRITE:
@@ -742,7 +742,7 @@ bio_media_error(void *msg_arg)
 		dev_state->bio_write_errs++;
 		d_tm_inc_counter(bdh->bdh_write_errs, 1);
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: "DF_UUID" write error logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " write error logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_READ:
@@ -750,7 +750,7 @@ bio_media_error(void *msg_arg)
 		dev_state->bio_read_errs++;
 		d_tm_inc_counter(bdh->bdh_read_errs, 1);
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: "DF_UUID" read error logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " read error logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_CSUM:
@@ -758,7 +758,7 @@ bio_media_error(void *msg_arg)
 		dev_state->checksum_errs++;
 		d_tm_inc_counter(bdh->bdh_checksum_errs, 1);
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: "DF_UUID" csum error logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " csum error logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_IO_STALLED:
@@ -767,7 +767,7 @@ bio_media_error(void *msg_arg)
 			goto out;
 		bdh->bdh_io_stalled = 1;
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: " DF_UUID " stalled I/O logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " stalled I/O logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	}
