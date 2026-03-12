@@ -996,14 +996,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true)
-                            args '--tmpfs /mnt/daos_0'
-                        }
+                        label params.CI_NLT_1_LABEL
                     }
                     steps {
                         job_step_update(
