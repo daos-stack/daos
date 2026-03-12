@@ -68,7 +68,7 @@ enum {
 /* Set the total in-flight size to be 1/3 of MAX DMA size for
  * the moment, will adjust it later if needed.
  */
-#define MIGR_TGT_INF_DATA  (320 << 20)
+#define MIGR_TGT_INF_DATA (320 << 20)
 
 struct migr_res_manager;
 
@@ -1964,12 +1964,6 @@ migrate_one_destroy(struct migrate_one *mrone)
 		migrate_pool_tls_put(mrone->mo_tls);
 
 	D_FREE(mrone);
-}
-
-static inline bool
-migr_res_is_private(struct migr_resource *res)
-{
-	return res->res_rmg->rmg_bkt_type == MIGR_BUCKET_PRIV;
 }
 
 static bool
@@ -4164,9 +4158,7 @@ migr_res_snap_str(struct migr_resource *res, uint64_t now, char *buf, size_t buf
 		return 0;
 	}
 
-	if (!migr_res_is_private(res))
-		ABT_mutex_lock(res->res_mutex);
-
+	ABT_mutex_lock(res->res_mutex);
 	used    = res->res_used;
 	limit   = res->res_limit;
 	holders = res->res_holders;
@@ -4184,9 +4176,7 @@ migr_res_snap_str(struct migr_resource *res, uint64_t now, char *buf, size_t buf
 		if (off < 0 || (size_t)off >= bufsz)
 			off = bufsz - 1;
 	}
-
-	if (!migr_res_is_private(res))
-		ABT_mutex_unlock(res->res_mutex);
+	ABT_mutex_unlock(res->res_mutex);
 
 	snprintf(buf + off, bufsz - off, " used/limit=%ld/%ld h=%d w=%d", used, limit, holders,
 		 waiters);
