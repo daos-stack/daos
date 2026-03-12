@@ -56,6 +56,30 @@ dsm_tls_get()
 	return tls;
 }
 
+enum cont_destroyer_task_state {
+	CONT_DESTROYER_PENDING, /* queued, no worker has claimed it yet */
+	CONT_DESTROYER_RUNNING, /* a worker is destroying it */
+	CONT_DESTROYER_DONE,    /* finished, csdt_rc is valid */
+};
+
+/* Tracker for one container destroy operation */
+struct cont_destroyer_task {
+	d_list_t csdt_link;
+	uuid_t   csdt_cont_uuid;
+	int      csdt_state;
+	int      csdt_rc;
+	int      csdt_waiters;
+};
+
+/* Executor for later steps of container destroy operations */
+struct cont_destroyer {
+	d_list_t  csd_tasks; /* cont_destroyer_task */
+	ABT_mutex csd_mutex;
+	ABT_cond  csd_cond;
+	int       csd_workers;
+	bool      csd_stop;
+};
+
 extern bool ec_agg_disabled;
 
 struct rank_eph {
@@ -99,6 +123,7 @@ struct cont_svc {
 	rdb_path_t		cs_conts;	/* container KVS */
 	rdb_path_t              cs_hdls;        /* container handle KVS */
 	struct ds_pool	       *cs_pool;
+	struct cont_destroyer   cs_destroyer;
 
 	/* Manage the EC aggregation epoch and stable epoch */
 	struct sched_request   *cs_cont_ephs_leader_req;
@@ -209,9 +234,6 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 			   struct cont_svc **svcp, struct rsvc_hint *hint);
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
-int
-     cont_lookup_active(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
-			struct cont **cont);
 void cont_put(struct cont *cont);
 void cont_svc_put_leader(struct cont_svc *svc);
 int
