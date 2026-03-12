@@ -59,7 +59,7 @@ Map nlt_test() {
         print 'Unstash failed, results from NLT stage will not be included'
     }
     sh label: 'Fault injection testing using NLT',
-       script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
+       script: './ci/docker_nlt.sh --class-name fault-injection fi'
     List filesList = []
     filesList.addAll(findFiles(glob: '*.memcheck.xml'))
     int vgfail = 0
@@ -471,13 +471,13 @@ def scriptedSummaryStage(Map kwargs = [:]) {
 
 // Determine if the Build with Bullseye was run and successful
 Boolean builtWithBullseye() {
-    Map status = job_status_internal['Build on EL 8.8 with Bullseye'] ?: [:]
-    println("[DEBUG] builtWithBullseye: status=${status}, status.result=${status.result}")
+    Map status = job_status_internal['Build_on_EL_9_with_Bullseye'] ?: [:]
+    println("builtWithBullseye: status=${status}, status.result=${status.result}")
     return status.result == 'SUCCESS'
 }
 
 // Get the inst_rpms argument for the unitTest method
-String unitTestInstRpms(String distro='el8') {
+String unitTestInstRpms(String distro='el9') {
     if (builtWithBullseye()) {
         return getScriptOutput("ci/unit/required_packages.sh ${distro} true")
     }
@@ -594,51 +594,49 @@ pipeline {
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
-                     description: 'Run the Unit Test on EL 8 test stage')
+                     description: 'Run the Unit Test test stage')
         booleanParam(name: 'CI_UNIT_TEST_BDEV',
                      defaultValue: true,
-                     description: 'Run the Unit Test bdev on EL 8 test stage')
+                     description: 'Run the Unit Test bdev test stage')
         booleanParam(name: 'CI_NLT_TEST',
                      defaultValue: true,
                      description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
-                     description: 'Run the Unit Test with memcheck on EL 8 test stage')
+                     description: 'Run the Unit Test with memcheck test stage')
         booleanParam(name: 'CI_NLT_BULLSEYE',
                      defaultValue: true,
                      description: 'Run the NLT test with Bullseye code coverage test stage')
-        booleanParam(name: 'CI_FI_el8_TEST',
+        booleanParam(name: 'CI_FI_TEST',
                      defaultValue: true,
-                     description: 'Run the Fault injection testing on EL 8 test stage')
-        booleanParam(name: 'CI_TEST_EL8_RPMs',
+                     description: 'Run the Fault injection testing test stage')
+        booleanParam(name: 'CI_TEST_EL_RPMs',
                      defaultValue: true,
-                     description: 'Run the Test RPMs on EL 8 test stage')
-        booleanParam(name: 'CI_TEST_LEAP15_RPMs',
+                     description: 'Run the Test RPMs on EL test stage')
+        booleanParam(name: 'CI_TEST_LEAP_RPMs',
                      defaultValue: true,
-                     description: 'Run the Test RPMs on Leap 15 test stage')
+                     description: 'Run the Test RPMs on Leap test stage')
         booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
                      defaultValue: false,
                      description: 'Skip all functional test stages (Test)')
-        booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
-                     defaultValue: false,
-                     description: 'Enable more distros for functional CI tests')
+        // booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
+        //              defaultValue: false,
+        //              description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
                      defaultValue: false,
                      description: 'Run the Functional on EL 8 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: false,
-                     description: 'Run the Functional on Leap 15 test stage' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+                     description: 'Run the Functional on Leap 15 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
-                     description: 'Run the Functional on Ubuntu 20.04 test stage' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+                     description: 'Run the Functional on Ubuntu 20.04 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_TEST_SKIP',
                      defaultValue: false,
                      description: 'Skip Functional Hardware (Test Hardware) stage')
@@ -814,8 +812,8 @@ pipeline {
             steps {
                 script {
                     parallel(
-                        'Build on EL 8.8': scriptedBuildStage(
-                            name: 'Build on EL 8.8',
+                        'Build on EL 8': scriptedBuildStage(
+                            name: 'Build on EL 8',
                             distro:'el8',
                             compiler: 'gcc',
                             runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
@@ -827,6 +825,7 @@ pipeline {
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                                             ' --build-arg POINT_RELEASE=.10 ' +
                                              ' -f utils/docker/Dockerfile.el.8 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -837,8 +836,8 @@ pipeline {
                             ],
                             artifacts: "config.log-el8-gcc"
                         ),
-                        'Build on EL 9.6': scriptedBuildStage(
-                            name: 'Build on EL 9.6',
+                        'Build on EL 9': scriptedBuildStage(
+                            name: 'Build on EL 9',
                             distro:'el9',
                             compiler: 'gcc',
                             runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
@@ -850,7 +849,7 @@ pipeline {
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el9') + '"' +
-                                             ' --build-arg POINT_RELEASE=.6' +
+                                             ' --build-arg POINT_RELEASE=.7' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -861,8 +860,8 @@ pipeline {
                             ],
                             artifacts: "config.log-el9-gcc"
                         ),
-                        'Build on Leap 15.5': scriptedBuildStage(
-                            name: 'Build on Leap 15.5',
+                        'Build on Leap 15': scriptedBuildStage(
+                            name: 'Build on Leap 15',
                             distro:'leap15',
                             rpmDistro: 'suse.lp155',
                             compiler: 'gcc',
@@ -883,8 +882,8 @@ pipeline {
                             ],
                             artifacts: "config.log-leap15-gcc"
                         ),
-                        'Build on Leap 15.5 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
-                            name: 'Build on Leap 15.5 with Intel-C and TARGET_PREFIX',
+                        'Build on Leap 15 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
+                            name: 'Build on Leap 15 with Intel-C and TARGET_PREFIX',
                             distro:'leap15',
                             compiler: 'icc',
                             runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
@@ -905,9 +904,9 @@ pipeline {
                             ],
                             artifacts: "config.log-leap15-intelc"
                         ),
-                        'Build on EL 8.8 with Bullseye': scriptedBuildStage(
-                            name: 'Build on EL 8.8 with Bullseye',
-                            distro:'el8',
+                        'Build on EL 9 with Bullseye': scriptedBuildStage(
+                            name: 'Build on EL 9 with Bullseye',
+                            distro:'el9',
                             compiler: 'covc',
                             buildRpms: true,
                             release: "${env.DAOS_RELVAL}.bullseye",
@@ -916,10 +915,11 @@ pipeline {
                                                              parallel_build: true) +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                                             ' --build-arg REPOS="' + prRepos('el9') + '"' +
+                                             ' --build-arg POINT_RELEASE=.7' +
                                              ' --build-arg COMPILER=covc' +
                                              ' --build-arg CODE_COVERAGE=true' +
-                                             ' -f utils/docker/Dockerfile.el.8 .',
+                                             ' -f utils/docker/Dockerfile.el.9 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
@@ -928,8 +928,8 @@ pipeline {
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release' +
                                             ' COMPILER=covc'
                             ],
-                            artifacts: "config.log-el8-covc",
-                            uploadTarget: 'el8'
+                            artifacts: "config.log-el9-covc",
+                            uploadTarget: 'el9'
                         )
                     ) // parallel
                 } // script
@@ -941,7 +941,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8.8') {
+                stage('Unit Test') {
                     when {
                         beforeAgent true
                         expression {
@@ -961,7 +961,8 @@ pipeline {
                             unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitTestInstRpms(),
+                                     inst_rpms: unitTestInstRpms('el9'),
+                                     image_version: 'el9.7',
                                      compiler: unitTestCompiler(),
                                      coverage_stash: 'unit_test_bullseye'))
                     }
@@ -972,8 +973,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test on EL 8.8')
-                stage('Unit Test bdev on EL 8.8') {
+                } // stage('Unit Test')
+                stage('Unit Test bdev') {
                     when {
                         beforeAgent true
                         expression {
@@ -993,7 +994,8 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitTestInstRpms(),
+                                     inst_rpms: unitTestInstRpms('el9'),
+                                     image_version: 'el9.7',
                                      compiler: unitTestCompiler(),
                                      coverage_stash: 'unit_test_bdev_bullseye'))
                     }
@@ -1004,8 +1006,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test bdev on EL 8.8')
-                stage('NLT on EL 8.8') {
+                } // stage('Unit Test bdev')
+                stage('NLT') {
                     when {
                         beforeAgent true
                         expression {
@@ -1019,7 +1021,8 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el9'),
+                                     image_version: 'el9.7',
                                      compiler: 'gcc',
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
@@ -1035,7 +1038,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
+                                         valgrind_stash: 'nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -1048,8 +1051,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('NLT on EL 8.8')
-                stage('NLT with Bullseye on EL 8.8') {
+                } // stage('NLT')
+                stage('NLT with Bullseye') {
                     when {
                         beforeAgent true
                         expression {
@@ -1069,7 +1072,8 @@ pipeline {
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
                                      inst_rpms: getScriptOutput(
-                                        'ci/unit/required_packages.sh el8 true'),
+                                        'ci/unit/required_packages.sh el9 true'),
+                                     image_version: 'el9.7',
                                      compiler: 'covc',
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_tests: false,
@@ -1087,8 +1091,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('NLT with Bullseye on EL 8.8')
-                stage('Unit Test with memcheck on EL 8.8') {
+                } // stage('NLT with Bullseye')
+                stage('Unit Test with memcheck') {
                     when {
                         beforeAgent true
                         expression {
@@ -1103,19 +1107,20 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el9'),
+                                     image_version: 'el9.7',
                                      compiler: 'gcc'))
                     }
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck'
+                                         valgrind_stash: 'unit-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8.8')
-                stage('Unit Test bdev with memcheck on EL 8.8') {
+                } // stage('Unit Test with memcheck')
+                stage('Unit Test bdev with memcheck') {
                     when {
                         beforeAgent true
                         expression {
@@ -1130,18 +1135,19 @@ pipeline {
                                      unstash_opt: true,
                                      ignore_failure: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el8'),
+                                     inst_rpms: getScriptOutput('ci/unit/required_packages.sh el9'),
+                                     image_version: 'el9.7',
                                      compiler: 'gcc'))
                     }
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
                                                      'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+                                         valgrind_stash: 'unit-bdev-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test bdev with memcheck on EL 8')
+                } // stage('Unit Test bdev with memcheck')
             }
         } // stage('Unit Tests')
         stage('Test') {
@@ -1176,10 +1182,11 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8.8 with Valgrind')
-                stage('Functional on EL 8.8') {
+                stage('Functional on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression {
+                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -1188,11 +1195,9 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(
-                                    false,
-                                    paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                inst_rpms: getFunctionalPackages(false, false),
                                 test_function: 'runTestFunctionalV2',
-                                coverage_stash: 'func_vm_bullseye'))
+                                image_version: 'el8.10'))
                     }
                     post {
                         always {
@@ -1200,12 +1205,11 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8.8')
+                } // stage('Functional on EL 8')
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression {
-                            !skipStage() && !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
+                        expression { !skipStage() }
                     }
                     agent {
                         label vm9_label('EL9')
@@ -1214,8 +1218,11 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(false, false),
-                                test_function: 'runTestFunctionalV2'))
+                                inst_rpms: getFunctionalPackages(
+                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'el9.7',
+                                coverage_stash: 'func_vm_bullseye'))
                     }
                     post {
                         always {
@@ -1224,7 +1231,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.6') {
+                stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
                         expression {
@@ -1247,7 +1254,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.6')
+                } // stage('Functional on Leap 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1271,7 +1278,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8.8') {
+                stage('Fault injection testing') {
                     when {
                         beforeAgent true
                         expression {
@@ -1279,11 +1286,12 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
+                            filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true)
+                                                                deps_build: true) +
+                                                ' --build-arg POINT_RELEASE=.7 '
                             args '--tmpfs /mnt/daos_0'
                         }
                     }
@@ -1322,17 +1330,17 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                            archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
                         }
                     }
                 } // stage('Fault injection testing on EL 8.8')
-                stage('Test RPMs on EL 8.6') {
+                stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
                         expression {
-                            params.CI_TEST_EL8_RPMs && !skipStage() &&
+                            params.CI_TEST_EL_RPMs && !skipStage() &&
                             !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
@@ -1350,12 +1358,12 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on EL 8.6')
+                } // stage('Test RPMs on EL 9.6')
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression {
-                            params.CI_TEST_LEAP15_RPMs && !skipStage() &&
+                            params.CI_TEST_LEAP_RPMs && !skipStage() &&
                             !paramsValue('CI_FULL_BULLSEYE_REPORT', false) }
                     }
                     agent {
@@ -1616,8 +1624,8 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
-                                                     'el8-gcc-unit-memcheck',
+            valgrindReportPublish valgrind_stashes: ['nlt-memcheck',
+                                                     'unit-memcheck',
                                                      'fault-inject-valgrind']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
