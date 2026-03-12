@@ -17,6 +17,7 @@ DESCRIPTION="Intelligent Storage Acceleration Library.
 Provides various algorithms for erasure coding, crc, raid, compression and
 decompression"
 URL="https://github.com/intel/isa-l"
+RPM_CHANGELOG="isa-l.changelog"
 
 files=()
 TARGET_PATH="${bindir}"

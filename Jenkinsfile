@@ -5,7 +5,7 @@
 /* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
 /* Copyright 2025 Google LLC
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -152,9 +152,12 @@ String vm9_label(String distro) {
 }
 
 void rpm_test_post(String stageName, String node) {
+    // Extract first node from comma-delimited list
+    String firstNode = node.split(',')[0].trim()
     sh label: 'Fetch and stage artifacts',
-       script: 'hostname; ssh -i ci_key jenkins@' + node + ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
-               'scp -i ci_key jenkins@' + node +
+       script: 'hostname; ssh -i ci_key jenkins@' + firstNode +
+               ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
+               'scp -i ci_key jenkins@' + firstNode +
                ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
                stageName + '/"'
     archiveArtifacts artifacts: env.STAGE_NAME + '/**'
@@ -197,14 +200,18 @@ Boolean skip_build_stage(String distro='', String compiler='gcc') {
         }
     }
 
-    // Skip the stage if any Skip-build-<distro>-<compiler> pragmas are true
-    String pragma_names = ['build']
+    // Skip the stage if any Skip-build[-<distro>-<compiler>] pragmas are true
+    List<String> pragma_names = ['build']
     if (distro && compiler) {
         pragma_names << "build-${distro}-${compiler}"
     }
-    Boolean any_pragma_skip = pragma_names.any { name -> skip_pragma_set(name) }
+    Boolean any_pragma_skip = pragma_names.any { name ->
+        if (skip_pragma_set(name)) {
+            println("[${env.STAGE_NAME}] Skipping build stage due to \"Skip-${name}: true\" pragma")
+            return true
+        }
+    }
     if (any_pragma_skip) {
-        println("[${env.STAGE_NAME}] Skipping build stage for due to Skip-[${pragma_names}] pragma")
         return true
     }
 
@@ -574,7 +581,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9') {
+                stage('Build on EL 9.6') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -589,7 +596,8 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=.6 '
                         }
                     }
                     steps {
@@ -640,7 +648,8 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                " -t ${sanitized_JOB_NAME()}-leap15" +
+                                                ' --build-arg POINT_RELEASE=.5 '
                         }
                     }
                     steps {
@@ -833,13 +842,14 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label vm9_label('EL8')
                     }
                     steps {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -861,8 +871,9 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -883,8 +894,9 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2'))
                     }
                     post {
                         always {
@@ -905,7 +917,8 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -928,7 +941,8 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1005,7 +1019,8 @@ pipeline {
                     steps {
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()))
+                                    daos_pkg_version: daosPackagesVersion(next_version()),
+                                    inst_rpms: 'mercury-libfabric')
                         )
                     }
                     post {
@@ -1057,7 +1072,8 @@ pipeline {
                     } */
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()))
+                                    daos_pkg_version: daosPackagesVersion(next_version()),
+                                    inst_rpms: 'mercury-libfabric')
                         )
                     }
                     post {
@@ -1144,7 +1160,8 @@ pipeline {
                             provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
@@ -1157,7 +1174,8 @@ pipeline {
                             provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',

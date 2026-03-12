@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1406,7 +1406,7 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 }
 
 static void
-test_drpc_pool_query_success(void **state)
+test_drpc_pool_query_rebuild_idle_success(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
@@ -1443,7 +1443,31 @@ test_drpc_pool_query_success(void **state)
 }
 
 static void
-test_drpc_pool_query_success_rebuild_busy(void **state)
+test_drpc_pool_query_rebuild_done_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	daos_pool_info_t	exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	init_test_rebuild_status(&exp_info.pi_rebuild_st);
+	exp_info.pi_rebuild_st.rs_version = 1;
+	exp_info.pi_rebuild_st.rs_state   = DRS_COMPLETED;
+	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__DONE, &resp);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_rebuild_busy_success(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
@@ -1459,42 +1483,76 @@ test_drpc_pool_query_success_rebuild_busy(void **state)
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info,
-				    MGMT__POOL_REBUILD_STATUS__STATE__BUSY,
-				    &resp);
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
 
 static void
-test_drpc_pool_query_success_rebuild_done(void **state)
+test_drpc_pool_query_rebuild_idle_err(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	daos_pool_info_t	exp_info = {0};
+	Drpc__Call       call     = DRPC__CALL__INIT;
+	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
+	daos_pool_info_t exp_info = {0};
 
 	init_test_pool_info(&exp_info);
-	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	exp_info.pi_rebuild_st.rs_version = 1;
-	exp_info.pi_rebuild_st.rs_state = DRS_COMPLETED;
-	ds_mgmt_pool_query_info_out = exp_info;
+	exp_info.pi_rebuild_st.rs_errno   = -DER_MISC;
+	exp_info.pi_rebuild_st.rs_state   = DRS_NOT_STARTED;
+
+	ds_mgmt_pool_query_info_out  = exp_info;
 	ds_mgmt_pool_query_mem_bytes = 11;
+	/*
+	 * rebuild results returned to us shouldn't include the number of
+	 * objects/records if there's an error.
+	 */
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_obj_nr = 42;
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_rec_nr = 999;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info,
-				    MGMT__POOL_REBUILD_STATUS__STATE__DONE,
-				    &resp);
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__IDLE, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
 
 static void
-test_drpc_pool_query_success_rebuild_err(void **state)
+test_drpc_pool_query_rebuild_done_err(void **state)
+{
+	Drpc__Call       call     = DRPC__CALL__INIT;
+	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
+	daos_pool_info_t exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	exp_info.pi_rebuild_st.rs_version = 1;
+	exp_info.pi_rebuild_st.rs_errno   = -DER_MISC;
+	exp_info.pi_rebuild_st.rs_state   = DRS_COMPLETED;
+
+	ds_mgmt_pool_query_info_out  = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
+	/*
+	 * rebuild results returned to us shouldn't include the number of
+	 * objects/records if there's an error.
+	 */
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_obj_nr = 42;
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_rec_nr = 999;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__DONE, &resp);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_rebuild_busy_err(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
@@ -1503,6 +1561,7 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 	init_test_pool_info(&exp_info);
 	exp_info.pi_rebuild_st.rs_version = 1;
 	exp_info.pi_rebuild_st.rs_errno = -DER_MISC;
+	exp_info.pi_rebuild_st.rs_state   = DRS_IN_PROGRESS;
 
 	ds_mgmt_pool_query_info_out = exp_info;
 	ds_mgmt_pool_query_mem_bytes = 11;
@@ -1517,9 +1576,7 @@ test_drpc_pool_query_success_rebuild_err(void **state)
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info,
-				    MGMT__POOL_REBUILD_STATUS__STATE__IDLE,
-				    &resp);
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -1610,7 +1667,6 @@ expect_drpc_pool_query_targets_resp_with_targets(Drpc__Response *resp,
 	for (i = 0; i < exp_infos_len; i++) {
 		uint32_t	j;
 
-		assert_int_equal(pqt_resp->infos[i]->type, infos[i].ta_type);
 		assert_int_equal(pqt_resp->infos[i]->state, infos[i].ta_state);
 		assert_int_equal(pqt_resp->infos[i]->n_space, DAOS_MEDIA_MAX);
 		assert_int_equal(pqt_resp->infos[i]->mem_file_bytes, mem_file_bytes);
@@ -3411,10 +3467,12 @@ main(void)
 	    REINT_TEST(test_drpc_reint_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
-	    QUERY_TEST(test_drpc_pool_query_success),
-	    QUERY_TEST(test_drpc_pool_query_success_rebuild_busy),
-	    QUERY_TEST(test_drpc_pool_query_success_rebuild_done),
-	    QUERY_TEST(test_drpc_pool_query_success_rebuild_err),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_success),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_done_success),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_success),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_err),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_done_err),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_err),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_bad_uuid),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_mgmt_svc_fails),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_with_targets),

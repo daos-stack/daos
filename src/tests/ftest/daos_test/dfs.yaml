@@ -3,13 +3,14 @@
 hosts:
   test_servers: 4
   test_clients: 4
+
 timeout: 4000
+
 timeouts:
   test_daos_dfs_unit: 2030
   test_daos_dfs_parallel: 2060
   test_daos_dfs_sys: 90
-pool:
-  scm_size: 8G
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -18,8 +19,6 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
@@ -31,8 +30,6 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
@@ -43,12 +40,18 @@ server_config:
           scm_mount: /mnt/daos1
   transport_config:
     allow_insecure: True
+
 agent_config:
   transport_config:
     allow_insecure: True
+
 dmg:
   transport_config:
     allow_insecure: True
+
+pool:
+  scm_size: 8G
+
 daos_tests:
   test_name:
     test_daos_dfs_unit: DAOS_DFS_Unit

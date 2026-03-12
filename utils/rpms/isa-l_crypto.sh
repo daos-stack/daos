@@ -26,6 +26,7 @@ SHA1, SHA256, SHA512, MD5)
 Provides various algorithms for erasure coding, crc, raid, compression and
 decompression"
 URL="https://github.com/intel/isa-l_crypto"
+RPM_CHANGELOG="isa-l_crypto.changelog"
 
 files=()
 TARGET_PATH="${libdir}"

@@ -783,7 +783,7 @@ $ dmg pool get-prop pool1
    Checksum scrubbing frequency (scrub_freq)                                        not set
    Checksum scrubbing threshold (scrub_thresh)                                      not set
    Self-healing policy (self_heal)                                                  exclude
-   Rebuild space ratio (space_rb)                                                   0%
+   Rebuild space ratio (space_rb)                                                   5%
    Pool service replica list (svc_list)                                             [0]
    Pool service redundancy factor (svc_rf)                                          not set
    Upgrade Status (upgrade_status)                                                  not started
@@ -812,7 +812,7 @@ $ dmg pool get-prop pool1
    Checksum scrubbing frequency (scrub_freq)                                        604800
    Checksum scrubbing threshold (scrub_thresh)                                      0
    Self-healing policy (self_heal)                                                  exclude
-   Rebuild space ratio (space_rb)                                                   0%
+   Rebuild space ratio (space_rb)                                                   5%
    Pool service replica list (svc_list)                                             [0]
    Pool service redundancy factor (svc_rf)                                          2
    Upgrade Status (upgrade_status)                                                  in progress
@@ -876,7 +876,7 @@ $ dmg pool get-prop tank
    Checksum scrubbing frequency (scrub_freq)                                        604800
    Checksum scrubbing threshold (scrub_thresh)                                      0
    Self-healing policy (self_heal)                                                  exclude,rebuild
-   Rebuild space ratio (space_rb)                                                   0%
+   Rebuild space ratio (space_rb)                                                   5%
    Pool service replica list (svc_list)                                             [0]
    Pool service redundancy factor (svc_rf)                                          2
    Upgrade Status (upgrade_status)                                                  not started
@@ -918,7 +918,7 @@ $ dmg pool get-prop tank2
    Checksum scrubbing frequency (scrub_freq)                                        604800
    Checksum scrubbing threshold (scrub_thresh)                                      0
    Self-healing policy (self_heal)                                                  exclude,rebuild
-   Rebuild space ratio (space_rb)                                                   0%
+   Rebuild space ratio (space_rb)                                                   5%
    Pool service replica list (svc_list)                                             [0]
    Pool service redundancy factor (svc_rf)                                          2
    Upgrade Status (upgrade_status)                                                  not started
@@ -968,7 +968,7 @@ Two options are supported: "exclude" (default strategy) and "rebuild".
 
 This property defines the percentage of total space reserved on each storage
 engine for self-healing purpose. The reserved space cannot be consumed by
-applications. Valid values are 0% to 100%, the default is 0%.
+applications. Valid values are 0% to 100%, the default is 5%.
 When setting this property, specifying the percentage symbol is optional:
 `space_rb:2%` and `space_rb:2` both specify two percent of storage capacity.
 

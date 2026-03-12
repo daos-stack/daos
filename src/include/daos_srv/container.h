@@ -76,9 +76,11 @@ struct ds_cont_child {
 	ABT_cond		 sc_scrub_cond;
 	ABT_cond		 sc_rebuild_cond;
 	ABT_cond		 sc_fini_cond;
+	ABT_cond                 sc_init_cond;
 	uint32_t                 sc_dtx_resyncing : 1, sc_dtx_reindex : 1, sc_dtx_reindex_abort : 1,
-	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_props_fetched : 1, sc_stopping : 1,
-	    sc_destroying : 1, sc_vos_agg_active : 1, sc_ec_agg_active : 1,
+	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_csummer_inited : 1,
+	    sc_csummer_initing : 1, sc_stopping : 1, sc_destroying : 1, sc_vos_agg_active : 1,
+	    sc_ec_agg_active : 1,
 	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
 	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1,
 	    /* flag of sc_ec_agg_eph_boundary valid */
@@ -150,6 +152,7 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_batched_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
+	int                      sc_ec_agg_updates;
 };
 
 struct agg_param {
@@ -162,6 +165,14 @@ struct agg_param {
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
 				   daos_epoch_range_t *epr, uint32_t flags,
 				   struct agg_param *param);
+
+static inline bool
+ds_cont_child_ec_aggregating(struct ds_cont_child *cont)
+{
+	/* either I'm running aggregation, or someone else is writing to me for aggregation */
+	return cont->sc_ec_agg_updates || cont->sc_ec_agg_active;
+}
+
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param);
@@ -215,6 +226,9 @@ ds_cont_child_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
 
 void
 ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child);
+void
+     ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeout);
+
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
  */

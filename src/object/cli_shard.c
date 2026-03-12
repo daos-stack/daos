@@ -1,6 +1,6 @@
 /*
  *  (C) Copyright 2016-2024 Intel Corporation.
- *  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ *  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -847,7 +847,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * rec2big errors which can be expected.
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
-		    rc == -DER_EXIST || rc == -DER_RF)
+		    rc == -DER_EXIST || rc == -DER_RF || rc == -DER_UPDATE_AGAIN ||
+		    rc == -DER_FETCH_AGAIN)
 			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
@@ -1598,62 +1599,6 @@ struct obj_enum_args {
 	uint32_t		*max_delay;
 };
 
-/**
- * use iod/iod_csum as vehicle to verify data
- */
-static int
-csum_enum_verify_recx(struct daos_csummer *csummer, struct obj_enum_rec *rec,
-		      d_iov_t *enum_type_val, struct dcs_csum_info *csum_info)
-{
-	daos_iod_t		 tmp_iod = {0};
-	d_sg_list_t		 tmp_sgl = {0};
-	struct dcs_iod_csums	 tmp_iod_csum = {0};
-	int			 rc;
-
-	tmp_iod.iod_size = rec->rec_size;
-	tmp_iod.iod_type = DAOS_IOD_ARRAY;
-	tmp_iod.iod_recxs = &rec->rec_recx;
-	tmp_iod.iod_nr = 1;
-
-	tmp_sgl.sg_nr = tmp_sgl.sg_nr_out = 1;
-	tmp_sgl.sg_iovs = enum_type_val;
-
-	tmp_iod_csum.ic_nr = 1;
-	tmp_iod_csum.ic_data = csum_info;
-
-	rc = daos_csummer_verify_iod(csummer, &tmp_iod, &tmp_sgl,
-				     &tmp_iod_csum, NULL, 0, NULL);
-
-	return rc;
-}
-
-/**
- * use iod/iod_csum as vehicle to verify data
- */
-static int
-csum_enum_verify_sv(struct daos_csummer *csummer, struct obj_enum_rec *rec,
-		    d_iov_t *enum_type_val, struct dcs_csum_info *csum_info)
-{
-	daos_iod_t		 tmp_iod = {0};
-	d_sg_list_t		 tmp_sgl = {0};
-	struct dcs_iod_csums	 tmp_iod_csum = {0};
-	int			 rc;
-
-	tmp_iod.iod_size = rec->rec_size;
-	tmp_iod.iod_type = DAOS_IOD_SINGLE;
-	tmp_iod.iod_nr = 1;
-
-	tmp_sgl.sg_nr = tmp_sgl.sg_nr_out = 1;
-	tmp_sgl.sg_iovs = enum_type_val;
-
-	tmp_iod_csum.ic_nr = 1;
-	tmp_iod_csum.ic_data = csum_info;
-	rc = daos_csummer_verify_iod(csummer, &tmp_iod, &tmp_sgl,
-				     &tmp_iod_csum, NULL, 0, NULL);
-
-	return rc;
-}
-
 struct csum_enum_args {
 	d_iov_t			*csum_iov;
 	struct daos_csummer	*csummer;
@@ -1663,7 +1608,7 @@ static int
 verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 {
 	struct dcs_csum_info	 *ci_to_compare = NULL;
-	struct csum_enum_args	*args = arg;
+	struct csum_enum_args    *args          = arg;
 	d_iov_t			 enum_type_val;
 	int rc;
 
@@ -1671,6 +1616,7 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 	case OBJ_ITER_SINGLE:
 	case OBJ_ITER_RECX: {
 		struct obj_enum_rec	*rec;
+		daos_recx_t             *recx;
 		uint64_t		 rec_data_len;
 
 		rec = buf;
@@ -1690,13 +1636,8 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 
 		d_iov_set(&enum_type_val, buf, rec_data_len);
 
-		if (kd->kd_val_type == OBJ_ITER_RECX)
-			rc = csum_enum_verify_recx(args->csummer, rec,
-						   &enum_type_val,
-						   ci_to_compare);
-		else
-			rc = csum_enum_verify_sv(args->csummer, rec,
-						 &enum_type_val,
+		recx = (kd->kd_val_type == OBJ_ITER_RECX) ? &rec->rec_recx : NULL;
+		rc   = daos_csummer_verify_value(args->csummer, recx, rec->rec_size, &enum_type_val,
 						 ci_to_compare);
 		if (rc != 0)
 			return rc;
@@ -1716,9 +1657,7 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 		ci_cast(&ci_to_compare, args->csum_iov);
 		ci_move_next_iov(ci_to_compare, args->csum_iov);
 
-		rc = daos_csummer_verify_key(args->csummer,
-					     &enum_type_val, ci_to_compare);
-
+		rc = daos_csummer_verify_key(args->csummer, &enum_type_val, ci_to_compare);
 		if (rc != 0) {
 			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
 				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);

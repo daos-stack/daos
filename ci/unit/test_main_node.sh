@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -84,13 +84,17 @@ rm -rf "$test_log_dir"
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-# touch venv/pip.conf
-# pip config set global.progress_bar off
-# pip config set global.no_color true
+
+cat <<EOF > venv/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+    quiet = 1
+EOF
 
 pip install --upgrade pip
-pip install --requirement requirements-utest.txt
 
+pip install --requirement requirements-utest.txt
 pip install /opt/daos/lib/daos/python/
 
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \

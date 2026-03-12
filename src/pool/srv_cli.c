@@ -644,7 +644,6 @@ pool_query_target_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	D_DEBUG(DB_MGMT, DF_UUID ": Successfully queried pool rank %u target %u\n",
 		DP_UUID(pool_uuid), arg->pqta_rank, arg->pqta_tgt_idx);
 
-	arg->pqta_info->ta_type  = DAOS_TP_UNKNOWN;
 	arg->pqta_info->ta_state = out->pqio_state;
 	for (i = 0; i < DAOS_MEDIA_MAX; i++) {
 		arg->pqta_info->ta_space.s_total[i] = out->pqio_space.s_total[i];

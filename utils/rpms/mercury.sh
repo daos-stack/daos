@@ -1,5 +1,10 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
+#
+#  (C) Copyright 2025 Google LLC
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
@@ -24,6 +29,7 @@ Access (RMA). Its interface is generic and allows any function
 call to be serialized. Since code generation is done using the C
 preprocessor, no external tool is required."
 URL="http://mercury-hpc.github.io"
+RPM_CHANGELOG="mercury.changelog"
 
 files=()
 TARGET_PATH="${bindir}"
@@ -36,14 +42,17 @@ list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
+ARCH="${isa}"
+build_package "mercury"
+
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ofi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("${libfabric_lib} >= ${libfabric_full}")
-build_package "mercury"
+DEPENDS=("${libfabric_lib} >= ${libfabric_min_version}")
+build_package "mercury-libfabric"
 DEPENDS=()
 
 TARGET_PATH="${libdir}/mercury"
@@ -65,10 +74,10 @@ append_install_list "${files[@]}"
 TARGET_PATH="${libdir/pkgconfig}"
 list_files files "${SL_MERCURY_PREFIX}/lib64/pkgconfig/*.pc"
 replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
-if [ -n "${SL_OFI_PREFIX}" ]; then
+if [ -n "${SL_OFI_PREFIX:-}" ]; then
   replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
 fi
-if [ -n "${SL_UCX_PREFIX}" ]; then
+if [ -n "${SL_UCX_PREFIX:-}" ]; then
   replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
 fi
 append_install_list "${files[@]}"
@@ -76,10 +85,10 @@ append_install_list "${files[@]}"
 TARGET_PATH="${libdir}/cmake/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/cmake/mercury/*"
 replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
-if [ -n "${SL_OFI_PREFIX}" ]; then
+if [ -n "${SL_OFI_PREFIX:-}" ]; then
   replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
 fi
-if [ -n "${SL_UCX_PREFIX}" ]; then
+if [ -n "${SL_UCX_PREFIX:-}" ]; then
   replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
 fi
 append_install_list "${files[@]}"

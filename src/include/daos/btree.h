@@ -543,6 +543,15 @@ int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
 int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 			    daos_handle_t coh, void *priv, daos_handle_t *toh);
+enum btr_report_type {
+	BTR_REPORT_ERROR,
+	BTR_REPORT_WARNING,
+	BTR_REPORT_MSG,
+};
+typedef void (*btr_report_fn_t)(void *arg, enum btr_report_type type, const char *fmt, ...);
+int
+     dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn_t report_fn,
+			  void *report_arg, bool error_on_non_zero_padding);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);

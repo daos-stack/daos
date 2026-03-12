@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -320,8 +320,15 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 		//
 		// Applies block (not allow) list if VMD is configured so specific NVMe devices can
 		// be reserved for other use (bdev_exclude).
-		if err := sb.script.Unbind(&req); err != nil {
-			return resp, errors.Wrap(err, "un-binding devices")
+		//
+		// NOTE DAOS-18606: There may be a bug in SPDK setup script that results in backing
+		//                  device addresses being unbound despite relevant VMD address
+		//                  being supplied in blocklist. As a workaround, skip unbind in VMD
+		//                  mode if blocklist populated.
+		if req.PCIBlockList == "" {
+			if err := sb.script.Unbind(&req); err != nil {
+				return resp, errors.Wrap(err, "un-binding devices")
+			}
 		}
 	} else {
 		if err := sb.script.Reset(&req); err != nil {

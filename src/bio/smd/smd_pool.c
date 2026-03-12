@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2025 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -179,7 +179,7 @@ smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, enum smd_dev_
 }
 
 static int
-pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, char *table_name)
+pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, char *table_name, int *tgt_cnt)
 {
 	struct smd_pool	pool;
 	struct d_uuid	id;
@@ -226,6 +226,9 @@ pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, char *table_name)
 		rc = 1;	/* Inform caller that last target is deleted */
 	}
 
+	if (tgt_cnt)
+		*tgt_cnt = pool.sp_tgt_cnt;
+
 	return rc;
 }
 
@@ -234,15 +237,15 @@ smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type st)
 {
 	struct smd_pool_meta	meta = { 0 };
 	struct d_uuid		id;
-	int			rc;
+	int                     rc, remaining = 0;
 
 	smd_db_lock();
-	rc = pool_del_tgt(pool_id, tgt_id, TABLE_POOLS[st]);
+	rc = pool_del_tgt(pool_id, tgt_id, TABLE_POOLS[st], &remaining);
 	if (rc <= 0)
 		goto out;
 
 	rc = 0;
-	if (st == SMD_DEV_TYPE_META) {
+	if (st == SMD_DEV_TYPE_META && !remaining) {
 		uuid_copy(id.uuid, pool_id);
 
 		rc = smd_db_fetch(TABLE_POOLS_EX[st], &id, sizeof(id), &meta, sizeof(meta));
@@ -269,7 +272,7 @@ smd_rdb_del_tgt(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type st)
 	int	rc;
 
 	smd_db_lock();
-	rc = pool_del_tgt(pool_id, tgt_id, TABLE_RDBS[st]);
+	rc = pool_del_tgt(pool_id, tgt_id, TABLE_RDBS[st], NULL);
 	smd_db_unlock();
 
 	return rc < 0 ? rc : 0;

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -287,7 +287,7 @@ d_rank_list_t   *ds_mgmt_pool_query_dead_ranks_out;
 
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
-		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks,
+		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks, uint64_t deadline,
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
 		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes)
 {
@@ -374,7 +374,6 @@ mock_ds_mgmt_pool_query_targets_gen_infos(uint32_t n_infos)
 
 	D_ALLOC_ARRAY(infos, n_infos);
 	for (i = 0; i < n_infos; i++) {
-		infos[i].ta_type = DAOS_TP_UNKNOWN;
 		infos[i].ta_state = (i == 0) ? DAOS_TS_DOWN_OUT : DAOS_TS_UP_IN;
 		infos[i].ta_space.s_total[DAOS_MEDIA_SCM] = 1000000000;
 		infos[i].ta_space.s_free[DAOS_MEDIA_SCM] = 800000000 + i;
@@ -555,7 +554,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks)
 {
 	return 0;
 }
@@ -695,7 +694,7 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 int
 ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		    Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
-		    uint32_t flags, int phase)
+		    uint32_t flags)
 {
 	return 0;
 }

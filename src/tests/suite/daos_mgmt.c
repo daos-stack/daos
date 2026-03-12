@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +20,12 @@
 #include <daos_event.h>
 #include <daos/agent.h>
 
+/*
+ * Given the 128MB default blobstore cluster size, the minimal pool scm_size for
+ * an 8 targets engine would be 128MB * 8 = 1GB.
+ */
+#define MIN_SCM_SIZE (1ULL << 30)
+
 /** create/destroy pool on all tgts */
 static void
 pool_create_all(void **state)
@@ -35,11 +42,8 @@ pool_create_all(void **state)
 
 	/** create container */
 	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file,
-			     geteuid(), getegid(),
-			     arg->group, NULL /* tgts */,
-			     256 * 1024 * 1024 /* minimal size */,
-			     0 /* nvme size */, NULL /* prop */,
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
 	assert_rc_equal(rc, 0);
 
@@ -340,11 +344,8 @@ pool_create_and_destroy_retry(void **state)
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file,
-			     geteuid(), getegid(),
-			     arg->group, NULL /* tgts */,
-			     256 * 1024 * 1024 /* minimal size */,
-			     0 /* nvme size */, NULL /* prop */,
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
@@ -434,8 +435,7 @@ pool_create_steps_down_from_up_empty(void **state)
 	svc.rl_ranks = &rank;
 	svc.rl_nr = 1;
 	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
-			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
-			     NULL /* prop */, &svc, uuid);
+			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */, &svc, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
@@ -465,8 +465,7 @@ pool_destroy_disconnect_all(void **state)
 
 	print_message("creating pool synchronously ... ");
 	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
-			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
-			     NULL /* prop */, arg->pool.svc, uuid);
+			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */, arg->pool.svc, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
@@ -514,8 +513,7 @@ pool_destroy_cancel_rfcheck(void **state)
 
 	print_message("creating pool synchronously ... ");
 	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
-			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
-			     NULL /* prop */, arg->pool.svc, uuid);
+			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */, arg->pool.svc, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
@@ -527,26 +525,51 @@ pool_destroy_cancel_rfcheck(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
+static void
+pool_create_query_fail(void **state)
+{
+	test_arg_t *arg = *state;
+	uuid_t      uuid;
+	int         rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MGMT_FAIL_CREATE_QUERY | DAOS_FAIL_ONCE);
+
+	print_message("creating pool synchronously ... ");
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */, arg->pool.svc, uuid);
+	assert_rc_equal(rc, 0);
+	print_message("success uuid = " DF_UUIDF "\n", DP_UUID(uuid));
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
+	print_message("destroying pool synchronously ... ");
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+}
+
 static const struct CMUnitTest tests[] = {
-	{ "MGMT1: create/destroy pool on all tgts",
-	  pool_create_all, async_disable, test_case_teardown},
-	{ "MGMT2: create/destroy pool on all tgts (async)",
-	  pool_create_all, async_enable, test_case_teardown},
-	{ "MGMT3: list-pools with no pools in sys",
-	  list_pools_test, setup_zeropools, teardown_pools},
-	{ "MGMT4: list-pools with multiple pools in sys",
-	  list_pools_test, setup_manypools, teardown_pools},
-	{ "MGMT5: retry MGMT_POOL_{CREATE,DESETROY} upon errors",
-	  pool_create_and_destroy_retry, async_disable, test_case_teardown},
-	{ "MGMT6: daos_mgmt_get_sys_info",
-	  get_sys_info_test, async_disable, test_case_teardown},
-	{ "MGMT7: create: PS steps down from UP_EMPTY",
-	  pool_create_steps_down_from_up_empty, async_disable, test_case_teardown},
-	{ "MGMT8: pool destroy disconnect all",
-	  pool_destroy_disconnect_all, async_disable, test_case_teardown},
-	{ "MGMT9: pool destroy cancels rfcheck",
-	  pool_destroy_cancel_rfcheck, NULL, test_case_teardown}
-};
+    {"MGMT1: create/destroy pool on all tgts", pool_create_all, async_disable, test_case_teardown},
+    {"MGMT2: create/destroy pool on all tgts (async)", pool_create_all, async_enable,
+     test_case_teardown},
+    {"MGMT3: list-pools with no pools in sys", list_pools_test, setup_zeropools, teardown_pools},
+    {"MGMT4: list-pools with multiple pools in sys", list_pools_test, setup_manypools,
+     teardown_pools},
+    {"MGMT5: retry MGMT_POOL_{CREATE,DESETROY} upon errors", pool_create_and_destroy_retry,
+     async_disable, test_case_teardown},
+    {"MGMT6: daos_mgmt_get_sys_info", get_sys_info_test, async_disable, test_case_teardown},
+    {"MGMT7: create: PS steps down from UP_EMPTY", pool_create_steps_down_from_up_empty,
+     async_disable, test_case_teardown},
+    {"MGMT8: pool destroy disconnect all", pool_destroy_disconnect_all, async_disable,
+     test_case_teardown},
+    {"MGMT9: pool destroy cancels rfcheck", pool_destroy_cancel_rfcheck, NULL, test_case_teardown},
+    {"MGMT10: query in pool create fails", pool_create_query_fail, async_disable,
+     test_case_teardown}};
 
 static int
 setup(void **state)

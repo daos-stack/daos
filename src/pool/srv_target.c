@@ -242,9 +242,9 @@ flush_ult(void *arg)
 		} else if (rc) {	/* This pool doesn't have NVMe partition */
 			sleep_ms = 60000;
 		} else if (sched_req_space_check(child->spc_flush_req) == SCHED_SPACE_PRESS_NONE) {
-			sleep_ms = 500;
+			sleep_ms = 5000;
 		} else {
-			sleep_ms = (nr_flushed < nr_flush) ? 50 : 0;
+			sleep_ms = (nr_flushed < nr_flush) ? 1000 : 0;
 		}
 
 		if (dss_ult_exiting(child->spc_flush_req))
@@ -539,7 +539,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
 	rc = vos_pool_open_metrics(path, child->spc_uuid,
 				   VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_EXTERNAL_CHKPT,
-				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
+				   child->spc_metrics[DAOS_VOS_MODULE], NULL, &child->spc_hdl);
 
 	D_FREE(path);
 
@@ -909,6 +909,13 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
 	pool->sp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+	/*
+	 * Set proper default chkpt parameters to ensure the checkpoint working
+	 * before the pool property being propagated.
+	 */
+	pool->sp_checkpoint_mode   = DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT;
+	pool->sp_checkpoint_freq   = DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT;
+	pool->sp_checkpoint_thresh = DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT;
 
 	/** set up ds_pool metrics */
 	rc = ds_pool_metrics_start(pool);
@@ -2797,6 +2804,8 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	pool->sp_need_discard = 1;
 	pool->sp_discard_status = 0;
 	rc = dss_ult_execute(ds_pool_tgt_discard_ult, arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (rc == 0)
+		rc = ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
 
 	ds_pool_put(pool);
 out:
@@ -3116,6 +3125,9 @@ lock:
 	ABT_rwlock_wrlock(pool->sp_recov_lock);
 	rc = ds_pool_thread_collective(prci->prci_uuid, ex_status, pool_tgt_recov_cont, &prca, 0);
 	ABT_rwlock_unlock(pool->sp_recov_lock);
+
+	if (rc == 0)
+		rc = ds_iv_ns_reint_prep(pool->sp_iv_ns); /* cleanup IV cache */
 
 out:
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_REBUILD, rc,

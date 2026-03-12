@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
@@ -318,12 +318,12 @@ update_one_dom(struct pool_map *map, struct pool_domain *dom, struct pool_target
 		if (dom->do_comp.co_status == PO_COMP_ST_DOWNOUT ||
 		    dom->do_comp.co_status == PO_COMP_ST_DOWN)
 			update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_UP,
-						    *version, &updated);
+						    *version, &updated, false);
 		break;
 	case MAP_EXTEND:
 		if (dom->do_comp.co_status == PO_COMP_ST_NEW)
 			update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_UP,
-						    *version, &updated);
+						    *version, &updated, false);
 		break;
 	case MAP_EXCLUDE:
 		/* Only change the dom status if it is from SWIM eviction */
@@ -331,27 +331,29 @@ update_one_dom(struct pool_map *map, struct pool_domain *dom, struct pool_target
 		    !(dom->do_comp.co_status & (PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) &&
 		    pool_map_node_status_match(dom, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT))
 			update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_DOWN,
-						    *version, &updated);
+						    *version, &updated, false);
 		break;
 	case MAP_FINISH_REBUILD:
 		if (dom->do_comp.co_status == PO_COMP_ST_UP)
 			update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_UPIN,
-						    *version, &updated);
+						    *version, &updated, false);
 		else if (dom->do_comp.co_status == PO_COMP_ST_DOWN && exclude_rank)
 			update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_DOWNOUT,
-						    *version, &updated);
+						    *version, &updated, false);
 		break;
 	case MAP_REVERT_REBUILD:
 		if (dom->do_comp.co_status == PO_COMP_ST_UP) {
 			if (dom->do_comp.co_fseq == 1)
 				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_NEW,
-							    *version, &updated);
+							    *version, &updated, true);
 			else if (dom->do_comp.co_flags == PO_COMPF_DOWN2UP)
 				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id,
-							    PO_COMP_ST_DOWN, *version, &updated);
+							    PO_COMP_ST_DOWN, *version, &updated,
+							    true);
 			else
 				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id,
-							    PO_COMP_ST_DOWNOUT, *version, &updated);
+							    PO_COMP_ST_DOWNOUT, *version, &updated,
+							    true);
 		}
 		break;
 	default:

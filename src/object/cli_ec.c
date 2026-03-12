@@ -2392,8 +2392,10 @@ obj_ec_recov_task_fini(struct obj_reasb_req *reasb_req)
 
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		d_sgl_fini(&fail_info->efi_recov_tasks[i].ert_sgl, false);
-		if (daos_handle_is_valid(fail_info->efi_recov_tasks[i].ert_th))
+		if (daos_handle_is_valid(fail_info->efi_recov_tasks[i].ert_th)) {
 			dc_tx_local_close(fail_info->efi_recov_tasks[i].ert_th);
+			fail_info->efi_recov_tasks[i].ert_th = DAOS_HDL_INVAL;
+		}
 	}
 	D_FREE(fail_info->efi_recov_tasks);
 }
@@ -2556,9 +2558,6 @@ obj_ec_recov_reset(struct obj_reasb_req *reasb_req)
 			fail_info->efi_recov_tasks[i].ert_th = DAOS_HDL_INVAL;
 		}
 	}
-	daos_recx_ep_list_free(reasb_req->orr_parity_lists, reasb_req->orr_parity_list_nr);
-	reasb_req->orr_parity_lists   = NULL;
-	reasb_req->orr_parity_list_nr = 0;
 }
 
 void
@@ -2566,11 +2565,20 @@ obj_ec_fail_info_free(struct obj_reasb_req *reasb_req)
 {
 	struct obj_ec_fail_info *fail_info = reasb_req->orr_fail;
 
-	obj_ec_recov_reset(reasb_req);
+	/* EC fetch (task A) may initiate EC recovery task (task B).
+	 * task A passes fail_info pointer to task B (see obj_ec_recov_cb()), but task B's
+	 * orr_fail_alloc is 0, task A's orr_fail_alloc is 1.
+	 * task B only needs to free its orr_parity_lists, but task A needs to do more cleanup for
+	 * the fail_info.
+	 */
+	daos_recx_ep_list_free(reasb_req->orr_parity_lists, reasb_req->orr_parity_list_nr);
+	reasb_req->orr_parity_lists   = NULL;
+	reasb_req->orr_parity_list_nr = 0;
 
 	if (fail_info == NULL || reasb_req->orr_fail_alloc == 0)
 		return;
 
+	obj_ec_recov_reset(reasb_req);
 	obj_ec_recov_task_fini(reasb_req);
 	obj_ec_recov_codec_free(reasb_req);
 	daos_recx_ep_list_free(fail_info->efi_recx_lists, fail_info->efi_nrecx_lists);
