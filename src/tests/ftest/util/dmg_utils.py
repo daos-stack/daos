@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1157,6 +1157,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
+    def system_get_prop(self, properties=None):
+        """Call dmg system get-prop.
+
+        Args:
+            properties (str, optional): Comma separated properties to get.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "get-prop"), properties=properties)
+
     def system_leader_query(self):
         """Call dmg system leader-query.
 
@@ -1192,7 +1207,7 @@ class DmgCommand(DmgCommandBase):
         #     {
         #         "addr": "10.8.1.11:10001",
         #         "state": "joined",
-        #         "fault_domain": "/wolf-11.wolf.hpdd.intel.com",
+        #         "fault_domain": "/wolf-11.wolf.example.com",
         #         "rank": 0,
         #         "uuid": "e7f2cb06-a111-4d55-a6a5-b494b70d62ab",
         #         "fabric_uri": "ofi+sockets://192.168.100.11:31416",
@@ -1202,7 +1217,7 @@ class DmgCommand(DmgCommandBase):
         #     {
         #         "addr": "10.8.1.74:10001",
         #         "state": "excluded",
-        #         "fault_domain": "/wolf-74.wolf.hpdd.intel.com",
+        #         "fault_domain": "/wolf-74.wolf.example.com",
         #         "rank": 1,
         #         "uuid": "db36ab28-fdb0-4822-97e6-89547393ed03",
         #         "fabric_uri": "ofi+sockets://192.168.100.74:31416",
@@ -1267,6 +1282,33 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(
             ("system", "rebuild", "stop"), verbose=verbose, force=force)
+
+    def system_self_heal_eval(self):
+        """Call dmg system self-heal eval.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "self-heal", "eval"))
+
+    def system_set_prop(self, properties=None):
+        """Call dmg system set-prop.
+
+        Args:
+            properties (str): properties in the form of key:val[,key:val...]
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "set-prop"), properties=properties)
 
     def system_start(self, ranks=None, ignore_admin_excluded=False):
         """Start the system.

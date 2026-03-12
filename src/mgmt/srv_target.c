@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -418,7 +418,8 @@ recreate_pooltgts()
 
 		D_ASSERT(pool_info->spi_scm_sz > 0);
 		rc = ds_mgmt_tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
-					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], rdb_blob_sz,
+					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META],
+					  pool_info->spi_tgts[SMD_DEV_TYPE_META], rdb_blob_sz,
 					  dss_storage_path, dss_bind_to_xstream_cpuset);
 		if (rc)
 			goto out;

@@ -22,7 +22,7 @@ server_config:
       storage: auto
 
 pool:
-  size: 60G
+  size: 100G
 
 container:
   type: POSIX

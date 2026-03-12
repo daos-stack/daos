@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -93,10 +94,7 @@ class NvmePoolCapacity(TestWithServers):
             self.log.info("Running test %s", loop_count)
             offset = loop_count * num_pool
             for val in range(offset, offset + num_pool):
-                self.pool.append(
-                    self.get_pool(
-                        namespace="/run/pool_qty_{}/*".format(num_pool),
-                        properties="reclaim:disabled"))
+                self.pool.append(self.get_pool(namespace=f"/run/pool_qty_{num_pool}/*"))
 
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
@@ -151,8 +149,7 @@ class NvmePoolCapacity(TestWithServers):
             # Create the IOR threads
             threads = []
             for val in range(0, num_pool):
-                self.pool.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
-                                 properties="reclaim:disabled"))
+                self.pool.append(self.get_pool(namespace=f"/run/pool_qty_{num_pool}/*"))
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
 

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -242,6 +242,70 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 			} else {
 				co_prop = redun_lvl_prop;
 			}
+		}
+
+		/* Temporarily use old container property defaults due to DAOS-17946 */
+		/* Set DAOS_PROP_CO_CSUM to off if not already defined */
+		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_CSUM) == NULL) {
+			daos_prop_t *csum_prop = daos_prop_alloc(1);
+			if (csum_prop == NULL) {
+				D_ERROR("failed to allocate csum prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				return -DER_NOMEM;
+			}
+			csum_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+			csum_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_OFF;
+
+			daos_prop_t *new_merged_props = daos_prop_merge(co_prop, csum_prop);
+			if (new_merged_props == NULL) {
+				D_ERROR("failed to merge co_prop and csum_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				daos_prop_free(csum_prop);
+				return -DER_NOMEM;
+			}
+
+			/* Update co_prop to point to the newly merged properties */
+			if (merged_props) {
+				daos_prop_free(merged_props);
+				merged_props = new_merged_props;
+			} else {
+				merged_props = new_merged_props;
+			}
+			co_prop = merged_props;
+			daos_prop_free(csum_prop);
+		}
+		/* Set DAOS_PROP_CO_CSUM_SERVER_VERIFY to off if not already defined */
+		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_CSUM_SERVER_VERIFY) == NULL) {
+			daos_prop_t *csum_sv_prop = daos_prop_alloc(1);
+			if (csum_sv_prop == NULL) {
+				D_ERROR("failed to allocate csum_sv_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				return -DER_NOMEM;
+			}
+			csum_sv_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+			csum_sv_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_SV_OFF;
+
+			daos_prop_t *new_merged_props = daos_prop_merge(co_prop, csum_sv_prop);
+			if (new_merged_props == NULL) {
+				D_ERROR("failed to merge co_prop and csum_sv_prop\n");
+				daos_prop_free(redun_lvl_prop);
+				daos_prop_free(merged_props);
+				daos_prop_free(csum_sv_prop);
+				return -DER_NOMEM;
+			}
+
+			/* Update co_prop to point to the newly merged properties */
+			if (merged_props) {
+				daos_prop_free(merged_props);
+				merged_props = new_merged_props;
+			} else {
+				merged_props = new_merged_props;
+			}
+			co_prop = merged_props;
+			daos_prop_free(csum_sv_prop);
 		}
 
 		D_ASSERT(co_prop != NULL);
@@ -803,7 +867,13 @@ rebuild_pool_started_after_ver(test_arg_t *arg, uint32_t rs_version)
 			      "(waiting for > %d)\n",
 			      DP_UUID(arg->pool.pool_uuid), in_progress ? "" : "not yet ",
 			      rst->rs_version, rs_version);
-		return in_progress && (rst->rs_version > rs_version);
+		if (in_progress && (rst->rs_version > rs_version)) {
+			/* save final pool query info to be able to inspect rebuild status */
+			memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
+
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -825,11 +895,17 @@ rebuild_pool_started_before_ver(test_arg_t *arg, uint32_t rs_version)
 		return false;
 	} else {
 		bool in_progress = (rst->rs_state == DRS_IN_PROGRESS);
+
 		print_message("rebuild for pool " DF_UUIDF "has %sstarted, rs_version=%u "
 			      "(waiting for < %d)\n",
 			      DP_UUID(arg->pool.pool_uuid), in_progress ? "" : "not yet ",
 			      rst->rs_version, rs_version);
-		return in_progress && (rst->rs_version < rs_version);
+		if (in_progress && (rst->rs_version < rs_version)) {
+			/* save final pool query info to be able to inspect rebuild status */
+			memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -935,8 +1011,8 @@ test_get_last_svr_rank(test_arg_t *arg)
 	return arg->srv_nnodes - disable_nodes - 1;
 }
 
-bool
-test_rebuild_started_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
+static bool
+test_rebuild_started_before(test_arg_t **args, int args_cnt, uint32_t *cur_versions)
 {
 	bool all_started = true;
 	int  i;
@@ -945,7 +1021,7 @@ test_rebuild_started_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_vers
 		bool started = true;
 
 		if (!args[i]->pool.destroyed)
-			started = rebuild_pool_started_after_ver(args[i], rs_version);
+			started = rebuild_pool_started_before_ver(args[i], cur_versions[i]);
 
 		if (!started)
 			all_started = false;
@@ -953,8 +1029,8 @@ test_rebuild_started_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_vers
 	return all_started;
 }
 
-bool
-test_rebuild_started_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
+static bool
+test_rebuild_started_after(test_arg_t **args, int args_cnt, uint32_t *cur_versions)
 {
 	bool all_started = true;
 	int  i;
@@ -963,7 +1039,7 @@ test_rebuild_started_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_ver
 		bool started = true;
 
 		if (!args[i]->pool.destroyed)
-			started = rebuild_pool_started_before_ver(args[i], rs_version);
+			started = rebuild_pool_started_after_ver(args[i], cur_versions[i]);
 
 		if (!started)
 			all_started = false;
@@ -971,25 +1047,67 @@ test_rebuild_started_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_ver
 	return all_started;
 }
 
+/* wait until pools start rebuilds with rs_version < current (e.g.,. expecting op:Fail_reclaim) */
+void
+test_rebuild_wait_to_start_lower(test_arg_t **args, int args_cnt)
+{
+	uint32_t *cur_versions;
+	int       i;
+
+	D_ALLOC_ARRAY(cur_versions, args_cnt);
+	assert_true(cur_versions != NULL);
+	for (i = 0; i < args_cnt; i++)
+		cur_versions[i] = args[i]->pool.pool_info.pi_rebuild_st.rs_version;
+
+	while (!test_rebuild_started_before(args, args_cnt, cur_versions))
+		sleep(2);
+
+	/* NB: when control reaches here, each pool's current rs_version has been updated
+	 * (for subsequent calls that will rely on it as a baseline)
+	 */
+	D_FREE(cur_versions);
+}
+
+/* wait until pools start rebuilds with rs_version > current (e.g.,. expecting op:Rebuild) */
+void
+test_rebuild_wait_to_start_next(test_arg_t **args, int args_cnt)
+{
+	uint32_t *cur_versions;
+	int       i;
+
+	D_ALLOC_ARRAY(cur_versions, args_cnt);
+	assert_true(cur_versions != NULL);
+	for (i = 0; i < args_cnt; i++)
+		cur_versions[i] = args[i]->pool.pool_info.pi_rebuild_st.rs_version;
+
+	while (!test_rebuild_started_after(args, args_cnt, cur_versions))
+		sleep(2);
+
+	/* NB: when control reaches here, each pool's current rs_version has been updated
+	 * (for subsequent calls that will rely on it as a baseline)
+	 */
+	D_FREE(cur_versions);
+}
+
+/* wait until pools start rebuilds with any rs_version > 0 (whatever is current) */
 void
 test_rebuild_wait_to_start(test_arg_t **args, int args_cnt)
 {
-	while (!test_rebuild_started_after_ver(args, args_cnt, 0 /* don't care rs_version */))
-		sleep(2);
-}
+	uint32_t *cur_versions;
+	int       i;
 
-void
-test_rebuild_wait_to_start_after_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
-{
-	while (!test_rebuild_started_after_ver(args, args_cnt, rs_version))
-		sleep(2);
-}
+	D_ALLOC_ARRAY(cur_versions, args_cnt);
+	assert_true(cur_versions != NULL);
+	for (i = 0; i < args_cnt; i++)
+		cur_versions[i] = 0;
 
-void
-test_rebuild_wait_to_start_before_ver(test_arg_t **args, int args_cnt, uint32_t rs_version)
-{
-	while (!test_rebuild_started_before_ver(args, args_cnt, rs_version))
+	while (!test_rebuild_started_after(args, args_cnt, cur_versions))
 		sleep(2);
+
+	/* NB: when control reaches here, each pool's current rs_version has been updated
+	 * (for subsequent calls that will rely on it as a baseline)
+	 */
+	D_FREE(cur_versions);
 }
 
 bool
@@ -1119,6 +1237,12 @@ daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		   const char *value)
 {
 	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
+}
+
+int
+daos_pool_get_prop(const uuid_t pool_uuid, const char *name, char **value_out)
+{
+	return dmg_pool_get_prop(dmg_config_file, NULL, pool_uuid, name, value_out);
 }
 
 void
@@ -1702,4 +1826,42 @@ test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_nu
 
 	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
 	assert_rc_equal(rc, 0);
+}
+
+/**
+ * Duplicate unescaped \a value, escaping every ';' with '\\'. The caller is
+ * responsible for freeing the returned string.
+ *
+ * \param[in]	value	self_heal value to escape
+ */
+char *
+test_escape_self_heal(const char *value)
+{
+	size_t      len = 0;
+	char       *new_value;
+	const char *src;
+	char       *dst;
+
+	for (src = value; *src != '\0'; src++) {
+		D_ASSERT(*src != '\\');
+		len++;
+		if (*src == ';')
+			len++; /* for '\\' */
+	}
+
+	D_ALLOC(new_value, len + 1 /* '\0' */);
+	D_ASSERT(new_value != NULL);
+
+	dst = new_value;
+	for (src = value; *src != '\0'; src++) {
+		if (*src == ';') {
+			*dst++ = '\\';
+			*dst++ = ';';
+		} else {
+			*dst++ = *src;
+		}
+	}
+	*dst = '\0';
+
+	return new_value;
 }

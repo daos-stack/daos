@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -86,6 +87,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		autoFaultyEnable   bool
 		autoFaultyIO       uint32
 		autoFaultyCsum     uint32
+		iobufSmallPoolNr   uint32
+		iobufLargePoolNr   uint32
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
 		expDaosCfgs        []*DaosConfig
@@ -196,7 +199,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				}...),
 			vosEnv: "AIO",
 		},
-		"multiple controllers; accel, rpc server & auto faulty settings": {
+		"accel, rpc server & auto faulty settings": {
 			class:            storage.ClassNvme,
 			devList:          []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			accelEngine:      storage.AccelEngineSPDK,
@@ -228,6 +231,28 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 						Enable:      true,
 						MaxIoErrs:   100,
 						MaxCsumErrs: 200,
+					},
+				},
+			},
+		},
+		"iobuf custom settings provided": {
+			class:            storage.ClassNvme,
+			devList:          []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			devRoles:         storage.BdevRoleAll,
+			iobufSmallPoolNr: 16384,
+			iobufLargePoolNr: 2048,
+			expBdevCfgs:      multiCtrlrConfs(storage.BdevRoleAll, false),
+			expExtraSubsystems: []*SpdkSubsystem{
+				{
+					Name: "iobuf",
+					Configs: []*SpdkSubsystemConfig{
+						{
+							Method: storage.ConfIobufSetOptions,
+							Params: &IobufParams{
+								SmallPoolCount: 16384,
+								LargePoolCount: 2048,
+							},
+						},
 					},
 				},
 			},
@@ -273,7 +298,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
 				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr).
 				WithStorageAutoFaultyCriteria(tc.autoFaultyEnable, tc.autoFaultyIO,
-					tc.autoFaultyCsum)
+					tc.autoFaultyCsum).
+				WithStorageSpdkIobufProps(tc.iobufSmallPoolNr, tc.iobufLargePoolNr)
 
 			if tc.devRoles != 0 {
 				engineConfig.Storage.ControlMetadata = storage.ControlMetadata{
@@ -330,5 +356,152 @@ func TestBackend_unreadableSpdkConfig(t *testing.T) {
 
 	if _, err := readSpdkConfig(bytes.NewReader(buf)); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestBackend_IobufParams_JSONUnmarshal(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expOutput IobufParams
+	}{
+		"empty": {
+			input: `{}`,
+			expOutput: IobufParams{
+				SmallPoolCount: 0,
+				LargePoolCount: 0,
+			},
+		},
+		"small_pool_count only": {
+			input: `{"small_pool_count":1024}`,
+			expOutput: IobufParams{
+				SmallPoolCount: 1024,
+				LargePoolCount: 0,
+			},
+		},
+		"large_pool_count only": {
+			input: `{"large_pool_count":512}`,
+			expOutput: IobufParams{
+				SmallPoolCount: 0,
+				LargePoolCount: 512,
+			},
+		},
+		"both values set": {
+			input: `{"small_pool_count":2048,"large_pool_count":1024}`,
+			expOutput: IobufParams{
+				SmallPoolCount: 2048,
+				LargePoolCount: 1024,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var v IobufParams
+			if err := json.Unmarshal([]byte(tc.input), &v); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(v, tc.expOutput); diff != "" {
+				t.Fatalf("unmarshal mismatch (-want +got):\n%s\nJSON: %s", diff, tc.input)
+			}
+		})
+	}
+}
+
+func TestBackend_IobufParams_JSON_RoundTrip(t *testing.T) {
+	for name, tc := range map[string]struct {
+		params IobufParams
+	}{
+		"zero values": {
+			params: IobufParams{
+				SmallPoolCount: 0,
+				LargePoolCount: 0,
+			},
+		},
+		"small_pool_count only": {
+			params: IobufParams{
+				SmallPoolCount: 1024,
+				LargePoolCount: 0,
+			},
+		},
+		"large_pool_count only": {
+			params: IobufParams{
+				SmallPoolCount: 0,
+				LargePoolCount: 512,
+			},
+		},
+		"both values set": {
+			params: IobufParams{
+				SmallPoolCount: 2048,
+				LargePoolCount: 1024,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// Marshal to JSON
+			buf, err := json.Marshal(&tc.params)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Unmarshal back
+			var unmarshaled IobufParams
+			if err := json.Unmarshal(buf, &unmarshaled); err != nil {
+				t.Fatal(err)
+			}
+
+			// Verify round-trip preserves values
+			if diff := cmp.Diff(tc.params, unmarshaled); diff != "" {
+				t.Fatalf("round-trip mismatch (-want +got):\n%s\nJSON: %s", diff, string(buf))
+			}
+		})
+	}
+}
+
+func TestBackend_IobufParams_JSONOutput(t *testing.T) {
+	for name, tc := range map[string]struct {
+		params  IobufParams
+		expJSON string
+	}{
+		"both zero produces empty object": {
+			params: IobufParams{
+				SmallPoolCount: 0,
+				LargePoolCount: 0,
+			},
+			expJSON: `{}`,
+		},
+		"only small_pool_count": {
+			params: IobufParams{
+				SmallPoolCount: 1024,
+				LargePoolCount: 0,
+			},
+			expJSON: `{"small_pool_count":1024}`,
+		},
+		"only large_pool_count": {
+			params: IobufParams{
+				SmallPoolCount: 0,
+				LargePoolCount: 512,
+			},
+			expJSON: `{"large_pool_count":512}`,
+		},
+		"both non-zero": {
+			params: IobufParams{
+				SmallPoolCount: 2048,
+				LargePoolCount: 1024,
+			},
+			expJSON: `{"small_pool_count":2048,"large_pool_count":1024}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf, err := json.Marshal(&tc.params)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			jsonStr := string(buf)
+
+			// Check exact JSON output
+			if diff := cmp.Diff(tc.expJSON, jsonStr); diff != "" {
+				t.Fatalf("unexpected JSON output (-want +got):\n%s", diff)
+			}
+		})
 	}
 }

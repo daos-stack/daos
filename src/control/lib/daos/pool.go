@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -57,9 +57,11 @@ type (
 	PoolRebuildStatus struct {
 		Status       int32            `json:"status"`
 		State        PoolRebuildState `json:"state"`
+		DerivedState PoolRebuildState `json:"derived_state"`
 		Objects      uint64           `json:"objects"`
 		Records      uint64           `json:"records"`
 		TotalObjects uint64           `json:"total_objects"`
+		Degraded     bool             `json:"degraded"`
 	}
 
 	// PoolInfo contains information about the pool.
@@ -313,6 +315,40 @@ func (pi *PoolInfo) RebuildState() string {
 	return pi.Rebuild.State.String()
 }
 
+// UpdateRebuildStatus evaluates a derived state to indicate transient rebuild conditions.
+func (pi *PoolInfo) UpdateRebuildStatus() error {
+	if pi.Rebuild == nil {
+		return nil
+	}
+	if pi.Rebuild.State > PoolRebuildStateDone {
+		return errors.New("illegal rebuild state value")
+	}
+	ds := pi.Rebuild.State
+
+	switch pi.Rebuild.State {
+	case PoolRebuildStateIdle:
+		if pi.Rebuild.Status == int32(OpCanceled) {
+			ds = PoolRebuildStateStopped
+		} else if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailed
+		}
+	case PoolRebuildStateDone:
+		if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailed
+		}
+	case PoolRebuildStateBusy:
+		if pi.Rebuild.Status == int32(OpCanceled) {
+			ds = PoolRebuildStateStopping
+		} else if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailing
+		}
+	}
+
+	pi.Rebuild.DerivedState = ds
+
+	return nil
+}
+
 // Name retrieves effective name for pool from either label or UUID.
 func (pi *PoolInfo) Name() string {
 	name := pi.Label
@@ -428,6 +464,14 @@ const (
 	PoolRebuildStateDone = PoolRebuildState(mgmtpb.PoolRebuildStatus_DONE)
 	// PoolRebuildStateBusy indicates that the rebuild process is in progress.
 	PoolRebuildStateBusy = PoolRebuildState(mgmtpb.PoolRebuildStatus_BUSY)
+	// PoolRebuildStateStopping indicates that the rebuild process is stopping (transient).
+	PoolRebuildStateStopping = PoolRebuildState(mgmtpb.PoolRebuildStatus_STOPPING)
+	// PoolRebuildStateStopped indicates that the rebuild process has stopped.
+	PoolRebuildStateStopped = PoolRebuildState(mgmtpb.PoolRebuildStatus_STOPPED)
+	// PoolRebuildStateFailing indicates that the rebuild process is failing (transient).
+	PoolRebuildStateFailing = PoolRebuildState(mgmtpb.PoolRebuildStatus_FAILING)
+	// PoolRebuildStateFailed indicates that the rebuild process has failed.
+	PoolRebuildStateFailed = PoolRebuildState(mgmtpb.PoolRebuildStatus_FAILED)
 )
 
 func (prs PoolRebuildState) String() string {

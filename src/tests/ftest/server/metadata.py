@@ -1,6 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -81,7 +81,7 @@ class ObjectMetadata(TestWithServers):
             self.add_pool()
         else:
             params = {}
-            params['properties'] = "svc_ops_enabled:0"
+            params['properties'] = "rd_fac:0,space_rb:0,svc_ops_enabled:0"
             self.add_pool(**params)
         self.log.info("Created %s: svc ranks:", str(self.pool))
         for index, rank in enumerate(self.pool.svc_ranks):

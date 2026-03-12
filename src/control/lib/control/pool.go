@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -582,6 +582,10 @@ func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq
 		return nil, err
 	}
 
+	if err := resp.UpdateRebuildStatus(); err != nil {
+		return nil, err
+	}
+
 	if req.QueryMask.HasOption(daos.PoolQueryOptionSelfHealPolicy) {
 		if err := resp.UpdateSelfHealPolicy(ctx, rpcClient); err != nil {
 			return nil, errors.Wrap(err, "pool get-prop self_heal failed")
@@ -862,6 +866,9 @@ func getPoolRanksResp(ctx context.Context, rpcClient UnaryInvoker, req *PoolRank
 	if len(req.Ranks) == 0 {
 		return nil, errors.New("no ranks in request")
 	}
+
+	// Set timeout to 5 minutes per rank to allow sufficient time for operation
+	req.SetTimeout(time.Duration(len(req.Ranks)) * DefaultPoolTimeout)
 
 	results := []*PoolRankResult{}
 	for _, rank := range req.Ranks {
@@ -1181,16 +1188,8 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 type rankFreeSpaceMap map[ranklist.Rank]uint64
 
-type filterRankFn func(rank ranklist.Rank) bool
-
-func newFilterRankFunc(ranks ranklist.RankList) filterRankFn {
-	return func(rank ranklist.Rank) bool {
-		return len(ranks) == 0 || rank.InList(ranks)
-	}
-}
-
 // Add namespace ranks to rankNVMeFreeSpace map and return minimum free available SCM namespace bytes.
-func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespaces storage.ScmNamespaces, rankNVMeFreeSpace rankFreeSpaceMap) (uint64, error) {
+func processSCMSpaceStats(log debugLogger, ranks ranklist.RankList, scmNamespaces storage.ScmNamespaces, rankNVMeFreeSpace rankFreeSpaceMap) (uint64, error) {
 	scmBytes := uint64(math.MaxUint64)
 
 	// Realistically there should only be one-per-rank but handle the case for multiple anyway.
@@ -1200,7 +1199,7 @@ func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespace
 				scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name)
 		}
 
-		if !filterRank(scmNamespace.Mount.Rank) {
+		if !scmNamespace.Mount.Rank.InList(ranks) {
 			log.Debugf("Skipping SCM device %s (bdev %s, name %s, rank %d) not in ranklist",
 				scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name,
 				scmNamespace.Mount.Rank)
@@ -1226,7 +1225,7 @@ func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespace
 }
 
 // Add NVMe free bytes to rankNVMeFreeSpace map.
-func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
+func processNVMeSpaceStats(log debugLogger, ranks ranklist.RankList, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, controller := range nvmeControllers {
 		for _, smdDevice := range controller.SmdDevices {
 			msgDev := fmt.Sprintf("SMD device %s (rank %d, ctrlr %s", smdDevice.UUID,
@@ -1251,7 +1250,7 @@ func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControl
 					controller.NvmeState.String())
 			}
 
-			if !filterRank(smdDevice.Rank) {
+			if !smdDevice.Rank.InList(ranks) {
 				log.Debugf("Skipping %s, not in ranklist", msgDev)
 				continue
 			}
@@ -1281,10 +1280,34 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		return 0, 0, errors.New("invalid mem-ratio, should not be greater than one")
 	}
 
-	// Verify that the DAOS system is ready before attempting to query storage.
-	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
-		return 0, 0, err
+	// Verify that the DAOS system is ready before attempting to query storage and record joined.
+	queryResp, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{})
+	if err != nil {
+		return 0, 0, errors.Wrap(err, "getMaxPoolSize: SystemQuery")
 	}
+	joinedRanks := ranklist.RankList{}
+	for _, member := range queryResp.Members {
+		if member.State == system.MemberStateJoined {
+			joinedRanks = append(joinedRanks, member.Rank)
+		}
+	}
+
+	// Refuse if any requested ranks are not joined, update ranklist to contain only joined ranks.
+	filterRanks := ranklist.RankList{}
+	if len(createReq.Ranks) == 0 {
+		filterRanks = joinedRanks
+	} else {
+		for _, rank := range createReq.Ranks {
+			if !rank.InList(joinedRanks) {
+				return 0, 0, errors.Errorf("specified rank %d is not joined", rank)
+			}
+			filterRanks = append(filterRanks, rank)
+		}
+	}
+	slices.Sort(filterRanks)
+	rpcClient.Debugf("requested/joined/filter ranks: %v/%v/%v", createReq.Ranks, joinedRanks,
+		filterRanks)
+	createReq.Ranks = filterRanks
 
 	scanReq := &StorageScanReq{
 		Usage:    true,
@@ -1300,8 +1323,6 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		return 0, 0, errors.New("Empty host storage response from StorageScan")
 	}
 
-	// Generate function to verify a rank is in the provided rank slice.
-	filterRank := newFilterRankFunc(ranklist.RankList(createReq.Ranks))
 	rankNVMeFreeSpace := make(rankFreeSpaceMap)
 	scmBytes := uint64(math.MaxUint64)
 	for _, key := range scanResp.HostStorage.Keys() {
@@ -1312,7 +1333,7 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 				scanResp.HostStorage[key].HostSet.String())
 		}
 
-		sb, err := processSCMSpaceStats(rpcClient, filterRank, hostStorage.ScmNamespaces, rankNVMeFreeSpace)
+		sb, err := processSCMSpaceStats(rpcClient, filterRanks, hostStorage.ScmNamespaces, rankNVMeFreeSpace)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -1321,7 +1342,7 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 			scmBytes = sb
 		}
 
-		if err := processNVMeSpaceStats(rpcClient, filterRank, hostStorage.NvmeDevices, rankNVMeFreeSpace); err != nil {
+		if err := processNVMeSpaceStats(rpcClient, filterRanks, hostStorage.NvmeDevices, rankNVMeFreeSpace); err != nil {
 			return 0, 0, err
 		}
 	}

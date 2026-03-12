@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -191,7 +191,7 @@ prep_dtx_entries(void)
 }
 
 static void
-check_rollback(void)
+check_rollback(uint32_t count)
 {
 	int      i;
 	uint64_t cmt_time;
@@ -214,8 +214,8 @@ check_rollback(void)
 			 umem_ptr2off(&mock_pool.vp_umm, mock_dbds[0]));
 	assert_int_equal(mock_cont_df.cd_dtx_committed_tail,
 			 umem_ptr2off(&mock_pool.vp_umm, mock_dbds[DBD_BLOBS_CAP - 1]));
-	assert_int_equal(mock_cont.vc_dtx_committed_count, DBD_BLOBS_CAP * DBD_BLOB_DF_CAP);
-	assert_int_equal(mock_pool.vp_dtx_committed_count, DBD_BLOBS_CAP * DBD_BLOB_DF_CAP);
+	assert_int_equal(mock_cont.vc_dtx_committed_count, DBD_BLOBS_CAP * DBD_BLOB_DF_CAP - count);
+	assert_int_equal(mock_pool.vp_dtx_committed_count, DBD_BLOBS_CAP * DBD_BLOB_DF_CAP - count);
 	assert_int_equal(mock_cont.vc_cmt_dtx_reindex_pos,
 			 umem_ptr2off(&mock_pool.vp_umm, mock_dbds[0]));
 }
@@ -348,7 +348,7 @@ test_tx_begin_error(void **unused)
 
 	rc = vos_dtx_aggregate(mock_coh, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(0);
 }
 
 /* DAOS B-tree delete failure */
@@ -366,10 +366,12 @@ test_dbtree_delete_error(void **unused)
 		will_return(__wrap_dbtree_delete, 0);
 	will_return(__wrap_dbtree_delete, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
+	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
+	expect_value(__wrap_d_tm_dec_gauge, value, 3);
 
 	rc = vos_dtx_aggregate(mock_coh, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(3);
 }
 
 /* Update of newest aggregated epoch failure */
@@ -389,10 +391,12 @@ test_newest_aggregated_error(void **unused)
 	expect_value(tx_add_ptr, ptr_size, sizeof(mock_cont_df.cd_newest_aggregated));
 	will_return(tx_add_ptr, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
+	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
+	expect_value(__wrap_d_tm_dec_gauge, value, DBD_BLOB_DF_CAP);
 
 	rc = vos_dtx_aggregate(mock_coh, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(DBD_BLOB_DF_CAP);
 }
 
 /* Update of DTX blob list failure */
@@ -415,10 +419,12 @@ test_committed_head_error(void **unused)
 	expect_value(tx_add_ptr, ptr_size, sizeof(umem_off_t));
 	will_return(tx_add_ptr, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
+	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
+	expect_value(__wrap_d_tm_dec_gauge, value, DBD_BLOB_DF_CAP);
 
 	rc = vos_dtx_aggregate(mock_coh, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(DBD_BLOB_DF_CAP);
 }
 
 /* Update of DTX blob list failure */
@@ -444,10 +450,12 @@ test_committed_prev_error(void **unused)
 	expect_value(tx_add_ptr, ptr_size, sizeof(umem_off_t));
 	will_return(tx_add_ptr, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
+	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
+	expect_value(__wrap_d_tm_dec_gauge, value, DBD_BLOB_DF_CAP);
 
 	rc = vos_dtx_aggregate(mock_coh, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(DBD_BLOB_DF_CAP);
 }
 
 /* Pmem free failure */
@@ -475,10 +483,12 @@ test_umm_free_error(void **unused)
 	expect_value(tx_free, umoff, mock_dbds_off[0]);
 	will_return(tx_free, -DER_UNKNOWN);
 	expect_value(tx_abort, error, -DER_UNKNOWN);
+	expect_value(__wrap_d_tm_dec_gauge, metric, mock_tls.vtl_committed);
+	expect_value(__wrap_d_tm_dec_gauge, value, DBD_BLOB_DF_CAP);
 
 	rc = vos_dtx_aggregate(mock_coh, NULL);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(DBD_BLOB_DF_CAP);
 }
 
 /* Update of committed DTX entries failure */
@@ -507,7 +517,7 @@ test_committed_data_error(void **unused)
 	cmt_time = CMT_TIME_START + (dtx_count - 1) * CMT_TIME_STEP;
 	rc       = vos_dtx_aggregate(mock_coh, &cmt_time);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(0);
 }
 
 /* Update of committed DTX entries count failure */
@@ -539,7 +549,7 @@ test_dbd_count_error(void **unused)
 	cmt_time = CMT_TIME_START + (dtx_count - 1) * CMT_TIME_STEP;
 	rc       = vos_dtx_aggregate(mock_coh, &cmt_time);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(0);
 }
 
 /* Pmem commit transaction failure */
@@ -571,7 +581,7 @@ test_umm_commit_error(void **unused)
 	cmt_time = CMT_TIME_START + (dtx_count - 1) * CMT_TIME_STEP;
 	rc       = vos_dtx_aggregate(mock_coh, &cmt_time);
 	assert_rc_equal(rc, -DER_UNKNOWN);
-	check_rollback();
+	check_rollback(0);
 }
 
 /* Pool without DTX committed transaction */

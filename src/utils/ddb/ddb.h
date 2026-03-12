@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -204,6 +204,7 @@ struct feature_options {
 
 struct rm_pool_options {
 	const char *path;
+	const char *db_path;
 };
 
 struct dev_list_options {

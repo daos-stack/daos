@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,6 +80,7 @@ struct ds_pool {
 	struct sched_request	*sp_ec_ephs_req;
 
 	uint32_t		sp_dtx_resync_version;
+	uint32_t                 sp_gl_dtx_resync_version; /* global DTX resync version */
 	/* Special pool/container handle uuid, which are
 	 * created on the pool leader step up, and propagated
 	 * to all servers by IV. Then they will be used by server
@@ -566,18 +567,19 @@ int
 ds_pool_prop_recov_cont_reset(struct rdb_tx *tx, struct ds_rsvc *rsvc);
 
 static inline bool
-is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)
+is_pool_rebuild_allowed(struct ds_pool *pool, uint64_t self_heal, bool auto_recovery)
 {
-	uint64_t flags = DAOS_SELF_HEAL_AUTO_REBUILD;
-
-	if (check_delayed_rebuild)
-		flags |= DAOS_SELF_HEAL_DELAY_REBUILD;
+	bool auto_rebuild_enabled  = self_heal & DAOS_SELF_HEAL_AUTO_REBUILD;
+	bool delay_rebuild_enabled = self_heal & DAOS_SELF_HEAL_DELAY_REBUILD;
 
 	if (pool->sp_disable_rebuild)
 		return false;
-	if (!(pool->sp_self_heal & flags))
+
+	/* If auto recovery is requested, only allow if self_heal enables auto or delay_rebuild */
+	if (auto_recovery && !(auto_rebuild_enabled || delay_rebuild_enabled))
 		return false;
 
+	/* Otherwise, rebuild is allowed */
 	return true;
 }
 

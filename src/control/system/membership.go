@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -102,7 +102,7 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 		return NilRank, errors.New("unexpected rank in replace-rank request")
 	}
 
-	currentMembers, err := m.Members(nil)
+	currentMembers, err := m.Members(nil, AllMemberFilter)
 	if err != nil {
 		return NilRank, errors.Wrap(err, "failed to get all system members")
 	}

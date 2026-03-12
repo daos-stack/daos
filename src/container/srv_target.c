@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2358,10 +2358,9 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	args.snap_opts = in->tsi_opts;
 	args.oit_oid = in->tsi_oit_oid;
 
-	out->tso_rc = ds_pool_thread_collective(in->tsi_pool_uuid,
-						PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-						PO_COMP_ST_DOWNOUT, cont_snap_notify_one,
-						&args, 0);
+	out->tso_rc = ds_pool_thread_collective(
+	    in->tsi_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+	    cont_snap_notify_one, &args, DSS_ULT_DEEP_STACK);
 	if (out->tso_rc != 0)
 		D_ERROR(DF_CONT": Snapshot notify failed: "DF_RC"\n",
 			DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid),
