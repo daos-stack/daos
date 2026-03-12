@@ -68,7 +68,7 @@ enum {
 /* Set the total in-flight size to be 1/3 of MAX DMA size for
  * the moment, will adjust it later if needed.
  */
-#define MIGR_TGT_INF_DATA (320 << 20)
+#define MIGR_TGT_INF_DATA (320ULL << 20)
 
 struct migr_res_manager;
 
