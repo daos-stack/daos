@@ -2093,6 +2093,10 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units)
 	waiter.rw_wait_since = 0;
 
 	res = migr_type2res(tls, res_type);
+	/* otherwise rebuild will hang forever */
+	D_ASSERTF(units <= res->res_limit, "res=%s, units=%lu, limit=%lu\n", res->res_rmg->rmg_name,
+		  units, res->res_limit);
+
 	ABT_mutex_lock(res->res_mutex);
 	while (1) {
 		if (tls->mpt_fini) {
@@ -2165,7 +2169,8 @@ migrate_res_release(struct migrate_pool_tls *tls, int res_type, long units)
 	D_ASSERT(res->res_holders > 0);
 	res->res_holders--;
 
-	if (res->res_waiters > 0 && res->res_limit > res->res_used)
+	D_ASSERT(res->res_waiters > 0 || d_list_empty(&res->res_waitq));
+	if (res->res_waiters > 0)
 		migrate_res_wakeup(res, res->res_limit - res->res_used);
 
 	ABT_mutex_unlock(res->res_mutex);
@@ -3684,9 +3689,8 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 		dss_sleep(0);
 	}
 
-	/* re-probe the dbtree after calling migrate_object, because it may have yielded */
-	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION,
-			       NULL, NULL);
+	/* re-probe the dbtree, because it has already deleted an element or yielded */
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL, NULL);
 	if (rc == -DER_NONEXIST)
 		return 1;
 	else if (rc != 0)
