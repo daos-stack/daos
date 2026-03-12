@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,6 +64,8 @@
 
 /** Number of A-keys for attributes in any object entry */
 #define INODE_AKEYS        12
+/** Number of A-keys for HLM entries (includes ref_cnt) */
+#define HLM_INODE_AKEYS    13
 #define INODE_AKEY_NAME    "DFS_INODE"
 #define SLINK_AKEY_NAME    "DFS_SLINK"
 #define MODE_IDX           0
@@ -78,6 +81,8 @@
 #define SIZE_IDX           (GID_IDX + sizeof(gid_t))
 #define HLC_IDX            (SIZE_IDX + sizeof(daos_size_t))
 #define END_IDX            (HLC_IDX + sizeof(uint64_t))
+#define REF_CNT_IDX        END_IDX
+#define END_HLM_IDX        (REF_CNT_IDX + sizeof(uint64_t))
 
 /*
  * END IDX for layout V2 (2.0) is at the current offset where we store the mtime nsec, but also need
@@ -94,9 +99,20 @@
 #define RESERVED_LO        0
 #define SB_HI              0
 #define ROOT_HI            1
+#define HLM_HI             2
 
 /** DFS mode mask (3rd bit) */
 #define MODE_MASK          (1 << 2)
+
+/** Hardlink mode bit - highest bit in mode_t to indicate file is a hardlink */
+#define MODE_HARDLINK_BIT  (1U << 31)
+
+/** Check if a mode indicates this is a hardlinked regular file */
+static inline bool
+dfs_is_hardlink(mode_t mode)
+{
+	return S_ISREG(mode) && (mode & MODE_HARDLINK_BIT);
+}
 
 /** Max recursion depth for symlinks */
 #define DFS_MAX_RECURSION  40
@@ -175,6 +191,10 @@ struct dfs {
 	daos_obj_id_t        super_oid;
 	/** Open object handle of SB */
 	daos_handle_t        super_oh;
+	/** Hardlink metadata object OID */
+	daos_obj_id_t        hlm_oid;
+	/** Open object handle of HLM */
+	daos_handle_t        hlm_oh;
 	/** Root object info */
 	dfs_obj_t            root;
 	/** DFS container attributes (Default chunk size, oclass, etc.) */
@@ -223,6 +243,8 @@ struct dfs_entry {
 	gid_t            gid;
 	/** Sym Link value */
 	char            *value;
+	/** Number of hardlinks to the same file object */
+	uint64_t         ref_cnt;
 };
 
 /** enum for hash entry type */
@@ -411,8 +433,30 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	    bool fetch_sym, bool *exists, struct dfs_entry *entry, int xnr, char *xnames[],
 	    void *xvals[], daos_size_t *xsizes);
 int
+hlm_fetch_entry(daos_handle_t hlm_oh, daos_handle_t th, daos_obj_id_t *oid,
+		struct dfs_entry *entry);
+int
+dfsobj_fetch_entry(dfs_t *dfs, daos_handle_t th, dfs_obj_t *obj, daos_handle_t *parent_oh,
+		   struct dfs_entry *entry);
+int
+hlm_update_ref_cnt(dfs_t *dfs, daos_handle_t th, struct dfs_entry *entry, int delta);
+int
 remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name, size_t len,
-	     struct dfs_entry entry);
+	     struct dfs_entry entry, bool *deleted);
+int
+hlm_copy_xattr(daos_handle_t src_oh, const char *src_name, daos_handle_t hlm_oh,
+	       daos_obj_id_t *dst_oid, daos_handle_t th);
+int
+hlm_copy_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name,
+	       struct dfs_entry *entry);
+int
+remove_xattrs_from_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name);
+int
+set_hardlink_bit(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, dfs_obj_t *obj,
+		 mode_t mode);
+int
+clear_hardlink_bit(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, dfs_obj_t *obj,
+		   mode_t mode);
 int
 open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct dfs_entry *entry,
 	 size_t len, dfs_obj_t *dir);

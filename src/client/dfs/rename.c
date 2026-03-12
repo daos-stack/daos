@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -111,11 +112,14 @@ out:
 	return rc;
 }
 
-/* Returns oids for both moved and clobbered files, but does not check either of them */
+/* Returns oids for both moved and clobbered files, but does not check either of them.
+ * deleted indicates if the clobbered file was actually deleted (last link or regular file),
+ * or just a hardlink was removed (file still has other links).
+ */
 int
 dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char *name,
 		  dfs_obj_t *new_parent, const char *new_name, daos_obj_id_t *moid,
-		  daos_obj_id_t *oid)
+		  daos_obj_id_t *oid, bool *deleted)
 {
 	struct dfs_entry entry = {0}, new_entry = {0};
 	daos_handle_t    th = DAOS_TX_NONE;
@@ -124,6 +128,9 @@ dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char 
 	size_t           len;
 	size_t           new_len;
 	int              rc;
+
+	if (deleted)
+		*deleted = true; /* Default to true for non-hardlink files */
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -227,7 +234,7 @@ restart:
 				D_GOTO(out, rc = ENOTEMPTY);
 		}
 
-		rc = remove_entry(dfs, th, new_parent->oh, new_name, new_len, new_entry);
+		rc = remove_entry(dfs, th, new_parent->oh, new_name, new_len, new_entry, deleted);
 		if (rc) {
 			D_ERROR("Failed to remove entry %s (%d)\n", new_name, rc);
 			D_GOTO(out, rc);
@@ -239,7 +246,7 @@ restart:
 
 	/** rename symlink */
 	if (S_ISLNK(entry.mode)) {
-		rc = remove_entry(dfs, th, parent->oh, name, len, entry);
+		rc = remove_entry(dfs, th, parent->oh, name, len, entry, NULL);
 		if (rc) {
 			D_ERROR("Failed to remove entry %s (%d)\n", name, rc);
 			D_GOTO(out, rc);
@@ -268,13 +275,15 @@ restart:
 		D_GOTO(out, rc);
 	}
 
-	/** cp the extended attributes if they exist */
-	rc = xattr_copy(parent->oh, name, new_parent->oh, new_name, th);
-	if (rc == ERESTART) {
-		D_GOTO(out, rc);
-	} else if (rc) {
-		D_ERROR("Failed to copy extended attributes (%d)\n", rc);
-		D_GOTO(out, rc);
+	/** cp the extended attributes if they exist (skip for hardlinks - xattrs are in HLM) */
+	if (!dfs_is_hardlink(entry.mode)) {
+		rc = xattr_copy(parent->oh, name, new_parent->oh, new_name, th);
+		if (rc == ERESTART) {
+			D_GOTO(out, rc);
+		} else if (rc) {
+			D_ERROR("Failed to copy extended attributes (%d)\n", rc);
+			D_GOTO(out, rc);
+		}
 	}
 
 	/** remove the old entry from the old parent (just the dkey) */
@@ -318,7 +327,7 @@ int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
 	 const char *new_name, daos_obj_id_t *oid)
 {
-	return dfs_move_internal(dfs, 0, parent, name, new_parent, new_name, NULL, oid);
+	return dfs_move_internal(dfs, 0, parent, name, new_parent, new_name, NULL, oid, NULL);
 }
 
 int

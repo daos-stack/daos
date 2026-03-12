@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,12 +57,12 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 * will be skipped.
 		 */
 		if (duns_attr && inode->ie_dfs->dfc_dentry_dir_timeout > 0) {
-			struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+			struct dfuse_info  *dfuse_info = fuse_req_userdata(req);
+			struct dfuse_dentry released   = {0};
 
-			rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
-							      inode->ie_parent, inode->ie_name,
-							      strnlen(inode->ie_name, NAME_MAX));
-			DFUSE_TRA_INFO(inode, "inval_entry() rc is %d", rc);
+			D_INIT_LIST_HEAD(&released.dd_list);
+			dfuse_ie_dentry_clear(inode, &released);
+			dfuse_ie_dentry_inval(dfuse_info, &released);
 		}
 		DFUSE_REPLY_ZERO(inode, req);
 		return;

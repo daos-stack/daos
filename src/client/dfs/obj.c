@@ -841,7 +841,7 @@ struct statx_op_args {
 	daos_iod_t         iod;
 	daos_recx_t        recx;
 	d_sg_list_t        sgl;
-	d_iov_t            sg_iovs[INODE_AKEYS];
+	d_iov_t            sg_iovs[HLM_INODE_AKEYS];
 	struct dfs_entry   entry;
 	daos_array_stbuf_t array_stbuf;
 };
@@ -851,6 +851,7 @@ ostatx_cb(tse_task_t *task, void *data)
 {
 	struct dfs_statx_args *args    = daos_task_get_args(task);
 	struct statx_op_args  *op_args = *((struct statx_op_args **)data);
+	bool                   is_obj_hardlink = dfs_is_hardlink(args->obj->mode);
 	int                    rc2, rc = task->dt_result;
 
 	if (rc != 0) {
@@ -863,6 +864,21 @@ ostatx_cb(tse_task_t *task, void *data)
 	if (args->obj->oid.hi != op_args->entry.oid.hi ||
 	    args->obj->oid.lo != op_args->entry.oid.lo)
 		D_GOTO(out, rc = -DER_ENOENT);
+
+	/*
+	 * If we fetched from dentry (not HLM) and the entry has hardlink bit set,
+	 * we need to fetch the actual metadata from HLM.
+	 */
+	if (!is_obj_hardlink && dfs_is_hardlink(op_args->entry.mode)) {
+		rc = hlm_fetch_entry(args->dfs->hlm_oh, args->dfs->th, &op_args->entry.oid,
+				     &op_args->entry);
+		if (rc) {
+			D_ERROR("Failed to fetch entry from HLM (%d)\n", rc);
+			D_GOTO(out, rc = daos_errno2der(rc));
+		}
+		/* Update obj->mode to reflect hardlink status */
+		args->obj->mode |= MODE_HARDLINK_BIT;
+	}
 
 	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf,
 				NULL);
@@ -880,8 +896,8 @@ ostatx_cb(tse_task_t *task, void *data)
 		args->stbuf->st_size = op_args->entry.value_len;
 	}
 
-	args->stbuf->st_nlink = 1;
-	args->stbuf->st_mode  = op_args->entry.mode;
+	args->stbuf->st_nlink = op_args->entry.ref_cnt ? op_args->entry.ref_cnt : 1;
+	args->stbuf->st_mode  = op_args->entry.mode & ~MODE_HARDLINK_BIT;
 	args->stbuf->st_uid   = op_args->entry.uid;
 	args->stbuf->st_gid   = op_args->entry.gid;
 	if (tspec_gt(args->stbuf->st_ctim, args->stbuf->st_mtim)) {
@@ -894,9 +910,12 @@ ostatx_cb(tse_task_t *task, void *data)
 
 out:
 	D_FREE(op_args);
-	rc2 = daos_obj_close(args->parent_oh, NULL);
-	if (rc == 0)
-		rc = rc2;
+	/* Only close parent_oh if we opened it (non-hardlink case) */
+	if (!is_obj_hardlink && daos_handle_is_valid(args->parent_oh)) {
+		rc2 = daos_obj_close(args->parent_oh, NULL);
+		if (rc == 0)
+			rc = rc2;
+	}
 	if (rc == 0)
 		DFS_OP_STAT_INCR(args->dfs, DOS_STAT);
 	return rc;
@@ -917,7 +936,8 @@ statx_task(tse_task_t *task)
 
 	D_ALLOC_PTR(op_args);
 	if (op_args == NULL) {
-		daos_obj_close(args->parent_oh, NULL);
+		if (!dfs_is_hardlink(args->obj->mode))
+			daos_obj_close(args->parent_oh, NULL);
 		return -DER_NOMEM;
 	}
 
@@ -928,12 +948,23 @@ statx_task(tse_task_t *task)
 		D_GOTO(err1_out, rc);
 	}
 
-	/** set obj_fetch parameters */
-	d_iov_set(&op_args->dkey, (void *)args->obj->name, strlen(args->obj->name));
+	/*
+	 * Set up fetch parameters based on whether obj is already known to be a hardlink.
+	 * For hardlinks, fetch from HLM using OID as dkey.
+	 * For non-hardlinks, fetch from parent dir using name as dkey.
+	 */
+	if (dfs_is_hardlink(args->obj->mode)) {
+		/* For hardlinks, use OID as dkey and fetch from HLM */
+		d_iov_set(&op_args->dkey, &args->obj->oid, sizeof(daos_obj_id_t));
+		op_args->recx.rx_nr = END_HLM_IDX;
+	} else {
+		/* For non-hardlinks, use name as dkey and fetch from parent */
+		d_iov_set(&op_args->dkey, (void *)args->obj->name, strlen(args->obj->name));
+		op_args->recx.rx_nr = END_IDX;
+	}
 	d_iov_set(&op_args->iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	op_args->iod.iod_nr    = 1;
 	op_args->recx.rx_idx   = 0;
-	op_args->recx.rx_nr    = END_IDX;
 	op_args->iod.iod_recxs = &op_args->recx;
 	op_args->iod.iod_type  = DAOS_IOD_ARRAY;
 	op_args->iod.iod_size  = 1;
@@ -950,12 +981,16 @@ statx_task(tse_task_t *task)
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.gid, sizeof(gid_t));
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.value_len, sizeof(daos_size_t));
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.obj_hlc, sizeof(uint64_t));
+	/* For HLM fetch, also get ref_cnt */
+	if (dfs_is_hardlink(args->obj->mode))
+		d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.ref_cnt, sizeof(uint64_t));
 	op_args->sgl.sg_nr     = i;
 	op_args->sgl.sg_nr_out = 0;
 	op_args->sgl.sg_iovs   = op_args->sg_iovs;
 
 	fetch_arg        = daos_task_get_args(fetch_task);
-	fetch_arg->oh    = args->parent_oh;
+	/* Use HLM object handle for hardlinks, parent object handle otherwise */
+	fetch_arg->oh    = dfs_is_hardlink(args->obj->mode) ? args->dfs->hlm_oh : args->parent_oh;
 	fetch_arg->th    = args->dfs->th;
 	fetch_arg->flags = DAOS_COND_DKEY_FETCH;
 	fetch_arg->dkey  = &op_args->dkey;
@@ -1029,7 +1064,8 @@ err2_out:
 	tse_task_complete(fetch_task, rc);
 err1_out:
 	D_FREE(op_args);
-	daos_obj_close(args->parent_oh, NULL);
+	if (!dfs_is_hardlink(args->obj->mode))
+		daos_obj_close(args->parent_oh, NULL);
 
 	return rc;
 }
@@ -1037,9 +1073,10 @@ err1_out:
 int
 dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 {
-	daos_handle_t          oh;
+	daos_handle_t          oh = DAOS_HDL_INVAL;
 	tse_task_t            *task;
 	struct dfs_statx_args *args;
+	bool                   is_hardlink;
 	int                    rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1049,13 +1086,20 @@ dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 	if (ev == NULL)
 		return dfs_ostat(dfs, obj, stbuf);
 
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
-	if (rc)
-		return daos_der2errno(rc);
+	/* Check if obj is already known to be a hardlink */
+	is_hardlink = dfs_is_hardlink(obj->mode);
+
+	/* Only need to open parent if not a hardlink (hardlinks fetch from HLM) */
+	if (!is_hardlink) {
+		rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+	}
 
 	rc = dc_task_create(statx_task, NULL, ev, &task);
 	if (rc) {
-		daos_obj_close(oh, NULL);
+		if (!is_hardlink)
+			daos_obj_close(oh, NULL);
 		return daos_der2errno(rc);
 	}
 	D_ASSERT(ev);
@@ -1114,6 +1158,16 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 	if (!exists)
 		return ENOENT;
 
+	/* If entry is a hardlink, fetch metadata from HLM */
+	if (dfs_is_hardlink(entry.mode)) {
+		rc = hlm_fetch_entry(dfs->hlm_oh, dfs->th, &entry.oid, &entry);
+		if (rc) {
+			D_ERROR("Failed to fetch entry '%s' oid=" DF_OID " from HLM (%d)\n", name,
+				DP_OID(entry.oid), rc);
+			return rc;
+		}
+	}
+
 	if (!S_ISLNK(entry.mode)) {
 		if (mask == F_OK)
 			return 0;
@@ -1155,6 +1209,8 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	mode_t           orig_mode;
 	const char      *entry_name;
 	struct timespec  now;
+	bool             is_hardlink;
+	daos_obj_id_t    hlm_oid;
 	int              rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1186,14 +1242,35 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		return ENOTSUP;
 	}
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
+	}
+
+restart:
+	is_hardlink = false;
 	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, dfs->th, name, len, true, &exists, &entry, 0, NULL,
-			 NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, oh, th, name, len, true, &exists, &entry, 0, NULL, NULL,
+			 NULL);
 	if (rc)
-		return rc;
+		D_GOTO(out, rc);
 
 	if (!exists)
-		return ENOENT;
+		D_GOTO(out, rc = ENOENT);
+
+	/* If entry is a hardlink, fetch metadata from HLM */
+	if (dfs_is_hardlink(entry.mode)) {
+		is_hardlink = true;
+		oid_cp(&hlm_oid, entry.oid);
+		rc = hlm_fetch_entry(dfs->hlm_oh, th, &hlm_oid, &entry);
+		if (rc) {
+			D_ERROR("Failed to fetch entry '%s' from HLM (%d)\n", name, rc);
+			D_GOTO(out, rc);
+		}
+	}
 
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
@@ -1203,14 +1280,20 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		if (rc) {
 			D_ERROR("Failed to lookup symlink %s\n", entry.value);
 			D_FREE(entry.value);
-			return rc;
+			D_GOTO(out, rc);
 		}
 
 		rc = daos_obj_open(dfs->coh, sym->parent_oid, DAOS_OO_RW, &oh, NULL);
 		D_FREE(entry.value);
 		if (rc) {
 			dfs_release(sym);
-			return daos_der2errno(rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		/* Check if symlink target is a hardlink */
+		if (dfs_is_hardlink(sym->mode)) {
+			is_hardlink = true;
+			oid_cp(&hlm_oid, sym->oid);
 		}
 
 		orig_mode  = sym->mode;
@@ -1223,14 +1306,20 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 	if ((mode & S_IFMT) && (orig_mode & S_IFMT) != (mode & S_IFMT)) {
 		D_ERROR("Cannot change entry type\n");
-		D_GOTO(out, rc = EINVAL);
+		D_GOTO(out_sym, rc = EINVAL);
 	}
 
 	/** set the type mode in case user has not passed it */
 	mode |= orig_mode & S_IFMT;
 
-	/** set dkey as the entry name */
-	d_iov_set(&dkey, (void *)entry_name, len);
+	/** For hardlinks, update HLM with OID as dkey; otherwise use parent dir with name as dkey
+	 */
+	if (is_hardlink) {
+		d_iov_set(&dkey, &hlm_oid, sizeof(daos_obj_id_t));
+		oh = dfs->hlm_oh;
+	} else {
+		d_iov_set(&dkey, (void *)entry_name, len);
+	}
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod.iod_recxs   = recxs;
 	iod.iod_type    = DAOS_IOD_ARRAY;
@@ -1245,7 +1334,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
-		D_GOTO(out, rc = errno);
+		D_GOTO(out_sym, rc = errno);
 
 	/** set sgl for update */
 	sgl.sg_nr     = 3;
@@ -1258,14 +1347,42 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update mode, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
+		D_GOTO(out_sym, rc = daos_der2errno(rc));
+	}
+
+	if (dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			if (rc == -DER_TX_RESTART) {
+				rc = daos_tx_restart(th, NULL);
+				if (rc) {
+					D_ERROR("daos_tx_restart() failed (%d)\n", rc);
+					D_GOTO(out_sym, rc = daos_der2errno(rc));
+				}
+				if (S_ISLNK(entry.mode)) {
+					dfs_release(sym);
+					daos_obj_close(oh, NULL);
+				}
+				goto restart;
+			}
+			D_GOTO(out_sym, rc = daos_der2errno(rc));
+		}
 	}
 
 	DFS_OP_STAT_INCR(dfs, DOS_CHMOD);
-out:
+out_sym:
 	if (S_ISLNK(entry.mode)) {
 		dfs_release(sym);
 		daos_obj_close(oh, NULL);
+	}
+out:
+	if (dfs->use_dtx) {
+		if (rc == 0)
+			daos_tx_close(th, NULL);
+		else
+			daos_tx_abort(th, NULL);
 	}
 	return rc;
 }
@@ -1287,6 +1404,8 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	const char      *entry_name;
 	int              i;
 	struct timespec  now;
+	bool             is_hardlink = false;
+	daos_obj_id_t    hlm_oid;
 	int              rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1312,14 +1431,34 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		oh = parent->oh;
 	}
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
+	}
+
+restart:
 	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
-			 NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, oh, th, name, len, true, &exists, &entry, 0, NULL, NULL,
+			 NULL);
 	if (rc)
-		return rc;
+		D_GOTO(out, rc);
 
 	if (!exists)
-		return ENOENT;
+		D_GOTO(out, rc = ENOENT);
+
+	/* If entry is a hardlink, fetch metadata from HLM */
+	if (dfs_is_hardlink(entry.mode)) {
+		is_hardlink = true;
+		oid_cp(&hlm_oid, entry.oid);
+		rc = hlm_fetch_entry(dfs->hlm_oh, th, &hlm_oid, &entry);
+		if (rc) {
+			D_ERROR("Failed to fetch entry '%s' from HLM (%d)\n", name, rc);
+			D_GOTO(out, rc);
+		}
+	}
 
 	if (uid == -1 && gid == -1)
 		D_GOTO(out, rc = 0);
@@ -1332,15 +1471,22 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 			D_DEBUG(DB_TRACE, "Failed to lookup symlink '%s': %d (%s)\n", entry.value,
 				rc, strerror(rc));
 			D_FREE(entry.value);
-			return rc;
+			D_GOTO(out, rc);
 		}
 
 		rc = daos_obj_open(dfs->coh, sym->parent_oid, DAOS_OO_RW, &oh, NULL);
 		D_FREE(entry.value);
 		if (rc) {
 			dfs_release(sym);
-			return daos_der2errno(rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
+
+		/* Check if symlink target is a hardlink */
+		if (dfs_is_hardlink(sym->mode)) {
+			is_hardlink = true;
+			oid_cp(&hlm_oid, sym->oid);
+		}
+
 		entry_name = sym->name;
 		len        = strlen(entry_name);
 	} else {
@@ -1351,7 +1497,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
-		D_GOTO(out, rc = errno);
+		D_GOTO(out_sym, rc = errno);
 
 	i               = 0;
 	recxs[i].rx_idx = CTIME_IDX;
@@ -1378,8 +1524,14 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		i++;
 	}
 
-	/** set dkey as the entry name */
-	d_iov_set(&dkey, (void *)entry_name, len);
+	/** For hardlinks, update HLM with OID as dkey; otherwise use parent dir with name as dkey
+	 */
+	if (is_hardlink) {
+		d_iov_set(&dkey, &hlm_oid, sizeof(daos_obj_id_t));
+		oh = dfs->hlm_oh;
+	} else {
+		d_iov_set(&dkey, (void *)entry_name, len);
+	}
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod.iod_nr    = i;
 	iod.iod_recxs = recxs;
@@ -1394,14 +1546,42 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update owner/group, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
+		D_GOTO(out_sym, rc = daos_der2errno(rc));
+	}
+
+	if (dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			if (rc == -DER_TX_RESTART) {
+				rc = daos_tx_restart(th, NULL);
+				if (rc) {
+					D_ERROR("daos_tx_restart() failed (%d)\n", rc);
+					D_GOTO(out_sym, rc = daos_der2errno(rc));
+				}
+				if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
+					dfs_release(sym);
+					daos_obj_close(oh, NULL);
+				}
+				goto restart;
+			}
+			D_GOTO(out_sym, rc = daos_der2errno(rc));
+		}
 	}
 
 	DFS_OP_STAT_INCR(dfs, DOS_CHOWN);
-out:
+out_sym:
 	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
 		dfs_release(sym);
 		daos_obj_close(oh, NULL);
+	}
+out:
+	if (dfs->use_dtx) {
+		if (rc == 0)
+			daos_tx_close(th, NULL);
+		else
+			daos_tx_abort(th, NULL);
 	}
 	return rc;
 }
@@ -1411,7 +1591,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
 	daos_handle_t      th = DAOS_TX_NONE;
 	daos_key_t         dkey;
-	daos_handle_t      oh;
+	daos_handle_t      oh = DAOS_HDL_INVAL;
 	d_sg_list_t        sgl;
 	d_iov_t            sg_iovs[10];
 	daos_iod_t         iod;
@@ -1424,7 +1604,10 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	uint64_t           obj_hlc     = 0;
 	struct stat        rstat       = {};
 	daos_array_stbuf_t array_stbuf = {0};
+	int                saved_flags;
 	int                rc;
+	mode_t             st_mode;
+	bool               is_hardlink;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -1445,12 +1628,42 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		}
 	}
 
-	/** Open parent object and fetch entry of obj from it */
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		return daos_der2errno(rc);
+	saved_flags = flags;
 
-	len = strlen(obj->name);
+	if (dfs->use_dtx) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
+	}
+
+restart:
+	len          = strlen(obj->name);
+	flags        = saved_flags;
+	i            = 0;
+	hlc_recx_idx = 0;
+	set_size     = false;
+	set_mtime    = false;
+	set_ctime    = false;
+	st_mode      = 0;
+	is_hardlink  = false;
+
+	/** Set up dkey and object handle based on hardlink status */
+	if (dfs_is_hardlink(obj->mode)) {
+		/* For hardlinks, attrs are stored in HLM with OID as dkey */
+		d_iov_set(&dkey, &obj->oid, sizeof(daos_obj_id_t));
+		oh          = dfs->hlm_oh;
+		st_mode     = MODE_HARDLINK_BIT;
+		is_hardlink = true;
+	} else {
+		/** Open parent object and fetch entry of obj from it */
+		rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
+		if (rc)
+			D_GOTO(out, rc = daos_der2errno(rc));
+		/** set dkey as the entry name */
+		d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+	}
 
 	/*
 	 * Fetch the remote entry first so we can check the oid, then keep track locally of what has
@@ -1463,8 +1676,15 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	if (rc)
 		D_GOTO(out_obj, rc);
 
-	/** set dkey as the entry name */
-	d_iov_set(&dkey, (void *)obj->name, len);
+	/** entry_stat would update the hardlink bit if set remotely */
+	if (!is_hardlink && dfs_is_hardlink(obj->mode)) {
+		daos_obj_close(oh, NULL);
+		d_iov_set(&dkey, &obj->oid, sizeof(daos_obj_id_t));
+		oh          = dfs->hlm_oh;
+		st_mode     = MODE_HARDLINK_BIT;
+		is_hardlink = true;
+	}
+
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod.iod_recxs = recxs;
 	iod.iod_type  = DAOS_IOD_ARRAY;
@@ -1494,7 +1714,8 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	}
 
 	if (flags & DFS_SET_ATTR_MODE) {
-		d_iov_set(&sg_iovs[i], &stbuf->st_mode, sizeof(mode_t));
+		st_mode |= stbuf->st_mode;
+		d_iov_set(&sg_iovs[i], &st_mode, sizeof(mode_t));
 		recxs[i].rx_idx = MODE_IDX;
 		recxs[i].rx_nr  = sizeof(mode_t);
 		i++;
@@ -1565,7 +1786,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		D_GOTO(out_obj, rc = EINVAL);
 
 	if (set_size) {
-		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
+		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, stbuf->st_size, NULL);
 		if (rc)
 			D_GOTO(out_obj, rc = daos_der2errno(rc));
 
@@ -1579,7 +1800,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		 * an array stat for the hlc.
 		 */
 		/** TODO - need an array API to just stat the max epoch without size */
-		rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
+		rc = daos_array_stat(obj->oh, DAOS_TX_NONE, &array_stbuf, NULL);
 		if (rc)
 			D_GOTO(out_obj, rc = daos_der2errno(rc));
 
@@ -1618,11 +1839,38 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 
+	if (dfs->use_dtx) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			if (rc == -DER_TX_RESTART) {
+				rc = daos_tx_restart(th, NULL);
+				if (rc) {
+					D_ERROR("daos_tx_restart() failed (%d)\n", rc);
+					D_GOTO(out_obj, rc = daos_der2errno(rc));
+				}
+				if (!is_hardlink)
+					daos_obj_close(oh, NULL);
+				goto restart;
+			}
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+		}
+	}
+
 	DFS_OP_STAT_INCR(dfs, DOS_SETATTR);
 out_stat:
 	*stbuf = rstat;
 out_obj:
-	daos_obj_close(oh, NULL);
+	if (!is_hardlink)
+		daos_obj_close(oh, NULL);
+out:
+	if (dfs->use_dtx) {
+		if (rc == 0)
+			daos_tx_close(th, NULL);
+		else
+			daos_tx_abort(th, NULL);
+	}
 	return rc;
 }
 
@@ -1721,6 +1969,180 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 	*size = val_size;
 	DFS_OP_STAT_INCR(obj->dfs, DOS_READLINK);
 	return 0;
+}
+
+int
+dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *name, dfs_obj_t **_new_obj,
+	 struct stat *stbuf)
+{
+	struct dfs_entry entry   = {0};
+	dfs_obj_t       *new_obj = NULL;
+	daos_handle_t    th      = DAOS_TX_NONE;
+	daos_handle_t    oh      = DAOS_HDL_INVAL;
+	size_t           len;
+	int              rc, rc2;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (dfs->amode != O_RDWR)
+		return EPERM;
+	if (obj == NULL)
+		return EINVAL;
+	/* Hardlinks are only supported for regular files */
+	if (!S_ISREG(obj->mode))
+		return EPERM;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+
+	/* Check if HLM object is available */
+	if (!daos_handle_is_valid(dfs->hlm_oh)) {
+		D_ERROR("HLM object not available for hardlink support\n");
+		return ENOTSUP;
+	}
+
+	rc = check_name(name, &len);
+	if (rc)
+		return rc;
+
+	/* Always use DTX for hardlink operations to ensure consistency */
+	rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+	if (rc) {
+		D_ERROR("daos_tx_open() failed (%d)\n", rc);
+		return daos_der2errno(rc);
+	}
+
+restart:
+	/* Fetch the target entry, handling hardlinks transparently */
+	oh = DAOS_HDL_INVAL;
+	rc = dfsobj_fetch_entry(dfs, th, obj, &oh, &entry);
+	if (rc) {
+		D_ERROR("Failed to fetch target entry (%d)\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* Allocate new_obj and open array early so failures can be handled in tx */
+	if (_new_obj) {
+		D_ALLOC_PTR(new_obj);
+		if (new_obj == NULL)
+			D_GOTO(out_close, rc = ENOMEM);
+
+		/* Open the array object for the file */
+		rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RW, 1,
+					       entry.chunk_size ? entry.chunk_size
+								: dfs->attr.da_chunk_size,
+					       &new_obj->oh, NULL);
+		if (rc) {
+			D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n", DP_RC(rc));
+			D_FREE(new_obj);
+			new_obj = NULL;
+			D_GOTO(out_close, rc = daos_der2errno(rc));
+		}
+	}
+
+	/* Step 1: If hardlink bit is not set, migrate metadata to HLM */
+	if (!dfs_is_hardlink(entry.mode)) {
+		/* 1a. Copy dentry and xattrs to HLM object with dkey as oid */
+		rc = hlm_copy_entry(dfs, th, oh, obj->name, &entry);
+		if (rc) {
+			D_ERROR("Failed to copy entry to HLM (%d)\n", rc);
+			D_GOTO(out_close, rc);
+		}
+
+		/* 1b. Set hardlink bit in the target dentry */
+		rc = set_hardlink_bit(dfs, th, oh, obj, entry.mode);
+		if (rc) {
+			D_ERROR("Failed to set hardlink bit (%d)\n", rc);
+			D_GOTO(out_close, rc);
+		}
+
+		/* 1c. Remove extended attributes from target dentry (not HLM) */
+		rc = remove_xattrs_from_entry(dfs, th, oh, obj->name);
+		if (rc) {
+			D_ERROR("Failed to remove xattrs from entry (%d)\n", rc);
+			D_GOTO(out_close, rc);
+		}
+	} else {
+		/* Entry is already a hardlink, increment ref_cnt in HLM */
+		rc = hlm_update_ref_cnt(dfs, th, &entry, 1);
+		if (rc) {
+			D_ERROR("Failed to increment ref_cnt in HLM (%d)\n", rc);
+			D_GOTO(out_close, rc);
+		}
+	}
+
+	/* Step 2: Create dentry for link_name with same value as target */
+	/* Set the hardlink bit in the new entry's mode as well */
+	entry.mode |= MODE_HARDLINK_BIT;
+	rc = insert_entry(dfs->layout_v, parent->oh, th, name, len, DAOS_COND_DKEY_INSERT, &entry);
+	if (rc) {
+		D_ERROR("Failed to create link entry (%d)\n", rc);
+		D_GOTO(out_close, rc);
+	}
+
+	if (daos_handle_is_valid(oh))
+		daos_obj_close(oh, NULL);
+	oh = DAOS_HDL_INVAL;
+
+	rc = daos_tx_commit(th, NULL);
+	if (rc) {
+		if (rc != -DER_TX_RESTART)
+			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+		D_GOTO(out_close, rc = daos_der2errno(rc));
+	}
+
+	daos_tx_close(th, NULL);
+	th = DAOS_TX_NONE;
+
+	/* Populate new_obj fields after successful commit */
+	if (new_obj) {
+		strncpy(new_obj->name, name, len + 1);
+		oid_cp(&new_obj->parent_oid, parent->oid);
+		oid_cp(&new_obj->oid, entry.oid);
+		new_obj->mode  = entry.mode;
+		new_obj->dfs   = dfs;
+		new_obj->flags = obj->flags;
+		*_new_obj      = new_obj;
+	}
+
+	/* Populate stbuf if requested */
+	if (stbuf) {
+		memset(stbuf, 0, sizeof(struct stat));
+		stbuf->st_nlink        = entry.ref_cnt;
+		stbuf->st_mode         = entry.mode & ~MODE_HARDLINK_BIT;
+		stbuf->st_uid          = entry.uid;
+		stbuf->st_gid          = entry.gid;
+		stbuf->st_mtim.tv_sec  = entry.mtime;
+		stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+		stbuf->st_ctim.tv_sec  = entry.ctime;
+		stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+		stbuf->st_atim         = stbuf->st_mtim;
+		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
+	}
+
+	DFS_OP_STAT_INCR(dfs, DOS_LINK);
+	return 0;
+
+out_close:
+	if (new_obj) {
+		daos_array_close(new_obj->oh, NULL);
+		D_FREE(new_obj);
+	}
+	if (daos_handle_is_valid(oh))
+		daos_obj_close(oh, NULL);
+out:
+	if (daos_handle_is_valid(th)) {
+		if (rc == ERESTART) {
+			rc2 = daos_tx_restart(th, NULL);
+			if (rc2 == 0)
+				goto restart;
+			rc = daos_der2errno(rc2);
+		}
+		daos_tx_abort(th, NULL);
+		daos_tx_close(th, NULL);
+	}
+	return rc;
 }
 
 int

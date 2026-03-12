@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,9 +18,10 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 {
 	struct fuse_entry_param  entry = {0};
 	d_list_t		*rlink;
-	ino_t			wipe_parent = 0;
-	char			wipe_name[NAME_MAX + 1];
+	struct dfuse_dentry      released = {0};
 	int			rc;
+
+	D_INIT_LIST_HEAD(&released.dd_list);
 
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
@@ -110,21 +111,20 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
-		} else if ((inode->ie_parent != ie->ie_parent) ||
-			(strncmp(inode->ie_name, ie->ie_name, NAME_MAX) != 0)) {
-			DFUSE_TRA_DEBUG(inode, "File has moved from " DF_DE " to " DF_DE,
-					DP_DE(inode->ie_name), DP_DE(ie->ie_name));
-
-			dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
-
-			/* Save the old name so that we can invalidate it in later */
-			wipe_parent = inode->ie_parent;
-			strncpy(wipe_name, inode->ie_name, NAME_MAX);
-			wipe_name[NAME_MAX] = '\0';
-
-			inode->ie_parent = ie->ie_parent;
-			strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
-			inode->ie_name[NAME_MAX] = '\0';
+		} else {
+			if (ie->ie_stat.st_nlink > 1) {
+				/* Hardlink: add as additional dentry */
+				rc = dfuse_ie_dentry_add(inode, ie->ie_parent, ie->ie_name);
+				if (rc != 0)
+					DHL_ERROR(inode, rc, "dentry_add failed");
+				dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
+			} else {
+				/* Single link: replace dentry, release old ones */
+				dfuse_ie_dentry_replace(inode, ie->ie_parent, ie->ie_name,
+							ie->ie_parent, ie->ie_name, &released);
+				if (released.dd_name[0] != '\0')
+					dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
+			}
 		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(dfuse_info, ie);
@@ -160,13 +160,7 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 	}
 
-	if (wipe_parent == 0)
-		return;
-
-	rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, wipe_parent, wipe_name,
-					      strnlen(wipe_name, NAME_MAX));
-	if (rc && rc != -ENOENT)
-		DS_ERROR(-rc, "inval_entry() failed");
+	dfuse_ie_dentry_inval(dfuse_info, &released);
 
 	return;
 out_err:

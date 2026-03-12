@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -386,6 +386,8 @@ struct dfuse_inode_ops {
 		       const char *newname, unsigned int flags);
 	void (*symlink)(fuse_req_t req, const char *link,
 			struct dfuse_inode_entry *parent, const char *name);
+	void (*hardlink)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			 struct dfuse_inode_entry *parent, const char *name);
 	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
 	void (*setxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
@@ -472,6 +474,7 @@ struct dfuse_pool {
 	ACTION(UNLINK)                                                                             \
 	ACTION(READDIR)                                                                            \
 	ACTION(SYMLINK)                                                                            \
+	ACTION(LINK)                                                                               \
 	ACTION(READLINK)                                                                           \
 	ACTION(OPENDIR)                                                                            \
 	ACTION(SETXATTR)                                                                           \
@@ -928,6 +931,26 @@ dfuse_loop(struct dfuse_info *dfuse_info);
 #define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
 
 /**
+ * Directory entry for tracking hardlink names.
+ *
+ * For hardlinks, a single inode can have multiple names in different
+ * directories. This structure tracks each (parent, name) pair.
+ */
+struct dfuse_dentry {
+	/**
+	 * Link in the inode's ie_dentries list, or list head when used
+	 * to hold released dentries from dfuse_replace_dentries().
+	 */
+	d_list_t   dd_list;
+
+	/** The parent inode number */
+	fuse_ino_t dd_parent;
+
+	/** The name of this entry */
+	char       dd_name[NAME_MAX + 1];
+};
+
+/**
  * Inode handle.
  *
  * Describes any entry in the projection that the kernel knows about, may
@@ -962,6 +985,12 @@ struct dfuse_inode_entry {
 	 * a reference on the parent so the inode may not be valid.
 	 */
 	fuse_ino_t                ie_parent;
+
+	/** List of all directory entries (dentries) for this inode.
+	 * For hardlinks, an inode can have multiple names in different
+	 * directories. Each dentry tracks a (parent, name) pair.
+	 */
+	d_list_t                  ie_dentries;
 
 	struct dfuse_cont        *ie_dfs;
 
@@ -1010,6 +1039,12 @@ struct dfuse_inode_entry {
 	 * acquired and released to flush outstanding writes for getattr, close and forget.
 	 */
 	pthread_rwlock_t          ie_wlock;
+
+	/* Lock protecting ie_parent, ie_name, and ie_dentries from concurrent access.
+	 * This is needed because ival_loop runs in a separate thread and accesses these fields.
+	 */
+	pthread_spinlock_t        ie_dentry_lock;
+
 	/** Last file closed in this directory was read linearly.  Directories only.
 	 *
 	 * Set on close() of a file in the directory to the value of linear_read from the fh.
@@ -1106,7 +1141,102 @@ dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
 }
 
-/* Drop a reference on an inode. */
+/**
+ * Add a dentry for an inode if it does not already exist.
+ *
+ * If the primary dentry (ie_parent, ie_name) is not set, this becomes
+ * the primary dentry. Otherwise, if the dentry doesn't already exist
+ * in ie_dentries list, it is added.
+ *
+ * \param[in] ie       The inode entry
+ * \param[in] parent   The parent inode number
+ * \param[in] name     The name of the entry
+ *
+ * \return 0 on success, -DER_NOMEM on allocation failure
+ */
+int
+dfuse_ie_dentry_add(struct dfuse_inode_entry *ie, fuse_ino_t parent, const char *name);
+
+/**
+ * Remove a dentry from an inode.
+ *
+ * If the matching dentry is the primary, promote the first entry from
+ * ie_dentries to be the new primary. If ie_dentries is empty, clear
+ * the primary (ie_name[0] = '\0').
+ *
+ * \param[in] ie       The inode entry
+ * \param[in] parent   The parent inode number
+ * \param[in] name     The name of the entry
+ */
+void
+dfuse_ie_dentry_remove(struct dfuse_inode_entry *ie, fuse_ino_t parent, const char *name);
+
+/**
+ * Replace a dentry or release all dentries and set a new primary.
+ *
+ * If a dentry matching old_parent/old_name exists, replace it with
+ * new_parent/new_name. If not found, copy the current primary to
+ * released->dd_parent/dd_name, move ie_dentries to released->dd_list,
+ * and set new_parent/new_name as the new primary.
+ *
+ * \param[in]  ie          The inode entry
+ * \param[in]  old_parent  The old parent inode number to find
+ * \param[in]  old_name    The old name to find
+ * \param[in]  new_parent  The new parent inode number
+ * \param[in]  new_name    The new name
+ * \param[out] released    Structure to receive released dentries if old not found
+ */
+void
+dfuse_ie_dentry_replace(struct dfuse_inode_entry *ie, fuse_ino_t old_parent, const char *old_name,
+			fuse_ino_t new_parent, const char *new_name, struct dfuse_dentry *released);
+
+/**
+ * Copy all dentries from an inode to a released structure.
+ *
+ * Copies the primary dentry to released->dd_parent/dd_name,
+ * moves ie_dentries to released->dd_list. The primary dentry
+ * in the inode is not cleared for now.
+ *
+ * \param[in]  ie          The inode entry
+ * \param[out] released    Structure to receive all dentries
+ */
+void
+dfuse_ie_dentry_clear(struct dfuse_inode_entry *ie, struct dfuse_dentry *released);
+
+/**
+ * Invalidate and free all dentries in a released structure.
+ *
+ * Calls fuse_lowlevel_notify_inval_entry() for the primary dentry (if set)
+ * and each secondary dentry in dd_list, then frees the secondary entries.
+ * The released struct itself is not freed. No spinlock is acquired.
+ *
+ * \param[in] dfuse_info  The dfuse info structure (for session)
+ * \param[in] released    Structure containing dentries to invalidate
+ *
+ * \return 0 on success, -EBADF if fuse session is dead
+ */
+int
+dfuse_ie_dentry_inval(struct dfuse_info *dfuse_info, struct dfuse_dentry *released);
+
+/**
+ * Delete and free all dentries in a released structure.
+ *
+ * Calls fuse_lowlevel_notify_inval_inode() for the inode, then
+ * fuse_lowlevel_notify_delete() for the primary dentry (if set)
+ * and each secondary dentry in dd_list, then frees the secondary entries.
+ * The released struct itself is not freed. No spinlock is acquired.
+ * Skip the dentry matching exclude_parent/exclude_name (kernel already knows about it).
+ *
+ * \param[in] dfuse_info     The dfuse info structure (for session)
+ * \param[in] ie             The inode entry (for inode number)
+ * \param[in] released       Structure containing dentries to delete
+ * \param[in] exclude_parent Parent inode of dentry to skip
+ * \param[in] exclude_name   Name of dentry to skip
+ */
+void
+	     dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
+				   struct dfuse_dentry *released, fuse_ino_t exclude_parent,
+				   const char *exclude_name);
 
 extern char *duns_xattr_name;
 
@@ -1293,6 +1423,9 @@ dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
 		 const char *);
 
 void
+dfuse_cb_link(fuse_req_t, struct dfuse_inode_entry *, struct dfuse_inode_entry *, const char *);
+
+void
 dfuse_cb_setxattr(fuse_req_t, struct dfuse_inode_entry *, const char *,
 		  const char *, size_t, int);
 
@@ -1333,10 +1466,20 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *inode
 int
 _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mode);
 
-/* Mark object as removed and invalidate any kernel data for it */
+/* Mark object as removed and invalidate any kernel data for it.
+ * This function should only be called when the file is actually deleted.
+ * For hardlink removal where file still exists, use dfuse_hardlink_removed() instead.
+ */
 void
-dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t *oid,
-		   struct dfuse_inode_entry *parent, const char *name);
+dfuse_oid_removed(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t *oid,
+		  struct dfuse_inode_entry *parent, const char *name);
+
+/* Handle a hardlink being removed but the file still exists (other links remain).
+ * Removes the dentry from the inode's tracking and replies to fuse.
+ */
+void
+dfuse_hardlink_removed(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t *oid,
+		       struct dfuse_inode_entry *parent, const char *name);
 
 /* dfuse_cont.c */
 void

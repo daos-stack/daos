@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,13 +57,15 @@ dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_
 	    daos_size_t *xsizes);
 
 /* moid is moved oid, oid is clobbered file.
+ * deleted indicates if the clobbered file was actually deleted (last link or regular file),
+ * or just a hardlink was removed (file still has other links).
  * This isn't yet fully compatible with dfuse because we also want to pass in a flag for if the
  * destination exists.
  */
 int
 dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char *name,
 		  dfs_obj_t *new_parent, const char *new_name, daos_obj_id_t *moid,
-		  daos_obj_id_t *oid);
+		  daos_obj_id_t *oid, bool *deleted);
 
 /* Set the in-memory parent, but takes the parent, rather than another file object */
 void
@@ -101,6 +104,23 @@ dfs_relink_root(daos_handle_t coh);
 /** Internal routine for async ostat.*/
 int
 dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev);
+
+/**
+ * Internal routine for remove that returns whether the file was actually deleted.
+ * For hardlinks, the file is only deleted when the last link is removed.
+ *
+ * \param[in]  dfs     DFS handle
+ * \param[in]  parent  Parent directory object
+ * \param[in]  name    Name of entry to remove
+ * \param[in]  force   If true, remove directory contents recursively
+ * \param[out] oid     OID of the removed entry (optional)
+ * \param[out] deleted Set to true if the file was actually deleted, false if only a link was
+ *                     removed (hardlink case). Optional, can be NULL.
+ * \return             0 on success, errno on failure
+ */
+int
+dfs_remove_internal(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid,
+		    bool *deleted);
 
 #if defined(__cplusplus)
 }

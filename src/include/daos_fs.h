@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -893,6 +893,23 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
 int
 dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *parent2,
 	     const char *name2);
+
+/**
+ * Create a hard link to an existing file.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Open object to create a hard link to.
+ * \param[in]	parent	Opened parent directory object where the new link will be created.
+ *			If NULL, use root obj.
+ * \param[in]	name	Link name of the new hard link.
+ * \param[out]	new_obj	Optional: pointer to return the new opened object handle.
+ * \param[out]	stbuf	Optional: stat struct of the linked object.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *name, dfs_obj_t **new_obj,
+	 struct stat *stbuf);
 
 /**
  * Retrieve mode of an open object.

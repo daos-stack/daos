@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -398,6 +398,29 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
+static void
+df_ll_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, const char *newname)
+{
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_inode_entry *inode;
+	struct dfuse_inode_entry *parent_inode;
+	int                       rc;
+
+	inode        = dfuse_inode_lookup_nf(dfuse_info, ino);
+	parent_inode = dfuse_inode_lookup_nf(dfuse_info, newparent);
+
+	if (!parent_inode->ie_dfs->dfs_ops->hardlink)
+		D_GOTO(err, rc = ENOTSUP);
+
+	DFUSE_IE_STAT_ADD(parent_inode, DS_LINK);
+
+	parent_inode->ie_dfs->dfs_ops->hardlink(req, inode, parent_inode, newname);
+
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
+}
+
 /* Do not allow security xattrs to be set or read, see DAOS-14639 */
 #define XATTR_SEC   "security."
 /* Do not allow either system.posix_acl_default or system.posix_acl_access */
@@ -603,6 +626,7 @@ const struct dfuse_inode_ops dfuse_dfs_ops = {
     .create      = dfuse_cb_create,
     .rename      = dfuse_cb_rename,
     .symlink     = dfuse_cb_symlink,
+    .hardlink    = dfuse_cb_link,
     .setxattr    = dfuse_cb_setxattr,
     .getxattr    = dfuse_cb_getxattr,
     .listxattr   = dfuse_cb_listxattr,
@@ -638,6 +662,7 @@ const struct dfuse_inode_ops dfuse_pool_ops = {
 	ACTION(mknod, df_ll_mknod, true)                                                           \
 	ACTION(rename, df_ll_rename, true)                                                         \
 	ACTION(symlink, df_ll_symlink, true)                                                       \
+	ACTION(link, df_ll_link, true)                                                             \
 	ACTION(setxattr, df_ll_setxattr, true)                                                     \
 	ACTION(getxattr, df_ll_getxattr, false)                                                    \
 	ACTION(listxattr, df_ll_listxattr, false)                                                  \

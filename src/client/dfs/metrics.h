@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,6 +46,7 @@ extern "C" {
 	ACTION(SETXATTR)                                                                           \
 	ACTION(STAT)                                                                               \
 	ACTION(SYMLINK)                                                                            \
+	ACTION(LINK)                                                                               \
 	ACTION(SYNC)                                                                               \
 	ACTION(TRUNCATE)                                                                           \
 	ACTION(UNLINK)                                                                             \

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1284,7 +1284,9 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_linear_read, true);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
+	D_INIT_LIST_HEAD(&ie->ie_dentries);
 	D_RWLOCK_INIT(&ie->ie_wlock, 0);
+	D_SPIN_INIT(&ie->ie_dentry_lock, PTHREAD_PROCESS_PRIVATE);
 }
 
 void
@@ -1324,6 +1326,16 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		d_hash_rec_decref(dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
 
+	/* Free any remaining secondary dentries */
+	while (!d_list_empty(&ie->ie_dentries)) {
+		struct dfuse_dentry *dd;
+
+		dd = d_list_entry(ie->ie_dentries.next, struct dfuse_dentry, dd_list);
+		d_list_del(&dd->dd_list);
+		D_FREE(dd);
+	}
+
+	D_SPIN_DESTROY(&ie->ie_dentry_lock);
 	dfuse_ie_free(dfuse_info, ie);
 }
 
@@ -1789,4 +1801,269 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info)
 	}
 
 	return rc;
+}
+
+/**
+ * Add a dentry for an inode if it does not already exist.
+ */
+int
+dfuse_ie_dentry_add(struct dfuse_inode_entry *ie, fuse_ino_t parent, const char *name)
+{
+	struct dfuse_dentry *dd;
+	struct dfuse_dentry *new_dd = NULL;
+
+	/* Preallocate dentry outside spinlock */
+	D_ALLOC_PTR(new_dd);
+	if (new_dd == NULL)
+		return -DER_NOMEM;
+
+	D_SPIN_LOCK(&ie->ie_dentry_lock);
+
+	/* Check if primary dentry is not set */
+	if (ie->ie_name[0] == '\0') {
+		/* Set as primary dentry */
+		ie->ie_parent = parent;
+		strncpy(ie->ie_name, name, NAME_MAX);
+		ie->ie_name[NAME_MAX] = '\0';
+		goto out;
+	}
+
+	/* Check if this matches the primary dentry */
+	if (ie->ie_parent == parent && strncmp(ie->ie_name, name, NAME_MAX) == 0)
+		goto out;
+
+	/* Check if already in the dentry list */
+	d_list_for_each_entry(dd, &ie->ie_dentries, dd_list) {
+		if (dd->dd_parent == parent && strncmp(dd->dd_name, name, NAME_MAX) == 0)
+			goto out;
+	}
+
+	/* Not found, add the preallocated dentry */
+	new_dd->dd_parent = parent;
+	strncpy(new_dd->dd_name, name, NAME_MAX);
+	new_dd->dd_name[NAME_MAX] = '\0';
+	d_list_add_tail(&new_dd->dd_list, &ie->ie_dentries);
+	new_dd = NULL; /* Don't free it */
+
+out:
+	D_SPIN_UNLOCK(&ie->ie_dentry_lock);
+
+	if (new_dd != NULL)
+		D_FREE(new_dd);
+
+	return 0;
+}
+
+/**
+ * Remove a dentry from an inode.
+ */
+void
+dfuse_ie_dentry_remove(struct dfuse_inode_entry *ie, fuse_ino_t parent, const char *name)
+{
+	struct dfuse_dentry *dd;
+	struct dfuse_dentry *free_dd = NULL;
+
+	D_SPIN_LOCK(&ie->ie_dentry_lock);
+
+	/* Check if this matches the primary dentry */
+	if (ie->ie_parent == parent && strncmp(ie->ie_name, name, NAME_MAX) == 0) {
+		/* Primary matches, promote first from list or clear */
+		if (!d_list_empty(&ie->ie_dentries)) {
+			dd = d_list_entry(ie->ie_dentries.next, struct dfuse_dentry, dd_list);
+			ie->ie_parent = dd->dd_parent;
+			strncpy(ie->ie_name, dd->dd_name, NAME_MAX);
+			ie->ie_name[NAME_MAX] = '\0';
+			d_list_del(&dd->dd_list);
+			free_dd = dd;
+		} else {
+			ie->ie_parent  = 0;
+			ie->ie_name[0] = '\0';
+		}
+		goto out;
+	}
+
+	/* Search in the dentry list */
+	d_list_for_each_entry(dd, &ie->ie_dentries, dd_list) {
+		if (dd->dd_parent == parent && strncmp(dd->dd_name, name, NAME_MAX) == 0) {
+			d_list_del(&dd->dd_list);
+			free_dd = dd;
+			goto out;
+		}
+	}
+
+out:
+	D_SPIN_UNLOCK(&ie->ie_dentry_lock);
+
+	if (free_dd != NULL)
+		D_FREE(free_dd);
+}
+
+/**
+ * Replace a dentry or release all dentries and set a new primary.
+ */
+void
+dfuse_ie_dentry_replace(struct dfuse_inode_entry *ie, fuse_ino_t old_parent, const char *old_name,
+			fuse_ino_t new_parent, const char *new_name, struct dfuse_dentry *released)
+{
+	struct dfuse_dentry *dd;
+
+	/* Initialize released structure */
+	released->dd_parent  = 0;
+	released->dd_name[0] = '\0';
+	D_INIT_LIST_HEAD(&released->dd_list);
+
+	D_SPIN_LOCK(&ie->ie_dentry_lock);
+
+	/* Check if old dentry matches the primary */
+	if (ie->ie_parent == old_parent && strncmp(ie->ie_name, old_name, NAME_MAX) == 0) {
+		/* Replace primary with new values */
+		ie->ie_parent = new_parent;
+		strncpy(ie->ie_name, new_name, NAME_MAX);
+		ie->ie_name[NAME_MAX] = '\0';
+		goto out;
+	}
+
+	/* Search in the dentry list */
+	d_list_for_each_entry(dd, &ie->ie_dentries, dd_list) {
+		if (dd->dd_parent == old_parent && strncmp(dd->dd_name, old_name, NAME_MAX) == 0) {
+			/* Replace this entry with new values */
+			dd->dd_parent = new_parent;
+			strncpy(dd->dd_name, new_name, NAME_MAX);
+			dd->dd_name[NAME_MAX] = '\0';
+			goto out;
+		}
+	}
+
+	/* Old dentry not found - release all and set new primary */
+	released->dd_parent = ie->ie_parent;
+	strncpy(released->dd_name, ie->ie_name, NAME_MAX);
+	released->dd_name[NAME_MAX] = '\0';
+
+	/* Move ie_dentries to released->dd_list */
+	d_list_splice_init(&ie->ie_dentries, &released->dd_list);
+
+	/* Set new primary */
+	ie->ie_parent = new_parent;
+	strncpy(ie->ie_name, new_name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
+
+out:
+	D_SPIN_UNLOCK(&ie->ie_dentry_lock);
+}
+
+/**
+ * Clear all dentries from an inode.
+ */
+void
+dfuse_ie_dentry_clear(struct dfuse_inode_entry *ie, struct dfuse_dentry *released)
+{
+	/* Initialize released structure */
+	released->dd_parent  = 0;
+	released->dd_name[0] = '\0';
+	D_INIT_LIST_HEAD(&released->dd_list);
+
+	D_SPIN_LOCK(&ie->ie_dentry_lock);
+
+	/* Copy primary to released */
+	released->dd_parent = ie->ie_parent;
+	strncpy(released->dd_name, ie->ie_name, NAME_MAX);
+	released->dd_name[NAME_MAX] = '\0';
+
+	/* Move ie_dentries to released->dd_list */
+	d_list_splice_init(&ie->ie_dentries, &released->dd_list);
+
+	/* Lets not clear primary for now */
+
+	D_SPIN_UNLOCK(&ie->ie_dentry_lock);
+}
+
+/**
+ * Invalidate and free all dentries in a released structure.
+ *
+ * Returns -EBADF if fuse session is dead, 0 otherwise.
+ */
+int
+dfuse_ie_dentry_inval(struct dfuse_info *dfuse_info, struct dfuse_dentry *released)
+{
+	struct dfuse_dentry *dd;
+	struct dfuse_dentry *ddn;
+	int                  rc;
+	int                  ret = 0;
+
+	/* Invalidate primary dentry if set */
+	if (released->dd_name[0] != '\0') {
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, released->dd_parent,
+						      released->dd_name,
+						      strnlen(released->dd_name, NAME_MAX));
+		if (rc == -EBADF)
+			ret = -EBADF;
+		else if (rc != 0 && rc != -ENOENT)
+			DS_ERROR(-rc, "inval_entry() error");
+	}
+
+	/* Invalidate and free secondary dentries */
+	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, dd->dd_parent,
+						      dd->dd_name, strnlen(dd->dd_name, NAME_MAX));
+		if (rc == -EBADF)
+			ret = -EBADF;
+		else if (rc != 0 && rc != -ENOENT)
+			DS_ERROR(-rc, "inval_entry() error");
+
+		d_list_del(&dd->dd_list);
+		D_FREE(dd);
+	}
+
+	return ret;
+}
+
+/**
+ * Delete and free all dentries in a released structure.
+ * Skip the dentry matching exclude_parent/exclude_name (kernel already knows about it).
+ */
+void
+dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
+		      struct dfuse_dentry *released, fuse_ino_t exclude_parent,
+		      const char *exclude_name)
+{
+	struct dfuse_dentry *dd;
+	struct dfuse_dentry *ddn;
+	fuse_ino_t           ino = ie->ie_stat.st_ino;
+	int                  rc;
+
+	/* Invalidate the data and attribute caches. As this came from a unlink/rename call
+	 * the kernel will have just done a lookup and knows what was likely unlinked so will
+	 * destroy it anyway, but there is a race here so try and destroy it even though most
+	 * of the time we expect this to fail.
+	 */
+	rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, ino, 0, 0);
+	if (rc != 0 && rc != -ENOENT)
+		DS_ERROR(-rc, "inval_inode() error");
+
+	/* Delete primary dentry if set and not excluded */
+	if (released->dd_name[0] != '\0') {
+		if (released->dd_parent != exclude_parent ||
+		    strncmp(released->dd_name, exclude_name, NAME_MAX) != 0) {
+			rc = fuse_lowlevel_notify_delete(
+			    dfuse_info->di_session, released->dd_parent, ino, released->dd_name,
+			    strnlen(released->dd_name, NAME_MAX));
+			if (rc != 0 && rc != -ENOENT)
+				DS_ERROR(-rc, "notify_delete() error");
+		}
+	}
+
+	/* Delete and free secondary dentries */
+	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
+		if (dd->dd_parent != exclude_parent ||
+		    strncmp(dd->dd_name, exclude_name, NAME_MAX) != 0) {
+			rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, dd->dd_parent, ino,
+							 dd->dd_name,
+							 strnlen(dd->dd_name, NAME_MAX));
+			if (rc != 0 && rc != -ENOENT)
+				DS_ERROR(-rc, "notify_delete() error");
+		}
+
+		d_list_del(&dd->dd_list);
+		D_FREE(dd);
+	}
 }
