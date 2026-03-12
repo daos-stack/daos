@@ -1417,14 +1417,12 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
 
 	rc = dss_rpc_send(rpc);
-	if (rc != 0) {
+	rso = crt_reply_get(rpc);
+	if (rc == 0)
+		rc = rso->rso_status;
+	else
 		DL_ERROR(rc, DF_RB " scan broadcast send failed.", DP_RB_RGT(rgt));
-		crt_req_decref(rpc);
-		D_GOTO(out, rc);
-	}
 
-	rso                   = crt_reply_get(rpc);
-	rc                    = rso->rso_status;
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
 	DL_INFO(rc, DF_RB " got stable/reclaim epoch " DF_X64 "/" DF_X64, DP_RB_RGT(rgt),
