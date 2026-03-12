@@ -215,11 +215,6 @@ func (fc *FabricConfig) Validate() error {
 	return nil
 }
 
-// GetAuthKeyEnv returns the environment variable string for the auth key.
-func (fc *FabricConfig) GetAuthKeyEnv() string {
-	return fmt.Sprintf("D_PROVIDER_AUTH_KEY=%s", fc.AuthKey)
-}
-
 // cleanEnvVars scrubs the supplied slice of environment
 // variables by removing all variables not included in the
 // allow list.

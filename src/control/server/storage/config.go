@@ -174,8 +174,8 @@ func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 }
 
 // WithScmHugepagesDisabled disables hugepages for tmpfs.
-func (tc *TierConfig) WithScmHugepagesDisabled() *TierConfig {
-	tc.Scm.DisableHugepages = true
+func (tc *TierConfig) WithScmHugepagesDisabled(b bool) *TierConfig {
+	tc.Scm.DisableHugepages = &b
 	return tc
 }
 
@@ -574,7 +574,7 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 type ScmConfig struct {
 	MountPoint       string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
 	RamdiskSize      uint     `yaml:"scm_size,omitempty"`
-	DisableHugepages bool     `yaml:"scm_hugepages_disabled,omitempty"`
+	DisableHugepages *bool    `yaml:"scm_hugepages_disabled,omitempty"`
 	DeviceList       []string `yaml:"scm_list,omitempty"`
 	NumaNodeIndex    uint     `yaml:"-"`
 }
@@ -592,9 +592,6 @@ func (sc *ScmConfig) Validate(class Class) error {
 		}
 		if len(sc.DeviceList) == 0 {
 			return errors.New("scm_list must be set when class is dcpm")
-		}
-		if sc.DisableHugepages {
-			return errors.New("scm_hugepages_disabled may not be set when class is dcpm")
 		}
 	case ClassRam:
 		if len(sc.DeviceList) > 0 {
