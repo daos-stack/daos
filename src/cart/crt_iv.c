@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1136,7 +1136,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	struct crt_iv_fetch_in		*input;
 	crt_bulk_t			local_bulk = CRT_BULK_NULL;
 	crt_endpoint_t			ep = {0};
-	crt_rpc_t			*rpc;
+	crt_rpc_t                       *rpc        = NULL;
 	struct ivf_key_in_progress	*entry;
 	int				rc = 0;
 	struct crt_iv_ops		*iv_ops;
@@ -1266,6 +1266,8 @@ exit:
 		D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 		if (local_bulk != CRT_BULK_NULL)
 			crt_bulk_free(local_bulk);
+		if (rpc != NULL)
+			RPC_PUB_DECREF(rpc);
 	}
 	return rc;
 }
@@ -2611,7 +2613,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 	struct crt_iv_update_in		*input;
 	crt_bulk_t			local_bulk = CRT_BULK_NULL;
 	crt_endpoint_t			ep = {0};
-	crt_rpc_t			*rpc;
+	crt_rpc_t                       *rpc        = NULL;
 	int				rc = 0;
 	uint32_t			local_grp_ver;
 
@@ -2693,6 +2695,8 @@ exit:
 	if (rc != 0) {
 		if (local_bulk != CRT_BULK_NULL)
 			crt_bulk_free(local_bulk);
+		if (rpc != NULL)
+			RPC_PUB_DECREF(rpc);
 	}
 	return rc;
 }

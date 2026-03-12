@@ -953,11 +953,11 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				    VOS_OF_REBUILD, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
+		daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
 			DL_ERROR(rc, DF_RB ": migrate failed", DP_RB_MRO(mrone));
 			D_GOTO(out, rc);
 		}
-		daos_csummer_free_ic(csummer, &iod_csums);
 	}
 
 out:
@@ -4325,8 +4325,10 @@ migrate_check_one(void *data)
 		migrate_pool_tls_get(tls);
 		tls->mpt_post_process_started = 1;
 		D_ALLOC_PTR(ult_arg);
-		if (ult_arg == NULL)
+		if (ult_arg == NULL) {
+			migrate_pool_tls_put(tls);
 			D_GOTO(out, rc = -DER_NOMEM);
+		}
 
 		ult_arg->rpa_tls = tls;
 		ult_arg->rpa_migrated_root = &tls->mpt_migrated_root;
@@ -4464,10 +4466,6 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		return -DER_NONEXIST;
 	}
 
-	/* NB: let's send object list to 0 xstream to simplify the migrate
-	 * object handling process for now, for example avoid lock to insert
-	 * objects in the object tree.
-	 */
 	tgt_ep.ep_rank = target->ta_comp.co_rank;
 	index = target->ta_comp.co_index;
 	ABT_rwlock_unlock(pool->sp_lock);
