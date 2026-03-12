@@ -5144,7 +5144,7 @@ pool_list_cont_handler(crt_rpc_t *rpc, int handler_version)
 	}
 
 	/* Call container service to get the list */
-	rc = ds_cont_list(in->plci_op.pi_uuid, true /* include_destroying */, &cont_buf, &ncont);
+	rc = ds_cont_list(in->plci_op.pi_uuid, false /* include_destroying */, &cont_buf, &ncont);
 	if (rc != 0) {
 		D_GOTO(out_svc, rc);
 	} else if ((ncont_in > 0) && (ncont > ncont_in)) {
@@ -5161,7 +5161,7 @@ pool_list_cont_handler(crt_rpc_t *rpc, int handler_version)
 			DP_UUID(in->plci_op.pi_uuid), DP_UUID(in->plci_op.pi_hdl), ncont);
 
 		/* Send any results only if client provided a handle */
-		if (cont_buf && (ncont_in > 0) && (bulk != CRT_BULK_NULL))
+		if (ncont > 0 && (ncont_in > 0) && (bulk != CRT_BULK_NULL))
 			rc = transfer_cont_buf(cont_buf, nbytes, svc, rpc, bulk);
 	}
 

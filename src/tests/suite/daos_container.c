@@ -4061,14 +4061,14 @@ co_open_destroying(void **state)
 	print_message("destroying container '%s' with fault injection\n", label);
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_DESTROY_FAIL_POST | DAOS_FAIL_ALWAYS);
 	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	assert_rc_equal(rc, -DER_NOMEM);
 
 	print_message("attempting to open DESTROYING container '%s'\n", label);
 	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_rc_equal(rc, -DER_CONT_DESTROYING);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	print_message("destroying container '%s'\n", label);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
 

@@ -694,7 +694,7 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+		DL_INFO(rc, DF_CONT ": cont_lookup", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -741,8 +741,7 @@ ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_INFO(rc, DF_CONT ": cont_lookup", DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		goto out_lock;
 	}
 
