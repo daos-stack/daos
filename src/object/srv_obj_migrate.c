@@ -147,6 +147,12 @@ struct migr_res_manager {
 	char                 *rmg_name;
 	/* all resource buckets */
 	struct migr_resource *rmg_res_buckets;
+	/*
+	 * Per-xstream watchdog log timestamp (indexed by tgt_id).
+	 * Shared across all pools on the same xstream so that with 100 pools
+	 * only one D_WARN line is emitted per xstream per MIGR_STALL_LOG_INTERVAL.
+	 */
+	uint64_t             *rmg_watchdog_log_ts;
 };
 
 /* per-engine resources */
@@ -4136,6 +4142,122 @@ struct migrate_query_arg {
 	uint32_t generation;
 };
 
+#define MIGR_STALL_LOG_INTERVAL 120 /* log at most once per 120 s */
+#define MIGR_STALL_DETECT_SECS  60  /* declare stall after 60 s without progress */
+
+/**
+ * Lock the bucket if shared, snapshot its counters, format a waiter-info
+ * string into @buf (" hw=<uuid> u=U ws=Ss", or "" when none), and return
+ * the waiter count.  When @res is NULL (ROTATE bucket not yet assigned)
+ * @buf is set to " N/A" and 0 is returned.
+ */
+static int
+migr_res_snap_str(struct migr_resource *res, uint64_t now, char *buf, size_t bufsz)
+{
+	struct migr_res_waiter *head;
+	long                    used, limit;
+	int                     holders, waiters;
+	int                     off = 0;
+
+	if (res == NULL) {
+		snprintf(buf, bufsz, " N/A");
+		return 0;
+	}
+
+	if (!migr_res_is_private(res))
+		ABT_mutex_lock(res->res_mutex);
+
+	used    = res->res_used;
+	limit   = res->res_limit;
+	holders = res->res_holders;
+	waiters = res->res_waiters;
+
+	if (!d_list_empty(&res->res_waitq)) {
+		uint64_t wait_secs;
+
+		head      = d_list_entry(res->res_waitq.next, struct migr_res_waiter, rw_link);
+		wait_secs = (head->rw_wait_since > 0 && now >= head->rw_wait_since)
+				? now - head->rw_wait_since
+				: 0;
+		off       = snprintf(buf, bufsz, " hw=" DF_UUID " u=" DF_U64 " ws=" DF_U64 "s",
+				     DP_UUID(head->rw_tls->mpt_pool_uuid), head->rw_units, wait_secs);
+		if (off < 0 || (size_t)off >= bufsz)
+			off = bufsz - 1;
+	}
+
+	if (!migr_res_is_private(res))
+		ABT_mutex_unlock(res->res_mutex);
+
+	snprintf(buf + off, bufsz - off, " used/limit=%ld/%ld h=%d w=%d", used, limit, holders,
+		 waiters);
+	return waiters;
+}
+
+static struct migr_resource *
+migr_watchdog_res(struct migr_res_manager *rmg, struct migrate_pool_tls *tls, int tgt_id,
+		  const char **bkt_name)
+{
+	if (rmg->rmg_bkt_type == MIGR_BUCKET_PRIV) {
+		*bkt_name = "priv";
+		return &rmg->rmg_res_buckets[tgt_id];
+	} else if (rmg->rmg_bkt_type == MIGR_BUCKET_MAP) {
+		*bkt_name = "map";
+		return &rmg->rmg_res_buckets[tgt_id / rmg->rmg_bkt_size];
+	}
+	/* ROTATE */
+	*bkt_name = "rotate";
+	return (rmg->rmg_res_type == MIGR_OBJ) ? tls->mpt_obj_res : tls->mpt_key_res;
+}
+
+static void
+migrate_check_watchdog(struct migrate_pool_tls *tls, uint32_t ult_cnt)
+{
+	uint64_t                 now     = daos_gettime_coarse();
+	int                      tgt_id  = dss_get_module_info()->dmi_tgt_id;
+	struct migr_res_manager *obj_rmg = &migr_res_managers[MIGR_OBJ];
+	struct migr_res_manager *dat_rmg = &migr_res_managers[MIGR_DATA];
+	struct migr_resource    *obj_res, *key_res, *dat_res;
+	const char              *obj_bkt_name, *key_bkt_name;
+	char                     obj_buf[160], key_buf[160], dat_buf[160];
+	int                      obj_w, key_w, dat_w;
+
+	obj_res = migr_watchdog_res(obj_rmg, tls, tgt_id, &obj_bkt_name);
+	key_res = migr_watchdog_res(&migr_res_managers[MIGR_KEY], tls, tgt_id, &key_bkt_name);
+	dat_res = tls->mpt_data_res != NULL ? tls->mpt_data_res : &dat_rmg->rmg_res_buckets[tgt_id];
+
+	obj_w = migr_res_snap_str(obj_res, now, obj_buf, sizeof(obj_buf));
+	key_w = migr_res_snap_str(key_res, now, key_buf, sizeof(key_buf));
+	dat_w = migr_res_snap_str(dat_res, now, dat_buf, sizeof(dat_buf));
+
+	if (ult_cnt > 0 || obj_w > 0 || key_w > 0 || dat_w > 0) {
+		if (tls->mpt_last_progress_ts == 0 ||
+		    tls->mpt_obj_count != tls->mpt_last_progress_obj_count ||
+		    tls->mpt_rec_count != tls->mpt_last_progress_rec_count) {
+			/* First active poll, or real progress — (re)start clock */
+			tls->mpt_last_progress_obj_count = tls->mpt_obj_count;
+			tls->mpt_last_progress_rec_count = tls->mpt_rec_count;
+			tls->mpt_last_progress_ts        = now;
+		} else if (now - tls->mpt_last_progress_ts > MIGR_STALL_DETECT_SECS &&
+			   now - obj_rmg->rmg_watchdog_log_ts[tgt_id] > MIGR_STALL_LOG_INTERVAL) {
+			D_WARN(DF_RB " rebuild watchdog: no progress for %lu secs"
+				     " (obj/rec both frozen),"
+				     " obj_ults=%u key_ults=%u inflight_size=" DF_U64
+				     " obj_count=" DF_U64 " rec_count=" DF_U64 " |"
+				     " OBJ(%s)%s | KEY(%s)%s | DATA(priv)%s\n",
+			       DP_RB_MPT(tls), now - tls->mpt_last_progress_ts,
+			       tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt,
+			       tls->mpt_inflight_size, tls->mpt_obj_count, tls->mpt_rec_count,
+			       obj_bkt_name, obj_buf, key_bkt_name, key_buf, dat_buf);
+			obj_rmg->rmg_watchdog_log_ts[tgt_id] = now;
+		}
+	} else {
+		/* No active ULTs and no waiters — reset watchdog so it
+		 * doesn't fire on the next rebuild with stale timestamps.
+		 */
+		tls->mpt_last_progress_ts = 0;
+	}
+}
+
 static int
 migrate_check_one(void *data)
 {
@@ -4155,6 +4277,8 @@ migrate_check_one(void *data)
 	arg->total_ult_cnt += (tls->mpt_tgt_obj_ult_cnt + tls->mpt_tgt_dkey_ult_cnt);
 	arg->ult_running += tls->mpt_ult_running;
 	ABT_mutex_unlock(arg->status_lock);
+
+	migrate_check_watchdog(tls, tls->mpt_tgt_obj_ult_cnt + tls->mpt_tgt_dkey_ult_cnt);
 	D_DEBUG(DB_REBUILD,
 		"status %d/%d/ ult %u/%u  rec/obj/size " DF_U64 "/" DF_U64 "/" DF_U64 "\n",
 		tls->mpt_status, arg->dms.dm_status, tls->mpt_tgt_obj_ult_cnt,
@@ -4386,6 +4510,12 @@ migr_rmg_init(int type, int concur_max, uint64_t units)
 	if (!rmg->rmg_res_buckets)
 		D_GOTO(failed, rc = -DER_NOMEM);
 
+	D_ALLOC_ARRAY(rmg->rmg_watchdog_log_ts, dss_tgt_nr);
+	if (!rmg->rmg_watchdog_log_ts) {
+		D_FREE(rmg->rmg_res_buckets);
+		D_GOTO(failed, rc = -DER_NOMEM);
+	}
+
 	rmg->rmg_name     = name;
 	rmg->rmg_res_type = type;
 	rmg->rmg_bkt_nr   = bkt_nr;
@@ -4415,6 +4545,7 @@ migr_rmg_fini(int type)
 
 	for (i = 0; i < rmg->rmg_bkt_nr; i++)
 		migr_res_fini(&rmg->rmg_res_buckets[i]);
+	D_FREE(rmg->rmg_watchdog_log_ts);
 	D_FREE(rmg->rmg_res_buckets);
 	memset(rmg, 0, sizeof(*rmg));
 }
