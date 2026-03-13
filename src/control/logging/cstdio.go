@@ -6,7 +6,7 @@ package logging
 import "C"
 import "github.com/pkg/errors"
 
-// InitCStdout disables C stdout buffering and must be called before any write to stdout.
+// DisableCStdoutBuffering disables C code write to stdout buffering and must be called before any write to stdout.
 //
 // When a Go program's stdout is connected to a pipe (e.g. redirected or piped to another
 // process), C stdout becomes fully-buffered by Unix convention instead of line-buffered,
@@ -19,7 +19,7 @@ import "github.com/pkg/errors"
 //   - https://stackoverflow.com/questions/1716296/why-does-printf-not-flush-after-the-call-unless-a-newline-is-in-the-format-strin
 //   - https://stackoverflow.com/questions/3723795/is-stdout-line-buffered-unbuffered-or-indeterminate-by-default
 //   - https://groups.google.com/g/comp.lang.c/c/dvRKt-iuO40#
-func InitCStdout() error {
+func DisableCStdoutBuffering() error {
 	rc, err := C.setvbuf(C.stdout, nil, C._IONBF, 0)
 	if rc == 0 {
 		return nil
