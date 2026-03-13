@@ -7,13 +7,14 @@
 #
 set -eu
 
-distro="${1:-el8}"
+distro="${1:?ERROR: Missing distro argument. Usage: $0 <distro>}"
 code_coverage="${2:-false}"
 
 OPENMPI_VER=""
 PY_MINOR_VER=""
 
-export DISTRO="${distro}"
+export DISTRO="${distro%%.*}"
+
 pkgs=("$(utils/rpms/package_version.sh argobots lib)")
 pkgs+=("boost-python3${PY_MINOR_VER}-devel")
 pkgs+=("capstone")
