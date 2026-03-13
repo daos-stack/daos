@@ -10,10 +10,10 @@ NODE="${NODELIST%%,*}"
 test_log_dir="${1:-}"
 if [ -z "$test_log_dir" ]; then
     case $STAGE_NAME in
-        "NLT on "*)
+        "NLT")
           test_log_dir="nlt_logs"
           ;;
-        "NLT with Bullseye on "*)
+        "NLT with Bullseye")
           test_log_dir="nlt_bullseye_logs"
           ;;
         *)
