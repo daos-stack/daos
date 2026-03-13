@@ -996,7 +996,9 @@ static void
 rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			    struct rebuild_global_pool_tracker *rgt)
 {
-	double                last_print = 0;
+	uint64_t              check_cnt      = 0;
+	uint64_t              last_print_cnt = 0;
+	uint64_t              log_cnt_intv   = 1;
 	unsigned int          total;
 	struct sched_req_attr attr = {0};
 	d_rank_t              myrank;
@@ -1018,13 +1020,12 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 	while (1) {
 		struct daos_rebuild_status *rs = &rgt->rgt_status;
 		char                        sbuf[RBLD_SBUF_LEN];
-		double                      now;
 		char                       *str;
 		d_rank_list_t               rank_list     = {0};
 		bool                        rebuild_abort = false;
 		int                         i;
 
-		now = ABT_get_wtime();
+		check_cnt++;
 		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = map_ranks_init(pool->sp_map,
 				    PO_COMP_ST_UP | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
@@ -1064,7 +1065,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 				}
 			}
 
-			if (now - last_print > RBLD_LOG_INTV)
+			if (check_cnt - last_print_cnt >= log_cnt_intv)
 				D_INFO(DF_RB " rank %d, status 0x%x.\n", DP_RB_RGT(rgt),
 				       dom->do_comp.co_rank, dom->do_comp.co_status);
 
@@ -1126,9 +1127,10 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			break;
 		}
 
-		/* print something at least for each RBLD_LOG_INTV seconds */
-		if (now - last_print > RBLD_LOG_INTV) {
-			last_print = now;
+		/* Exponential backoff to print at most every RBLD_LOG_INTV seconds */
+		if (check_cnt - last_print_cnt >= log_cnt_intv) {
+			last_print_cnt = check_cnt;
+			log_cnt_intv   = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
 			D_INFO("%s", sbuf);
 			D_PRINT("%s", sbuf);
 		}
@@ -2900,6 +2902,7 @@ rebuild_tgt_status_check_ult(void *arg)
 	struct sched_req_attr	attr = { 0 };
 	uint32_t                         reported_dtx_resyc_ver = 0;
 	uint64_t                         check_cnt              = 0;
+	uint64_t                         log_cnt_intv           = 1;
 
 	D_ASSERT(rpt != NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rpt->rt_pool_uuid);
@@ -3025,15 +3028,15 @@ rebuild_tgt_status_check_ult(void *arg)
 			}
 		}
 
-		if (check_cnt % RBLD_LOG_INTV_CNT == 0 || rpt->rt_global_done || rpt->rt_abort) {
+		if (check_cnt % log_cnt_intv == 0 || rpt->rt_global_done || rpt->rt_abort) {
 			D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
 				     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
 			       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
 			       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
 			       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+			log_cnt_intv = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
 		}
 		check_cnt++;
-
 		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
