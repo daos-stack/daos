@@ -366,6 +366,10 @@ func parseOpts(args []string, opts *cliOptions) error {
 func main() {
 	var opts cliOptions
 
+	if err := logging.InitCStdout(); err != nil {
+		exitWithError(err)
+	}
+
 	if err := parseOpts(os.Args[1:], &opts); err != nil {
 		exitWithError(err)
 	}
