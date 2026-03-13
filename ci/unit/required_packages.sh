@@ -15,8 +15,7 @@ PY_MINOR_VER=""
 
 export DISTRO="${distro%%.*}"
 
-pkgs=("$(utils/rpms/package_version.sh argobots lib)")
-pkgs+=("boost-python3${PY_MINOR_VER}-devel")
+pkgs=("boost-python3${PY_MINOR_VER}-devel")
 pkgs+=("capstone")
 pkgs+=("$(utils/rpms/package_version.sh argobots lib)")
 pkgs+=("$(utils/rpms/package_version.sh argobots debug)")
