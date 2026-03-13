@@ -8,6 +8,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"sort"
 	"testing"
@@ -1346,6 +1347,209 @@ func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 			}
 
 			test.CmpAny(t, "updated finding", tc.expFinding, f, cmpopts.IgnoreUnexported(chkpb.CheckReport{}))
+		})
+	}
+}
+
+func TestServer_mgmtSvc_getCheckerLeader(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startValue string
+		expResult  *ranklist.Rank
+		expErr     error
+	}{
+		"unset": {
+			expErr: system.ErrSystemAttrNotFound("mgmt." + checkerLeaderKey),
+		},
+		"invalid": {
+			startValue: "1234junk",
+			expErr:     errors.New("invalid rank"),
+		},
+		"valid": {
+			startValue: "42",
+			expResult:  ranklist.NewRankPtr(42),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+
+			svc := testSvcWithMemberState(t, logging.FromContext(ctx), system.MemberStateCheckerStarted, []string{})
+
+			if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, tc.startValue); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := svc.getCheckerLeader()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
+func TestServer_mgmtSvc_setCheckerLeader(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notLeader  bool
+		startValue string
+		input      *ranklist.Rank
+		expErr     error
+		expSaved   string
+	}{
+		"not leader": {
+			notLeader: true,
+			input:     ranklist.NewRankPtr(13),
+			expErr:    &system.ErrNotLeader{},
+		},
+		"nil rank": {
+			startValue: "123",
+			expErr:     errors.New("nil rank"),
+			expSaved:   "123",
+		},
+		"valid initialize": {
+			input:    ranklist.NewRankPtr(42),
+			expSaved: "42",
+		},
+		"valid overwrite": {
+			startValue: "123",
+			input:      ranklist.NewRankPtr(42),
+			expSaved:   "42",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+
+			svc := testSvcWithMemberState(t, logging.FromContext(ctx), system.MemberStateCheckerStarted, []string{})
+			if tc.startValue != "" {
+				if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, tc.startValue); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.notLeader {
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err := svc.setCheckerLeader(tc.input)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			saved, propErr := system.GetMgmtProperty(svc.sysdb, checkerLeaderKey)
+			if tc.expSaved == "" {
+				test.CmpErr(t, system.ErrSystemAttrNotFound("mgmt."+checkerLeaderKey), propErr)
+			} else {
+				test.CmpErr(t, nil, propErr)
+				test.AssertEqual(t, tc.expSaved, saved, "")
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_clearCheckerLeader(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notLeader  bool
+		startValue string
+		expErr     error
+		expSaved   string
+	}{
+		"not leader": {
+			notLeader:  true,
+			startValue: "42",
+			expErr:     &system.ErrNotLeader{},
+			expSaved:   "42", // not cleared
+		},
+		"empty": {},
+		"existing value": {
+			startValue: "123",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+
+			svc := testSvcWithMemberState(t, logging.FromContext(ctx), system.MemberStateCheckerStarted, []string{})
+			if tc.startValue != "" {
+				if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, tc.startValue); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.notLeader {
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err := svc.clearCheckerLeader()
+
+			test.CmpErr(t, tc.expErr, err)
+
+			saved, propErr := system.GetMgmtProperty(svc.sysdb, checkerLeaderKey)
+			if tc.expSaved == "" {
+				test.CmpErr(t, system.ErrSystemAttrNotFound("mgmt."+checkerLeaderKey), propErr)
+			} else {
+				test.CmpErr(t, nil, propErr)
+				test.AssertEqual(t, tc.expSaved, saved, "")
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_hasCheckerLeader(t *testing.T) {
+	testNonLocalReplicaAddr := &net.TCPAddr{IP: net.IP{111, 222, 1, 1}}
+	localRanks := []uint32{15, 12}
+
+	for name, tc := range map[string]struct {
+		notReplica bool
+		startValue string
+		expResult  bool
+		expErr     error
+	}{
+		"not a replica": {
+			notReplica: true,
+			expErr:     &system.ErrNotReplica{Replicas: []string{testNonLocalReplicaAddr.String()}},
+		},
+		"not set": {},
+		"invalid": {
+			startValue: "garbage",
+			expErr:     errors.New("invalid rank"),
+		},
+		"first engine": {
+			startValue: fmt.Sprintf("%d", localRanks[0]),
+			expResult:  true,
+		},
+		"second engine": {
+			startValue: fmt.Sprintf("%d", localRanks[1]),
+			expResult:  true,
+		},
+		"not local engine": {
+			startValue: "123",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+			log := logging.FromContext(ctx)
+
+			svc := testSvcWithMemberState(t, log, system.MemberStateCheckerStarted, []string{})
+			if tc.startValue != "" {
+				if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, tc.startValue); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.notReplica {
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{testNonLocalReplicaAddr},
+				})
+			}
+			svc.harness = NewEngineHarness(log)
+			for _, r := range localRanks {
+				svc.harness.AddInstance(NewMockInstance(&MockInstanceConfig{
+					GetRankResp: ranklist.Rank(r),
+				}))
+			}
+
+			result, err := svc.hasCheckerLeader()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }

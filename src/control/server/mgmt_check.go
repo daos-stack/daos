@@ -35,7 +35,59 @@ const (
 	checkerEnabledKey      = "checker_enabled"
 	checkerPoliciesKey     = "checker_policies"
 	checkerLatestPolicyKey = "checker_latest_policy"
+	checkerLeaderKey       = "checker_leader"
 )
+
+func (svc *mgmtSvc) getCheckerLeader() (*ranklist.Rank, error) {
+	value, err := system.GetMgmtProperty(svc.sysdb, checkerLeaderKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "get checker leader")
+	}
+
+	r, err := ranklist.NewRankFromString(value)
+	if err != nil {
+		return nil, errors.Wrapf(err, "parsing rank from prop %q", checkerLeaderKey)
+	}
+	return r, nil
+}
+
+func (svc *mgmtSvc) setCheckerLeaderValue(val string) error {
+	if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, val); err != nil {
+		return errors.Wrapf(err, "failed to set checker leader to %q", val)
+	}
+	return nil
+}
+
+func (svc *mgmtSvc) setCheckerLeader(rank *ranklist.Rank) error {
+	if rank.Equals(ranklist.NilRank) {
+		return errors.New("cannot set checker leader to nil rank")
+	}
+	return svc.setCheckerLeaderValue(rank.String())
+}
+
+func (svc *mgmtSvc) clearCheckerLeader() error {
+	return svc.setCheckerLeaderValue("")
+}
+
+func (svc *mgmtSvc) hasCheckerLeader() (bool, error) {
+	leaderRank, err := svc.getCheckerLeader()
+	if system.IsErrSystemAttrNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	for i, engine := range svc.harness.instances {
+		if r, err := engine.GetRank(); err != nil {
+			svc.log.Errorf("unable to get rank from engine instance %d", i)
+			continue
+		} else if r == *leaderRank {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 var errNoSavedPolicies = errors.New("no previous policies have been saved")
 
