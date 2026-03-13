@@ -26,6 +26,8 @@
 #include "rebuild_internal.h"
 
 #define RBLD_CHECK_INTV	 2000	/* milliseconds interval to check*/
+#define RBLD_LOG_INTV     300    /* seconds interval to print logs */
+#define RBLD_LOG_INTV_CNT (RBLD_LOG_INTV * 1000 / RBLD_CHECK_INTV)
 struct rebuild_global	rebuild_gst;
 unsigned int            rebuild_wait_ec_pause = 0;
 
@@ -1062,7 +1064,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 				}
 			}
 
-			if (now - last_print > 20)
+			if (now - last_print > RBLD_LOG_INTV)
 				D_INFO(DF_RB " rank %d, status 0x%x.\n", DP_RB_RGT(rgt),
 				       dom->do_comp.co_rank, dom->do_comp.co_status);
 
@@ -1118,15 +1120,16 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			 rs->rs_state, rs->rs_errno, rs->rs_fail_rank, rgt->rgt_stable_epoch,
 			 rgt->rgt_reclaim_epoch, rs->rs_seconds);
 
-		D_INFO("%s", sbuf);
 		if (rs->rs_state == DRS_COMPLETED || rebuild_gst.rg_abort || rgt->rgt_abort) {
+			D_INFO("%s", sbuf);
 			D_PRINT("%s", sbuf);
 			break;
 		}
 
-		/* print something at least for each 10 seconds */
-		if (now - last_print > 10) {
+		/* print something at least for each RBLD_LOG_INTV seconds */
+		if (now - last_print > RBLD_LOG_INTV) {
 			last_print = now;
+			D_INFO("%s", sbuf);
 			D_PRINT("%s", sbuf);
 		}
 sleep:
@@ -2896,6 +2899,7 @@ rebuild_tgt_status_check_ult(void *arg)
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
 	struct sched_req_attr	attr = { 0 };
 	uint32_t                         reported_dtx_resyc_ver = 0;
+	uint64_t                         check_cnt              = 0;
 
 	D_ASSERT(rpt != NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rpt->rt_pool_uuid);
@@ -3021,11 +3025,15 @@ rebuild_tgt_status_check_ult(void *arg)
 			}
 		}
 
-		D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
-			     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
-		       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
-		       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
-		       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+		if (check_cnt % RBLD_LOG_INTV_CNT == 0 || rpt->rt_global_done || rpt->rt_abort) {
+			D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
+				     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
+			       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
+			       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
+			       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+		}
+		check_cnt++;
+
 		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
