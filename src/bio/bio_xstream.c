@@ -1125,7 +1125,10 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		/* Clear any pre-existing VMD-LED state */
+		D_DEBUG(DB_MGMT, "Device " DF_UUID " LED reset on init\n",
+			DP_UUID(d_bdev->bb_uuid));
+
+		/* Clear any pre-existing LED state */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 		if (rc != 0) {
@@ -2090,18 +2093,17 @@ bio_led_reset_on_timeout(struct bio_xs_context *ctxt, uint64_t now)
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
-		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time <= now)) {
+		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
+			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for " DF_UUID "\n",
+				DP_UUID(d_bdev->bb_uuid));
+
 			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs. */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0) {
 				DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
 					 DP_UUID(d_bdev->bb_uuid));
-				continue;
 			}
-
-			D_DEBUG(DB_MGMT, "Cleared LED QUICK_BLINK state for " DF_UUID "\n",
-				DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }

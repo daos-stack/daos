@@ -443,7 +443,16 @@ set_led_faulty(void *arg)
 	D_ASSERT(is_init_xstream(led_msg->xs));
 
 	bdev = lookup_dev_by_id(led_msg->dev_uuid);
-	if (bdev != NULL && bdev->bb_led_identify_active) {
+	if (bdev == NULL) {
+		D_ERROR("Failed to find device:" DF_UUID "\n", DP_UUID(led_msg->dev_uuid));
+		D_FREE(led_msg);
+		return;
+	}
+
+	D_DEBUG(DB_MGMT, "Device " DF_UUID " is in IDENTIFY state (%d)\n",
+		DP_UUID(led_msg->dev_uuid), bdev->bb_led_identify_active);
+
+	if (bdev->bb_led_identify_active) {
 		/*
 		 * Device LED is actively blinking for identification.
 		 * Skip setting FAULT LED to allow user-initiated identify to take precedence.

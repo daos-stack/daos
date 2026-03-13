@@ -63,6 +63,9 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 		return 0;
 	}
 
+	D_DEBUG(DB_MGMT, "Device " DF_UUID " revived, changing LED state to NORMAL\n",
+		DP_UUID(d_bdev->bb_uuid));
+
 	/* Reset the LED of the VMD device once revived */
 	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__SET,
 			    (unsigned int *)&state, 0);
