@@ -20,19 +20,19 @@ struct ddb_cont {
 };
 
 struct ddb_obj {
-	daos_obj_id_t			ddbo_oid;
-	uint32_t			ddbo_idx;
-	enum daos_otype_t		ddbo_otype;
-	char				ddbo_otype_str[32];
-	uint32_t			ddbo_nr_grps;
-	struct dv_indexed_tree_path	*ddbo_path;
+	daos_obj_id_t                ddbo_oid;
+	uint32_t                     ddbo_idx;
+	uint32_t                     ddbo_nr_grps;
+	char                         ddbo_otype_str[32];
+	struct dv_indexed_tree_path *ddbo_path;
 };
 
 struct ddb_key {
-	daos_key_t			ddbk_key;
-	uint32_t			ddbk_idx;
-	vos_iter_type_t			ddbk_child_type;
-	struct dv_indexed_tree_path	*ddbk_path;
+	daos_key_t                   ddbk_key;
+	uint32_t                     ddbk_idx;
+	enum daos_otype_t            ddbk_otype;
+	vos_iter_type_t              ddbk_child_type;
+	struct dv_indexed_tree_path *ddbk_path;
 };
 
 struct ddb_sv {
