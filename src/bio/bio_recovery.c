@@ -449,9 +449,6 @@ set_led_faulty(void *arg)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Device " DF_UUID " is in IDENTIFY state (%d)\n",
-		DP_UUID(led_msg->dev_uuid), bdev->bb_led_identify_active);
-
 	if (bdev->bb_led_identify_active) {
 		/*
 		 * Device LED is actively blinking for identification.
