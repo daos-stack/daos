@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -282,6 +282,8 @@ struct rebuild_pool_tls {
 	unsigned int	rebuild_pool_ver;
 	uint32_t	rebuild_pool_gen;
 	uint64_t	rebuild_pool_leader_term;
+	uint64_t        rebuild_send_wait_start;
+	uint64_t        rebuild_pool_obj_send_pending;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1,
 			rebuild_pool_scan_done:1;
