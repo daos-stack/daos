@@ -115,10 +115,15 @@ class DdbTest(TestWithServers):
         self.object_count = 5
         self.dkey_count = 2
         self.akey_count = 1
+
         # Generate random keys and data to insert into the object.
         self.random_dkey = get_random_string(10)
         self.random_akey = get_random_string(10)
         self.random_data = get_random_string(10)
+
+        # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb prov_mem
+        # documentation, but use daos_load_path here for clarity.
+        self.daos_load_path = "/mnt/daos_load"
 
     def run_cmd_check_result(self, command):
         """Run given command as root and check its result.
@@ -132,8 +137,8 @@ class DdbTest(TestWithServers):
         if not result.passed:
             self.fail(f"{command} failed on {result.failed_hosts}!")
 
-    def get_ddb_command(self, md_on_ssd, pool):
-        """Return DdbCommand object based on whether the system uses MD-on-SSD.
+    def prepare_ddb_command(self, md_on_ssd, pool):
+        """Create DdbCommand object, load pool dir, and update db_path and vos_path.
 
         Args:
             md_on_ssd (bool): True if the system uses MD-on-SSD.
@@ -152,8 +157,26 @@ class DdbTest(TestWithServers):
                 self.fail("vos file wasn't found!")
             vos_path = vos_paths[0]
 
-        return DdbCommand(
+        ddb_command = DdbCommand(
             server_host=self.server_managers[0].hosts[0], path=self.bin, vos_path=vos_path)
+
+        if md_on_ssd:
+            self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
+            self.run_cmd_check_result(command=f"mkdir {self.daos_load_path}")
+
+            self.log_step(f"MD-on-SSD: Load pool dir to {self.daos_load_path}")
+            db_path = os.path.join(self.log_dir, "control_metadata", "daos_control", "engine0")
+            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=self.daos_load_path)
+
+            # prov_mem and other subcommands take different arguments, so update.
+            # Add --db_path for MD-on-SSD and set appropriate vos_path. Add -w for rm and load.
+            # e.g., ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control/engine0
+            # --vos_path /mnt/daos_load/<pool_uuid>/vos-0 value_dump <component_path> <file_path>
+            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
+            ddb_command.vos_path.update(
+                value=os.path.join(self.daos_load_path, pool.uuid.lower(), "vos-0"))
+
+        return ddb_command
 
     def test_recovery_ddb_ls(self):
         """Test ddb ls.
@@ -172,19 +195,11 @@ class DdbTest(TestWithServers):
         :avocado: tags=recovery
         :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_ls
         """
-        # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb
-        # prov_mem documentation, but use daos_load_path here for clarity.
-        daos_load_path = "/mnt/daos_load"
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
-        if md_on_ssd:
-            self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
-            self.run_cmd_check_result(command=f"mkdir {daos_load_path}")
 
         self.log_step("Create a pool and a container.")
         pool = self.get_pool()
         container = self.get_container(pool)
-
-        ddb_command = self.get_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         errors = []
 
@@ -200,23 +215,13 @@ class DdbTest(TestWithServers):
         self.log_step("Stop server to use ddb.")
         self.get_dmg_command().system_stop()
 
-        db_path = None
-        if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
-            db_path = os.path.join(
-                self.server_managers[0].manager.job.yaml.metadata_params.path.value,
-                "daos_control", "engine0")
-            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
+        ddb_command = self.prepare_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         self.log_step("Verify container UUID.")
-        if md_on_ssd:
-            # "ddb ls" command for MD-on-SSD is quite different.
-            # PMEM: ddb /mnt/daos/<pool_uuid>/vos-0 ls
-            # MD-on-SSD: ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control
-            # /engine0 --vos_path /mnt/daos_load/<pool_uuid>/vos-0 ls
-            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
-            ddb_command.vos_path.update(
-                value=os.path.join(daos_load_path, pool.uuid.lower(), "vos-0"))
+        # "ddb ls" command for MD-on-SSD is quite different.
+        # PMEM: ddb /mnt/daos/<pool_uuid>/vos-0 ls
+        # MD-on-SSD: ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control
+        # /engine0 --vos_path /mnt/daos_load/<pool_uuid>/vos-0 ls
         cmd_result = ddb_command.list_component()
         # Sample output.
         #   Listing contents of '/'
@@ -326,9 +331,9 @@ class DdbTest(TestWithServers):
             errors.append(msg)
 
         if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Clean {daos_load_path}")
-            self.run_cmd_check_result(command=f"umount {daos_load_path}")
-            self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
+            self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"umount {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"rm -rf {self.daos_load_path}")
 
         self.log_step("Restart the server for the cleanup.")
         self.get_dmg_command().system_start()
@@ -368,19 +373,11 @@ class DdbTest(TestWithServers):
         :avocado: tags=recovery
         :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_rm
         """
-        # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb prov_mem
-        # documentation, but use daos_load_path here for clarity.
-        daos_load_path = "/mnt/daos_load"
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
-        if md_on_ssd:
-            self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
-            self.run_cmd_check_result(command=f"mkdir {daos_load_path}")
 
         self.log_step("Create a pool and a container.")
         pool = self.get_pool(connect=True)
         container = self.get_container(pool)
-
-        ddb_command = self.get_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         self.log_step("Insert one object with one dkey and one akey with API.")
         obj_dataset = insert_objects(
@@ -406,23 +403,13 @@ class DdbTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        db_path = None
-        if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
-            db_path = os.path.join(
-                self.server_managers[0].manager.job.yaml.metadata_params.path.value, "daos_control",
-                "engine0")
-            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
+        ddb_command = self.prepare_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         self.log_step("Call ddb rm to remove the akey.")
-        if md_on_ssd:
-            # "ddb rm" command for MD-on-SSD is quite different.
-            # PMEM: ddb -w /mnt/daos/<pool_uuid>/vos-0 rm <component_path>
-            # MD-on-SSD: ddb -w --db_path=/var/tmp/daos_testing/control_metadata/daos_control
-            # /engine0 --vos_path /mnt/daos_load/<pool_uuid>/vos-0 rm <component_path>
-            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
-            ddb_command.vos_path.update(
-                value=os.path.join(daos_load_path, pool.uuid.lower(), "vos-0"))
+        # "ddb rm" command for MD-on-SSD is quite different.
+        # PMEM: ddb -w /mnt/daos/<pool_uuid>/vos-0 rm <component_path>
+        # MD-on-SSD: ddb -w --db_path=/var/tmp/daos_testing/control_metadata/daos_control
+        # /engine0 --vos_path /mnt/daos_load/<pool_uuid>/vos-0 rm <component_path>
         cmd_result = ddb_command.remove_component(component_path="[0]/[0]/[0]/[0]")
         self.log.info("rm akey stdout = %s", cmd_result.joined_stdout)
 
@@ -508,9 +495,9 @@ class DdbTest(TestWithServers):
             errors.append(msg)
 
         if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Clean {daos_load_path}")
-            self.run_cmd_check_result(command=f"umount {daos_load_path}")
-            self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
+            self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"umount {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"rm -rf {self.daos_load_path}")
 
         report_errors(test=self, errors=errors)
 
@@ -531,19 +518,11 @@ class DdbTest(TestWithServers):
         :avocado: tags=recovery
         :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_load
         """
-        # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb prov_mem
-        # documentation, but use daos_load_path here for clarity.
-        daos_load_path = "/mnt/daos_load"
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
-        if md_on_ssd:
-            self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
-            self.run_cmd_check_result(command=f"mkdir {daos_load_path}")
 
         self.log_step("Create a pool and a container.")
         pool = self.get_pool(connect=True)
         container = self.get_container(pool)
-
-        ddb_command = self.get_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         self.log_step("Insert one object with one dkey with API.")
         obj_dataset = insert_objects(
@@ -565,13 +544,7 @@ class DdbTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        db_path = None
-        if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
-            db_path = os.path.join(
-                self.server_managers[0].manager.job.yaml.metadata_params.path.value, "daos_control",
-                "engine0")
-            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
+        ddb_command = self.prepare_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         self.log_step("Load new data into [0]/[0]/[0]/[0]; Create a file in test node.")
         load_file_path = os.path.join(self.test_dir, "new_data.txt")
@@ -586,15 +559,11 @@ class DdbTest(TestWithServers):
             raise CommandFailure(f"ERROR: Copying new_data.txt to {result.failed_hosts}")
 
         self.log_step("The file with the new data is ready. Run ddb load.")
-        if md_on_ssd:
-            # "ddb value_load" command for MD-on-SSD is quite different.
-            # PMEM: ddb -w /mnt/daos/<pool_uuid>/vos-0 value_load <file_path> <component_path>
-            # MD-on-SSD: ddb -w --db_path=/var/tmp/daos_testing/control_metadata/daos_control
-            # /engine0 --vos_path /mnt/daos_load/<pool_uuid>/vos-0 value_load <file_path>
-            # <component_path>
-            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
-            ddb_command.vos_path.update(
-                value=os.path.join(daos_load_path, pool.uuid.lower(), "vos-0"))
+        # "ddb value_load" command for MD-on-SSD is quite different.
+        # PMEM: ddb -w /mnt/daos/<pool_uuid>/vos-0 value_load <file_path> <component_path>
+        # MD-on-SSD: ddb -w --db_path=/var/tmp/daos_testing/control_metadata/daos_control
+        # /engine0 --vos_path /mnt/daos_load/<pool_uuid>/vos-0 value_load <file_path>
+        # <component_path>
         ddb_command.value_load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
 
         self.log_step("Restart the server.")
@@ -620,9 +589,9 @@ class DdbTest(TestWithServers):
             errors.append(msg)
 
         if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Clean {daos_load_path}")
-            self.run_cmd_check_result(command=f"umount {daos_load_path}")
-            self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
+            self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"umount {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"rm -rf {self.daos_load_path}")
 
         report_errors(test=self, errors=errors)
 
@@ -643,13 +612,7 @@ class DdbTest(TestWithServers):
         :avocado: tags=recovery
         :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_dump_value
         """
-        # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb prov_mem
-        # documentation, but use daos_load_path here for clarity.
-        daos_load_path = "/mnt/daos_load"
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
-        if md_on_ssd:
-            self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
-            self.run_cmd_check_result(command=f"mkdir {daos_load_path}")
 
         self.log_step("Create a pool and a container.")
         pool = self.get_pool(connect=True)
@@ -666,23 +629,9 @@ class DdbTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        ddb_command = self.get_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
-
-        db_path = None
-        if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
-            db_path = os.path.join(
-                self.log_dir, "control_metadata", "daos_control", "engine0")
-            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
+        ddb_command = self.prepare_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         self.log_step("Dump the two akeys to files.")
-        if md_on_ssd:
-            # Add --db_path for MD-on-SSD and set appropriate vos_path. e.g.,
-            # ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control/engine0
-            # --vos_path /mnt/daos_load/<pool_uuid>/vos-0 value_dump <component_path> <file_path>
-            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
-            ddb_command.vos_path.update(
-                value=os.path.join(daos_load_path, pool.uuid.lower(), "vos-0"))
         akey1_file_path = os.path.join(self.test_dir, "akey1.txt")
         ddb_command.value_dump(
             component_path="[0]/[0]/[0]/[0]", out_file_path=akey1_file_path)
@@ -725,9 +674,9 @@ class DdbTest(TestWithServers):
             errors.append(msg)
 
         if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Clean {daos_load_path}")
-            self.run_cmd_check_result(command=f"umount {daos_load_path}")
-            self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
+            self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"umount {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"rm -rf {self.daos_load_path}")
 
         self.log_step("Restart the server for the cleanup.")
         dmg_command.system_start()
