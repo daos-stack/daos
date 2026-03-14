@@ -12,9 +12,10 @@ from apricot import TestWithServers
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from file_utils import distribute_files
-from general_utils import create_string_buffer, get_random_string, report_errors
+from general_utils import (DaosTestError, create_string_buffer, get_random_string, report_errors,
+                           run_command)
 from pydaos.raw import DaosObjClass, IORequest
-from run_utils import command_as_user, run_remote
+from run_utils import command_as_user, get_clush_command, run_remote
 
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,
@@ -33,8 +34,7 @@ def insert_objects(context, container, object_count, dkey_count, akey_count, bas
             to it.
 
     Returns:
-        tuple: Inserted objects, dkeys, akeys, and data as (ioreqs, dkeys, akeys,
-        data_list)
+        tuple: Inserted objects, dkeys, akeys, and data as (ioreqs, dkeys, akeys, data_list)
 
     """
     ioreqs = []
@@ -52,21 +52,18 @@ def insert_objects(context, container, object_count, dkey_count, akey_count, bas
 
         for dkey_index in range(dkey_count):
             # Prepare the dkey to insert into the object.
-            dkey_str = " ".join(
-                [base_dkey, str(obj_index), str(dkey_index)]).encode("utf-8")
+            dkey_str = " ".join([base_dkey, str(obj_index), str(dkey_index)]).encode("utf-8")
             dkeys.append(create_string_buffer(value=dkey_str, size=len(dkey_str)))
 
             for akey_index in range(akey_count):
                 # Prepare the akey to insert into the dkey.
                 akey_str = " ".join(
-                    [base_akey, str(obj_index), str(dkey_index),
-                     str(akey_index)]).encode("utf-8")
+                    [base_akey, str(obj_index), str(dkey_index), str(akey_index)]).encode("utf-8")
                 akeys.append(create_string_buffer(value=akey_str, size=len(akey_str)))
 
                 # Prepare the data to insert into the akey.
                 data_str = " ".join(
-                    [base_data, str(obj_index), str(dkey_index),
-                     str(akey_index)]).encode("utf-8")
+                    [base_data, str(obj_index), str(dkey_index), str(akey_index)]).encode("utf-8")
                 data_list.append(create_string_buffer(value=data_str, size=len(data_str)))
                 c_size = ctypes.c_size_t(ctypes.sizeof(data_list[-1]))
 
@@ -75,6 +72,34 @@ def insert_objects(context, container, object_count, dkey_count, akey_count, bas
                     dkey=dkeys[-1], akey=akeys[-1], value=data_list[-1], size=c_size)
 
     return (ioreqs, dkeys, akeys, data_list)
+
+
+def copy_remote_to_local(remote_file_path, test_dir, remote):
+    """Copy the given file from the server node to the local test node and retrieve
+    the original name.
+
+    Args:
+        remote_file_path (str): File path to copy to local.
+        test_dir (str): Test directory. Usually self.test_dir.
+        remote (str): Remote hostname to copy file from.
+    """
+    # Use clush --rcopy to copy the file from the remote server node to the local test
+    # node. clush will append .<server_hostname> to the file when copying.
+    args = f"--rcopy {remote_file_path} --dest {test_dir}"
+    clush_command = get_clush_command(hosts=remote, args=args, timeout=60)
+    try:
+        run_command(command=clush_command, timeout=None)
+    except DaosTestError as error:
+        raise DaosTestError(f"ERROR: Copying {remote_file_path} from {remote}: {error}") from error
+
+    # Remove the appended .<server_hostname> from the copied file.
+    current_file_path = "".join([remote_file_path, ".", remote])
+    mv_command = f"mv {current_file_path} {remote_file_path}"
+    try:
+        run_command(command=mv_command)
+    except DaosTestError as error:
+        raise DaosTestError(
+            f"ERROR: Moving {current_file_path} to {remote_file_path}: {error}") from error
 
 
 class DdbTest(TestWithServers):
@@ -107,6 +132,29 @@ class DdbTest(TestWithServers):
         if not result.passed:
             self.fail(f"{command} failed on {result.failed_hosts}!")
 
+    def get_ddb_command(self, md_on_ssd, pool):
+        """Return DdbCommand object based on whether the system uses MD-on-SSD.
+
+        Args:
+            md_on_ssd (bool): True if the system uses MD-on-SSD.
+            pool (TestPool): Pool UUID is needed when the system is PMEM.
+        
+        Returns:
+            DdbCommand: DdbCommand object created based on the environment.
+
+        """
+        if md_on_ssd:
+            vos_path = '""'
+        else:
+            # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
+            vos_paths = self.server_managers[0].get_vos_files(pool)
+            if not vos_paths:
+                self.fail("vos file wasn't found!")
+            vos_path = vos_paths[0]
+
+        return DdbCommand(
+            server_host=self.server_managers[0].hosts[0], path=self.bin, vos_path=vos_path)
+
     def test_recovery_ddb_ls(self):
         """Test ddb ls.
 
@@ -136,18 +184,7 @@ class DdbTest(TestWithServers):
         pool = self.get_pool()
         container = self.get_container(pool)
 
-        if md_on_ssd:
-            vos_path = '""'
-        else:
-            # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
-            vos_paths = self.server_managers[0].get_vos_files(pool)
-            if not vos_paths:
-                self.fail("vos file wasn't found!")
-            vos_path = vos_paths[0]
-
-        ddb_command = DdbCommand(
-            server_host=self.server_managers[0].hosts[0:1], path=self.bin,
-            vos_path=vos_path)
+        ddb_command = self.get_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         errors = []
 
@@ -343,17 +380,7 @@ class DdbTest(TestWithServers):
         pool = self.get_pool(connect=True)
         container = self.get_container(pool)
 
-        if md_on_ssd:
-            vos_path = '""'
-        else:
-            # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
-            vos_paths = self.server_managers[0].get_vos_files(pool)
-            if not vos_paths:
-                self.fail("vos file wasn't found!")
-            vos_path = vos_paths[0]
-
-        ddb_command = DdbCommand(
-            server_host=self.server_managers[0].hosts[0:1], path=self.bin, vos_path=vos_path)
+        ddb_command = self.get_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         self.log_step("Insert one object with one dkey and one akey with API.")
         obj_dataset = insert_objects(
@@ -516,17 +543,7 @@ class DdbTest(TestWithServers):
         pool = self.get_pool(connect=True)
         container = self.get_container(pool)
 
-        if md_on_ssd:
-            vos_path = '""'
-        else:
-            # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
-            vos_paths = self.server_managers[0].get_vos_files(pool)
-            if not vos_paths:
-                self.fail("vos file wasn't found!")
-            vos_path = vos_paths[0]
-
-        ddb_command = DdbCommand(
-            server_host=self.server_managers[0].hosts[0], path=self.bin, vos_path=vos_path)
+        ddb_command = self.get_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
 
         self.log_step("Insert one object with one dkey with API.")
         obj_dataset = insert_objects(
@@ -606,5 +623,121 @@ class DdbTest(TestWithServers):
             self.log_step(f"MD-on-SSD: Clean {daos_load_path}")
             self.run_cmd_check_result(command=f"umount {daos_load_path}")
             self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
+
+        report_errors(test=self, errors=errors)
+
+    def test_recovery_ddb_dump_value(self):
+        """Test ddb dump_value.
+
+        1. Create a pool and a container.
+        2. Insert one object with one dkey with API.
+        3. Stop the server to use ddb.
+        4. Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
+        5. Dump the two akeys to files.
+        6. Verify the content of the files.
+        7. Restart the server for the cleanup.
+        8. Reset the object, container, and pool to prepare for the cleanup.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery
+        :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_dump_value
+        """
+        # This is where we load pool for MD-on-SSD. It's called tmpfs_mount in ddb prov_mem
+        # documentation, but use daos_load_path here for clarity.
+        daos_load_path = "/mnt/daos_load"
+        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
+        if md_on_ssd:
+            self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
+            self.run_cmd_check_result(command=f"mkdir {daos_load_path}")
+
+        self.log_step("Create a pool and a container.")
+        pool = self.get_pool(connect=True)
+        container = self.get_container(pool)
+
+        self.log_step("Insert one object with one dkey with API.")
+        obj_dataset = insert_objects(
+            context=self.context, container=container, object_count=1, dkey_count=1, akey_count=2,
+            base_dkey=self.random_dkey, base_akey=self.random_akey, base_data=self.random_data)
+        ioreqs = obj_dataset[0]
+        data_list = obj_dataset[3]
+
+        self.log_step("Stop the server to use ddb.")
+        dmg_command = self.get_dmg_command()
+        dmg_command.system_stop()
+
+        ddb_command = self.get_ddb_command(md_on_ssd=md_on_ssd, pool=pool)
+
+        db_path = None
+        if md_on_ssd:
+            self.log_step(f"MD-on-SSD: Load pool dir to {daos_load_path}")
+            db_path = os.path.join(
+                self.log_dir, "control_metadata", "daos_control", "engine0")
+            ddb_command.prov_mem(db_path=db_path, tmpfs_mount=daos_load_path)
+
+        self.log_step("Dump the two akeys to files.")
+        if md_on_ssd:
+            # Add --db_path for MD-on-SSD and set appropriate vos_path. e.g.,
+            # ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control/engine0
+            # --vos_path /mnt/daos_load/<pool_uuid>/vos-0 value_dump <component_path> <file_path>
+            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
+            ddb_command.vos_path.update(
+                value=os.path.join(daos_load_path, pool.uuid.lower(), "vos-0"))
+        akey1_file_path = os.path.join(self.test_dir, "akey1.txt")
+        ddb_command.value_dump(
+            component_path="[0]/[0]/[0]/[0]", out_file_path=akey1_file_path)
+        akey2_file_path = os.path.join(self.test_dir, "akey2.txt")
+        ddb_command.value_dump(
+            component_path="[0]/[0]/[0]/[1]", out_file_path=akey2_file_path)
+
+        self.log_step("Copy them from remote server node to local test node.")
+        copy_remote_to_local(
+            remote_file_path=akey1_file_path, test_dir=self.test_dir,
+            remote=self.hostlist_servers[0])
+        copy_remote_to_local(
+            remote_file_path=akey2_file_path, test_dir=self.test_dir,
+            remote=self.hostlist_servers[0])
+
+        self.log_step("Verify the content of the files.")
+        actual_akey1_data = None
+        with open(akey1_file_path, "r", encoding="utf-8") as file:
+            actual_akey1_data = file.readlines()[0]
+        actual_akey2_data = None
+        with open(akey2_file_path, "r", encoding="utf-8") as file:
+            actual_akey2_data = file.readlines()[0]
+
+        errors = []
+        str_data_list = []
+        # Convert the data to string.
+        for data in data_list:
+            str_data_list.append(data.value.decode("utf-8"))
+        # Verify that we were able to obtain the data and akey1 and akey2 aren't the same.
+        if actual_akey1_data is None or actual_akey2_data is None or \
+                actual_akey1_data == actual_akey2_data:
+            msg = (f"Invalid dumped value! Dumped akey1 data = {actual_akey1_data}; "
+                   f"Dumped akey2 data = {actual_akey2_data}")
+            errors.append(msg)
+        # Verify that the data we obtained with ddb are the ones we wrote. The order isn't
+        # deterministic, so check with "in".
+        if actual_akey1_data not in str_data_list or actual_akey2_data not in str_data_list:
+            msg = (f"Unexpected dumped value! Dumped akey data 1 = {actual_akey1_data}; Dumped "
+                   f"akey data 2 = {actual_akey2_data}; Expected data list = {str_data_list}")
+            errors.append(msg)
+
+        if md_on_ssd:
+            self.log_step(f"MD-on-SSD: Clean {daos_load_path}")
+            self.run_cmd_check_result(command=f"umount {daos_load_path}")
+            self.run_cmd_check_result(command=f"rm -rf {daos_load_path}")
+
+        self.log_step("Restart the server for the cleanup.")
+        dmg_command.system_start()
+
+        self.log_step("Reset the object, container, and pool to prepare for the cleanup.")
+        ioreqs[0].obj.close()
+        container.close()
+        pool.disconnect()
+        pool.connect()
+        container.open()
+        ioreqs[0].obj.open()
 
         report_errors(test=self, errors=errors)
