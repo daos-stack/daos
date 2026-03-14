@@ -138,7 +138,7 @@ class DdbTest(TestWithServers):
         Args:
             md_on_ssd (bool): True if the system uses MD-on-SSD.
             pool (TestPool): Pool UUID is needed when the system is PMEM.
-        
+
         Returns:
             DdbCommand: DdbCommand object created based on the environment.
 
