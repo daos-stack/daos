@@ -304,10 +304,10 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         # 2. Inject container bad label fault into all.
         self.log_step("Inject container bad label fault into all.")
         daos_command = self.get_daos_command()
-        for i in range(len(pools)):
+        for i, pool in enumerate(pools):
             daos_command.faults_container(
-                pool=pools[i].identifier, cont=containers[i].identifier,
-                location="DAOS_CHK_CONT_BAD_LABEL")
+            pool=pool.identifier, cont=containers[i].identifier,
+            location="DAOS_CHK_CONT_BAD_LABEL")
 
         # 3. Enable checker. Set policy to --all-interactive.
         self.log_step("Enable checker. Set policy to --all-interactive.")
@@ -333,7 +333,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
             dmg_command.check_start(pool=corrupted_same)
             self.log.info("dmg check start with two same corrupted pool labels worked as expected.")
         except CommandFailure as command_failure:
-            msg = (f"dmg check start with two same corrupted pool labels failed! {command_failure}")
+            msg = f"dmg check start with two same corrupted pool labels failed! {command_failure}"
             self.fail(msg)
 
         self.log_step("Wait for checker to detect inconsistent container label for pool_1 pool_1.")
@@ -391,7 +391,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         seq_nums = []
         for query_report in query_reports:
             if query_report["pool_label"] == pool_2.label.value or \
-                query_report["pool_label"] == pool_3.label.value:
+            query_report["pool_label"] == pool_3.label.value:
                 seq_nums.append(str(query_report["seq"]))
 
         self.log_step("Repair with option 2 for pool_2 pool_3.")
