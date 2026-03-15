@@ -306,8 +306,8 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         daos_command = self.get_daos_command()
         for i, pool in enumerate(pools):
             daos_command.faults_container(
-            pool=pool.identifier, cont=containers[i].identifier,
-            location="DAOS_CHK_CONT_BAD_LABEL")
+                pool=pool.identifier, cont=containers[i].identifier,
+                location="DAOS_CHK_CONT_BAD_LABEL")
 
         # 3. Enable checker. Set policy to --all-interactive.
         self.log_step("Enable checker. Set policy to --all-interactive.")
@@ -391,8 +391,8 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         seq_nums = []
         for query_report in query_reports:
             if query_report["pool_label"] == pool_2.label.value or \
-            query_report["pool_label"] == pool_3.label.value:
-                seq_nums.append(str(query_report["seq"]))
+                query_report["pool_label"] == pool_3.label.value:
+                    seq_nums.append(str(query_report["seq"]))
 
         self.log_step("Repair with option 2 for pool_2 pool_3.")
         for seq_num in seq_nums:
