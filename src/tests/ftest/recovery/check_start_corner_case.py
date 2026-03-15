@@ -390,9 +390,8 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         # Obtain the seq nums (ID) to repair.
         seq_nums = []
         for query_report in query_reports:
-            if query_report["pool_label"] == pool_2.label.value or \
-                query_report["pool_label"] == pool_3.label.value:
-                    seq_nums.append(str(query_report["seq"]))
+            if query_report["pool_label"] in (pool_2.label.value, pool_3.label.value):
+                seq_nums.append(str(query_report["seq"]))
 
         self.log_step("Repair with option 2 for pool_2 pool_3.")
         for seq_num in seq_nums:
