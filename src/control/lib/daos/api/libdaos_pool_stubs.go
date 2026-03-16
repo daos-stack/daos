@@ -184,7 +184,6 @@ var (
 	}
 
 	daos_default_PoolQueryTargetInfo daos.PoolQueryTargetInfo = daos.PoolQueryTargetInfo{
-		Type:  daos.PoolQueryTargetType(1),
 		State: daos.PoolTargetStateUp,
 		Space: func() []*daos.StorageUsageStats {
 			tiStats := make([]*daos.StorageUsageStats, len(daos_default_PoolInfo.TierStats))
@@ -365,7 +364,6 @@ func daos_pool_query_target(poolHdl C.daos_handle_t, tgt C.uint32_t, rank C.uint
 	daos_pool_query_target_SetTgt = tgt
 	daos_pool_query_target_SetRank = rank
 
-	info.ta_type = C.daos_target_type_t(daos_pool_query_target_Info.Type)
 	info.ta_state = C.daos_target_state_t(daos_pool_query_target_Info.State)
 	info.ta_space = daos_gds2cds(daos_pool_query_target_Info.Space)
 

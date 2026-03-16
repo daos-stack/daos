@@ -36,6 +36,8 @@ typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
 typedef struct _Mgmt__PoolMonitorReq Mgmt__PoolMonitorReq;
 typedef struct _Mgmt__ClientTelemetryReq Mgmt__ClientTelemetryReq;
 typedef struct _Mgmt__ClientTelemetryResp Mgmt__ClientTelemetryResp;
+typedef struct _Mgmt__GetGroupStatusReq Mgmt__GetGroupStatusReq;
+typedef struct _Mgmt__GetGroupStatusResp Mgmt__GetGroupStatusResp;
 
 
 /* --- enums --- */
@@ -531,6 +533,37 @@ struct  _Mgmt__ClientTelemetryResp
     , 0, 0 }
 
 
+struct  _Mgmt__GetGroupStatusReq
+{
+  ProtobufCMessage base;
+  /*
+   * System map version
+   */
+  uint32_t         map_version;
+};
+#define MGMT__GET_GROUP_STATUS_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_group_status_req__descriptor) \
+    , 0 }
+
+
+struct  _Mgmt__GetGroupStatusResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS status code
+   */
+  int32_t status;
+  /*
+   * All dead ranks
+   */
+  size_t n_dead_ranks;
+  uint32_t *dead_ranks;
+};
+#define MGMT__GET_GROUP_STATUS_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_group_status_resp__descriptor) \
+    , 0, 0,NULL }
+
+
 /* Mgmt__DaosResp methods */
 void   mgmt__daos_resp__init
                      (Mgmt__DaosResp         *message);
@@ -898,6 +931,44 @@ Mgmt__ClientTelemetryResp *
 void   mgmt__client_telemetry_resp__free_unpacked
                      (Mgmt__ClientTelemetryResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__GetGroupStatusReq methods */
+void   mgmt__get_group_status_req__init
+                     (Mgmt__GetGroupStatusReq         *message);
+size_t mgmt__get_group_status_req__get_packed_size
+                     (const Mgmt__GetGroupStatusReq   *message);
+size_t mgmt__get_group_status_req__pack
+                     (const Mgmt__GetGroupStatusReq   *message,
+                      uint8_t             *out);
+size_t mgmt__get_group_status_req__pack_to_buffer
+                     (const Mgmt__GetGroupStatusReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__GetGroupStatusReq *
+       mgmt__get_group_status_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__get_group_status_req__free_unpacked
+                     (Mgmt__GetGroupStatusReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__GetGroupStatusResp methods */
+void   mgmt__get_group_status_resp__init
+                     (Mgmt__GetGroupStatusResp         *message);
+size_t mgmt__get_group_status_resp__get_packed_size
+                     (const Mgmt__GetGroupStatusResp   *message);
+size_t mgmt__get_group_status_resp__pack
+                     (const Mgmt__GetGroupStatusResp   *message,
+                      uint8_t             *out);
+size_t mgmt__get_group_status_resp__pack_to_buffer
+                     (const Mgmt__GetGroupStatusResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__GetGroupStatusResp *
+       mgmt__get_group_status_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__get_group_status_resp__free_unpacked
+                     (Mgmt__GetGroupStatusResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__DaosResp_Closure)
@@ -963,6 +1034,12 @@ typedef void (*Mgmt__ClientTelemetryReq_Closure)
 typedef void (*Mgmt__ClientTelemetryResp_Closure)
                  (const Mgmt__ClientTelemetryResp *message,
                   void *closure_data);
+typedef void (*Mgmt__GetGroupStatusReq_Closure)
+                 (const Mgmt__GetGroupStatusReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__GetGroupStatusResp_Closure)
+                 (const Mgmt__GetGroupStatusResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -991,6 +1068,8 @@ extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_monitor_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__client_telemetry_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__client_telemetry_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__get_group_status_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__get_group_status_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

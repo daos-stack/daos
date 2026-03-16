@@ -77,7 +77,11 @@
 	X(POOL_ACL_DELETE, 0, &CQF_pool_acl_delete, ds_pool_acl_delete_handler, NULL)              \
 	X(POOL_RANKS_GET, 0, &CQF_pool_ranks_get, ds_pool_ranks_get_handler, NULL)                 \
 	X(POOL_UPGRADE, 0, &CQF_pool_upgrade, ds_pool_upgrade_handler, NULL)                       \
-	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)
+	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)           \
+	X(POOL_REBUILD_STOP, 0, &CQF_pool_rebuild_stop, ds_pool_rebuild_stop_handler, NULL)        \
+	X(POOL_REBUILD_START, 0, &CQF_pool_rebuild_start, ds_pool_rebuild_start_handler, NULL)     \
+	X(POOL_EVAL_SELF_HEAL, 0, &CQF_pool_eval_self_heal, ds_pool_eval_self_heal_handler, NULL)  \
+	X(POOL_RECOV_CONT, 0, &CQF_pool_recov_cont, ds_pool_recov_cont_handler, NULL)
 
 #define POOL_PROTO_RPC_LIST                                                                        \
 	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)                                                 \
@@ -152,8 +156,13 @@ enum map_update_opc {
 	MAP_REVERT_REBUILD,
 };
 
-enum pool_target_update_flags {
+enum pool_map_update_flags {
 	POOL_TGT_UPDATE_SKIP_RF_CHECK = (1 << 0),
+	POOL_RESET_RECOV_CONT         = (1 << 1),
+};
+
+enum pool_recov_cont_flags {
+	PRCF_BIND_BULK = (1 << 0),
 };
 
 static inline uint32_t
@@ -902,6 +911,44 @@ CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP, DAOS_OSEQ_POOL
 
 CRT_RPC_DECLARE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_DISCARD)
 
+#define DAOS_ISEQ_POOL_REBUILD_STOP	/* input fields */       \
+	((struct pool_op_in)	(rstpi_op)		CRT_VAR)     \
+	((uint32_t)				(rstpi_force)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_REBUILD_STOP	/* output fields */      \
+	((struct pool_op_out)		(rstpo_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_rebuild_stop, DAOS_ISEQ_POOL_REBUILD_STOP, DAOS_OSEQ_POOL_REBUILD_STOP)
+
+#define DAOS_ISEQ_POOL_REBUILD_START	/* input fields */   \
+	((struct pool_op_in)		(rstai_op)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_REBUILD_START	/* output fields */  \
+	((struct pool_op_out)		(rstao_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_rebuild_start, DAOS_ISEQ_POOL_REBUILD_START, DAOS_OSEQ_POOL_REBUILD_START)
+
+#define DAOS_ISEQ_POOL_EVAL_SELF_HEAL	/* input fields */		 \
+	((struct pool_op_in)		(pesi_op)		CRT_VAR) \
+	((uint64_t)			(pesi_sys_self_heal)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_EVAL_SELF_HEAL	/* output fields */		 \
+	((struct pool_op_out)		(peso_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_eval_self_heal, DAOS_ISEQ_POOL_EVAL_SELF_HEAL, DAOS_OSEQ_POOL_EVAL_SELF_HEAL)
+
+#define DAOS_ISEQ_POOL_RECOV_CONT	/* input fields */		 \
+	((uuid_t)			(prci_uuid)		CRT_VAR) \
+	((uint32_t)			(prci_flags)		CRT_VAR) \
+	((uint32_t)			(prci_padding)		CRT_VAR) \
+	((uint64_t)			(prci_cont_nr)		CRT_VAR) \
+	((crt_bulk_t)			(prci_cont_bulk)	CRT_VAR) \
+	((struct pool_target_addr)	(prci_addrs)		CRT_ARRAY)
+
+#define DAOS_OSEQ_POOL_RECOV_CONT	/* output fields */		 \
+	((int32_t)			(prco_ret)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_recov_cont, DAOS_ISEQ_POOL_RECOV_CONT, DAOS_OSEQ_POOL_RECOV_CONT)
 /* clang-format on */
 
 static inline int

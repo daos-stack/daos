@@ -435,17 +435,13 @@ during container create.
 
 - cksum (`DAOS_PROP_CO_CSUM`): the type of checksum algorithm to use.
   Supported values are adler32, crc[16|32|64] or sha[1|256|512]. By default,
-  checksum is disabled for new containers.
+  checksum is enabled for new containers using crc32.
 - cksum\_size (`DAOS_PROP_CO_CSUM_CHUNK_SIZE`): defines the chunk size used for
   creating checksums of array types. (default is 32K).
-- srv\_cksum (`DAOS_PROP_CO_CSUM_SERVER_VERIFY`): Because of the probable decrease to
-  IOPS, in most cases, it is not desired to verify checksums on an object
-  update on the server side. It is sufficient for the client to verify on
-  a fetch because any data corruption, whether on the object update,
-  storage, or fetch, will be caught. However, there is an advantage to
-  knowing if corruption happens on an update. The update would fail
-  right away, indicating to the client to retry the RPC or report an
-  error to upper levels.
+- srv\_cksum (`DAOS_PROP_CO_CSUM_SERVER_VERIFY`): verify the checksum on an
+  object update on the server side. This is enabled by default. Verifying checksums
+  on update allows to pro-actively detect corruption over the wire and retry the RPC
+  from the client, but has an impact on IOPS.
 
 For instance, to create a new container with crc64 checksum enabled and
 checksum verification on the server side, one can use the following command
@@ -471,9 +467,8 @@ The DAOS erasure code implementation uses a fixed cell size that applies to all
 objects in the container.
 The cell size in DAOS is the size of a single data and parity fragment.
 By default, a container's `ec_cell_sz` property is inherited from the pool's
-default `ec_cell_sz`, which was 1MiB in DAOS 2.0 and has been reduced to
-64kiB in DAOS 2.2.  The container cell size can also be set at
-container creation time via the `--property` option:
+default `ec_cell_sz`, which is 128kiB. The container cell size can also be set
+at container creation time via the `--property` option:
 
 ```bash
 $ daos cont create tank mycont5 --type POSIX --properties rd_fac:1,cell_size:131072

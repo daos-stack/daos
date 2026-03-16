@@ -1,16 +1,21 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
+#
+#  (C) Copyright 2025 Google LLC
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
-if [ -z "${SL_MERCURY_PREFIX}" ]; then
+if [ -z "${SL_MERCURY_PREFIX:-}" ]; then
   echo "Mercury must be installed or never built"
   exit 0
 fi
 
 VERSION="${mercury_version}"
-RELEASE="2"
+RELEASE="${mercury_release}"
 LICENSE="BSD"
 ARCH=${isa}
 DESCRIPTION="Mercury is a Remote Procedure Call (RPC) framework specifically
@@ -24,6 +29,7 @@ Access (RMA). Its interface is generic and allows any function
 call to be serialized. Since code generation is done using the C
 preprocessor, no external tool is required."
 URL="http://mercury-hpc.github.io"
+RPM_CHANGELOG="mercury.changelog"
 
 files=()
 TARGET_PATH="${bindir}"
@@ -36,14 +42,19 @@ list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
+ARCH="${isa}"
+DEPENDS=("(mercury-libfabric or mercury-ucx)")
+build_package "mercury"
+DEPENDS=()
+
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ofi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("${libfabric_lib} >= ${libfabric_version}")
-build_package "mercury"
+DEPENDS=("${libfabric_lib} >= ${libfabric_min_version}")
+build_package "mercury-libfabric"
 DEPENDS=()
 
 TARGET_PATH="${libdir}/mercury"
@@ -54,38 +65,36 @@ append_install_list "${files[@]}"
 ARCH="${isa}"
 build_package "mercury-ucx"
 
-if [ "${BUILD_EXTRANEOUS:-no}" = "yes" ]; then
 TARGET_PATH="${libdir}"
-  list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so"
-  append_install_list "${files[@]}"
+list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${includedir}"
-  list_files files "${SL_MERCURY_PREFIX}/include/*.h"
-  append_install_list "${files[@]}"
+TARGET_PATH="${includedir}"
+list_files files "${SL_MERCURY_PREFIX}/include/*.h"
+append_install_list "${files[@]}"
 
-  TARGET_PATH="${libdir/pkgconfig}"
-  list_files files "${SL_MERCURY_PREFIX}/lib64/pkgconfig/*.pc"
-  replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
-  if [ -n "${SL_OFI_PREFIX}" ]; then
-    replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
-  fi
-  if [ -n "${SL_UCX_PREFIX}" ]; then
-    replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
-  fi
-  append_install_list "${files[@]}"
-
-  TARGET_PATH="${libdir}/cmake/mercury"
-  list_files files "${SL_MERCURY_PREFIX}/lib64/cmake/mercury/*"
-  replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
-  if [ -n "${SL_OFI_PREFIX}" ]; then
-    replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
-  fi
-  if [ -n "${SL_UCX_PREFIX}" ]; then
-    replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
-  fi
-  append_install_list "${files[@]}"
-
-  DEPENDS=("mercury = ${mercury_version}")
-  build_package "${mercury_dev}"
-  DEPENDS=()
+TARGET_PATH="${libdir/pkgconfig}"
+list_files files "${SL_MERCURY_PREFIX}/lib64/pkgconfig/*.pc"
+replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
+if [ -n "${SL_OFI_PREFIX:-}" ]; then
+  replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
 fi
+if [ -n "${SL_UCX_PREFIX:-}" ]; then
+  replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
+fi
+append_install_list "${files[@]}"
+
+TARGET_PATH="${libdir}/cmake/mercury"
+list_files files "${SL_MERCURY_PREFIX}/lib64/cmake/mercury/*"
+replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
+if [ -n "${SL_OFI_PREFIX:-}" ]; then
+  replace_paths "${SL_OFI_PREFIX}" "${files[@]}"
+fi
+if [ -n "${SL_UCX_PREFIX:-}" ]; then
+  replace_paths "${SL_UCX_PREFIX}" "${files[@]}"
+fi
+append_install_list "${files[@]}"
+
+DEPENDS=("mercury = ${mercury_full}")
+build_package "${mercury_dev}"
+DEPENDS=()

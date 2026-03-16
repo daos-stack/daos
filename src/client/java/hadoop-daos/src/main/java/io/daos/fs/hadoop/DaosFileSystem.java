@@ -381,10 +381,10 @@ public class DaosFileSystem extends FileSystem {
         throw new IOException("failed to delete existing file " + daosFile);
       }
     }
-
+   
     daosFile.createNewFile(
             Constants.DAOS_MODLE,
-            DaosObjectClass.OC_SX,
+            DaosObjectClass.OC_UNKNOWN,
             this.chunkSize,
             true);
 

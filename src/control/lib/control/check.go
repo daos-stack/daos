@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -428,11 +430,27 @@ func (r *SystemCheckReport) IsInteractive() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_INTERACT
 }
 
+// IsStale indicates whether this report was awaiting user interaction when it became stale. Stale
+// reports are still valid but can't be repaired without re-running the checker on the affected
+// pool.
+func (r *SystemCheckReport) IsStale() bool {
+	return r.Action == chkpb.CheckInconsistAction_CIA_STALE
+}
+
 // IsRemovedPool indicates whether the error detected in this report indicates a missing pool.
 func (r *SystemCheckReport) IsRemovedPool() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_DISCARD &&
 		(r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE ||
 			r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS)
+}
+
+// IsDryRun indicates whether this report was for a dry run. In a dry run, the resolution was not
+// actually applied.
+func (r *SystemCheckReport) IsDryRun() bool {
+	if r == nil {
+		return false
+	}
+	return r.Result == int32(chkpb.CheckResult_DRY_RUN)
 }
 
 // Resolution returns a string describing the action taken to resolve this report.
@@ -585,6 +603,15 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		proto.Merge(rpt, pbReport)
 		resp.Reports = append(resp.Reports, rpt)
 	}
+
+	// Sort reports by class, then sequence for consistent ordering.
+	sort.Slice(resp.Reports, func(i, j int) bool {
+		if resp.Reports[i].Class != resp.Reports[j].Class {
+			return resp.Reports[i].Class < resp.Reports[j].Class
+		}
+		return resp.Reports[i].Seq < resp.Reports[j].Seq
+	})
+
 	return resp, nil
 }
 

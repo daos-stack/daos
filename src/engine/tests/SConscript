@@ -7,13 +7,25 @@ def scons():
 
     unit_env = denv.Clone()
     unit_env.AppendUnique(OBJPREFIX='utest_')
+    mock_abt = unit_env.SharedObject('mock_abt.c')
 
+    # drpc communication integration test
+    comm_env = unit_env.Clone()
+    comm_env.AppendUnique(OBJPREFIX='drpctest_')
+
+    comm_env.d_test_program('drpc_comm_tests',
+                            ['drpc_comm_tests.c', drpc_test_utils, 'drpc_test_listener.c',
+                             '../drpc_progress.c', mock_abt],
+                            LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka', 'pthread'])
+
+    # mocked unit tests
     common_mock_ld_script = f"{Dir('.').srcnode()}/../../common/tests/common-mock-ld-opts"
     unit_env.AppendUnique(LINKFLAGS=[f'-Wl,@{common_mock_ld_script}'])
 
     Depends('drpc_progress_tests', common_mock_ld_script)
     unit_env.d_test_program('drpc_progress_tests',
-                            ['drpc_progress_tests.c', drpc_test_utils, '../drpc_progress.c'],
+                            ['drpc_progress_tests.c', drpc_test_utils, mock_abt,
+                             '../drpc_progress.c'],
                             LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
 
     Depends('drpc_handler_tests', common_mock_ld_script)
@@ -30,9 +42,9 @@ def scons():
     unit_env.d_test_program('drpc_client_tests',
                             ['drpc_client_tests.c', drpc_test_utils, '../drpc_client.c',
                              '../drpc_ras.c', '../srv.pb-c.c', '../event.pb-c.c',
-                             '../../chk/chk.pb-c.c'],
+                             '../../chk/chk.pb-c.c', mock_abt],
                             LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka',
-                                  'uuid', 'pthread', 'abt', 'cart'])
+                                  'uuid', 'pthread', 'cart'])
 
     abt_tenv = denv.Clone()
     abt_tenv.AppendUnique(OBJPREFIX='utest_')

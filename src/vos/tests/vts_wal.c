@@ -297,11 +297,11 @@ wal_tst_pool_cont(void **state)
 
 	/* Create pool: Create meta & WAL blobs, write meta & WAL header */
 	rc = vos_pool_create(pool_name, pool_id, 0 /* scm_sz */, VPOOL_1G, 0 /* meta_sz */,
-			     0 /* flags */, 0 /* version */, NULL);
+			     VOS_POF_EXTERNAL_CHKPT, 0 /* version */, NULL);
 	assert_int_equal(rc, 0);
 
 	/* Create cont: write WAL */
-	rc = vos_pool_open(pool_name, pool_id, 0, &poh);
+	rc = vos_pool_open(pool_name, pool_id, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_int_equal(rc, 0);
 
 	rc = vos_cont_create(poh, cont_id);
@@ -334,7 +334,7 @@ wal_tst_pool_cont(void **state)
 		daos_fail_loc_set(DAOS_WAL_NO_REPLAY | DAOS_FAIL_ALWAYS);
 
 	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
-	rc = vos_pool_open(pool_name, pool_id, 0, &poh);
+	rc = vos_pool_open(pool_name, pool_id, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_int_equal(rc, 0);
 
 	/* Open cont */
@@ -418,14 +418,14 @@ wal_pool_refill(struct io_test_args *arg)
 		daos_fail_loc_set(DAOS_WAL_FAIL_REPLAY | DAOS_FAIL_ALWAYS);
 		daos_fail_value_set(1000);
 		poh = DAOS_HDL_INVAL;
-		rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
+		rc  = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, VOS_POF_EXTERNAL_CHKPT, &poh);
 		assert_rc_equal(rc, -DER_AGAIN);
 		daos_fail_loc_set(0);
 	}
 
 	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
 	poh = DAOS_HDL_INVAL;
-	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
+	rc  = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, VOS_POF_EXTERNAL_CHKPT, &poh);
 	assert_rc_equal(rc, 0);
 	tcx->tc_po_hdl = poh;
 	tcx->tc_step = TCX_CO_CREATE;
@@ -623,7 +623,8 @@ setup_wal_io(void **state)
 	if (rc == -1)
 		return rc;
 
-	test_args_reset((struct io_test_args *)*state, VPOOL_2G);
+	test_args_reset((struct io_test_args *)*state, VPOOL_2G, 0, VPOOL_2G,
+			VOS_POF_EXTERNAL_CHKPT);
 	wal_args_reset((struct io_test_args *)*state);
 	return 0;
 }
@@ -636,6 +637,7 @@ static struct io_test_args test_args;
 #define MDTEST_MB_SIZE        (16 * 1024 * 1024UL)
 #define MDTEST_META_BLOB_SIZE ((MDTEST_MAX_NEMB_CNT + MDTEST_MAX_EMB_CNT) * MDTEST_MB_SIZE)
 #define MDTEST_VOS_SIZE       ((MDTEST_MAX_NEMB_CNT * 10 / 8 + 1) * MDTEST_MB_SIZE)
+#define MDTEST_DATA_BLOB_SIZE MDTEST_VOS_SIZE
 #define MDTEST_MB_VOS_CNT     ((int)(MDTEST_VOS_SIZE / MDTEST_MB_SIZE))
 #define MDTEST_MB_CNT         ((int)(MDTEST_META_BLOB_SIZE / MDTEST_MB_SIZE))
 
@@ -646,7 +648,24 @@ setup_mb_io(void **state)
 
 	d_setenv("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", "1", true);
 	memset(&test_args, 0, sizeof(test_args));
-	rc     = vts_ctx_init_ex(&test_args.ctx, MDTEST_VOS_SIZE, MDTEST_META_BLOB_SIZE);
+	rc     = vts_ctx_init(&test_args.ctx, MDTEST_VOS_SIZE, MDTEST_META_BLOB_SIZE,
+			      MDTEST_DATA_BLOB_SIZE, VOS_POF_EXTERNAL_CHKPT);
+	*state = (void *)&test_args;
+	return rc;
+}
+
+#define MDTEST_VOS_SIZE_V2       (1ul * 1024 * 1024 * 1024)
+#define MDTEST_META_BLOB_SIZE_V2 (2ul * 1024 * 1024 * 1024)
+#define MDTEST_DATA_BLOB_SIZE_V2 MDTEST_META_BLOB_SIZE_V2
+static int
+setup_mb_io_v2(void **state)
+{
+	int rc;
+
+	d_setenv("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", "1", true);
+	memset(&test_args, 0, sizeof(test_args));
+	rc     = vts_ctx_init(&test_args.ctx, MDTEST_VOS_SIZE_V2, MDTEST_META_BLOB_SIZE_V2,
+			      MDTEST_DATA_BLOB_SIZE_V2, VOS_POF_EXTERNAL_CHKPT);
 	*state = (void *)&test_args;
 	return rc;
 }
@@ -2930,6 +2949,126 @@ p2_fill_test(void **state)
 	D_FREE(buf);
 }
 
+/* Fill single evictable bucket with single array object */
+static void
+p2_fill_single(void **state)
+{
+	struct io_test_args  *arg  = *state;
+	struct vos_container *cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	struct umem_pool     *umm_pool;
+	struct vos_object    *obj;
+	daos_unit_oid_t       oid;
+	daos_epoch_t          epoch = 1;
+	uint64_t              dkey  = 0;
+	daos_key_t            dkey_iov;
+	daos_iod_t            iod  = {0};
+	daos_recx_t           recx = {0};
+	d_sg_list_t           sgl  = {0};
+	char                 *buf;
+	uint32_t              bkt_id = UMEM_DEFAULT_MBKT_ID;
+	uint32_t written = 0, total_written = 0, io_size = (4 << 10), chunk_size = (1 << 17);
+	uint64_t ne_used = 0, ne_init = 0, ne_total = 0;
+	uint64_t used = 0, total = 0, prev_used = 0;
+	int      rc;
+
+	D_ALLOC(buf, io_size);
+	assert_non_null(buf);
+	dts_buf_render(buf, io_size);
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	sgl.sg_iovs[0].iov_buf     = buf;
+	sgl.sg_iovs[0].iov_buf_len = io_size;
+	sgl.sg_iovs[0].iov_len     = io_size;
+
+	/* Get initial NE space usage */
+	rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, UMEM_DEFAULT_MBKT_ID, &ne_init,
+				  &ne_total);
+	assert_int_equal(rc, 0);
+
+	oid      = dts_unit_oid_gen(DAOS_OT_ARRAY, 0);
+	arg->oid = oid;
+
+	/* Fill one evictable bucket with single array object */
+	while (1) {
+		if ((written * io_size) >= chunk_size) {
+			dkey++;
+			written = 0;
+		}
+
+		d_iov_set(&dkey_iov, &dkey, sizeof(dkey));
+
+		iod.iod_name  = dkey_iov;
+		iod.iod_nr    = 1;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+		recx.rx_idx   = (written * io_size);
+		recx.rx_nr    = io_size;
+		iod.iod_recxs = &recx;
+
+		rc = io_test_obj_update(arg, epoch++, 0, &dkey_iov, &iod, &sgl, NULL, true);
+		if (rc != 0)
+			break;
+
+		if (bkt_id == UMEM_DEFAULT_MBKT_ID) {
+			rc = vos_obj_acquire(cont, oid, false, &obj);
+			assert_rc_equal(rc, 0);
+
+			bkt_id = obj->obj_bkt_ids[0];
+			vos_obj_release(obj, 0, false);
+			assert_true(bkt_id != UMEM_DEFAULT_MBKT_ID);
+		}
+
+		rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, bkt_id, &used, &total);
+		assert_int_equal(rc, 0);
+		assert_int_equal(total, MDTEST_MB_SIZE);
+
+		/* This evictable bucket is filled up */
+		if (used == prev_used)
+			break;
+
+		prev_used = used;
+		written += 1;
+		total_written += 1;
+	}
+
+	d_sgl_fini(&sgl, false);
+	D_FREE(buf);
+
+	/* Get NE usage */
+	rc = umempobj_get_mbusage(vos_cont2umm(cont)->umm_pool, UMEM_DEFAULT_MBKT_ID, &ne_used,
+				  &ne_total);
+	assert_int_equal(rc, 0);
+	assert_true(ne_used > ne_init);
+
+	print_message("Bucket is filled. bkt_id:%u, io_size:%u, chunk_size:%u, written:%u, "
+		      "used:" DF_U64 "/" DF_U64 ", NE_used:" DF_U64 "/" DF_U64 "\n",
+		      bkt_id, io_size, chunk_size, total_written, used, total, ne_used - ne_init,
+		      ne_total);
+
+	assert_in_range(used * 100 / total, 97, 100);
+	checkpoint_fn(&arg->ctx.tc_po_hdl);
+	umm_pool = vos_cont2umm(cont)->umm_pool;
+	/* Close container */
+	rc = vos_cont_close(arg->ctx.tc_co_hdl);
+	assert_rc_equal(rc, 0);
+	arg->ctx.tc_step = TCX_CO_CREATE;
+
+	/* Destroy container */
+	rc = vos_cont_destroy(arg->ctx.tc_po_hdl, arg->ctx.tc_co_uuid);
+	assert_rc_equal(rc, 0);
+	arg->ctx.tc_step = TCX_PO_CREATE_OPEN;
+
+	gc_wait();
+
+	rc = umempobj_get_mbusage(umm_pool, bkt_id, &used, &total);
+	assert_int_equal(rc, 0);
+	assert_int_equal(total, MDTEST_MB_SIZE);
+	print_message("Bucket %u usage after cont destroy. " DF_U64 "/" DF_U64 "\n", bkt_id, used,
+		      total);
+}
+
 static const struct CMUnitTest wal_tests[] = {
     {"WAL01: Basic pool/cont create/destroy test", wal_tst_pool_cont, NULL, NULL},
     {"WAL02: Basic pool/cont create/destroy test with checkpointing", wal_tst_pool_cont,
@@ -2975,6 +3114,7 @@ static const struct CMUnitTest wal_MB_tests[] = {
     {"WAL40: nemb pct test", wal_mb_nemb_pct, setup_mb_io_nembpct, teardown_mb_io_nembpct},
     {"WAL41: nemb unused test", nemb_unused, setup_mb_io, teardown_mb_io},
     {"WAL42: soemb test", soemb_test, setup_mb_io, teardown_mb_io},
+    {"WAL43: P2 fill single", p2_fill_single, setup_mb_io_v2, teardown_mb_io},
 };
 
 int

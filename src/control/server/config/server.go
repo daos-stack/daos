@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,6 +58,7 @@ type deprecatedParams struct {
 type Server struct {
 	// control-specific
 	ControlPort        int                       `yaml:"port"`
+	ControlInterface   string                    `yaml:"control_iface,omitempty"`
 	TransportConfig    *security.TransportConfig `yaml:"transport_config"`
 	Engines            []*engine.Config          `yaml:"engines"`
 	BdevExclude        []string                  `yaml:"bdev_exclude,omitempty"`
@@ -68,6 +69,7 @@ type Server struct {
 	SystemRamReserved  int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages   bool                      `yaml:"disable_hugepages"`
 	AllowNumaImbalance bool                      `yaml:"allow_numa_imbalance"`
+	AllowTHP           bool                      `yaml:"allow_thp"`
 	ControlLogMask     common.ControlLogLevel    `yaml:"control_log_mask"`
 	ControlLogFile     string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON     bool                      `yaml:"control_log_json,omitempty"`
@@ -146,7 +148,6 @@ func (cfg *Server) WithFabricProvider(provider string) *Server {
 // WithFabricAuthKey sets the top-level fabric authorization key.
 func (cfg *Server) WithFabricAuthKey(key string) *Server {
 	cfg.Fabric.AuthKey = key
-	cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	for _, engine := range cfg.Engines {
 		engine.Fabric.AuthKey = cfg.Fabric.AuthKey
 	}
@@ -230,6 +231,12 @@ func (cfg *Server) WithControlPort(port int) *Server {
 	return cfg
 }
 
+// WithControlInterface sets the network interface for the control plane listener.
+func (cfg *Server) WithControlInterface(iface string) *Server {
+	cfg.ControlInterface = iface
+	return cfg
+}
+
 // WithTransportConfig sets the gRPC transport configuration.
 func (cfg *Server) WithTransportConfig(cfgTransport *security.TransportConfig) *Server {
 	cfg.TransportConfig = cfgTransport
@@ -296,6 +303,12 @@ func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
 // WithAllowNumaImbalance allows engine count mismatch between NUMA-nodes.
 func (cfg *Server) WithAllowNumaImbalance(allowed bool) *Server {
 	cfg.AllowNumaImbalance = allowed
+	return cfg
+}
+
+// WithAllowTHP allows DAOS server to run with transparent hugepage support enabled.
+func (cfg *Server) WithAllowTHP(allowed bool) *Server {
+	cfg.AllowTHP = allowed
 	return cfg
 }
 
@@ -388,10 +401,6 @@ func (cfg *Server) Load(log logging.Logger) error {
 	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
-	}
-
-	if cfg.Fabric.AuthKey != "" {
-		cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	}
 
 	if len(cfg.deprecatedParams.AccessPoints) > 0 {
@@ -897,6 +906,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenHelperStreamCount := -1
 	seenScmCls := storage.ClassNone
 	seenScmClsIdx := -1
+	var seenScmHuge *bool
+	seenScmHugeIdx := -1
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
@@ -943,6 +954,22 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			}
 			seenScmCls = scmConf.Class
 			seenScmClsIdx = idx
+
+			if seenScmHugeIdx != -1 {
+				switch {
+				case scmConf.Scm.DisableHugepages == nil && seenScmHuge == nil:
+				case scmConf.Scm.DisableHugepages != nil && seenScmHuge == nil:
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				case scmConf.Scm.DisableHugepages == nil && seenScmHuge != nil:
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				case *scmConf.Scm.DisableHugepages != *seenScmHuge:
+					log.Debugf("scm_hugepages_disabled entry %v in %d doesn't match %d",
+						*scmConf.Scm.DisableHugepages, idx, seenScmHugeIdx)
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				}
+			}
+			seenScmHuge = scmConf.Scm.DisableHugepages
+			seenScmHugeIdx = idx
 		}
 
 		bdevs := engine.Storage.GetBdevs()
@@ -1083,4 +1110,21 @@ func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
 	}
 
 	return
+}
+
+// HasPMem returns true if any engine storage config contains a DCPM-class SCM-tier.
+func (cfg *Server) HasPMem() bool {
+	if cfg == nil {
+		return false
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		for _, scmCfg := range engineCfg.Storage.Tiers.ScmConfigs() {
+			if scmCfg.Class == storage.ClassDcpm {
+				return true
+			}
+		}
+	}
+
+	return false
 }

@@ -8,7 +8,7 @@ error_exit() {
 
 cleanup_provision_request () {
     local reqid="$1"
-    local file="/scratch/Get a cluster/$reqid"
+    local file="/CIShare/Get a cluster/$reqid"
     local n=3
 
     while [ $n -gt 0 ] && [ -e "$file" ]; do
@@ -142,7 +142,7 @@ provision_cluster() {
     echo QUEUE_URL="$queue_url" >> "$GITHUB_ENV"
     # disable xtrace here as this could loop for a long time
     set +x
-    while [ ! -f /scratch/Get\ a\ cluster/"$reqid" ]; do
+    while [ ! -f /CIShare/Get\ a\ cluster/"$reqid" ]; do
         if [ $((SECONDS % 60)) -eq 0 ]; then
             { local cancelled why
               read -r cancelled; read -r why; } < \
@@ -158,7 +158,7 @@ provision_cluster() {
     done
     set -x
     local nodestring
-    nodestring=$(cat /scratch/Get\ a\ cluster/"$reqid")
+    nodestring=$(cat /CIShare/Get\ a\ cluster/"$reqid")
     if [ "$nodestring" = "cancelled" ]; then
         echo "Cluster request cancelled from Jenkins"
         return 1
@@ -234,6 +234,6 @@ test_test_tag_and_features() {
 }
 
 #test_jenkins_curl() {
-#    JENKINS_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}"
+#    JENKINS_URL="${JENKINS_URL:-https://jenkins-3.daos.hpc.amslabs.hpecorp.net/}"
 #    assert_equals "$(QUIET=true VERBOSE=false jenkins_curl -X POST "${JENKINS_URL}api/xml" 3>&1 >/dev/null | tr -d '\r' | grep '^X-Content-Type-Options:')" "X-Content-Type-Options: nosniff"
 #}

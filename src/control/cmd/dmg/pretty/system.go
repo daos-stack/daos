@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -68,6 +69,15 @@ func printAbsentRanks(out io.Writer, absentRanks *ranklist.RankSet) {
 		fmt.Fprintf(out, "Unknown %s: %s\n",
 			english.Plural(absentRanks.Count(), "rank", "ranks"),
 			absentRanks.String())
+	}
+}
+
+func printSysSelfHealUnsetFlags(out io.Writer, propVal string) {
+	offFlags := daos.SystemPropertySelfHealUnsetFlags(propVal)
+	if len(offFlags) > 0 {
+		fmt.Fprintf(out, "System property self_heal %s disabled: %s\n",
+			english.PluralWord(len(offFlags), "flag", "flags"),
+			strings.Join(offFlags, ", "))
 	}
 }
 
@@ -131,11 +141,14 @@ func PrintSystemQueryResponse(out, outErr io.Writer, resp *control.SystemQueryRe
 		}
 		printAbsentHosts(outErr, &resp.AbsentHosts)
 		printSystemProviders(out, resp.Providers)
+		printSysSelfHealUnsetFlags(out, resp.SysSelfHealPolicy)
+
 		return nil
 	}
 
 	printAbsentHosts(outErr, &resp.AbsentHosts)
 	printAbsentRanks(outErr, &resp.AbsentRanks)
+	printSysSelfHealUnsetFlags(out, resp.SysSelfHealPolicy)
 
 	printSystemProviders(out, resp.Providers)
 
@@ -243,4 +256,26 @@ func PrintSystemCleanupResponse(out io.Writer, resp *control.SystemCleanupResp, 
 	}
 
 	fmt.Fprintln(out, "System Cleanup Success")
+}
+
+// PrintSystemProperties generates a human readable representation of the property supplied.
+func PrintSystemProperties(out io.Writer, props []*daos.SystemProperty) {
+	if len(props) == 0 {
+		fmt.Fprintln(out, "No system properties found.")
+		return
+	}
+
+	nameTitle := "Name"
+	valueTitle := "Value"
+	table := []txtfmt.TableRow{}
+	for _, prop := range props {
+		row := txtfmt.TableRow{}
+		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Key)
+		row[valueTitle] = prop.Value.String()
+		table = append(table, row)
+	}
+
+	tf := txtfmt.NewTableFormatter(nameTitle, valueTitle)
+	tf.InitWriter(out)
+	tf.Format(table)
 }

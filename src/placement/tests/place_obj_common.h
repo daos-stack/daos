@@ -1,10 +1,9 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(tests)
-
 #ifndef __PL_MAP_COMMON_H__
 #define __PL_MAP_COMMON_H__
 
@@ -28,7 +27,7 @@ extern bool g_verbose;
 #define is_true assert_true
 #define is_false assert_false
 
-#define PLT_LAYOUT_VERSION	1
+#define PLT_LAYOUT_VERSION 2
 extern bool fail_domain_node;
 void
 print_layout(struct pl_obj_layout *layout);

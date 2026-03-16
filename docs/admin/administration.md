@@ -34,7 +34,7 @@ Below is an example of a RAS event signaling an exclusion of an unresponsive
 engine:
 
 ```
-&&& RAS EVENT id: [swim_rank_dead] ts: [2021-11-21T13:32:31.747408+0000] host: [wolf-112.wolf.hpdd.intel.com] type: [STATE_CHANGE] sev: [NOTICE] msg: [SWIM marked rank as dead.] pid: [253454] tid: [1] rank: [6] inc: [63a058833280000]
+&&& RAS EVENT id: [swim_rank_dead] ts: [2021-11-21T13:32:31.747408+0000] host: [wolf-112.wolf.example.com] type: [STATE_CHANGE] sev: [NOTICE] msg: [SWIM marked rank as dead.] pid: [253454] tid: [1] rank: [6] inc: [63a058833280000]
 ```
 
 ### Event List
@@ -580,7 +580,7 @@ following `daos_server` log entries to indicate the parameters are written to
 the engine's NVMe config:
 
 ```bash
-DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.hpdd.intel.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
+DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.example.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
 Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
 ```
 
@@ -642,41 +642,18 @@ This LED activity visually indicates a fault and that the device needs to be rep
 longer in use by DAOS.
 The LED of the VMD device will remain in this state until replaced by a new device.
 
-!!! note
-    Full NVMe hot plug capability will be available and supported in DAOS 2.6 release.
-    Use is currently intended for testing only and is not supported for production.
-
-- To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
-and bound instead to a user-space driver so that the device can be used with DAOS.
-
-To rebind a SSD on a single host, run the following command (replace SSD PCI address and
-hostname with appropriate values):
+- If VMD is not enabled, then in order to use a newly added (hot-inserted) SSD it needs to be
+unbound from the kernel driver and bound instead to a user-space driver so that the device can be
+used with DAOS. To rebind an SSD on a single host, run the following command (replace SSD PCI
+address and hostname with appropriate values):
 ```bash
 $ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
 Command completed successfully
 ```
 
 The device will now be bound to a user-space driver (e.g. VFIO) and can be accessed by
-DAOS I/O engine processes (and used in the following `dmg storage replace nvme` command
-as a new device).
-
-- Once an engine is using a newly added (hot-inserted) SSD it can be added to the persistent
-NVMe config (stored on SCM) so that on engine restart the new device will be used.
-
-To update the engine's persistent NVMe config with the new SSD transport address, run the
-following command (replace SSD PCI address, engine index and hostname with appropriate values):
-```bash
-$ dmg storage nvme-add-device -a 0000:84:00.0 -e 0 -l wolf-167
-Command completed successfully
-```
-
-The optional [--tier-index|-t] command parameter can be used to specify which storage tier to
-insert the SSD into, if specified then the server will attempt to insert the device into the tier
-specified by the index, if not specified then the server will attempt to insert the device into
-the bdev tier with the lowest index value (the first bdev tier).
-
-The device will now be registered in the engine's persistent NVMe config so that when restarted,
-the newly added SSD will be used.
+DAOS I/O engine processes. Now the new device can be used in the following
+`dmg storage replace nvme` command.
 
 - Replace an excluded SSD with a New Device:
 ```bash
@@ -1046,6 +1023,12 @@ An examples workflow would be:
 - Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
   rank will be created).
 - Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
+
+!!! note
+    `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. The
+    subsequent state of the rank will then no longer be `AdminExcluded`. This special case reduces
+    a chance that a duplicate rank entry is introduced inadvertently because the rank to be replaced
+    is in the `AdminExcluded` state and so is recreated rather than replaced.
 
 ### System Erase
 

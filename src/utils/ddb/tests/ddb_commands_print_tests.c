@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,6 +60,7 @@ print_key_test(void **state)
 
 	key.ddbk_idx = 4;
 	d_iov_set(&key.ddbk_key, key_buf, ARRAY_SIZE(key_buf));
+	key.ddbk_otype = DAOS_OT_MULTI_LEXICAL;
 
 	ddb_print_key(&g_ctx, &key, 0);
 
@@ -92,6 +94,7 @@ print_key_test(void **state)
 	 * If key length is a number type, then print as that.
 	 */
 	memset(key_buf, 0, ARRAY_SIZE(key_buf));
+	key.ddbk_otype = DAOS_OT_MULTI_UINT64;
 
 	/* char key */
 	key_buf[0] = 0xab;
@@ -146,25 +149,26 @@ print_key_test(void **state)
 static void
 print_sv_test(void **state)
 {
-	struct ddb_sv sv = {.ddbs_record_size = 19089555};
+	struct ddb_sv sv = {.ddbs_record_size = 19089555, .ddbs_epoch = 49126485506073};
 
 	ddb_print_sv(&g_ctx, &sv, 0);
-	assert_printed_exact("[0] Single Value (Length: 19089555 bytes)\n");
+	assert_printed_exact("[0] Single Value (Length: 19089555 bytes, Epoch: 49126485506073)\n");
 }
 
 static void
 print_array_test(void **state)
 {
 	struct ddb_array array = {
-		.ddba_recx.rx_idx = 64,
-		.ddba_recx.rx_nr = 128,
-		.ddba_record_size = 3,
-		.ddba_idx = 8,
+	    .ddba_recx.rx_idx = 64,
+	    .ddba_recx.rx_nr  = 128,
+	    .ddba_record_size = 3,
+	    .ddba_idx         = 8,
+	    .ddba_epoch       = 49126485506073,
 	};
 
 	ddb_print_array(&g_ctx, &array, 0);
 	assert_printed_exact("[8] Array Value (Length: 128 records, "
-		   "Record Indexes: {64-191}, Record Size: 3)\n");
+			     "Record Indexes: {64-191}, Record Size: 3, Epoch: 49126485506073)\n");
 }
 
 #define assert_hr_bytes(expected_str, bytes) \
@@ -284,17 +288,17 @@ iov_to_printable_test(void **state)
 	char buf[buf_len];
 	char input_buf[buf_len];
 
-	assert_int_equal(0, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_int_equal(0, ddb_iov_to_printable_buf(&iov, buf, buf_len, NULL));
 
 	/* buf is plenty big */
 	sprintf(input_buf, "This is some text");
 	d_iov_set(&iov, input_buf, strlen(input_buf) + 1);
-	assert_int_equal(17, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_int_equal(17, ddb_iov_to_printable_buf(&iov, buf, buf_len, NULL));
 	assert_string_equal(input_buf, buf);
 
 	/* buf is too small */
 	memset(buf, 0, buf_len);
-	assert_int_equal(17, ddb_iov_to_printable_buf(&iov, buf, 10));
+	assert_int_equal(17, ddb_iov_to_printable_buf(&iov, buf, 10, NULL));
 	assert_string_equal("This is s", buf);
 
 	/* Binary type - enough buffer*/
@@ -303,27 +307,27 @@ iov_to_printable_test(void **state)
 	/* chars written to buffer is 30. For each byte, 2 are printed (10 bytes * 2) plus
 	 * the prefix of 'bin(10):' is 10 more chars.
 	 */
-	assert_int_equal(30, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_int_equal(30, ddb_key_to_printable_buf(&iov, 0, buf, buf_len));
 	assert_string_equal("bin(10):0xabababababababababab", buf);
 
 	/* Binary type - not enough buffer*/
-	assert_int_equal(30, ddb_iov_to_printable_buf(&iov, buf, 20));
+	assert_int_equal(30, ddb_key_to_printable_buf(&iov, 0, buf, 20));
 	assert_string_equal("bin(10):0xababab...", buf);
 
 	/* Number types */
 	d_iov_set(&iov, input_buf, 8); /* uint64 */
-	assert_int_equal(25, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_int_equal(25, ddb_key_to_printable_buf(&iov, DAOS_OT_MULTI_UINT64, buf, buf_len));
 	assert_string_equal("uint64:0xabababababababab", buf);
 
-	assert_int_equal(25, ddb_iov_to_printable_buf(&iov, buf, 10));
+	assert_int_equal(25, ddb_key_to_printable_buf(&iov, DAOS_OT_MULTI_UINT64, buf, 10));
 	assert_string_equal("uint64:0x", buf);
 
 	d_iov_set(&iov, input_buf, 4); /* uint32 */
-	assert_int_equal(17, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_int_equal(17, ddb_key_to_printable_buf(&iov, DAOS_OT_ARRAY_BYTE, buf, buf_len));
 	assert_string_equal("uint32:0xabababab", buf);
 
 	d_iov_set(&iov, input_buf, 1); /* uint8 */
-	assert_int_equal(10, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_int_equal(10, ddb_key_to_printable_buf(&iov, DAOS_OT_ARRAY_BYTE, buf, buf_len));
 	assert_string_equal("uint8:0xab", buf);
 }
 

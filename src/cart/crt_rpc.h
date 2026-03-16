@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,9 +15,9 @@
 #include <gurt/heap.h>
 #include <gurt/common.h>
 
-/* default RPC timeout 60 seconds */
-#define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
-#define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
+/* default RPC timeout */
+#define CRT_TIMEOUT_DEFAULT             (60U)   /* 60 seconds */
+#define CRT_TIMEOUT_MAX                 (3600U) /* 1 hour */
 
 #define CRT_QUOTA_RPCS_DEFAULT          64
 #define CRT_QUOTA_BULKS_DEFAULT         64
@@ -34,9 +34,11 @@ void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
  */
 enum crt_rpc_flags_internal {
 	/* flag of collective RPC (bcast) */
-	CRT_RPC_FLAG_COLL		= (1U << 16),
+	CRT_RPC_FLAG_COLL = (1U << 16),
 	/* flag of targeting primary group */
-	CRT_RPC_FLAG_PRIMARY_GRP	= (1U << 17),
+	CRT_RPC_FLAG_PRIMARY_GRP = (1U << 17),
+	/* flag of using deadlines instead of timeouts in RPC headers */
+	CRT_RPC_FLAG_DEADLINES_USED = (1U << 18),
 };
 
 struct crt_corpc_hdr {
@@ -77,11 +79,30 @@ struct crt_common_hdr {
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	/* TODO: workaround for DAOS-13973 */
 	union {
-		uint32_t	cch_src_timeout;
+		uint32_t        cch_src_deadline_sec;
 		uint32_t	cch_rc;
 	};
 };
 
+static inline int32_t
+crt_deadline_to_timeout(uint32_t deadline_sec)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_REALTIME_COARSE, &now);
+	return deadline_sec - now.tv_sec - 1;
+}
+
+static inline uint32_t
+crt_timeout_to_deadline(int timeout_sec)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_REALTIME_COARSE, &now);
+
+	/* Deadline is the next second after timeout */
+	return now.tv_sec + timeout_sec + 1;
+}
 
 typedef enum {
 	RPC_STATE_INITED = 0x36,
@@ -145,6 +166,8 @@ struct crt_rpc_priv {
 	struct d_binheap_node	crp_timeout_bp_node;
 	/* the timeout in seconds set by user */
 	uint32_t		crp_timeout_sec;
+	/* the deadline corresponding to crp_timeout_sec */
+	uint32_t                 crp_deadline_sec;
 	/* time stamp to be timeout, the key of timeout binheap */
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
@@ -192,7 +215,9 @@ struct crt_rpc_priv {
 	    /* RPC originated from a primary provider */
 	    crp_src_is_primary      : 1,
 	    /* release input buffer early */
-	    crp_release_input_early : 1;
+	    crp_release_input_early : 1,
+	    /* rpc expired */
+	    crp_expired             : 1;
 
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
@@ -238,76 +263,44 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
  * this to ping the server waiting for start so needs to work before
  * proto_query() can be called.
  */
-#define CRT_INTERNAL_RPCS_LIST						\
-	X(CRT_OPC_URI_LOOKUP,						\
-		0, &CQF_crt_uri_lookup,					\
-		crt_hdlr_uri_lookup, NULL)				\
-	X(CRT_OPC_PROTO_QUERY,						\
-		0, &CQF_crt_proto_query,				\
-		crt_hdlr_proto_query, NULL)				\
-	X(CRT_OPC_CTL_LS,						\
-		0, &CQF_crt_ctl_ep_ls,					\
-		crt_hdlr_ctl_ls, NULL)					\
+#define CRT_INTERNAL_RPCS_LIST                                                                     \
+	X(CRT_OPC_URI_LOOKUP, 0, &CQF_crt_uri_lookup, crt_hdlr_uri_lookup, NULL)                   \
+	X(CRT_OPC_PROTO_QUERY, 0, &CQF_crt_proto_query, crt_hdlr_proto_query, NULL)                \
+	X(CRT_OPC_CTL_LS, 0, &CQF_crt_ctl_ep_ls, crt_hdlr_ctl_ls, NULL)
 
-#define CRT_FI_RPCS_LIST						\
-	X(CRT_OPC_CTL_FI_TOGGLE,					\
-		0, &CQF_crt_ctl_fi_toggle,				\
-		crt_hdlr_ctl_fi_toggle, NULL)				\
-	X(CRT_OPC_CTL_FI_SET_ATTR,					\
-		0, &CQF_crt_ctl_fi_attr_set,				\
-		crt_hdlr_ctl_fi_attr_set, NULL)				\
+#define CRT_FI_RPCS_LIST                                                                           \
+	X(CRT_OPC_CTL_FI_TOGGLE, 0, &CQF_crt_ctl_fi_toggle, crt_hdlr_ctl_fi_toggle, NULL)          \
+	X(CRT_OPC_CTL_FI_SET_ATTR, 0, &CQF_crt_ctl_fi_attr_set, crt_hdlr_ctl_fi_attr_set, NULL)
 
-#define CRT_ST_RPCS_LIST						\
-	X(CRT_OPC_SELF_TEST_BOTH_EMPTY,					\
-		0, NULL,						\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,				\
-		0, &CQF_crt_st_send_id_reply_iov,			\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,			\
-		0, &CQF_crt_st_send_iov_reply_empty,			\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_BOTH_IOV,					\
-		0, &CQF_crt_st_both_iov,				\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,			\
-		0, &CQF_crt_st_send_bulk_reply_iov,			\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,			\
-		0, &CQF_crt_st_send_iov_reply_bulk,			\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_BOTH_BULK,					\
-		0, &CQF_crt_st_both_bulk,				\
-		crt_self_test_msg_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_OPEN_SESSION,				\
-		0, &CQF_crt_st_open_session,				\
-		crt_self_test_open_session_handler, NULL)		\
-	X(CRT_OPC_SELF_TEST_CLOSE_SESSION,				\
-		0, &CQF_crt_st_close_session,				\
-		crt_self_test_close_session_handler, NULL)		\
-	X(CRT_OPC_SELF_TEST_START,					\
-		0, &CQF_crt_st_start,					\
-		crt_self_test_start_handler, NULL)			\
-	X(CRT_OPC_SELF_TEST_STATUS_REQ,					\
-		0, &CQF_crt_st_status_req,				\
-		crt_self_test_status_req_handler, NULL)			\
+#define CRT_ST_RPCS_LIST                                                                           \
+	X(CRT_OPC_SELF_TEST_BOTH_EMPTY, 0, NULL, crt_self_test_msg_handler, NULL)                  \
+	X(CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV, 0, &CQF_crt_st_send_id_reply_iov,                   \
+	  crt_self_test_msg_handler, NULL)                                                         \
+	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY, 0, &CQF_crt_st_send_iov_reply_empty,             \
+	  crt_self_test_msg_handler, NULL)                                                         \
+	X(CRT_OPC_SELF_TEST_BOTH_IOV, 0, &CQF_crt_st_both_iov, crt_self_test_msg_handler, NULL)    \
+	X(CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV, 0, &CQF_crt_st_send_bulk_reply_iov,               \
+	  crt_self_test_msg_handler, NULL)                                                         \
+	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK, 0, &CQF_crt_st_send_iov_reply_bulk,               \
+	  crt_self_test_msg_handler, NULL)                                                         \
+	X(CRT_OPC_SELF_TEST_BOTH_BULK, 0, &CQF_crt_st_both_bulk, crt_self_test_msg_handler, NULL)  \
+	X(CRT_OPC_SELF_TEST_OPEN_SESSION, 0, &CQF_crt_st_open_session,                             \
+	  crt_self_test_open_session_handler, NULL)                                                \
+	X(CRT_OPC_SELF_TEST_CLOSE_SESSION, 0, &CQF_crt_st_close_session,                           \
+	  crt_self_test_close_session_handler, NULL)                                               \
+	X(CRT_OPC_SELF_TEST_START, 0, &CQF_crt_st_start, crt_self_test_start_handler, NULL)        \
+	X(CRT_OPC_SELF_TEST_STATUS_REQ, 0, &CQF_crt_st_status_req,                                 \
+	  crt_self_test_status_req_handler, NULL)
 
-#define CRT_CTL_RPCS_LIST						\
-	X(CRT_OPC_CTL_LOG_SET,						\
-		0, &CQF_crt_ctl_log_set,				\
-		crt_hdlr_ctl_log_set, NULL)				\
-	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
-		0, &CQF_crt_ctl_log_add_msg,				\
-		crt_hdlr_ctl_log_add_msg, NULL)				\
-	X(CRT_OPC_CTL_GET_URI_CACHE,					\
-		0, &CQF_crt_ctl_get_uri_cache,				\
-		crt_hdlr_ctl_get_uri_cache, NULL)			\
-	X(CRT_OPC_CTL_GET_HOSTNAME,					\
-		0, &CQF_crt_ctl_get_host,				\
-		crt_hdlr_ctl_get_hostname, NULL)			\
-	X(CRT_OPC_CTL_GET_PID,						\
-		0, &CQF_crt_ctl_get_pid,				\
-		crt_hdlr_ctl_get_pid, NULL)				\
+#define CRT_CTL_RPCS_LIST                                                                          \
+	X(CRT_OPC_CTL_LOG_SET, 0, &CQF_crt_ctl_log_set, crt_hdlr_ctl_log_set, NULL)                \
+	X(CRT_OPC_CTL_LOG_ADD_MSG, 0, &CQF_crt_ctl_log_add_msg, crt_hdlr_ctl_log_add_msg, NULL)    \
+	X(CRT_OPC_CTL_GET_URI_CACHE, 0, &CQF_crt_ctl_get_uri_cache, crt_hdlr_ctl_get_uri_cache,    \
+	  NULL)                                                                                    \
+	X(CRT_OPC_CTL_GET_HOSTNAME, 0, &CQF_crt_ctl_get_host, crt_hdlr_ctl_get_hostname, NULL)     \
+	X(CRT_OPC_CTL_GET_PID, 0, &CQF_crt_ctl_get_pid, crt_hdlr_ctl_get_pid, NULL)                \
+	X(CRT_OPC_CTL_DUMP_COUNTERS, 0, &CQF_crt_ctl_dump_counters, crt_hdlr_ctl_dump_counters,    \
+	  NULL)
 
 #define CRT_IV_RPCS_LIST						\
 	X(CRT_OPC_IV_FETCH,						\
@@ -510,7 +503,7 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((uint32_t)		(padding)		CRT_VAR)
 
 #define CRT_OSEQ_IV_UPDATE	/* output fields */		 \
-	((uint64_t)		(rc)			CRT_VAR) \
+	((uint64_t)		(ivo_rc)		CRT_VAR) \
 	((d_sg_list_t)		(ivo_iv_sgl)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
@@ -529,7 +522,7 @@ CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 	((uint32_t)		(ivs_class_id)		CRT_VAR) \
 
 #define CRT_OSEQ_IV_SYNC	/* output fields */		 \
-	((int32_t)		(rc)			CRT_VAR)
+	((int32_t)		(ivs_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_sync, CRT_ISEQ_IV_SYNC, CRT_OSEQ_IV_SYNC)
 
@@ -555,6 +548,10 @@ CRT_RPC_DECLARE(crt_ctl_get_uri_cache, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_URI_CACHE)
 	((int32_t)		(cgh_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_ctl_get_host, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
+
+#define CRT_OSEQ_CTL_DUMP_COUNTERS /* output fields */ ((uint32_t)(rc)CRT_VAR)
+
+CRT_RPC_DECLARE(crt_ctl_dump_counters, CRT_ISEQ_CTL, CRT_OSEQ_CTL_DUMP_COUNTERS)
 
 #define CRT_OSEQ_CTL_GET_PID	/* output fields */		 \
 	((int32_t)		(cgp_pid)		CRT_VAR) \
@@ -667,7 +664,8 @@ crt_rpc_cb_customized(struct crt_context *crt_ctx,
 int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		       bool forward);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
-void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag);
+void
+     crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag);
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			    crt_opcode_t opc, bool forward, crt_rpc_t **req);
@@ -690,8 +688,10 @@ crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
 	D_ASSERT(rpc_priv != NULL);
 
-	if (rpc_priv->crp_timeout_sec == 0)
+	if (rpc_priv->crp_timeout_sec == 0) {
 		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
+		rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+	}
 
 	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 }

@@ -13,4 +13,4 @@ server_config:
       storage: auto
 
 pool:
-  size: 5G
+  size: 15G

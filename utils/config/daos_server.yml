@@ -56,6 +56,20 @@
 #port: 10001
 #
 #
+## Network interface for the control plane listener
+#
+## Bind the control plane to a specific network interface. When set, the server
+## will use the first IPv4 address on this interface for binding the control
+## plane listener and for reporting its address to other system components.
+## This is useful in environments with multiple network interfaces where you
+## want to restrict control plane traffic to a specific network.
+#
+## If not set, the default behavior is to bind to 0.0.0.0 (all interfaces).
+#
+## default: (not set - binds to all interfaces)
+#control_iface: eth0
+#
+#
 ## Transport credentials specifying certificates to secure communications
 #
 #transport_config:
@@ -117,7 +131,7 @@
 #
 ## CART: Fabric authorization key
 ## If the fabric requires an authorization key, set it here to
-## be used on the server and clients.
+## be used on the server.
 #
 #fabric_auth_key: foo:bar
 #
@@ -198,16 +212,16 @@
 #socket_dir: ./.daos/daos_server
 #
 #
-## Number of hugepages to allocate for DMA buffer memory
+## Number of hugepages to allocate for DMA buffer memory (total value for all engines)
 #
-## Optional parameter that should only be set if overriding the automatically calculated value is #
-## #necessary. Specifies the number (not size) of hugepages to allocate for use by NVMe through
-## #SPDK. For optimum performance each target requires 1 GiB of hugepage space. The provided value
+## Optional parameter that should only be set if overriding the automatically calculated value is
+## necessary. Specifies the number (not size) of hugepages to allocate for use by NVMe through
+## SPDK. For optimum performance each target requires 1 GiB of hugepage space. The provided value
 ## should be calculated by dividing the total amount of hugepages memory required for all targets
 ## across all engines on a host by the system hugepage size. If not set here, the value will be
 ## automatically calculated based on the number of targets (using the default system hugepage size).
 #
-## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
+## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16384
 #
 ## default: 0
 #nr_hugepages: 0
@@ -228,6 +242,16 @@
 #allow_numa_imbalance: true
 #
 #
+## Allow DAOS server to run with transparent hugepages (THP) enabled on the host machine.
+#
+## WARNING: Transparent hugepages can conflict with how the DAOS server uses hugepages, and enabling
+## them may cause intermittent errors. Unless transparent hugepages are required by another
+## application on the machine, it is strongly recommended to leave this setting disabled.
+#
+## default: false
+#allow_thp: true
+#
+#
 ## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
 ## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
 ## reserved when calculating RAM-disk sizes for all engines.
@@ -240,7 +264,7 @@
 ## minimum of 4gib. Increasing the value may help avoid the potential of OOM killer terminating
 ## engine processes but could also result in stopping DAOS from using available memory resources.
 #
-## default: 26
+## default: 64
 #system_ram_reserved: 5
 #
 #
@@ -315,6 +339,12 @@
 #  #
 #  # The server should have sufficiently many physical cores to support the
 #  # number of targets, plus the additional service threads.
+#  #
+#  # Besides the number of CPU cores, this target number is limited by the number of
+#  # SSDs listed in the bdev_list as well. One NVMe SSD in the bdev_list can be assigned
+#  # to at most 64 targets in pmem mode, or 21 targets in md-on-ssd mode (when the SSD
+#  # has three roles), so the maximum target number will be 'number_of_SSD * 64' in
+#  # pmem mode or 'number_of_SSD * 21' in md-on-ssd mode.
 #
 #  targets: 16
 #
@@ -372,7 +402,10 @@
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
-#
+#  # Currently supported values:
+#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
+#  #   FATAL, EMRG, EMIT
+#  #
 #  # default: ERR
 #  log_mask: INFO
 #
@@ -411,10 +444,10 @@
 #
 #    #scm_size: 0
 #
-#    # When class is set to ram, tmpfs will be mounted with hugepage
-#    # support, if the kernel supports it. If this is not desirable,
-#    # the behavior may be disabled here.
-#    scm_hugepages_disabled: true
+#    # When class is set to ram, tmpfs will only be mounted with hugepage
+#    # support if the kernel supports it and this flag is explicitly set to false.
+#    # default: true
+#    scm_hugepages_disabled: false
 #
 #  -
 #    # Backend block device type. Force a SPDK driver to be used by this engine
@@ -470,6 +503,10 @@
 #    max_io_errs: 100
 #    max_csum_errs: 200
 #
+#  # Set SPDK iobuf tunable values. Defaults if unset are 8192 for small and 1024 for large.
+#  spdk_iobuf:
+#    small_pool_count: 16384
+#    large_pool_count: 2048
 #
 #-
 #  # Number of I/O service threads (and network endpoints) per engine.
@@ -536,7 +573,10 @@
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
-#
+#  # Currently supported values:
+#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
+#  #   FATAL, EMRG, EMIT
+#  #
 #  # default: ERR
 #  log_mask: INFO
 #
@@ -578,6 +618,11 @@
 #    # PMem namespaces (currently only one per engine supported).
 #    #class: dcpm
 #    #scm_list: [/dev/pmem1]
+#
+#    # When class is set to ram, tmpfs will only be mounted with hugepage
+#    # support if the kernel supports it and this flag is explicitly set to false.
+#    # default: true
+#    scm_hugepages_disabled: false
 #
 #  -
 #    # Backend block device type. Force a SPDK driver to be used by this engine

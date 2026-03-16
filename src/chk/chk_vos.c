@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,8 +190,8 @@ chk_bk_update_pool(struct chk_bookmark *cbk, char *uuid_str)
 
 	rc = chk_db_update(uuid_str, strlen(uuid_str), cbk, sizeof(*cbk));
 	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
-		  "Update pool %s bookmark on rank %u, status %u, phase %u",
-		  uuid_str, dss_self_rank(), cbk->cb_ins_status, cbk->cb_phase);
+		  "Update pool %s bookmark on rank %u, status %u, phase %u", uuid_str,
+		  dss_self_rank(), cbk->cb_pool_status, cbk->cb_phase);
 
 	return rc;
 }
@@ -302,13 +303,13 @@ chk_traverse_pools(sys_db_trav_cb_t cb, void *args)
 }
 
 void
-chk_vos_init(void)
+chk_vos_setup(void)
 {
 	chk_db = vos_db_get();
 }
 
 void
-chk_vos_fini(void)
+chk_vos_cleanup(void)
 {
 	chk_db = NULL;
 }

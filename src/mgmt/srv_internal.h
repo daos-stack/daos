@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,6 +29,7 @@
 #include "check.pb-c.h"
 #include "svc.pb-c.h"
 #include "smd.pb-c.h"
+#include "system.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 
@@ -87,7 +88,8 @@ int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets, size_t scm_size,
 		    size_t nvme_size, size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp,
 		    int domains_nr, uint32_t *domains);
-int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int
+    ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
 		       char *machine, uint32_t *count);
@@ -123,10 +125,10 @@ int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
 int
-    ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
-		       d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks,
-		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		       uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes);
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
+		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks, uint64_t deadline,
+		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes);
 int
     ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
 			       d_rank_list_t *tgts, daos_target_info_t **infos,
@@ -137,14 +139,25 @@ int
 			    const char *user, const char *group);
 
 /** srv_chk.c */
-int ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+int
+    ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 			Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
-			uint32_t flags, int phase);
+			uint32_t flags);
 int ds_mgmt_check_stop(int pool_nr, char **pools);
 int ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
 			chk_query_pool_cb_t pool_cb, void *buf);
-int ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
-int ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all);
+int
+ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
+int
+ds_mgmt_check_act(uint64_t seq, uint32_t act);
+int
+ds_mgmt_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *svc_ranks);
+int
+     ds_mgmt_pool_rebuild_start(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int
+ds_mgmt_pool_self_heal_eval(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t policy);
+int
+     ds_mgmt_check_set_policy(uint32_t policy_nr, Mgmt__CheckInconsistPolicy **policies);
 bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
@@ -188,6 +201,9 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_util.c */
 int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
+int
+     ds_mgmt_get_group_status(uint32_t group_version, d_rank_t **dead_ranks_out,
+			      size_t *n_dead_ranks_out);
 void ds_mgmt_kill_rank(bool force);
 int
 ds_mgmt_pbl_create(void);

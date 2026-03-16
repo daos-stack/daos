@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,9 +37,9 @@ var (
 	}
 )
 
-func mockEvtEngineDied(t *testing.T, r uint32) *events.RASEvent {
+func mockEvtEngineDied(t *testing.T, r uint32, inc uint64) *events.RASEvent {
 	t.Helper()
-	return events.NewEngineDiedEvent("foo", 0, r, common.NormalExit, 1234)
+	return events.NewEngineDiedEvent("foo", 0, r, inc, common.NormalExit, 1234)
 }
 
 func populateMembership(t *testing.T, log logging.Logger, members ...*Member) *Membership {
@@ -779,7 +779,8 @@ func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
 				FabricContexts:   newMember.PrimaryFabricContexts,
 				FaultDomain:      newMember.FaultDomain,
 			},
-			expErr: FaultJoinReplaceRankNotFound(4), // Takes nr not matching fields
+			// Fault constructor takes the number of non-matching fields.
+			expErr: FaultJoinReplaceRankNotFound(4),
 		},
 		"partially matching member": {
 			req: &JoinRequest{
@@ -790,7 +791,9 @@ func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
 				FabricContexts:   curMember.PrimaryFabricContexts,
 				FaultDomain:      curMember.FaultDomain,
 			},
-			expErr: FaultJoinReplaceRankNotFound(1), // Diff resolution when nr == 1
+			// A different fault resolution is printed when the number of non-matching
+			// fields is only one.
+			expErr: FaultJoinReplaceRankNotFound(1),
 		},
 		"matching member; identical UUID": {
 			req: &JoinRequest{
@@ -815,6 +818,20 @@ func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
 			expErr: FaultJoinReplaceRankNotFound(1),
 		},
 		"success; matching member": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             newUUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expRank: curMember.Rank,
+		},
+		"admin excluded existing member": {
+			curMembers: []*Member{
+				MockMember(t, 1, MemberStateAdminExcluded).WithFaultDomain(fd1),
+			},
 			req: &JoinRequest{
 				Rank:             NilRank,
 				UUID:             newUUID,
@@ -1132,10 +1149,10 @@ func TestSystem_Membership_Join(t *testing.T) {
 
 func TestSystem_Membership_OnEvent(t *testing.T) {
 	members := Members{
-		MockMember(t, 0, MemberStateJoined),
-		MockMember(t, 1, MemberStateJoined),
-		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateExcluded),
+		MockMemberWithIncarnation(t, 0, MemberStateJoined, 100),
+		MockMemberWithIncarnation(t, 1, MemberStateJoined, 200),
+		MockMemberWithIncarnation(t, 2, MemberStateStopped, 300),
+		MockMemberWithIncarnation(t, 3, MemberStateExcluded, 400),
 	}
 
 	for name, tc := range map[string]struct {
@@ -1150,20 +1167,37 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 		},
 		"event on unrecognized rank": {
 			members:    members,
-			event:      mockEvtEngineDied(t, 4),
+			event:      mockEvtEngineDied(t, 4, 789), // incarnation doesn't matter if rank doesn't exist
 			expMembers: members,
 		},
-		"state updated on unscheduled exit": {
+		"state updated if current incarnation": {
 			members: members,
-			event:   mockEvtEngineDied(t, 1),
+			event:   mockEvtEngineDied(t, 1, members[1].Incarnation),
 			expMembers: Members{
-				MockMember(t, 0, MemberStateJoined),
-				MockMember(t, 1, MemberStateErrored).WithInfo(
+				members[0],
+				MockMemberWithIncarnation(t, 1, MemberStateErrored, 200).WithInfo(
 					errors.Wrap(common.NormalExit,
 						"DAOS engine 0 exited unexpectedly").Error()),
-				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateExcluded),
+				members[2],
+				members[3],
 			},
+		},
+		"updated if new incarnation": {
+			members: members,
+			event:   mockEvtEngineDied(t, 1, members[1].Incarnation+1),
+			expMembers: Members{
+				members[0],
+				MockMemberWithIncarnation(t, 1, MemberStateErrored, 200).WithInfo(
+					errors.Wrap(common.NormalExit,
+						"DAOS engine 0 exited unexpectedly").Error()),
+				members[2],
+				members[3],
+			},
+		},
+		"not updated if old incarnation": {
+			members:    members,
+			event:      mockEvtEngineDied(t, 1, members[1].Incarnation-1),
+			expMembers: members,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1198,17 +1232,17 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 func TestSystem_Membership_MarkDead(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rank        Rank
-		incarnation uint64
-		expErr      error
+		rank           Rank
+		incarnation    uint64
+		expErr         error
+		expNeedsGrpUpd bool
 	}{
 		"unknown member": {
 			rank:   42,
 			expErr: ErrMemberRankNotFound(42),
 		},
-		"invalid transition ignored": {
-			rank:   2,
-			expErr: errors.New("illegal member state update"),
+		"invalid transition ignored; no error and no update requested": {
+			rank: 2,
 		},
 		"stale event for joined member": {
 			rank:        0,
@@ -1216,13 +1250,16 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			expErr:      errors.New("incarnation"),
 		},
 		"new event for joined member": {
-			rank:        0,
-			incarnation: 2,
+			rank:           0,
+			incarnation:    2,
+			expNeedsGrpUpd: true,
 		},
 		"event for stopped member": {
-			rank:        1,
-			incarnation: 2,
+			rank:           1,
+			incarnation:    2,
+			expNeedsGrpUpd: true,
 		},
+		// TODO: zero incarnation
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1240,8 +1277,9 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 				mock(2, 2, MemberStateExcluded),
 			)
 
-			gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
+			needsGrpUpd, gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
 			CmpErr(t, tc.expErr, gotErr)
+			test.AssertEqual(t, tc.expNeedsGrpUpd, needsGrpUpd, "unexpected flag")
 		})
 	}
 }

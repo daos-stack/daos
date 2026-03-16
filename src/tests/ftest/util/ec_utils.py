@@ -418,7 +418,7 @@ class ErasureCodeMdtest(MdtestBase):
         """Set up each test case."""
         super().setUp()
         # Create Pool
-        self.add_pool()
+        self.add_pool(connect=False)
         self.container = None
         self.out_queue = queue.Queue()
 

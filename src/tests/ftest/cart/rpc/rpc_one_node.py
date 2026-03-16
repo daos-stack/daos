@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -25,4 +26,5 @@ class CartRpcOneNodeTest(CartTest):
         clicmd = self.build_cmd(self.env, "test_clients")
 
         self.launch_srv_cli_test(srvcmd, clicmd)
+
         self.log_check()

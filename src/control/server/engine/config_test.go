@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1188,6 +1188,64 @@ func TestConfig_UpdatePMDKEnvarsStackSizeDCPM(t *testing.T) {
 	}
 }
 
+func TestConfig_UpdateABTEnvarsUCX(t *testing.T) {
+	validConfig := func() *Config {
+		return MockConfig().
+			WithFabricProvider("ucx+ud_x")
+	}
+
+	for name, tc := range map[string]struct {
+		cfg                   *Config
+		expErr                error
+		expABTthreadStackSize int
+	}{
+		"valid config for UCX should not fail": {
+			cfg:                   validConfig().WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX),
+			expABTthreadStackSize: minABTThreadStackSizeUCX,
+		},
+		"valid config for non-UCX should not fail": {
+			cfg:                   validConfig().WithFabricProvider("ofi+verbs"),
+			expABTthreadStackSize: 0,
+		},
+		"config for UCX without thread size should not fail": {
+			cfg:                   validConfig(),
+			expABTthreadStackSize: minABTThreadStackSizeUCX,
+		},
+		"config for UCX with stack size big enough should not fail": {
+			cfg: validConfig().
+				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX + 1),
+			expABTthreadStackSize: minABTThreadStackSizeUCX + 1,
+		},
+		"config for UCX with stack size too small should fail": {
+			cfg: validConfig().
+				WithEnvVarAbtThreadStackSize(minABTThreadStackSizeUCX - 1),
+			expErr: errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE should be >= %d for UCX provider, found %d",
+				minABTThreadStackSizeUCX, minABTThreadStackSizeUCX-1)),
+		},
+		"config for UCX with invalid ABT_THREAD_STACKSIZE value should fail": {
+			cfg:    validConfig().WithEnvVars("ABT_THREAD_STACKSIZE=foo_bar"),
+			expErr: errors.New("env_var ABT_THREAD_STACKSIZE has invalid value: foo_bar"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := tc.cfg.UpdateABTEnvarsUCX()
+			test.CmpErr(t, tc.expErr, err)
+			if err == nil {
+				stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
+				if tc.expABTthreadStackSize == 0 {
+					test.CmpErr(t, os.ErrNotExist, err)
+				} else {
+					test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
+					stackSizeVal, err := strconv.Atoi(stackSizeStr)
+					test.AssertTrue(t, err == nil, "Invalid env var ABT_THREAD_STACKSIZE")
+					test.AssertEqual(t, tc.expABTthreadStackSize, stackSizeVal,
+						"Invalid ABT_THREAD_STACKSIZE value")
+				}
+			}
+		})
+	}
+}
+
 func TestConfig_UpdatePMDKEnvarsPMemobjConfDCPM(t *testing.T) {
 	validConfig := func() *Config {
 		return MockConfig().WithStorage(
@@ -1384,6 +1442,40 @@ func TestConfig_SetNUMAAffinity(t *testing.T) {
 				"unexpected numa node in fabric config")
 			test.AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
 				"unexpected numa node in storage config")
+		})
+	}
+}
+
+func TestConfig_WithStorageSpdkIobufProps(t *testing.T) {
+	for name, tc := range map[string]struct {
+		smallPoolCount uint32
+		largePoolCount uint32
+	}{
+		"zero values": {
+			smallPoolCount: 0,
+			largePoolCount: 0,
+		},
+		"small pool count only": {
+			smallPoolCount: 1024,
+			largePoolCount: 0,
+		},
+		"large pool count only": {
+			smallPoolCount: 0,
+			largePoolCount: 512,
+		},
+		"both pool counts set": {
+			smallPoolCount: 2048,
+			largePoolCount: 1024,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := NewConfig().
+				WithStorageSpdkIobufProps(tc.smallPoolCount, tc.largePoolCount)
+
+			test.AssertEqual(t, tc.smallPoolCount, cfg.Storage.SpdkIobufProps.SmallPoolCount,
+				"unexpected small pool count")
+			test.AssertEqual(t, tc.largePoolCount, cfg.Storage.SpdkIobufProps.LargePoolCount,
+				"unexpected large pool count")
 		})
 	}
 }

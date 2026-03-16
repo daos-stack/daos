@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,6 +99,12 @@ void mock_valid_drpc_call_in_recvmsg(void);
  * Sets up recvmsg mock to populate a valid serialized Drpc__Response as the message received.
  */
 void mock_valid_drpc_resp_in_recvmsg(Drpc__Status status);
+
+/**
+ * Sets up recvmsg mock to populate the dRPC header for a given data size.
+ */
+void
+		      mock_valid_drpc_header_in_recvmsg(size_t data_len);
 
 void mock_poll_setup(void);
 void mock_poll_teardown(void);

@@ -67,6 +67,15 @@ func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Me
 	return m
 }
 
+// MockMemberWithIncarnation creates a system member with an incarnation set.
+func MockMemberWithIncarnation(t *testing.T, idx uint32, state MemberState, incarnation uint64) *Member {
+	t.Helper()
+
+	m := MockMember(t, idx, state)
+	m.Incarnation = incarnation
+	return m
+}
+
 // MockMemberResult return a result from an action on a system member.
 func MockMemberResult(rank Rank, action string, err error, state MemberState) *MemberResult {
 	result := NewMemberResult(rank, err, state)

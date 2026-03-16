@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -50,8 +51,8 @@ type CollectLogSubCmd struct {
 	TargetFolder         string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
 	Archive              bool   `short:"z" long:"archive" description:"Archive the log/config files"`
 	ExtraLogsDir         string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
-	LogStartDate         string `short:"D" long:"start-date" description:"Specify the start date, the day from log will be collected, Format: MM-DD"`
-	LogEndDate           string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: MM-DD"`
+	LogStartDate         string `short:"D" long:"start-date" description:"Specify the start date, the day from log will be collected, Format: YYYY-MM-DD"`
+	LogEndDate           string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: YYYY-MM-DD"`
 	LogStartTime         string `short:"S" long:"log-start-time" description:"Specify the log collection start time, Format: HH:MM:SS"`
 	LogEndTime           string `short:"E" long:"log-end-time" description:"Specify the log collection end time, Format: HH:MM:SS"`
 	FileTransferExecArgs string `short:"T" long:"transfer-args" description:"Extra arguments for alternate file transfer tool"`
@@ -62,11 +63,10 @@ type LogTypeSubCmd struct {
 }
 
 const (
-	MMDDYYYY        = "1-2-2006"
-	HHMMSS          = "15:4:5"
-	MMDDHHMMSS      = "1/2-15:4:5"
-	MMDDYYYY_HHMMSS = "1-2-2006 15:4:5"
-	YYYYMMDD_HHMMSS = "2006/1/2 15:4:5"
+	YYYYMMDD            = "2006-01-02"          // Date format as it is expected from commandline argument
+	HHMMSS              = "15:04:05"            // Time format as it is expected from commandline argument
+	YYYYMMDD_HHMMSS     = "2006-01-02 15:04:05" // Date/Time format as it is defined by ISO 8601
+	YYYYMMDD_HHMMSS_LOG = "2006/01/02 15:04:05" // Date/Time format as it is used in DAOS logs
 )
 
 // Folder names to copy logs and configs
@@ -164,14 +164,14 @@ type logCopy struct {
 // Verify if the date and time argument is valid and return error if it's invalid
 func (cmd *CollectLogSubCmd) DateTimeValidate() error {
 	if cmd.LogStartDate != "" || cmd.LogEndDate != "" {
-		startDate, err := time.Parse(MMDDYYYY, cmd.LogStartDate)
+		startDate, err := time.Parse(YYYYMMDD, cmd.LogStartDate)
 		if err != nil {
-			return errors.New("Invalid date, please provide the startDate in MM-DD-YYYY format")
+			return errors.New("Invalid date, please provide the startDate in YYYY-MM-DD format")
 		}
 
-		endDate, err := time.Parse(MMDDYYYY, cmd.LogEndDate)
+		endDate, err := time.Parse(YYYYMMDD, cmd.LogEndDate)
 		if err != nil {
-			return errors.New("Invalid date, please provide the endDate in MM-DD-YYYY format")
+			return errors.New("Invalid date, please provide the endDate in YYYY-MM-DD format")
 		}
 
 		if startDate.After(endDate) {
@@ -719,12 +719,12 @@ func getDateTime(log logging.Logger, opts ...CollectLogsParams) (time.Time, time
 	startTimeStr := fmt.Sprintf("%s %s", opts[0].LogStartDate, opts[0].LogStartTime)
 	endTimeStr := fmt.Sprintf("%s %s", opts[0].LogEndDate, opts[0].LogEndTime)
 
-	actStartTime, err := time.Parse(MMDDYYYY_HHMMSS, startTimeStr)
+	actStartTime, err := time.Parse(YYYYMMDD_HHMMSS, startTimeStr)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
 	}
 
-	actEndTime, err := time.Parse(MMDDYYYY_HHMMSS, endTimeStr)
+	actEndTime, err := time.Parse(YYYYMMDD_HHMMSS, endTimeStr)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
 	}
@@ -766,17 +766,16 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 	scanner := bufio.NewScanner(readFile)
 	var cpLogLine bool
 	if opts[0].LogCmd == "EngineLog" {
-		// Remove year as engine log does not store the year information.
-		actStartTime, _ = time.Parse(MMDDHHMMSS, actStartTime.Format(MMDDHHMMSS))
-		actEndTime, _ = time.Parse(MMDDHHMMSS, actEndTime.Format(MMDDHHMMSS))
+		actStartTime, _ = time.Parse(YYYYMMDD_HHMMSS_LOG, actStartTime.Format(YYYYMMDD_HHMMSS_LOG))
+		actEndTime, _ = time.Parse(YYYYMMDD_HHMMSS_LOG, actEndTime.Format(YYYYMMDD_HHMMSS_LOG))
 
-		var validDateTime = regexp.MustCompile(`^\d\d\/\d\d-\d\d:\d\d:\d\d.\d\d`)
+		var validDateTime = regexp.MustCompile(`^\d\d\d\d\/\d\d\/\d\d \d\d:\d\d:\d\d.\d\d\d\d\d\d`)
 		for scanner.Scan() {
 			lineData := scanner.Text()
 			lineDataSlice := strings.Split(lineData, " ")
 
 			// Verify if log line has date/time stamp and copy line if it's in range.
-			if validDateTime.MatchString(lineData) == false {
+			if !validDateTime.MatchString(lineData) {
 				if cpLogLine {
 					_, err = writeFile.WriteString(lineData + "\n")
 					if err != nil {
@@ -786,10 +785,10 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 				continue
 			}
 
-			dateTime := strings.Split(lineDataSlice[0], "-")
-			timeOnly := strings.Split(dateTime[1], ".")
-			expDateTime := fmt.Sprintf("%s-%s", dateTime[0], timeOnly[0])
-			expLogTime, _ := time.Parse(MMDDHHMMSS, expDateTime)
+			dateTime := lineDataSlice[0]
+			timeOnly := lineDataSlice[1]
+			expDateTime := fmt.Sprintf("%s %s", dateTime, timeOnly)
+			expLogTime, _ := time.Parse(YYYYMMDD_HHMMSS_LOG, expDateTime)
 
 			// Copy line, if the log line has time stamp between the given range of start/end date and time.
 			if expLogTime.After(actStartTime) && expLogTime.Before(actEndTime) {
@@ -818,7 +817,7 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 		lineData := scanner.Text()
 
 		// Verify if log line has date/time stamp and copy line if it's in range.
-		if validDateTime.MatchString(lineData) == false {
+		if !validDateTime.MatchString(lineData) {
 			if cpLogLine {
 				_, err = writeFile.WriteString(lineData + "\n")
 				if err != nil {
@@ -829,7 +828,7 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 		}
 
 		data := validDateTime.FindAllString(lineData, -1)
-		expLogTime, _ := time.Parse(YYYYMMDD_HHMMSS, data[0])
+		expLogTime, _ := time.Parse(YYYYMMDD_HHMMSS_LOG, data[0])
 		// Copy line, if the log line has time stamp between the given range of start/end date and time.
 		if expLogTime.After(actStartTime) && expLogTime.Before(actEndTime) {
 			cpLogLine = true

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (C) Copyright 2025 Google LLC
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -21,6 +22,7 @@ dnf --nodocs install ${dnf_install_args} \
     curl \
     clang \
     cmake \
+    createrepo_c \
     cunit-devel \
     fdupes \
     flex \
@@ -59,6 +61,7 @@ dnf --nodocs install ${dnf_install_args} \
     lua-lmod \
     make \
     maven \
+    nasm \
     numactl \
     openmpi3-devel \
     pandoc \
@@ -79,7 +82,7 @@ dnf --nodocs install ${dnf_install_args} \
 dnf install ${dnf_install_args} ruby-devel
 gem install json -v 2.7.6
 gem install dotenv -v 2.8.1
-gem install fpm
+gem install fpm -v 1.16.0
 if [ ! -f /usr/bin/fpm ]; then
     ln -s "$(basename "$(ls -1 /usr/bin/fpm.ruby*)")" /usr/bin/fpm
 fi

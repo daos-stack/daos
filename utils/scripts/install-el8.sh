@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (C) Copyright 2025 Google LLC
 
 # Install OS updates and packages as required for building DAOS on EL 8 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -22,6 +23,7 @@ dnf --nodocs install ${dnf_install_args} \
     clang \
     clang-tools-extra \
     cmake \
+    createrepo \
     CUnit-devel \
     daxctl-devel \
     diffutils \
@@ -58,11 +60,11 @@ dnf --nodocs install ${dnf_install_args} \
     Lmod \
     lz4-devel \
     make \
+    nasm \
     ndctl \
     ndctl-devel \
     numactl \
     numactl-devel \
-    openmpi-devel \
     openssl-devel \
     pandoc \
     patch \
@@ -79,7 +81,14 @@ dnf --nodocs install ${dnf_install_args} \
     systemd \
     valgrind-devel \
     which \
+    ncurses-devel \
     yasm
+
+if [[ -z "${NO_OPENMPI_DEVEL+set}" ]]; then
+    # shellcheck disable=SC2086
+    dnf --nodocs install ${dnf_install_args} \
+    	openmpi-devel 
+fi
 
 ruby_version=$(dnf module list ruby | grep -Eow "3\.[0-9]+" | tail -1)
 # shellcheck disable=SC2086

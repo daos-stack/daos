@@ -1,0 +1,49 @@
+hosts:
+  test_servers: 7
+  test_clients: 1
+
+timeout: 400
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=group_metadata_only,io,epc,rebuild
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=group_metadata_only,io,epc,rebuild
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+      storage: auto
+
+pool:
+  size: 90%
+  pool_query_timeout: 30
+  properties: rd_fac:3
+
+cont_ior:
+  type: POSIX
+  properties: rd_fac:3
+  oclass: EC_8P3GX
+
+ior:
+  ppn: 16
+  test_file: /testFile
+  api: DFS
+  transfer_size: 1M
+  block_size: 128M
+  flags_write: "-v -w -k -G 1 -F"
+  flags_read: "-v -r -R -k -G 1 -F"

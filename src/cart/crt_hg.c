@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -846,7 +846,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
-	if (crt_provider_is_block_mode(provider) && !prov_data->cpg_progress_busy)
+	if (crt_provider_is_block_mode(provider) && !crt_gdata.cg_progress_busy)
 		init_info.na_init_info.progress_mode = 0;
 	else
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
@@ -872,6 +872,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 		init_info.traffic_class = (enum na_traffic_class)crt_gdata.cg_swim_tc;
 	if (thread_mode_single)
 		init_info.na_init_info.thread_mode = NA_THREAD_MODE_SINGLE;
+	init_info.na_init_info.request_mem_device = crt_gdata.cg_mem_device;
 retry:
 	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
@@ -1189,39 +1190,43 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
-	D_ASSERT(proc != NULL);
-	opc = rpc_tmp.crp_req_hdr.cch_opc;
 
-	/**
-	 * Set the opcode in the temp RPC so that it can be correctly logged.
-	 */
+	D_ASSERT(proc != NULL);
+	opc                    = rpc_tmp.crp_req_hdr.cch_opc;
 	rpc_tmp.crp_pub.cr_opc = opc;
 
+	/* allocate rpc struct for a given opcode; in/out size will vary per opc */
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv, false /* forward */);
 	if (unlikely(rc != 0)) {
-		if (rc == -DER_UNREG) {
-			D_ERROR("opc: %#x, lookup failed.\n", opc);
-			/*
-			 * The RPC is not registered on the server, we don't know how to
-			 * process the RPC request, so we send a CART
-			 * level error message to the client.
-			 */
-			crt_hg_reply_error_send(&rpc_tmp, rc);
-			crt_hg_unpack_cleanup(proc);
-			HG_Destroy(rpc_tmp.crp_hg_hdl);
-			D_GOTO(out, hg_ret = HG_SUCCESS);
-		} else if (rc == -DER_NOMEM) {
-			crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
-			crt_hg_unpack_cleanup(proc);
-			HG_Destroy(rpc_tmp.crp_hg_hdl);
-			D_GOTO(out, hg_ret = HG_SUCCESS);
-		}
+		/* set client rc to denial of service if server is out of mem */
+		if (rc == -DER_NOMEM)
+			rc = -DER_DOS; /* don't log as we are oom already */
+		else
+			D_ERROR("crt_rpc_priv_alloc() failed, rc: %d.\n", rc);
+
+		crt_hg_reply_error_send(&rpc_tmp, rc);
+		crt_hg_unpack_cleanup(proc);
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 
 	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
 
-	crt_hg_header_copy(&rpc_tmp, rpc_priv);
+	/* populate rpc_priv based on raw header values in rpc_tmp.
+	 * perform conversion to either a timeout or deadline based on header
+	 * feature flag and set rpc_priv fields accordingly
+	 * returns error if an rpc is determined to be expired already
+	 */
+	rc = crt_hg_process_header(&rpc_tmp, rpc_priv);
+	if (unlikely(rc != 0)) {
+		RPC_WARN(rpc_priv, "RPC expired. Deadline was %d\n", rpc_priv->crp_deadline_sec);
+
+		crt_hg_reply_error_send(&rpc_tmp, -DER_TIMEDOUT);
+		crt_hg_unpack_cleanup(proc);
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		D_GOTO(out, hg_ret = HG_SUCCESS);
+	}
 
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		is_coll_req = true;
@@ -1597,6 +1602,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
+	/* corresponds to decref in crt_hg_reply_send_cb */
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
@@ -1868,7 +1874,8 @@ out:
 
 struct crt_hg_bulk_cbinfo {
 	struct crt_bulk_desc	*bci_desc;
-	crt_bulk_cb_t		bci_cb;
+	crt_bulk_cb_t            bci_complete_cb;
+	crt_bulk_cb_t            bci_verify_cb;
 	void			*bci_arg;
 };
 
@@ -1905,17 +1912,19 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 		}
 	}
 
-	if (bulk_cbinfo->bci_cb == NULL) {
+	if (bulk_cbinfo->bci_verify_cb == NULL || bulk_cbinfo->bci_complete_cb == NULL) {
 		D_DEBUG(DB_NET, "No bulk completion callback registered.\n");
 		D_GOTO(out, hg_ret);
 	}
+
 	crt_bulk_cbinfo.bci_arg = bulk_cbinfo->bci_arg;
 	crt_bulk_cbinfo.bci_rc = rc;
 	crt_bulk_cbinfo.bci_bulk_desc = bulk_desc;
+	crt_bulk_cbinfo.bci_complete_cb = bulk_cbinfo->bci_complete_cb;
 
-	rc = bulk_cbinfo->bci_cb(&crt_bulk_cbinfo);
+	rc = bulk_cbinfo->bci_verify_cb(&crt_bulk_cbinfo);
 	if (rc != 0)
-		D_ERROR("bulk_cbinfo->bci_cb failed, rc: %d.\n", rc);
+		D_ERROR("bulk_cbinfo->bci_verify_cb failed, rc: %d.\n", rc);
 
 out:
 	D_FREE(bulk_cbinfo);
@@ -1924,8 +1933,8 @@ out:
 }
 
 int
-crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
-		     void *arg, crt_bulk_opid_t *opid, bool bind)
+crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
+		     crt_bulk_cb_t complete_cb, void *arg, crt_bulk_opid_t *opid, bool bind)
 {
 	struct crt_context		*ctx;
 	struct crt_hg_context		*hg_ctx;
@@ -1970,9 +1979,10 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	}
 	crt_bulk_desc_dup(bulk_desc_dup, bulk_desc);
 
-	bulk_cbinfo->bci_desc = bulk_desc_dup;
-	bulk_cbinfo->bci_cb = complete_cb;
-	bulk_cbinfo->bci_arg = arg;
+	bulk_cbinfo->bci_desc        = bulk_desc_dup;
+	bulk_cbinfo->bci_arg         = arg;
+	bulk_cbinfo->bci_verify_cb   = verify_cb;
+	bulk_cbinfo->bci_complete_cb = complete_cb;
 
 	hg_bulk_op = (bulk_desc->bd_bulk_op == CRT_BULK_PUT) ?
 		     HG_BULK_PUSH : HG_BULK_PULL;

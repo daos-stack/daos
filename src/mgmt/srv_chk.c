@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +48,7 @@ out:
 int
 ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		    Mgmt__CheckInconsistPolicy **policies, int32_t pool_nr, char **pools,
-		    uint32_t flags, int32_t phase)
+		    uint32_t flags)
 {
 	uuid_t			*uuids = NULL;
 	struct chk_policy	*ply = NULL;
@@ -69,7 +70,7 @@ ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		}
 	}
 
-	rc = chk_leader_start(rank_nr, ranks, policy_nr, ply, pool_nr, uuids, flags, phase);
+	rc = chk_leader_start(rank_nr, ranks, policy_nr, ply, pool_nr, uuids, flags);
 
 out:
 	D_FREE(uuids);
@@ -116,9 +117,37 @@ ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf)
 }
 
 int
-ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all)
+ds_mgmt_check_act(uint64_t seq, uint32_t act)
 {
-	return chk_leader_act(seq, act, for_all);
+	return chk_leader_act(seq, act);
+}
+
+int
+ds_mgmt_check_set_policy(uint32_t policy_nr, Mgmt__CheckInconsistPolicy **policies)
+{
+	struct chk_policy *ply = NULL;
+	int                rc;
+	int                i;
+
+	if (policy_nr == 0) {
+		D_ERROR("It is invalid to set empty policy\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC_ARRAY(ply, policy_nr);
+	if (ply == NULL) {
+		rc = -DER_NOMEM;
+	} else {
+		for (i = 0; i < policy_nr; i++) {
+			ply[i].cp_class  = policies[i]->inconsist_cas;
+			ply[i].cp_action = policies[i]->inconsist_act;
+		}
+
+		rc = chk_leader_set_policy(policy_nr, ply);
+		D_FREE(ply);
+	}
+
+	return rc;
 }
 
 bool

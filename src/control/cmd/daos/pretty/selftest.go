@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -148,7 +149,11 @@ func PrintSelfTestResult(out io.Writer, result *daos.SelfTestResult, verbose, sh
 
 		for _, pct := range pcts {
 			pctTitles[pct] = fmt.Sprintf("%d%%", pct)
-			row[pctTitles[pct]] = printLatencyVal(buckets[pct].UpperBound, dispUnit)
+			val := "N/A"
+			if b, found := buckets[pct]; found {
+				val = printLatencyVal(b.UpperBound, dispUnit)
+			}
+			row[pctTitles[pct]] = val
 		}
 
 		table = append(table, row)
