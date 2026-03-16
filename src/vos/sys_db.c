@@ -106,7 +106,7 @@ db_unlink(struct sys_db *db)
 static int
 db_open_create(struct sys_db *db, bool try_create)
 {
-	const mode_t       db_dir_mode = 0770;
+	const mode_t       db_dir_mode = S_IRWXU | S_IRWXG;
 	struct vos_sys_db *vdb = db2vos(db);
 	d_iov_t		   key;
 	d_iov_t		   val;

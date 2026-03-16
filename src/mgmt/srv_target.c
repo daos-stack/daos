@@ -677,7 +677,7 @@ tgt_create_preallocate(void *arg)
 		if (rc)
 			goto out;
 
-		rc = mkdir(tca->tca_newborn, 0770);
+		rc = mkdir(tca->tca_newborn, S_IRWXU | S_IRWXG);
 		if (rc < 0 && errno != EEXIST) {
 			rc = daos_errno2der(errno);
 			D_ERROR("failed to created pool directory: "DF_RC"\n",

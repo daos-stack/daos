@@ -126,7 +126,7 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tg
 			DP_RC(rc));
 		goto out;
 	}
-	rc = mkdir(pool_newborns_path, 0770);
+	rc = mkdir(pool_newborns_path, S_IRWXU | S_IRWXG);
 	if (rc < 0 && errno != EEXIST) {
 		rc = daos_errno2der(errno);
 		D_ERROR("failed to created pool directory: " DF_RC "\n", DP_RC(rc));
