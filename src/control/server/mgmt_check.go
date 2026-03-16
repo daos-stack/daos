@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -14,12 +14,14 @@ import (
 	"sort"
 	"strings"
 
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -618,4 +620,49 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 	}
 
 	return resp, nil
+}
+
+// SystemCheckEngineReport registers a checker report with the management service.
+func (svc *mgmtSvc) SystemCheckEngineReport(ctx context.Context, req *sharedpb.CheckReportReq) (*sharedpb.CheckReportResp, error) {
+	if req == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "nil %T", req)
+	}
+
+	if req.Report == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "no report in request")
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	if req.Report.PoolLabel == "" && req.Report.PoolUuid != "" {
+		svc.log.Debug("looking up pool UUID")
+		poolUUID, err := uuid.Parse(req.Report.PoolUuid)
+		if err != nil {
+			svc.log.Errorf("unable to parse pool UUID %q: %s", req.Report.PoolUuid, err)
+			return nil, errors.Wrapf(daos.InvalidInput, "parse pool UUID %q", req.Report.PoolUuid)
+		}
+
+		if ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID); err == nil {
+			// Annotate the report with the pool label for the user.
+			// NB: In some cases this label may be incorrect, in which
+			// case the user will want to use the verbose or JSON output
+			// modes of the checker in order to get the UUID.
+			req.Report.PoolLabel = ps.PoolLabel
+		}
+	}
+
+	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
+	svc.log.Debugf("annotated finding: %+v", finding)
+
+	if err := svc.sysdb.AddOrUpdateCheckerFinding(finding); err != nil {
+		svc.log.Errorf("AddOrUpdateCheckerFinding %+v: %s", finding, err)
+		return nil, err
+	}
+	return new(sharedpb.CheckReportResp), nil
 }

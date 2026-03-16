@@ -1,0 +1,23 @@
+//
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+// This file defines RAS checker upcall related protobuf messages communicated over dRPC
+// and gRPC.
+
+syntax = "proto3";
+package shared;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/shared";
+
+import "chk/chk.proto";
+
+message CheckReportReq {
+	chk.CheckReport report = 1; // Report payload
+}
+
+message CheckReportResp {
+	int32 status = 1; // DAOS error code.
+}

@@ -23,6 +23,7 @@ import (
 	pbutil "github.com/daos-stack/daos/src/control/common/proto"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -751,4 +752,59 @@ func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 	}
 
 	return ur.getMSError()
+}
+
+// SystemCheckEngineReportReq contains parameters to be passed to SystemCheckEngineReport.
+type SystemCheckEngineReportReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckReportReq
+}
+
+// SystemCheckEngineReportResp contains the response from the SystemCheckEngineReport RPC.
+type SystemCheckEngineReportResp struct {
+	sharedpb.CheckReportResp
+}
+
+// SystemCheckEngineReport registers a checker report for an individual rank with the management service.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckEngineReport(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckEngineReportReq) (*SystemCheckEngineReportResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Report == nil {
+		return nil, errors.Errorf("no check report in %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckEngineReport(ctx, &req.CheckReportReq)
+	})
+
+	rpcClient.Debugf("DAOS system check report request: %s", pbutil.Debug(&req.CheckReportReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	if err := ur.getMSError(); err != nil {
+		return nil, errors.Wrap(err, "MS error")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckReportResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckEngineReportResp)
+	resp.CheckReportResp = *pbResp
+
+	return resp, nil
 }

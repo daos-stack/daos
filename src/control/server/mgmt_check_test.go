@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ import (
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -948,6 +949,105 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 			); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_SystemCheckEngineReport(t *testing.T) {
+	uuids := testPoolUUIDs(5)
+
+	validReport := &chkpb.CheckReport{
+		Seq:      13,
+		Class:    chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+		Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+		PoolUuid: uuids[0],
+	}
+
+	for name, tc := range map[string]struct {
+		createMS      func(*testing.T, logging.Logger) *mgmtSvc
+		req           *sharedpb.CheckReportReq
+		expErr        error
+		expResp       *sharedpb.CheckReportResp
+		expReportInDB bool
+	}{
+		"nil request": {
+			expErr: daos.InvalidInput,
+		},
+		"nil report": {
+			req:    &sharedpb.CheckReportReq{},
+			expErr: daos.InvalidInput,
+		},
+		"not leader": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := testSvcCheckerEnabled(t, l, system.MemberStateCheckerStarted, uuids)
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req: &sharedpb.CheckReportReq{
+				Report: validReport,
+			},
+			expErr: &system.ErrNotLeader{},
+		},
+		"not checker mode": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				return newTestMgmtSvcMulti(t, l, 3, true)
+			},
+			req: &sharedpb.CheckReportReq{
+				Report: validReport,
+			},
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"bad pool UUID": {
+			req: &sharedpb.CheckReportReq{
+				Report: &chkpb.CheckReport{
+					Seq:      13,
+					Class:    chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+					Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+					PoolUuid: "junk",
+				},
+			},
+			expErr: daos.InvalidInput,
+		},
+		"success": {
+			req: &sharedpb.CheckReportReq{
+				Report: validReport,
+			},
+			expReportInDB: true,
+			expResp:       &sharedpb.CheckReportResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, log logging.Logger) *mgmtSvc {
+					svc := testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
+					return svc
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			resp, err := svc.SystemCheckEngineReport(ctx, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "CheckReportResp", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckReportResp{}))
+
+			if tc.req == nil || tc.req.Report == nil {
+				return
+			}
+
+			seq := tc.req.Report.Seq
+			expReportErr := raft.ErrFindingNotFound(seq)
+			if tc.expReportInDB {
+				expReportErr = nil
+			}
+
+			_, reportErr := svc.sysdb.GetCheckerFinding(seq)
+			test.CmpErr(t, expReportErr, reportErr)
 		})
 	}
 }
