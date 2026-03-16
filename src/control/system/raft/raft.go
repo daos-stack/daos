@@ -269,7 +269,7 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 
 	// Boltdb file permissions on create are set to 0600.
 	// The os.Chmod ensures the final permissions for both the user and their group are the same.
-	err = os.Chmod(dbCfg.DBFilePath(), 0660)
+	err = os.Chmod(dbCfg.DBFilePath(), common.DefaultFilePerm)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to set permissions for boltdb at %s", dbCfg.DBFilePath())
 	}

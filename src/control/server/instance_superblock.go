@@ -205,6 +205,6 @@ func WriteSuperblock(sbPath string, sb *Superblock) error {
 		return err
 	}
 
-	return errors.Wrapf(common.WriteFileAtomic(sbPath, data, 0660),
+	return errors.Wrapf(common.WriteFileAtomic(sbPath, data, common.DefaultFilePerm),
 		"Failed to write Superblock to %s", sbPath)
 }

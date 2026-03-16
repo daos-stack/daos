@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
@@ -395,6 +396,11 @@ func (s LinuxProvider) Getegid() int {
 // bits (before umask).
 func (s LinuxProvider) Mkdir(name string, perm os.FileMode) error {
 	return os.Mkdir(name, perm)
+}
+
+// Mkdir2 creates a new directory with the specified name and permission bits (umask ignored).
+func (s LinuxProvider) Mkdir2(path string, perm os.FileMode) error {
+	return common.Mkdir2(path, perm)
 }
 
 // RemoveAll removes path and any children it contains.

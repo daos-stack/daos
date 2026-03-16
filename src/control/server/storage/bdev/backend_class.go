@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	aioBlockSize       = humanize.KiByte * 4 // device block size hardcoded to 4096 bytes
-	defaultAioFileMode = 0660                // AIO file permissions set to owner +rw
+	aioBlockSize       = humanize.KiByte * 4    // device block size hardcoded to 4096 bytes
+	defaultAioFileMode = common.DefaultFilePerm // AIO file permissions
 )
 
 func createEmptyFile(log logging.Logger, path string, size uint64) error {

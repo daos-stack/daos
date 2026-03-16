@@ -20,9 +20,13 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
-// log message context refers to caller not callee.
-const UtilLogDepth = 4
+const (
+	// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
+	// log message context refers to caller not callee.
+	UtilLogDepth    = 4
+	DefaultFilePerm = 0660
+	DefaultDirPerm  = 0770
+)
 
 // GetFilenames returns names of files in a directory.
 func GetFilenames(dir string) ([]string, error) {
@@ -376,4 +380,15 @@ func HasPrefixPath(base, sub string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// Mkdir2 creates a new directory with the specified name and permission bits (umask ignored).
+func Mkdir2(path string, perm os.FileMode) error {
+	err := os.Mkdir(path, perm)
+	if err != nil {
+		return err
+	}
+	// The requested permissions may have been reduced by the umask.
+	// Using Chmod ensures the requested permissions are applied.
+	return os.Chmod(path, perm)
 }
