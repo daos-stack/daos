@@ -26,7 +26,29 @@
 
 extern struct dss_module_key obj_module_key;
 
-struct migr_resource;
+/* anchor point of resource waiter
+ * NB: resource control can be a independent library in the future.
+ */
+struct migr_res_waiter {
+	struct migrate_pool_tls *rw_tls;
+	/* link chain on resource manager */
+	d_list_t                 rw_link;
+	/* quantity of resource being demanded */
+	uint64_t                 rw_units;
+	/* start to wait since... */
+	uint64_t                 rw_wait_since;
+	/* eventual to wait on */
+	ABT_eventual             rw_eventual;
+	/* for eventual */
+	int                     *rw_rc;
+};
+
+/* resource handle */
+struct migr_res_handle {
+	int      rh_type;
+	int      rh_bkt;
+	uint64_t rh_units;
+};
 
 /* Per pool attached to the migrate tls(per xstream) */
 struct migrate_pool_tls {
@@ -79,10 +101,6 @@ struct migrate_pool_tls {
 	uint32_t                 mpt_tgt_dkey_ult_cnt;
 	/* The current in-flight data size */
 	uint64_t                 mpt_inflight_size;
-
-	struct migr_resource    *mpt_data_res;
-	struct migr_resource    *mpt_obj_res;
-	struct migr_resource    *mpt_key_res;
 
 	/* reference count for the structure */
 	uint64_t                 mpt_refcount;
