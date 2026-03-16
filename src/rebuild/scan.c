@@ -29,8 +29,14 @@
 #include "rebuild_internal.h"
 
 #define REBUILD_SEND_LIMIT	4096
+/* Minimum pending objects before the send ULT flushes a batch (25% of max). */
+#define REBUILD_SEND_BATCH_MIN         (REBUILD_SEND_LIMIT / 4)
+/* Maximum seconds to wait for a batch to fill before flushing anyway. */
+#define REBUILD_SEND_BATCH_TIMEOUT_SEC 1
+
 struct rebuild_send_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
+	struct rebuild_pool_tls         *tls;
 	daos_unit_oid_t			*oids;
 	daos_epoch_t			*ephs;
 	daos_epoch_t			*punched_ephs;
@@ -75,6 +81,10 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	rc = dbtree_iter_delete(ih, NULL);
 	if (rc != 0)
 		return rc;
+
+	/* This OID is now removed from the btree; account for it. */
+	D_ASSERT(arg->tls->rebuild_pool_obj_send_pending > 0);
+	arg->tls->rebuild_pool_obj_send_pending--;
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
@@ -274,6 +284,7 @@ rebuild_objects_send_ult(void *data)
 	daos_epoch_t			*punched_ephs = NULL;
 	unsigned int			*shards = NULL;
 	int				rc = 0;
+	uint64_t                         rebuild_send_wait_start;
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
@@ -301,16 +312,54 @@ rebuild_objects_send_ult(void *data)
 	arg.ephs = ephs;
 	arg.punched_ephs = punched_ephs;
 	arg.rpt = rpt;
+	arg.tls          = tls;
+
+	rebuild_send_wait_start = daos_gettime_coarse();
+
+	/*
+	 * Batch OIDs before sending migrate RPCs to avoid RPC fragmentation.
+	 * The scan ULT yields every ~SCAN_YIELD_CNT placement-cost units
+	 * (1 per OID for small objects, up to more than 128 per OID for EC_16P3GX
+	 * depends on cluster size), so without batching the send ULT would flush
+	 * at most 64 OIDs per RPC instead of the REBUILD_SEND_LIMIT maximum.
+	 * Hold the flush until REBUILD_SEND_BATCH_MIN OIDs are pending or
+	 * REBUILD_SEND_BATCH_TIMEOUT_SEC seconds have elapsed; flush immediately
+	 * when the scan is done.
+	 */
 	while (!tls->rebuild_pool_scan_done || !dbtree_is_empty(tls->rebuild_tree_hdl)) {
+		bool     scan_done;
+		bool     tree_empty;
+		uint64_t now;
+		uint64_t elapsed;
+
 		if (rpt->rt_stable_epoch == 0) {
 			dss_sleep(0);
 			continue;
 		}
 
-		if (dbtree_is_empty(tls->rebuild_tree_hdl)) {
-			dss_sleep(0);
+		tree_empty = dbtree_is_empty(tls->rebuild_tree_hdl);
+		scan_done  = tls->rebuild_pool_scan_done;
+		now        = daos_gettime_coarse();
+
+		if (tree_empty) {
+			/* Reset wait clock and yield to let scan make progress. */
+			rebuild_send_wait_start = now;
+			dss_sleep(10);
 			continue;
 		}
+
+		elapsed = now - rebuild_send_wait_start;
+		if (!scan_done && tls->rebuild_pool_obj_send_pending < REBUILD_SEND_BATCH_MIN &&
+		    elapsed < REBUILD_SEND_BATCH_TIMEOUT_SEC) {
+			dss_sleep(10);
+			continue;
+		}
+
+		D_DEBUG(DB_REBUILD,
+			DF_RB " send batch: pending %" PRIu64 " elapsed %" PRIu64 "s"
+			      " scan_done %d\n",
+			DP_RB_RPT(rpt), tls->rebuild_pool_obj_send_pending, elapsed,
+			(int)scan_done);
 
 		/* walk through the rebuild tree and send the rebuild objects */
 		rc = dbtree_iterate(tls->rebuild_tree_hdl, DAOS_INTENT_MIGRATION,
@@ -319,6 +368,8 @@ rebuild_objects_send_ult(void *data)
 			D_ERROR("dbtree iterate failed: "DF_RC"\n", DP_RC(rc));
 			break;
 		}
+
+		rebuild_send_wait_start = now;
 		dss_sleep(0);
 	}
 
@@ -389,6 +440,8 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 			DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 		rc = 0;
 	} else {
+		if (rc == 0)
+			tls->rebuild_pool_obj_send_pending++;
 		D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "
 			DF_RC"\n", DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch,
 			punched_epoch, DP_RC(rc));
@@ -790,7 +843,7 @@ out:
 	if (map != NULL)
 		pl_map_decref(map);
 
-	if (--arg->yield_cnt <= 0) {
+	if (arg->yield_cnt <= 0) {
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild yield: %d\n",
 			DP_UUID(rpt->rt_pool_uuid), rc);
 		arg->yield_cnt = SCAN_YIELD_CNT;
