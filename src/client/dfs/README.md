@@ -134,7 +134,14 @@ Object testdir
 By default, all directories are created with an object class with 1 shard. This means, that if the
 container redundancy factor (RF) is 0, OC_S1 oclass will be used; if RF=1 OC_RP_2G1 is used, and so
 on. The user can of course change that when creating the directory and set the desired object class
-manually, or set the default object class when creating the container.
+manually, or set the default object class when creating the container. Using an EC object class
+class for directories is not recommended since directory entries are small and EC overhead will be
+large anyway. Thus when setting the directory object class on container creation to an EC object
+class, DAOS will ignore the user setting and use the default replication object class depending on
+the redundancy factory of the container as explained earlier. If one uses the DAOS tool to change
+the object class of new files and directories to be created under an existing directory (daos fs
+set-attr), and that object class is EC, that setting will apply only to files. New directories will
+use the container default in that case.
 
 Note that with this mapping, the inode information is stored with the entry that it corresponds to
 in the parent directory object. Thus, hard links won't be supported, since it won't be possible to
