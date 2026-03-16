@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,7 +30,9 @@ import (
 #include <daos/pool_map.h>
 #include <daos_srv/control.h>
 
-#cgo LDFLAGS: -ldaos_common -lgurt -lcart
+#cgo LDFLAGS: -lgurt -lcart
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 
