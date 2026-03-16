@@ -130,12 +130,12 @@ def setup_systemctl(logger, servers, clients, test_env):
         __add_systemctl_override(
             logger, servers, "daos_server.service", "root",
             os.path.join(test_env.daos_prefix, "bin", "daos_server"), test_env.server_config,
-            None, None))
+            test_env.systemd_path, test_env.systemd_library_path))
     systemctl_configs.update(
         __add_systemctl_override(
             logger, clients, "daos_agent.service", test_env.agent_user,
             os.path.join(test_env.daos_prefix, "bin", "daos_agent"), test_env.agent_config,
-            None, None))
+            test_env.systemd_path, test_env.systemd_library_path))
     return systemctl_configs
 
 
@@ -869,13 +869,12 @@ class TestRunner():
         logger.debug("Generating certificates")
         test_env = TestEnvironment()
         certs_dir = os.path.join(test_env.log_dir, "daosCA")
-        certgen_dir = os.path.abspath(
-            os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
-        command = os.path.join(certgen_dir, "gen_certificates.sh")
         if not run_local(logger, f"/usr/bin/rm -rf {certs_dir}").passed:
             message = "Error removing old certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
             return False
+        command = os.path.abspath(
+            os.path.join(test_env.daos_prefix, "lib64", "daos", "certgen", "gen_certificates.sh"))
         if not run_local(logger, f"{command} {test_env.log_dir}").passed:
             message = "Error generating certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())

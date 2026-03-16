@@ -1,0 +1,6 @@
+* Tue Nov 25 2025 Jeff Olivier <jeffolivier@google.com> - 2.0.0-1
+- Upgrade to SPDK 24.09.
+- Restore missing changelog
+
+* Wed Sep 10 2025 Jeff Olivier <jeffolivier@google.com> - 1.0.0-1
+- Switch to daos-spdk package for spdk, deprecates old spdk

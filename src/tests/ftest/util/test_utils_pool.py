@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,6 +12,7 @@ from time import sleep, time
 
 from avocado import TestFail, fail_on
 from command_utils import BasicParameter
+from data_utils import assert_dict_subset
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, check_file_exists
@@ -20,6 +21,48 @@ from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
+
+
+def add_pools(dmg, add_pool_kwargs, error_handler=None):
+    """Add multiple TestPool objects to the test.
+
+    Args:
+        dmg (DmgCommand): dmg command used to update the server log mask before creating the first
+            pool and reset it after creating the last pool. Not used if no pools are created.
+        add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
+            pool. Must at least include the 'test' kwargs. See add_pool() for other options.
+        error_handler (method, optional): optional method to call when a pool create fails. Defaults
+            to None.
+
+    Returns:
+        list: a list of new pool objects
+    """
+    _any_create = any(kwargs.get("create", True) is True for kwargs in add_pool_kwargs)
+
+    if _any_create:
+        # Set the DEBUG log mask before the first pool create
+        dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
+    # Add the requested pools
+    pools = []
+    try:
+        for kwargs in add_pool_kwargs:
+            # Disable setting/resetting log masks for each individual pool create
+            _restore = kwargs.get("set_logmasks", True)
+            kwargs["set_logmasks"] = False
+            try:
+                pools.append(add_pool(**kwargs))
+                pools[-1].set_logmasks.value = _restore
+            except TestFail as error:
+                if not error_handler:
+                    raise
+                error_handler(error)
+    finally:
+        if _any_create:
+            # Reset the log mask after the last pool create
+            dmg.server_set_logmasks(raise_exception=False)
+
+    return pools
 
 
 def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
@@ -53,8 +96,9 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None
 
     # Add a step to remove this pool when the test completes and ensure their is enough time for the
     # pool destroy to be attempted - accounting for a possible dmg command timeout
-    test.increment_timeout(POOL_TIMEOUT_INCREMENT)
-    test.register_cleanup(remove_pool, test=test, pool=pool)
+    if pool.register_cleanup.value is True:
+        test.increment_timeout(POOL_TIMEOUT_INCREMENT)
+        test.register_cleanup(remove_pool, test=test, pool=pool)
 
     return pool
 
@@ -182,6 +226,25 @@ def time_pool_create(log, number, pool):
     return duration
 
 
+def get_pool_create_percentages(num_pools, total_percent):
+    """Get a list of percentages for pool create sizes.
+
+    Args:
+        num_pools (int): number of pools to create
+        total_percent (int, str): total percent of the storage to use
+
+    Returns:
+        list: list of the percentages for each pool create
+    """
+    if isinstance(total_percent, str):
+        total_percent = int(total_percent.replace("%", ""))
+    percentages = []
+    for index in range(num_pools):
+        remaining_pools = num_pools - index
+        percentages.append(f"{round(total_percent / remaining_pools)}%")
+    return percentages
+
+
 class TestPool(TestDaosApiBase):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""
@@ -210,7 +273,7 @@ class TestPool(TestDaosApiBase):
         self.gid = os.getegid()
 
         self.mode = BasicParameter(None)
-        self.name = BasicParameter(None)            # server group name
+        self.name = BasicParameter(None)                                # server group name
         self.svcn = BasicParameter(None)
         self.target_list = BasicParameter(None)
         self.nranks = BasicParameter(None)
@@ -219,9 +282,9 @@ class TestPool(TestDaosApiBase):
         self.mem_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
-        self.prop_name = BasicParameter(None)       # name of property to be set
-        self.prop_value = BasicParameter(None)      # value of property
-        self.properties = BasicParameter(None)      # string of cs name:value
+        self.prop_name = BasicParameter(None)                           # name of property to be set
+        self.prop_value = BasicParameter(None)                          # value of property
+        self.properties = BasicParameter(None, "rd_fac:0,space_rb:0")   # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.pool_query_delay = BasicParameter(None)
@@ -240,6 +303,11 @@ class TestPool(TestDaosApiBase):
 
         # Parameter to control log mask enable/disable for pool create/destroy
         self.set_logmasks = BasicParameter(None, True)
+
+        # Parameter to control running 'dmg storage query usage --show_usable' if pool create fails
+        self.query_on_create_error = BasicParameter(None, False)
+
+        self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
         self.pool = None
         self.info = None
@@ -425,6 +493,11 @@ class TestPool(TestDaosApiBase):
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
+        except Exception as error:                      # pylint: disable=broad-except
+            if self.query_on_create_error.value is True:
+                query_kwargs = {"show_usable": True, "mem_ratio": kwargs.get("mem_ratio")}
+                self.dmg.storage_query_usage(**query_kwargs)
+            raise error
         finally:
             if self.set_logmasks.value is True:
                 self.dmg.server_set_logmasks(raise_exception=False)
@@ -654,7 +727,7 @@ class TestPool(TestDaosApiBase):
             dict: json output of dmg pool set-prop command
 
         """
-        return self.dmg.pool_set_prop(pool=self.identifier, *args, **kwargs)
+        return self.dmg.pool_set_prop(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def get_prop(self, *args, **kwargs):
@@ -777,6 +850,24 @@ class TestPool(TestDaosApiBase):
 
         """
         return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
+
+    def rebuild_start(self, *args, **kwargs):
+        """Use dmg to start rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_start(self.identifier, *args, **kwargs)
+
+    def rebuild_stop(self, *args, **kwargs):
+        """Use dmg to stop rebuild on this pool.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
@@ -961,7 +1052,7 @@ class TestPool(TestDaosApiBase):
         return False
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_state=None, rs_padding32=None,
+                             rs_errno=None, rs_state=None, rs_flags=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -978,7 +1069,7 @@ class TestPool(TestDaosApiBase):
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
             rs_state (int, optional): rebuild state flag. Defaults to None.
-            rs_padding32 (int, optional): padding. Defaults to None.
+            rs_flags (int, optional): rebuild status flags. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
                 Defaults to None.
@@ -1318,6 +1409,9 @@ class TestPool(TestDaosApiBase):
             # If the current state is busy or idle w/o a version increase after previously being
             # busy then rebuild is running
             self._rebuild_data["check"] = "running"
+        elif self._rebuild_data["state"] == "idle" and self._rebuild_data["status"] == -2027:
+            # Rebuild was explicitly stopped
+            self._rebuild_data["check"] = "stopped"
         elif self._rebuild_data["check"] is None:
             # Otherwise rebuild has yet to start
             self._rebuild_data["check"] = "not yet started"
@@ -1329,8 +1423,8 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to start or end.
 
         Args:
-            expected (str): which rebuild data check to wait for: 'running' or 'completed'
-            interval (int): number of seconds to wait in between rebuild completion checks
+            expected (str): which rebuild data check to wait for: 'running', 'completed', 'stopped'
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
@@ -1392,7 +1486,7 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to start.
 
         Args:
-            interval (int): number of seconds to wait in between rebuild completion checks
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
@@ -1404,13 +1498,25 @@ class TestPool(TestDaosApiBase):
         """Wait for the rebuild to end.
 
         Args:
-            interval (int): number of seconds to wait in between rebuild completion checks
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
 
         Raises:
             DaosTestError: if waiting for rebuild times out.
 
         """
         self._wait_for_rebuild("completed", interval)
+
+    def wait_for_rebuild_to_stop(self, interval=1):
+        """Wait for the rebuild to stop without completing.
+
+        Args:
+            interval (int, optional): number of seconds to wait between checks. Defaults to 1.
+
+        Raises:
+            DaosTestError: if waiting for rebuild times out.
+
+        """
+        self._wait_for_rebuild("stopped", interval)
 
     def measure_rebuild_time(self, operation, interval=1):
         """Measure rebuild time.
@@ -1499,3 +1605,46 @@ class TestPool(TestDaosApiBase):
         else:
             self.log.info("%s does not exist on %s", pool_dir, host)
         return result[0]
+
+    def verify_query(self, expected_response, use_cached_query=False):
+        """Verify dmg pool query returns expected values.
+
+        Args:
+            expected_response (dict): Expected key/value pairs from dmg pool query.
+                Can be a subset of the full response, where only expected keys are verified.
+                Expected value can be type callable(actual_value) -> bool for custom verification.
+            use_cached_query (bool, optional): Whether to use the last cached query.
+                Defaults to False, which issues a new query.
+
+        Raises:
+            AssertionError: if the pool query response does not match expected values
+
+        """
+        # Only refresh the cache if requested or not yet cached
+        if not use_cached_query or 'response' not in self.query_data:
+            self.set_query_data()
+        response = self.query_data['response']
+
+        assert_dict_subset(expected_response, response)
+
+    def verify_query_targets_state(self, ranks, expected_target_state):
+        """Verify all targets are in the expected state with dmg pool query-targets.
+
+        Args:
+            ranks (list): The list of ranks to verify.
+            expected_target_state (str): The expected target state.
+
+        Raises:
+            AssertionError: if the targets are not in the expected state
+
+        """
+        for rank in ranks:
+            self.log.info(
+                'Verifying targets on rank %s are in state %s', rank, expected_target_state)
+            response = self.query_targets(rank=rank)['response']
+            infos = response['Infos']
+            for target, info in enumerate(infos):
+                if info['target_state'] != expected_target_state:
+                    raise AssertionError(
+                        f'Expected target {target} to be in state {expected_target_state}, '
+                        f'but current state is {info["target_state"]}')

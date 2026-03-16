@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1164,16 +1164,20 @@ class DaosServerManager(SubprocessManager):
             engines.append(result)
         return engines
 
-    def get_vos_path(self, pool):
-        """Get the VOS file path.
+    def get_vos_paths(self, pool):
+        """Get the VOS file paths.
 
         Args:
             pool (TestPool): the pool containing the vos file
 
         Returns:
-            str: the full path to the vos file
+            list: the full path list to the vos file
         """
-        return os.path.join(self.get_config_value("scm_mount"), pool.uuid.lower())
+        vos_paths = []
+        for engine_params in self.manager.job.yaml.engine_params:
+            scm_mount = engine_params.get_value("scm_mount")
+            vos_paths.append(os.path.join(scm_mount, pool.uuid.lower()))
+        return vos_paths
 
     def get_vos_files(self, pool, pattern="vos"):
         """Get all the VOS file paths containing the pattern.
@@ -1187,7 +1191,7 @@ class DaosServerManager(SubprocessManager):
                 /mnt/daos0/<pool_uuid>/vos-0. If no matches are found the list will be empty.
         """
         vos_files = []
-        vos_path = self.get_vos_path(pool)
+        vos_path = self.get_vos_paths(pool)[0]
         command = command_as_user(f"ls {vos_path}", "root")
         result = run_remote(self.log, self.hosts[0:1], command)
         if result.passed:
@@ -1196,3 +1200,42 @@ class DaosServerManager(SubprocessManager):
                     vos_files.append(os.path.join(vos_path, file))
                     self.log.info("Found vos file path: %s", vos_files[-1])
         return vos_files
+
+    def search_engine_logs(self, pattern):
+        """Search the server log files for a specific pattern.
+
+        Args:
+            pattern (str): The pattern to search for in the log files.
+
+        Returns:
+            CommandResult: Result of the grep command run against each server log file.
+        """
+        log_dir = os.path.dirname(self.get_config_value("log_file"))
+        find_args = (f"{log_dir} -type f -regextype egrep -regex "
+                     r"'.*/daos_server[[:digit:]]?\.log\.[[:digit:]]+'")
+        return self._search_logs(find_args, pattern)
+
+    def search_control_logs(self, pattern):
+        """Search the control log files for a specific pattern.
+
+        Args:
+            pattern (str): The pattern to search for in the log files
+
+        Returns:
+            CommandResult: Result of the grep command run against each control log file.
+        """
+        return self._search_logs(f"{self.get_config_value('control_log_file')}", pattern)
+
+    def _search_logs(self, find_args, pattern):
+        """Search the log files for a specific pattern.
+
+        Args:
+            find_args (str): arguments used with the find command to locate the log files
+            pattern (str): The pattern to search for in the log files
+
+        Returns:
+            CommandResult: Result of the grep command run against each log file.
+        """
+        command = f"find {find_args} -print0 | xargs -0 -r grep -E -e '{pattern}'"
+        result = run_remote(self.log, self.hosts, command_as_user(command, "root"))
+        return result

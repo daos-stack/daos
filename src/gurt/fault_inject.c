@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -416,6 +417,8 @@ fault_attr_parse(yaml_parser_t *parser)
 
 		yaml_event_delete(&event);
 		if (event_type == YAML_SEQUENCE_END_EVENT)
+			break;
+		if (event_type == YAML_DOCUMENT_END_EVENT) /** in case the list is actually empty */
 			break;
 		if (rc != DER_SUCCESS)
 			break;

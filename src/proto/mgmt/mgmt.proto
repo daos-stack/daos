@@ -65,11 +65,13 @@ service MgmtSvc {
 	// Delete an entry from a DAOS pool's Access Control List.
 	rpc PoolDeleteACL(DeleteACLReq) returns (ACLResp) {}
 	// PoolUpgrade upgrades a DAOS pool.
-	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
+	rpc PoolUpgrade(PoolUpgradeReq) returns (DaosResp) {}
 	// PoolRebuildStart starts an interactive rebuild on a DAOS pool.
 	rpc PoolRebuildStart(PoolRebuildStartReq) returns (DaosResp) {}
 	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
 	rpc PoolRebuildStop(PoolRebuildStopReq) returns (DaosResp) {}
+	// PoolSelfHealEval evaluates self_heal system property on a DAOS pool.
+	rpc PoolSelfHealEval(PoolSelfHealEvalReq) returns (DaosResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
@@ -79,33 +81,37 @@ service MgmtSvc {
 	// Change the owner of a DAOS container
 	rpc ContSetOwner(ContSetOwnerReq) returns (DaosResp) {}
 	// Query DAOS system status
-	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {}
+	rpc SystemQuery(SystemQueryReq) returns (SystemQueryResp) {}
 	// Stop DAOS system (shutdown data-plane instances)
-	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {}
+	rpc SystemStop(SystemStopReq) returns (SystemStopResp) {}
 	// Start DAOS system (restart data-plane instances)
-	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
+	rpc SystemStart(SystemStartReq) returns (SystemStartResp) {}
 	// Exclude DAOS ranks
-	rpc SystemExclude(SystemExcludeReq) returns(SystemExcludeResp) {}
+	rpc SystemExclude(SystemExcludeReq) returns (SystemExcludeResp) {}
 	// Drain or reintegrate DAOS ranks from all pools
 	rpc SystemDrain(SystemDrainReq) returns (SystemDrainResp) {}
+	// Perform interactive rebuild operation on all DAOS pools
+	rpc SystemRebuildManage(SystemRebuildManageReq) returns (SystemRebuildManageResp) {}
+	// Evaluate self-heal system property and perform updates based on its value.
+	rpc SystemSelfHealEval(SystemSelfHealEvalReq) returns (DaosResp) {}
 	// Erase DAOS system database prior to reformat
-	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
+	rpc SystemErase(SystemEraseReq) returns (SystemEraseResp) {}
 	// Clean up leaked resources for a given node
-	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
+	rpc SystemCleanup(SystemCleanupReq) returns (SystemCleanupResp) {}
 	// Enable system check mode
-	rpc SystemCheckEnable(CheckEnableReq) returns(DaosResp){}
+	rpc SystemCheckEnable(CheckEnableReq) returns (DaosResp) {}
 	// Disable system check mode
-	rpc SystemCheckDisable(CheckDisableReq) returns(DaosResp){}
+	rpc SystemCheckDisable(CheckDisableReq) returns (DaosResp) {}
 	// Initiate a system check
-	rpc SystemCheckStart(CheckStartReq) returns(CheckStartResp){}
+	rpc SystemCheckStart(CheckStartReq) returns (CheckStartResp) {}
 	// Stop a system check
-	rpc SystemCheckStop(CheckStopReq) returns(CheckStopResp){}
+	rpc SystemCheckStop(CheckStopReq) returns (CheckStopResp) {}
 	// Query a system check
-	rpc SystemCheckQuery(CheckQueryReq) returns(CheckQueryResp){}
+	rpc SystemCheckQuery(CheckQueryReq) returns (CheckQueryResp) {}
 	// Set system check properties
-	rpc SystemCheckSetPolicy(CheckSetPolicyReq) returns(DaosResp){}
+	rpc SystemCheckSetPolicy(CheckSetPolicyReq) returns (DaosResp) {}
 	// Query system check properties
-	rpc SystemCheckGetPolicy(CheckGetPolicyReq) returns(CheckGetPolicyResp){}
+	rpc SystemCheckGetPolicy(CheckGetPolicyReq) returns (CheckGetPolicyResp) {}
 	// Send the desired action to repair an inconsistency.
 	rpc SystemCheckRepair(CheckActReq) returns (CheckActResp) {}
 	// Set a system attribute or attributes.

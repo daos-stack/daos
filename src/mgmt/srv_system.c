@@ -380,6 +380,11 @@ ds_mgmt_svc_put(struct mgmt_svc *svc)
  *
  * \param[in]	req		Request (owned by caller)
  * \param[out]	resp_out	Response (ownership transferred to caller)
+ *
+ * \retval	-DER_TIMEDOUT	Could not get a response from the MS due to a
+ *				potentially retriable error
+ * \retval	-DER_PROTO	Encountered an unretriable error such as
+ *				marshal/unmarshal errors
  */
 static int
 ds_mgmt_get_props(Mgmt__SystemGetPropReq *req, Mgmt__SystemGetPropResp **resp_out)
@@ -396,20 +401,24 @@ ds_mgmt_get_props(Mgmt__SystemGetPropReq *req, Mgmt__SystemGetPropResp **resp_ou
 		return -DER_NOMEM;
 	mgmt__system_get_prop_req__pack(req, reqb);
 
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_PROPS, reqb, reqb_size,
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_GET_SYS_PROPS, reqb, reqb_size,
 			   0 /* flags */, &dresp);
 	if (rc != 0)
 		goto out_reqb;
-	if (dresp->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("received erroneous dRPC response: %d\n", dresp->status);
-		rc = -DER_IO;
+	if (dresp->status == DRPC__STATUS__FAILURE) {
+		D_ERROR("no dRPC response\n");
+		rc = -DER_TIMEDOUT;
+		goto out_dresp;
+	} else if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received dRPC protocol error: %d\n", dresp->status);
+		rc = -DER_PROTO;
 		goto out_dresp;
 	}
 
 	resp = mgmt__system_get_prop_resp__unpack(NULL, dresp->body.len, dresp->body.data);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack dRPC response\n");
-		rc = -DER_IO;
+		rc = -DER_PROTO;
 		goto out_dresp;
 	}
 
@@ -437,29 +446,26 @@ ds_mgmt_get_self_heal_policy(bool (*abort)(void *arg), void *abort_arg, uint64_t
 	Mgmt__SystemGetPropReq   req  = MGMT__SYSTEM_GET_PROP_REQ__INIT;
 	char                    *key  = "self_heal";
 	Mgmt__SystemGetPropResp *resp = NULL;
+	int                      retries = 2;
 	char                    *sep  = ";";
 	char                    *p;
 	char                    *saveptr;
 	int                      rc;
-
-	/* TODO: Integrate with the control plane changes. */
-	if (true) {
-		*policy = DS_MGMT_SELF_HEAL_ALL;
-		return 0;
-	}
 
 	req.sys    = daos_sysname;
 	req.keys   = &key;
 	req.n_keys = 1;
 
 retry:
+	D_DEBUG(DB_MGMT, "getting property %s: retries=%d\n", key, retries);
 	rc = ds_mgmt_get_props(&req, &resp);
-	/* TODO: The retry case may need integration and revision. */
 	if (rc == -DER_TIMEDOUT) {
-		if (abort(abort_arg)) {
-			DL_INFO(rc, "aborting");
+		if (retries == 0 || abort(abort_arg)) {
+			DL_ERROR(rc, "aborting");
 			goto out;
 		}
+		retries--;
+		dss_sleep(3000 /* ms */);
 		goto retry;
 	} else if (rc != 0) {
 		DL_ERROR(rc, "failed to unpack response");
@@ -482,17 +488,19 @@ retry:
 	}
 	D_INFO("%s=%s\n", key, resp->properties[0]->value);
 	*policy = 0;
-	for (p = strtok_r(resp->properties[0]->value, sep, &saveptr); p != NULL;
-	     p = strtok_r(NULL, sep, &saveptr)) {
-		if (strcmp(p, "exclude") == 0) {
-			*policy |= DS_MGMT_SELF_HEAL_EXCLUDE;
-		} else if (strcmp(p, "pool_exclude") == 0) {
-			*policy |= DS_MGMT_SELF_HEAL_POOL_EXCLUDE;
-		} else if (strcmp(p, "pool_rebuild") == 0) {
-			*policy |= DS_MGMT_SELF_HEAL_POOL_REBUILD;
-		} else {
-			D_ERROR("unknown self-heal policy '%s'\n", p);
-			goto out_resp;
+	if (strcmp(resp->properties[0]->value, "none") != 0) {
+		for (p = strtok_r(resp->properties[0]->value, sep, &saveptr); p != NULL;
+		     p = strtok_r(NULL, sep, &saveptr)) {
+			if (strcmp(p, "exclude") == 0) {
+				*policy |= DS_MGMT_SELF_HEAL_EXCLUDE;
+			} else if (strcmp(p, "pool_exclude") == 0) {
+				*policy |= DS_MGMT_SELF_HEAL_POOL_EXCLUDE;
+			} else if (strcmp(p, "pool_rebuild") == 0) {
+				*policy |= DS_MGMT_SELF_HEAL_POOL_REBUILD;
+			} else {
+				D_ERROR("unknown self-heal policy '%s'\n", p);
+				goto out_resp;
+			}
 		}
 	}
 

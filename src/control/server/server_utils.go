@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -149,11 +150,30 @@ type ctlAddrParams struct {
 	port           int
 	replicaAddrSrc replicaAddrGetter
 	lookupHost     ipLookupFn
+	ctlIface       netInterface // optional: if set, use this interface for bind address
 }
 
 func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
-	ipStr := "0.0.0.0"
+	// If a control interface is configured, use its first IPv4 address.
+	if params.ctlIface != nil {
+		ip, err := getFirstIPv4Addr(params.ctlIface)
+		if err != nil {
+			return nil, errors.Wrap(err, "getting control interface address")
+		}
 
+		// If this node is a replica, verify the control interface address matches
+		// the configured replica address. A mismatch would break raft connectivity.
+		if repAddr, err := params.replicaAddrSrc.ReplicaAddr(); err == nil {
+			if !repAddr.IP.Equal(ip) {
+				return nil, config.FaultConfigControlInterfaceMismatch(ip.String(), repAddr.IP.String())
+			}
+		}
+
+		return &net.TCPAddr{IP: ip, Port: params.port}, nil
+	}
+
+	// Fall back to legacy behavior: use replica address if available, otherwise 0.0.0.0.
+	ipStr := "0.0.0.0"
 	if repAddr, err := params.replicaAddrSrc.ReplicaAddr(); err == nil {
 		ipStr = repAddr.IP.String()
 	}
@@ -166,11 +186,17 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 	return ctlAddr, nil
 }
 
-func createListener(ctlAddr *net.TCPAddr, listen netListenFn) (net.Listener, error) {
+func createListener(ctlAddr *net.TCPAddr, listen netListenFn, bindToCtlAddr bool) (net.Listener, error) {
 	// Create and start listener on management network.
-	lis, err := listen("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
+	// Only bind to ctlAddr.IP if explicitly requested (i.e., control_iface is set),
+	// otherwise bind to all interfaces (0.0.0.0) for backwards compatibility.
+	bindAddr := fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port)
+	if bindToCtlAddr {
+		bindAddr = ctlAddr.String()
+	}
+	lis, err := listen("tcp4", bindAddr)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to listen on management interface")
+		return nil, errors.Wrapf(err, "unable to listen on %s", bindAddr)
 	}
 
 	return lis, nil
@@ -361,7 +387,7 @@ func SetHugeNodes(log logging.Logger, srvCfg *config.Server, smi *common.SysMemI
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
 // are required for both emulated (AIO devices) and real NVMe bdevs. VFIO and IOMMU are not
 // mandatory requirements for emulated NVMe.
-func prepBdevStorage(srv *server, iommuEnabled bool, smi *common.SysMemInfo) error {
+func prepBdevStorage(srv *server, smi *common.SysMemInfo, iommuChecker hardware.IOMMUDetector, thpChecker hardware.THPDetector) error {
 	defer srv.logDuration(track("time to prepare bdev storage"))
 
 	if srv.cfg == nil {
@@ -370,6 +396,22 @@ func prepBdevStorage(srv *server, iommuEnabled bool, smi *common.SysMemInfo) err
 	if srv.cfg.DisableHugepages {
 		srv.log.Debugf("skip nvme prepare as disable_hugepages is set true in config")
 		return nil
+	}
+
+	// Fail to start if transparent hugepages are enabled. DAOS requires exclusive control over
+	// hugepages and therefore needs feature disabled. AllowTHP override flag provided for
+	// edge cases.
+	if !srv.cfg.AllowTHP {
+		if thpEnabled, err := thpChecker.IsTHPEnabled(); err != nil {
+			return errors.Wrap(err, "transparent hugepage check")
+		} else if thpEnabled {
+			return FaultTransparentHugepageEnabled
+		}
+	}
+
+	iommuEnabled, err := iommuChecker.IsIOMMUEnabled()
+	if err != nil {
+		return errors.Wrap(err, "iommu check")
 	}
 
 	bdevCfgs := srv.cfg.GetBdevConfigs()
@@ -713,9 +755,12 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 		return
 	}
 
+	// Use the same bind address as the control plane listener.
+	bindAddr := srv.ctlAddr.IP.String()
+
 	srv.OnEnginesStarted(func(ctxIn context.Context) error {
 		srv.log.Debug("starting Prometheus exporter")
-		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, bindAddr, srv.harness.Instances())
 		if err != nil {
 			return err
 		}
@@ -734,6 +779,67 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
+func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
+	selfHeal, err := svc.getSysSelfHeal()
+	if err != nil {
+		if system.IsErrSystemAttrNotFound(err) {
+			// Assume default value where all flags are set if property isn't present.
+			return true, nil
+		}
+		return false, err
+	}
+
+	svc.log.Tracef("system property self_heal='%+v'", selfHeal)
+
+	return daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagExclude), nil
+}
+
+func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
+	ts, err := evt.GetTimestamp()
+	if err != nil {
+		srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
+		return
+	}
+
+	msg := fmt.Sprintf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation,
+		ts)
+
+	isSet, err := isSysSelfHealExcludeSet(srv.mgmtSvc)
+	if err != nil {
+		srv.log.Errorf("handle rank dead: %s (%s)", err, msg)
+		return
+	}
+	if !isSet {
+		srv.log.Tracef("skipping ms exclude-state update, sys-prop-self_heal.exclude unset (%s)",
+			msg)
+		return
+	}
+	srv.log.Debug(msg)
+
+	if evt.Incarnation == 0 {
+		srv.log.Errorf("invalid zero incarnation value in event %+v", evt)
+	}
+
+	// Mark the rank as unavailable for membership in new pools, etc.
+	needsGrpUpd, err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation)
+	if err != nil {
+		srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
+		if system.IsNotLeader(err) {
+			// If we've lost leadership while processing the event, attempt to
+			// re-forward it to the new leader.
+			evt = evt.WithForwarded(false).WithForwardable(true)
+			srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank,
+				evt.Incarnation)
+			srv.evtForwarder.OnEvent(ctx, evt)
+		}
+		return
+	}
+	if needsGrpUpd {
+		srv.log.Debugf("do group update after marking rank %d dead", evt.Rank)
+		srv.mgmtSvc.reqGroupUpdate(ctx, false)
+	}
+}
+
 // registerLeaderSubscriptions stops forwarding events to MS and instead starts
 // handling received forwarded (and local) events.
 func registerLeaderSubscriptions(srv *server) {
@@ -745,26 +851,7 @@ func registerLeaderSubscriptions(srv *server) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
-				ts, err := evt.GetTimestamp()
-				if err != nil {
-					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
-					return
-				}
-				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
-				// Mark the rank as unavailable for membership in
-				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation); err != nil {
-					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
-					if system.IsNotLeader(err) {
-						// If we've lost leadership while processing the event,
-						// attempt to re-forward it to the new leader.
-						evt = evt.WithForwarded(false).WithForwardable(true)
-						srv.log.Debugf("re-forwarding rank dead event for %d:%x", evt.Rank, evt.Incarnation)
-						srv.evtForwarder.OnEvent(ctx, evt)
-					}
-					return
-				}
-				srv.mgmtSvc.reqGroupUpdate(ctx, false)
+				handleRankDead(ctx, srv, evt)
 			}
 		}))
 
@@ -814,6 +901,35 @@ func getGrpcOpts(log logging.Logger, cfgTransport *security.TransportConfig, ldr
 
 type netInterface interface {
 	Addrs() ([]net.Addr, error)
+}
+
+// getFirstIPv4Addr returns the first (lowest) IPv4 address from the interface.
+// If multiple IPv4 addresses exist, the lowest one is returned for determinism.
+func getFirstIPv4Addr(iface netInterface) (net.IP, error) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get interface addresses")
+	}
+
+	var ipv4s []net.IP
+	for _, a := range addrs {
+		if ipNet, ok := a.(*net.IPNet); ok && ipNet.IP != nil {
+			if v4 := ipNet.IP.To4(); v4 != nil {
+				ipv4s = append(ipv4s, v4)
+			}
+		}
+	}
+
+	if len(ipv4s) == 0 {
+		return nil, errors.New("no IPv4 addresses on interface")
+	}
+
+	// Sort for deterministic selection (lowest address first).
+	sort.Slice(ipv4s, func(i, j int) bool {
+		return bytes.Compare(ipv4s[i], ipv4s[j]) < 0
+	})
+
+	return ipv4s[0], nil
 }
 
 func getSrxSetting(cfg *config.Server) (int32, error) {

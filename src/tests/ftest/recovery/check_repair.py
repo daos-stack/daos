@@ -30,7 +30,7 @@ class DMGCheckRepairTest(TestWithServers):
         Jira ID: DAOS-17852
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckRepairTest,test_check_repair_corner_case
         """

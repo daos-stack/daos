@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -141,6 +141,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_server_helper.log")
         self.telemetry_port = BasicParameter(None, 9191)
+        self.control_iface = BasicParameter(None)
         self.client_env_vars = BasicParameter(None)
 
         # access_points was changed to mgmt_svc_replicas in 2.7
@@ -450,6 +451,7 @@ class EngineYamlParameters(YamlParameters):
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
             "DAOS_POOL_RF=4",
+            "DAOS_REBUILD_WAIT_EC_PAUSE=1",
             "CRT_EVENT_DELAY=1",
             # pylint: disable-next=fixme
             # FIXME disable space cache since some tests need to verify instant pool space
@@ -485,9 +487,19 @@ class EngineYamlParameters(YamlParameters):
         self._max_storage_tiers = max_storage_tiers
         super().__init__(os.path.join(*namespace))
 
-        # Use environment variables to get default parameters
-        default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
-        default_port = int(os.environ.get("D_PORT", 31416))
+        # Use environment variables to get default parameters. Supports lists to define values for
+        # multiple engines through comma-separated strings. If the index exceeds the list length
+        # then values are reused round-robin style.
+        try:
+            _defaults = os.environ.get("DAOS_TEST_FABRIC_IFACE").split(",")
+            default_interface = list(filter(None, _defaults))[index % len(_defaults)]
+        except (AttributeError, IndexError):
+            default_interface = f"eth{index}"
+        try:
+            _defaults = [int(port) for port in os.environ.get("D_PORT").split(",")]
+            default_port = list(filter(None, _defaults))[index % len(_defaults)]
+        except (AttributeError, ValueError, IndexError):
+            default_port = 31317 + (100 * index)
 
         # All log files should be placed in the same directory on each host
         # to enable easy log file archiving by launch.py

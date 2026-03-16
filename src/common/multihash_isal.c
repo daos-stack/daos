@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -237,6 +238,13 @@ crc64_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 	return 0;
 }
 
+#define HANDLE_ERROR(statement)                                                                    \
+	({                                                                                         \
+		int __rc__ = statement;                                                            \
+		D_ASSERTF(__rc__ == 0, #statement " = %d\n", __rc__);                              \
+		__rc__ == 0 ? 0 : -DER_INVAL;                                                      \
+	})
+
 struct hash_ft crc64_algo = {
 	.cf_update	= crc64_update,
 	.cf_init	= crc64_init,
@@ -250,7 +258,7 @@ struct hash_ft crc64_algo = {
 
 /** SHA1 */
 struct sha1_ctx {
-	struct mh_sha1_ctx	s1_ctx;
+	struct isal_mh_sha1_ctx s1_ctx;
 	bool			s1_updated;
 };
 
@@ -264,10 +272,14 @@ sha1_init(void **daos_mhash_ctx)
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	rc = mh_sha1_init(&ctx->s1_ctx);
-	if (rc == 0)
-		*daos_mhash_ctx = ctx;
-	return rc;
+	rc = isal_mh_sha1_init(&ctx->s1_ctx);
+	if (rc != 0) {
+		D_FREE(ctx);
+		return HANDLE_ERROR(rc);
+	}
+	*daos_mhash_ctx = ctx;
+
+	return 0;
 }
 
 static int
@@ -276,7 +288,7 @@ sha1_reset(void *daos_mhash_ctx)
 	struct sha1_ctx *ctx = daos_mhash_ctx;
 
 	ctx->s1_updated = false;
-	return mh_sha1_init(&ctx->s1_ctx);
+	return HANDLE_ERROR(isal_mh_sha1_init(&ctx->s1_ctx));
 }
 
 static void
@@ -291,7 +303,7 @@ sha1_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 	struct sha1_ctx *ctx = daos_mhash_ctx;
 
 	ctx->s1_updated = true;
-	return mh_sha1_update(&ctx->s1_ctx, buf, buf_len);
+	return HANDLE_ERROR(isal_mh_sha1_update(&ctx->s1_ctx, buf, buf_len));
 }
 
 static int
@@ -300,7 +312,7 @@ sha1_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 	struct sha1_ctx *ctx = daos_mhash_ctx;
 
 	if (ctx->s1_updated)
-		return mh_sha1_finalize(&ctx->s1_ctx, buf);
+		return HANDLE_ERROR(isal_mh_sha1_finalize(&ctx->s1_ctx, buf));
 	return 0;
 }
 
@@ -317,8 +329,8 @@ struct hash_ft sha1_algo = {
 
 /** SHA256 */
 struct sha256_ctx {
-	struct mh_sha256_ctx	s2_ctx;
-	bool			s2_updated;
+	struct isal_mh_sha256_ctx s2_ctx;
+	bool                      s2_updated;
 };
 
 static int
@@ -331,10 +343,16 @@ sha256_init(void **daos_mhash_ctx)
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	rc = mh_sha256_init(&ctx->s2_ctx);
-	if (rc == 0)
-		*daos_mhash_ctx = ctx;
-	return rc;
+	rc = isal_mh_sha256_init(&ctx->s2_ctx);
+	if (rc != 0) {
+		D_FREE(ctx);
+		return HANDLE_ERROR(rc);
+	}
+
+	*daos_mhash_ctx = ctx;
+	ctx->s2_updated = false;
+
+	return 0;
 }
 
 static int
@@ -343,7 +361,7 @@ sha256_reset(void *daos_mhash_ctx)
 	struct sha256_ctx *ctx = daos_mhash_ctx;
 
 	ctx->s2_updated = false;
-	return mh_sha256_init(&ctx->s2_ctx);
+	return HANDLE_ERROR(isal_mh_sha256_init(&ctx->s2_ctx));
 }
 
 static void
@@ -358,7 +376,7 @@ sha256_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 	struct sha256_ctx *ctx = daos_mhash_ctx;
 
 	ctx->s2_updated = true;
-	return mh_sha256_update(&ctx->s2_ctx, buf, buf_len);
+	return HANDLE_ERROR(isal_mh_sha256_update(&ctx->s2_ctx, buf, buf_len));
 }
 
 static int
@@ -367,7 +385,7 @@ sha256_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 	struct sha256_ctx *ctx = daos_mhash_ctx;
 
 	if (ctx->s2_updated)
-		return mh_sha256_finalize(&ctx->s2_ctx, buf);
+		return HANDLE_ERROR(isal_mh_sha256_finalize(&ctx->s2_ctx, buf));
 	return 0;
 }
 
@@ -384,22 +402,28 @@ struct hash_ft sha256_algo = {
 
 /** SHA512 */
 struct sha512_ctx {
-	SHA512_HASH_CTX_MGR	s5_mgr;
-	SHA512_HASH_CTX		s5_ctx;
-	bool			s5_updated;
+	ISAL_SHA512_HASH_CTX_MGR s5_mgr;
+	ISAL_SHA512_HASH_CTX     s5_ctx;
+	bool                     s5_updated;
 };
 
 static int
 sha512_init(void **daos_mhash_ctx)
 {
 	struct sha512_ctx	*ctx;
+	int                      rc;
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	sha512_ctx_mgr_init(&ctx->s5_mgr);
-	hash_ctx_init(&ctx->s5_ctx);
+	rc = isal_sha512_ctx_mgr_init(&ctx->s5_mgr);
+	if (rc != 0) {
+		D_FREE(ctx);
+		return HANDLE_ERROR(rc);
+	}
+	isal_hash_ctx_init(&ctx->s5_ctx);
+	ctx->s5_updated = false;
 
 	*daos_mhash_ctx = ctx;
 	return 0;
@@ -417,6 +441,8 @@ sha512_reset(void *daos_mhash_ctx)
 	struct sha512_ctx *ctx = daos_mhash_ctx;
 
 	ctx->s5_updated = false;
+	isal_hash_ctx_init(&ctx->s5_ctx);
+
 	return 0;
 }
 
@@ -424,48 +450,55 @@ static int
 sha512_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
 	struct sha512_ctx	*ctx = daos_mhash_ctx;
-	SHA512_HASH_CTX		*tmp;
+	ISAL_SHA512_HASH_CTX    *tmp = NULL;
+	int                      rc;
 
 	if (!ctx->s5_updated)
-		tmp = sha512_ctx_mgr_submit(&ctx->s5_mgr,
-					    &ctx->s5_ctx, buf,
-					    buf_len,
-					    HASH_FIRST);
+		rc = isal_sha512_ctx_mgr_submit(&ctx->s5_mgr, &ctx->s5_ctx, &tmp, buf, buf_len,
+						ISAL_HASH_FIRST);
 	else
-		tmp = sha512_ctx_mgr_submit(&ctx->s5_mgr,
-					    &ctx->s5_ctx, buf,
-					    buf_len,
-					    HASH_UPDATE);
+		rc = isal_sha512_ctx_mgr_submit(&ctx->s5_mgr, &ctx->s5_ctx, &tmp, buf, buf_len,
+						ISAL_HASH_UPDATE);
 
-	if (tmp == NULL)
-		sha512_ctx_mgr_flush(&ctx->s5_mgr);
+	if (rc != 0)
+		return HANDLE_ERROR(rc);
+
+	if (tmp == NULL) {
+		rc = isal_sha512_ctx_mgr_flush(&ctx->s5_mgr, &tmp);
+		if (rc != 0)
+			return HANDLE_ERROR(rc);
+	}
 
 	ctx->s5_updated = true;
-	return ctx->s5_ctx.error;
+	return HANDLE_ERROR(ctx->s5_ctx.error);
 }
 
 static int
 sha512_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
 	struct sha512_ctx	*ctx = daos_mhash_ctx;
+	int                      rc  = 0;
 
 	if (ctx->s5_updated) {
-		SHA512_HASH_CTX *tmp;
+		ISAL_SHA512_HASH_CTX *tmp = NULL;
 
-		tmp = sha512_ctx_mgr_submit(&ctx->s5_mgr,
-					    &ctx->s5_ctx, NULL,
-					    0,
-					    HASH_LAST);
+		rc = isal_sha512_ctx_mgr_submit(&ctx->s5_mgr, &ctx->s5_ctx, &tmp, NULL, 0,
+						ISAL_HASH_LAST);
+		if (rc != 0)
+			return HANDLE_ERROR(rc);
 
-		if (tmp == NULL)
-			sha512_ctx_mgr_flush(&ctx->s5_mgr);
+		if (tmp == NULL) {
+			rc = isal_sha512_ctx_mgr_flush(&ctx->s5_mgr, &tmp);
+			if (rc != 0)
+				return HANDLE_ERROR(rc);
+		}
 
 		memcpy(buf, ctx->s5_ctx.job.result_digest, buf_len);
 
-		return ctx->s5_ctx.error;
+		rc = ctx->s5_ctx.error;
 	}
 
-	return 0;
+	return HANDLE_ERROR(rc);
 }
 
 struct hash_ft sha512_algo = {

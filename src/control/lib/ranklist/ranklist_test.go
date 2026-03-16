@@ -31,9 +31,21 @@ func TestRanklist_RankSet(t *testing.T) {
 			expCount: 0,
 			expRanks: []Rank{},
 		},
+		"empty bracketed start list": {
+			ranks:    "[]",
+			expOut:   "",
+			expCount: 0,
+			expRanks: []Rank{},
+		},
 		"invalid with hostnames": {
 			ranks:  "node2-1,node1-2.suffix1,node1-[45,47].suffix2,node3,node1-3",
 			expErr: errors.New("unexpected alphabetic character(s)"),
+		},
+		"simple bracketed ranged rank list": {
+			ranks:    "[0-10]",
+			expOut:   "0-10",
+			expCount: 11,
+			expRanks: []Rank{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 		},
 		"simple ranged rank list": {
 			ranks:    "0-10",

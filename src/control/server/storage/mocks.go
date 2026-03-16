@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -231,8 +231,6 @@ func MockScmNamespaceRamdisk(varIdx ...int32) *ScmNamespace {
 
 	return &ScmNamespace{
 		BlockDevice: "ramdisk",
-		//		NumaNode:    uint32(idx),
-		//		Size:        uint64(humanize.TByte) * uint64(idx+1),
 		Mount: &ScmMountPoint{
 			Class: ClassRam,
 			Path:  fmt.Sprintf("/mnt/daos%d", idx),
@@ -246,6 +244,7 @@ func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys System
 	p.scm = scm
 	p.bdev = bdev
 	p.metadata = meta
+	p.getTopology = MockGetTopology
 	return p
 }
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2021-2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -9,7 +9,7 @@ bootstrap_dnf() {
     rm -rf "$REPOS_DIR"
     ln -s ../zypp/repos.d "$REPOS_DIR"
     dnf -y remove lua54 lua-lmod
-    dnf -y --nogpgcheck install lua-lmod '--repo=*lua*' --repo '*network-cluster*'
+    dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*'
 }
 
 group_repo_post() {

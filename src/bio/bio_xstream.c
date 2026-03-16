@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +22,7 @@
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
 #include <spdk/rpc.h>
+#include <spdk/file.h>
 #include <spdk/env_dpdk.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
@@ -29,8 +31,8 @@
 
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
-/* SPDK blob parameters */
-#define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
+/* Default cluster size in MB */
+#define DAOS_DEFAULT_CLUSTER_MB 128
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_INIT_PCT 50      /* Default per-xstream init chunks, in percentage */
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Default per-xstream max chunks, 1GB */
@@ -54,14 +56,15 @@ static unsigned int bio_chk_init_pct;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
 /* Whether SPDK inited */
-bool bio_spdk_inited;
-/* Whether VMD is enabled */
-bool                bio_vmd_enabled;
+bool                bio_spdk_inited;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
+/* SPDK NVMe power management value, use bits 0-4 as per NVMe spec */
+unsigned int        bio_spdk_power_mgmt_val = NVME_POWER_MGMT_UNINIT;
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
+unsigned int        bio_io_timeout         = 120000000; /* us, 120 seconds */
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -106,7 +109,6 @@ bio_spdk_conf_read(struct spdk_env_opts *opts)
 		return rc;
 	}
 	nvme_glb.bd_nvme_roles = roles;
-	bio_vmd_enabled        = vmd_enabled && (nvme_glb.bd_bdev_class == BDEV_CLASS_NVME);
 
 	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 	if (rc != 0) {
@@ -149,14 +151,44 @@ static int
 bio_spdk_env_init(void)
 {
 	struct spdk_env_opts opts;
+	const char          *dpdk_opts;
+	unsigned int         spdk_level = DAOS_SPDK_LOG_DEFAULT;
+	unsigned int         dpdk_level = DAOS_DPDK_LOG_DEFAULT;
 	int                  rc;
 
-	/* Only print error and more severe to stderr. */
-	spdk_log_set_print_level(SPDK_LOG_ERROR);
+	/* Check for SPDK log level from environment */
+	d_getenv_uint("DAOS_SPDK_LOG_LEVEL", &spdk_level);
+	if (spdk_level > DAOS_SPDK_LOG_MAX) {
+		D_WARN("Invalid DAOS_DPDK_LOG_LEVEL=%u, using default (%u)\n", dpdk_level,
+		       DAOS_SPDK_LOG_DEFAULT);
+		spdk_level = DAOS_SPDK_LOG_DEFAULT;
+	}
 
+	/* Check for DPDK log level from environment */
+	d_getenv_uint("DAOS_DPDK_LOG_LEVEL", &dpdk_level);
+	if (dpdk_level < DAOS_DPDK_LOG_MIN || dpdk_level > DAOS_DPDK_LOG_MAX) {
+		D_WARN("Invalid DAOS_DPDK_LOG_LEVEL=%u, using default (%u)\n", dpdk_level,
+		       DAOS_DPDK_LOG_DEFAULT);
+		dpdk_level = DAOS_DPDK_LOG_DEFAULT;
+	}
+
+	D_INFO("SPDK log level: %u, DPDK log level: %u\n", spdk_level, dpdk_level);
+
+	/* Set SPDK log print level to configured value */
+	spdk_log_set_print_level(spdk_level);
+
+	/* Build DPDK options with specified log level for all DPDK log facilities */
+	dpdk_opts = dpdk_cli_build_opts(dpdk_level, dpdk_level);
+	if (dpdk_opts == NULL) {
+		D_ERROR("Failed to build DPDK options\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	opts.opts_size = sizeof(opts);
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
-	opts.env_context = (char *)dpdk_cli_override_opts;
+	opts.env_context = (char *)dpdk_opts;
 
 	/**
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
@@ -219,7 +251,8 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 {
 	char		*env;
 	int		 rc, fd;
-	unsigned int	 size_mb = BIO_DMA_CHUNK_MB;
+	unsigned int     size_mb = BIO_DMA_CHUNK_MB, io_timeout_secs = 0;
+	unsigned int     cluster_mb = DAOS_DEFAULT_CLUSTER_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -266,6 +299,11 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
+	d_getenv_uint("DAOS_NVME_POWER_MGMT", &bio_spdk_power_mgmt_val);
+	if (bio_spdk_power_mgmt_val != NVME_POWER_MGMT_UNINIT)
+		D_INFO("NVMe power management setting to be applied is %u\n",
+		       bio_spdk_power_mgmt_val);
+
 	d_getenv_uint("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
@@ -277,6 +315,16 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	d_getenv_uint("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
 
+	d_getenv_uint("DAOS_SPDK_IO_TIMEOUT", &io_timeout_secs);
+	if (io_timeout_secs > 0) {
+		if (io_timeout_secs < 30 || io_timeout_secs > 300)
+			D_WARN("DAOS_SPDK_IO_TIMEOUT(%u) is invalid. Min:30,Max:300,Default:120\n",
+			       io_timeout_secs);
+		else
+			bio_io_timeout = io_timeout_secs * 1000000; /* convert to us */
+	}
+	D_INFO("SPDK IO timeout set to %u us\n", bio_io_timeout);
+
 	/* Hugepages disabled */
 	if (mem_size == 0) {
 		D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
@@ -286,7 +334,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	}
 
 	if (nvme_conf && strlen(nvme_conf) > 0) {
-		fd = open(nvme_conf, O_RDONLY, 0600);
+		fd = open(nvme_conf, O_RDONLY);
 		if (fd < 0)
 			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
 			       nvme_conf, DP_RC(daos_errno2der(errno)));
@@ -309,8 +357,14 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks, prealloc %u chunks\n",
 	       bio_chk_cnt_max, size_mb, init_chk_cnt());
 
+	d_getenv_uint("DAOS_BS_CLUSTER_MB", &cluster_mb);
+	if (cluster_mb < 32 || cluster_mb > 1024) {
+		D_WARN("DAOS_BS_CLUSTER_MB %u is invalid, default %u is used\n", cluster_mb,
+		       DAOS_DEFAULT_CLUSTER_MB);
+		cluster_mb = DAOS_DEFAULT_CLUSTER_MB;
+	}
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
-	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
+	nvme_glb.bd_bs_opts.cluster_sz      = (cluster_mb << 20);
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	d_agetenv_str(&env, "VOS_BDEV_CLASS");
@@ -354,8 +408,9 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		nvme_glb.bd_bs_opts.cluster_sz = (1UL << 30);	/* 1GB */
 
-	D_INFO("MD on SSD is %s\n",
-	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
+	D_INFO("MD on SSD is %s, %u cluster size is used\n",
+	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled",
+	       nvme_glb.bd_bs_opts.cluster_sz);
 
 	bio_spdk_inited = true;
 
@@ -496,10 +551,30 @@ common_init_cb(void *arg, int rc)
 	cp_arg->cca_rc = daos_errno2der(-rc);
 }
 
+struct subsystem_init_arg {
+	struct common_cp_arg *cp_arg;
+	void                 *json_data;
+	ssize_t               json_data_size;
+};
+
 static void
 subsys_init_cb(int rc, void *arg)
 {
-	common_init_cb(arg, rc);
+	struct subsystem_init_arg *init_arg = arg;
+
+	if (init_arg->json_data != NULL) {
+		free(init_arg->json_data);
+		init_arg->json_data = NULL;
+	}
+
+	if (rc)
+		D_ERROR("subsystem init failed: %d\n", rc);
+
+	common_init_cb(init_arg->cp_arg, rc);
+
+	D_FREE(init_arg);
+
+	return;
 }
 
 static void
@@ -901,8 +976,8 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	 * Hold the SPDK bdev by an open descriptor, otherwise, the bdev
 	 * could be deconstructed by SPDK on device hot remove.
 	 */
-	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
-				d_bdev, &d_bdev->bb_desc);
+	rc =
+	    spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb, d_bdev, &d_bdev->bb_desc);
 	if (rc != 0) {
 		D_ERROR("Failed to hold bdev %s, %d\n", d_bdev->bb_name, rc);
 		rc = daos_errno2der(-rc);
@@ -910,6 +985,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int
 	}
 
 	D_ASSERT(d_bdev->bb_desc != NULL);
+
 	/* Try to load blobstore without specifying 'bstype' first */
 	bs = load_blobstore(ctxt, d_bdev->bb_name, NULL, false, false,
 			    NULL, NULL);
@@ -1011,6 +1087,12 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 		bdev_name = spdk_bdev_get_name(bdev);
 
+		/* Apply NVMe power management settings */
+		rc = bio_set_power_mgmt(ctxt, bdev_name);
+		if (rc != 0 && rc != -DER_NOTSUPPORTED)
+			D_WARN("Failed to set power management for device %s: " DF_RC "\n",
+			       bdev_name, DP_RC(rc));
+
 		rc = bdev_name2roles(bdev_name);
 		if (rc < 0) {
 			D_ERROR("Failed to get role from bdev name '%s', "DF_RC"\n", bdev_name,
@@ -1033,10 +1115,10 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		/* A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible */
+		/* Clear any pre-existing VMD-LED state */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-		if ((rc != 0) && (rc != -DER_NOTSUPPORTED)) {
+		if (rc != 0) {
 			DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
 				 DP_UUID(d_bdev->bb_uuid));
 			return rc;
@@ -1241,6 +1323,7 @@ alloc_xs_blobstore(void)
 	if (bxb == NULL)
 		return NULL;
 
+	D_INIT_LIST_HEAD(&bxb->bxb_pending_ios);
 	D_INIT_LIST_HEAD(&bxb->bxb_io_ctxts);
 
 	return bxb;
@@ -1250,14 +1333,21 @@ static int
 assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 {
 	enum smd_dev_type	st, failed_st;
+	struct bio_dev_info    *b_info;
 	bool			assigned = false;
 	int			rc;
+
+	b_info = alloc_dev_info(d_bdev->bb_uuid, d_bdev, NULL);
+	if (b_info == NULL) {
+		D_ERROR("Failed to alloc bio_dev_info.");
+		return -DER_NOMEM;
+	}
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 
-		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st);
+		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st, b_info->bdi_ctrlr);
 		if (rc) {
 			D_ERROR("Failed to map dev "DF_UUID" type:%u to tgt %d. "DF_RC"\n",
 				DP_UUID(d_bdev->bb_uuid), st, tgt_id, DP_RC(rc));
@@ -1292,8 +1382,11 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 			break;
 	}
 
+	bio_free_dev_info(b_info);
+
 	return assigned ? 0 : -DER_INVAL;
 error:
+	bio_free_dev_info(b_info);
 	for (st = SMD_DEV_TYPE_DATA; st < failed_st; st++) {
 		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
@@ -1346,9 +1439,12 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	 */
 	d_bdev = lookup_dev_by_id(dev_info->sdi_id);
 	if (d_bdev == NULL)
-		D_ERROR("Device "DF_UUID" for target %d type %d isn't plugged or the "
-			"SMD table is stale/corrupted.\n",
-			DP_UUID(dev_info->sdi_id), tgt_id, st);
+		ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " "
+				  "[model:%s, serial:%s] for target:%d type:%d is unplugged\n",
+				  DP_UUID(dev_info->sdi_id), dev_info->sdi_model,
+				  dev_info->sdi_serial, tgt_id, st);
 	smd_dev_free_info(dev_info);
 
 	return d_bdev;
@@ -1571,6 +1667,76 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	D_FREE(ctxt);
 }
 
+static void
+subsystem_init_cb(int rc, void *arg)
+{
+	struct subsystem_init_arg *init_arg;
+
+	if (rc) {
+		subsys_init_cb(rc, arg);
+		return;
+	}
+
+	init_arg = arg;
+
+	/* Set RUNTIME state and load config again for RUNTIME methods */
+	spdk_rpc_set_state(SPDK_RPC_RUNTIME);
+	spdk_subsystem_load_config(init_arg->json_data, init_arg->json_data_size, subsys_init_cb,
+				   init_arg, true);
+}
+
+static void
+load_config_cb(int rc, void *arg)
+{
+	if (rc) {
+		subsys_init_cb(rc, arg);
+		return;
+	}
+
+	/* init subsystem */
+	spdk_subsystem_init(subsystem_init_cb, arg);
+}
+
+static int
+bio_xsctxt_init_by_config(struct common_cp_arg *cp_arg)
+{
+	struct subsystem_init_arg *init_arg;
+	void                      *json_data;
+	size_t                     json_data_size;
+
+	json_data = spdk_posix_file_load_from_name(nvme_glb.bd_nvme_conf, &json_data_size);
+	if (json_data == NULL) {
+		D_ERROR("failed to load nvme conf %s\n", nvme_glb.bd_nvme_conf);
+		return -DER_NOMEM;
+	}
+
+	/**
+	 * Initially, this was called internally spdk_subsystem_load_config() -> ... ->
+	 * spdk_rpc_initialize(). However, since commit
+	 * https://github.com/spdk/spdk/commit/fba209c7324a11b9230533144c02e7a66bc738ea (>=v24.01)
+	 * SPDK_RPC_STARTUP has become the initial value of the underlying global variable and it
+	 * is no longer reset automatically. This makes no difference for applications that
+	 * initialize SPDK only once during the lifetime of the process. But some BIO module
+	 * consumers—such as DDB—expect to be able to initialize, finalize, and then reinitialize
+	 * SPDK multiple times within the same process, for example when inspecting multiple pools
+	 * sequentially. For those use cases, the RPC state must now be reset explicitly.
+	 */
+	spdk_rpc_set_state(SPDK_RPC_STARTUP);
+
+	D_ALLOC_PTR(init_arg);
+	if (init_arg == NULL) {
+		free(json_data);
+		return -DER_NOMEM;
+	}
+
+	init_arg->cp_arg         = cp_arg;
+	init_arg->json_data      = json_data;
+	init_arg->json_data_size = (ssize_t)json_data_size;
+	spdk_subsystem_load_config(json_data, (ssize_t)json_data_size, load_config_cb, init_arg,
+				   true);
+	return 0;
+}
+
 int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
@@ -1634,13 +1800,14 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 		/* Initialize all registered subsystems: bdev, vmd, copy. */
 		common_prep_arg(&cp_arg);
-		spdk_subsystem_init_from_json_config(nvme_glb.bd_nvme_conf,
-						     SPDK_DEFAULT_RPC_ADDR,
-						     subsys_init_cb, &cp_arg,
-						     true);
+		rc = bio_xsctxt_init_by_config(&cp_arg);
+		if (rc != 0) {
+			D_ERROR("failed to load nvme conf %s\n", nvme_glb.bd_nvme_conf);
+			goto out;
+		}
+
 		rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
 		D_ASSERT(rc == 0);
-
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
 			DL_ERROR(rc, "failed to init bdevs");
@@ -1670,7 +1837,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 			if ((!nvme_glb.bd_rpc_srv_addr) || (strlen(nvme_glb.bd_rpc_srv_addr) == 0))
 				nvme_glb.bd_rpc_srv_addr = SPDK_DEFAULT_RPC_ADDR;
 
-			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr);
+			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr, NULL);
 			if (rc != 0) {
 				D_ERROR("failed to start SPDK JSON-RPC server at %s, "DF_RC"\n",
 					nvme_glb.bd_rpc_srv_addr, DP_RC(daos_errno2der(-rc)));
@@ -1748,8 +1915,10 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 static inline void
 reset_media_errors(struct bio_blobstore *bbs)
 {
-	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
+	struct bio_dev_health *bdh       = &bbs->bb_dev_health;
+	struct nvme_stats     *dev_stats = &bdh->bdh_health_state;
 
+	bdh->bdh_io_stalled       = 0;
 	dev_stats->bio_read_errs = 0;
 	dev_stats->bio_write_errs = 0;
 	dev_stats->bio_unmap_errs = 0;
@@ -1908,22 +2077,15 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
-	if (!bio_vmd_enabled)
-		return;
-
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			/**
-			 * LED will be reset to faulty or normal state based on SSDs bio_bdevs.
-			 * A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible.
-			 */
+			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs. */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0) {
-				if (rc != -DER_NOTSUPPORTED)
-					DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
-						 DP_UUID(d_bdev->bb_uuid));
+				DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+					 DP_UUID(d_bdev->bb_uuid));
 				continue;
 			}
 
@@ -1978,6 +2140,9 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		scan_bio_bdevs(ctxt, now);
 		bio_led_event_monitor(ctxt, now);
 	}
+
+	/* Detect stalled I/Os */
+	bio_io_monitor(ctxt, now);
 
 	return rc;
 }

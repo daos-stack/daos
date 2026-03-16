@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -82,8 +82,8 @@ ds_mgmt_dir_fsync(const char *dir)
 }
 
 int
-ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb_blob_sz,
-		     const char *storage_path, bind_cpu_fn_t bind_cpu_fn)
+ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tgts,
+		     daos_size_t rdb_blob_sz, const char *storage_path, bind_cpu_fn_t bind_cpu_fn)
 {
 	char       *newborns_path      = NULL;
 	char       *pool_newborns_path = NULL;
@@ -134,7 +134,7 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_si
 
 	/** create VOS files */
 	rc = ds_mgmt_tgt_preallocate_parallel(pool_uuid, scm_size, tgt_nr, &dummy_cancel_state,
-					      newborns_path, bind_cpu_fn);
+					      newborns_path, bind_cpu_fn, tgts);
 	if (rc) {
 		D_ERROR(DF_UUID ": failed to create tgt vos files: " DF_RC "\n", DP_UUID(pool_uuid),
 			DP_RC(rc));
@@ -149,7 +149,7 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_si
 			rc = -DER_NONEXIST;
 			goto out;
 		}
-		fd = open(rdb_path, O_RDWR | O_CREAT, 0600);
+		fd = open(rdb_path, O_RDWR | O_CREAT, UMEM_FILE_MODE_DEFAULT);
 		if (fd < 0) {
 			rc = daos_errno2der(errno);
 			D_ERROR("failed to create/open the vos file %s:" DF_RC "\n", rdb_path,
@@ -200,7 +200,7 @@ ds_mgmt_tgt_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id, const cha
 	D_DEBUG(DB_MGMT, DF_UUID ": creating vos file %s (%ld bytes)\n", DP_UUID(uuid), path,
 		scm_size);
 
-	fd = open(path, O_CREAT | O_RDWR, 0600);
+	fd = open(path, O_CREAT | O_RDWR, UMEM_FILE_MODE_DEFAULT);
 	if (fd < 0) {
 		rc = daos_errno2der(errno);
 		D_ERROR(DF_UUID ": failed to create vos file %s: " DF_RC "\n", DP_UUID(uuid), path,
@@ -307,7 +307,7 @@ ds_mgmt_tgt_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr
 int
 ds_mgmt_tgt_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
 				 bool *cancel_pending, const char *newborns_path,
-				 bind_cpu_fn_t bind_cpu_fn)
+				 bind_cpu_fn_t bind_cpu_fn, int *tgts)
 {
 	int                  i;
 	int                  rc;
@@ -329,7 +329,7 @@ ds_mgmt_tgt_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
 		entry = &thrds_list[i];
 		uuid_copy(entry->tvt_args.tvpa_uuid, uuid);
 		entry->tvt_args.tvpa_scm_size      = scm_size;
-		entry->tvt_args.tvpa_tgt_id        = i;
+		entry->tvt_args.tvpa_tgt_id        = (tgts != NULL) ? tgts[i] : i;
 		entry->tvt_args.tvpa_newborns_path = newborns_path;
 		entry->tvt_args.tvpa_bind_cpu_fn   = bind_cpu_fn;
 		rc = pthread_create(&entry->tvt_tid, NULL, tgt_preallocate_thrd_func,

@@ -126,7 +126,7 @@ class Test(avocadoTest):
         self._teardown_cancel = set()
         self._teardown_errors = []
         self.prefix = None
-        self.cancel_file = os.path.join(os.sep, "scratch", "CI-skip-list-master")
+        self.cancel_file = os.path.join(os.sep, "CIShare", "CI-skip-list-master")
 
         # List of methods to call during tearDown to cleanup after the steps
         # Use the register_cleanup() method to add methods with optional arguments
@@ -851,6 +851,7 @@ class TestWithServers(TestWithoutServers):
         if self.server_managers and self.agent_managers:
             # Compose and run cart_ctl command
             cart_ctl = CartCtl()
+            cart_ctl.get_params(self)
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
             cart_ctl.log_message.value = message

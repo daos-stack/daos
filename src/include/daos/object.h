@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -79,7 +79,7 @@ enum {
 	/* smallest cell size */
 	DAOS_EC_CELL_MIN	= (4 << 10),
 	/* default cell size */
-	DAOS_EC_CELL_DEF	= (64 << 10),
+	DAOS_EC_CELL_DEF	= (128 << 10),
 	/* largest cell size */
 	DAOS_EC_CELL_MAX	= (1024 << 10),
 };
@@ -404,6 +404,17 @@ daos_oclass_is_ec(struct daos_oclass_attr *oca)
 	return oca->ca_resil == DAOS_RES_EC;
 }
 
+static inline bool
+daos_cid_is_ec(daos_oclass_id_t cid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_id2attr(cid, NULL);
+	if (oca == NULL)
+		return false;
+	return daos_oclass_is_ec(oca);
+}
+
 static inline void
 daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 		 enum daos_obj_redun ord, uint32_t nr_grps,
@@ -653,6 +664,8 @@ enum daos_io_flags {
 	DIOF_RECX_REVERSE = 0x800,
 	/* Use for rebuild fetch epoch selection */
 	DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY = 0x1000,
+	/* Do not degrade enumeration/fetch if data shard failed */
+	DIOF_EC_NO_DEGRADE = 0x2000,
 };
 
 /**

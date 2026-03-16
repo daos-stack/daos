@@ -337,7 +337,7 @@ func (cmd *poolCreateCmd) Execute(args []string) error {
 		User:       cmd.UserName.String(),
 		UserGroup:  cmd.GroupName.String(),
 		NumSvcReps: cmd.NumSvcReps,
-		Properties: cmd.Properties.ToSet,
+		Properties: cmd.Properties.ToSet.Slice(),
 		Ranks:      cmd.RankList.Ranks(),
 	}
 
@@ -686,8 +686,9 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 // poolQueryCmd is the struct representing the command to query a DAOS pool.
 type poolQueryCmd struct {
 	poolCmd
-	ShowEnabledRanks bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
 	HealthOnly       bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
+	ShowEnabledRanks bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
+	NoSelfHealCheck  bool `long:"no-self-heal-check" description:"Disable self_heal pool property check"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
@@ -700,6 +701,9 @@ func (cmd *poolQueryCmd) Execute(args []string) error {
 	if cmd.HealthOnly {
 		req.QueryMask = daos.HealthOnlyPoolQueryMask
 	}
+	if !cmd.NoSelfHealCheck {
+		req.QueryMask.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+	}
 	if cmd.ShowEnabledRanks {
 		req.QueryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
 	}
@@ -711,6 +715,7 @@ func (cmd *poolQueryCmd) Execute(args []string) error {
 		if resp != nil {
 			poolInfo = &resp.PoolInfo
 		}
+		// NOTE: Self heal policy info not returned in JSON response.
 		return cmd.OutputJSON(poolInfo, err)
 	}
 
@@ -832,7 +837,7 @@ func (cmd *poolSetPropCmd) Execute(_ []string) error {
 
 	req := &control.PoolSetPropReq{
 		ID:         cmd.PoolID().String(),
-		Properties: cmd.Args.Props.ToSet,
+		Properties: cmd.Args.Props.ToSet.Slice(),
 	}
 
 	err := control.PoolSetProp(cmd.MustLogCtx(), cmd.ctlInvoker, req)
@@ -1067,13 +1072,13 @@ type poolRebuildOpCmd struct {
 }
 
 func (cmd *poolRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force bool) (errOut error) {
-	req := &control.PoolRebuildReq{
-		ID:    cmd.PoolID().String(),
-		Op:    opCode,
-		Force: force,
+	req := &control.PoolRebuildManageReq{
+		ID:     cmd.PoolID().String(),
+		OpCode: opCode,
+		Force:  force,
 	}
 
-	err := control.PoolRebuild(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	err := control.PoolRebuildManage(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil || cmd.JSONOutputEnabled() {
 		if err != nil {
 			cmd.ctlInvoker.Debug(err.Error())
@@ -1082,7 +1087,7 @@ func (cmd *poolRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force boo
 		return err
 	}
 
-	msg := fmt.Sprintf("Pool-rebuild %s request succeeded", opCode.String())
+	msg := fmt.Sprintf("Pool-rebuild %s request succeeded", opCode)
 	cmd.ctlInvoker.Debug(msg)
 	cmd.Info(msg)
 

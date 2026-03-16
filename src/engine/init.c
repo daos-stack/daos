@@ -1,8 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +23,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/mgmt.h>
 #include <daos/placement.h>
 #include <daos/tls.h>
 #include "srv_internal.h"
@@ -1134,8 +1134,9 @@ int
 main(int argc, char **argv)
 {
 	sigset_t        set;
-	int		sig;
-	int		rc;
+	bool	        exit_failure = false;
+	int	        sig;
+	int	        rc;
 
 	/** parse command line arguments */
 	parse(argc, argv);
@@ -1167,6 +1168,7 @@ main(int argc, char **argv)
 
 	/** wait for shutdown signal */
 	sigemptyset(&set);
+	sigaddset(&set, SIGBUS);
 	sigaddset(&set, SIGINT);
 	sigaddset(&set, SIGTERM);
 	sigaddset(&set, SIGUSR1);
@@ -1179,7 +1181,6 @@ main(int argc, char **argv)
 			D_ERROR("failed to wait for signals: %d\n", rc);
 			break;
 		}
-
 		/* open specific file to dump ABT infos and ULTs stacks */
 		if (sig == SIGUSR1 || sig == SIGUSR2) {
 			struct timeval tv;
@@ -1261,12 +1262,18 @@ main(int argc, char **argv)
 			continue;
 		}
 
-		/* SIGINT/SIGTERM cause server shutdown */
+		/* Log error for SIGBUS occurrence */
+		if (sig == SIGBUS) {
+			D_ERROR("SIGBUS signal received; proceeding to shutdown.\n");
+			exit_failure = true;
+		}
+
+		/* SIGINT/SIGTERM/SIGBUS cause server shutdown */
 		break;
 	}
 
 	/** shutdown */
 	server_fini(true);
 
-	exit(EXIT_SUCCESS);
+	exit(exit_failure ? EXIT_FAILURE : EXIT_SUCCESS);
 }

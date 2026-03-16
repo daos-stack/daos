@@ -34,7 +34,7 @@ class DMGCheckPolicyTest(TestWithServers):
         Jira ID: DAOS-17706
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckPolicyTest,test_check_policies
         """

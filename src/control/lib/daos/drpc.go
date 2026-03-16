@@ -123,6 +123,8 @@ func (m MgmtMethod) String() string {
 		MethodCheckerSetPolicy:     "CheckerSetPolicy",
 		MethodPoolRebuildStart:     "PoolRebuildStart",
 		MethodPoolRebuildStop:      "PoolRebuildStop",
+		MethodGroupStatusGet:       "GroupStatusGet",
+		MethodPoolSelfHealEval:     "PoolSelfHealEval",
 	}[m]; ok {
 		return s
 	}
@@ -217,6 +219,10 @@ const (
 	MethodPoolRebuildStart MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_START
 	// MethodPoolRebuildStop defines a method stop an interactive pool rebuild
 	MethodPoolRebuildStop MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REBUILD_STOP
+	// MethodGroupStatusGet defines a method for retrieving the group status of a system
+	MethodGroupStatusGet MgmtMethod = C.DRPC_METHOD_MGMT_GROUP_STATUS_GET
+	// MethodPoolSelfHealEval defines a method for evaluating self_heal property on a pool
+	MethodPoolSelfHealEval MgmtMethod = C.DRPC_METHOD_MGMT_POOL_SELF_HEAL_EVAL
 )
 
 type SrvMethod int32
@@ -231,11 +237,16 @@ func (m SrvMethod) ID() int32 {
 
 func (m SrvMethod) String() string {
 	if s, ok := map[SrvMethod]string{
-		MethodNotifyReady:         "notify ready",
-		MethodClusterEvent:        "cluster event",
-		MethodGetPoolServiceRanks: "get pool service ranks",
-		MethodPoolFindByLabel:     "find pool by label",
-		MethodListPools:           "list pools",
+		MethodNotifyReady:           "notify ready",
+		MethodGetPoolServiceRanks:   "get pool service ranks",
+		MethodPoolFindByLabel:       "find pool by label",
+		MethodClusterEvent:          "cluster event",
+		MethodCheckerListPools:      "checker list pools",
+		MethodCheckerRegisterPool:   "checker register pool",
+		MethodCheckerDeregisterPool: "checker deregister pool",
+		MethodCheckerReport:         "checker report",
+		MethodListPools:             "list pools",
+		MethodGetSysProps:           "get system properties",
 	}[m]; ok {
 		return s
 	}
@@ -262,6 +273,8 @@ const (
 	MethodCheckerReport SrvMethod = C.DRPC_METHOD_CHK_REPORT
 	// MethodListPools requests the list of pools in the system
 	MethodListPools SrvMethod = C.DRPC_METHOD_SRV_LIST_POOLS
+	// MethodGetSysProps requests system properties from the MS
+	MethodGetSysProps SrvMethod = C.DRPC_METHOD_SRV_GET_SYS_PROPS
 )
 
 type securityMethod int32

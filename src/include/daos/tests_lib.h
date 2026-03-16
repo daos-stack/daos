@@ -176,19 +176,20 @@ enum test_cr_class {
 };
 
 enum test_cr_action {
-	TCA_DEFAULT		= 0,
-	TCA_INTERACT		= 1,
-	TCA_IGNORE		= 2,
-	TCA_DISCARD		= 3,
-	TCA_READD		= 4,
-	TCA_TRUST_MS		= 5,
-	TCA_TRUST_PS		= 6,
-	TCA_TRUST_TARGET	= 7,
-	TCA_TRUST_MAJORITY	= 8,
-	TCA_TRUST_LATEST	= 9,
-	TCA_TRUST_OLDEST	= 10,
-	TCA_TRUST_EC_PARITY	= 11,
-	TCA_TRUST_EC_DATA	= 12,
+	TCA_STALE           = 0xffff,
+	TCA_DEFAULT         = 0,
+	TCA_INTERACT        = 1,
+	TCA_IGNORE          = 2,
+	TCA_DISCARD         = 3,
+	TCA_READD           = 4,
+	TCA_TRUST_MS        = 5,
+	TCA_TRUST_PS        = 6,
+	TCA_TRUST_TARGET    = 7,
+	TCA_TRUST_MAJORITY  = 8,
+	TCA_TRUST_LATEST    = 9,
+	TCA_TRUST_OLDEST    = 10,
+	TCA_TRUST_EC_PARITY = 11,
+	TCA_TRUST_EC_DATA   = 12,
 };
 
 struct daos_check_pool_info {
@@ -483,6 +484,25 @@ dmg_pool_set_prop(const char *dmg_config_file,
  */
 int dmg_pool_get_prop(const char *dmg_config_file, const char *label, const uuid_t uuid,
 		      const char *name, char **value);
+
+/**
+ * Interactively stop a pool's currently-running rebuild.
+ * \param dmg_config_file [IN] DMG config file.
+ * \param uuid            [IN] UUID of the pool.
+ * \param grp             [IN] Process set name of the DAOS servers managing the pool.
+ * \param force           [IN] forcibly stop a rebuild that is failing.
+ */
+int
+dmg_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char *grp, bool force);
+
+/**
+ * Interactively start/resume a pool's rebuilding.
+ * \param dmg_config_file [IN] DMG config file.
+ * \param uuid            [IN] UUID of the pool.
+ * \param grp             [IN] Process set name of the DAOS servers managing the pool.
+ */
+int
+    dmg_pool_rebuild_start(const char *dmg_config_file, const uuid_t uuid, const char *grp);
 
 /**
  * List all disks in the specified DAOS system.

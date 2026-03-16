@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -779,7 +779,8 @@ func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
 				FabricContexts:   newMember.PrimaryFabricContexts,
 				FaultDomain:      newMember.FaultDomain,
 			},
-			expErr: FaultJoinReplaceRankNotFound(4), // Takes nr not matching fields
+			// Fault constructor takes the number of non-matching fields.
+			expErr: FaultJoinReplaceRankNotFound(4),
 		},
 		"partially matching member": {
 			req: &JoinRequest{
@@ -790,7 +791,9 @@ func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
 				FabricContexts:   curMember.PrimaryFabricContexts,
 				FaultDomain:      curMember.FaultDomain,
 			},
-			expErr: FaultJoinReplaceRankNotFound(1), // Diff resolution when nr == 1
+			// A different fault resolution is printed when the number of non-matching
+			// fields is only one.
+			expErr: FaultJoinReplaceRankNotFound(1),
 		},
 		"matching member; identical UUID": {
 			req: &JoinRequest{
@@ -815,6 +818,20 @@ func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
 			expErr: FaultJoinReplaceRankNotFound(1),
 		},
 		"success; matching member": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             newUUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expRank: curMember.Rank,
+		},
+		"admin excluded existing member": {
+			curMembers: []*Member{
+				MockMember(t, 1, MemberStateAdminExcluded).WithFaultDomain(fd1),
+			},
 			req: &JoinRequest{
 				Rank:             NilRank,
 				UUID:             newUUID,
@@ -1215,17 +1232,17 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 func TestSystem_Membership_MarkDead(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rank        Rank
-		incarnation uint64
-		expErr      error
+		rank           Rank
+		incarnation    uint64
+		expErr         error
+		expNeedsGrpUpd bool
 	}{
 		"unknown member": {
 			rank:   42,
 			expErr: ErrMemberRankNotFound(42),
 		},
-		"invalid transition ignored": {
-			rank:   2,
-			expErr: errors.New("illegal member state update"),
+		"invalid transition ignored; no error and no update requested": {
+			rank: 2,
 		},
 		"stale event for joined member": {
 			rank:        0,
@@ -1233,13 +1250,16 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			expErr:      errors.New("incarnation"),
 		},
 		"new event for joined member": {
-			rank:        0,
-			incarnation: 2,
+			rank:           0,
+			incarnation:    2,
+			expNeedsGrpUpd: true,
 		},
 		"event for stopped member": {
-			rank:        1,
-			incarnation: 2,
+			rank:           1,
+			incarnation:    2,
+			expNeedsGrpUpd: true,
 		},
+		// TODO: zero incarnation
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1257,8 +1277,9 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 				mock(2, 2, MemberStateExcluded),
 			)
 
-			gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
+			needsGrpUpd, gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
 			CmpErr(t, tc.expErr, gotErr)
+			test.AssertEqual(t, tc.expNeedsGrpUpd, needsGrpUpd, "unexpected flag")
 		})
 	}
 }

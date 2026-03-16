@@ -1,6 +1,10 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
-# WORK IN PROGRESS
+#
+#  (C) Copyright 2025 Google LLC
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
@@ -30,6 +34,8 @@ data protection with self healing on top of commodity hardware, end-
 to-end data integrity, fine grained data control and elastic storage
 to optimize performance and cost."
 URL="https://daos.io"
+
+RPM_CHANGELOG="daos.changelog"
 
 # Some extra "install" steps
 # daos package
@@ -62,7 +68,8 @@ install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 
 EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
-DEPENDS=( "mercury >= ${mercury_full}" "${libfabric_lib} >= ${libfabric_full}" )
+DEPENDS=( "mercury >= ${mercury_version}" )
+DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
 build_package "daos"
 
 # Only build server RPMs if we built the server
@@ -177,7 +184,8 @@ EOF
   EXTRA_OPTS+=("--rpm-attr" "2755,root,daos_server:${bindir}/daos_server")
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${daos_spdk_full}" )
-  DEPENDS+=( "${pmemobj_lib} >= ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
+  DEPENDS+=( "${pmemobj_lib} = ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
+  DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" "numactl" "pciutils" )
   build_package "daos-server"
 
   TARGET_PATH="${bindir}"

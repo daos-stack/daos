@@ -1,5 +1,6 @@
 /*
  *  (C) Copyright 2016-2023 Intel Corporation.
+ *  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,4 +95,37 @@ out:
 		pl_obj_layout_free(old_layout);
 
 	return rc;
+}
+
+void
+obj_dump_grp_layout(daos_handle_t oh, uint32_t shard)
+{
+	struct dc_object    *obj;
+	struct dc_obj_shard *obj_shard;
+	uint32_t             grp_idx, i, nr;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL) {
+		D_INFO("invalid oh");
+		return;
+	}
+	if (shard >= obj->cob_shards_nr) {
+		D_ERROR("bad shard %d, cob_shards_nr %d", shard, obj->cob_shards_nr);
+		goto out;
+	}
+
+	grp_idx = shard / obj->cob_grp_size;
+	D_INFO(DF_OID " shard %d, grp_idx %d, grp_size %d", DP_OID(obj->cob_md.omd_id), shard,
+	       grp_idx, obj->cob_grp_size);
+	for (i = grp_idx * obj->cob_grp_size, nr = 0; nr < obj->cob_grp_size; i++, nr++) {
+		obj_shard = &obj->cob_shards->do_shards[i];
+		D_INFO("shard %d/%d/%d, tgt_id %d, rank %d, tgt_idx %d, "
+		       "rebuilding %d, reintegrating %d, fseq %d",
+		       i, obj_shard->do_shard_idx, obj_shard->do_shard, obj_shard->do_target_id,
+		       obj_shard->do_target_rank, obj_shard->do_target_idx,
+		       obj_shard->do_rebuilding, obj_shard->do_reintegrating, obj_shard->do_fseq);
+	}
+
+out:
+	obj_decref(obj);
 }

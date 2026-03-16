@@ -1233,8 +1233,8 @@ huge_reinit_chunk(const struct memory_block *m)
 {
 	struct chunk_header *hdr = heap_get_chunk_hdr(m->heap, m);
 
-	if (hdr->type == CHUNK_TYPE_USED)
-		huge_write_footer(hdr, hdr->size_idx);
+	D_ASSERT((hdr->type == CHUNK_TYPE_USED) || (hdr->type == CHUNK_TYPE_FREE));
+	huge_write_footer(hdr, hdr->size_idx);
 }
 
 /*
