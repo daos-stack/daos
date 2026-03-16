@@ -43,9 +43,7 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("(mercury-libfabric or mercury-ucx)")
 build_package "mercury"
-DEPENDS=()
 
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ofi.so"

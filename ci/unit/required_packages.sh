@@ -7,17 +7,16 @@
 #
 set -eu
 
-# Provided by pipeline-lib
+# No longer used but provided by pipeline-lib
 # distro="$1"
 # quick_build="${2:-false}"
 
 OPENMPI_VER=""
 PY_MINOR_VER=""
 
-DISTRO="${1:?ERROR: Missing distro argument. Usage: $0 <distro>}"
-export DISTRO="${DISTRO%%.*}"
-
-pkgs="boost-python3$PY_MINOR_VER-devel                               \
+export DISTRO="el8" # should also work for el9
+pkgs="$(utils/rpms/package_version.sh argobots lib)                  \
+      boost-python3$PY_MINOR_VER-devel                               \
       capstone                                                       \
       $(utils/rpms/package_version.sh argobots lib)                  \
       $(utils/rpms/package_version.sh argobots debug)                \

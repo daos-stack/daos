@@ -9,6 +9,8 @@ import os
 
 from apricot import TestWithServers
 from ddb_utils import DdbCommand
+from exception_utils import CommandFailure
+from file_utils import distribute_files
 from general_utils import (DaosTestError, create_string_buffer, get_random_string, report_errors,
                            run_command)
 from pydaos.raw import DaosObjClass, IORequest
@@ -114,6 +116,92 @@ class DdbPMEMTest(TestWithServers):
         self.random_dkey = get_random_string(10)
         self.random_akey = get_random_string(10)
         self.random_data = get_random_string(10)
+
+    def test_recovery_ddb_load(self):
+        """Test ddb value_load.
+
+        1. Create a pool and a container.
+        2. Insert one object with one dkey with the API.
+        3. Stop the server to use ddb.
+        4. Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
+        5. Load new data into [0]/[0]/[0]/[0]
+        6. Restart the server.
+        7. Reset the object, container, and pool to use the API.
+        8. Verify the data in the akey with single_fetch().
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=recovery
+        :avocado: tags=DdbPMEMTest,ddb_cmd,test_recovery_ddb_load
+        """
+        self.log_step("Create a pool and a container.")
+        pool = self.get_pool(connect=True)
+        container = self.get_container(pool)
+
+        self.log_step("Insert one object with one dkey with API.")
+        obj_dataset = insert_objects(
+            context=self.context, container=container, object_count=1, dkey_count=1, akey_count=1,
+            base_dkey=self.random_dkey, base_akey=self.random_akey, base_data=self.random_data)
+        ioreqs = obj_dataset[0]
+        dkeys_inserted = obj_dataset[1]
+        akeys_inserted = obj_dataset[2]
+        data_list = obj_dataset[3]
+
+        # For debugging/reference, call single_fetch and get the data just inserted.
+        # Pass in size + 1 to single_fetch to avoid the no-space error.
+        data_size = len(data_list[0]) + 1
+        data = ioreqs[0].single_fetch(
+            dkey=dkeys_inserted[0], akey=akeys_inserted[0], size=data_size)
+        self.log.info("data (before) = %s", data.value.decode('utf-8'))
+
+        self.log_step("Stop the server to use ddb.")
+        dmg_command = self.get_dmg_command()
+        dmg_command.system_stop()
+
+        self.log_step("Find the vos file name.")
+        host = self.server_managers[0].hosts[0:1]
+        vos_paths = self.server_managers[0].get_vos_files(pool)
+        if not vos_paths:
+            self.fail("vos file wasn't found!")
+        ddb_command = DdbCommand(host, self.bin, vos_paths[0])
+
+        self.log_step("Load new data into [0]/[0]/[0]/[0]; Create a file in test node.")
+        load_file_path = os.path.join(self.test_dir, "new_data.txt")
+        new_data = get_random_string(20)
+        with open(load_file_path, "w", encoding="utf-8") as file:
+            file.write(new_data)
+
+        self.log_step("Copy the created file to server node.")
+        result = distribute_files(self.log, host, load_file_path, load_file_path, False)
+        if not result.passed:
+            raise CommandFailure(f"ERROR: Copying new_data.txt to {result.failed_hosts}")
+
+        self.log_step("The file with the new data is ready. Run ddb load.")
+        ddb_command.value_load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
+
+        self.log_step("Restart the server.")
+        dmg_command.system_start()
+
+        self.log_step("Reset the object, container, and pool to use the API after server restart.")
+        ioreqs[0].obj.close()
+        container.close()
+        pool.disconnect()
+        pool.connect()
+        container.open()
+        ioreqs[0].obj.open()
+
+        self.log_step("Verify the data in the akey with single_fetch().")
+        data_size = len(new_data) + 1
+        data = ioreqs[0].single_fetch(
+            dkey=dkeys_inserted[0], akey=akeys_inserted[0], size=data_size)
+        actual_data = data.value.decode('utf-8')
+        self.log.info("data (after) = %s", actual_data)
+        errors = []
+        if new_data != actual_data:
+            msg = f"ddb load failed! Expected = {new_data}; Actual = {actual_data}"
+            errors.append(msg)
+
+        report_errors(test=self, errors=errors)
 
     def test_recovery_ddb_dump_value(self):
         """Test ddb dump_value.

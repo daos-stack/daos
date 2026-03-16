@@ -100,9 +100,7 @@ retry_dnf() {
                 if command -v dnf4; then
                     dnfx="dnf4"
                 fi
-                if "$dnfx" repolist | grep -q '^epel'; then
-                    "$dnfx" config-manager --disable 'epel*'
-                fi
+                "$dnfx" config-manager --disable 'epel*' || true
             fi
             return 0
         fi
