@@ -283,6 +283,7 @@ rebuild_objects_send_ult(void *data)
 	daos_epoch_t			*punched_ephs = NULL;
 	unsigned int			*shards = NULL;
 	int				rc = 0;
+	uint64_t                         rebuild_send_wait_start;
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
@@ -312,7 +313,7 @@ rebuild_objects_send_ult(void *data)
 	arg.rpt = rpt;
 	arg.tls          = tls;
 
-	tls->rebuild_send_wait_start = daos_gettime_coarse();
+	rebuild_send_wait_start = daos_gettime_coarse();
 
 	/*
 	 * Batch OIDs before sending migrate RPCs to avoid RPC fragmentation.
@@ -341,12 +342,12 @@ rebuild_objects_send_ult(void *data)
 
 		if (tree_empty) {
 			/* Reset wait clock and yield to let scan make progress. */
-			tls->rebuild_send_wait_start = now;
+			rebuild_send_wait_start = now;
 			dss_sleep(10);
 			continue;
 		}
 
-		elapsed = now - tls->rebuild_send_wait_start;
+		elapsed = now - rebuild_send_wait_start;
 		if (!scan_done && tls->rebuild_pool_obj_send_pending < REBUILD_SEND_BATCH_MIN &&
 		    elapsed < REBUILD_SEND_BATCH_TIMEOUT_SEC) {
 			dss_sleep(10);
@@ -367,7 +368,7 @@ rebuild_objects_send_ult(void *data)
 			break;
 		}
 
-		tls->rebuild_send_wait_start = now;
+		rebuild_send_wait_start = now;
 		dss_sleep(0);
 	}
 
