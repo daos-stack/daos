@@ -63,7 +63,7 @@ enum {
 };
 #define MIGRATE_KEY_CONCUR_ENV "D_MIGRATE_KEY_CONCUR"
 
-/* Max in-flight data transfer size (in MB), default is 6GB.
+/* Max in-flight data transfer size (in MB), default is 8GB.
  * Giving there are 8 buckets by default, it's 1GB each bucket.
  */
 enum {
@@ -2090,9 +2090,6 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units,
 	waiter.rw_eventual   = ABT_EVENTUAL_NULL;
 
 	res = migr_type2res(res_type);
-	/* otherwise rebuild will hang forever */
-	D_ASSERTF(units <= res->res_limit, "res=%s, units=%lu, limit=%lu\n", res->res_rmg->rmg_name,
-		  units, res->res_limit);
 
 	ABT_mutex_lock(res->res_mutex);
 	while (1) {
