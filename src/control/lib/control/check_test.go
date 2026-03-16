@@ -11,12 +11,16 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestControl_SystemCheckReport_RepairChoices(t *testing.T) {
@@ -215,5 +219,115 @@ func TestControl_SystemCheckQuery_ReportsSorted(t *testing.T) {
 
 	if diff := cmp.Diff(expReports, resp.Reports, protocmp.Transform()); diff != "" {
 		t.Fatalf("reports not sorted (-want +got):\n%s", diff)
+	}
+}
+
+func TestControl_SystemCheckReportRegister(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *SystemCheckEngineReportReq
+		expErr  error
+		expResp *SystemCheckEngineReportResp
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"nil report": {
+			req:    &SystemCheckEngineReportReq{},
+			expErr: errors.New("no check report"),
+		},
+		"gRPC fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expErr: errors.New("MockInvoker error"),
+		},
+		"MS error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Error: errors.New("MockInvoker response error"),
+						},
+					},
+				},
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expErr: errors.New("MockInvoker response error"),
+		},
+		"daos error code": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{{
+						Message: &sharedpb.CheckReportResp{
+							Status: daos.MiscError.Int32(),
+						},
+					}},
+				},
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expResp: &SystemCheckEngineReportResp{
+				CheckReportResp: sharedpb.CheckReportResp{
+					Status: daos.MiscError.Int32(),
+				},
+			},
+		},
+		"bad MS response type": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Message: &mgmtpb.CheckStartReq{
+								Sys: "something",
+							},
+						},
+					},
+				},
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expErr: errors.New("unexpected response"),
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{{
+						Message: &sharedpb.CheckReportResp{},
+					}},
+				},
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expResp: &SystemCheckEngineReportResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			invoker := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+			resp, err := SystemCheckEngineReport(ctx, invoker, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "response", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckReportResp{}))
+		})
 	}
 }

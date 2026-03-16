@@ -8,6 +8,7 @@ DAOS_ROOT ?= $(shell git rev-parse --show-toplevel)
 C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 engine/srv.pb-c.h\
 		 engine/event.pb-c.h\
+		 engine/check_engine.pb-c.h\
 		 mgmt/acl.pb-c.h\
 		 mgmt/cont.pb-c.h\
 		 mgmt/pool.pb-c.h\
@@ -24,6 +25,7 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 C_SOURCE_FILES = common/drpc.pb-c.c\
 		 engine/srv.pb-c.c\
 		 engine/event.pb-c.c\
+		 engine/check_engine.pb-c.c\
 		 mgmt/acl.pb-c.c\
 		 mgmt/cont.pb-c.c\
 		 mgmt/pool.pb-c.c\
@@ -39,6 +41,7 @@ C_SOURCE_FILES = common/drpc.pb-c.c\
 		 tests/drpc/drpc_test.pb-c.c
 GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/shared/event.pb.go\
+		   common/proto/shared/check_engine.pb.go\
 		   common/proto/mgmt/acl.pb.go\
 		   common/proto/mgmt/cont.pb.go\
 		   common/proto/mgmt/check.pb.go\
@@ -162,6 +165,12 @@ $(DAOS_ROOT)/src/engine/event.pb-c.h: $(PROTO_SOURCE_DIR)/shared/event.proto
 
 $(DAOS_ROOT)/src/engine/event.pb-c.c: $(PROTO_SOURCE_DIR)/shared/event.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/engine/check_engine.pb-c.h: $(PROTO_SOURCE_DIR)/shared/check_engine.proto
+	protoc -I $(dir $<) -I $(PROTO_SOURCE_DIR) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/engine/check_engine.pb-c.c: $(PROTO_SOURCE_DIR)/shared/check_engine.proto
+	protoc -I $(dir $<) -I $(PROTO_SOURCE_DIR) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/engine/%.pb-c.h: $(PROTO_SOURCE_DIR)/srv/%.proto
 	protoc -I $(dir $<) -I $(PROTO_SOURCE_DIR) --c_out=$(dir $@) $(notdir $<)

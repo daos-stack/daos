@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -112,6 +112,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemCheckSetPolicy":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckGetPolicy":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckRepair":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckEngineReport":  {ComponentServer},
 		"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
