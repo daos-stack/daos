@@ -30,6 +30,18 @@ typedef enum {
 	RB_OP_NONE	= 0xffff,
 } daos_rebuild_opc_t;
 
+/**
+ * Bitmask values representing the pool operation(s) that caused a rebuild to
+ * be triggered.  Multiple causes can be OR-ed together when tasks are merged.
+ */
+#define RB_CAUSE_EXCLUDE    (1U << 0)
+#define RB_CAUSE_DRAIN      (1U << 1)
+#define RB_CAUSE_REINT      (1U << 2)
+#define RB_CAUSE_EXTEND     (1U << 3)
+
+/** Only an exclude-triggered rebuild does NOT require a follow-up RECLAIM. */
+#define RB_CAUSE_NO_RECLAIM (RB_CAUSE_EXCLUDE)
+
 #define RB_OP_STR(rb_op) ((rb_op) == RB_OP_REBUILD ? "Rebuild" : \
 			  (rb_op) == RB_OP_RECLAIM ? "Reclaim" : \
 			  (rb_op) == RB_OP_FAIL_RECLAIM ? "Reclaim fail" : \
@@ -87,8 +99,9 @@ typedef enum {
 int
      ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t stable_eph,
 			 uint32_t layout_version, struct pool_target_id_list *tgts,
-			 daos_rebuild_opc_t rebuild_op, daos_rebuild_opc_t retry_rebuild_op,
-			 uint32_t retry_map_ver, bool stop_admin, void *cur_taskp, uint64_t delay_sec);
+			 daos_rebuild_opc_t rebuild_op, uint32_t rebuild_cause,
+			 daos_rebuild_opc_t retry_rebuild_op, uint32_t retry_map_ver, bool stop_admin,
+			 void *cur_taskp, uint64_t delay_sec);
 void ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank);
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);

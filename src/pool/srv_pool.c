@@ -6484,6 +6484,7 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 	if (current_layout_ver < DAOS_POOL_OBJ_VERSION) {
 		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
 					 DAOS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE,
+					 0 /* cause: N/A for upgrade */,
 					 RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
 					 false /* stop_admin */, NULL /* cur_taskp */, 0);
 		if (rc == 0)
@@ -7900,10 +7901,28 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		tgt_map_ver);
 
 	if (tgt_map_ver != 0) {
+		uint32_t rebuild_cause;
+
+		/*
+		 * Translate the pool-map operation code into the rebuild-cause
+		 * bitmask so that the rebuild machinery can decide (among other
+		 * things) whether a follow-up RECLAIM is necessary.
+		 */
+		if (opc == MAP_EXCLUDE)
+			rebuild_cause = RB_CAUSE_EXCLUDE;
+		else if (opc == MAP_DRAIN)
+			rebuild_cause = RB_CAUSE_DRAIN;
+		else if (opc == MAP_REINT || opc == MAP_ADD_IN)
+			rebuild_cause = RB_CAUSE_REINT;
+		else if (opc == MAP_EXTEND)
+			rebuild_cause = RB_CAUSE_EXTEND;
+		else
+			rebuild_cause = 0; /* unknown – be conservative */
+
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph, 0, &target_list,
-					 RB_OP_REBUILD, RB_OP_NONE /* retry_rebuild_op */,
-					 0 /* retry_map_ver */, false /* stop_admin */,
-					 NULL /* cur_taskp */, delay);
+					 RB_OP_REBUILD, rebuild_cause,
+					 RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
+					 false /* stop_admin */, NULL /* cur_taskp */, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -238,6 +238,14 @@ struct rebuild_task {
 	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
 	daos_rebuild_opc_t		dst_rebuild_op;
+
+	/**
+	 * Bitmask of RB_CAUSE_* flags describing what pool operation(s) caused
+	 * this rebuild task to be scheduled.  When tasks are merged the causes
+	 * are OR-ed together.  A value of 0 means "unknown" and is treated
+	 * conservatively (RECLAIM will be scheduled).
+	 */
+	uint32_t                        dst_rebuild_cause;
 
 	/* Epoch to use for reclaim job for discarding the data
 	 * of half-rebuild/reintegrated job.
