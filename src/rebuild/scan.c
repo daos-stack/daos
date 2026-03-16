@@ -33,7 +33,7 @@
 /* Minimum pending objects before the send ULT flushes a batch (25% of max). */
 #define REBUILD_SEND_BATCH_MIN         (REBUILD_SEND_LIMIT / 4)
 /* Maximum seconds to wait for a batch to fill before flushing anyway. */
-#define REBUILD_SEND_BATCH_TIMEOUT_SEC 2
+#define REBUILD_SEND_BATCH_TIMEOUT_SEC 1
 
 struct rebuild_send_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
@@ -319,7 +319,7 @@ rebuild_objects_send_ult(void *data)
 	 * The scan ULT yields every ~SCAN_YIELD_CNT placement-cost units
 	 * (1 per OID for small objects, up to more than 128 per OID for EC_16P3GX
 	 * depends on cluster size), so without batching the send ULT would flush
-	 * only ~128 OIDs per RPC instead of the REBUILD_SEND_LIMIT maximum.
+	 * at most 64 OIDs per RPC instead of the REBUILD_SEND_LIMIT maximum.
 	 * Hold the flush until REBUILD_SEND_BATCH_MIN OIDs are pending or
 	 * REBUILD_SEND_BATCH_TIMEOUT_SEC seconds have elapsed; flush immediately
 	 * when the scan is done.
@@ -337,17 +337,16 @@ rebuild_objects_send_ult(void *data)
 
 		tree_empty = dbtree_is_empty(tls->rebuild_tree_hdl);
 		scan_done  = tls->rebuild_pool_scan_done;
+		now        = daos_gettime_coarse();
 
 		if (tree_empty) {
 			/* Reset wait clock and yield to let scan make progress. */
-			tls->rebuild_send_wait_start = daos_gettime_coarse();
-			dss_sleep(0);
+			tls->rebuild_send_wait_start = now;
+			dss_sleep(10);
 			continue;
 		}
 
-		now     = daos_gettime_coarse();
 		elapsed = now - tls->rebuild_send_wait_start;
-
 		if (!scan_done && tls->rebuild_pool_obj_send_pending < REBUILD_SEND_BATCH_MIN &&
 		    elapsed < REBUILD_SEND_BATCH_TIMEOUT_SEC) {
 			dss_sleep(10);
@@ -832,6 +831,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		rc = rebuild_object(rpt, arg->co_uuid, oid, tgts[i], shards[i], myrank, ent);
 		if (rc)
 			D_GOTO(out, rc);
+
+		arg->yield_cnt--;
 	}
 
 out:
