@@ -7,6 +7,11 @@
 
 package common
 
+/*
+#include "daos_srv/control.h"
+*/
+import "C"
+
 import (
 	"fmt"
 	"io"
@@ -24,8 +29,8 @@ const (
 	// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
 	// log message context refers to caller not callee.
 	UtilLogDepth    = 4
-	DefaultFilePerm = 0660
-	DefaultDirPerm  = 0770
+	DefaultFilePerm = C.DEFAULT_FILE_PERM
+	DefaultDirPerm  = C.DEFAULT_DIR_PERM
 )
 
 // GetFilenames returns names of files in a directory.

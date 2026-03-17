@@ -106,7 +106,6 @@ db_unlink(struct sys_db *db)
 static int
 db_open_create(struct sys_db *db, bool try_create)
 {
-	const mode_t       db_dir_mode = S_IRWXU | S_IRWXG;
 	struct vos_sys_db *vdb = db2vos(db);
 	d_iov_t		   key;
 	d_iov_t		   val;
@@ -114,7 +113,7 @@ db_open_create(struct sys_db *db, bool try_create)
 	int		   rc;
 
 	if (try_create) {
-		rc = mkdir(vdb->db_path, db_dir_mode);
+		rc = mkdir(vdb->db_path, DEFAULT_DIR_PERM);
 		if (rc < 0 && errno != EEXIST) {
 			rc = daos_errno2der(errno);
 			goto failed;
@@ -133,7 +132,7 @@ db_open_create(struct sys_db *db, bool try_create)
 	 * The requested permissions may have been reduced by the umask.
 	 * Using chmod ensures the requested permissions are applied.
 	 */
-	rc = chmod(vdb->db_path, db_dir_mode);
+	rc = chmod(vdb->db_path, DEFAULT_DIR_PERM);
 	if (rc == -1) {
 		rc = daos_errno2der(errno);
 		D_CRIT("failed to set directory permissions for %s: " DF_RC "\n", vdb->db_path,

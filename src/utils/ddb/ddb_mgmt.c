@@ -229,11 +229,11 @@ ddb_dirs_prepare(const char *path)
 	if (unlikely(rc >= sizeof(zombies_path)))
 		return -DER_EXCEEDS_PATH_LEN;
 
-	rc = ddb_mkdir(newborns_path, S_IRWXU | S_IRWXG);
+	rc = ddb_mkdir(newborns_path, DEFAULT_DIR_PERM);
 	if (rc)
 		return rc;
 
-	rc = ddb_mkdir(zombies_path, S_IRWXU | S_IRWXG);
+	rc = ddb_mkdir(zombies_path, DEFAULT_DIR_PERM);
 	if (rc)
 		return rc;
 
