@@ -12,8 +12,6 @@
 
 #define D_LOGFAC	DD_FAC(mgmt)
 
-#include <sys/stat.h>
-
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
 
@@ -172,7 +170,6 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 		    size_t nvme_size, size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp,
 		    int domains_nr, uint32_t *domains)
 {
-	mode_t         stored_mask = umask(0);
 	d_rank_list_t *pg_ranks   = NULL;
 	d_rank_list_t *pg_targets = NULL;
 	d_rank_list_t *dummy      = NULL;
@@ -270,7 +267,6 @@ out:
 	d_rank_list_free(pg_targets);
 	d_rank_list_free(pg_ranks);
 	d_rank_list_free(dummy);
-	(void)umask(stored_mask);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
 	return rc;

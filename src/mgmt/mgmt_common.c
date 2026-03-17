@@ -12,7 +12,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 
 #include <daos_errno.h>
 #include <daos_types.h>
@@ -90,7 +89,6 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tg
 	char       *pool_path          = NULL;
 	char       *rdb_path           = NULL;
 	bool        dummy_cancel_state = false;
-	mode_t      stored_mask        = umask(0);
 	int         rc;
 	int         fd;
 	struct stat statbuf;
@@ -102,7 +100,6 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tg
 	if (rc) {
 		D_ERROR("pool's path generation failed for " DF_UUID ": " DF_RC "\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		(void)umask(stored_mask);
 		return rc;
 	}
 
@@ -184,8 +181,6 @@ out:
 	D_FREE(newborns_path);
 	D_FREE(pool_newborns_path);
 	D_FREE(pool_path);
-
-	(void)umask(stored_mask);
 
 	return rc;
 }
