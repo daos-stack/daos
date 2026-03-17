@@ -893,6 +893,12 @@ enum {
 static bool
 rebuild_is_stoppable(struct rebuild_global_pool_tracker *rgt, bool force, int *rcp)
 {
+	/* NAK if nothing is rebuilding */
+	if (rgt == NULL) {
+		*rcp = -DER_NONEXIST;
+		return false;
+	}
+
 	/* NAK if another rebuild is queued for the same pool (it would run after this one stopped)
 	 */
 	if (!d_list_empty(&rebuild_gst.rg_queue_list)) {
@@ -956,18 +962,19 @@ ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 
 	/* admin stop command only for specific cases (and force option for failing op:Fail_reclaim)
 	 */
-	if (rgt == NULL) {
-		D_INFO(DF_UUID ": nothing found to stop\n", DP_UUID(pool->sp_uuid));
-		return -DER_NONEXIST;
-	}
 	if (rebuild_is_stoppable(rgt, force, &rc)) {
 		D_INFO(DF_RB ": stopping rebuild force=%u opc %u(%s)\n", DP_RB_RGT(rgt), force,
 		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
 		rgt->rgt_abort           = 1;
 		rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 	} else {
-		D_INFO(DF_RB ": NOT stopping rebuild force=%u opc %u(%s), rc=%d\n", DP_RB_RGT(rgt),
-		       force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
+		if (rgt) {
+			D_INFO(DF_RB ": NOT stopping rebuild force=%u opc %u(%s), rc=%d\n",
+			       DP_RB_RGT(rgt), force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
+		} else {
+			DL_INFO(rc, DF_UUID ": nothing found to stop", DP_UUID(pool->sp_uuid));
+			return rc;
+		}
 	}
 
 	/* admin stop command does not usually terminate op:Fail_reclaim, but it is always
@@ -2045,9 +2052,11 @@ rebuild_task_ult(void *arg)
 	int					rc;
 
 	cur_ts = daos_gettime_coarse();
-	/* rebuild_ults() prevents dequeuing the task until schedule time is reached. */
 	D_ASSERT(task->dst_schedule_time != (uint64_t)-1);
-	D_ASSERT(cur_ts >= task->dst_schedule_time);
+	if (cur_ts < task->dst_schedule_time) {
+		D_INFO("rebuild task sleep " DF_U64 " second\n", task->dst_schedule_time - cur_ts);
+		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
+	}
 
 	rc = ds_pool_lookup(task->dst_pool_uuid, &pool);
 	if (pool == NULL) {
@@ -2264,13 +2273,12 @@ rebuild_ults(void *arg)
 
 		task = d_list_entry(rebuild_gst.rg_queue_list.next, struct rebuild_task, dst_list);
 		while (&rebuild_gst.rg_queue_list != &task->dst_list) {
-			/* If a pool is currently handling a rebuild, wait for it to finish.
-			 * Skip this pool now if its rebuild task is scheduled for later
-			 * (allow for merging of other tasks into this one in ds_rebuild_schedule().
+			/* If a pool is already handling a rebuild operation,
+			 * wait to start the next operation until the current
+			 * one completes
 			 */
 			if (pool_is_rebuilding(task->dst_pool_uuid) ||
-			    task->dst_schedule_time == (uint64_t)-1 ||
-			    (daos_gettime_coarse() < task->dst_schedule_time)) {
+			    task->dst_schedule_time == (uint64_t)-1) {
 				struct rebuild_task *head_task = task;
 
 				/* jump to next pool */
