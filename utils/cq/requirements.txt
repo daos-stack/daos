@@ -6,7 +6,7 @@ flake8==7.3.0
 isort==8.0.1
 pylint==4.0.5
 yamllint==1.38.0
-codespell==2.4.1
+codespell==2.4.2
 # Used by ci/jira_query.py which pip installs it standalone.
 jira
 torch>=2.2.0

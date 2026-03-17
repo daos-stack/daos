@@ -1,4 +1,7 @@
 %changelog
+* Mon Mar 09 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.4.1-2
+- Require mercury-libfabric or mercury-ucx
+
 * Mon Jan 26 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.4.1-1
 - Update to 2.4.1
 - Separate libfabric plugin from main build to align with ucx plugin
