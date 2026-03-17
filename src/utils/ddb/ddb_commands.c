@@ -83,7 +83,7 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0);
+	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0, ctx->dc_write_mode);
 }
 
 int
@@ -306,7 +306,7 @@ print_value_cb(void *cb_args, d_iov_t *value)
 		return 0;
 	}
 
-	ddb_iov_to_printable_buf(value, buf, ARRAY_SIZE(buf));
+	ddb_iov_to_printable_buf(value, buf, ARRAY_SIZE(buf), NULL);
 	ddb_printf(ctx, "Value (size: %lu):\n", value->iov_len);
 	ddb_printf(ctx, "%s\n", buf);
 	return 0;
@@ -1101,7 +1101,8 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
 		opt->db_path = ctx->dc_db_path;
 
-	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
+	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
+			  ctx->dc_write_mode);
 	if (rc)
 		return rc;
 	close = true;
