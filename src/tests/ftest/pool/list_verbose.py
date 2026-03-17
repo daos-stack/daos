@@ -369,6 +369,8 @@ class ListVerboseTest(IorTestBase):
         # 7. Wait for rebuild to complete.
         self.log_step("Wait for rebuild to complete")
         self.pool[0].wait_for_rebuild_to_end()
+        rebuild_state[0] = "done"
+        rebuild_degraded[0] = False
 
         # 8-12. Destroy and verify until the pools are gone.
         while self.pool:
