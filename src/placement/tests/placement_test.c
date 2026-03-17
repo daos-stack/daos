@@ -1,9 +1,11 @@
 /**
  * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
  */
+#define D_LOGFAC DD_FAC(tests)
 
 #include <daos.h>
 #include "place_obj_common.h"
