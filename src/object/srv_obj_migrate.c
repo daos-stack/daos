@@ -4168,6 +4168,11 @@ migr_tls_trigger_watchdog(struct migrate_pool_tls *tls)
 	    now < migr_res_wd_since + MIGR_STALL_LOG_INTERVAL)
 		return false;
 
+	/* If no objects are currently being migrated, there is no need to bump it */
+	if (tls->mpt_tgt_obj_ult_cnt == 0 && tls->mpt_tgt_dkey_ult_cnt == 0 &&
+	    tls->mpt_inflight_size == 0)
+		return false;
+
 	/* time to trigger watchdog */
 	D_WARN(DF_RB " TLS res watchdog: tgt=%d no progress for %lu secs (obj/rec both frozen),"
 		     " obj_ults=%u key_ults=%u inflight_size=" DF_U64 " obj_count=" DF_U64
