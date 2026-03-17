@@ -2105,11 +2105,13 @@ migrate_res_hold(struct migrate_pool_tls *tls, int res_type, long units,
 			break;
 		}
 
-		if (waiter.rw_eventual == ABT_EVENTUAL_NULL) {
+		if (waiter.rw_eventual == ABT_EVENTUAL_NULL)
 			rc = ABT_eventual_create(sizeof(*waiter.rw_rc), &waiter.rw_eventual);
-			if (rc != ABT_SUCCESS)
-				D_GOTO(out, rc = dss_abterr2der(rc));
-		}
+		else
+			rc = ABT_eventual_reset(waiter.rw_eventual);
+
+		if (rc != ABT_SUCCESS)
+			D_GOTO(out, rc = dss_abterr2der(rc));
 
 		res->res_waiters++;
 		if (!waited) {
