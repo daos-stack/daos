@@ -2781,7 +2781,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	struct pool_target_addr_list	pta_list;
 	struct tgt_discard_arg		*arg = NULL;
 	struct ds_pool			*pool;
-	uint32_t                         discarding = 0;
+	int                              discarding = 0;
 	int				rc;
 
 	pta_list.pta_number = in->ptdi_addrs.ca_count;
