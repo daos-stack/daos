@@ -391,7 +391,15 @@ post_provision_config_nodes() {
                 branch="${branch%:*}"
             fi
         fi
-        add_inst_repo "${repo}" "${branch}" "${build_number}"
+        # add_inst_repo "${repo}" "${branch}" "${build_number}" source code:
+        local subdir=""
+        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/"${subdir:-}"$DISTRO_NAME/
+        dnf -y config-manager --add-repo="$repo_url"
+        repo="$(url_to_repo "$repo_url")"
+        # PR-repos: should always be able to upgrade modular packages
+        dnf -y config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
+        disable_gpg_check "$repo_url"
+        # add_inst_repo "${repo}" "${branch}" "${build_number}"
     done
 
     # start with everything fully up-to-date
