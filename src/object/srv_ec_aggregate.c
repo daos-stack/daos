@@ -1428,10 +1428,10 @@ agg_peer_update_ult(void *arg)
 
 		if (peer == pidx)
 			continue;
+retry:
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag  = entry->ae_peer_pshards[peer].sd_tgt_idx;
-retry:
 		peer_retry = false;
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
