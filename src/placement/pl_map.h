@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,8 +72,7 @@ struct failed_shard {
 	uint32_t        fs_tgt_id;
 	uint16_t	fs_rank;
 	uint8_t		fs_index;
-	uint8_t         fs_status;
-	uint32_t	fs_down2up:1;
+	uint8_t          fs_status;
 };
 
 #define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"
@@ -115,8 +115,8 @@ void
 reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
-remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint, void *data);
+remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx, struct pool_target *tgt,
+		bool rebuilding, void *data);
 
 int
 remap_insert_copy_one(d_list_t *remap_list, struct failed_shard *original);
@@ -141,10 +141,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		bool fill_addition);
 
 int
-determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		       bool spare_avail, d_list_t *remap_list, uint32_t allow_version,
-		       enum layout_gen_mode gen_mode, struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard, bool *is_extending);
+determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
+		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		       struct failed_shard *f_shard, struct pl_obj_shard *l_shard);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
