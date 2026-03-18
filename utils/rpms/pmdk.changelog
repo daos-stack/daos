@@ -1,4 +1,7 @@
 %changelog
+* Wed Mar 18 2026  Jan Michalski <jan-marian.michalski@hpe.com> - 2.1.3-2
+- Patch "The pool was not closed" message (no ADR failure) (daos-stack/pmdk#1, DAOS-18692)
+
 * Mon Jan 19 2026  Oksana Salyk <oksana.salyk@intel.com> - 2.1.3-1
 - Expand the sds.at_create CTL to disable unnecessary bad-block checking when running without PMem, preventing the stack overflow (DAOS-18296).
 - Fix an issue in the PMEMOBJ allocator with a potential to corrupt the allocator's metadata (DAOS-18195).
