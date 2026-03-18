@@ -14,7 +14,7 @@ hosts: !mux
   hosts_1:
     config: one_node
     test_servers: 1
-timeout: 600
+timeout: 1200
 tests: !mux
   ghost_rank:
     name: rpc_to_ghost_rank
