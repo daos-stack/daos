@@ -1,7 +1,6 @@
 #!/bin/bash
 set -eEuo pipefail
 build_type="${1:-all}"
-code_coverage="${2:-false}"
 source utils/sl/setup_local.sh
 if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/argobots.sh
@@ -12,10 +11,11 @@ if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/mercury.sh
   utils/rpms/pmdk.sh
   utils/rpms/daos-spdk.sh
-  if [[ "${code_coverage}" != "false" ]]; then
-    utils/rpms/bullseye.sh
-  fi
 fi
 if [[ "${build_type}" =~ daos|all ]]; then
-  utils/rpms/daos.sh "${code_coverage}"
+  utils/rpms/daos.sh false
+fi
+if [[ "${build_type}" =~ daos-bullseye ]]; then
+  utils/rpms/bullseye.sh
+  utils/rpms/daos.sh true
 fi

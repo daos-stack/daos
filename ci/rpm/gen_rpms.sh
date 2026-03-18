@@ -16,21 +16,29 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
+function mv_rpms() {
+  local dir="${1}"
+  if ls -1 ./*.rpm; then
+    mkdir -p /home/daos/rpms/${dir}
+    cp ./*.rpm /home/daos/rpms/${dir}
+    rm -f ./*.rpm
+  fi
+}
+
 env | sort -n
 
 pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
 code_coverage="${3:-false}"
+build_types="deps daos"
+if [[ "${code_coverage}" == "true" ]]; then
+  build_types="deps daos-bullseye"
+fi
 rm -f ./*.rpm
 rm -rf /home/daos/rpms/*
-utils/rpms/build_packages.sh deps "${code_coverage}"
-if ls -1 ./*.rpm; then
-  mkdir -p /home/daos/rpms/deps
-  cp ./*.rpm /home/daos/rpms/deps
-  rm -f ./*.rpm
-fi
-utils/rpms/build_packages.sh daos "${code_coverage}"
-mkdir -p /home/daos/rpms/daos
-cp ./*.rpm /home/daos/rpms/daos
+for build_type in ${build_types}; do
+  utils/rpms/build_packages.sh "${build_type}"
+  mv_rpms "${build_type}"
+done
 popd || exit 1

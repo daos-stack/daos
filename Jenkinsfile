@@ -142,7 +142,10 @@ void fixup_rpmlintrc() {
 }
 
 void uploadNewRPMs(String target, String stage) {
-    buildRpmPost target: target, condition: stage, rpmlint: false, new_rpm: true
+    buildRpmPost target: target,
+                 condition: stage,
+                 rpmlint: false,
+                 productArtifacts: ['daos', 'deps', 'daos-bullseye']
 }
 
 String vm9_label(String distro) {
