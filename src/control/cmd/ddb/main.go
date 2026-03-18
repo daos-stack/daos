@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -242,6 +244,13 @@ Example Paths:
 
 func main() {
 	var opts cliOptions
+
+	// Must be called before any write to stdout.
+	if err := logging.DisableCStdoutBuffering(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error disabling stdout buffering: %v\n", err)
+		os.Exit(1)
+	}
+
 	log := logging.NewCommandLineLogger()
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
