@@ -636,7 +636,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Mon Mar 09 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.4-19
-- Bump and pin PMDK (libpmemobj) version to 2.1.3
+- Bump PMDK (libpmemobj) version to 2.1.3
 - Point https://github.com/daos-stack/pmdk as the main PMDK reference source.
 
 * Fri Mar 06 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-18
