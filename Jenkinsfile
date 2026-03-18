@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@janekmi/SRE-3665-redundant-libraries') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
