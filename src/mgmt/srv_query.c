@@ -682,11 +682,9 @@ bio_faulty_state_set(void *arg)
 int
 ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 {
-	struct bio_led_manage_info	 led_info = { 0 };
 	struct bio_faulty_dev_info	 faulty_info = { 0 };
 	struct smd_dev_info		*dev_info;
-	ABT_thread			 thread;
-	Ctl__LedState			 led_state;
+	ABT_thread                       thread;
 	int				 tgt_id;
 	int				 rc = 0;
 
@@ -740,19 +738,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	uuid_unparse_lower(dev_uuid, resp->device->uuid);
-
-	uuid_copy(led_info.dev_uuid, dev_uuid);
-	led_info.action = CTL__LED_ACTION__SET;
-	led_state = CTL__LED_STATE__ON;
-	led_info.state = &led_state;
-	/* Indicate infinite duration */
-	led_info.duration = 0;
-
-	/* Set the VMD LED to FAULTY state on init xstream */
-	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
-			     init_xs_type(), 0, 0);
-	if (rc != 0)
-		DL_ERROR(rc, "FAULT LED state not set on device:" DF_UUID, DP_UUID(dev_uuid));
 
 out:
 	smd_dev_free_info(dev_info);
