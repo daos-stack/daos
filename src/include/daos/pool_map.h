@@ -398,12 +398,6 @@ pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
 }
 
 static inline bool
-pool_target_is_up_or_drain(struct pool_target *tgt)
-{
-	return tgt->ta_comp.co_status & (PO_COMP_ST_UP | PO_COMP_ST_DRAIN);
-}
-
-static inline bool
 pool_target_is_up(struct pool_target *tgt)
 {
 	return (tgt->ta_comp.co_status == PO_COMP_ST_UP);

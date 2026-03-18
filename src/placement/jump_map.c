@@ -399,7 +399,6 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 	uint32_t		spares_left;
 	int                     rc;
 
-
 	remap_dump(remap_list, md, "remap:");
 
 	current = remap_list->next;
@@ -460,9 +459,8 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			}
 		}
 
-		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list,
-					    allow_version, gen_mode, f_shard, l_shard,
-					    is_extending);
+		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list, allow_version,
+					    gen_mode, f_shard, l_shard);
 		if (rc == 1) {
 			/* Current shard is remapped, move the remap to the output list or
 			 * delete it.
@@ -476,6 +474,15 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 
 			if (spare_dom != NULL && dgu != NULL)
 				setbit(dgu->dgu_real, spare_dom - root);
+
+			if (gen_mode == CURRENT) {
+				if ((spare_tgt->ta_comp.co_status & PO_COMP_ST_DRAIN) ||
+				    ((spare_tgt->ta_comp.co_status & PO_COMP_ST_UP) &&
+				     !pool_target_is_down2up(spare_tgt))) {
+					D_ASSERT(is_extending);
+					*is_extending = true;
+				}
+			}
 		}
 		current = remap_list->next;
 	}
@@ -737,15 +744,11 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 					layout->ol_shards[k].po_rebuilding = 1;
 
 				if (pool_target_is_down2up(target)) {
-					if (gen_mode == PRE_REBUILD)
-						layout->ol_shards[k].po_rebuilding = 1;
-					else
+					layout->ol_shards[k].po_rebuilding = 1; /* disallow read */
+					if (gen_mode != PRE_REBUILD)            /* ensure write */
 						layout->ol_shards[k].po_reintegrating = 1;
 				}
 			}
-
-			if (is_extending != NULL && pool_target_is_up_or_drain(target))
-				*is_extending = true;
 		}
 	}
 

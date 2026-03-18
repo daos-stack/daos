@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -141,10 +142,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		bool fill_addition);
 
 int
-determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		       bool spare_avail, d_list_t *remap_list, uint32_t allow_version,
-		       enum layout_gen_mode gen_mode, struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard, bool *is_extending);
+determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
+		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		       struct failed_shard *f_shard, struct pl_obj_shard *l_shard);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,

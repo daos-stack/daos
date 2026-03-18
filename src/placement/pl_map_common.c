@@ -285,6 +285,11 @@ is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
 				else
 					status = PO_COMP_ST_DOWNOUT;
 			}
+		} else if (comp->co_flags & PO_COMPF_DOWN2UP) {
+			/* remap is not required because writes on fallback will be discarded
+			 * anyway, down2up flag can ensure nobody reads data from this target.
+			 */
+			status = PO_COMP_ST_UPIN;
 		}
 	}
 
@@ -318,16 +323,12 @@ need_remap_comp(struct pool_component *comp, uint32_t allow_version,
  * spare target.
  */
 int
-determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		       bool spare_avail, d_list_t *remap_list, uint32_t allow_version,
-		       enum layout_gen_mode gen_mode, struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard, bool *is_extending)
+determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
+		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		       struct failed_shard *f_shard, struct pl_obj_shard *l_shard)
 {
 	if (!spare_avail)
 		goto next_fail;
-
-	if (is_extending != NULL && pool_target_is_up_or_drain(spare_tgt))
-		*is_extending = true;
 
 	/* The selected spare target is down as well */
 	if (need_remap_comp(&spare_tgt->ta_comp, allow_version, gen_mode)) {
