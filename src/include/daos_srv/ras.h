@@ -43,6 +43,7 @@
 	X(RAS_ENGINE_DIED, "engine_died")                                                          \
 	X(RAS_ENGINE_ASSERTED, "engine_asserted")                                                  \
 	X(RAS_ENGINE_CLOCK_DRIFT, "engine_clock_drift")                                            \
+	X(RAS_ENGINE_SUICIDE, "engine_suicide")                                                    \
 	X(RAS_POOL_CORRUPTION_DETECTED, "pool_corruption_detected")                                \
 	X(RAS_POOL_REBUILD_START, "pool_rebuild_started")                                          \
 	X(RAS_POOL_REBUILD_END, "pool_rebuild_finished")                                           \
@@ -66,8 +67,7 @@
 	X(RAS_ENGINE_JOIN_FAILED, "engine_join_failed")                                            \
 	X(RAS_DEVICE_LINK_SPEED_CHANGED, "device_link_speed_changed")                              \
 	X(RAS_DEVICE_LINK_WIDTH_CHANGED, "device_link_width_changed")                              \
-	X(RAS_DEVICE_LED_SET, "device_led_set")                                                    \
-	X(RAS_ENGINE_EVICT_SUICIDE, "engine_evict_suicide")
+	X(RAS_DEVICE_LED_SET, "device_led_set")
 
 /** Define RAS event enum */
 typedef enum {
@@ -238,6 +238,17 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl, uint64_t version);
  */
 int
 ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation);
+
+/**
+ * Notify control plane that an excluded engine has committed suicide.
+ *
+ * \param[in] rank		Rank that committed suicide.
+ * \param[in] incarnation	Incarnation of rank that committed suicide.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_notify_rank_suicide(d_rank_t rank, uint64_t incarnation);
 
 /**
  * List all the known pools from control plane (MS).

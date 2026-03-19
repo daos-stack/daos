@@ -598,23 +598,20 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
 			       self_rank);
 
-			/*
+			/**
 			 * Send RAS event to inform local server of intentional suicide before
-			 * raisin a SIGKILL to ourselves. Local daos_server can then decide
+			 * raising a SIGKILL to ourselves. Local daos_server can then decide
 			 * whether to restart rank.
 			 */
-			ds_notify_ras_eventf(RAS_ENGINE_EVICT_SUICIDE, RAS_TYPE_INFO,
-				RAS_SEV_NOTICE, NULL /* hwid */, NULL /* rank */, NULL /* inc */,
-				NULL /* jobid */, NULL /* pool */, NULL /* cont */,
-				NULL /* objid */, NULL /* ctlop */, NULL /* data */,
-				"evicted engine suicide detected");
+			rc = ds_notify_rank_suicide(rank, incarnation);
+			if (rc)
+				D_ERROR("failed to handle %u/%u event: " DF_RC "\n", src, type,
+					DP_RC(rc));
 
 			rc = kill(getpid(), SIGKILL);
 			if (rc != 0)
 				D_ERROR("failed to raise SIGKILL: %d\n", errno);
-			return;
 		}
-
 	}
 }
 

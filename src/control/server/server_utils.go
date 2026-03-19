@@ -769,6 +769,46 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 	})
 }
 
+// Handle local engine suicide and restart engine to rejoin system.
+func handleEngineSuicide(ctx context.Context, srv *server, evt *events.RASEvent) error {
+
+	srv.log.Infof("handling suicide")
+
+	ts, err := evt.GetTimestamp()
+	if err != nil {
+		return errors.Wrapf(err, "bad event timestamp %q", evt.Timestamp)
+	}
+
+	// Find the engine instance by rank
+	instances, err := srv.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", evt.Rank))
+	if err != nil {
+		return errors.Wrapf(err, "failed to find instance for rank %d", evt.Rank)
+	}
+
+	if len(instances) == 0 {
+		return errors.Errorf("no instance found for rank %d", evt.Rank)
+	}
+	if len(instances) > 1 {
+		return errors.Errorf("multiple instances found for rank %d", evt.Rank)
+	}
+	engine := instances[0]
+
+	srv.log.Infof("%s was notified @ %s of rank %d:%x (instance %d) suicide", ts, evt.Hostname,
+		evt.Rank, evt.Incarnation, engine.Index())
+
+	// Wait until engine is stopped.
+	pollFn := func(e Engine) bool { return !e.IsStarted() }
+	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
+		return errors.Errorf("rank %d (instance %d) did not stop", evt.Rank, engine.Index())
+	}
+
+	// TODO: Check if rank should be restarted?
+
+	engine.requestStart(ctx)
+
+	return nil
+}
+
 // registerFollowerSubscriptions stops handling received forwarded (in addition
 // to local) events and starts forwarding events to the new MS leader.
 // Log events on the host that they were raised (and first published) on.
@@ -777,8 +817,15 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
-	// TODO 17427: Register subscriber for RASEngineEvictSuicide RasTypeInfo to handle local
-	//             event and restart suicided rank.
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			switch evt.ID {
+			case events.RASEngineSuicide:
+				if err := handleEngineSuicide(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSuicide: %s", err)
+				}
+			}
+		}))
 }
 
 func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
@@ -856,8 +903,15 @@ func registerLeaderSubscriptions(srv *server) {
 				handleRankDead(ctx, srv, evt)
 			}
 		}))
-	// TODO 17427: Register subscriber for RASEngineEvictSuicide RasTypeInfo to handle local
-	//             event and restart suicided rank.
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			switch evt.ID {
+			case events.RASEngineSuicide:
+				if err := handleEngineSuicide(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSuicide: %s", err)
+				}
+			}
+		}))
 
 	// Add a debounce to throttle multiple SWIM Rank Dead events for the same rank/incarnation.
 	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {

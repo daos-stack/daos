@@ -49,6 +49,7 @@ const (
 	RASUnknownEvent            RASID = C.RAS_UNKNOWN_EVENT
 	RASEngineFormatRequired    RASID = C.RAS_ENGINE_FORMAT_REQUIRED     // notice
 	RASEngineDied              RASID = C.RAS_ENGINE_DIED                // error
+	RASEngineSuicide           RASID = C.RAS_ENGINE_SUICIDE             // notice
 	RASPoolRepsUpdate          RASID = C.RAS_POOL_REPS_UPDATE           // info
 	RASSwimRankAlive           RASID = C.RAS_SWIM_RANK_ALIVE            // info
 	RASSwimRankDead            RASID = C.RAS_SWIM_RANK_DEAD             // info
@@ -59,7 +60,6 @@ const (
 	RASNVMeLinkSpeedChanged    RASID = C.RAS_DEVICE_LINK_SPEED_CHANGED  // warning|notice
 	RASNVMeLinkWidthChanged    RASID = C.RAS_DEVICE_LINK_WIDTH_CHANGED  // warning|notice
 	RASDeviceLEDSet            RASID = C.RAS_DEVICE_LED_SET             // info
-	RASEngineEvictSuicide      RASID = C.RAS_ENGINE_EVICT_SUICIDE       // notice
 )
 
 func (id RASID) String() string {
