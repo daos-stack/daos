@@ -436,7 +436,7 @@ if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
 fi
 
 TARGET_PATH="${libdir}"
-DEPENDS=("da${base_name}os-client-tests = ${VERSION}-${RELEASE}")
+DEPENDS=("${base_name}-client-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("hdf5-${openmpi_lib}")
 DEPENDS+=("hdf5-vol-daos-${openmpi_lib}")
 DEPENDS+=("MACSio-${openmpi_lib}")
