@@ -75,6 +75,8 @@ struct bio_nvme_data {
 	int			 bd_xstream_cnt;
 	/* The thread responsible for SPDK bdevs init/fini */
 	struct spdk_thread	*bd_init_thread;
+	/* The xstream context for init thread */
+	struct bio_xs_context   *bd_init_xs;
 	/* Default SPDK blobstore options */
 	struct spdk_bs_opts	 bd_bs_opts;
 	/* All bdevs can be used by DAOS server */
@@ -267,6 +269,7 @@ bio_nvme_init_ext(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	bio_numa_node = 0;
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
+	nvme_glb.bd_init_xs               = NULL;
 	nvme_glb.bd_nvme_conf = NULL;
 	nvme_glb.bd_bypass_health_collect = bypass_health_collect;
 	nvme_glb.bd_enable_rpc_srv = false;
@@ -450,6 +453,7 @@ bio_nvme_fini(void)
 	ABT_mutex_free(&nvme_glb.bd_mutex);
 	D_ASSERT(nvme_glb.bd_xstream_cnt == 0);
 	D_ASSERT(nvme_glb.bd_init_thread == NULL);
+	D_ASSERT(nvme_glb.bd_init_xs == NULL);
 	D_ASSERT(d_list_empty(&nvme_glb.bd_bdevs));
 	D_FREE(nvme_glb.bd_nvme_conf);
 }
@@ -466,6 +470,12 @@ inline struct spdk_thread *
 init_thread(void)
 {
 	return nvme_glb.bd_init_thread;
+}
+
+inline struct bio_xs_context *
+init_xs_context(void)
+{
+	return nvme_glb.bd_init_xs;
 }
 
 inline bool
@@ -851,7 +861,7 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	d_bdev->bb_removed = 1;
 
 	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL, NULL,
-			  NULL, NULL, NULL, NULL, NULL, NULL, "Device: " DF_UUID " unplugged\n",
+			  NULL, NULL, NULL, NULL, NULL, NULL, "Device: " DF_UUID " unplugged",
 			  DP_UUID(d_bdev->bb_uuid));
 
 	/* The bio_bdev is still under construction */
@@ -1115,7 +1125,10 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		/* Clear any pre-existing VMD-LED state */
+		D_DEBUG(DB_MGMT, "Device " DF_UUID " LED reset on init\n",
+			DP_UUID(d_bdev->bb_uuid));
+
+		/* Clear any pre-existing LED state */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 		if (rc != 0) {
@@ -1442,7 +1455,7 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 		ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
 				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 				  "Device: " DF_UUID " "
-				  "[model:%s, serial:%s] for target:%d type:%d is unplugged\n",
+				  "[model:%s, serial:%s] for target:%d type:%d is unplugged",
 				  DP_UUID(dev_info->sdi_id), dev_info->sdi_model,
 				  dev_info->sdi_serial, tgt_id, st);
 	smd_dev_free_info(dev_info);
@@ -1630,6 +1643,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 				ctxt->bxc_skip_draining = 1;
 
 			nvme_glb.bd_init_thread = NULL;
+			nvme_glb.bd_init_xs     = NULL;
 
 		} else if (nvme_glb.bd_xstream_cnt == 0) {
 			ABT_cond_broadcast(nvme_glb.bd_barrier);
@@ -1709,6 +1723,19 @@ bio_xsctxt_init_by_config(struct common_cp_arg *cp_arg)
 		D_ERROR("failed to load nvme conf %s\n", nvme_glb.bd_nvme_conf);
 		return -DER_NOMEM;
 	}
+
+	/**
+	 * Initially, this was called internally spdk_subsystem_load_config() -> ... ->
+	 * spdk_rpc_initialize(). However, since commit
+	 * https://github.com/spdk/spdk/commit/fba209c7324a11b9230533144c02e7a66bc738ea (>=v24.01)
+	 * SPDK_RPC_STARTUP has become the initial value of the underlying global variable and it
+	 * is no longer reset automatically. This makes no difference for applications that
+	 * initialize SPDK only once during the lifetime of the process. But some BIO module
+	 * consumers—such as DDB—expect to be able to initialize, finalize, and then reinitialize
+	 * SPDK multiple times within the same process, for example when inspecting multiple pools
+	 * sequentially. For those use cases, the RPC state must now be reset explicitly.
+	 */
+	spdk_rpc_set_state(SPDK_RPC_STARTUP);
 
 	D_ALLOC_PTR(init_arg);
 	if (init_arg == NULL) {
@@ -1812,6 +1839,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		D_DEBUG(DB_MGMT, "SPDK bdev initialized, tgt_id:%d", tgt_id);
 
 		nvme_glb.bd_init_thread = ctxt->bxc_thread;
+		nvme_glb.bd_init_xs     = ctxt;
 		rc = init_bio_bdevs(ctxt);
 		if (rc != 0) {
 			D_ERROR("failed to init bio_bdevs, "DF_RC"\n",
@@ -1984,10 +2012,9 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 
 		/* Print a console message */
 		D_PRINT("Detected hot plugged device %s\n", bdev_name);
-		ras_notify_eventf(RAS_DEVICE_PLUGGED, RAS_TYPE_INFO,
-				  RAS_SEV_NOTICE, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Detected hot plugged device: %s\n", bdev_name);
+		ras_notify_eventf(RAS_DEVICE_PLUGGED, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Detected hot plugged device: %s", bdev_name);
 
 		scan_period = 0;
 
@@ -2059,7 +2086,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 }
 
 void
-bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
+bio_led_reset_on_timeout(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_bdev         *d_bdev;
 	int			 rc;
@@ -2067,17 +2094,16 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
+			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for " DF_UUID "\n",
+				DP_UUID(d_bdev->bb_uuid));
+
 			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs. */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0) {
 				DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
 					 DP_UUID(d_bdev->bb_uuid));
-				continue;
 			}
-
-			D_DEBUG(DB_MGMT, "Cleared LED QUICK_BLINK state for " DF_UUID "\n",
-				DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }
@@ -2125,7 +2151,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	/* Detect new plugged device, manage LED on init xstream */
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
-		bio_led_event_monitor(ctxt, now);
+		bio_led_reset_on_timeout(ctxt, now);
 	}
 
 	/* Detect stalled I/Os */
