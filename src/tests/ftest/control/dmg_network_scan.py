@@ -37,7 +37,7 @@ class DmgNetworkScanTest(TestWithServers):
         sys_info = []
         for entry in get_network_information(self.log, self.hostlist_servers, SUPPORTED_PROVIDERS):
             if server_provider == entry.provider or (server_provider[0:3] == "ucx" and
-                                  server_provider[0:6] == entry.provider[0:6]):
+                                                     server_provider[0:6] == entry.provider[0:6]):
                 entry.device = None
                 sys_info.append(entry)
             if server_provider[0:3] == "ucx" and server_provider[0:6] == entry.provider[0:6]:
