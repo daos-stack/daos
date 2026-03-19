@@ -16,7 +16,7 @@ hosts: !mux
   hosts_1:
     config: one_node
     test_servers: 1
-timeout: 1200
+timeout: 600
 tests: !mux
   corpc_prefwd:
     name: corpc_prefwd
