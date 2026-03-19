@@ -122,7 +122,7 @@ COPY --chown=daos_server:daos_server utils/sl utils/sl
 
 # Build third party RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-	export DISTRO="suse.lp156" &&                                           \
+	export DISTRO="suse.lp15${POINT_RELEASE#\.}" &&                                           \
 	utils/rpms/build_packages.sh deps &&                                    \
 	mkdir -p /home/daos/rpms &&                                             \
 	mv *.rpm /home/daos/rpms;                                               \
