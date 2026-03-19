@@ -78,9 +78,7 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_rank = tgt->ta_comp.co_rank;
 	f_new->fs_index = tgt->ta_comp.co_index;
 	f_new->fs_status = tgt->ta_comp.co_status;
-	f_new->fs_data = data;
-	if (pool_target_is_down2up(tgt))
-		f_new->fs_down2up = 1;
+	f_new->fs_data      = data;
 
 	D_DEBUG(DB_PL, "tgt %u status %u flags %u reint %s\n", tgt->ta_comp.co_id,
 		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, for_reint ? "yes" : "no");
@@ -388,23 +386,16 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 
 next_fail:
 	if (spare_avail) {
-		/* The selected spare target is up and ready */
 		l_shard->po_target = spare_tgt->ta_comp.co_id;
 		l_shard->po_fseq    = f_shard->fs_fseq;
 		l_shard->po_rank    = spare_tgt->ta_comp.co_rank;
 		l_shard->po_index   = spare_tgt->ta_comp.co_index;
-		f_shard->fs_down2up = pool_target_is_down2up(spare_tgt);
 
-		/*
-		 * Mark the shard as 'rebuilding' so that read will skip this shard.
-		 * f_shard->fs_down2up is the case of delay_rebuild exclude+reint.
-		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN || f_shard->fs_down2up ||
-		    pool_target_is_down(spare_tgt))
+		    f_shard->fs_status == PO_COMP_ST_DRAIN || pool_target_is_down(spare_tgt))
 			l_shard->po_rebuilding = 1;
 
-		if (f_shard->fs_down2up && gen_mode != PRE_REBUILD)
+		if (pool_target_is_up(spare_tgt))
 			l_shard->po_reintegrating = 1;
 
 	} else {

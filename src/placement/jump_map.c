@@ -166,14 +166,13 @@ jm_obj_shard_pd(struct jm_obj_placement *jmop, uint32_t shard)
  *				recent pool map changes, like reintegration.
  * \param[in]	new		The new layout that contains changes in layout
  *				that occurred due to pool status changes.
- * \param[in]	for_reint	diff calls from find_reint() to extract the reintegrating
- *                              shards.
+ * \param[in]	for_rebuild	diff calls to extract the rebuilding shards.
  * \param[out]	diff		The d_list that contains the differences that
  *				were calculated.
  */
 static inline void
 layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
-		 struct pl_obj_layout *new, d_list_t *diff, bool for_reint)
+		 struct pl_obj_layout *new, d_list_t *diff, bool for_rebuild)
 {
 	int index;
 
@@ -197,7 +196,7 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		 * chosen to be rebuilt as well.
 		 */
 		if (reint_tgt != original_target ||
-		    (for_reint && original->ol_shards[index].po_rebuilding) ||
+		    (for_rebuild && original->ol_shards[index].po_rebuilding) ||
 		    (temp_tgt->ta_comp.co_flags & PO_COMPF_DOWN2UP &&
 		     temp_tgt->ta_comp.co_status == PO_COMP_ST_UP)) {
 			pool_map_find_target(jmap->jmp_map.pl_poolmap,
@@ -218,10 +217,8 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 				 * removed when placement is able to handle
 				 * this situation better
 				 */
-				D_DEBUG(DB_PL,
-					"skip remap %d to unavail tgt %u\n",
-					index, reint_tgt);
-
+				D_DEBUG(DB_PL, "skip remap %d to unavail tgt %u\n", index,
+					reint_tgt);
 		}
 	}
 }
@@ -360,6 +357,21 @@ struct dom_grp_used {
 	d_list_t	dgu_list;
 };
 
+static inline void
+target_has_peer(struct pool_target *tgt, int gen_mode, bool *peer)
+{
+	/* should write to extra peer shard before completion of drain/reintegration */
+	D_ASSERT(gen_mode != CURRENT || peer != NULL);
+	if (gen_mode != CURRENT)
+		return;
+
+	if (pool_target_is_drain(tgt))
+		*peer = true;
+
+	if (pool_target_is_up(tgt) && !pool_target_is_down2up(tgt))
+		*peer = true;
+}
+
 /**
  * Try to remap all the failed shards in the @remap_list to proper
  * targets. The new target id will be updated in the @layout if the
@@ -475,14 +487,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			if (spare_dom != NULL && dgu != NULL)
 				setbit(dgu->dgu_real, spare_dom - root);
 
-			if (gen_mode == CURRENT) {
-				if ((spare_tgt->ta_comp.co_status & PO_COMP_ST_DRAIN) ||
-				    ((spare_tgt->ta_comp.co_status & PO_COMP_ST_UP) &&
-				     !pool_target_is_down2up(spare_tgt))) {
-					D_ASSERT(is_extending);
-					*is_extending = true;
-				}
-			}
+			target_has_peer(spare_tgt, gen_mode, is_extending);
 		}
 		current = remap_list->next;
 	}
@@ -740,15 +745,15 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 				if (domain != NULL)
 					setbit(dom_cur_grp_real, domain - root);
 
-				if (pool_target_is_down(target))
+				if (pool_target_is_down(target)) {
 					layout->ol_shards[k].po_rebuilding = 1;
 
-				if (pool_target_is_down2up(target)) {
-					layout->ol_shards[k].po_rebuilding = 1; /* disallow read */
-					if (gen_mode != PRE_REBUILD)            /* ensure write */
-						layout->ol_shards[k].po_reintegrating = 1;
+				} else if (pool_target_is_up(target)) {
+					layout->ol_shards[k].po_rebuilding    = 1;
+					layout->ol_shards[k].po_reintegrating = 1;
 				}
 			}
+			target_has_peer(target, gen_mode, is_extending);
 		}
 	}
 

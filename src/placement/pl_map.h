@@ -72,8 +72,7 @@ struct failed_shard {
 	uint32_t        fs_tgt_id;
 	uint16_t	fs_rank;
 	uint8_t		fs_index;
-	uint8_t         fs_status;
-	uint32_t	fs_down2up:1;
+	uint8_t          fs_status;
 };
 
 #define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"

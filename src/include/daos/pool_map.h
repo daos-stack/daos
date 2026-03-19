@@ -404,6 +404,12 @@ pool_target_is_up(struct pool_target *tgt)
 }
 
 static inline bool
+pool_target_is_drain(struct pool_target *tgt)
+{
+	return (tgt->ta_comp.co_status & PO_COMP_ST_DRAIN);
+}
+
+static inline bool
 pool_target_is_down2up(struct pool_target *tgt)
 {
 	return (tgt->ta_comp.co_status == PO_COMP_ST_UP) &&
