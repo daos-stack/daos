@@ -94,3 +94,10 @@ if [ "$arch" = x86_64 ]; then
     dnf --nodocs install ${dnf_install_args} \
         ipmctl-devel
 fi
+
+module load mpi/openmpi3-x86_64
+which mpirun
+which mpicc
+echo $PATH
+module avail
+module list
