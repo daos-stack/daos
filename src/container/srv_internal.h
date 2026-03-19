@@ -56,6 +56,22 @@ dsm_tls_get()
 	return tls;
 }
 
+struct cont_destroyer_task {
+	d_list_t         csdt_link;
+	uuid_t           csdt_cont_uuid;
+	ABT_thread       csdt_thread;
+	struct cont_svc *csdt_svc;
+	int              csdt_rc;
+	int              csdt_waiters;
+};
+
+struct cont_destroyer {
+	d_list_t  csd_tasks; /* list of cont_destroyer_task objects */
+	ABT_mutex csd_mutex;
+	ABT_cond  csd_cond;
+	bool      csd_stop;
+};
+
 extern bool ec_agg_disabled;
 
 struct rank_eph {
@@ -99,6 +115,7 @@ struct cont_svc {
 	rdb_path_t		cs_conts;	/* container KVS */
 	rdb_path_t              cs_hdls;        /* container handle KVS */
 	struct ds_pool	       *cs_pool;
+	struct cont_destroyer   cs_destroyer;
 
 	/* Manage the EC aggregation epoch and stable epoch */
 	struct sched_request   *cs_cont_ephs_leader_req;

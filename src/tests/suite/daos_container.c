@@ -4203,7 +4203,7 @@ co_open_destroying(void **state)
 	print_message("destroying container '%s'\n", label);
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 out:
 	par_barrier(PAR_COMM_WORLD);
