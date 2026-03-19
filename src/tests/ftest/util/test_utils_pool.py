@@ -593,7 +593,9 @@ class TestPool(TestDaosApiBase):
         if self.pool:
             if disconnect:
                 self.log.info("Disconnecting from pool %s", self.identifier)
+                self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                 self.disconnect()
+                self.dmg.server_set_logmasks(raise_exception=False)
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.identifier)
 
