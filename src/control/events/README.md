@@ -16,3 +16,20 @@ A subset of events are actionable (type 'STATE_CHANGE' as opposed to
 'INFO_ONLY') and will be forwarded to the management service (MS) leader. On
 receipt of an actionable event, the MS will update the membership and backing
 database based on the event's contents.
+
+## Engine Suicide Event
+
+The `engine_suicide` event (RAS_ENGINE_SUICIDE) is an INFO_ONLY event raised
+when a DAOS engine rank performs a self-exclusion due to an unrecoverable
+condition. The control plane automatically handles this event by:
+
+1. Waiting for the engine instance to fully stop
+2. Restarting the engine to rejoin the system
+
+This event is handled by both follower and leader control servers to ensure
+local engine restarts happen regardless of MS leadership state. The event
+includes rank and incarnation information to identify the specific engine
+instance that requires restart.
+
+See `src/control/server/server_utils.go:handleEngineSuicide()` for the
+implementation details.

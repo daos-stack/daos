@@ -84,3 +84,28 @@ can now read from the rebuilt object shards.
 
 This rebuild process is executed online while applications continue accessing
 and updating objects.
+
+### Engine Self-Exclusion and Automatic Restart
+
+In some cases, a DAOS engine may detect an internal unrecoverable condition
+that prevents it from operating correctly. When this occurs, the engine can
+perform a self-exclusion (referred to as "suicide") to protect data integrity
+and system stability.
+
+When an engine commits suicide, it raises a `engine_suicide` RAS event
+(INFO_ONLY, NOTICE severity) containing the rank and incarnation information.
+The control plane automatically handles this event by:
+
+1. Detecting the suicide event through the RAS event system
+2. Identifying the engine instance associated with the rank
+3. Waiting for the engine process to fully stop
+4. Automatically restarting the engine to rejoin the system
+
+This automatic restart mechanism is implemented in both follower and leader
+control servers to ensure local engine recovery happens regardless of
+management service leadership state. The restarted engine will rejoin the
+system with a new incarnation number and resume normal operations.
+
+This self-healing mechanism allows DAOS to automatically recover from
+transient engine failures without administrator intervention, improving
+overall system availability.

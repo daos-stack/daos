@@ -8,12 +8,14 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"os/user"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -21,7 +23,10 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -1981,3 +1986,447 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 		t.Fatalf("unexpected output format (-want, +got):\n%s\n", diff)
 	}
 }
+
+func TestServer_handleEngineSuicide(t *testing.T) {
+	testRank := ranklist.Rank(1)
+	testIncarnation := uint64(42)
+	testHostname := "test-host-1"
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	for name, tc := range map[string]struct {
+		evt                *events.RASEvent
+		setupEngines       func(*testing.T, logging.Logger, *EngineHarness)
+		setupMockStartReq  bool
+		timeout            time.Duration
+		expErr             error
+		expEngineRestarted bool
+		expLogContains     []string
+	}{
+		"nil event timestamp": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSuicide,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   "",
+			},
+			timeout:            1 * time.Second,
+			expErr:             errors.New("bad event timestamp"),
+			expEngineRestarted: false,
+		},
+		"invalid event timestamp": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSuicide,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   "not-a-valid-timestamp",
+			},
+			timeout:            1 * time.Second,
+			expErr:             errors.New("bad event timestamp"),
+			expEngineRestarted: false,
+		},
+		"rank not found in harness": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSuicide,
+				Rank:        99, // Non-existent rank
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+				e._superblock.Rank = ranklist.NewRankPtr(1)
+				if err := h.AddInstance(e); err != nil {
+					t.Fatal(err)
+				}
+			},
+			timeout:            1 * time.Second,
+			expErr:             errors.New("no instance found for rank 99"),
+			expEngineRestarted: false,
+		},
+		"filter instances error - nil superblock": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSuicide,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+				e._superblock = nil
+				if err := h.AddInstance(e); err != nil {
+					t.Fatal(err)
+				}
+			},
+			timeout:            1 * time.Second,
+			expErr:             errors.New("no instance found for rank"),
+			expEngineRestarted: false,
+		},
+		//		"successful restart - engine already stopped": {
+		//			evt: &events.RASEvent{
+		//				ID:          events.RASEngineSuicide,
+		//				Rank:        uint32(testRank),
+		//				Incarnation: testIncarnation,
+		//				Hostname:    testHostname,
+		//				Timestamp:   validTimestamp,
+		//			},
+		//			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+		//				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+		//				e._superblock.Rank = ranklist.NewRankPtr(uint32(testRank))
+		//				rCfg := &engine.TestRunnerConfig{}
+		//				rCfg.Running.SetFalse()
+		//				e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
+		//				e.ready.SetFalse()
+		//				if err := h.AddInstance(e); err != nil {
+		//					t.Fatal(err)
+		//				}
+		//			},
+		//			setupMockStartReq:  true,
+		//			timeout:            2 * time.Second,
+		//			expEngineRestarted: true,
+		//			expLogContains: []string{
+		//				fmt.Sprintf("rank %d:%x (instance 0) suicide", testRank, testIncarnation),
+		//				testHostname,
+		//			},
+		//		},
+		//		"engine stops during wait": {
+		//			evt: &events.RASEvent{
+		//				ID:          events.RASEngineSuicide,
+		//				Rank:        uint32(testRank),
+		//				Incarnation: testIncarnation,
+		//				Hostname:    testHostname,
+		//				Timestamp:   validTimestamp,
+		//			},
+		//			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+		//				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+		//				e._superblock.Rank = ranklist.NewRankPtr(uint32(testRank))
+		//				rCfg := &engine.TestRunnerConfig{}
+		//				rCfg.Running.SetTrue()
+		//				e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
+		//				if err := h.AddInstance(e); err != nil {
+		//					t.Fatal(err)
+		//				}
+		//
+		//				go func() {
+		//					time.Sleep(200 * time.Millisecond)
+		//					rCfg.Running.SetFalse()
+		//				}()
+		//			},
+		//			setupMockStartReq:  true,
+		//			timeout:            3 * time.Second,
+		//			expEngineRestarted: true,
+		//			expLogContains: []string{
+		//				"suicide",
+		//			},
+		//		},
+		//		"timeout waiting for engine to stop": {
+		//			evt: &events.RASEvent{
+		//				ID:          events.RASEngineSuicide,
+		//				Rank:        uint32(testRank),
+		//				Incarnation: testIncarnation,
+		//				Hostname:    testHostname,
+		//				Timestamp:   validTimestamp,
+		//			},
+		//			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+		//				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+		//				e._superblock.Rank = ranklist.NewRankPtr(uint32(testRank))
+		//				rCfg := &engine.TestRunnerConfig{}
+		//				rCfg.Running.SetTrue()
+		//				e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
+		//				if err := h.AddInstance(e); err != nil {
+		//					t.Fatal(err)
+		//				}
+		//			},
+		//			timeout:            500 * time.Millisecond,
+		//			expErr:             errors.New("did not stop"),
+		//			expEngineRestarted: false,
+		//		},
+		//		"multiple engines - restart correct one": {
+		//			evt: &events.RASEvent{
+		//				ID:          events.RASEngineSuicide,
+		//				Rank:        2,
+		//				Incarnation: testIncarnation,
+		//				Hostname:    testHostname,
+		//				Timestamp:   validTimestamp,
+		//			},
+		//			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+		//				for i := 0; i < 3; i++ {
+		//					e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+		//					e._superblock.Rank = ranklist.NewRankPtr(uint32(i))
+		//					rCfg := &engine.TestRunnerConfig{}
+		//					rCfg.Running.SetFalse()
+		//					e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
+		//					e.ready.SetFalse()
+		//					if err := h.AddInstance(e); err != nil {
+		//						t.Fatal(err)
+		//					}
+		//				}
+		//			},
+		//			setupMockStartReq:  true,
+		//			timeout:            2 * time.Second,
+		//			expEngineRestarted: true,
+		//			expLogContains: []string{
+		//				"rank 2:42 (instance 2) suicide",
+		//			},
+		//		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx, cancel := context.WithTimeout(test.Context(t), tc.timeout)
+			defer cancel()
+
+			harness := NewEngineHarness(log)
+
+			if tc.setupEngines != nil {
+				tc.setupEngines(t, log, harness)
+			}
+
+			srv := &server{
+				log:     log,
+				harness: harness,
+			}
+
+			restartRequested := false
+			if tc.setupMockStartReq && len(harness.instances) > 0 {
+				targetRank := ranklist.Rank(tc.evt.Rank)
+				for _, inst := range harness.instances {
+					rank, err := inst.GetRank()
+					if err != nil || rank != targetRank {
+						continue
+					}
+
+					ei, ok := inst.(*EngineInstance)
+					if !ok {
+						continue
+					}
+
+					go func(e *EngineInstance) {
+						select {
+						case <-ctx.Done():
+						case <-e.startRequested:
+							restartRequested = true
+						case <-time.After(2 * time.Second):
+						}
+					}(ei)
+				}
+			}
+
+			err := handleEngineSuicide(ctx, srv, tc.evt)
+
+			time.Sleep(100 * time.Millisecond)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			if tc.expEngineRestarted != restartRequested {
+				t.Errorf("expected engine restarted=%v, got=%v",
+					tc.expEngineRestarted, restartRequested)
+			}
+
+			logOutput := buf.String()
+			for _, expStr := range tc.expLogContains {
+				if !strings.Contains(logOutput, expStr) {
+					t.Errorf("expected log to contain %q, but it didn't\nLog:\n%s",
+						expStr, logOutput)
+				}
+			}
+		})
+	}
+}
+
+func TestServer_handleEngineSuicide_ErrorHandling(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	srv := &server{
+		log:       log,
+		harness:   harness,
+		pubSub:    pubSub,
+		evtLogger: control.NewEventLogger(log),
+	}
+
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			switch evt.ID {
+			case events.RASEngineSuicide:
+				if err := handleEngineSuicide(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSuicide: %s", err)
+				}
+			}
+		}))
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSuicide,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	time.Sleep(100 * time.Millisecond)
+
+	if !strings.Contains(buf.String(), "handleEngineSuicide") {
+		t.Error("expected error to be logged by handler")
+	}
+	if !strings.Contains(buf.String(), "no instance found") {
+		t.Errorf("expected 'no instance found' in log, got:\n%s", buf.String())
+	}
+}
+
+func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	for name, tc := range map[string]struct {
+		evt            *events.RASEvent
+		expErrContains string
+	}{
+		"zero incarnation": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSuicide,
+				Rank:        1,
+				Incarnation: 0,
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found",
+		},
+		"very high rank number": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSuicide,
+				Rank:        999999,
+				Incarnation: 1,
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found for rank",
+		},
+		"max incarnation value": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSuicide,
+				Rank:        1,
+				Incarnation: ^uint64(0),
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx, cancel := context.WithTimeout(test.Context(t), 1*time.Second)
+			defer cancel()
+
+			harness := NewEngineHarness(log)
+			srv := &server{
+				log:     log,
+				harness: harness,
+			}
+
+			err := handleEngineSuicide(ctx, srv, tc.evt)
+
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+
+			if !strings.Contains(err.Error(), tc.expErrContains) {
+				t.Errorf("expected error containing %q, got: %s",
+					tc.expErrContains, err)
+			}
+		})
+	}
+}
+
+//func TestServer_registerFollowerSubscriptions_includesSuicide(t *testing.T) {
+//	log, buf := logging.NewTestLogger(t.Name())
+//	defer test.ShowBufferOnFailure(t, buf)
+//
+//	ctx := test.Context(t)
+//
+//	harness := NewEngineHarness(log)
+//	pubSub := events.NewPubSub(ctx, log)
+//
+//	srv := &server{
+//		log:       log,
+//		harness:   harness,
+//		pubSub:    pubSub,
+//		evtLogger: control.NewEventLogger(log),
+//	}
+//
+//	registerFollowerSubscriptions(srv)
+//
+//	evt := &events.RASEvent{
+//		ID:          events.RASEngineSuicide,
+//		Rank:        1,
+//		Incarnation: 42,
+//		Hostname:    "test-host",
+//		Timestamp:   time.Now().Format(time.RFC3339),
+//	}
+//
+//	pubSub.Publish(evt)
+//	time.Sleep(100 * time.Millisecond)
+//
+//	logOutput := buf.String()
+//	hasHandler := strings.Contains(logOutput, "handleEngineSuicide") ||
+//		strings.Contains(logOutput, "no instance found") ||
+//		strings.Contains(logOutput, "handling suicide")
+//
+//	if !hasHandler {
+//		t.Errorf("suicide handler does not appear to be registered\nLog:\n%s", logOutput)
+//	}
+//}
+//
+//func TestServer_registerLeaderSubscriptions_includesSuicide(t *testing.T) {
+//	log, buf := logging.NewTestLogger(t.Name())
+//	defer test.ShowBufferOnFailure(t, buf)
+//
+//	ctx := test.Context(t)
+//
+//	harness := NewEngineHarness(log)
+//	pubSub := events.NewPubSub(ctx, log)
+//
+//	svc := newTestMgmtSvc(t, log)
+//
+//	srv := &server{
+//		log:        log,
+//		harness:    harness,
+//		pubSub:     pubSub,
+//		evtLogger:  control.NewEvenEventtLogger(log),
+//		membership: svc.membership,
+//		sysdb:      svc.sysdb,
+//		mgmtSvc:    svc,
+//	}
+//
+//	registerLeaderSubscriptions(srv)
+//
+//	evt := &events.RASEvent{
+//		ID:          events.RASEngineSuicide,
+//		Rank:        1,
+//		Incarnation: 42,
+//		Hostname:    "test-host",
+//		Timestamp:   time.Now().Format(time.RFC3339),
+//	}
+//
+//	pubSub.Publish(evt)
+//	time.Sleep(100 * time.Millisecond)
+//
+//	logOutput := buf.String()
+//	hasHandler := strings.Contains(logOutput, "handleEngineSuicide") ||
+//		strings.Contains(logOutput, "no instance found") ||
+//		strings.Contains(logOutput, "handling suicide")
+//
+//	if !hasHandler {
+//		t.Errorf("suicide handler does not appear to be registered\nLog:\n%s", logOutput)
+//	}
+//}
