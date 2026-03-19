@@ -15,6 +15,9 @@ arch=$(uname -i)
 
 dnf_install_args="${1:-}"
 
+dnf -y remove lua54 lua-lmod
+dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*'
+
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
     boost-devel \
