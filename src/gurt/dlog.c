@@ -568,7 +568,7 @@ d_log_disable_logging(void)
 void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
-	static __thread char buf[DLOG_TBSIZ];
+	static __thread char     buf[DLOG_TBSIZ];
 	static __thread uint32_t tid = -1;
 	static __thread uint32_t pid = -1;
 	static uint64_t	last_flush;
@@ -576,7 +576,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	uint64_t uid = 0;
 	int fac, lvl, pri;
 	bool flush;
-	char *buf_nopt1hdr;
+	char                    *buf_nopt1hdr;
 	char facstore[16], *facstr;
 	struct timeval tv;
 	struct tm *tm;
