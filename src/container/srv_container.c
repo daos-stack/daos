@@ -87,6 +87,34 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 }
 
 static int
+cont_destroyer_init(struct cont_destroyer *destroyer)
+{
+	int rc;
+
+	D_INIT_LIST_HEAD(&destroyer->csd_tasks);
+	rc = ABT_mutex_create(&destroyer->csd_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create csd_mutex: %d\n", rc);
+		return dss_abterr2der(rc);
+	}
+	rc = ABT_cond_create(&destroyer->csd_cond);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create csd_cond: %d\n", rc);
+		ABT_mutex_free(&destroyer->csd_mutex);
+		return dss_abterr2der(rc);
+	}
+	destroyer->csd_stop = false;
+	return 0;
+}
+
+static void
+cont_destroyer_fini(struct cont_destroyer *destroyer)
+{
+	ABT_cond_free(&destroyer->csd_cond);
+	ABT_mutex_free(&destroyer->csd_mutex);
+}
+
+static int
 cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	      struct ds_rsvc *rsvc)
 {
@@ -108,10 +136,14 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 		D_GOTO(err_rwlock, rc = dss_abterr2der(rc));
 	}
 
+	rc = cont_destroyer_init(&svc->cs_destroyer);
+	if (rc != 0)
+		goto err_mutex;
+
 	/* cs_root */
 	rc = rdb_path_init(&svc->cs_root);
 	if (rc != 0)
-		goto err_mutex;
+		goto err_destroyer;
 	rc = rdb_path_push(&svc->cs_root, &rdb_path_root_key);
 	if (rc != 0)
 		goto err_root;
@@ -150,6 +182,8 @@ err_uuids:
 	rdb_path_fini(&svc->cs_uuids);
 err_root:
 	rdb_path_fini(&svc->cs_root);
+err_destroyer:
+	cont_destroyer_fini(&svc->cs_destroyer);
 err_mutex:
 	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
 err_rwlock:
@@ -165,6 +199,7 @@ cont_svc_fini(struct cont_svc *svc)
 	rdb_path_fini(&svc->cs_conts);
 	rdb_path_fini(&svc->cs_uuids);
 	rdb_path_fini(&svc->cs_root);
+	cont_destroyer_fini(&svc->cs_destroyer);
 	ABT_rwlock_free(&svc->cs_lock);
 	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
 }
@@ -198,6 +233,10 @@ ds_cont_svc_fini(struct cont_svc **svcp)
 
 static int cont_svc_eph_track_leader_start(struct cont_svc *svc);
 static void cont_svc_eph_track_leader_stop(struct cont_svc *svc);
+static int
+cont_destroyer_start(struct cont_svc *svc);
+static void
+cont_destroyer_stop(struct cont_svc *svc);
 
 int
 ds_cont_svc_step_up(struct cont_svc *svc)
@@ -213,6 +252,11 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	}
 	D_ASSERT(svc->cs_pool != NULL);
 
+	rc = cont_destroyer_start(svc);
+	if (rc != 0)
+		D_ERROR(DF_UUID ": start cont destroyer failed: " DF_RC "\n",
+			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+
 	rc = cont_svc_eph_track_leader_start(svc);
 	if (rc != 0)
 		D_ERROR(DF_UUID": start ec agg leader failed: "DF_RC"\n",
@@ -224,6 +268,7 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 void
 ds_cont_svc_step_down(struct cont_svc *svc)
 {
+	cont_destroyer_stop(svc);
 	cont_svc_eph_track_leader_stop(svc);
 	D_ASSERT(svc->cs_pool != NULL);
 	ds_pool_put(svc->cs_pool);
@@ -1697,7 +1742,7 @@ cont_lookup_internal(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t
 		     bool include_destroying, struct cont **cont);
 
 static int
-cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uuid, crt_rpc_t *rpc)
+cont_destroy_post(struct cont_svc *svc, uuid_t uuid)
 {
 	struct rdb_tx           tx;
 	struct cont            *cont;
@@ -1712,7 +1757,7 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 		goto out;
 	}
 
-	rc = cont_destroy_bcast(rpc->cr_ctx, svc, uuid);
+	rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
 	if (rc != 0)
 		goto out;
 
@@ -1737,22 +1782,22 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 
 	cont_track_eph_leader_delete(cont->c_svc, cont->c_uuid);
 
-        if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
-                need_destroy_oid_oit_kvs = true;
-        } else {
-                d_iov_t value;
+	if (svc->cs_pool->sp_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
+		need_destroy_oid_oit_kvs = true;
+	} else {
+		d_iov_t value;
 
-                d_iov_set(&value, NULL, 0);
+		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
 		if (rc && rc != -DER_NONEXIST) {
 			DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
-				 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+				 DP_CONT(svc->cs_pool_uuid, cont->c_uuid));
 			goto out_cont;
 		}
 		/* There was a bug that oit oids might be created already see DAOS-14799 */
 		if (rc == 0)
 			need_destroy_oid_oit_kvs = true;
-        }
+	}
 
 	/* Destroy oit oids index KVS. */
 	if (need_destroy_oid_oit_kvs) {
@@ -1789,8 +1834,8 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 	D_ASSERT(prop != NULL);
 	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
 	if (lbl_ent) {
-		rc = cont_delete_label(&tx, cont, lbl_ent->dpe_str, pool_hdl->sph_pool->sp_uuid,
-				       cont->c_uuid);
+		rc =
+		    cont_delete_label(&tx, cont, lbl_ent->dpe_str, svc->cs_pool_uuid, cont->c_uuid);
 		if (rc != 0)
 			goto out_prop;
 	}
@@ -1811,9 +1856,282 @@ out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 out:
-	D_DEBUG(DB_MD, DF_CONT ": replying: rpc=%p: " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": end" DF_RC "\n", DP_CONT(svc->cs_pool_uuid, uuid), DP_RC(rc));
 	return rc;
+}
+
+static void
+cont_destroyer_task_ult(void *arg)
+{
+	struct cont_destroyer_task *task = arg;
+	struct cont_svc            *svc  = task->csdt_svc;
+
+	task->csdt_rc = cont_destroy_post(svc, task->csdt_cont_uuid);
+
+	ABT_mutex_lock(svc->cs_destroyer.csd_mutex);
+	task->csdt_thread = ABT_THREAD_NULL;
+	if (task->csdt_waiters == 0) {
+		d_list_del(&task->csdt_link);
+		D_FREE(task);
+	} else {
+		ABT_cond_broadcast(svc->cs_destroyer.csd_cond);
+	}
+	ABT_mutex_unlock(svc->cs_destroyer.csd_mutex);
+}
+
+static int
+cont_destroyer_create_task(struct cont_svc *svc, uuid_t cont_uuid,
+			   struct cont_destroyer_task **taskp)
+{
+	struct cont_destroyer_task *task;
+	int                         rc;
+
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		return -DER_NOMEM;
+
+	uuid_copy(task->csdt_cont_uuid, cont_uuid);
+	task->csdt_rc      = 0;
+	task->csdt_waiters = 0;
+	task->csdt_svc     = svc;
+	d_list_add_tail(&task->csdt_link, &svc->cs_destroyer.csd_tasks);
+
+	rc = dss_ult_create(cont_destroyer_task_ult, task, DSS_XS_SYS, 0, 0, &task->csdt_thread);
+	if (rc != 0) {
+		d_list_del(&task->csdt_link);
+		D_FREE(task);
+		return rc;
+	}
+
+	*taskp = task;
+	return 0;
+}
+
+static struct cont_destroyer_task *
+cont_destroyer_find_task(struct cont_destroyer *destroyer, uuid_t cont_uuid)
+{
+	struct cont_destroyer_task *task;
+
+	d_list_for_each_entry(task, &destroyer->csd_tasks, csdt_link) {
+		if (uuid_compare(task->csdt_cont_uuid, cont_uuid) == 0)
+			return task;
+	}
+	return NULL;
+}
+
+/*
+ * Request destruction of the container identified by cont_uuid and wait for
+ * the task to complete. If a task already exists for this container UUID,
+ * simply wait for it. Otherwise, create a new task with a dedicated ULT.
+ */
+static int
+cont_destroyer_request_and_wait(struct cont_svc *svc, uuid_t cont_uuid)
+{
+	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
+	struct cont_destroyer_task *task;
+	int                         rc;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+
+	if (destroyer->csd_stop) {
+		ABT_mutex_unlock(destroyer->csd_mutex);
+		return -DER_SHUTDOWN;
+	}
+
+	task = cont_destroyer_find_task(destroyer, cont_uuid);
+	if (task != NULL)
+		goto wait;
+
+	rc = cont_destroyer_create_task(svc, cont_uuid, &task);
+	if (rc != 0) {
+		ABT_mutex_unlock(destroyer->csd_mutex);
+		return rc;
+	}
+
+wait:
+	/* Wait for the ULT to finish. */
+	task->csdt_waiters++;
+	while (task->csdt_thread != ABT_THREAD_NULL) {
+		ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
+		if (destroyer->csd_stop) {
+			task->csdt_waiters--;
+			ABT_mutex_unlock(destroyer->csd_mutex);
+			return -DER_SHUTDOWN;
+		}
+	}
+	rc = task->csdt_rc;
+	task->csdt_waiters--;
+	if (task->csdt_waiters == 0) {
+		d_list_del(&task->csdt_link);
+		D_FREE(task);
+	}
+	ABT_mutex_unlock(destroyer->csd_mutex);
+	return rc;
+}
+
+/*
+ * Create a fire-and-forget destroyer task. Used during step-up to schedule
+ * destruction of containers that have CONTAINER_F_DESTROYING set. Nobody
+ * waits for these tasks inline.
+ */
+static int
+cont_destroyer_fire(struct cont_svc *svc, uuid_t cont_uuid)
+{
+	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
+	struct cont_destroyer_task *task;
+	int                         rc;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+
+	if (destroyer->csd_stop) {
+		ABT_mutex_unlock(destroyer->csd_mutex);
+		return -DER_SHUTDOWN;
+	}
+
+	/* Skip if a task already exists for this container. */
+	task = cont_destroyer_find_task(destroyer, cont_uuid);
+	if (task != NULL) {
+		ABT_mutex_unlock(destroyer->csd_mutex);
+		return 0;
+	}
+
+	rc = cont_destroyer_create_task(svc, cont_uuid, &task);
+
+	ABT_mutex_unlock(destroyer->csd_mutex);
+	return rc;
+}
+
+struct cont_destroyer_iter_args {
+	struct cont_svc *cdia_svc;
+	struct rdb_tx   *cdia_tx;
+	int              cdia_count;
+};
+
+static int
+cont_destroyer_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct cont_destroyer_iter_args *args = varg;
+	struct cont_svc                 *svc  = args->cdia_svc;
+	uuid_t                           cont_uuid;
+	rdb_path_t                       prop;
+	container_flags_t                flags;
+	d_iov_t                          k;
+	d_iov_t                          v;
+	int                              rc;
+
+	if (key->iov_len != sizeof(uuid_t))
+		return -DER_IO;
+
+	uuid_copy(cont_uuid, key->iov_buf);
+
+	d_iov_set(&k, cont_uuid, sizeof(uuid_t));
+
+	rc = rdb_path_clone(&svc->cs_conts, &prop);
+	if (rc != 0)
+		return rc;
+	rc = rdb_path_push(&prop, &k);
+	if (rc != 0) {
+		rdb_path_fini(&prop);
+		return rc;
+	}
+
+	d_iov_set(&v, &flags, sizeof(flags));
+	rc = rdb_tx_lookup(args->cdia_tx, &prop, &ds_cont_prop_ghce, &v);
+	rdb_path_fini(&prop);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			return 0;
+		return rc;
+	}
+
+	if (!(flags & CONTAINER_F_DESTROYING))
+		return 0;
+
+	D_DEBUG(DB_MD, DF_CONT ": scheduling destruction on step-up\n",
+		DP_CONT(svc->cs_pool_uuid, cont_uuid));
+
+	rc = cont_destroyer_fire(svc, cont_uuid);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to schedule destruction on step-up",
+			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		return rc;
+	}
+
+	args->cdia_count++;
+	return 0;
+}
+
+/*
+ * During step-up, scan all containers and schedule destruction of those
+ * that have the CONTAINER_F_DESTROYING flag set.
+ */
+static int
+cont_destroyer_start(struct cont_svc *svc)
+{
+	struct rdb_tx                   tx;
+	struct cont_destroyer_iter_args args = {0};
+	int                             rc;
+
+	svc->cs_destroyer.csd_stop = false;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		return rc;
+	ABT_rwlock_rdlock(svc->cs_lock);
+
+	args.cdia_svc   = svc;
+	args.cdia_count = 0;
+	args.cdia_tx    = &tx;
+
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* backward */, cont_destroyer_iter_cb,
+			    &args);
+
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": failed to scan destroying containers",
+			 DP_UUID(svc->cs_pool_uuid));
+	else if (args.cdia_count > 0)
+		D_DEBUG(DB_MD, DF_UUID ": scheduled %d container destructions on step-up\n",
+			DP_UUID(svc->cs_pool_uuid), args.cdia_count);
+
+	return rc;
+}
+
+/*
+ * During step-down, signal all destroyer tasks to stop and wait for
+ * running ULTs to complete.
+ */
+static void
+cont_destroyer_stop(struct cont_svc *svc)
+{
+	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
+	struct cont_destroyer_task *task;
+	struct cont_destroyer_task *tmp;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+	destroyer->csd_stop = true;
+
+	/*
+	 * Increment waiters on all tasks so that the ULTs won't free them
+	 * while we're iterating.
+	 */
+	d_list_for_each_entry(task, &destroyer->csd_tasks, csdt_link)
+		task->csdt_waiters++;
+
+	/* Wait for all running ULTs to complete. */
+	d_list_for_each_entry(task, &destroyer->csd_tasks, csdt_link) {
+		while (task->csdt_thread != ABT_THREAD_NULL)
+			ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
+	}
+
+	/* All ULTs are done. Clean up the task list. */
+	d_list_for_each_entry_safe(task, tmp, &destroyer->csd_tasks, csdt_link) {
+		d_list_del(&task->csdt_link);
+		D_FREE(task);
+	}
+	ABT_mutex_unlock(destroyer->csd_mutex);
 }
 
 struct cont_track_eph_leader *
@@ -6013,7 +6331,13 @@ out_lock:
 			uuid = &in->ci_uuid;
 		}
 
-		rc = cont_destroy_post(pool_hdl, svc, *uuid, rpc);
+		rc = cont_destroyer_request_and_wait(svc, *uuid);
+		if (rc != 0) {
+			DL_INFO(rc, DF_CONT ": unable to request container destroy",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid));
+			rdb_resign(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term);
+			goto out;
+		}
 	}
 
 out:
