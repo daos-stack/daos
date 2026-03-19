@@ -30,14 +30,14 @@ distro_custom() {
         zypper rm -y -u libfabric libfabric1 libfabric-debuginfo || true
         zypper clean --all
         ldconfig
-        zypper mr -e daos-stack-daos-sl-15-stable-local-artifactory || true
-        zypper mr -p 90 daos-stack-daos-sl-15-stable-local-artifactory || true
-        zypper mr -p 90 daos-stack-deps-sl-15-stable-local-artifactory || true
+        #zypper mr -e daos-stack-daos-sl-15-stable-local-artifactory || true
+        #zypper mr -p 90 daos-stack-daos-sl-15-stable-local-artifactory || true
+        #zypper mr -p 90 daos-stack-deps-sl-15-stable-local-artifactory || true
         
         if [[ "${ID:-}" == "sles" ]]; then
-            zypper in -y -f libfabric1 mercury-libfabric mercury daos-server daos-client daos-client-tests openmpi3 openmpi3-devel
+            dnf install -y libfabric1 mercury-libfabric mercury daos-server daos-client daos-client-tests daos-tests-internal openmpi3 openmpi3-devel
         else
-            zypper in -y -f libfabric1 mercury-libfabric mercury
+            dnf install -y libfabric1 mercury-libfabric mercury
         fi
     fi
 }
