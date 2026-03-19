@@ -445,8 +445,8 @@ int
 tse_task_register_comp_cb_and_reinit(tse_task_t *task, tse_task_cb_t comp_cb, void *arg,
 				     daos_size_t arg_size, uint64_t delay)
 {
-	struct tse_task_cb      *dtc = NULL;
-	int                      rc;
+	struct tse_task_cb *dtc = NULL;
+	int                 rc;
 
 	D_ASSERT(comp_cb != NULL);
 	rc = register_cb(task, true, comp_cb, arg, arg_size, &dtc);
