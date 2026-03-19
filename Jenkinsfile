@@ -912,7 +912,7 @@ pipeline {
                             distro:'el9',
                             compiler: 'covc',
                             buildRpms: true,
-                            release: "${env.DAOS_RELVAL}.bullseye",
+                            release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
