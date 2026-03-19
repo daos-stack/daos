@@ -426,11 +426,25 @@ tse_task_register_comp_cb(tse_task_t *task, tse_task_cb_t comp_cb,
 	return register_cb(task, true, comp_cb, arg, arg_size, NULL);
 }
 
+static void
+unregister_cb(tse_task_t *task, struct tse_task_cb *dtc)
+{
+	struct tse_task_private *dtp;
+
+	if (dtc == NULL)
+		return;
+
+	dtp = tse_task2priv(task);
+	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
+	d_list_del(&dtc->dtc_list);
+	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
+	D_FREE(dtc);
+}
+
 int
 tse_task_register_comp_cb_and_reinit(tse_task_t *task, tse_task_cb_t comp_cb, void *arg,
 				     daos_size_t arg_size, uint64_t delay)
 {
-	struct tse_task_private *dtp = tse_task2priv(task);
 	struct tse_task_cb      *dtc = NULL;
 	int                      rc;
 
@@ -440,12 +454,8 @@ tse_task_register_comp_cb_and_reinit(tse_task_t *task, tse_task_cb_t comp_cb, vo
 		return rc;
 
 	rc = tse_task_reinit_with_delay(task, delay);
-	if (rc != 0) {
-		D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
-		d_list_del(&dtc->dtc_list);
-		D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
-		D_FREE(dtc);
-	}
+	if (rc != 0)
+		unregister_cb(task, dtc);
 
 	return rc;
 }
@@ -456,13 +466,20 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
 		      tse_task_cb_t comp_cb, void *comp_data,
 		      daos_size_t comp_data_size)
 {
-	int	rc = 0;
+	int                 rc  = 0;
+	struct tse_task_cb *dtc = NULL;
 
 	D_ASSERT(prep_cb != NULL || comp_cb != NULL);
-	if (prep_cb)
-		rc = register_cb(task, false, prep_cb, prep_data, prep_data_size, NULL);
-	if (comp_cb && !rc)
+	if (prep_cb) {
+		rc = register_cb(task, false, prep_cb, prep_data, prep_data_size, &dtc);
+		if (rc != 0)
+			return rc;
+	}
+	if (comp_cb) {
 		rc = register_cb(task, true, comp_cb, comp_data, comp_data_size, NULL);
+		if (rc != 0)
+			unregister_cb(task, dtc);
+	}
 	return rc;
 }
 
