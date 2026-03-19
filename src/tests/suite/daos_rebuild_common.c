@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,6 +62,8 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	for (i = 0; i < arg_cnt; i++) {
 		rc = dmg_pool_exclude(args[i]->dmg_config, args[i]->pool.pool_uuid,
 				      args[i]->group, rank, tgt_idx);
+		print_message("dmg pool exclude rank %u tgt_idx=%d " DF_UUID ", rc=%d\n", rank,
+			      tgt_idx, DP_UUID(args[i]->pool.pool_uuid), rc);
 		assert_success(rc);
 	}
 }
@@ -83,6 +85,9 @@ rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed) {
 			rc = dmg_pool_reintegrate(args[i]->dmg_config, args[i]->pool.pool_uuid,
 						  args[i]->group, rank, tgt_idx);
+			print_message("dmg pool reintegrate rank %u tgt_idx=%d " DF_UUID
+				      ", rc=%d\n",
+				      rank, tgt_idx, DP_UUID(args[i]->pool.pool_uuid), rc);
 			assert_success(rc);
 		}
 		sleep(2);
@@ -100,6 +105,8 @@ rebuild_extend_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed) {
 			rc = dmg_pool_extend(args[i]->dmg_config, args[i]->pool.pool_uuid,
 					     args[i]->group, &rank, 1);
+			print_message("dmg pool extend rank %u " DF_UUID ", rc=%d\n", rank,
+				      DP_UUID(args[i]->pool.pool_uuid), rc);
 			assert_success(rc);
 		}
 		sleep(2);
@@ -117,6 +124,8 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed) {
 			rc = dmg_pool_drain(args[i]->dmg_config, args[i]->pool.pool_uuid,
 					    args[i]->group, rank, tgt_idx);
+			print_message("dmg pool drain rank %u tgt_idx=%d " DF_UUID ", rc=%d\n",
+				      rank, tgt_idx, DP_UUID(args[i]->pool.pool_uuid), rc);
 			assert_success(rc);
 		}
 		sleep(2);
@@ -135,6 +144,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		daos_pool_info_t	pool_info;
 
 		/* refresh the pool information */
+		pool_info.pi_bits = DPI_REBUILD_STATUS;
 		rc = test_pool_get_info(args[i], &pool_info, NULL /* engine_ranks */);
 		if (rc) {
 			print_message("get pool "DF_UUIDF" info failed: %d\n",
@@ -142,6 +152,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			return;
 		}
 		args[i]->rebuild_pre_pool_ver = pool_info.pi_map_ver;
+		memcpy(&args[i]->pool.pool_info, &pool_info, sizeof(pool_info));
 		if (op_type == RB_OP_TYPE_FAIL)
 			print_message("before exclude, got pool " DF_UUIDF "info, map_ver=%d\n",
 				      DP_UUID(args[i]->pool.pool_uuid), pool_info.pi_map_ver);
@@ -158,20 +169,35 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			for (i = 0; i < rank_nr; i++)
 				rebuild_exclude_tgt(args, args_cnt, ranks[i],
 						    tgts ? tgts[i] : -1, kill);
+			if (args[0]->no_rebuild == 0) {
+				print_message(
+				    "wait for %u rank excludes/rebuilds to start before invoking "
+				    "rebuild_cb\n",
+				    rank_nr);
+				test_rebuild_wait_to_start_next(args, args_cnt);
+			}
 		}
 		par_barrier(PAR_COMM_WORLD);
 
 		for (i = 0; i < args_cnt; i++)
-			if (args[i]->rebuild_cb)
+			if (args[i]->rebuild_cb) {
+				print_message("call rebuild_cb for exclude rebuilding pool " DF_UUID
+					      "\n",
+					      DP_UUID(args[i]->pool.pool_uuid));
 				args[i]->rebuild_cb(args[i]);
+			}
 
 		if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 			test_rebuild_wait(args, args_cnt);
 
 		par_barrier(PAR_COMM_WORLD);
 		for (i = 0; i < args_cnt; i++) {
-			if (args[i]->rebuild_post_cb)
+			if (args[i]->rebuild_post_cb) {
+				print_message(
+				    "call rebuild_post_cb for exclude rebuilt pool " DF_UUID "\n",
+				    DP_UUID(args[i]->pool.pool_uuid));
 				args[i]->rebuild_post_cb(args[i]);
+			}
 		}
 		return;
 
@@ -179,6 +205,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 
 	for (i = 0; i < rank_nr; i++) {
 		int j;
+		const char *op_type_str = NULL;
 
 		/* No concurrent drain/extend/reintegration are allowed, so
 		 * it has to reintegrate/extend one by one.
@@ -187,15 +214,18 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[0]->myrank == 0) {
 			switch (op_type) {
 			case RB_OP_TYPE_REINT:
+				op_type_str = "reintegrate";
 				rebuild_reint_tgt(args, args_cnt, ranks[i],
 						  tgts ? tgts[i] : -1, kill);
 				break;
 			case RB_OP_TYPE_ADD:
+				op_type_str = "extend";
 				rebuild_extend_tgt(args, args_cnt, ranks[i],
 						   tgts ? tgts[i] : -1,
 						   args[i]->pool.pool_size);
 				break;
 			case RB_OP_TYPE_DRAIN:
+				op_type_str = "drain";
 				rebuild_drain_tgt(args, args_cnt, ranks[i],
 						tgts ? tgts[i] : -1);
 				break;
@@ -208,20 +238,36 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 				D_ASSERT(op_type != RB_OP_TYPE_RECLAIM);
 				break;
 			default:
+				op_type_str = "UNKNOWN";
 				break;
+			}
+			if (args[0]->no_rebuild == 0) {
+				print_message("wait for 1 rank (%u) rebuilds to start before "
+					      "invoking rebuild_cb\n",
+					      ranks[i]);
+				test_rebuild_wait_to_start_next(args, args_cnt);
 			}
 		}
 		par_barrier(PAR_COMM_WORLD);
 		for (j = 0; j < args_cnt; j++)
-			if (args[j]->rebuild_cb)
+			if (args[j]->rebuild_cb) {
+				print_message("call rebuild_cb for %s rebuilding pool " DF_UUID
+					      "\n",
+					      op_type_str, DP_UUID(args[j]->pool.pool_uuid));
+
 				args[j]->rebuild_cb(args[j]);
+			}
 
 		if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 			test_rebuild_wait(args, args_cnt);
 
 		for (j = 0; j < args_cnt; j++) {
-			if (args[j]->rebuild_post_cb)
+			if (args[j]->rebuild_post_cb) {
+				print_message("call rebuild_post_cb for %s rebuilt pool " DF_UUID
+					      "\n",
+					      op_type_str, DP_UUID(args[j]->pool.pool_uuid));
 				args[j]->rebuild_post_cb(args[j]);
+			}
 		}
 	}
 }
@@ -972,8 +1018,8 @@ reintegrate_inflight_io(void *data)
 
 	}
 	ioreq_fini(&req);
-	sleep(12);
 	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
+	sleep(12);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
 				      NULL);
@@ -1218,7 +1264,7 @@ rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint3
 		 */
 		print_message("It can not create the pool, probably due"
 			      " to not enough ranks %d\n", rc);
-		return 0;
+		return rc;
 	}
 
 	arg = *state;
