@@ -64,6 +64,7 @@ dnf --nodocs install ${dnf_install_args} \
     nasm \
     numactl \
     openmpi3-devel \
+    openmpi3-gnu-hpc-devel \
     pandoc \
     patch \
     patchelf \
