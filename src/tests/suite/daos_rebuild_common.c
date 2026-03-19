@@ -144,6 +144,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		daos_pool_info_t	pool_info;
 
 		/* refresh the pool information */
+		pool_info.pi_bits = DPI_REBUILD_STATUS;
 		rc = test_pool_get_info(args[i], &pool_info, NULL /* engine_ranks */);
 		if (rc) {
 			print_message("get pool "DF_UUIDF" info failed: %d\n",
@@ -151,6 +152,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			return;
 		}
 		args[i]->rebuild_pre_pool_ver = pool_info.pi_map_ver;
+		memcpy(&args[i]->pool.pool_info, &pool_info, sizeof(pool_info));
 		if (op_type == RB_OP_TYPE_FAIL)
 			print_message("before exclude, got pool " DF_UUIDF "info, map_ver=%d\n",
 				      DP_UUID(args[i]->pool.pool_uuid), pool_info.pi_map_ver);
@@ -167,6 +169,13 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			for (i = 0; i < rank_nr; i++)
 				rebuild_exclude_tgt(args, args_cnt, ranks[i],
 						    tgts ? tgts[i] : -1, kill);
+			if (args[0]->no_rebuild == 0) {
+				print_message(
+				    "wait for %u rank excludes/rebuilds to start before invoking "
+				    "rebuild_cb\n",
+				    rank_nr);
+				test_rebuild_wait_to_start_next(args, args_cnt);
+			}
 		}
 		par_barrier(PAR_COMM_WORLD);
 
@@ -231,6 +240,12 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			default:
 				op_type_str = "UNKNOWN";
 				break;
+			}
+			if (args[0]->no_rebuild == 0) {
+				print_message("wait for 1 rank (%u) rebuilds to start before "
+					      "invoking rebuild_cb\n",
+					      ranks[i]);
+				test_rebuild_wait_to_start_next(args, args_cnt);
 			}
 		}
 		par_barrier(PAR_COMM_WORLD);
