@@ -903,6 +903,12 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_mutex, rc = dss_abterr2der(rc));
 
+	rc = ABT_rwlock_create(&pool->sp_recov_lock);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto err_cond;
+	}
+
 	D_INIT_LIST_HEAD(&pool->sp_ec_ephs_list);
 	uuid_copy(pool->sp_uuid, key);
 	D_INIT_LIST_HEAD(&pool->sp_hdls);
@@ -922,7 +928,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
 			DP_UUID(key), rc);
-		goto err_cond;
+		goto err_recov_lock;
 	}
 
 	uuid_unparse_lower(key, group_id);
@@ -952,6 +958,8 @@ err_group:
 			DP_UUID(pool->sp_uuid), DP_RC(rc_tmp));
 err_metrics:
 	ds_pool_metrics_stop(pool);
+err_recov_lock:
+	ABT_rwlock_free(&pool->sp_recov_lock);
 err_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 err_mutex:
@@ -994,6 +1002,7 @@ pool_free_ref(struct daos_llink *llink)
 
 	if (pool->sp_map_bc != NULL)
 		ds_pool_put_map_bc(pool->sp_map_bc);
+	ABT_rwlock_free(&pool->sp_recov_lock);
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_mutex_free(&pool->sp_mutex);
 	ABT_rwlock_free(&pool->sp_lock);
