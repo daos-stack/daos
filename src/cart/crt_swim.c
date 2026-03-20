@@ -623,7 +623,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	if (cb_info->cci_rc) {
 		swim_ctx_lock(ctx);
 		if (to_id == ctx->sc_target)
-			ctx->sc_deadline = 0;
+			ctx->sc_deadline = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
 		swim_ctx_unlock(ctx);
 	} else {
 		struct crt_swim_membs *csm = &grp_priv->gp_membs_swim;
@@ -1025,16 +1025,19 @@ crt_metrics_sample_delay(crt_context_t crt_ctx, uint64_t delay, bool glitch)
 		d_tm_inc_counter(ctx->cc_net_glitches, 1);
 }
 
-static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, void *arg)
+static struct timespec
+crt_swim_progress_cb(crt_context_t crt_ctx, const struct timespec *deadline, void *arg)
 {
-	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
-	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
-	struct swim_context	*ctx = csm->csm_ctx;
-	swim_id_t		 self_id = swim_self_get(ctx);
-	int			 rc;
+	struct crt_grp_priv   *grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+	struct crt_swim_membs *csm      = &grp_priv->gp_membs_swim;
+	struct swim_context   *ctx      = csm->csm_ctx;
+	swim_id_t              self_id  = swim_self_get(ctx);
+	struct timespec        new_deadline =
+            (deadline != NULL) ? *deadline : (struct timespec){.tv_sec = 0, .tv_nsec = 0};
+	int rc;
 
 	if (self_id == SWIM_ID_INVALID)
-		return timeout_us;
+		return new_deadline;
 
 	if (crt_swim_fail_hlc && d_hlc_get() >= crt_swim_fail_hlc) {
 		crt_swim_should_fail = true;
@@ -1042,10 +1045,8 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 		D_EMIT("SWIM id=%lu should fail\n", crt_swim_fail_id);
 	}
 
-	rc = swim_progress(ctx, timeout_us);
+	rc = swim_progress(ctx, deadline);
 	if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
-		uint64_t now = swim_now_ms();
-
 		/*
 		 * Check for network idle in swim context.
 		 * If the time passed from last received RPC till now is more
@@ -1070,15 +1071,19 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 			crt_metrics_sample_delay(crt_ctx, delay, delay > max_delay);
 		}
 
-		if (now < ctx->sc_next_event)
-			timeout_us = min(timeout_us, (ctx->sc_next_event - now) * 1000);
+		if (deadline != NULL) {
+			struct timespec now;
+			d_gettime_coarse(&now);
+			if (d_timeless(&now, &ctx->sc_next_event))
+				new_deadline = D_TIME_MIN(*deadline, ctx->sc_next_event);
+		}
 	} else if (rc) {
 		D_ERROR("swim_progress(): "DF_RC"\n", DP_RC(rc));
 	} else {
 		crt_metrics_sample_delay(crt_ctx, 0, false);
 	}
 
-	return timeout_us;
+	return new_deadline;
 }
 
 void crt_swim_fini(void)

@@ -268,14 +268,13 @@ int swim_ipings_reply(struct swim_context *ctx, swim_id_t from_id, int ret_rc);
 /**
  * Progress the state machine of SWIM protocol.
  *
- * @param[in]  ctx     SWIM context pointer from swim_init()
- * @param[in]  timeout The amount of time in milliseconds available for
- *                     processing. If timeout <= 0 then returns immediately or
- *                     after the state change (progress minimal required
- *                     changes).
- * @returns            0 on success, negative error ID otherwise
+ * @param[in]  ctx      SWIM context pointer from swim_init()
+ * @param[in]  deadline The time deadline until which we can process.
+ *                      If deadline is NULL then returns immediately or
+ *                      after the state change (progress minimal required changes).
+ * @returns             0 on success, negative error ID otherwise
  */
-int swim_progress(struct swim_context *ctx, int64_t timeout);
+int swim_progress(struct swim_context *ctx, const struct timespec *deadline);
 
 /**
  * Update the state machine of SWIM protocol with unexpected network glitch.
