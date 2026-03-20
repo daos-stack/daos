@@ -1,6 +1,6 @@
 """
   (C) Copyright 2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -226,15 +226,14 @@ class PerServerFaultDomainTest(IorTestBase):
         """Jira ID: DAOS-11200
 
         Test Description:
-        1. Determine the ranks to stop. Three ranks in three nodes. Select up to two
-        service ranks.
+        1. Determine the ranks to stop. Three ranks in three nodes. Select up to two service ranks.
         2. Create a container with rf_lvl:2,rf:2
         3. Run IOR to write some data to the container.
         4. Stop the ranks.
         5. Wait for rebuild to finish.
         6. Get container's health status.
         7. Restart the stopped servers for cleanup.
-        8. Verify container's Health status is HEALTHY.
+        8. Verify container's Health status is UNCLEAN.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
@@ -244,7 +243,7 @@ class PerServerFaultDomainTest(IorTestBase):
         # 1. Determine the ranks to stop; three ranks in three nodes. We can select up to
         # two ranks from service ranks. If we stop more than two service ranks, many of
         # the dmg commands will hang.
-        # Create a pool to determine the service ranks.
+        self.log_step("Create a pool to determine the service ranks.")
         self.pool = self.get_pool()
         self.log.info("Pool service ranks = %s", self.pool.svc_ranks)
 
@@ -284,12 +283,7 @@ class PerServerFaultDomainTest(IorTestBase):
         self.log.info("Stop rank list = %s", ranks_to_stop)
 
         # Convert the list to string.
-        ranks_to_stop_str = ""
-        for rank in ranks_to_stop:
-            if ranks_to_stop_str == "":
-                ranks_to_stop_str = str(rank)
-            else:
-                ranks_to_stop_str += "," + str(rank)
+        ranks_to_stop_str = ",".join(map(str, ranks_to_stop))
         self.log.info("Ranks to stop = %s", ranks_to_stop_str)
 
         properties = self.params.get("rf_2", "/run/cont_property/*")

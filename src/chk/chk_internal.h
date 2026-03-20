@@ -591,6 +591,14 @@ struct chk_pool_shard {
 	chk_pool_free_data_t	 cps_free_cb;
 };
 
+struct chk_engine_ult {
+	/* Link into chk_pool_rec::cpr_ult_list. */
+	d_list_t   ceu_link;
+	ABT_thread ceu_ult;
+	int        ceu_result;
+	char       ceu_data[0];
+};
+
 /* Check engine uses it to trace pools. Query logic uses it to organize the result. */
 struct chk_pool_rec {
 	/* Link into chk_instance::ci_pool_list. */
@@ -601,6 +609,8 @@ struct chk_pool_rec {
 	d_list_t		 cpr_shard_list;
 	/* The list of chk_pending_rec. */
 	d_list_t		 cpr_pending_list;
+	/* The list of active ULTs that are handling some inconsistency and maybe blocked. */
+	d_list_t                 cpr_ult_list;
 	uint32_t		 cpr_shard_nr;
 	uint32_t		 cpr_started:1,
 				 cpr_start_post:1,
@@ -742,6 +752,8 @@ int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t 
 
 void chk_pool_shard_cleanup(struct chk_instance *ins);
 
+int chk_pending_lookup(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
+
 int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *rank_head, uuid_t uuid,
 		    uint64_t seq, uint32_t rank, uint32_t cla, uint32_t option_nr,
 		    uint32_t *options, struct chk_pending_rec **cpr);
@@ -749,8 +761,6 @@ int chk_pending_add(struct chk_instance *ins, d_list_t *pool_head, d_list_t *ran
 int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
 
 int chk_pending_wakeup(struct chk_instance *ins, struct chk_pending_rec *cpr);
-
-void chk_pending_destroy(struct chk_pending_rec *cpr);
 
 int chk_policy_refresh(uint32_t policy_nr, struct chk_policy *policies, struct chk_property *prop);
 
@@ -987,6 +997,26 @@ chk_destroy_tree(daos_handle_t *toh, struct btr_root *root)
 }
 
 static inline void
+chk_pending_destroy(struct chk_instance *ins, struct chk_pending_rec *cpr)
+{
+	if (d_list_empty(&cpr->cpr_pool_link)) {
+		D_ASSERT(d_list_empty(&cpr->cpr_rank_link));
+		D_ASSERT(d_list_empty(&cpr->cpr_ins_link));
+
+		if (cpr->cpr_cond != ABT_COND_NULL)
+			ABT_cond_free(&cpr->cpr_cond);
+
+		if (cpr->cpr_mutex != ABT_MUTEX_NULL)
+			ABT_mutex_free(&cpr->cpr_mutex);
+
+		D_FREE(cpr);
+	} else {
+		cpr->cpr_busy = 0;
+		chk_pending_del(ins, cpr->cpr_seq, NULL);
+	}
+}
+
+static inline void
 chk_destroy_pending_tree(struct chk_instance *ins)
 {
 	ABT_rwlock_wrlock(ins->ci_abt_lock);
@@ -1039,6 +1069,7 @@ chk_pool_put(struct chk_pool_rec *cpr)
 		D_ASSERT(cpr->cpr_thread == ABT_THREAD_NULL);
 		D_ASSERT(d_list_empty(&cpr->cpr_pending_list));
 		D_ASSERT(d_list_empty(&cpr->cpr_shutdown_link));
+		D_ASSERT(d_list_empty(&cpr->cpr_ult_list));
 
 		while ((cps = d_list_pop_entry(&cpr->cpr_shard_list, struct chk_pool_shard,
 					       cps_link)) != NULL) {

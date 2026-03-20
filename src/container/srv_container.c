@@ -5689,7 +5689,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	bool                          update_mtime = false;
 	const char                   *clbl         = NULL;
 	bool                          dup_op       = false;
-	struct ds_pool_svc_op_val     op_val;
+	struct ds_pool_svc_op_val     op_val          = {0};
 	bool                          fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                          fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
 	bool                          fi_pass_nl_noreply;
