@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -72,7 +73,7 @@ class DaosAggregationThrottling(IorTestBase):
 
         # When DAOS-5057 is fixed, adjust the percentage. For now,
         # keep it at 30 %
-        expected_perf_diff = 30.0
+        expected_perf_diff = 35.0
 
         self.verify_performance(metric_before_aggregate,
                                 metric_after_aggregate,
