@@ -1847,7 +1847,7 @@ crt_hg_event_progress_serial(struct crt_hg_context *hg_ctx, const struct timespe
 	/* Skip epoll_wait() call if either there's no fd to wait on, there's already work to do
 	 * (i.e., it is not safe to block), there's no deadline set, we've already reached the
 	 * deadline or we have reached the spin deadline */
-	if (hg_ctx->chc_epfd > 0 && deadline) {
+	if (hg_ctx->chc_epfd > 0 && deadline != NULL) {
 		struct timespec now;
 
 		if (d_gettime_coarse(&now) == 0 && !d_timeless(&now, &hg_ctx->spin_deadline)) {
@@ -1856,7 +1856,7 @@ crt_hg_event_progress_serial(struct crt_hg_context *hg_ctx, const struct timespe
 			hg_ctx->spin_deadline = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
 		}
 
-		if (!hg_ctx->spin_flag) {
+		if (!hg_ctx->spin_flag && d_timeless(&now, deadline)) {
 			if (!HG_Event_ready(hg_ctx->chc_hgctx)) {
 				struct epoll_event event;
 				struct timespec    timeout;
@@ -1873,8 +1873,7 @@ crt_hg_event_progress_serial(struct crt_hg_context *hg_ctx, const struct timespe
 					/* Set new spin deadline to be the current time plus the
 					 * spin duration */
 					hg_ctx->spin_deadline = now;
-					d_timeinc(&hg_ctx->spin_deadline,
-						  CRT_SPIN_TIME_MS * 1000000);
+					d_timeinc_ms(&hg_ctx->spin_deadline, CRT_SPIN_TIME_MS);
 				} else if (nfds < 0) {
 					if (unlikely(errno == EINTR)) {
 						errno = 0; /* reset errno */
@@ -1893,7 +1892,7 @@ crt_hg_event_progress_serial(struct crt_hg_context *hg_ctx, const struct timespe
 				/* Set new spin deadline to be the current time plus the spin
 				 * duration */
 				hg_ctx->spin_deadline = now;
-				d_timeinc(&hg_ctx->spin_deadline, CRT_SPIN_TIME_MS * 1000000);
+				d_timeinc_ms(&hg_ctx->spin_deadline, CRT_SPIN_TIME_MS);
 			}
 		}
 	}
