@@ -145,9 +145,9 @@ level of logging on a per-subsystem basis as well
 ("D_LOG_MASK=DEBUG,MEM=ERR").
 
 -   Log Levels:
-    debug, dbug, info, note, warn, error, err, crit, alrt, fatal, emrg, emit
+    debug, info, note, warn, error, err, crit, alrt, fatal, emrg, emit
 
-Note: debug == dbug, error == err and fatal == emrg.
+Note: error == err and fatal == emrg.
 
 ### Debug Masks/Streams:
 

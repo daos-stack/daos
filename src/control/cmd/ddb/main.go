@@ -192,9 +192,9 @@ func setenvIfNotSet(key, value string) {
 func strToLogLevels(level string) (logging.LogLevel, engine.LogLevel, error) {
 	switch strings.ToUpper(level) {
 	case "TRACE":
-		return logging.LogLevelTrace, engine.LogLevelDbug, nil
-	case "DEBUG", "DBUG":
-		return logging.LogLevelDebug, engine.LogLevelDbug, nil
+		return logging.LogLevelTrace, engine.LogLevelDebug, nil
+	case "DEBUG":
+		return logging.LogLevelDebug, engine.LogLevelDebug, nil
 	case "INFO":
 		return logging.LogLevelInfo, engine.LogLevelInfo, nil
 	case "NOTE", "NOTICE":

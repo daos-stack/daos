@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,11 +43,11 @@ func Test_ValidateLogMasks(t *testing.T) {
 			expErr: errors.New("illegal characters"),
 		},
 		"single level; single assignment; bad subsystem": {
-			masks:  "ERR,zzz=DBUG",
+			masks:  "ERR,zzz=DEBUG",
 			expErr: errors.New("unknown name"),
 		},
 		"single level; single assignment; illegal use of all": {
-			masks:  "ERR,all=DBUG",
+			masks:  "ERR,all=DEBUG",
 			expErr: errors.New("identifier can not be used"),
 		},
 		"single level; single assignment; bad level": {
@@ -141,7 +142,7 @@ func Test_MergeLogEnvVars(t *testing.T) {
 		"debug base level": {
 			masks:      "debug",
 			subsystems: "vos",
-			expMasks:   "ERR,vos=DBUG",
+			expMasks:   "ERR,vos=DEBUG",
 		},
 		"skip subsystem": {
 			masks:      "ERROR,misc=CRIT,mem=DEBUG",
@@ -151,31 +152,31 @@ func Test_MergeLogEnvVars(t *testing.T) {
 		"don't skip subsystem if level above error": {
 			masks:      "error,common=crit,vos=debug",
 			subsystems: "vos",
-			expMasks:   "ERR,common=CRIT,vos=DBUG",
+			expMasks:   "ERR,common=CRIT,vos=DEBUG",
 		},
 		"keep assignment for subsystem in list": {
 			masks:      "err,container=debug,object=debug",
 			subsystems: "object",
-			expMasks:   "ERR,object=DBUG",
+			expMasks:   "ERR,object=DEBUG",
 		},
 		"add assignment for subsystem in list; remove ineffective assignments": {
-			masks:      "dbug,rdb=crit,pool=err",
+			masks:      "debug,rdb=crit,pool=err",
 			subsystems: "pool,mgmt",
-			expMasks:   "ERR,rdb=CRIT,mgmt=DBUG",
+			expMasks:   "ERR,rdb=CRIT,mgmt=DEBUG",
 		},
 		"default base level applied": {
-			masks:      "corpc=crit,iv=dbug,grp=dbug",
+			masks:      "corpc=crit,iv=debug,grp=debug",
 			subsystems: "iv,st",
-			expMasks:   "ERR,corpc=CRIT,iv=DBUG",
+			expMasks:   "ERR,corpc=CRIT,iv=DEBUG",
 		},
 		"all passthrough": {
 			masks:      "debug",
 			subsystems: "all",
-			expMasks:   "DBUG",
+			expMasks:   "DEBUG",
 		},
 		"long mask string": {
 			masks:    "info,dtx=debug,vos=debug,object=debug",
-			expMasks: "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
+			expMasks: "INFO,dtx=DEBUG,vos=DEBUG,object=DEBUG",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
