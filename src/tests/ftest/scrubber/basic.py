@@ -24,7 +24,6 @@ class TestWithScrubberBasic(TestWithScrubber):
         self.ior_cmd.api.update(apis[0])
         self.ior_cmd.flags.update(flags[0], "ior.flags")
         self.ior_cmd.dfs_oclass.update(obj_class[0])
-        self.ior_cmd.dfs_dir_oclass.update(obj_class[0])
         for test in transfer_block_size:
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
