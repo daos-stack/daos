@@ -61,9 +61,10 @@ RUN dnf upgrade &&        \
 # opensuse-network-cluster for lua-lmod (>=8.7.55)
 # opensuse-oss for lua53, lua53-luaterm,, sqlite3-tcl, tcl
 # opensuse-devel-languages-lua for lua53-luafilesystem, lua53-luaposix
+ARG JENKINS_URL
 RUN if [ -n "$JENKINS_URL" ]; then \
-    dnf -y remove lua-lmod \
-    dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*' \
+    dnf -y remove lua-lmod; \
+    dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*'; \
     fi
 
 # Add DAOS users
