@@ -2307,9 +2307,9 @@ struct tgt_discard_arg {
 };
 
 struct child_discard_arg {
-	uint64_t                ca_epoch;
-	uuid_t                  ca_po_uuid;
-	uuid_t                  ca_co_uuid;
+	uint64_t ca_epoch;
+	uuid_t   ca_po_uuid;
+	uuid_t   ca_co_uuid;
 };
 
 static struct tgt_discard_arg*
@@ -2687,7 +2687,8 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 			dss_sleep(100);
 		}
 		if (ds_pool_is_rebuilding(pool)) {
-			D_INFO(DF_UUID " is already being reintegrated!\n", DP_UUID(arg->pool_uuid));
+			D_INFO(DF_UUID " is already being reintegrated!\n",
+			       DP_UUID(arg->pool_uuid));
 			D_GOTO(out_put, rc = -DER_BUSY);
 		}
 	}
