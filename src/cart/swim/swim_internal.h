@@ -83,7 +83,7 @@ struct swim_item {
 	swim_id_t		 si_from;
 	void			*si_args;
 	union {
-		uint64_t	 si_deadline; /**< for sc_suspects/sc_ipings */
+		struct timespec	 si_deadline; /**< for sc_suspects/sc_ipings */
 		uint64_t	 si_count;    /**< for sc_updates */
 	} u;
 };
@@ -105,10 +105,10 @@ struct swim_context {
 	swim_id_t		 sc_self;
 
 	uint64_t		 sc_default_ping_timeout;
-	uint64_t		 sc_expect_progress_time;
-	uint64_t		 sc_next_tick_time;
-	uint64_t		 sc_next_event;
-	uint64_t		 sc_deadline;
+	struct timespec		 sc_expect_progress_time;
+	struct timespec		 sc_next_tick_time;
+	struct timespec		 sc_next_event;
+	struct timespec		 sc_deadline;
 
 	uint64_t		 sc_piggyback_tx_max;
 

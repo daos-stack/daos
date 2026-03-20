@@ -297,7 +297,6 @@ static void *progress_thread(void *arg)
 {
 	int		num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 	cpu_set_t	cpuset;
-	int64_t		timeout = 0;
 	int		i, rc = 0;
 
 	CPU_ZERO(&cpuset);
@@ -308,7 +307,7 @@ static void *progress_thread(void *arg)
 
 	do {
 		for (i = 0; i < members_count; i++) {
-			rc = swim_progress(g.swim_ctx[i], timeout);
+			rc = swim_progress(g.swim_ctx[i], NULL);
 			if (rc == -ESHUTDOWN)
 				g.shutdown = 1;
 		}

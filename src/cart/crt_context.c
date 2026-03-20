@@ -1826,8 +1826,19 @@ crt_progress_legacy(struct crt_context *ctx, int64_t timeout)
 	 */
 	d_gettime_coarse(&now);
 	crt_context_timeout_check(ctx, &now);
-	if (ctx->cc_prog_cb != NULL)
-		timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
+	if (ctx->cc_prog_cb != NULL) {
+		struct timespec deadline = now, *deadline_p = NULL;
+		if (timeout > 0) {
+			d_timeinc(&deadline, (uint64_t)(timeout * 1000));
+			deadline_p = &deadline;
+		}
+		deadline = ctx->cc_prog_cb(ctx, deadline_p, ctx->cc_prog_cb_arg);
+		 if (deadline_p != NULL) {
+			timeout = d_time2ms(d_timediff(&now, &deadline));
+			if (timeout < 0)
+				timeout = 0;
+		}
+	}
 
 	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
 		/** call progress once again with the real timeout */
@@ -1842,11 +1853,8 @@ crt_progress_legacy(struct crt_context *ctx, int64_t timeout)
 static int
 crt_progress_event(struct crt_context *ctx, int64_t timeout_us)
 {
-	struct timespec *deadline_p, now = {.tv_sec = 0, .tv_nsec = 0};
+	struct timespec *deadline_p, now = {.tv_sec = 0, .tv_nsec = 0}, new_deadline;
 	int              rc;
-
-	if (ctx->cc_prog_cb != NULL)
-		timeout_us = ctx->cc_prog_cb(ctx, timeout_us, ctx->cc_prog_cb_arg);
 
 	if (timeout_us > 0) {
 		rc = d_gettime_coarse(&now);
@@ -1856,10 +1864,18 @@ crt_progress_event(struct crt_context *ctx, int64_t timeout_us)
 		}
 
 		crt_context_timeout_check(ctx, &now);
-		deadline_p = &now;
+		new_deadline = now;
+		deadline_p = &new_deadline;
 		d_timeinc(deadline_p, (uint64_t)(timeout_us * 1000));
 	} else
 		deadline_p = NULL;
+
+	/* Used for SWIM progress */
+	if (ctx->cc_prog_cb != NULL) {
+		new_deadline = ctx->cc_prog_cb(ctx, deadline_p, ctx->cc_prog_cb_arg);
+		if (deadline_p != NULL)
+			deadline_p = &new_deadline;
+	}
 
 	rc = crt_hg_event_progress(&ctx->cc_hg_ctx, deadline_p);
 	if (unlikely(rc && rc != -DER_TIMEDOUT))
@@ -1926,8 +1942,20 @@ crt_progress_cond_legacy(struct crt_context *ctx, int64_t timeout, crt_progress_
 
 		d_gettime_coarse(&ts_now);
 		crt_context_timeout_check(ctx, &ts_now);
-		if (ctx->cc_prog_cb != NULL)
-			timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
+		if (ctx->cc_prog_cb != NULL) {
+			struct timespec deadline = ts_now, *deadline_p = NULL;
+			if (timeout > 0) {
+				d_timeinc(&deadline, (uint64_t)(timeout * 1000));
+				deadline_p = &deadline;
+			}
+			deadline = ctx->cc_prog_cb(ctx, deadline_p, ctx->cc_prog_cb_arg);
+			if (deadline_p != NULL) {
+				if (d_timeless(&ts_now, &deadline))
+					timeout = d_time2ms(d_timediff(&ts_now, &deadline));
+				else
+					timeout = 0;
+			}
+		}
 
 		if (timeout < 0) {
 			/**

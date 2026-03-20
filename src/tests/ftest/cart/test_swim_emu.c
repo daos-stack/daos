@@ -217,10 +217,10 @@ static int test_set_member_state(struct swim_context *ctx,
 int test_run(void)
 {
 	enum swim_member_status s;
-	struct timespec now;
-	uint64_t time = swim_now_ms();
+	struct timespec now, time;
 	int i, j, cs, cd, tick, rc = 0;
 
+	d_gettime_coarse(&time);
 	sleep(1);
 	fprintf(stderr, "-=main=- thread running on core %d\n", sched_getcpu());
 	for (i = 0; i < members_count; i++)
@@ -229,7 +229,7 @@ int test_run(void)
 	tick = 0;
 	/* print the state of all members from all targets */
 	while (!g.shutdown && g.swim_ctx[0]->sc_self != SWIM_ID_INVALID) {
-		if (time != g.swim_ctx[0]->sc_next_tick_time) {
+		if (!d_timecmp(&time, &g.swim_ctx[0]->sc_next_tick_time)) {
 			time = g.swim_ctx[0]->sc_next_tick_time;
 			tick++;
 
@@ -402,7 +402,6 @@ static void *progress_thread(void *arg)
 {
 	int		num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 	cpu_set_t	cpuset;
-	int64_t		timeout = 0;
 	int		i, rc = 0;
 
 	CPU_ZERO(&cpuset);
@@ -413,7 +412,7 @@ static void *progress_thread(void *arg)
 
 	do {
 		for (i = 0; i < members_count; i++) {
-			rc = swim_progress(g.swim_ctx[i], timeout);
+			rc = swim_progress(g.swim_ctx[i], NULL);
 			if (rc && rc != -DER_TIMEDOUT)
 				fprintf(stderr, "swim_progress() rc=%d\n", rc);
 		}
