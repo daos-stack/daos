@@ -157,7 +157,6 @@ dmg
 dnf
 dockerfile
 docstring
-doneapi
 dpdk
 drpc
 dst
@@ -215,8 +214,6 @@ hugepage
 hugepages
 hwloc
 ib
-icc
-icx
 idx
 iface
 indata
@@ -313,7 +310,6 @@ oclass
 ofi
 oid
 ok
-oneapi
 opcode
 openmpi
 orterun

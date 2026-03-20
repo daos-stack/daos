@@ -1,5 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -33,7 +33,6 @@ import sys
 import traceback
 from copy import deepcopy
 
-from SCons.Errors import InternalError
 from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
 from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
@@ -413,7 +412,6 @@ class PreReqComponent():
         self.__env = env
         self.__dry_run = GetOption('no_exec')
         self.__require_optional = GetOption('require_optional')
-        self._has_icx = False
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
@@ -452,7 +450,7 @@ class PreReqComponent():
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
                               ['default', 'dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('COMPILER', "Set the compiler family to use", 'gcc',
-                              ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
+                              ['gcc', 'covc', 'clang'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
 
@@ -567,33 +565,6 @@ class PreReqComponent():
 
         return self.__env.subst("$BUILD_ROOT/$BUILD_TYPE/$COMPILER")
 
-    def _setup_intelc(self):
-        """Setup environment to use Intel compilers"""
-        try:
-            env = self.__env.Clone(tools=['doneapi'])
-            self._has_icx = True
-        except InternalError:
-            print("No oneapi compiler, trying legacy")
-            env = self.__env.Clone(tools=['intelc'])
-        self.__env["ENV"]["PATH"] = env["ENV"]["PATH"]
-        self.__env["ENV"]["LD_LIBRARY_PATH"] = env["ENV"]["LD_LIBRARY_PATH"]
-        self.__env.Replace(AR=env.get("AR"))
-        self.__env.Replace(ENV=env.get("ENV"))
-        self.__env.Replace(CC=env.get("CC"))
-        self.__env.Replace(CXX=env.get("CXX"))
-        version = env.get("INTEL_C_COMPILER_VERSION")
-        self.__env.Replace(INTEL_C_COMPILER_VERSION=version)
-        self.__env.Replace(LINK=env.get("LINK"))
-        # disable the warning about Cilk since we don't use it
-        if not self._has_icx:
-            self.__env.AppendUnique(LINKFLAGS=["-static-intel",
-                                               "-diag-disable=10237"])
-            self.__env.AppendUnique(CCFLAGS=["-diag-disable:2282",
-                                             "-diag-disable:188",
-                                             "-diag-disable:2405",
-                                             "-diag-disable:1338"])
-        return {'CC': env.get("CC"), "CXX": env.get("CXX")}
-
     def _setup_compiler(self):
         """Setup the compiler to use"""
         compiler_map = {'gcc': {'CC': 'gcc', 'CXX': 'g++'},
@@ -607,14 +578,9 @@ class PreReqComponent():
             return
 
         compiler = self.__env.get('COMPILER')
-        if compiler == 'icc':
-            compiler_map['icc'] = self._setup_intelc()
 
         if self.__env.get('WARNING_LEVEL') == 'error':
-            if compiler == 'icc' and not self._has_icx:
-                warning_flag = '-Werror-all'
-            else:
-                warning_flag = '-Werror'
+            warning_flag = '-Werror'
             self.__env.AppendUnique(CCFLAGS=warning_flag)
 
         env = self.__env.Clone()
