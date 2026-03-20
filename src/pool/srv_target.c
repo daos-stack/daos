@@ -2812,8 +2812,24 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	}
 
 	if (ds_pool_is_rebuilding(pool)) {
-		D_INFO(DF_UUID " is already being reintegrated!\n", DP_UUID(arg->pool_uuid));
-		D_GOTO(out_put, rc = -DER_BUSY);
+		int i;
+
+		/* The leader has already deemed the previous rebuild complete (hence this RPC),
+		 * but the local target might still be finalizing cleanup (up to 2s lag).
+		 * We wait for the local status to sync up.
+		 *
+		 * TODO: This race should be fixed by making the rebuild leader wait for
+		 * all targets to finish before marking the rebuild as globally complete.
+		 */
+		for (i = 0; i < 40; i++) { /* Wait up to 4 seconds */
+			if (!ds_pool_is_rebuilding(pool))
+				break;
+			dss_sleep(100);
+		}
+		if (ds_pool_is_rebuilding(pool)) {
+			D_INFO(DF_UUID " is already being reintegrated!\n", DP_UUID(arg->pool_uuid));
+			D_GOTO(out_put, rc = -DER_BUSY);
+		}
 	}
 
 	ABT_mutex_lock(pool->sp_mutex);
