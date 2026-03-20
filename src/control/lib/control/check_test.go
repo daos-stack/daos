@@ -16,6 +16,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -328,6 +329,105 @@ func TestControl_SystemCheckReportRegister(t *testing.T) {
 
 			test.CmpErr(t, tc.expErr, err)
 			test.CmpAny(t, "response", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckReportResp{}))
+		})
+	}
+}
+
+func TestControl_CheckEngineRepair(t *testing.T) {
+	reqWithHostList := func(rank uint32, actReq *mgmtpb.CheckActReq, hosts ...string) *CheckEngineRepairReq {
+		req := &CheckEngineRepairReq{
+			CheckEngineActReq: ctlpb.CheckEngineActReq{
+				Rank: rank,
+				Req:  actReq,
+			},
+		}
+		req.SetHostList(hosts)
+		return req
+	}
+
+	defaultReq := reqWithHostList(42, &mgmtpb.CheckActReq{}, "1.2.3.4")
+
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *CheckEngineRepairReq
+		expResp *CheckEngineRepairResp
+		expErr  error
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"no action req": {
+			req:    reqWithHostList(5, nil),
+			expErr: errors.New("no action"),
+		},
+		"host list too long": {
+			req:    reqWithHostList(5, &mgmtpb.CheckActReq{}, "1.2.3.4", "5.6.7.8"),
+			expErr: errors.New("exactly one host"),
+		},
+		"gRPC fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			req:    defaultReq,
+			expErr: errors.New("MockInvoker error"),
+		},
+		"no host response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{},
+				},
+			},
+			req:    defaultReq,
+			expErr: errors.New("no host responses"),
+		},
+		"bad return type": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Message: &MockMessage{},
+						},
+					},
+				},
+			},
+			req:    defaultReq,
+			expErr: errors.New("bad response type"),
+		},
+		"got response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Message: &ctlpb.CheckEngineActResp{
+								Rank: 5,
+								Resp: &mgmtpb.CheckActResp{
+									Status: daos.MiscError.Int32(),
+								},
+							},
+						},
+					},
+				},
+			},
+			req: defaultReq,
+			expResp: &CheckEngineRepairResp{
+				CheckEngineActResp: ctlpb.CheckEngineActResp{
+					Rank: 5,
+					Resp: &mgmtpb.CheckActResp{
+						Status: daos.MiscError.Int32(),
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			invoker := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+			resp, err := CheckEngineRepair(ctx, invoker, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "response", tc.expResp, resp,
+				cmpopts.IgnoreUnexported(ctlpb.CheckEngineActResp{}, mgmtpb.CheckActResp{}))
 		})
 	}
 }

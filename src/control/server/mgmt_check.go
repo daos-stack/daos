@@ -20,9 +20,11 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -589,7 +591,15 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 
 // SystemCheckRepair repairs a previous checker finding.
 func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActReq) (*mgmtpb.CheckActResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
 		return nil, err
 	}
 
@@ -602,24 +612,34 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, errors.Errorf("invalid action %s (must be one of %s)", req.Act, f.ValidChoicesString())
 	}
 
-	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerAction, req)
+	// Repair must be sent to the rank associated with the finding
+	r := ranklist.Rank(f.Rank)
+	m, err := svc.sysdb.FindMemberByRank(r)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "looking up rank %d for finding 0x%x", r, f.Seq)
 	}
 
-	resp := new(mgmtpb.CheckActResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
+	// Send to rank's control address
+	engReq := &control.CheckEngineRepairReq{
+		CheckEngineActReq: ctlpb.CheckEngineActReq{
+			Rank: r.Uint32(),
+			Req:  req,
+		},
+	}
+	engReq.HostList = []string{m.Addr.String()}
+	engResp, err := control.CheckEngineRepair(ctx, svc.rpcClient, engReq)
+	if err != nil {
+		return nil, errors.Wrapf(err, "send repair request to rank %d", r)
 	}
 
-	if resp.Status == 0 {
+	if engResp.Resp.Status == 0 {
 		if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
 			return nil, err
 		}
 		svc.log.Debugf("Set action %s for finding %d", req.Act, req.Seq)
 	}
 
-	return resp, nil
+	return engResp.Resp, nil
 }
 
 // SystemCheckEngineReport registers a checker report with the management service.

@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pbutil "github.com/daos-stack/daos/src/control/common/proto"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -752,6 +753,57 @@ func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 	}
 
 	return ur.getMSError()
+}
+
+// CheckEngineRepairReq contains a repair request for a specific engine.
+type CheckEngineRepairReq struct {
+	unaryRequest
+
+	ctlpb.CheckEngineActReq
+}
+
+// CheckEngineRepairResp contains the engine response for a repair request.
+type CheckEngineRepairResp struct {
+	ctlpb.CheckEngineActResp
+}
+
+// CheckEngineRepair directs a repair request to a specific engine.
+//
+// NB: This is an inter-server RPC.
+func CheckEngineRepair(ctx context.Context, rpcClient UnaryInvoker, req *CheckEngineRepairReq) (*CheckEngineRepairResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Req == nil {
+		return nil, errors.Errorf("no action request included in %T", req)
+	}
+
+	if len(req.HostList) != 1 {
+		return nil, errors.Errorf("CheckEngineRepair requires exactly one host")
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).CheckEngineRepair(ctx, &req.CheckEngineActReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	if len(ur.Responses) == 0 {
+		return nil, errors.New("no host responses")
+	}
+
+	pbResp, ok := ur.Responses[0].Message.(*ctlpb.CheckEngineActResp)
+	if !ok {
+		return nil, errors.Errorf("bad response type %T", ur.Responses[0].Message)
+	}
+
+	return &CheckEngineRepairResp{
+		CheckEngineActResp: *pbResp,
+	}, nil
 }
 
 // SystemCheckEngineReportReq contains parameters to be passed to SystemCheckEngineReport.
