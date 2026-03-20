@@ -619,13 +619,9 @@ class Ior:
 
         if not self.manager.job.test_file.value:
             # Provide a default test_file if not specified
-            if dfuse and self.manager.job.value == "POSIX":
+            if dfuse and (self.manager.job.api.value == "POSIX" or plugin_path):
                 test_file = self.manager.job.test_file.value or 'testfile'
                 self.manager.job.test_file.update(os.path.join(dfuse.mount_dir.value, test_file))
-            elif self.manager.job.value == "HDF5" and plugin_path:
-                # UNS path for file
-                test_file = format_path(
-                    self.manager.job.dfs_pool.value, self.manager.job.dfs_cont.value, "testfile")
             elif self.manager.job.api.value == "DFS":
                 self.manager.job.test_file.update(
                     os.path.join(os.sep, self.label_generator.get_label("testfile")))
