@@ -336,7 +336,9 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
             msg = f"dmg check start with two same corrupted pool labels failed! {command_failure}"
             self.fail(msg)
 
-        self.log_step("Wait for checker to detect inconsistent container label for pool_1 pool_1.")
+        msg = ('Wait for checker to detect inconsistent container label for '
+               '"dmg check start pool_1 pool_1."')
+        self.log_step(msg)
         query_reports = None
         for _ in range(8):
             check_query_out = dmg_command.check_query()
@@ -354,7 +356,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         if expected_fault not in fault_msg:
             self.fail(f"Checker didn't detect {expected_fault}! Fault msg = {fault_msg}")
 
-        self.log_step("Repair the fault for pool_1 pool_1.")
+        self.log_step('Repair the fault for "dmg check start pool_1 pool_1".')
         # Obtain the seq num (ID) to repair.
         seq = query_reports[0]["seq"]
         # Repair with action 2, which is to use the original container label.
@@ -386,7 +388,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         if not query_reports:
             self.fail("Checker didn't detect any inconsistency!")
         if len(query_reports) < 3:
-            self.fail(f"Checker didn't detect 3 inconsistencies! {len(query_reports)}")
+            self.fail(f"Checker only detected {len(query_reports)}/3 consistencies!")
         # Obtain the seq nums (ID) to repair.
         seq_nums = []
         for query_report in query_reports:
