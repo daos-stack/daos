@@ -685,6 +685,19 @@ mrone_recx_vos2_daos(struct migrate_one *mrone, int shard, daos_iod_t *iods, int
 	mrone_recx_daos_vos_internal(mrone, false, shard, iods, iods_num);
 }
 
+static bool
+mrone_get_zero_iod_size(daos_iod_t *iods, int iod_num)
+{
+	int i;
+
+	for (i = 0; i < iod_num; i++) {
+		if (iods[i].iod_size == 0)
+			return true;
+	}
+
+	return false;
+}
+
 static int
 mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 			 daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
@@ -692,6 +705,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 {
 	uint32_t *extra_arg = NULL;
 	int       waited    = 0;
+	bool      force_degraded = false;
 	int       rc;
 
 	/* pass rebuild epoch by extra_arg */
@@ -703,6 +717,14 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
+	if ((rc == 0 && mrone_get_zero_iod_size(iods, iod_num)) && !force_degraded &&
+	    !tls->mpt_fini) {
+		DL_INFO(rc, DF_RB ": retry " DF_UOID " fetch", DP_RB_MPT(tls),
+			DP_UOID(mrone->mo_oid));
+		force_degraded = true;
+		flags |= DIOF_FOR_FORCE_DEGRADE;
+		goto retry;
+	}
 	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
