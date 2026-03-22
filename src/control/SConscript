@@ -24,7 +24,21 @@ def get_build_tags(benv):
         tags.append("pprof")
     else:
         tags.append("release")
+    if is_server_build(benv):
+        print("Building server go binary: adding 'server' build tag")
+        tags.append("server")
     return f"-tags {','.join(tags)}"
+
+
+def is_server_build(benv):
+    """Check if the go-lang binary being built is a server binary."""
+    env = benv.get("ENV")
+    if env is None:
+        return False
+    ld_flags = env.get("CGO_LDFLAGS")
+    if ld_flags is None:
+        return False
+    return "-ldaos_common_pmem" in ld_flags
 
 
 def is_release_build(benv):
