@@ -735,7 +735,9 @@ func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos
 
 		var pool *daos.PoolInfo
 		if queryEnabled {
-			poolHandle, pool, err := poolConnect(poolUUID.String(), sysName, daos.PoolConnectFlagReadOnly, true)
+			var poolHandle C.daos_handle_t
+
+			poolHandle, pool, err = poolConnect(poolUUID.String(), sysName, daos.PoolConnectFlagReadOnly, true)
 			if err != nil {
 				log.Errorf("failed to connect to pool %q: %s", poolLabel, err)
 				continue
