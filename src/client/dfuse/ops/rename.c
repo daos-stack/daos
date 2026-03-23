@@ -1,11 +1,13 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
 #include "dfuse.h"
+#include <daos/dfs_lib_int.h>
 
 /* Handle a file that has been moved.
  *
@@ -18,8 +20,10 @@ dfuse_oid_moved(struct dfuse_info *dfuse_info, daos_obj_id_t *oid, struct dfuse_
 		const char *name, struct dfuse_inode_entry *newparent, const char *newname)
 {
 	struct dfuse_inode_entry *ie;
-	int                       rc;
+	struct dfuse_dentry       released = {0};
 	ino_t                     ino;
+
+	D_INIT_LIST_HEAD(&released.dd_list);
 
 	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
 
@@ -29,24 +33,15 @@ dfuse_oid_moved(struct dfuse_info *dfuse_info, daos_obj_id_t *oid, struct dfuse_
 	if (!ie)
 		return;
 
-	/* If the move is not from where we thought the file was then invalidate the old entry */
-	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
-		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
+	/* Replace old dentry with new, releasing any stale dentries */
+	dfuse_ie_dentry_replace(ie, parent->ie_stat.st_ino, name, newparent->ie_stat.st_ino,
+				newname, &released);
 
-		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
-						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
-
-		if (rc && rc != -ENOENT)
-			DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
-	}
-
-	/* Update the inode entry data */
-	ie->ie_parent = newparent->ie_stat.st_ino;
-	strncpy(ie->ie_name, newname, NAME_MAX);
-
-	/* Set the new parent and name */
+	/* Set the new parent and name in the DFS object */
 	dfs_update_parentfd(ie->ie_obj, newparent->ie_obj, newname);
+
+	/* Invalidate any released dentries from the cache */
+	dfuse_ie_dentry_inval(dfuse_info, &released);
 
 	/* Drop the ref again */
 	dfuse_inode_decref(dfuse_info, ie);
@@ -60,6 +55,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 	daos_obj_id_t      moid       = {};
 	daos_obj_id_t      oid        = {};
+	bool               deleted    = true;
 	int                rc;
 
 	if (flags != 0) {
@@ -86,7 +82,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, flags, parent->ie_obj, (char *)name,
-			       newparent->ie_obj, (char *)newname, &moid, &oid);
+			       newparent->ie_obj, (char *)newname, &moid, &oid, &deleted);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -96,10 +92,15 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_oid_moved(dfuse_info, &moid, parent, name, newparent, newname);
 
 	/* Check if a file was unlinked and see if anything needs updating */
-	if (oid.lo || oid.hi)
-		dfuse_oid_unlinked(dfuse_info, req, &oid, newparent, newname);
-	else
+	if (oid.lo || oid.hi) {
+		if (!deleted) {
+			dfuse_hardlink_removed(dfuse_info, req, &oid, newparent, newname);
+		} else {
+			dfuse_oid_removed(dfuse_info, req, &oid, newparent, newname);
+		}
+	} else {
 		DFUSE_REPLY_ZERO(newparent, req);
+	}
 
 	return;
 

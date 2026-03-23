@@ -288,8 +288,18 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	/* store SB & root OIDs as container property */
-	roots.cr_oids[2] = roots.cr_oids[3]          = DAOS_OBJ_NIL;
+	/* select oclass and generate HLM (hardlink metadata) OID */
+	roots.cr_oids[2].lo = RESERVED_LO;
+	roots.cr_oids[2].hi = HLM_HI;
+	rc = daos_obj_generate_oid_by_rf(poh, rf, &roots.cr_oids[2], 0, dattr.da_dir_oclass_id,
+					 dir_oclass_hint, 0, pa_domain);
+	if (rc) {
+		D_ERROR("Failed to generate HLM OID " DF_RC "\n", DP_RC(rc));
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
+	}
+
+	/* store SB, root & HLM OIDs as container property */
+	roots.cr_oids[3] = DAOS_OBJ_NIL;
 
 	if (roots_entry == NULL) {
 		/* need to add roots prop to list */
@@ -460,15 +470,298 @@ out_prop:
 #define DFS_ELAPSED_TIME   30
 
 struct dfs_oit_args {
-	daos_handle_t oit;
-	uint64_t      flags;
-	uint64_t      snap_epoch;
-	uint64_t      skipped;
-	uint64_t      failed;
-	time_t        start_time;
-	time_t        print_time;
-	uint64_t      num_scanned;
+	daos_handle_t        oit;
+	uint64_t             flags;
+	uint64_t             snap_epoch;
+	uint64_t             skipped;
+	uint64_t             failed;
+	time_t               start_time;
+	time_t               print_time;
+	uint64_t             num_scanned;
+	struct d_hash_table *hlm_hash;
 };
+
+/** Hash table entry to track HLM objects for hardlink verification */
+struct hlm_check_entry {
+	daos_obj_id_t hce_oid;            /**< Object ID (key) */
+	uint64_t      hce_stored_linkcnt; /**< Link count stored in HLM (ref_cnt) */
+	uint64_t      hce_cur_linkcnt;    /**< Current link count from traversal */
+	d_list_t      hce_link;           /**< Hash table link */
+};
+
+static inline struct hlm_check_entry *
+hlm_check_obj(d_list_t *rlink)
+{
+	return container_of(rlink, struct hlm_check_entry, hce_link);
+}
+
+static bool
+hlm_check_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
+{
+	struct hlm_check_entry *entry = hlm_check_obj(rlink);
+
+	D_ASSERT(ksize == sizeof(daos_obj_id_t));
+	return daos_oid_cmp(entry->hce_oid, *(daos_obj_id_t *)key) == 0;
+}
+
+static uint32_t
+hlm_check_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct hlm_check_entry *entry = hlm_check_obj(rlink);
+
+	return d_hash_string_u32((const char *)&entry->hce_oid, sizeof(daos_obj_id_t));
+}
+
+static void
+hlm_check_rec_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct hlm_check_entry *entry = hlm_check_obj(rlink);
+
+	D_FREE(entry);
+}
+
+static d_hash_table_ops_t hlm_check_hash_ops = {
+    .hop_key_cmp  = hlm_check_key_cmp,
+    .hop_rec_hash = hlm_check_rec_hash,
+    .hop_rec_free = hlm_check_rec_free,
+};
+
+#define HLM_CHECK_HASH_BITS 10
+
+/**
+ * Iterate through HLM object and populate the hash table with all entries.
+ * Each entry in HLM has the OID as dkey and stores ref_cnt among other fields.
+ */
+static int
+hlm_populate_check_hash(dfs_t *dfs, struct d_hash_table *hlm_hash, uint64_t flags)
+{
+	daos_anchor_t    anchor   = {0};
+	daos_key_desc_t *kds      = NULL;
+	char            *enum_buf = NULL;
+	d_sg_list_t      sgl;
+	d_iov_t          iov;
+	int              rc = 0;
+
+	/* If HLM is not enabled for this container, nothing to do */
+	if (daos_obj_id_is_nil(dfs->hlm_oid))
+		return 0;
+
+	D_ALLOC_ARRAY(kds, DFS_ITER_NR);
+	if (kds == NULL)
+		return ENOMEM;
+
+	D_ALLOC_ARRAY(enum_buf, DFS_ITER_NR * sizeof(daos_obj_id_t));
+	if (enum_buf == NULL) {
+		D_FREE(kds);
+		return ENOMEM;
+	}
+
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, DFS_ITER_NR * sizeof(daos_obj_id_t));
+	sgl.sg_iovs = &iov;
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t nr = DFS_ITER_NR;
+		uint32_t i;
+		char    *ptr;
+
+		rc = daos_obj_list_dkey(dfs->hlm_oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_list_dkey() on HLM failed " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		if (nr == 0)
+			continue;
+
+		ptr = enum_buf;
+		for (i = 0; i < nr; i++) {
+			struct hlm_check_entry *entry;
+			daos_obj_id_t          *oid_ptr;
+			struct dfs_entry        hlm_entry = {0};
+
+			if (kds[i].kd_key_len != sizeof(daos_obj_id_t)) {
+				D_ERROR("Unexpected dkey size in HLM: %lu\n",
+					(unsigned long)kds[i].kd_key_len);
+				D_GOTO(out, rc = EINVAL);
+			}
+
+			oid_ptr = (daos_obj_id_t *)ptr;
+
+			/* Fetch the ref_cnt from HLM for this OID */
+			rc = hlm_fetch_entry(dfs->hlm_oh, DAOS_TX_NONE, oid_ptr, &hlm_entry);
+			if (rc) {
+				D_ERROR("Failed to fetch HLM entry for " DF_OID ": %d\n",
+					DP_OID(*oid_ptr), rc);
+				D_GOTO(out, rc);
+			}
+
+			/**
+			 * Only regular files (array type) should be in HLM. If we find a
+			 * non-array object, this is corruption - punch the HLM entry.
+			 */
+			if (!daos_is_array_type(daos_obj_id2type(*oid_ptr))) {
+				D_ERROR("Invalid object type in HLM. OID: " DF_OID ", type: %d\n",
+					DP_OID(*oid_ptr), daos_obj_id2type(*oid_ptr));
+				if (flags & (DFS_CHECK_REMOVE | DFS_CHECK_RELINK)) {
+					daos_key_t dkey;
+
+					D_PRINT("Removing invalid object from HLM entry\n");
+					d_iov_set(&dkey, oid_ptr, sizeof(daos_obj_id_t));
+					rc = daos_obj_punch_dkeys(dfs->hlm_oh, DAOS_TX_NONE, 0, 1,
+								  &dkey, NULL);
+					if (rc) {
+						D_ERROR("Failed to punch invalid HLM entry " DF_OID
+							" " DF_RC "\n",
+							DP_OID(*oid_ptr), DP_RC(rc));
+						D_GOTO(out, rc = daos_der2errno(rc));
+					}
+				}
+				ptr += kds[i].kd_key_len;
+				continue;
+			}
+
+			D_ALLOC_PTR(entry);
+			if (entry == NULL)
+				D_GOTO(out, rc = ENOMEM);
+
+			oid_cp(&entry->hce_oid, *oid_ptr);
+			entry->hce_stored_linkcnt = hlm_entry.ref_cnt;
+			entry->hce_cur_linkcnt    = 0;
+
+			rc = d_hash_rec_insert(hlm_hash, &entry->hce_oid, sizeof(daos_obj_id_t),
+					       &entry->hce_link, true);
+			if (rc) {
+				D_ERROR("Failed to insert HLM entry into hash " DF_RC "\n",
+					DP_RC(rc));
+				D_FREE(entry);
+				D_GOTO(out, rc = daos_der2errno(rc));
+			}
+
+			ptr += kds[i].kd_key_len;
+		}
+	}
+
+out:
+	D_FREE(kds);
+	D_FREE(enum_buf);
+	return rc;
+}
+
+/** Context for HLM link count verification traverse callback */
+struct hlm_verify_arg {
+	dfs_t   *dfs;
+	uint64_t flags;
+	uint64_t mismatches;
+	uint64_t fixed;
+};
+
+/**
+ * Callback for traversing HLM hash table to verify and fix link counts.
+ * If hce_cur_linkcnt != hce_stored_linkcnt, update the HLM entry.
+ */
+static int
+hlm_verify_linkcnt_cb(d_list_t *link, void *arg)
+{
+	struct hlm_verify_arg  *varg = (struct hlm_verify_arg *)arg;
+	struct hlm_check_entry *hce  = hlm_check_obj(link);
+	dfs_t                  *dfs  = varg->dfs;
+	daos_key_t              dkey;
+	d_sg_list_t             sgl;
+	d_iov_t                 sg_iovs[3];
+	daos_iod_t              iod;
+	daos_recx_t             recxs[3];
+	struct timespec         now;
+	int                     rc;
+
+	/**
+	 * No directory entries point to this OID - it's an orphan in HLM.
+	 * This could happen if:
+	 * 1. Object exists but unmarked - handled by Pass 1 (REMOVE) or Pass 2 (RELINK)
+	 * 2. Object doesn't exist - HLM entry is garbage, punch it
+	 * 3. HLM entry has ref_cnt=0 stored (invalid state)
+	 *
+	 * We punch the HLM entry here if repair flags are set. If the object
+	 * exists and gets relinked in Pass 2, the HLM entry will be recreated.
+	 */
+	if (hce->hce_cur_linkcnt == 0) {
+		D_PRINT("HLM entry " DF_OID " has no directory entries (stored=%lu, cur=%lu)\n",
+			DP_OID(hce->hce_oid), (unsigned long)hce->hce_stored_linkcnt,
+			(unsigned long)hce->hce_cur_linkcnt);
+
+		varg->mismatches++;
+		if (varg->flags & (DFS_CHECK_REMOVE | DFS_CHECK_RELINK)) {
+			d_iov_set(&dkey, &hce->hce_oid, sizeof(daos_obj_id_t));
+			rc = daos_obj_punch_dkeys(dfs->hlm_oh, DAOS_TX_NONE, 0, 1, &dkey, NULL);
+			if (rc && rc != -DER_NONEXIST) {
+				D_ERROR("Failed to punch orphan HLM entry " DF_OID " " DF_RC "\n",
+					DP_OID(hce->hce_oid), DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+			varg->fixed++;
+		}
+		return 0;
+	}
+
+	/** No mismatch - counts match */
+	if (hce->hce_cur_linkcnt == hce->hce_stored_linkcnt)
+		return 0;
+
+	varg->mismatches++;
+
+	/**
+	 * Link count mismatch detected. The stored link count in HLM doesn't
+	 * match the actual number of directory entries pointing to this OID.
+	 * Update HLM with the correct (current) link count.
+	 */
+	D_PRINT("HLM entry " DF_OID " link count mismatch (stored=%lu, cur=%lu)\n",
+		DP_OID(hce->hce_oid), (unsigned long)hce->hce_stored_linkcnt,
+		(unsigned long)hce->hce_cur_linkcnt);
+
+	/** Only fix if repair flags are set */
+	if (!(varg->flags & (DFS_CHECK_REMOVE | DFS_CHECK_RELINK)))
+		return 0;
+
+	/* Get current time for ctime update */
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc) {
+		D_ERROR("clock_gettime() failed: %d (%s)\n", errno, strerror(errno));
+		return errno;
+	}
+
+	/* Update ref_cnt and ctime in HLM */
+	d_iov_set(&dkey, &hce->hce_oid, sizeof(daos_obj_id_t));
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod.iod_nr      = 3;
+	recxs[0].rx_idx = REF_CNT_IDX;
+	recxs[0].rx_nr  = sizeof(uint64_t);
+	recxs[1].rx_idx = CTIME_IDX;
+	recxs[1].rx_nr  = sizeof(uint64_t);
+	recxs[2].rx_idx = CTIME_NSEC_IDX;
+	recxs[2].rx_nr  = sizeof(uint64_t);
+	iod.iod_recxs   = recxs;
+	iod.iod_type    = DAOS_IOD_ARRAY;
+	iod.iod_size    = 1;
+
+	d_iov_set(&sg_iovs[0], &hce->hce_cur_linkcnt, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[1], &now.tv_sec, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[2], &now.tv_nsec, sizeof(uint64_t));
+	sgl.sg_nr     = 3;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = sg_iovs;
+
+	rc = daos_obj_update(dfs->hlm_oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
+			     NULL);
+	if (rc) {
+		D_ERROR("Failed to update HLM ref_cnt for " DF_OID " " DF_RC "\n",
+			DP_OID(hce->hce_oid), DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	varg->fixed++;
+	return 0;
+}
 
 static int
 fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char *enum_buf,
@@ -564,7 +857,9 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	d_iov_t              marker;
 	bool                 mark_data = true;
 	struct timespec      current_time;
+	d_list_t            *rlink;
 	int                  rc;
+	int                  rc2;
 
 	rc = clock_gettime(CLOCK_REALTIME, &current_time);
 	if (rc)
@@ -578,7 +873,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	}
 
 	/** open the entry name and get the oid */
-	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY | O_NOFOLLOW, &obj, NULL, NULL);
+	rc = dfs_lookup_rel(dfs, parent, name, O_RDWR | O_NOFOLLOW, &obj, NULL, NULL);
 	if (rc) {
 		D_ERROR("dfs_lookup_rel() of %s failed: %d\n", name, rc);
 		return rc;
@@ -587,6 +882,78 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	rc = dfs_obj2id(obj, &oid);
 	if (rc)
 		D_GOTO(out_obj, rc);
+
+	/** Check if the OID exists in HLM hash table */
+	if (oit_args->hlm_hash != NULL) {
+		rlink = d_hash_rec_find(oit_args->hlm_hash, &oid, sizeof(daos_obj_id_t));
+		if (rlink != NULL) {
+			struct hlm_check_entry *hce = hlm_check_obj(rlink);
+
+			/** Increment current link count */
+			hce->hce_cur_linkcnt++;
+
+			/**
+			 * File found in HLM but dentry missing hardlink bit.
+			 * Note: Only array-type objects are added to hlm_hash
+			 * (directories/symlinks are filtered in hlm_populate_check_hash).
+			 */
+			if (!dfs_is_hardlink(obj->mode)) {
+				D_PRINT("OID " DF_OID " (parent " DF_OID ", name '%s') in HLM but "
+					"dentry missing hardlink bit\n",
+					DP_OID(oid), DP_OID(parent->oid), name);
+				if (oit_args->flags & (DFS_CHECK_REMOVE | DFS_CHECK_RELINK)) {
+					rc = set_hardlink_bit(dfs, DAOS_TX_NONE, parent->oh, obj,
+							      obj->mode);
+					if (rc) {
+						D_ERROR("Failed to set hardlink bit for " DF_OID
+							": %d\n",
+							DP_OID(oid), rc);
+						D_GOTO(out_obj, rc);
+					}
+				}
+			}
+		} else if (dfs_is_hardlink(obj->mode)) {
+			/**
+			 * Dentry has hardlink bit set but no HLM entry exists.
+			 * This is corruption - the file claims to be a hardlink
+			 * but has no metadata in HLM to support it. Clear the bit
+			 * so the file becomes accessible as a regular file.
+			 */
+			D_PRINT("OID " DF_OID " (parent " DF_OID ", name '%s') has hardlink bit "
+				"set but no HLM entry exists\n",
+				DP_OID(oid), DP_OID(parent->oid), name);
+			if (oit_args->flags & (DFS_CHECK_REMOVE | DFS_CHECK_RELINK)) {
+				rc = clear_hardlink_bit(dfs, DAOS_TX_NONE, parent->oh, obj,
+							obj->mode);
+				if (rc) {
+					D_ERROR("Failed to clear hardlink bit for " DF_OID ": %d\n",
+						DP_OID(oid), rc);
+					D_GOTO(out_obj, rc);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Directories and symlinks should never have the hardlink bit set.
+	 * This is corruption - clear the bit.
+	 * Note: We check MODE_HARDLINK_BIT directly instead of dfs_is_hardlink()
+	 * because dfs_is_hardlink() requires S_ISREG() which is false here.
+	 */
+	if ((S_ISDIR(obj->mode) || S_ISLNK(obj->mode)) && (obj->mode & MODE_HARDLINK_BIT)) {
+		D_WARN("OID " DF_OID " (parent " DF_OID ", name '%s') is %s but has "
+		       "hardlink bit set - needs clearing\n",
+		       DP_OID(oid), DP_OID(parent->oid), name,
+		       S_ISDIR(obj->mode) ? "directory" : "symlink");
+		if (oit_args->flags & (DFS_CHECK_REMOVE | DFS_CHECK_RELINK)) {
+			rc = clear_hardlink_bit(dfs, DAOS_TX_NONE, parent->oh, obj, obj->mode);
+			if (rc) {
+				D_ERROR("Failed to clear hardlink bit for " DF_OID ": %d\n",
+					DP_OID(oid), rc);
+				D_GOTO(out_obj, rc);
+			}
+		}
+	}
 
 	if (oit_args->flags & DFS_CHECK_VERIFY) {
 		rc = daos_obj_verify(dfs->coh, oid, oit_args->snap_epoch);
@@ -613,6 +980,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 		D_ERROR("Failed to mark OID in OIT: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
+	rc = 0;
 
 	/** descend into directories */
 	if (S_ISDIR(obj->mode)) {
@@ -631,8 +999,8 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	}
 
 out_obj:
-	rc = dfs_release(obj);
-	return rc;
+	rc2 = dfs_release(obj);
+	return rc ? rc : rc2;
 }
 
 static int
@@ -719,6 +1087,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	char                *dkey_enum_buf     = NULL;
 	char                *entry_enum_buf    = NULL;
 	uint64_t             unmarked_entries  = 0;
+	struct d_hash_table *hlm_hash          = NULL;
 	d_iov_t              marker;
 	bool                 mark_data = true;
 	daos_epoch_range_t   epr;
@@ -796,6 +1165,12 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		D_ERROR("Failed to mark ROOT OID in OIT: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_oit, rc = daos_der2errno(rc));
 	}
+	/** mark the HLM object as reachable */
+	rc = daos_oit_mark(oit_args->oit, dfs->hlm_oid, &marker, NULL);
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR("Failed to mark HLM OID in OIT: " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_oit, rc = daos_der2errno(rc));
+	}
 	rc = 0;
 
 	if (flags & DFS_CHECK_VERIFY) {
@@ -824,7 +1199,41 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			D_ERROR("daos_obj_verify() failed " DF_RC "\n", DP_RC(rc));
 			D_GOTO(out_oit, rc = daos_der2errno(rc));
 		}
+
+		if (!daos_obj_id_is_nil(dfs->hlm_oid)) {
+			rc = daos_obj_verify(coh, dfs->hlm_oid, snap_epoch);
+			if (rc == -DER_NOSYS) {
+				oit_args->skipped++;
+			} else if (rc == -DER_MISMATCH) {
+				oit_args->failed++;
+				if (flags & DFS_CHECK_PRINT)
+					D_PRINT("HLM Object " DF_OID
+						" failed data consistency check!\n",
+						DP_OID(dfs->hlm_oid));
+			} else if (rc) {
+				D_ERROR("daos_obj_verify() failed " DF_RC "\n", DP_RC(rc));
+				D_GOTO(out_oit, rc = daos_der2errno(rc));
+			}
+		}
 	}
+
+	/** Create and populate hash table with HLM entries for hardlink verification */
+	rc = d_hash_table_create(D_HASH_FT_NOLOCK, HLM_CHECK_HASH_BITS, NULL, &hlm_check_hash_ops,
+				 &hlm_hash);
+	if (rc) {
+		D_ERROR("Failed to create HLM check hash table " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_oit, rc = daos_der2errno(rc));
+	}
+
+	D_PRINT("DFS checker: Populating HLM hash table for hardlink verification\n");
+	rc = hlm_populate_check_hash(dfs, hlm_hash, flags);
+	if (rc) {
+		D_ERROR("Failed to populate HLM check hash table: %d\n", rc);
+		D_GOTO(out_hlm_hash, rc);
+	}
+
+	/** Set the hash table in oit_args so oit_mark_cb can access it */
+	oit_args->hlm_hash = hlm_hash;
 
 	D_PRINT("DFS checker: Iterating namespace and marking objects\n");
 	oit_args->num_scanned = 2;
@@ -834,7 +1243,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				 oit_mark_cb, oit_args);
 		if (rc) {
 			D_ERROR("dfs_iterate() failed: %d\n", rc);
-			D_GOTO(out_oit, rc);
+			D_GOTO(out_hlm_hash, rc);
 		}
 
 		nr_entries = DFS_ITER_NR;
@@ -842,7 +1251,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 
 	rc = clock_gettime(CLOCK_REALTIME, &current_time);
 	if (rc)
-		D_GOTO(out_oit, rc = errno);
+		D_GOTO(out_hlm_hash, rc = errno);
 	D_PRINT("DFS checker: marked " DF_U64 " files/directories (runtime: " DF_U64 " sec))\n",
 		oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
 
@@ -852,7 +1261,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			      &lf);
 		if (rc) {
 			D_ERROR("Failed to create/open lost+found directory: %d\n", rc);
-			D_GOTO(out_oit, rc);
+			D_GOTO(out_hlm_hash, rc);
 		}
 
 		if (name == NULL) {
@@ -908,9 +1317,11 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			D_GOTO(out_lf2, rc = daos_der2errno(rc));
 		}
 
-		clock_gettime(CLOCK_REALTIME, &current_time);
-		if (rc)
+		rc = clock_gettime(CLOCK_REALTIME, &current_time);
+		if (rc) {
+			D_ERROR("clock_gettime() failed: %d (%s)\n", errno, strerror(errno));
 			D_GOTO(out_lf2, rc = errno);
+		}
 		oit_args->num_scanned += nr_entries;
 		if (current_time.tv_sec - oit_args->print_time >= DFS_ELAPSED_TIME) {
 			D_PRINT("DFS checker: Checked " DF_U64 " objects (runtime: " DF_U64
@@ -934,9 +1345,24 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				continue;
 			}
 
-			if (flags & DFS_CHECK_PRINT)
-				D_PRINT("oid[" DF_U64 "]: " DF_OID "\n", unmarked_entries,
-					DP_OID(oids[i]));
+			if (flags & DFS_CHECK_PRINT) {
+				d_list_t *hlink = NULL;
+
+				if (hlm_hash != NULL)
+					hlink = d_hash_rec_find(hlm_hash, &oids[i],
+								sizeof(daos_obj_id_t));
+				if (hlink != NULL) {
+					struct hlm_check_entry *hce = hlm_check_obj(hlink);
+
+					D_PRINT("oid[" DF_U64 "]: " DF_OID " (hardlink, "
+						"HLM ref_cnt=%lu)\n",
+						unmarked_entries, DP_OID(oids[i]),
+						(unsigned long)hce->hce_stored_linkcnt);
+				} else {
+					D_PRINT("oid[" DF_U64 "]: " DF_OID "\n", unmarked_entries,
+						DP_OID(oids[i]));
+				}
+			}
 
 			if (flags & DFS_CHECK_VERIFY) {
 				rc = daos_obj_verify(dfs->coh, oids[i], snap_epoch);
@@ -950,26 +1376,42 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 							DP_OID(oids[i]));
 				} else if (rc) {
 					D_ERROR("daos_obj_verify() failed " DF_RC "\n", DP_RC(rc));
-					D_GOTO(out_oit, rc = daos_der2errno(rc));
+					D_GOTO(out_hlm_hash, rc = daos_der2errno(rc));
 				}
 			}
 
 			if (flags & DFS_CHECK_REMOVE) {
 				daos_handle_t oh;
+				daos_key_t    hlm_dkey;
 
 				rc = daos_obj_open(dfs->coh, oids[i], DAOS_OO_RW, &oh, NULL);
 				if (rc)
-					D_GOTO(out_oit, rc = daos_der2errno(rc));
+					D_GOTO(out_hlm_hash, rc = daos_der2errno(rc));
 
 				rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
 				if (rc) {
 					daos_obj_close(oh, NULL);
-					D_GOTO(out_oit, rc = daos_der2errno(rc));
+					D_GOTO(out_hlm_hash, rc = daos_der2errno(rc));
 				}
 
 				rc = daos_obj_close(oh, NULL);
 				if (rc)
-					D_GOTO(out_oit, rc = daos_der2errno(rc));
+					D_GOTO(out_hlm_hash, rc = daos_der2errno(rc));
+
+				/** Also punch any HLM entry for this OID */
+				if (!daos_obj_id_is_nil(dfs->hlm_oid)) {
+					d_iov_set(&hlm_dkey, &oids[i], sizeof(daos_obj_id_t));
+					rc = daos_obj_punch_dkeys(dfs->hlm_oh, DAOS_TX_NONE, 0, 1,
+								  &hlm_dkey, NULL);
+					if (rc && rc != -DER_NONEXIST) {
+						D_ERROR("Failed to punch HLM entry " DF_RC "\n",
+							DP_RC(rc));
+						D_GOTO(out_hlm_hash, rc = daos_der2errno(rc));
+					}
+				}
+
+				/** Remove from HLM check hash table if it exists */
+				d_hash_rec_delete(hlm_hash, &oids[i], sizeof(daos_obj_id_t));
 			}
 
 			unmarked_entries++;
@@ -991,9 +1433,11 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			D_GOTO(out_lf2, rc = daos_der2errno(rc));
 		}
 
-		clock_gettime(CLOCK_REALTIME, &current_time);
-		if (rc)
+		rc = clock_gettime(CLOCK_REALTIME, &current_time);
+		if (rc) {
+			D_ERROR("clock_gettime() failed: %d (%s)\n", errno, strerror(errno));
 			D_GOTO(out_lf2, rc = errno);
+		}
 		oit_args->num_scanned += nr_entries;
 		if (current_time.tv_sec - oit_args->print_time >= DFS_ELAPSED_TIME) {
 			D_PRINT("DFS checker: Checked " DF_U64 " objects (runtime: " DF_U64
@@ -1007,9 +1451,24 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			enum daos_otype_t otype = daos_obj_id2type(oids[i]);
 			char              oid_name[DFS_MAX_NAME + 1];
 
-			if (flags & DFS_CHECK_PRINT)
-				D_PRINT("oid[" DF_U64 "]: " DF_OID "\n", unmarked_entries,
-					DP_OID(oids[i]));
+			if (flags & DFS_CHECK_PRINT) {
+				d_list_t *hlink = NULL;
+
+				if (hlm_hash != NULL)
+					hlink = d_hash_rec_find(hlm_hash, &oids[i],
+								sizeof(daos_obj_id_t));
+				if (hlink != NULL) {
+					struct hlm_check_entry *hce = hlm_check_obj(hlink);
+
+					D_PRINT("oid[" DF_U64 "]: " DF_OID " (hardlink, "
+						"HLM ref_cnt=%lu)\n",
+						unmarked_entries, DP_OID(oids[i]),
+						(unsigned long)hce->hce_stored_linkcnt);
+				} else {
+					D_PRINT("oid[" DF_U64 "]: " DF_OID "\n", unmarked_entries,
+						DP_OID(oids[i]));
+				}
+			}
 
 			if (flags & DFS_CHECK_VERIFY) {
 				rc = daos_obj_verify(dfs->coh, oids[i], snap_epoch);
@@ -1037,6 +1496,55 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			entry.mtime = entry.ctime = now.tv_sec;
 			entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 			entry.chunk_size                    = dfs->attr.da_chunk_size;
+
+			/**
+			 * Check if this OID has an HLM entry. If so, this is a hardlink
+			 * that lost all its directory entries. Set the hardlink bit and
+			 * update the HLM link count to 1.
+			 */
+			if (hlm_hash != NULL) {
+				d_list_t *hlink;
+
+				hlink = d_hash_rec_find(hlm_hash, &oids[i], sizeof(daos_obj_id_t));
+				if (hlink != NULL) {
+					struct hlm_check_entry *hce = hlm_check_obj(hlink);
+					struct dfs_entry        hlm_entry;
+					int                     delta;
+
+					/* Set hardlink bit in the new entry */
+					entry.mode |= MODE_HARDLINK_BIT;
+
+					/* Calculate delta to set link count to 1 */
+					delta = 1 - (int)hce->hce_stored_linkcnt;
+
+					/* Fetch HLM entry and update link count using delta */
+					rc = hlm_fetch_entry(dfs->hlm_oh, DAOS_TX_NONE, &oids[i],
+							     &hlm_entry);
+					if (rc) {
+						D_ERROR("Failed to fetch HLM entry for " DF_OID
+							": %d\n",
+							DP_OID(oids[i]), rc);
+						D_GOTO(out_lf2, rc);
+					}
+					rc = hlm_update_ref_cnt(dfs, DAOS_TX_NONE, &hlm_entry,
+								delta);
+					if (rc) {
+						D_ERROR("Failed to update HLM ref_cnt for " DF_OID
+							": %d\n",
+							DP_OID(oids[i]), rc);
+						D_GOTO(out_lf2, rc);
+					}
+
+					/* Update hash entry to reflect new link count */
+					hce->hce_cur_linkcnt    = 1;
+					hce->hce_stored_linkcnt = 1;
+
+					if (flags & DFS_CHECK_PRINT)
+						D_PRINT("Restoring hardlink " DF_OID
+							" with link count 1\n",
+							DP_OID(oids[i]));
+				}
+			}
 
 			/*
 			 * If this is a regular file / array object, the user might have used a
@@ -1075,6 +1583,25 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	}
 
 done:
+	/** Verify and fix HLM link counts */
+	if (hlm_hash != NULL) {
+		struct hlm_verify_arg varg = {0};
+
+		D_PRINT("DFS checker: Verifying HLM link counts\n");
+		varg.dfs   = dfs;
+		varg.flags = flags;
+		rc         = d_hash_table_traverse(hlm_hash, hlm_verify_linkcnt_cb, &varg);
+		if (rc) {
+			D_ERROR("HLM link count verification failed: %d\n", rc);
+			D_GOTO(out_lf2, rc);
+		}
+		if (varg.mismatches > 0) {
+			D_PRINT("DFS checker: Found " DF_U64 " HLM link count mismatches, "
+				"fixed " DF_U64 "\n",
+				varg.mismatches, varg.fixed);
+		}
+	}
+
 	rc = clock_gettime(CLOCK_REALTIME, &current_time);
 	if (rc)
 		D_GOTO(out_lf2, rc = errno);
@@ -1102,6 +1629,12 @@ out_lf1:
 		rc2 = dfs_release(lf);
 		if (rc == 0)
 			rc = rc2;
+	}
+out_hlm_hash:
+	if (hlm_hash != NULL) {
+		rc2 = d_hash_table_destroy(hlm_hash, true);
+		if (rc2)
+			D_ERROR("Failed to destroy HLM check hash table " DF_RC "\n", DP_RC(rc2));
 	}
 out_oit:
 	rc2 = daos_oit_close(oit_args->oit, NULL);
@@ -1293,8 +1826,10 @@ out_prop:
 int
 dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 {
-	struct dfs_entry  entry = {0};
+	struct dfs_entry  entry     = {0};
+	struct dfs_entry  hlm_entry = {0};
 	bool              exists;
+	bool              is_hardlink = false;
 	daos_key_t        dkey;
 	size_t            len;
 	enum daos_otype_t otype;
@@ -1334,6 +1869,17 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	if (daos_is_array_type(otype)) {
 		mode |= S_IFREG;
 		D_PRINT("Setting entry type to S_IFREG\n");
+
+		/** Check if this is a hardlink by looking up the HLM */
+		rc = hlm_fetch_entry(dfs->hlm_oh, DAOS_TX_NONE, &entry.oid, &hlm_entry);
+		if (rc == 0) {
+			mode |= MODE_HARDLINK_BIT;
+			is_hardlink = true;
+			D_PRINT("Entry is a hardlink, setting hardlink bit\n");
+		} else if (rc != ENOENT) {
+			D_ERROR("Failed to fetch HLM entry (%d)\n", rc);
+			D_GOTO(out, rc);
+		}
 	} else if (entry.value_len) {
 		mode |= S_IFLNK;
 		D_PRINT("Setting entry type to S_IFLNK\n");
@@ -1360,6 +1906,17 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	if (rc) {
 		D_ERROR("Failed to update object type " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	/** Update mode bits in HLM entry if this is a hardlink */
+	if (is_hardlink) {
+		d_iov_set(&dkey, &entry.oid, sizeof(daos_obj_id_t));
+		rc = daos_obj_update(dfs->hlm_oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1,
+				     &iod, &sgl, NULL);
+		if (rc) {
+			D_ERROR("Failed to update HLM entry with new mode " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
 	}
 
 out:

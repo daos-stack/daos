@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -136,6 +137,18 @@ lookup_rel_path_loop:
 
 		/** if entry is a file, open the array object and return */
 		if (S_ISREG(entry.mode)) {
+			/* If entry is a hardlink, fetch metadata from HLM */
+			if (dfs_is_hardlink(entry.mode)) {
+				rc = hlm_fetch_entry(dfs->hlm_oh, dfs->th, &entry.oid, &entry);
+				if (rc) {
+					D_ERROR("Failed to fetch entry '%s' oid=" DF_OID
+						" from HLM (%d)\n",
+						token, DP_OID(entry.oid), rc);
+					D_GOTO(err_obj, rc);
+				}
+				obj->mode = entry.mode;
+			}
+
 			/* if there are more entries, then file is not a dir */
 			if (strtok_r(NULL, "/", &sptr) != NULL) {
 				D_ERROR("%s is not a directory\n", obj->name);
@@ -168,6 +181,8 @@ lookup_rel_path_loop:
 					D_GOTO(err_obj, rc = daos_der2errno(rc));
 				}
 
+				stbuf->st_nlink  = entry.ref_cnt;
+				stbuf->st_mode   = entry.mode & ~MODE_HARDLINK_BIT;
 				stbuf->st_size   = array_stbuf.st_size;
 				stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 
@@ -339,8 +354,8 @@ lookup_rel_path_loop:
 			}
 			memcpy(stbuf, &dfs->root_stbuf, sizeof(struct stat));
 		} else {
-			stbuf->st_nlink = 1;
-			stbuf->st_mode  = obj->mode;
+			stbuf->st_nlink = entry.ref_cnt;
+			stbuf->st_mode  = obj->mode & ~MODE_HARDLINK_BIT;
 			stbuf->st_uid   = entry.uid;
 			stbuf->st_gid   = entry.gid;
 			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
@@ -428,6 +443,16 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 
 	if (!exists)
 		return ENOENT;
+
+	/* If entry is a hardlink, fetch metadata from HLM */
+	if (dfs_is_hardlink(entry.mode)) {
+		rc = hlm_fetch_entry(dfs->hlm_oh, dfs->th, &entry.oid, &entry);
+		if (rc) {
+			D_ERROR("Failed to fetch entry '%s' oid=" DF_OID " from HLM (%d)\n", name,
+				DP_OID(entry.oid), rc);
+			return rc;
+		}
+	}
 
 	if (stbuf)
 		memset(stbuf, 0, sizeof(struct stat));
@@ -557,8 +582,8 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 		*mode = obj->mode;
 
 	if (stbuf) {
-		stbuf->st_nlink = 1;
-		stbuf->st_mode  = obj->mode;
+		stbuf->st_nlink = entry.ref_cnt;
+		stbuf->st_mode  = obj->mode & ~MODE_HARDLINK_BIT;
 		stbuf->st_uid   = entry.uid;
 		stbuf->st_gid   = entry.gid;
 		if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -90,20 +91,9 @@ struct dfuse_time_entry {
 
 /* Core data structure, maintains a list of struct dfuse_time_entry lists */
 struct dfuse_ival {
-	d_list_t             time_entry_list;
-	struct fuse_session *session;
-	bool                 session_dead;
-};
-
-/* The core data from struct dfuse_inode_entry.  No additional inode references are held on inodes
- * because of there place on invalidate lists, rather inodes are removed from any list on close.
- * Therefore once a decision is made to evict an inode then a copy of the data is needed as once
- * the ival_lock is dropped the inode could be freed.  This is not a problem if this happens as the
- * kernel will simply return ENOENT.
- */
-struct inode_core {
-	char       name[NAME_MAX + 1];
-	fuse_ino_t parent;
+	d_list_t           time_entry_list;
+	struct dfuse_info *dfuse_info;
+	bool               session_dead;
 };
 
 /* Number of dentries to invalidate per iteration. This value affects how long the lock is held,
@@ -127,9 +117,12 @@ static bool
 ival_loop(int *sleep_time)
 {
 	struct dfuse_time_entry *dte, *dtep;
-	struct inode_core        ic[EVICT_COUNT] = {};
+	struct dfuse_dentry      ic[EVICT_COUNT] = {};
 	int                      idx             = 0;
 	double                   sleep           = (60 * 1) - 1;
+
+	for (int i = 0; i < EVICT_COUNT; i++)
+		D_INIT_LIST_HEAD(&ic[i].dd_list);
 
 	D_MUTEX_LOCK(&ival_lock);
 
@@ -162,9 +155,8 @@ ival_loop(int *sleep_time)
 				continue;
 			}
 
-			ic[idx].parent = inode->ie_parent;
-			strncpy(ic[idx].name, inode->ie_name, NAME_MAX + 1);
-			ic[idx].name[NAME_MAX] = '\0';
+			/* Clear all dentries from the inode for invalidation */
+			dfuse_ie_dentry_clear(inode, &ic[idx]);
 
 			d_list_del_init(&inode->ie_evict_entry);
 
@@ -186,13 +178,10 @@ out:
 	for (int i = 0; i < idx; i++) {
 		int rc;
 
-		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE, ic[i].parent,
-				DP_DE(ic[i].name));
+		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE, ic[i].dd_parent,
+				DP_DE(ic[i].dd_name));
 
-		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ic[i].parent, ic[i].name,
-						      strnlen(ic[i].name, NAME_MAX));
-		if (rc && rc != -ENOENT && rc != -EBADF)
-			DHS_ERROR(&ival_data, -rc, "notify_inval_entry() failed");
+		rc = dfuse_ie_dentry_inval(ival_data.dfuse_info, &ic[i]);
 		if (rc == -EBADF)
 			ival_data.session_dead = true;
 	}
@@ -290,7 +279,7 @@ ival_thread_start(struct dfuse_info *dfuse_info)
 {
 	int rc;
 
-	ival_data.session = dfuse_info->di_session;
+	ival_data.dfuse_info = dfuse_info;
 
 	rc = pthread_create(&ival_thread, NULL, ival_thread_fn, NULL);
 	if (rc != 0)

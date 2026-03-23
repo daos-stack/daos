@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -123,7 +124,7 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 					D_GOTO(out, rc);
 			}
 
-			rc = remove_entry(dfs, th, oh, ptr, kds[i].kd_key_len, child_entry);
+			rc = remove_entry(dfs, th, oh, ptr, kds[i].kd_key_len, child_entry, NULL);
 			if (rc)
 				D_GOTO(out, rc);
 		}
@@ -135,7 +136,8 @@ out:
 }
 
 int
-dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid)
+dfs_remove_internal(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid,
+		    bool *deleted)
 {
 	struct dfs_entry entry = {0};
 	daos_handle_t    th    = DAOS_TX_NONE;
@@ -205,7 +207,7 @@ restart:
 		}
 	}
 
-	rc = remove_entry(dfs, th, parent->oh, name, len, entry);
+	rc = remove_entry(dfs, th, parent->oh, name, len, entry, deleted);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -227,6 +229,12 @@ out:
 	if (rc == ERESTART)
 		goto restart;
 	return rc;
+}
+
+int
+dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid)
+{
+	return dfs_remove_internal(dfs, parent, name, force, oid, NULL);
 }
 
 int

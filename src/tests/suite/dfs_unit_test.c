@@ -3558,63 +3558,4161 @@ dfs_test_pipeline_find(void **state)
 	test_pipeline_find(state, OC_RP_3GX);
 }
 
+/**
+ * Test hardlink functionality:
+ * 1. Create 2 directories
+ * 2. Create a file in the first directory
+ * 3. Stat the file and verify nlink == 1
+ * 4. Create a hardlink to the file in the same directory
+ * 5. Stat both files - verify nlink == 2 and other properties match
+ * 6. Create a hardlink in the second directory
+ * 7. Stat all 3 files - verify nlink == 3 and properties match
+ * 8. Delete first file - verify nlink == 2
+ * 9. Delete third file - verify nlink == 1
+ * 10. Delete remaining file - verify object is removed (stat returns ENOENT)
+ */
+static void
+dfs_test_hardlink(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *dir1, *dir2;
+	dfs_obj_t    *file1, *file2, *file3;
+	struct stat   stbuf1, stbuf2, stbuf3;
+	struct stat   stbuf_orig, stbuf_prev;
+	daos_obj_id_t oid1, oid2, oid3, removed_oid;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("Creating 2 directories...\n");
+
+	/* Step 1: Create 2 directories */
+	rc = dfs_open(dfs_mt, NULL, "hldir1", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, "hldir2", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir2);
+	assert_int_equal(rc, 0);
+
+	/* Step 2: Create a file in the first directory */
+	print_message("Creating file in first directory...\n");
+	rc = dfs_open(dfs_mt, dir1, "testfile", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file1);
+	assert_int_equal(rc, 0);
+
+	/* Get the object ID for later comparison */
+	rc = dfs_obj2id(file1, &oid1);
+	assert_int_equal(rc, 0);
+
+	/* Step 3: Stat the file and save info - nlink should be 1 */
+	print_message("Stat original file - expecting nlink=1...\n");
+	rc = dfs_ostat(dfs_mt, file1, &stbuf_orig);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf_orig.st_nlink, 1);
+	print_message("  st_nlink = %lu (expected 1)\n", (unsigned long)stbuf_orig.st_nlink);
+	print_message("  st_ino   = %lu\n", (unsigned long)stbuf_orig.st_ino);
+	print_message("  st_mode  = 0%o\n", stbuf_orig.st_mode);
+	print_message("  st_uid   = %u\n", stbuf_orig.st_uid);
+	print_message("  st_gid   = %u\n", stbuf_orig.st_gid);
+	print_message("  st_mtim  = %ld.%09ld\n", stbuf_orig.st_mtim.tv_sec,
+		      stbuf_orig.st_mtim.tv_nsec);
+	print_message("  st_ctim  = %ld.%09ld\n", stbuf_orig.st_ctim.tv_sec,
+		      stbuf_orig.st_ctim.tv_nsec);
+
+	/* Save for later comparison */
+	stbuf_prev = stbuf_orig;
+
+	/* Step 4: Create a hardlink in the same directory */
+	print_message("Creating hardlink in same directory...\n");
+	rc = dfs_link(dfs_mt, file1, dir1, "testfile_link1", &file2, &stbuf2);
+	assert_int_equal(rc, 0);
+
+	/* Get the object ID - should match original */
+	rc = dfs_obj2id(file2, &oid2);
+	assert_int_equal(rc, 0);
+	assert_true(oid1.lo == oid2.lo && oid1.hi == oid2.hi);
+
+	/* Step 5: Stat first and second files - nlink should be 2 */
+	print_message("Stat both files - expecting nlink=2...\n");
+	rc = dfs_ostat(dfs_mt, file1, &stbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf1.st_nlink, 2);
+	print_message("  file1: st_nlink = %lu (expected 2)\n", (unsigned long)stbuf1.st_nlink);
+
+	/* stbuf2 was already filled by dfs_link */
+	assert_int_equal(stbuf2.st_nlink, 2);
+	print_message("  file2: st_nlink = %lu (expected 2)\n", (unsigned long)stbuf2.st_nlink);
+
+	/* Verify other properties match (inode, mode, uid, gid should be same) */
+	assert_int_equal(stbuf1.st_ino, stbuf2.st_ino);
+	assert_int_equal(stbuf1.st_ino, stbuf_orig.st_ino);
+	assert_int_equal(stbuf1.st_mode & ~S_IFMT, stbuf_orig.st_mode & ~S_IFMT);
+	assert_int_equal(stbuf1.st_uid, stbuf_orig.st_uid);
+	assert_int_equal(stbuf1.st_gid, stbuf_orig.st_gid);
+
+	/*
+	 * POSIX: Creating a hardlink updates ctime (metadata changed).
+	 * mtime should NOT change (file content not modified).
+	 */
+	print_message("  Checking ctime/mtime after first hardlink creation...\n");
+	assert_true(check_ts(stbuf_prev.st_ctim, stbuf1.st_ctim));
+	print_message("  Verified: ctime updated (prev < current)\n");
+	/* mtime should remain unchanged */
+	assert_int_equal(stbuf1.st_mtim.tv_sec, stbuf_orig.st_mtim.tv_sec);
+	assert_int_equal(stbuf1.st_mtim.tv_nsec, stbuf_orig.st_mtim.tv_nsec);
+	print_message("  Verified: mtime unchanged\n");
+	print_message("  Verified: ino, mode, uid, gid match original\n");
+
+	/* Save current state for next comparison */
+	stbuf_prev = stbuf1;
+
+	/* Step 6: Create a hardlink in the second directory */
+	print_message("Creating hardlink in second directory...\n");
+	rc = dfs_link(dfs_mt, file1, dir2, "testfile_link2", &file3, &stbuf3);
+	assert_int_equal(rc, 0);
+
+	/* Get the object ID - should match original */
+	rc = dfs_obj2id(file3, &oid3);
+	assert_int_equal(rc, 0);
+	assert_true(oid1.lo == oid3.lo && oid1.hi == oid3.hi);
+
+	/* Step 7: Stat all 3 files - nlink should be 3 */
+	print_message("Stat all 3 files - expecting nlink=3...\n");
+	rc = dfs_ostat(dfs_mt, file1, &stbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf1.st_nlink, 3);
+	print_message("  file1: st_nlink = %lu (expected 3)\n", (unsigned long)stbuf1.st_nlink);
+
+	rc = dfs_ostat(dfs_mt, file2, &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf2.st_nlink, 3);
+	print_message("  file2: st_nlink = %lu (expected 3)\n", (unsigned long)stbuf2.st_nlink);
+
+	/* stbuf3 was already filled by dfs_link, but let's re-stat to be sure */
+	rc = dfs_ostat(dfs_mt, file3, &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_nlink, 3);
+	print_message("  file3: st_nlink = %lu (expected 3)\n", (unsigned long)stbuf3.st_nlink);
+
+	/* All should have same inode */
+	assert_int_equal(stbuf1.st_ino, stbuf2.st_ino);
+	assert_int_equal(stbuf2.st_ino, stbuf3.st_ino);
+	assert_int_equal(stbuf1.st_ino, stbuf_orig.st_ino);
+	print_message("  Verified: all files have same inode\n");
+
+	/*
+	 * POSIX: Creating a hardlink updates ctime (metadata changed).
+	 * mtime should NOT change (file content not modified).
+	 */
+	print_message("  Checking ctime/mtime after second hardlink creation...\n");
+	assert_true(check_ts(stbuf_prev.st_ctim, stbuf1.st_ctim));
+	print_message("  Verified: ctime updated (prev < current)\n");
+	/* mtime should remain unchanged from original */
+	assert_int_equal(stbuf1.st_mtim.tv_sec, stbuf_orig.st_mtim.tv_sec);
+	assert_int_equal(stbuf1.st_mtim.tv_nsec, stbuf_orig.st_mtim.tv_nsec);
+	print_message("  Verified: mtime unchanged from original\n");
+
+	/* Save current state for next comparison */
+	stbuf_prev = stbuf1;
+
+	/* Step 8: Delete the first file and check stat */
+	print_message("Removing first file...\n");
+	rc = dfs_remove(dfs_mt, dir1, "testfile", false, &removed_oid);
+	assert_int_equal(rc, 0);
+
+	/* file2 and file3 should now have nlink=2 */
+	rc = dfs_ostat(dfs_mt, file2, &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf2.st_nlink, 2);
+	print_message("  file2: st_nlink = %lu (expected 2)\n", (unsigned long)stbuf2.st_nlink);
+
+	rc = dfs_ostat(dfs_mt, file3, &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_nlink, 2);
+	print_message("  file3: st_nlink = %lu (expected 2)\n", (unsigned long)stbuf3.st_nlink);
+
+	/* file1 handle should still be valid but stat via name should fail */
+	rc = dfs_stat(dfs_mt, dir1, "testfile", &stbuf1);
+	assert_int_equal(rc, ENOENT);
+	print_message("  Verified: original name no longer exists (ENOENT)\n");
+
+	/*
+	 * POSIX: Removing a hardlink updates ctime (metadata changed - link count decreased).
+	 * mtime should NOT change (file content not modified).
+	 */
+	print_message("  Checking ctime/mtime after first unlink...\n");
+	assert_true(check_ts(stbuf_prev.st_ctim, stbuf2.st_ctim));
+	print_message("  Verified: ctime updated (prev < current)\n");
+	/* mtime should remain unchanged from original */
+	assert_int_equal(stbuf2.st_mtim.tv_sec, stbuf_orig.st_mtim.tv_sec);
+	assert_int_equal(stbuf2.st_mtim.tv_nsec, stbuf_orig.st_mtim.tv_nsec);
+	print_message("  Verified: mtime unchanged from original\n");
+
+	/* Save current state for next comparison */
+	stbuf_prev = stbuf2;
+
+	/* Step 9: Delete the third file (in dir2) and check stat */
+	print_message("Removing third file (from dir2)...\n");
+	rc = dfs_remove(dfs_mt, dir2, "testfile_link2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/* file2 should now have nlink=1 */
+	rc = dfs_ostat(dfs_mt, file2, &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf2.st_nlink, 1);
+	print_message("  file2: st_nlink = %lu (expected 1)\n", (unsigned long)stbuf2.st_nlink);
+
+	/*
+	 * POSIX: Removing a hardlink updates ctime (metadata changed - link count decreased).
+	 * mtime should NOT change (file content not modified).
+	 */
+	print_message("  Checking ctime/mtime after second unlink...\n");
+	assert_true(check_ts(stbuf_prev.st_ctim, stbuf2.st_ctim));
+	print_message("  Verified: ctime updated (prev < current)\n");
+	/* mtime should remain unchanged from original */
+	assert_int_equal(stbuf2.st_mtim.tv_sec, stbuf_orig.st_mtim.tv_sec);
+	assert_int_equal(stbuf2.st_mtim.tv_nsec, stbuf_orig.st_mtim.tv_nsec);
+	print_message("  Verified: mtime unchanged from original\n");
+
+	/* Step 10: Delete the last remaining file */
+	print_message("Removing last file...\n");
+	rc = dfs_remove(dfs_mt, dir1, "testfile_link1", false, &removed_oid);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Verify the object is really deleted by trying to stat via
+	 * the open handle - should return ENOENT after the object
+	 * is punched/deleted from the backend.
+	 */
+	rc = dfs_ostat(dfs_mt, file2, &stbuf2);
+	assert_int_equal(rc, ENOENT);
+	print_message("  Verified: object is deleted (stat on handle returns ENOENT)\n");
+
+	/* Also verify stat by name fails */
+	rc = dfs_stat(dfs_mt, dir1, "testfile_link1", &stbuf2);
+	assert_int_equal(rc, ENOENT);
+	print_message("  Verified: name no longer exists (ENOENT)\n");
+
+	/* Cleanup: release all handles */
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file3);
+	assert_int_equal(rc, 0);
+
+	/* Remove directories */
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, "hldir1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "hldir2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Hardlink test completed successfully!\n");
+}
+
+static void
+dfs_test_hardlink_chmod_chown(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *dir1, *dir2;
+	dfs_obj_t    *file1, *file2, *file3;
+	struct stat   stbuf1, stbuf2, stbuf3;
+	struct stat   stbuf_orig, stbuf_prev;
+	daos_obj_id_t oid1, oid2, oid3;
+	mode_t        orig_mode, new_mode;
+	uid_t         orig_uid, new_uid;
+	gid_t         orig_gid, new_gid;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("=== Hardlink chmod/chown test ===\n");
+
+	/* Step 1: Create 2 directories */
+	print_message("Creating 2 directories...\n");
+	rc = dfs_open(dfs_mt, NULL, "hl_chmod_dir1", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, "hl_chmod_dir2", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir2);
+	assert_int_equal(rc, 0);
+
+	/* Step 2: Create original file in dir1 */
+	print_message("Creating original file in dir1...\n");
+	rc = dfs_open(dfs_mt, dir1, "original", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file1, &oid1);
+	assert_int_equal(rc, 0);
+
+	/* Get original stats */
+	rc = dfs_ostat(dfs_mt, file1, &stbuf_orig);
+	assert_int_equal(rc, 0);
+	orig_mode = stbuf_orig.st_mode;
+	orig_uid  = stbuf_orig.st_uid;
+	orig_gid  = stbuf_orig.st_gid;
+	print_message("  Original: mode=0%o, uid=%u, gid=%u, nlink=%lu\n", orig_mode, orig_uid,
+		      orig_gid, (unsigned long)stbuf_orig.st_nlink);
+	assert_int_equal(stbuf_orig.st_nlink, 1);
+
+	/* Step 3: Create hardlink in same directory (dir1) */
+	print_message("Creating hardlink 'link1' in same directory (dir1)...\n");
+	rc = dfs_link(dfs_mt, file1, dir1, "link1", &file2, &stbuf2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file2, &oid2);
+	assert_int_equal(rc, 0);
+	assert_true(oid1.lo == oid2.lo && oid1.hi == oid2.hi);
+	print_message("  Verified: OIDs match\n");
+
+	/* Step 4: Create hardlink in different directory (dir2) */
+	print_message("Creating hardlink 'link2' in different directory (dir2)...\n");
+	rc = dfs_link(dfs_mt, file1, dir2, "link2", &file3, &stbuf3);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file3, &oid3);
+	assert_int_equal(rc, 0);
+	assert_true(oid1.lo == oid3.lo && oid1.hi == oid3.hi);
+	print_message("  Verified: OIDs match\n");
+
+	/* Verify all have nlink=3 */
+	rc = dfs_ostat(dfs_mt, file1, &stbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf1.st_nlink, 3);
+	rc = dfs_ostat(dfs_mt, file2, &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf2.st_nlink, 3);
+	rc = dfs_ostat(dfs_mt, file3, &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_nlink, 3);
+	print_message("  All 3 files have nlink=3\n");
+
+	/* Save state for ctime comparison */
+	stbuf_prev = stbuf1;
+
+	/* ========== CHMOD TESTS ========== */
+	print_message("\n--- Testing chmod on hardlink ---\n");
+
+	/* Step 5: chmod on the second hardlink (link1 in dir1) */
+	new_mode = S_IFREG | S_IRWXU | S_IRGRP | S_IXGRP; /* rwx for user, rx for group */
+	print_message("Calling chmod on 'link1' to mode 0%o...\n", new_mode & ~S_IFMT);
+	rc = dfs_chmod(dfs_mt, dir1, "link1", new_mode);
+	assert_int_equal(rc, 0);
+
+	/* Verify mode changed on ALL hardlinks */
+	print_message("Verifying mode change visible on all hardlinks...\n");
+	rc = dfs_ostat(dfs_mt, file1, &stbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf1.st_mode, new_mode);
+	print_message("  file1 (original): mode=0%o - PASS\n", stbuf1.st_mode);
+
+	rc = dfs_ostat(dfs_mt, file2, &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf2.st_mode, new_mode);
+	print_message("  file2 (link1): mode=0%o - PASS\n", stbuf2.st_mode);
+
+	rc = dfs_ostat(dfs_mt, file3, &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_mode, new_mode);
+	print_message("  file3 (link2 in dir2): mode=0%o - PASS\n", stbuf3.st_mode);
+
+	/* Verify ctime updated (chmod changes metadata) */
+	assert_true(check_ts(stbuf_prev.st_ctim, stbuf1.st_ctim));
+	print_message("  Verified: ctime updated after chmod\n");
+
+	/* Also verify via path lookup */
+	rc = dfs_stat(dfs_mt, dir1, "original", &stbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf1.st_mode, new_mode);
+	rc = dfs_stat(dfs_mt, dir2, "link2", &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_mode, new_mode);
+	print_message("  Verified via path lookup as well\n");
+
+	stbuf_prev = stbuf1;
+
+	/* ========== CHOWN TESTS ========== */
+	print_message("\n--- Testing chown on hardlink ---\n");
+
+	/* Step 6: chown on the third hardlink (link2 in dir2) */
+	new_uid = 1000;
+	new_gid = 2000;
+	print_message("Calling chown on 'link2' (in dir2) to uid=%u, gid=%u...\n", new_uid,
+		      new_gid);
+	rc = dfs_chown(dfs_mt, dir2, "link2", new_uid, new_gid, 0);
+	assert_int_equal(rc, 0);
+
+	/* Verify uid/gid changed on ALL hardlinks */
+	print_message("Verifying uid/gid change visible on all hardlinks...\n");
+	rc = dfs_ostat(dfs_mt, file1, &stbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf1.st_uid, new_uid);
+	assert_int_equal(stbuf1.st_gid, new_gid);
+	print_message("  file1 (original): uid=%u, gid=%u - PASS\n", stbuf1.st_uid, stbuf1.st_gid);
+
+	rc = dfs_ostat(dfs_mt, file2, &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf2.st_uid, new_uid);
+	assert_int_equal(stbuf2.st_gid, new_gid);
+	print_message("  file2 (link1): uid=%u, gid=%u - PASS\n", stbuf2.st_uid, stbuf2.st_gid);
+
+	rc = dfs_ostat(dfs_mt, file3, &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_uid, new_uid);
+	assert_int_equal(stbuf3.st_gid, new_gid);
+	print_message("  file3 (link2 in dir2): uid=%u, gid=%u - PASS\n", stbuf3.st_uid,
+		      stbuf3.st_gid);
+
+	/* Verify ctime updated (chown changes metadata) */
+	assert_true(check_ts(stbuf_prev.st_ctim, stbuf1.st_ctim));
+	print_message("  Verified: ctime updated after chown\n");
+
+	stbuf_prev = stbuf1;
+
+	/* ========== REMOVE FILE USED FOR CHMOD AND VERIFY PERSISTENCE ========== */
+	print_message("\n--- Removing link1 (chmod target) and verifying persistence ---\n");
+
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, dir1, "link1", false, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Removed 'link1' from dir1\n");
+
+	/* Re-open via another path for verification */
+	rc = dfs_lookup_rel(dfs_mt, dir1, "original", O_RDWR, &file2, NULL, &stbuf2);
+	assert_int_equal(rc, 0);
+
+	/* Verify changes still visible on remaining hardlinks */
+	rc = dfs_ostat(dfs_mt, file1, &stbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf1.st_nlink, 2);
+	assert_int_equal(stbuf1.st_mode, new_mode);
+	assert_int_equal(stbuf1.st_uid, new_uid);
+	assert_int_equal(stbuf1.st_gid, new_gid);
+	print_message("  file1: nlink=%lu, mode=0%o, uid=%u, gid=%u - PASS\n",
+		      (unsigned long)stbuf1.st_nlink, stbuf1.st_mode, stbuf1.st_uid, stbuf1.st_gid);
+
+	rc = dfs_ostat(dfs_mt, file3, &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_nlink, 2);
+	assert_int_equal(stbuf3.st_mode, new_mode);
+	assert_int_equal(stbuf3.st_uid, new_uid);
+	assert_int_equal(stbuf3.st_gid, new_gid);
+	print_message("  file3: nlink=%lu, mode=0%o, uid=%u, gid=%u - PASS\n",
+		      (unsigned long)stbuf3.st_nlink, stbuf3.st_mode, stbuf3.st_uid, stbuf3.st_gid);
+
+	/* Verify ctime updated (unlink changes metadata - link count) */
+	assert_true(check_ts(stbuf_prev.st_ctim, stbuf1.st_ctim));
+	print_message("  Verified: ctime updated after unlink\n");
+
+	stbuf_prev = stbuf1;
+
+	/* ========== REMOVE ORIGINAL FILE AND VERIFY PERSISTENCE ========== */
+	print_message("\n--- Removing original file and verifying persistence ---\n");
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, dir1, "original", false, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Removed 'original' from dir1\n");
+
+	/* Verify changes still visible on last remaining hardlink */
+	rc = dfs_ostat(dfs_mt, file3, &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_nlink, 1);
+	assert_int_equal(stbuf3.st_mode, new_mode);
+	assert_int_equal(stbuf3.st_uid, new_uid);
+	assert_int_equal(stbuf3.st_gid, new_gid);
+	print_message("  file3 (last link): nlink=%lu, mode=0%o, uid=%u, gid=%u - PASS\n",
+		      (unsigned long)stbuf3.st_nlink, stbuf3.st_mode, stbuf3.st_uid, stbuf3.st_gid);
+
+	/* Verify via path lookup as well */
+	rc = dfs_stat(dfs_mt, dir2, "link2", &stbuf3);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf3.st_nlink, 1);
+	assert_int_equal(stbuf3.st_mode, new_mode);
+	assert_int_equal(stbuf3.st_uid, new_uid);
+	assert_int_equal(stbuf3.st_gid, new_gid);
+	print_message("  Verified via path lookup: link2 in dir2 has correct attributes\n");
+
+	/* Verify ctime updated (unlink changes metadata - link count) */
+	assert_true(check_ts(stbuf_prev.st_ctim, stbuf3.st_ctim));
+	print_message("  Verified: ctime updated after unlink\n");
+
+	/* ========== CLEANUP ========== */
+	print_message("\n--- Cleanup ---\n");
+
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file3);
+	assert_int_equal(rc, 0);
+
+	/* Remove last file */
+	rc = dfs_remove(dfs_mt, dir2, "link2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Remove directories */
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, "hl_chmod_dir1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "hl_chmod_dir2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("\nHardlink chmod/chown test completed successfully!\n");
+}
+
+static void
+dfs_test_hardlink_rename(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *src, *src_link, *dst, *dst_link;
+	dfs_obj_t    *file_a, *file_a_link, *file_b, *file_b_link;
+	dfs_obj_t    *tmp_obj;
+	dfs_obj_t    *dir_src, *dir_src_link, *dir_dst, *dir_dst_link;
+	struct stat   stbuf;
+	d_sg_list_t   sgl;
+	d_iov_t       iov;
+	char          src_data[64], dst_data[64], read_buf[64];
+	daos_size_t   read_size;
+	daos_obj_id_t oid_src, oid_dst, oid_a, oid_b, oid_tmp;
+	const char   *xattr_name = "user.rename_test";
+	const char   *xattr_val  = "xattr_preserved_after_rename";
+	char          xattr_buf[64];
+	daos_size_t   xattr_size;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("=== Hardlink rename test ===\n");
+	print_message("All files and hardlinks in different directories, with xattr validation\n");
+
+	/* Prepare unique data patterns for source and destination */
+	memset(src_data, 'S', sizeof(src_data)); /* Source pattern */
+	memset(dst_data, 'D', sizeof(dst_data)); /* Destination pattern */
+
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+
+	/*
+	 * ============================================================
+	 * Scenario 1: Source file has hardlinks, destination is regular
+	 * ============================================================
+	 * /dir_src1/src1 has hardlink /dir_src1_link/src1_link
+	 * /dir_dst1/dst1 is a regular file (no hardlinks)
+	 * rename(src1 -> dst1) with xattr on src
+	 */
+	print_message("\n--- Scenario 1: Source has hardlinks, dest is regular file ---\n");
+
+	/* Create directories */
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_src1", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_src1", O_RDWR, &dir_src, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_src1_link", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_src1_link", O_RDWR, &dir_src_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_dst1", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_dst1", O_RDWR, &dir_dst, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directories: dir_src1/, dir_src1_link/, dir_dst1/\n");
+
+	/* Create source file in dir_src1 */
+	rc = dfs_open(dfs_mt, dir_src, "src1", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &src);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(src, &oid_src);
+	assert_int_equal(rc, 0);
+	print_message("  Created /dir_src1/src1, oid=" DF_OID "\n", DP_OID(oid_src));
+
+	/* Write source data */
+	d_iov_set(&iov, src_data, sizeof(src_data));
+	rc = dfs_write(dfs_mt, src, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Set xattr on source file */
+	rc = dfs_setxattr(dfs_mt, src, xattr_name, xattr_val, strlen(xattr_val) + 1, 0);
+	assert_int_equal(rc, 0);
+	print_message("  Set xattr '%s' = '%s' on src1\n", xattr_name, xattr_val);
+
+	rc = dfs_release(src);
+	assert_int_equal(rc, 0);
+
+	/* Re-open and create hardlink in different directory */
+	rc = dfs_lookup_rel(dfs_mt, dir_src, "src1", O_RDWR, &src, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs_mt, src, dir_src_link, "src1_link", &src_link, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /dir_src1_link/src1_link, nlink=%lu\n",
+		      (unsigned long)stbuf.st_nlink);
+
+	rc = dfs_release(src);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(src_link);
+	assert_int_equal(rc, 0);
+
+	/* Create destination file in dir_dst1 */
+	rc = dfs_open(dfs_mt, dir_dst, "dst1", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dst);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(dst, &oid_dst);
+	assert_int_equal(rc, 0);
+	print_message("  Created /dir_dst1/dst1, oid=" DF_OID "\n", DP_OID(oid_dst));
+
+	d_iov_set(&iov, dst_data, sizeof(dst_data));
+	rc = dfs_write(dfs_mt, dst, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dst);
+	assert_int_equal(rc, 0);
+
+	/* Rename src1 -> dst1 (cross-directory rename) */
+	print_message("  Renaming /dir_src1/src1 -> /dir_dst1/dst1...\n");
+	rc = dfs_move(dfs_mt, dir_src, "src1", dir_dst, "dst1", NULL);
+	assert_int_equal(rc, 0);
+
+	/* src1 name should not exist */
+	rc = dfs_stat(dfs_mt, dir_src, "src1", &stbuf);
+	assert_int_equal(rc, ENOENT);
+	print_message("  /dir_src1/src1 no longer exists - PASS\n");
+
+	/* Verify src1_link still works */
+	rc = dfs_lookup_rel(dfs_mt, dir_src_link, "src1_link", O_RDWR, &src_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(src_link, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, src_link, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_src.lo && oid_tmp.hi == oid_src.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /dir_src1_link/src1_link: oid=" DF_OID ", nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+
+	/* Verify xattr accessible via src1_link */
+	xattr_size = sizeof(xattr_buf);
+	memset(xattr_buf, 0, sizeof(xattr_buf));
+	rc = dfs_getxattr(dfs_mt, src_link, xattr_name, xattr_buf, &xattr_size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xattr_buf, xattr_val);
+	print_message("  xattr via src1_link: '%s' = '%s' - PASS\n", xattr_name, xattr_buf);
+
+	rc = dfs_release(src_link);
+	assert_int_equal(rc, 0);
+
+	/* Verify dst1 now has src's oid */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst, "dst1", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_src.lo && oid_tmp.hi == oid_src.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /dir_dst1/dst1: oid=" DF_OID ", nlink=%lu - PASS\n", DP_OID(oid_tmp),
+		      (unsigned long)stbuf.st_nlink);
+
+	/* Verify xattr accessible via dst1 */
+	xattr_size = sizeof(xattr_buf);
+	memset(xattr_buf, 0, sizeof(xattr_buf));
+	rc = dfs_getxattr(dfs_mt, tmp_obj, xattr_name, xattr_buf, &xattr_size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xattr_buf, xattr_val);
+	print_message("  xattr via dst1: '%s' = '%s' - PASS\n", xattr_name, xattr_buf);
+
+	/* Verify content */
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, src_data, sizeof(src_data));
+	print_message("  dst1 content matches original src1 data - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 1 */
+	rc = dfs_remove(dfs_mt, dir_dst, "dst1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_src_link, "src1_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_src);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_src_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_dst);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_src1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_src1_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_dst1", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * ============================================================
+	 * Scenario 2: Source is regular file, destination has hardlinks
+	 * ============================================================
+	 * /dir_src2/src2 is a regular file (no hardlinks) with xattr
+	 * /dir_dst2/dst2 has hardlink /dir_dst2_link/dst2_link
+	 */
+	print_message("\n--- Scenario 2: Source is regular, dest has hardlinks ---\n");
+
+	/* Create directories */
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_src2", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_src2", O_RDWR, &dir_src, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_dst2", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_dst2", O_RDWR, &dir_dst, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_dst2_link", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_dst2_link", O_RDWR, &dir_dst_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directories: dir_src2/, dir_dst2/, dir_dst2_link/\n");
+
+	/* Create source file with xattr */
+	rc = dfs_open(dfs_mt, dir_src, "src2", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &src);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(src, &oid_src);
+	assert_int_equal(rc, 0);
+	print_message("  Created /dir_src2/src2, oid=" DF_OID "\n", DP_OID(oid_src));
+
+	d_iov_set(&iov, src_data, sizeof(src_data));
+	rc = dfs_write(dfs_mt, src, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_setxattr(dfs_mt, src, xattr_name, xattr_val, strlen(xattr_val) + 1, 0);
+	assert_int_equal(rc, 0);
+	print_message("  Set xattr '%s' on src2\n", xattr_name);
+
+	rc = dfs_release(src);
+	assert_int_equal(rc, 0);
+
+	/* Create destination file with hardlink */
+	rc = dfs_open(dfs_mt, dir_dst, "dst2", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dst);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(dst, &oid_dst);
+	assert_int_equal(rc, 0);
+	print_message("  Created /dir_dst2/dst2, oid=" DF_OID "\n", DP_OID(oid_dst));
+
+	d_iov_set(&iov, dst_data, sizeof(dst_data));
+	rc = dfs_write(dfs_mt, dst, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dst);
+	assert_int_equal(rc, 0);
+
+	/* Create hardlink to dst2 in different directory */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst, "dst2", O_RDWR, &dst, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs_mt, dst, dir_dst_link, "dst2_link", &dst_link, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /dir_dst2_link/dst2_link, nlink=%lu\n",
+		      (unsigned long)stbuf.st_nlink);
+
+	rc = dfs_release(dst);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dst_link);
+	assert_int_equal(rc, 0);
+
+	/* Rename src2 -> dst2 */
+	print_message("  Renaming /dir_src2/src2 -> /dir_dst2/dst2...\n");
+	rc = dfs_move(dfs_mt, dir_src, "src2", dir_dst, "dst2", NULL);
+	assert_int_equal(rc, 0);
+
+	/* src2 name should not exist */
+	rc = dfs_stat(dfs_mt, dir_src, "src2", &stbuf);
+	assert_int_equal(rc, ENOENT);
+	print_message("  /dir_src2/src2 no longer exists - PASS\n");
+
+	/* dst2 should now have src's oid with nlink=1 */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst, "dst2", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_src.lo && oid_tmp.hi == oid_src.hi);
+	assert_int_equal(stbuf.st_nlink, 1);
+	print_message("  /dir_dst2/dst2: oid=" DF_OID " (src's), nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* dst2_link should have old dst's oid with nlink=1 */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst_link, "dst2_link", O_RDONLY, &dst_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(dst_link, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, dst_link, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_dst.lo && oid_tmp.hi == oid_dst.hi);
+	assert_int_equal(stbuf.st_nlink, 1);
+	print_message("  /dir_dst2_link/dst2_link: oid=" DF_OID " (old dst), nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+
+	/* Verify xattr on dst2 (moved from src2) */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst, "dst2", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	xattr_size = sizeof(xattr_buf);
+	memset(xattr_buf, 0, sizeof(xattr_buf));
+	rc = dfs_getxattr(dfs_mt, tmp_obj, xattr_name, xattr_buf, &xattr_size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xattr_buf, xattr_val);
+	print_message("  xattr via dst2: '%s' = '%s' - PASS\n", xattr_name, xattr_buf);
+
+	/* Verify content of dst2 */
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, src_data, sizeof(src_data));
+	print_message("  dst2 content matches original src2 data - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify dst2_link content - should be old dst_data */
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, dst_link, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, dst_data, sizeof(dst_data));
+	print_message("  dst2_link content matches original dst2 data - PASS\n");
+
+	/* Cleanup scenario 2 */
+	rc = dfs_release(dst_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_dst, "dst2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_dst_link, "dst2_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_src);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_dst);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_dst_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_src2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_dst2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_dst2_link", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * ============================================================
+	 * Scenario 3: Both source and destination have hardlinks
+	 * ============================================================
+	 * /dir_a/file_a has hardlink /dir_a_link/file_a_link, with xattr
+	 * /dir_b/file_b has hardlink /dir_b_link/file_b_link
+	 */
+	print_message("\n--- Scenario 3: Both source and dest have hardlinks ---\n");
+
+	/* Create directories */
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_a", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_a", O_RDWR, &dir_src, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_a_link", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_a_link", O_RDWR, &dir_src_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_b", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_b", O_RDWR, &dir_dst, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_b_link", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_b_link", O_RDWR, &dir_dst_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directories: dir_a/, dir_a_link/, dir_b/, dir_b_link/\n");
+
+	/* Create file_a with xattr */
+	rc = dfs_open(dfs_mt, dir_src, "file_a", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_a);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_a, &oid_a);
+	assert_int_equal(rc, 0);
+	print_message("  Created /dir_a/file_a, oid=" DF_OID "\n", DP_OID(oid_a));
+
+	d_iov_set(&iov, src_data, sizeof(src_data));
+	rc = dfs_write(dfs_mt, file_a, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_setxattr(dfs_mt, file_a, xattr_name, xattr_val, strlen(xattr_val) + 1, 0);
+	assert_int_equal(rc, 0);
+	print_message("  Set xattr '%s' on file_a\n", xattr_name);
+
+	rc = dfs_release(file_a);
+	assert_int_equal(rc, 0);
+
+	/* Create hardlink to file_a */
+	rc = dfs_lookup_rel(dfs_mt, dir_src, "file_a", O_RDWR, &file_a, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs_mt, file_a, dir_src_link, "file_a_link", &file_a_link, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /dir_a_link/file_a_link, nlink=%lu\n",
+		      (unsigned long)stbuf.st_nlink);
+
+	rc = dfs_release(file_a);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file_a_link);
+	assert_int_equal(rc, 0);
+
+	/* Create file_b with hardlink */
+	rc = dfs_open(dfs_mt, dir_dst, "file_b", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_b);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_b, &oid_b);
+	assert_int_equal(rc, 0);
+	print_message("  Created /dir_b/file_b, oid=" DF_OID "\n", DP_OID(oid_b));
+
+	d_iov_set(&iov, dst_data, sizeof(dst_data));
+	rc = dfs_write(dfs_mt, file_b, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file_b);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup_rel(dfs_mt, dir_dst, "file_b", O_RDWR, &file_b, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs_mt, file_b, dir_dst_link, "file_b_link", &file_b_link, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /dir_b_link/file_b_link, nlink=%lu\n",
+		      (unsigned long)stbuf.st_nlink);
+
+	rc = dfs_release(file_b);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file_b_link);
+	assert_int_equal(rc, 0);
+
+	/* Rename file_a -> file_b */
+	print_message("  Renaming /dir_a/file_a -> /dir_b/file_b...\n");
+	rc = dfs_move(dfs_mt, dir_src, "file_a", dir_dst, "file_b", NULL);
+	assert_int_equal(rc, 0);
+
+	/* file_a name should not exist */
+	rc = dfs_stat(dfs_mt, dir_src, "file_a", &stbuf);
+	assert_int_equal(rc, ENOENT);
+	print_message("  /dir_a/file_a no longer exists - PASS\n");
+
+	/* file_a_link should have original oid, nlink=2 */
+	rc = dfs_lookup_rel(dfs_mt, dir_src_link, "file_a_link", O_RDWR, &file_a_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_a_link, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, file_a_link, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_a.lo && oid_tmp.hi == oid_a.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /dir_a_link/file_a_link: oid=" DF_OID ", nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+
+	/* Verify xattr via file_a_link */
+	xattr_size = sizeof(xattr_buf);
+	memset(xattr_buf, 0, sizeof(xattr_buf));
+	rc = dfs_getxattr(dfs_mt, file_a_link, xattr_name, xattr_buf, &xattr_size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xattr_buf, xattr_val);
+	print_message("  xattr via file_a_link: '%s' = '%s' - PASS\n", xattr_name, xattr_buf);
+
+	rc = dfs_release(file_a_link);
+	assert_int_equal(rc, 0);
+
+	/* file_b should now have file_a's oid */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst, "file_b", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_a.lo && oid_tmp.hi == oid_a.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /dir_b/file_b: oid=" DF_OID " (file_a's), nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+
+	/* Verify xattr via file_b */
+	xattr_size = sizeof(xattr_buf);
+	memset(xattr_buf, 0, sizeof(xattr_buf));
+	rc = dfs_getxattr(dfs_mt, tmp_obj, xattr_name, xattr_buf, &xattr_size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xattr_buf, xattr_val);
+	print_message("  xattr via file_b: '%s' = '%s' - PASS\n", xattr_name, xattr_buf);
+
+	/* Verify content */
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, src_data, sizeof(src_data));
+	print_message("  file_b content matches original file_a data - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* file_b_link should have old file_b oid, nlink=1 */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst_link, "file_b_link", O_RDWR, &file_b_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_b_link, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, file_b_link, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_b.lo && oid_tmp.hi == oid_b.hi);
+	assert_int_equal(stbuf.st_nlink, 1);
+	print_message("  /dir_b_link/file_b_link: oid=" DF_OID " (old file_b), nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+
+	/* Verify file_b_link content - should be old dst_data */
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, file_b_link, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, dst_data, sizeof(dst_data));
+	print_message("  file_b_link content matches original file_b data - PASS\n");
+
+	/* Cleanup scenario 3 */
+	rc = dfs_release(file_b_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_dst, "file_b", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_src_link, "file_a_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_dst_link, "file_b_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_src);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_src_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_dst);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_dst_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_a", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_a_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_b", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_b_link", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * ============================================================
+	 * Scenario 4: Source has hardlinks, destination doesn't exist
+	 * ============================================================
+	 * /dir_src4/src4 has hardlink /dir_src4_link/src4_link, with xattr
+	 * /dir_dst4/dst4 does not exist
+	 */
+	print_message("\n--- Scenario 4: Source has hardlinks, dest doesn't exist ---\n");
+
+	/* Create directories */
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_src4", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_src4", O_RDWR, &dir_src, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_src4_link", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_src4_link", O_RDWR, &dir_src_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "dir_dst4", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "dir_dst4", O_RDWR, &dir_dst, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directories: dir_src4/, dir_src4_link/, dir_dst4/\n");
+
+	/* Create source file with xattr */
+	rc = dfs_open(dfs_mt, dir_src, "src4", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &src);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(src, &oid_src);
+	assert_int_equal(rc, 0);
+	print_message("  Created /dir_src4/src4, oid=" DF_OID "\n", DP_OID(oid_src));
+
+	d_iov_set(&iov, src_data, sizeof(src_data));
+	rc = dfs_write(dfs_mt, src, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_setxattr(dfs_mt, src, xattr_name, xattr_val, strlen(xattr_val) + 1, 0);
+	assert_int_equal(rc, 0);
+	print_message("  Set xattr '%s' on src4\n", xattr_name);
+
+	rc = dfs_release(src);
+	assert_int_equal(rc, 0);
+
+	/* Create hardlink in different directory */
+	rc = dfs_lookup_rel(dfs_mt, dir_src, "src4", O_RDWR, &src, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs_mt, src, dir_src_link, "src4_link", &src_link, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /dir_src4_link/src4_link, nlink=%lu\n",
+		      (unsigned long)stbuf.st_nlink);
+
+	rc = dfs_release(src);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(src_link);
+	assert_int_equal(rc, 0);
+
+	/* Verify dst4 does not exist */
+	rc = dfs_stat(dfs_mt, dir_dst, "dst4", &stbuf);
+	assert_int_equal(rc, ENOENT);
+	print_message("  /dir_dst4/dst4 does not exist - confirmed\n");
+
+	/* Rename src4 -> dst4 */
+	print_message("  Renaming /dir_src4/src4 -> /dir_dst4/dst4...\n");
+	rc = dfs_move(dfs_mt, dir_src, "src4", dir_dst, "dst4", NULL);
+	assert_int_equal(rc, 0);
+
+	/* src4 name should not exist */
+	rc = dfs_stat(dfs_mt, dir_src, "src4", &stbuf);
+	assert_int_equal(rc, ENOENT);
+	print_message("  /dir_src4/src4 no longer exists - PASS\n");
+
+	/* dst4 should have src's oid, nlink=2 */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst, "dst4", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_src.lo && oid_tmp.hi == oid_src.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /dir_dst4/dst4: oid=" DF_OID ", nlink=%lu - PASS\n", DP_OID(oid_tmp),
+		      (unsigned long)stbuf.st_nlink);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* src4_link should still have original oid, nlink=2 */
+	rc = dfs_lookup_rel(dfs_mt, dir_src_link, "src4_link", O_RDWR, &src_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(src_link, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, src_link, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_src.lo && oid_tmp.hi == oid_src.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /dir_src4_link/src4_link: oid=" DF_OID ", nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+
+	/* Verify xattr via src4_link */
+	xattr_size = sizeof(xattr_buf);
+	memset(xattr_buf, 0, sizeof(xattr_buf));
+	rc = dfs_getxattr(dfs_mt, src_link, xattr_name, xattr_buf, &xattr_size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xattr_buf, xattr_val);
+	print_message("  xattr via src4_link: '%s' = '%s' - PASS\n", xattr_name, xattr_buf);
+
+	rc = dfs_release(src_link);
+	assert_int_equal(rc, 0);
+
+	/* Verify xattr via dst4 */
+	rc = dfs_lookup_rel(dfs_mt, dir_dst, "dst4", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	xattr_size = sizeof(xattr_buf);
+	memset(xattr_buf, 0, sizeof(xattr_buf));
+	rc = dfs_getxattr(dfs_mt, tmp_obj, xattr_name, xattr_buf, &xattr_size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xattr_buf, xattr_val);
+	print_message("  xattr via dst4: '%s' = '%s' - PASS\n", xattr_name, xattr_buf);
+
+	/* Verify content */
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, src_data, sizeof(src_data));
+	print_message("  dst4 content matches original src4 data - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 4 */
+	rc = dfs_remove(dfs_mt, dir_dst, "dst4", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_src_link, "src4_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_src);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_src_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_dst);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_src4", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_src4_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "dir_dst4", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("\nHardlink rename test completed successfully!\n");
+}
+
+static void
+dfs_test_hardlink_xattr(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *file1, *file2;
+	struct stat   stbuf;
+	const char   *xname1 = "user.attr1";
+	const char   *xname2 = "user.attr2";
+	const char   *xval1  = "value1";
+	const char   *xval2  = "value2";
+	daos_size_t   size;
+	char          buf[64];
+	daos_obj_id_t oid_orig, oid_tmp;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("=== Hardlink xattr test ===\n");
+
+	/*
+	 * ============================================================
+	 * Part 1: Test xattr sharing with hardlinks
+	 * ============================================================
+	 * - Create file, set xname1
+	 * - Create hardlink, set xname2 on hardlink
+	 * - Both xnames should be visible on both files
+	 * - Delete first file
+	 * - Both xattrs still visible on second file
+	 */
+	print_message("\n--- Part 1: xattr sharing across hardlinks ---\n");
+
+	/* Create first file */
+	rc = dfs_open(dfs_mt, NULL, "xattr_file1", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file1);
+	assert_int_equal(rc, 0);
+
+	/* Record oid immediately after creation */
+	rc = dfs_obj2id(file1, &oid_orig);
+	assert_int_equal(rc, 0);
+	print_message("  Created xattr_file1, oid=" DF_OID "\n", DP_OID(oid_orig));
+
+	/* Set xname1 on first file BEFORE hardlink is created */
+	rc = dfs_setxattr(dfs_mt, file1, xname1, xval1, strlen(xval1) + 1, 0);
+	assert_int_equal(rc, 0);
+	print_message("  Set xattr '%s' = '%s' on file1\n", xname1, xval1);
+
+	/* Verify xname1 is set */
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file1, xname1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval1);
+	print_message("  Verified xattr on file1 - PASS\n");
+
+	/* Release handle */
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+
+	/* Re-open and create hardlink */
+	rc = dfs_lookup_rel(dfs_mt, NULL, "xattr_file1", O_RDWR, &file1, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs_mt, file1, NULL, "xattr_file2", &file2, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink xattr_file2\n");
+
+	/* Verify oid matches */
+	rc = dfs_obj2id(file2, &oid_tmp);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_orig.lo && oid_tmp.hi == oid_orig.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  Hardlink oid=" DF_OID " (matches), nlink=%lu\n", DP_OID(oid_tmp),
+		      (unsigned long)stbuf.st_nlink);
+
+	/* Set xname2 on the hardlink (file2) */
+	rc = dfs_setxattr(dfs_mt, file2, xname2, xval2, strlen(xval2) + 1, 0);
+	assert_int_equal(rc, 0);
+	print_message("  Set xattr '%s' = '%s' on file2 (hardlink)\n", xname2, xval2);
+
+	/* Verify both xattrs are visible on file1 */
+	print_message("  Verifying both xattrs visible on file1...\n");
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file1, xname1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval1);
+	print_message("    file1 has '%s' = '%s' - PASS\n", xname1, xval1);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file1, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval2);
+	print_message("    file1 has '%s' = '%s' - PASS\n", xname2, xval2);
+
+	/* Verify both xattrs are visible on file2 */
+	print_message("  Verifying both xattrs visible on file2...\n");
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file2, xname1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval1);
+	print_message("    file2 has '%s' = '%s' - PASS\n", xname1, xval1);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file2, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval2);
+	print_message("    file2 has '%s' = '%s' - PASS\n", xname2, xval2);
+
+	/* Verify listxattr shows both on file1 */
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_listxattr(dfs_mt, file1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xname1) + 1 + strlen(xname2) + 1);
+	print_message("  listxattr on file1 shows both xattrs - PASS\n");
+
+	/* Release handles */
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+
+	/* Delete first file */
+	print_message("  Removing xattr_file1...\n");
+	rc = dfs_remove(dfs_mt, NULL, "xattr_file1", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Re-open file2 and verify xattrs still exist */
+	rc = dfs_lookup_rel(dfs_mt, NULL, "xattr_file2", O_RDWR, &file2, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Verify oid and nlink */
+	rc = dfs_obj2id(file2, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, file2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_orig.lo && oid_tmp.hi == oid_orig.hi);
+	assert_int_equal(stbuf.st_nlink, 1);
+	print_message("  file2 after deletion: oid=" DF_OID ", nlink=%lu\n", DP_OID(oid_tmp),
+		      (unsigned long)stbuf.st_nlink);
+
+	/* Verify both xattrs still visible on file2 */
+	print_message("  Verifying xattrs still visible after file1 deletion...\n");
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file2, xname1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval1);
+	print_message("    file2 still has '%s' = '%s' - PASS\n", xname1, xval1);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file2, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval2);
+	print_message("    file2 still has '%s' = '%s' - PASS\n", xname2, xval2);
+
+	/* Cleanup part 1 */
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "xattr_file2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * ============================================================
+	 * Part 2: Test xattr removal with hardlinks
+	 * ============================================================
+	 * - Create file, set xname1
+	 * - Create hardlink, set xname2 on hardlink
+	 * - Remove xattr from first file
+	 * - Verify removal is visible in both (xattr gone from both)
+	 */
+	print_message("\n--- Part 2: xattr removal across hardlinks ---\n");
+
+	/* Create first file */
+	rc = dfs_open(dfs_mt, NULL, "xattr_rm_file1", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file1);
+	assert_int_equal(rc, 0);
+
+	/* Record oid immediately after creation */
+	rc = dfs_obj2id(file1, &oid_orig);
+	assert_int_equal(rc, 0);
+	print_message("  Created xattr_rm_file1, oid=" DF_OID "\n", DP_OID(oid_orig));
+
+	/* Set xname1 on first file */
+	rc = dfs_setxattr(dfs_mt, file1, xname1, xval1, strlen(xval1) + 1, 0);
+	assert_int_equal(rc, 0);
+	print_message("  Set xattr '%s' = '%s' on file1\n", xname1, xval1);
+
+	/* Release handle */
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+
+	/* Re-open and create hardlink */
+	rc = dfs_lookup_rel(dfs_mt, NULL, "xattr_rm_file1", O_RDWR, &file1, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs_mt, file1, NULL, "xattr_rm_file2", &file2, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink xattr_rm_file2\n");
+
+	/* Set xname2 on the hardlink (file2) */
+	rc = dfs_setxattr(dfs_mt, file2, xname2, xval2, strlen(xval2) + 1, 0);
+	assert_int_equal(rc, 0);
+	print_message("  Set xattr '%s' = '%s' on file2 (hardlink)\n", xname2, xval2);
+
+	/* Verify both xattrs visible on both files */
+	print_message("  Verifying both xattrs on both files before removal...\n");
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, file1, xname1, buf, &size);
+	assert_int_equal(rc, 0);
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, file1, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, file2, xname1, buf, &size);
+	assert_int_equal(rc, 0);
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, file2, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	print_message("    Both files have both xattrs - PASS\n");
+
+	/* Remove xname1 from file1 */
+	print_message("  Removing xattr '%s' from file1...\n", xname1);
+	rc = dfs_removexattr(dfs_mt, file1, xname1);
+	assert_int_equal(rc, 0);
+
+	/* Verify xname1 is gone from file1 */
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, file1, xname1, buf, &size);
+	assert_int_equal(rc, ENODATA);
+	print_message("    file1: '%s' removed (ENODATA) - PASS\n", xname1);
+
+	/* Verify xname1 is also gone from file2 (shared xattr) */
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, file2, xname1, buf, &size);
+	assert_int_equal(rc, ENODATA);
+	print_message("    file2: '%s' also removed (ENODATA) - PASS\n", xname1);
+
+	/* Verify xname2 still exists on both */
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file1, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval2);
+	print_message("    file1: '%s' still exists - PASS\n", xname2);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, file2, xname2, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, xval2);
+	print_message("    file2: '%s' still exists - PASS\n", xname2);
+
+	/* Verify listxattr shows only xname2 on both files */
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_listxattr(dfs_mt, file1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xname2) + 1);
+	assert_string_equal(buf, xname2);
+	print_message("    file1 listxattr shows only '%s' - PASS\n", xname2);
+
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_listxattr(dfs_mt, file2, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(xname2) + 1);
+	assert_string_equal(buf, xname2);
+	print_message("    file2 listxattr shows only '%s' - PASS\n", xname2);
+
+	/* Cleanup part 2 */
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "xattr_rm_file1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "xattr_rm_file2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("\nHardlink xattr test completed successfully!\n");
+}
+
+static void
+dfs_test_exchange(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *file_a, *file_a_link, *file_b, *file_b_link;
+	dfs_obj_t    *tmp_obj;
+	dfs_obj_t    *dir_a, *dir_a_link, *dir_b, *dir_b_link;
+	struct stat   stbuf;
+	d_sg_list_t   sgl;
+	d_iov_t       iov;
+	char          data_a[64], data_b[64], read_buf[64];
+	daos_size_t   read_size;
+	daos_obj_id_t oid_a, oid_b, oid_tmp;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("=== dfs_exchange test ===\n");
+
+	/* Prepare unique data patterns */
+	memset(data_a, 'A', sizeof(data_a));
+	memset(data_b, 'B', sizeof(data_b));
+
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+
+	/*
+	 * ============================================================
+	 * Scenario 1: Basic exchange (no hardlinks)
+	 * ============================================================
+	 * /exch_dir_a1/file_a and /exch_dir_b1/file_b are regular files
+	 * exchange(file_a, file_b) should swap their directory entries
+	 */
+	print_message("\n--- Scenario 1: Basic exchange (no hardlinks) ---\n");
+
+	/* Create directories for file_a and file_b */
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_dir_a1", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_dir_a1", O_RDWR, &dir_a, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_dir_b1", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_dir_b1", O_RDWR, &dir_b, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directories: exch_dir_a1/, exch_dir_b1/\n");
+
+	/* Create file_a and write data */
+	rc = dfs_open(dfs_mt, dir_a, "exch_a1", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_a);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_a, &oid_a);
+	assert_int_equal(rc, 0);
+	print_message("  Created /exch_dir_a1/exch_a1, oid=" DF_OID "\n", DP_OID(oid_a));
+
+	d_iov_set(&iov, data_a, sizeof(data_a));
+	rc = dfs_write(dfs_mt, file_a, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Wrote data 'A' to exch_a1\n");
+
+	rc = dfs_release(file_a);
+	assert_int_equal(rc, 0);
+
+	/* Create file_b and write data */
+	rc = dfs_open(dfs_mt, dir_b, "exch_b1", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_b);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_b, &oid_b);
+	assert_int_equal(rc, 0);
+	print_message("  Created /exch_dir_b1/exch_b1, oid=" DF_OID "\n", DP_OID(oid_b));
+
+	d_iov_set(&iov, data_b, sizeof(data_b));
+	rc = dfs_write(dfs_mt, file_b, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Wrote data 'B' to exch_b1\n");
+
+	rc = dfs_release(file_b);
+	assert_int_equal(rc, 0);
+
+	/* Exchange file_a and file_b - names swap directories */
+	print_message("  Exchanging /exch_dir_a1/exch_a1 <-> /exch_dir_b1/exch_b1...\n");
+	rc = dfs_exchange(dfs_mt, dir_a, "exch_a1", dir_b, "exch_b1");
+	assert_int_equal(rc, 0);
+
+	/* After exchange: exch_a1 is now in dir_b, exch_b1 is now in dir_a */
+	/* Verify exch_a1 (now in dir_b) still has oid_a and data_a */
+	rc = dfs_lookup_rel(dfs_mt, dir_b, "exch_a1", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_a.lo && oid_tmp.hi == oid_a.hi);
+	print_message("  /exch_dir_b1/exch_a1: oid=" DF_OID " (still oid_a) - PASS\n",
+		      DP_OID(oid_tmp));
+
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_a, sizeof(data_a));
+	print_message("  /exch_dir_b1/exch_a1: content is 'A' - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify exch_b1 (now in dir_a) still has oid_b and data_b */
+	rc = dfs_lookup_rel(dfs_mt, dir_a, "exch_b1", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_b.lo && oid_tmp.hi == oid_b.hi);
+	print_message("  /exch_dir_a1/exch_b1: oid=" DF_OID " (still oid_b) - PASS\n",
+		      DP_OID(oid_tmp));
+
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_b, sizeof(data_b));
+	print_message("  /exch_dir_a1/exch_b1: content is 'B' - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 1 - files are now in swapped directories */
+	rc = dfs_remove(dfs_mt, dir_b, "exch_a1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_a, "exch_b1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_a);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_b);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_dir_a1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_dir_b1", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * ============================================================
+	 * Scenario 2: Exchange where one file has hardlinks
+	 * ============================================================
+	 * /exch_dir_a2/file_a has a hardlink /exch_linkdir_a2/file_a_link
+	 * /exch_dir_b2/file_b is a regular file (no hardlinks)
+	 * exchange(file_a, file_b) should:
+	 *   - file_a name now points to file_b's object
+	 *   - file_b name now points to file_a's object
+	 *   - file_a_link still points to file_a's original object
+	 */
+	print_message("\n--- Scenario 2: Exchange where one file has hardlinks ---\n");
+
+	/* Create directory for file_a */
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_dir_a2", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_dir_a2", O_RDWR, &dir_a, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Create directory for file_a's hardlink */
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_linkdir_a2", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_linkdir_a2", O_RDWR, &dir_a_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Create directory for file_b */
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_dir_b2", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_dir_b2", O_RDWR, &dir_b, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directories: exch_dir_a2/, exch_linkdir_a2/, exch_dir_b2/\n");
+
+	/* Create file_a in its directory */
+	rc = dfs_open(dfs_mt, dir_a, "exch_a2", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_a);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_a, &oid_a);
+	assert_int_equal(rc, 0);
+	print_message("  Created /exch_dir_a2/exch_a2, oid=" DF_OID "\n", DP_OID(oid_a));
+
+	d_iov_set(&iov, data_a, sizeof(data_a));
+	rc = dfs_write(dfs_mt, file_a, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Create hardlink in separate directory */
+	rc = dfs_link(dfs_mt, file_a, dir_a_link, "exch_a2_link", &file_a_link, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /exch_linkdir_a2/exch_a2_link, nlink=%lu\n",
+		      (unsigned long)stbuf.st_nlink);
+
+	rc = dfs_release(file_a);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file_a_link);
+	assert_int_equal(rc, 0);
+
+	/* Create file_b in its directory (no hardlink) */
+	rc = dfs_open(dfs_mt, dir_b, "exch_b2", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_b);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_b, &oid_b);
+	assert_int_equal(rc, 0);
+	print_message("  Created /exch_dir_b2/exch_b2, oid=" DF_OID "\n", DP_OID(oid_b));
+
+	d_iov_set(&iov, data_b, sizeof(data_b));
+	rc = dfs_write(dfs_mt, file_b, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file_b);
+	assert_int_equal(rc, 0);
+
+	/* Exchange file_a and file_b - names swap directories */
+	print_message("  Exchanging /exch_dir_a2/exch_a2 <-> /exch_dir_b2/exch_b2...\n");
+	rc = dfs_exchange(dfs_mt, dir_a, "exch_a2", dir_b, "exch_b2");
+	assert_int_equal(rc, 0);
+
+	/* After exchange: exch_a2 is now in dir_b, exch_b2 is now in dir_a */
+	/* Verify exch_a2 (now in dir_b) still has oid_a, nlink=2 (has hardlink) */
+	rc = dfs_lookup_rel(dfs_mt, dir_b, "exch_a2", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_a.lo && oid_tmp.hi == oid_a.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /exch_dir_b2/exch_a2: oid=" DF_OID ", nlink=%lu (still oid_a) - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify exch_b2 (now in dir_a) still has oid_b, nlink=1 */
+	rc = dfs_lookup_rel(dfs_mt, dir_a, "exch_b2", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_b.lo && oid_tmp.hi == oid_b.hi);
+	assert_int_equal(stbuf.st_nlink, 1);
+	print_message("  /exch_dir_a2/exch_b2: oid=" DF_OID ", nlink=%lu (still oid_b) - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify exch_linkdir_a2/exch_a2_link still has oid_a, nlink=2 */
+	rc = dfs_lookup_rel(dfs_mt, dir_a_link, "exch_a2_link", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_a.lo && oid_tmp.hi == oid_a.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /exch_linkdir_a2/exch_a2_link: oid=" DF_OID
+		      ", nlink=%lu (same as exch_a2) - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify content of exch_a2 (now in dir_b, should be data_a) */
+	rc = dfs_lookup_rel(dfs_mt, dir_b, "exch_a2", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_a, sizeof(data_a));
+	print_message("  /exch_dir_b2/exch_a2: content is 'A' - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify content of exch_b2 (now in dir_a, should be data_b) */
+	rc = dfs_lookup_rel(dfs_mt, dir_a, "exch_b2", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_b, sizeof(data_b));
+	print_message("  /exch_dir_a2/exch_b2: content is 'B' - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify content of exch_a2_link (should be data_a, same as exch_a2) */
+	rc = dfs_lookup_rel(dfs_mt, dir_a_link, "exch_a2_link", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_a, sizeof(data_a));
+	print_message("  /exch_linkdir_a2/exch_a2_link: content is 'A' (same as exch_a2) - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 2 - files are now in swapped directories */
+	rc = dfs_remove(dfs_mt, dir_b, "exch_a2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_a, "exch_b2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_a_link, "exch_a2_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_a);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_a_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_b);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_dir_a2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_linkdir_a2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_dir_b2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * ============================================================
+	 * Scenario 3: Exchange where both files have hardlinks
+	 * ============================================================
+	 * /exch_dir_a3/file_a has hardlink /exch_linkdir_a3/file_a_link
+	 * /exch_dir_b3/file_b has hardlink /exch_linkdir_b3/file_b_link
+	 * exchange(file_a, file_b) should:
+	 *   - file_a name now points to file_b's object
+	 *   - file_b name now points to file_a's object
+	 *   - file_a_link still points to original file_a object (now same as file_b)
+	 *   - file_b_link still points to original file_b object (now same as file_a)
+	 */
+	print_message("\n--- Scenario 3: Exchange where both files have hardlinks ---\n");
+
+	/* Create directory for file_a */
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_dir_a3", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_dir_a3", O_RDWR, &dir_a, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Create directory for file_a's hardlink */
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_linkdir_a3", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_linkdir_a3", O_RDWR, &dir_a_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Create directory for file_b */
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_dir_b3", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_dir_b3", O_RDWR, &dir_b, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Create directory for file_b's hardlink */
+	rc = dfs_mkdir(dfs_mt, NULL, "exch_linkdir_b3", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "exch_linkdir_b3", O_RDWR, &dir_b_link, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directories: exch_dir_a3/, exch_linkdir_a3/, exch_dir_b3/, "
+		      "exch_linkdir_b3/\n");
+
+	/* Create file_a in its directory */
+	rc = dfs_open(dfs_mt, dir_a, "exch_a3", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_a);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_a, &oid_a);
+	assert_int_equal(rc, 0);
+	print_message("  Created /exch_dir_a3/exch_a3, oid=" DF_OID "\n", DP_OID(oid_a));
+
+	d_iov_set(&iov, data_a, sizeof(data_a));
+	rc = dfs_write(dfs_mt, file_a, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Create hardlink in separate directory */
+	rc = dfs_link(dfs_mt, file_a, dir_a_link, "exch_a3_link", &file_a_link, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /exch_linkdir_a3/exch_a3_link\n");
+	rc = dfs_release(file_a);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file_a_link);
+	assert_int_equal(rc, 0);
+
+	/* Create file_b in its directory */
+	rc = dfs_open(dfs_mt, dir_b, "exch_b3", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_b);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file_b, &oid_b);
+	assert_int_equal(rc, 0);
+	print_message("  Created /exch_dir_b3/exch_b3, oid=" DF_OID "\n", DP_OID(oid_b));
+
+	d_iov_set(&iov, data_b, sizeof(data_b));
+	rc = dfs_write(dfs_mt, file_b, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Create hardlink in separate directory */
+	rc = dfs_link(dfs_mt, file_b, dir_b_link, "exch_b3_link", &file_b_link, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /exch_linkdir_b3/exch_b3_link\n");
+	rc = dfs_release(file_b);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file_b_link);
+	assert_int_equal(rc, 0);
+
+	/* Exchange file_a and file_b - names swap directories */
+	print_message("  Exchanging /exch_dir_a3/exch_a3 <-> /exch_dir_b3/exch_b3...\n");
+	rc = dfs_exchange(dfs_mt, dir_a, "exch_a3", dir_b, "exch_b3");
+	assert_int_equal(rc, 0);
+
+	/* After exchange: exch_a3 is now in dir_b, exch_b3 is now in dir_a */
+	/* Verify exch_a3 (now in dir_b) still has oid_a, nlink=2 */
+	rc = dfs_lookup_rel(dfs_mt, dir_b, "exch_a3", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_a.lo && oid_tmp.hi == oid_a.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /exch_dir_b3/exch_a3: oid=" DF_OID " (still oid_a), nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify exch_b3 (now in dir_a) still has oid_b, nlink=2 */
+	rc = dfs_lookup_rel(dfs_mt, dir_a, "exch_b3", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_b.lo && oid_tmp.hi == oid_b.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /exch_dir_a3/exch_b3: oid=" DF_OID " (still oid_b), nlink=%lu - PASS\n",
+		      DP_OID(oid_tmp), (unsigned long)stbuf.st_nlink);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify exch_linkdir_a3/exch_a3_link still has oid_a (same as exch_a3) */
+	rc = dfs_lookup_rel(dfs_mt, dir_a_link, "exch_a3_link", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_a.lo && oid_tmp.hi == oid_a.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /exch_linkdir_a3/exch_a3_link: oid=" DF_OID
+		      " (oid_a, same as exch_a3) - PASS\n",
+		      DP_OID(oid_tmp));
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify exch_linkdir_b3/exch_b3_link still has oid_b (same as exch_b3) */
+	rc = dfs_lookup_rel(dfs_mt, dir_b_link, "exch_b3_link", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(tmp_obj, &oid_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_true(oid_tmp.lo == oid_b.lo && oid_tmp.hi == oid_b.hi);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  /exch_linkdir_b3/exch_b3_link: oid=" DF_OID
+		      " (oid_b, same as exch_b3) - PASS\n",
+		      DP_OID(oid_tmp));
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify content: exch_a3 (now in dir_b) and exch_a3_link should have data_a */
+	rc = dfs_lookup_rel(dfs_mt, dir_b, "exch_a3", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_a, sizeof(data_a));
+	print_message("  /exch_dir_b3/exch_a3: content is 'A' - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup_rel(dfs_mt, dir_a_link, "exch_a3_link", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_a, sizeof(data_a));
+	print_message("  /exch_linkdir_a3/exch_a3_link: content is 'A' (same as exch_a3) - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Verify content: exch_b3 (now in dir_a) and exch_b3_link should have data_b */
+	rc = dfs_lookup_rel(dfs_mt, dir_a, "exch_b3", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_b, sizeof(data_b));
+	print_message("  /exch_dir_a3/exch_b3: content is 'B' - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup_rel(dfs_mt, dir_b_link, "exch_b3_link", O_RDONLY, &tmp_obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	memset(read_buf, 0, sizeof(read_buf));
+	d_iov_set(&iov, read_buf, sizeof(read_buf));
+	rc = dfs_read(dfs_mt, tmp_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(read_buf, data_b, sizeof(data_b));
+	print_message("  /exch_linkdir_b3/exch_b3_link: content is 'B' (same as exch_b3) - PASS\n");
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 3 - files are now in swapped directories */
+	rc = dfs_remove(dfs_mt, dir_b, "exch_a3", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_a, "exch_b3", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_a_link, "exch_a3_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_b_link, "exch_b3_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_a);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_a_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_b);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_b_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_dir_a3", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_linkdir_a3", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_dir_b3", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "exch_linkdir_b3", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("\ndfs_exchange test completed successfully!\n");
+}
+
+static void
+dfs_test_hardlink_access(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *file, *link1, *link2, *symlink_obj;
+	dfs_obj_t    *dir_file, *dir_link1, *dir_link2, *dir_symlink;
+	struct stat   stbuf;
+	daos_obj_id_t oid_file;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("=== Hardlink dfs_access test ===\n");
+	print_message("Testing that dfs_access returns consistent results across hardlinks\n");
+
+	/*
+	 * Create structure:
+	 *   /access_dir_file/access_file     - original file
+	 *   /access_dir_link1/access_link1   - hardlink 1
+	 *   /access_dir_link2/access_link2   - hardlink 2
+	 *   /access_dir_symlink/access_symlink -> ../access_dir_link2/access_link2
+	 */
+
+	/* Create directories */
+	rc = dfs_mkdir(dfs_mt, NULL, "access_dir_file", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "access_dir_file", O_RDWR, &dir_file, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directory /access_dir_file/\n");
+
+	rc = dfs_mkdir(dfs_mt, NULL, "access_dir_link1", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "access_dir_link1", O_RDWR, &dir_link1, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directory /access_dir_link1/\n");
+
+	rc = dfs_mkdir(dfs_mt, NULL, "access_dir_link2", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "access_dir_link2", O_RDWR, &dir_link2, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directory /access_dir_link2/\n");
+
+	rc = dfs_mkdir(dfs_mt, NULL, "access_dir_symlink", S_IFDIR | S_IRWXU, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "access_dir_symlink", O_RDWR, &dir_symlink, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created directory /access_dir_symlink/\n");
+
+	/* Create file with read-write permissions */
+	rc = dfs_open(dfs_mt, dir_file, "access_file", S_IFREG | S_IRUSR | S_IWUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(file, &oid_file);
+	assert_int_equal(rc, 0);
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created /access_dir_file/access_file, oid=" DF_OID ", mode=0%o\n",
+		      DP_OID(oid_file), stbuf.st_mode & 0777);
+
+	/* Create hardlinks in different directories */
+	rc = dfs_link(dfs_mt, file, dir_link1, "access_link1", &link1, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /access_dir_link1/access_link1, nlink=%lu\n",
+		      (unsigned long)stbuf.st_nlink);
+
+	rc = dfs_link(dfs_mt, file, dir_link2, "access_link2", &link2, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Created hardlink /access_dir_link2/access_link2, nlink=%lu\n",
+		      (unsigned long)stbuf.st_nlink);
+
+	/* Create symlink pointing to link2 */
+	rc = dfs_open(dfs_mt, dir_symlink, "access_symlink", S_IFLNK, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, "../access_dir_link2/access_link2", &symlink_obj);
+	assert_int_equal(rc, 0);
+	print_message("  Created symlink /access_dir_symlink/access_symlink -> "
+		      "../access_dir_link2/access_link2\n");
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(link1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(link2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(symlink_obj);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Test 1: F_OK (file existence) on all paths
+	 */
+	print_message("\n--- Test 1: F_OK (existence check) ---\n");
+
+	rc = dfs_access(dfs_mt, dir_file, "access_file", F_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_file/access_file, F_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link1, "access_link1", F_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link1/access_link1, F_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link2, "access_link2", F_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link2/access_link2, F_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_symlink, "access_symlink", F_OK);
+	assert_int_equal(rc, 0);
+	print_message(
+	    "  dfs_access(/access_dir_symlink/access_symlink, F_OK) = %d - PASS (via symlink)\n",
+	    rc);
+
+	/*
+	 * Test 2: R_OK (read permission) on all paths
+	 */
+	print_message("\n--- Test 2: R_OK (read permission) ---\n");
+
+	rc = dfs_access(dfs_mt, dir_file, "access_file", R_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_file/access_file, R_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link1, "access_link1", R_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link1/access_link1, R_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link2, "access_link2", R_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link2/access_link2, R_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_symlink, "access_symlink", R_OK);
+	assert_int_equal(rc, 0);
+	print_message(
+	    "  dfs_access(/access_dir_symlink/access_symlink, R_OK) = %d - PASS (via symlink)\n",
+	    rc);
+
+	/*
+	 * Test 3: W_OK (write permission) on all paths
+	 */
+	print_message("\n--- Test 3: W_OK (write permission) ---\n");
+
+	rc = dfs_access(dfs_mt, dir_file, "access_file", W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_file/access_file, W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link1, "access_link1", W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link1/access_link1, W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link2, "access_link2", W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link2/access_link2, W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_symlink, "access_symlink", W_OK);
+	assert_int_equal(rc, 0);
+	print_message(
+	    "  dfs_access(/access_dir_symlink/access_symlink, W_OK) = %d - PASS (via symlink)\n",
+	    rc);
+
+	/*
+	 * Test 4: R_OK | W_OK combined on all paths
+	 */
+	print_message("\n--- Test 4: R_OK | W_OK (read+write permission) ---\n");
+
+	rc = dfs_access(dfs_mt, dir_file, "access_file", R_OK | W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_file/access_file, R_OK|W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link1, "access_link1", R_OK | W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link1/access_link1, R_OK|W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link2, "access_link2", R_OK | W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link2/access_link2, R_OK|W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_symlink, "access_symlink", R_OK | W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_symlink/access_symlink, R_OK|W_OK) = %d - PASS "
+		      "(via symlink)\n",
+		      rc);
+
+	/*
+	 * Test 5: Change permissions via one link, verify via all links
+	 */
+	print_message("\n--- Test 5: chmod via one link, verify access via all links ---\n");
+
+	/* Change to read-only via link1 */
+	rc = dfs_chmod(dfs_mt, dir_link1, "access_link1", S_IRUSR);
+	assert_int_equal(rc, 0);
+	print_message("  Changed mode to read-only (0400) via /access_dir_link1/access_link1\n");
+
+	/* Verify R_OK succeeds on all */
+	rc = dfs_access(dfs_mt, dir_file, "access_file", R_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_file/access_file, R_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link1, "access_link1", R_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link1/access_link1, R_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link2, "access_link2", R_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link2/access_link2, R_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_symlink, "access_symlink", R_OK);
+	assert_int_equal(rc, 0);
+	print_message(
+	    "  dfs_access(/access_dir_symlink/access_symlink, R_OK) = %d - PASS (via symlink)\n",
+	    rc);
+
+	/* Verify W_OK fails on all (read-only now) */
+	rc = dfs_access(dfs_mt, dir_file, "access_file", W_OK);
+	assert_int_equal(rc, EACCES);
+	print_message("  dfs_access(/access_dir_file/access_file, W_OK) = EACCES - PASS\n");
+
+	rc = dfs_access(dfs_mt, dir_link1, "access_link1", W_OK);
+	assert_int_equal(rc, EACCES);
+	print_message("  dfs_access(/access_dir_link1/access_link1, W_OK) = EACCES - PASS\n");
+
+	rc = dfs_access(dfs_mt, dir_link2, "access_link2", W_OK);
+	assert_int_equal(rc, EACCES);
+	print_message("  dfs_access(/access_dir_link2/access_link2, W_OK) = EACCES - PASS\n");
+
+	rc = dfs_access(dfs_mt, dir_symlink, "access_symlink", W_OK);
+	assert_int_equal(rc, EACCES);
+	print_message("  dfs_access(/access_dir_symlink/access_symlink, W_OK) = EACCES - PASS (via "
+		      "symlink)\n");
+
+	/*
+	 * Test 6: Restore permissions via original file, verify via all links
+	 */
+	print_message("\n--- Test 6: Restore permissions, verify access ---\n");
+
+	/* Restore read-write via original file */
+	rc = dfs_chmod(dfs_mt, dir_file, "access_file", S_IRUSR | S_IWUSR);
+	assert_int_equal(rc, 0);
+	print_message("  Restored mode to read-write (0600) via /access_dir_file/access_file\n");
+
+	/* Verify W_OK now succeeds on all */
+	rc = dfs_access(dfs_mt, dir_file, "access_file", W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_file/access_file, W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link1, "access_link1", W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link1/access_link1, W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_link2, "access_link2", W_OK);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_access(/access_dir_link2/access_link2, W_OK) = %d - PASS\n", rc);
+
+	rc = dfs_access(dfs_mt, dir_symlink, "access_symlink", W_OK);
+	assert_int_equal(rc, 0);
+	print_message(
+	    "  dfs_access(/access_dir_symlink/access_symlink, W_OK) = %d - PASS (via symlink)\n",
+	    rc);
+
+	/* Cleanup */
+	rc = dfs_remove(dfs_mt, dir_file, "access_file", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_link1, "access_link1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_link2, "access_link2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir_symlink, "access_symlink", false, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dir_file);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_link1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_link2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir_symlink);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, "access_dir_file", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "access_dir_link1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "access_dir_link2", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "access_dir_symlink", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("\nHardlink dfs_access test completed successfully!\n");
+}
+
+/**
+ * Test dfs_ostatx with hardlinks.
+ *
+ * This test verifies that dfs_ostatx works correctly when:
+ * 1. A file is converted to a hardlink (another DFS instance scenario)
+ * 2. A stale handle (opened before hardlink creation) is used
+ *
+ * Test steps:
+ * 1. Create two subdirectories (dir1 and dir2)
+ * 2. Create a file in dir1 and open two handles to it
+ * 3. Using handle1, create a hardlink in dir2 (converts file to hardlink)
+ * 4. Using handle1, stat both files - they should have identical metadata
+ * 5. Write some data using handle1, stat both files - size should match
+ * 6. Use handle2 (opened before hardlink) to call dfs_ostatx - should work
+ */
+static void
+dfs_test_hardlink_ostatx(void **state)
+{
+	test_arg_t   *arg  = *state;
+	dfs_obj_t    *dir1 = NULL, *dir2 = NULL;
+	dfs_obj_t    *file_handle1 = NULL, *file_handle2 = NULL;
+	dfs_obj_t    *link_handle = NULL;
+	struct stat   stbuf1, stbuf_link, stbuf_handle2;
+	daos_obj_id_t oid1, oid2, oid_link;
+	char         *write_buf = "Hello, hardlink ostatx test!";
+	daos_size_t   write_size;
+	d_sg_list_t   sgl;
+	d_iov_t       iov;
+	daos_event_t  ev, *evp;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("\n=== Test: dfs_ostatx with hardlinks ===\n");
+
+	/*
+	 * Step 1: Create two subdirectories
+	 */
+	print_message("\nStep 1: Creating two subdirectories...\n");
+	rc = dfs_open(dfs_mt, NULL, "ostatx_dir1", S_IFDIR | S_IRWXU, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+	print_message("  Created /ostatx_dir1\n");
+
+	rc = dfs_open(dfs_mt, NULL, "ostatx_dir2", S_IFDIR | S_IRWXU, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &dir2);
+	assert_int_equal(rc, 0);
+	print_message("  Created /ostatx_dir2\n");
+
+	/*
+	 * Step 2: Create a file in dir1 and open TWO handles to it
+	 */
+	print_message("\nStep 2: Creating file and opening two handles...\n");
+
+	/* First handle - will be used to create hardlink */
+	rc = dfs_open(dfs_mt, dir1, "testfile", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_handle1);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(file_handle1, &oid1);
+	assert_int_equal(rc, 0);
+	print_message("  Created /ostatx_dir1/testfile (handle1)\n");
+
+	/* Second handle - opened BEFORE hardlink creation (simulates stale handle) */
+	rc = dfs_lookup(dfs_mt, "/ostatx_dir1/testfile", O_RDWR, &file_handle2, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(file_handle2, &oid2);
+	assert_int_equal(rc, 0);
+	print_message("  Opened second handle to same file (handle2)\n");
+
+	/* Verify both handles point to the same OID */
+	assert_true(oid1.lo == oid2.lo && oid1.hi == oid2.hi);
+	print_message("  Verified: both handles have same OID\n");
+
+	/* Stat using handle1 before hardlink - nlink should be 1 */
+	rc = dfs_ostat(dfs_mt, file_handle1, &stbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf1.st_nlink, 1);
+	print_message("  Initial stat via handle1: nlink=%lu, size=%lu\n",
+		      (unsigned long)stbuf1.st_nlink, (unsigned long)stbuf1.st_size);
+
+	/*
+	 * Step 3: Using handle1, create a hardlink in dir2
+	 * This converts the file to a hardlink (metadata moves to HLM)
+	 */
+	print_message("\nStep 3: Creating hardlink using handle1...\n");
+	rc = dfs_link(dfs_mt, file_handle1, dir2, "testfile_link", &link_handle, &stbuf_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(link_handle, &oid_link);
+	assert_int_equal(rc, 0);
+	assert_true(oid1.lo == oid_link.lo && oid1.hi == oid_link.hi);
+	print_message("  Created /ostatx_dir2/testfile_link\n");
+	print_message("  Verified: link has same OID as original\n");
+	assert_int_equal(stbuf_link.st_nlink, 2);
+	print_message("  Link stat: nlink=%lu (expected 2)\n", (unsigned long)stbuf_link.st_nlink);
+
+	/*
+	 * Step 4: Using handle1, stat both files - they should have identical data
+	 */
+	print_message("\nStep 4: Stat both files via handle1 - verifying identical metadata...\n");
+
+	rc = dfs_ostat(dfs_mt, file_handle1, &stbuf1);
+	assert_int_equal(rc, 0);
+	print_message("  Original file: nlink=%lu, size=%lu, mode=0%o\n",
+		      (unsigned long)stbuf1.st_nlink, (unsigned long)stbuf1.st_size,
+		      stbuf1.st_mode);
+
+	rc = dfs_ostat(dfs_mt, link_handle, &stbuf_link);
+	assert_int_equal(rc, 0);
+	print_message("  Link file:     nlink=%lu, size=%lu, mode=0%o\n",
+		      (unsigned long)stbuf_link.st_nlink, (unsigned long)stbuf_link.st_size,
+		      stbuf_link.st_mode);
+
+	/* Verify identical metadata */
+	assert_int_equal(stbuf1.st_nlink, 2);
+	assert_int_equal(stbuf_link.st_nlink, 2);
+	assert_int_equal(stbuf1.st_mode, stbuf_link.st_mode);
+	assert_int_equal(stbuf1.st_uid, stbuf_link.st_uid);
+	assert_int_equal(stbuf1.st_gid, stbuf_link.st_gid);
+	assert_int_equal(stbuf1.st_size, stbuf_link.st_size);
+	print_message("  Verified: both files have identical metadata\n");
+
+	/*
+	 * Step 5: Write some data and repeat stat - size should match
+	 * Use dfs_ostatx with event handle to test async path
+	 */
+	print_message("\nStep 5: Writing data and verifying size (using dfs_ostatx async)...\n");
+
+	write_size = strlen(write_buf);
+	d_iov_set(&iov, write_buf, write_size);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+
+	rc = dfs_write(dfs_mt, file_handle1, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Wrote %lu bytes via handle1\n", (unsigned long)write_size);
+
+	/* Stat original file using dfs_ostatx with event */
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_ostatx(dfs_mt, file_handle1, &stbuf1, &ev);
+	assert_int_equal(rc, 0);
+
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+
+	print_message("  Original file after write: nlink=%lu, size=%lu\n",
+		      (unsigned long)stbuf1.st_nlink, (unsigned long)stbuf1.st_size);
+
+	/* Stat link file using dfs_ostatx with event */
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_ostatx(dfs_mt, link_handle, &stbuf_link, &ev);
+	assert_int_equal(rc, 0);
+
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+
+	print_message("  Link file after write:     nlink=%lu, size=%lu\n",
+		      (unsigned long)stbuf_link.st_nlink, (unsigned long)stbuf_link.st_size);
+
+	/* Verify size is correct on both */
+	assert_int_equal(stbuf1.st_size, write_size);
+	assert_int_equal(stbuf_link.st_size, write_size);
+	assert_int_equal(stbuf1.st_nlink, 2);
+	assert_int_equal(stbuf_link.st_nlink, 2);
+	print_message("  Verified: both files show correct size (%lu bytes)\n",
+		      (unsigned long)write_size);
+
+	/*
+	 * Step 6: Use handle2 (opened BEFORE hardlink creation) to call dfs_ostatx
+	 * This simulates the case where a DFS handle was opened before another
+	 * DFS instance converted the file to a hardlink.
+	 * dfs_ostatx should detect the hardlink bit and fetch from HLM.
+	 * We use an event handle to test the async code path.
+	 */
+	print_message("\nStep 6: Using stale handle2 with dfs_ostatx (async)...\n");
+	print_message("  (handle2 was opened before hardlink creation)\n");
+
+	/* Initialize event for async operation */
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_ostatx(dfs_mt, file_handle2, &stbuf_handle2, &ev);
+	assert_int_equal(rc, 0);
+
+	/* Wait for async completion */
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+
+	print_message("  dfs_ostatx via handle2: nlink=%lu, size=%lu, mode=0%o\n",
+		      (unsigned long)stbuf_handle2.st_nlink, (unsigned long)stbuf_handle2.st_size,
+		      stbuf_handle2.st_mode);
+
+	/* Verify handle2 sees the same data as handle1 */
+	assert_int_equal(stbuf_handle2.st_nlink, 2);
+	assert_int_equal(stbuf_handle2.st_size, write_size);
+	assert_int_equal(stbuf_handle2.st_mode, stbuf1.st_mode);
+	assert_int_equal(stbuf_handle2.st_uid, stbuf1.st_uid);
+	assert_int_equal(stbuf_handle2.st_gid, stbuf1.st_gid);
+	print_message("  Verified: handle2 sees identical metadata as handle1\n");
+	print_message("  SUCCESS: dfs_ostatx correctly detected hardlink and fetched from HLM\n");
+
+	/*
+	 * Cleanup
+	 */
+	print_message("\nCleaning up...\n");
+
+	rc = dfs_release(file_handle1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file_handle2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(link_handle);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, dir1, "testfile", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "testfile_link", false, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, "ostatx_dir1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "ostatx_dir2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("\nHardlink dfs_ostatx test completed successfully!\n");
+}
+
+static void
+dfs_test_hardlink_osetattr(void **state)
+{
+	test_arg_t   *arg  = *state;
+	dfs_obj_t    *dir1 = NULL, *dir2 = NULL;
+	dfs_obj_t    *file_handle1 = NULL, *file_handle2 = NULL;
+	dfs_obj_t    *link_handle = NULL;
+	struct stat   stbuf1, stbuf2, stbuf_link;
+	daos_obj_id_t oid1, oid2, oid_link;
+	mode_t        new_mode;
+	uid_t         new_uid;
+	gid_t         new_gid;
+	daos_size_t   new_size;
+	daos_event_t  ev, *evp;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("\n=== Test: dfs_osetattr with hardlinks ===\n");
+
+	/*
+	 * Step 1: Create two subdirectories
+	 */
+	print_message("\nStep 1: Creating two subdirectories...\n");
+	rc = dfs_open(dfs_mt, NULL, "osetattr_dir1", S_IFDIR | S_IRWXU, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+	print_message("  Created /osetattr_dir1\n");
+
+	rc = dfs_open(dfs_mt, NULL, "osetattr_dir2", S_IFDIR | S_IRWXU, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &dir2);
+	assert_int_equal(rc, 0);
+	print_message("  Created /osetattr_dir2\n");
+
+	/*
+	 * Step 2: Create a file in dir1 (not root) and open TWO handles to it
+	 */
+	print_message("\nStep 2: Creating file in subdirectory and opening two handles...\n");
+
+	/* First handle */
+	rc = dfs_open(dfs_mt, dir1, "testfile", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file_handle1);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(file_handle1, &oid1);
+	assert_int_equal(rc, 0);
+	print_message("  Created /osetattr_dir1/testfile (handle1)\n");
+
+	/* Second handle - opened before hardlink creation */
+	rc = dfs_lookup(dfs_mt, "/osetattr_dir1/testfile", O_RDWR, &file_handle2, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(file_handle2, &oid2);
+	assert_int_equal(rc, 0);
+	print_message("  Opened second handle to same file (handle2)\n");
+
+	/* Verify both handles point to the same OID */
+	assert_true(oid1.lo == oid2.lo && oid1.hi == oid2.hi);
+	print_message("  Verified: both handles have same OID\n");
+
+	/*
+	 * Step 3: Using handle1, convert to hardlink by creating link in dir2
+	 */
+	print_message("\nStep 3: Converting to hardlink using handle1...\n");
+	rc = dfs_link(dfs_mt, file_handle1, dir2, "testfile_link", &link_handle, &stbuf_link);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(link_handle, &oid_link);
+	assert_int_equal(rc, 0);
+	assert_true(oid1.lo == oid_link.lo && oid1.hi == oid_link.hi);
+	print_message("  Created /osetattr_dir2/testfile_link\n");
+	print_message("  Verified: link has same OID as original\n");
+	assert_int_equal(stbuf_link.st_nlink, 2);
+	print_message("  Link stat: nlink=%lu (expected 2)\n", (unsigned long)stbuf_link.st_nlink);
+
+	/*
+	 * Step 4: Using handle1, set mode, ownership and size using dfs_osetattr()
+	 */
+	print_message(
+	    "\nStep 4: Setting mode, ownership and size via dfs_osetattr() using handle1...\n");
+
+	new_mode = S_IFREG | S_IRWXU | S_IRGRP | S_IXGRP; /* rwxr-x--- = 0750 */
+	new_uid  = 1001;
+	new_gid  = 2002;
+	new_size = 4096; /* Set size to 4K */
+
+	memset(&stbuf1, 0, sizeof(stbuf1));
+	stbuf1.st_mode = new_mode;
+	stbuf1.st_uid  = new_uid;
+	stbuf1.st_gid  = new_gid;
+	stbuf1.st_size = new_size;
+
+	print_message("  Setting mode=0%o, uid=%u, gid=%u, size=%lu\n", new_mode & ~S_IFMT, new_uid,
+		      new_gid, (unsigned long)new_size);
+
+	rc = dfs_osetattr(dfs_mt, file_handle1, &stbuf1,
+			  DFS_SET_ATTR_MODE | DFS_SET_ATTR_UID | DFS_SET_ATTR_GID |
+			      DFS_SET_ATTR_SIZE);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_osetattr() completed successfully\n");
+
+	/*
+	 * Step 5: Call dfs_ostat() using handle1 and verify stat values are correct
+	 */
+	print_message("\nStep 5: Verifying attributes via dfs_ostat() using handle1...\n");
+
+	memset(&stbuf1, 0, sizeof(stbuf1));
+	rc = dfs_ostat(dfs_mt, file_handle1, &stbuf1);
+	assert_int_equal(rc, 0);
+
+	print_message("  handle1 stat: mode=0%o, uid=%u, gid=%u, size=%lu, nlink=%lu\n",
+		      stbuf1.st_mode & ~S_IFMT, stbuf1.st_uid, stbuf1.st_gid,
+		      (unsigned long)stbuf1.st_size, (unsigned long)stbuf1.st_nlink);
+
+	assert_int_equal(stbuf1.st_mode, new_mode);
+	assert_int_equal(stbuf1.st_uid, new_uid);
+	assert_int_equal(stbuf1.st_gid, new_gid);
+	assert_int_equal(stbuf1.st_size, new_size);
+	assert_int_equal(stbuf1.st_nlink, 2);
+	print_message("  Verified: all attributes are correctly set via handle1\n");
+
+	/*
+	 * Step 6: Call dfs_ostatx() using handle2 (opened before hardlink creation)
+	 * The output should be the same as handle1
+	 */
+	print_message("\nStep 6: Verifying attributes via dfs_ostatx() using handle2...\n");
+	print_message("  (handle2 was opened before hardlink creation)\n");
+
+	/* Initialize event for async operation */
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	assert_rc_equal(rc, 0);
+
+	memset(&stbuf2, 0, sizeof(stbuf2));
+	rc = dfs_ostatx(dfs_mt, file_handle2, &stbuf2, &ev);
+	assert_int_equal(rc, 0);
+
+	/* Wait for async completion */
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+
+	print_message("  handle2 stat: mode=0%o, uid=%u, gid=%u, size=%lu, nlink=%lu\n",
+		      stbuf2.st_mode & ~S_IFMT, stbuf2.st_uid, stbuf2.st_gid,
+		      (unsigned long)stbuf2.st_size, (unsigned long)stbuf2.st_nlink);
+
+	/* Verify handle2 sees the same data as handle1 */
+	assert_int_equal(stbuf2.st_mode, new_mode);
+	assert_int_equal(stbuf2.st_uid, new_uid);
+	assert_int_equal(stbuf2.st_gid, new_gid);
+	assert_int_equal(stbuf2.st_size, new_size);
+	assert_int_equal(stbuf2.st_nlink, 2);
+	assert_int_equal(stbuf2.st_ino, stbuf1.st_ino);
+	print_message("  Verified: handle2 (via dfs_ostatx) sees identical metadata as handle1\n");
+	print_message(
+	    "  SUCCESS: dfs_osetattr changes visible through stale handle via dfs_ostatx\n");
+
+	/*
+	 * Cleanup
+	 */
+	print_message("\nCleaning up...\n");
+
+	rc = dfs_release(file_handle1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file_handle2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(link_handle);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, dir1, "testfile", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "testfile_link", false, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, "osetattr_dir1", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "osetattr_dir2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("\nHardlink dfs_osetattr test completed successfully!\n");
+}
+
+/**
+ * Test dfs_cont_check with HLM (Hardlink Metadata) inconsistencies.
+ *
+ * This test covers five scenarios:
+ *
+ * SCENARIO 1: Orphan HLM entries
+ * - Creates a file with a hardlink (which creates an HLM entry)
+ * - Punches ALL directory entries using low-level DAOS APIs
+ * - HLM entry becomes orphaned (no directory entries point to the OID)
+ * - Verifies PRINT mode reports the orphan
+ * - Verifies REMOVE mode removes HLM entry and punches the object
+ * - Verifies RELINK mode restores file in lost+found with correct nlink=1
+ * - Additional test: Empty file orphan - RELINK deletes HLM entry instead of relinking
+ *
+ * SCENARIO 2: HLM link count mismatch
+ * - Creates a file with a hardlink (nlink=2 stored in HLM)
+ * - Punches only ONE directory entry using low-level DAOS APIs
+ * - HLM has link count=2 but only 1 dentry exists
+ * - Verifies PRINT mode reports the mismatch (stored=2, cur=1)
+ * - Verifies RELINK mode fixes link count from 2 to 1
+ *
+ * SCENARIO 3: Missing hardlink bit in directory entry
+ * - Creates a file with mode 555, then creates a hardlink
+ * - Changes mode to 500 via the hardlink
+ * - Clears the hardlink bit from one dentry using low-level DAOS APIs
+ * - Verifies PRINT mode reports the missing hardlink bit
+ * - Verifies RELINK mode restores the hardlink bit
+ * - Verifies both files show mode 500 after repair
+ *
+ * SCENARIO 4: Spurious hardlink bit on regular file
+ * - Creates a regular file (not a hardlink)
+ * - Sets the hardlink bit on the dentry using low-level DAOS APIs
+ * - Verifies dfs_osetattr() fails on the corrupted file
+ * - Verifies PRINT mode reports the spurious hardlink bit
+ * - Verifies RELINK mode clears the spurious hardlink bit
+ * - Verifies dfs_osetattr() succeeds after repair
+ *
+ * SCENARIO 5: Hardlink bit on directory or symlink
+ * - Creates a directory and a symlink
+ * - Sets the hardlink bit on both using low-level DAOS APIs
+ * - Verifies PRINT mode reports the spurious hardlink bit
+ * - Verifies RELINK mode clears the hardlink bit from both
+ * - Fetches dentries directly and verifies hardlink bit is cleared
+ */
+static void
+dfs_test_checker_hlm(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_t        *dfs;
+	dfs_obj_t    *dir, *file1, *file2;
+	daos_obj_id_t file_oid, dir_oid;
+	daos_handle_t coh;
+	struct stat   stbuf;
+	uint64_t      nr_oids = 0;
+	char         *cname   = "cont_chkr_hlm";
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("Testing dfs_cont_check with HLM inconsistencies...\n");
+
+	/*
+	 * ==========================================================================
+	 * SCENARIO 1: Orphan HLM entries (both directory entries punched)
+	 * ==========================================================================
+	 */
+	print_message("\n=== SCENARIO 1: Orphan HLM entries ===\n");
+
+	/*
+	 * Part 1.1: Setup - Create container, file with hardlink
+	 */
+	print_message("Creating container and file with hardlink...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* Create a directory */
+	rc = dfs_open(dfs, NULL, "hlm_test_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create a file */
+	rc = dfs_open(dfs, dir, "testfile", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &file1);
+	assert_int_equal(rc, 0);
+
+	/* Write some data to the file */
+	{
+		d_sg_list_t sgl;
+		d_iov_t     iov;
+		char       *buf;
+
+		D_ALLOC(buf, 1024);
+		assert_non_null(buf);
+		memset(buf, 'A', 1024);
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs   = &iov;
+		d_iov_set(&iov, buf, 1024);
+		rc = dfs_write(dfs, file1, &sgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		D_FREE(buf);
+		print_message("  Wrote 1024 bytes of data to file\n");
+	}
+
+	/* Get the file OID */
+	rc = dfs_obj2id(file1, &file_oid);
+	assert_int_equal(rc, 0);
+
+	/* Create a hardlink - this creates the HLM entry */
+	rc = dfs_link(dfs, file1, dir, "testfile_link", &file2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  Created file " DF_OID " with nlink=2\n", DP_OID(file_oid));
+
+	/* Get the directory OID for later use */
+	rc = dfs_obj2id(dir, &dir_oid);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	/** have to call fini to release the cached container handle for the checker to work */
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 1.2: Corrupt - Punch all directory entries using low-level API
+	 * This leaves the HLM entry orphaned
+	 */
+	print_message("Punching all directory entries (leaving HLM orphaned)...\n");
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t dir_oh;
+		d_iov_t       dkey;
+
+		/* Punch the file entries from the directory object */
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RW, &dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Punch "testfile" entry */
+		d_iov_set(&dkey, "testfile", strlen("testfile"));
+		rc = daos_obj_punch_dkeys(dir_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Punch "testfile_link" entry */
+		d_iov_set(&dkey, "testfile_link", strlen("testfile_link"));
+		rc = daos_obj_punch_dkeys(dir_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_obj_close(dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Part 1.3: Test PRINT mode - should report orphan HLM entry
+	 */
+	print_message("Testing PRINT mode - should report orphan...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Objects should still exist (PRINT doesn't modify anything) */
+	get_nr_oids(arg->pool.poh, cname, &nr_oids);
+	print_message("  Number of OIDs after PRINT: %lu\n", (unsigned long)nr_oids);
+	/* Should be: SB + root + dir + file + HLM = 5 (HLM is a reserved object) */
+	assert_int_equal(nr_oids, 5);
+
+	/*
+	 * Part 1.4: Test REMOVE mode - should remove HLM entry and punch object
+	 */
+	print_message("Testing REMOVE mode - should remove orphan HLM and object...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_REMOVE, NULL);
+	assert_int_equal(rc, 0);
+
+	/* File object should be removed (unmarked OID gets punched) */
+	get_nr_oids(arg->pool.poh, cname, &nr_oids);
+	print_message("  Number of OIDs after REMOVE: %lu\n", (unsigned long)nr_oids);
+	/* Should be: SB + root + dir + HLM = 4 (file is gone) */
+	assert_int_equal(nr_oids, 4);
+
+	/*
+	 * Part 1.5: Recreate corruption and test RELINK mode
+	 */
+	print_message("Recreating file with hardlink for RELINK test...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* Create a new file with hardlink */
+	rc = dfs_lookup(dfs, "/hlm_test_dir", O_RDWR, &dir, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs, dir, "testfile2", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &file1);
+	assert_int_equal(rc, 0);
+
+	/* Write some data to the file */
+	{
+		d_sg_list_t sgl;
+		d_iov_t     iov;
+		char       *buf;
+
+		D_ALLOC(buf, 1024);
+		assert_non_null(buf);
+		memset(buf, 'A', 1024);
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs   = &iov;
+		d_iov_set(&iov, buf, 1024);
+		rc = dfs_write(dfs, file1, &sgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		D_FREE(buf);
+		print_message("  Wrote 1024 bytes of data to file\n");
+	}
+
+	rc = dfs_obj2id(file1, &file_oid);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs, file1, dir, "testfile2_link", &file2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  Created file " DF_OID " with nlink=2\n", DP_OID(file_oid));
+
+	/* Get dir_oid before disconnecting */
+	rc = dfs_obj2id(dir, &dir_oid);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/* Punch directory entries again */
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t dir_oh;
+		d_iov_t       dkey;
+
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RW, &dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		d_iov_set(&dkey, "testfile2", strlen("testfile2"));
+		rc = daos_obj_punch_dkeys(dir_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+
+		d_iov_set(&dkey, "testfile2_link", strlen("testfile2_link"));
+		rc = daos_obj_punch_dkeys(dir_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_obj_close(dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Testing RELINK mode - should restore file in lost+found...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_RELINK, "lf_orphan");
+	assert_int_equal(rc, 0);
+
+	/* Verify file is in lost+found */
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	{
+		char fpath[128];
+
+		/* Construct expected path in lost+found */
+		sprintf(fpath, "/lost+found/lf_orphan/%" PRIu64 ".%" PRIu64 "", file_oid.hi,
+			file_oid.lo);
+
+		print_message("  Looking for restored file at %s\n", fpath);
+		rc = dfs_lookup(dfs, fpath, O_RDONLY, &file1, NULL, &stbuf);
+		assert_int_equal(rc, 0);
+
+		/* Verify it's a regular file with the hardlink bit set and nlink=1 */
+		assert_true(S_ISREG(stbuf.st_mode));
+		assert_int_equal(stbuf.st_nlink, 1);
+		print_message("  Found file with nlink=%lu\n", (unsigned long)stbuf.st_nlink);
+
+		rc = dfs_release(file1);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 1 - destroy container */
+	rc = daos_cont_destroy(arg->pool.poh, cname, 1, NULL);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Part 1.5: RELINK with empty file - should delete HLM entry instead of relinking
+	 */
+	print_message(
+	    "\n--- Scenario 1b: Empty orphan file - RELINK should delete HLM entry ---\n");
+
+	/* Create container with empty file (no data) that has a hardlink */
+	print_message("Creating container with empty hardlinked file...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* Create directory */
+	rc = dfs_open(dfs, NULL, "hlm_test_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create empty file (no data written) */
+	rc = dfs_open(dfs, dir, "empty_file", S_IFREG | 0644, O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL,
+		      &file1);
+	assert_int_equal(rc, 0);
+
+	/* Create a hardlink to make it an HLM entry (link count > 1) */
+	rc = dfs_link(dfs, file1, dir, "empty_file_link", &file2, NULL);
+	assert_int_equal(rc, 0);
+	print_message("  Created empty file with hardlink (nlink=2)\n");
+
+	/* Get the file OID */
+	rc = dfs_obj2id(file1, &file_oid);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(dir, &dir_oid);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/* Punch ALL directory entries to make HLM entry orphaned */
+	print_message("Punching all directory entries to orphan the HLM entry...\n");
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t dir_oh;
+		d_iov_t       dkey;
+
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RW, &dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		d_iov_set(&dkey, "empty_file", strlen("empty_file"));
+		rc = daos_obj_punch_dkeys(dir_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+
+		d_iov_set(&dkey, "empty_file_link", strlen("empty_file_link"));
+		rc = daos_obj_punch_dkeys(dir_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_obj_close(dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Run RELINK mode - should delete the HLM entry (file is empty, not worth relinking) */
+	print_message("Testing RELINK mode - should delete HLM entry for empty file...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_RELINK, "lf_empty");
+	assert_int_equal(rc, 0);
+
+	/* Verify HLM object has no dkeys by querying container roots and listing dkeys */
+	print_message("Verifying HLM object has no entries...\n");
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_prop_t               *prop = NULL;
+		struct daos_prop_entry    *entry;
+		struct daos_prop_co_roots *roots;
+		daos_obj_id_t              hlm_oid;
+		daos_handle_t              hlm_oh;
+		daos_anchor_t              anchor = {0};
+		uint32_t                   nr_dkeys;
+		daos_key_desc_t            kds[1];
+		d_sg_list_t                sgl;
+		d_iov_t                    iov;
+		char                       dkey_buf[64];
+
+		/* Get HLM OID from container roots */
+		prop = daos_prop_alloc(1);
+		assert_non_null(prop);
+		prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ROOTS;
+		rc                            = daos_cont_query(coh, NULL, prop, NULL);
+		assert_rc_equal(rc, 0);
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
+		assert_non_null(entry);
+		roots   = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
+		hlm_oid = roots->cr_oids[2];
+		print_message("  HLM OID: " DF_OID "\n", DP_OID(hlm_oid));
+
+		/* Open HLM object and list dkeys */
+		rc = daos_obj_open(coh, hlm_oid, DAOS_OO_RO, &hlm_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		d_iov_set(&iov, dkey_buf, sizeof(dkey_buf));
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = &iov;
+		nr_dkeys      = 1;
+		rc = daos_obj_list_dkey(hlm_oh, DAOS_TX_NONE, &nr_dkeys, kds, &sgl, &anchor, NULL);
+		/* rc might be 0 or -DER_NONEXIST if no dkeys */
+		if (rc == 0 && nr_dkeys == 0) {
+			print_message("  HLM object has no entries (as expected)\n");
+		} else if (rc == -DER_NONEXIST) {
+			print_message("  HLM object has no entries (DER_NONEXIST)\n");
+			rc = 0;
+		} else {
+			print_message("  ERROR: HLM object has %u entries (expected 0)\n",
+				      nr_dkeys);
+			assert_int_equal(nr_dkeys, 0);
+		}
+
+		rc = daos_obj_close(hlm_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		daos_prop_free(prop);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Cleanup scenario 1b - destroy container */
+	rc = daos_cont_destroy(arg->pool.poh, cname, 1, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Scenario 1 (orphan HLM) completed successfully!\n");
+
+	/*
+	 * ==========================================================================
+	 * SCENARIO 2: HLM link count mismatch (one directory entry punched)
+	 * ==========================================================================
+	 */
+	print_message("\n=== SCENARIO 2: HLM link count mismatch ===\n");
+
+	/*
+	 * Part 2.1: Setup - Create container, file with 2 hardlinks
+	 */
+	print_message("Creating container and file with 2 hardlinks...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* Create a directory */
+	rc = dfs_open(dfs, NULL, "hlm_test_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create a file */
+	rc = dfs_open(dfs, dir, "testfile", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &file1);
+	assert_int_equal(rc, 0);
+
+	/* Write some data to the file */
+	{
+		d_sg_list_t sgl;
+		d_iov_t     iov;
+		char       *buf;
+
+		D_ALLOC(buf, 1024);
+		assert_non_null(buf);
+		memset(buf, 'B', 1024);
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs   = &iov;
+		d_iov_set(&iov, buf, 1024);
+		rc = dfs_write(dfs, file1, &sgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		D_FREE(buf);
+		print_message("  Wrote 1024 bytes of data to file\n");
+	}
+
+	/* Get the file OID */
+	rc = dfs_obj2id(file1, &file_oid);
+	assert_int_equal(rc, 0);
+
+	/* Create a hardlink - this creates the HLM entry with link count = 2 */
+	rc = dfs_link(dfs, file1, dir, "testfile_link", &file2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  Created file " DF_OID " with nlink=2\n", DP_OID(file_oid));
+
+	/* Get the directory OID for later use */
+	rc = dfs_obj2id(dir, &dir_oid);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 2.2: Corrupt - Punch only ONE directory entry using low-level API
+	 * This leaves the file with 1 dentry but HLM has link count = 2
+	 */
+	print_message("Punching one directory entry (creating link count mismatch)...\n");
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t dir_oh;
+		d_iov_t       dkey;
+
+		/* Punch the file entries from the directory object */
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RW, &dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Punch only "testfile_link" entry - keep "testfile" */
+		d_iov_set(&dkey, "testfile_link", strlen("testfile_link"));
+		rc = daos_obj_punch_dkeys(dir_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_obj_close(dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Part 2.3: Test PRINT mode - should report link count mismatch (stored=2, cur=1)
+	 */
+	print_message("Testing PRINT mode - should report link count mismatch...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Verify the file is still accessible and has wrong nlink */
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup(dfs, "/hlm_test_dir/testfile", O_RDONLY, &file1, NULL, &stbuf);
+	assert_int_equal(rc, 0);
+	/* nlink should still be 2 because PRINT doesn't fix anything */
+	print_message("  File nlink after PRINT mode: %lu (expected 2, unfixed)\n",
+		      (unsigned long)stbuf.st_nlink);
+	assert_int_equal(stbuf.st_nlink, 2);
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 2.4: Test RELINK mode - should fix link count from 2 to 1
+	 */
+	print_message("Testing RELINK mode - should fix link count to 1...\n");
+	rc =
+	    dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_RELINK, "lf_mismatch");
+	assert_int_equal(rc, 0);
+
+	/* Verify the file now has correct nlink = 1 */
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup(dfs, "/hlm_test_dir/testfile", O_RDONLY, &file1, NULL, &stbuf);
+	assert_int_equal(rc, 0);
+	/* nlink should now be 1 because RELINK fixed the link count */
+	print_message("  File nlink after RELINK mode: %lu (expected 1, fixed)\n",
+		      (unsigned long)stbuf.st_nlink);
+	assert_int_equal(stbuf.st_nlink, 1);
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Verify that lost+found/lf_mismatch directory is empty since
+	 * no files were orphaned - only link count was fixed.
+	 * Note: dfs_cont_check creates the directory regardless, so we check it's empty.
+	 */
+	rc = dfs_lookup(dfs, "/lost+found/lf_mismatch", O_RDONLY, &dir, NULL, NULL);
+	assert_int_equal(rc, 0);
+	{
+		daos_anchor_t anchor = {0};
+		uint32_t      nr     = 1;
+		struct dirent ents[1];
+
+		rc = dfs_readdir(dfs, dir, &anchor, &nr, ents);
+		assert_int_equal(rc, 0);
+		if (nr == 0) {
+			print_message("  /lost+found/lf_mismatch is empty (as expected)\n");
+		} else {
+			print_message(
+			    "  ERROR: /lost+found/lf_mismatch has entries (expected 0)\n");
+			assert_int_equal(nr, 0);
+		}
+	}
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 2 - destroy container */
+	rc = daos_cont_destroy(arg->pool.poh, cname, 1, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Scenario 2 (link count mismatch) completed successfully!\n");
+
+	/*
+	 * ==========================================================================
+	 * SCENARIO 3: Missing hardlink bit in directory entry
+	 * ==========================================================================
+	 */
+	print_message("\n=== SCENARIO 3: Missing hardlink bit in dentry ===\n");
+
+	/*
+	 * Part 3.1: Setup - Create container, file with mode 555, then create hardlink
+	 */
+	print_message("Creating container and file with mode 555...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* Create a directory */
+	rc = dfs_open(dfs, NULL, "hlm_test_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create a file with mode 555 */
+	rc = dfs_open(dfs, dir, "testfile", S_IFREG | 0555, O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL,
+		      &file1);
+	assert_int_equal(rc, 0);
+
+	/* Write some data to the file */
+	{
+		d_sg_list_t sgl;
+		d_iov_t     iov;
+		char       *buf;
+
+		D_ALLOC(buf, 1024);
+		assert_non_null(buf);
+		memset(buf, 'C', 1024);
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs   = &iov;
+		d_iov_set(&iov, buf, 1024);
+		rc = dfs_write(dfs, file1, &sgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		D_FREE(buf);
+		print_message("  Wrote 1024 bytes of data to file\n");
+	}
+
+	/* Verify initial mode is 555 */
+	rc = dfs_stat(dfs, dir, "testfile", &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  Initial file mode: 0%o\n", stbuf.st_mode & 0777);
+	assert_int_equal(stbuf.st_mode & 0777, 0555);
+
+	/* Get the file OID */
+	rc = dfs_obj2id(file1, &file_oid);
+	assert_int_equal(rc, 0);
+
+	/* Create a hardlink */
+	rc = dfs_link(dfs, file1, dir, "testfile_link", &file2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_nlink, 2);
+	print_message("  Created hardlink with nlink=2\n");
+
+	/* Change mode to 500 via the second handle */
+	stbuf.st_mode = S_IFREG | 0500;
+	rc            = dfs_osetattr(dfs, file2, &stbuf, DFS_SET_ATTR_MODE);
+	assert_int_equal(rc, 0);
+	print_message("  Changed mode to 500 via hardlink\n");
+
+	/* Verify both files now show mode 500 */
+	rc = dfs_stat(dfs, dir, "testfile", &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  file1 mode after chmod: 0%o\n", stbuf.st_mode & 0777);
+	assert_int_equal(stbuf.st_mode & 0777, 0500);
+
+	rc = dfs_stat(dfs, dir, "testfile_link", &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  file2 mode after chmod: 0%o\n", stbuf.st_mode & 0777);
+	assert_int_equal(stbuf.st_mode & 0777, 0500);
+
+	/* Get the directory OID for later use */
+	rc = dfs_obj2id(dir, &dir_oid);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 3.2: Corrupt - Clear the hardlink bit from testfile's dentry
+	 */
+	print_message("Clearing hardlink bit from testfile's dentry...\n");
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t dir_oh;
+		d_iov_t       dkey;
+		d_iov_t       akey;
+		d_sg_list_t   sgl;
+		d_iov_t       iov;
+		daos_iod_t    iod;
+		daos_recx_t   recx;
+		mode_t        mode;
+
+		/* Open the directory object */
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RW, &dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Fetch the current mode */
+		d_iov_set(&dkey, "testfile", strlen("testfile"));
+		d_iov_set(&akey, "DFS_INODE", strlen("DFS_INODE"));
+		d_iov_set(&iov, &mode, sizeof(mode_t));
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = &iov;
+		recx.rx_idx   = 0; /* MODE_IDX = 0 */
+		recx.rx_nr    = sizeof(mode_t);
+		iod.iod_name  = akey;
+		iod.iod_nr    = 1;
+		iod.iod_recxs = &recx;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+
+		rc = daos_obj_fetch(dir_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Fetched mode from dentry: 0x%x\n", mode);
+
+		/* Clear the hardlink bit (MODE_HARDLINK_BIT = 1U << 31) */
+		mode &= ~(1U << 31);
+		print_message("  Mode after clearing hardlink bit: 0x%x\n", mode);
+
+		/* Update the mode */
+		rc = daos_obj_update(dir_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Updated dentry with cleared hardlink bit\n");
+
+		rc = daos_obj_close(dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Part 3.3: Test PRINT mode - should report missing hardlink bit
+	 */
+	print_message("Testing PRINT mode - should report missing hardlink bit...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Verify the file still works but has inconsistent state */
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup(dfs, "/hlm_test_dir", O_RDWR, &dir, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 3.4: Test RELINK mode - should fix the hardlink bit
+	 */
+	print_message("Testing RELINK mode - should fix hardlink bit...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_RELINK, "lf_hlbit");
+	assert_int_equal(rc, 0);
+
+	/* Verify the hardlink bit is restored by fetching the dentry mode directly */
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t dir_oh;
+		d_iov_t       dkey;
+		d_iov_t       akey;
+		d_sg_list_t   sgl;
+		d_iov_t       iov;
+		daos_iod_t    iod;
+		daos_recx_t   recx;
+		mode_t        mode;
+
+		/* Open the directory object */
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RO, &dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Fetch the mode */
+		d_iov_set(&dkey, "testfile", strlen("testfile"));
+		d_iov_set(&akey, "DFS_INODE", strlen("DFS_INODE"));
+		d_iov_set(&iov, &mode, sizeof(mode_t));
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = &iov;
+		recx.rx_idx   = 0; /* MODE_IDX = 0 */
+		recx.rx_nr    = sizeof(mode_t);
+		iod.iod_name  = akey;
+		iod.iod_nr    = 1;
+		iod.iod_recxs = &recx;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+
+		rc = daos_obj_fetch(dir_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Dentry mode after RELINK: 0x%x\n", mode);
+		/* Verify hardlink bit is set (MODE_HARDLINK_BIT = 1U << 31) */
+		assert_true((mode & (1U << 31)) != 0);
+		print_message("  Hardlink bit is now set!\n");
+
+		rc = daos_obj_close(dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Part 3.5: Verify both files show mode 500 via DFS APIs
+	 */
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup(dfs, "/hlm_test_dir", O_RDWR, &dir, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs, dir, "testfile", &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  file1 mode after repair: 0%o (expected 0500)\n", stbuf.st_mode & 0777);
+	assert_int_equal(stbuf.st_mode & 0777, 0500);
+
+	rc = dfs_stat(dfs, dir, "testfile_link", &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  file2 mode after repair: 0%o (expected 0500)\n", stbuf.st_mode & 0777);
+	assert_int_equal(stbuf.st_mode & 0777, 0500);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 3 - destroy container */
+	rc = daos_cont_destroy(arg->pool.poh, cname, 1, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Scenario 3 (missing hardlink bit) completed successfully!\n");
+
+#if 0 /* REVISIT */
+	/*
+	 * ==========================================================================
+	 * SCENARIO 4: Spurious hardlink bit on non-hardlink file
+	 * ==========================================================================
+	 */
+	print_message("\n=== SCENARIO 4: Spurious hardlink bit on regular file ===\n");
+
+	/*
+	 * Part 4.1: Setup - Create container and a regular file (no hardlink)
+	 */
+	print_message("Creating container and regular file (no hardlink)...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* Create a directory */
+	rc = dfs_open(dfs, NULL, "hlm_test_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create a regular file (NOT a hardlink) */
+	rc = dfs_open(dfs, dir, "testfile", S_IFREG | 0644,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file1);
+	assert_int_equal(rc, 0);
+
+	/* Write some data to the file */
+	{
+		d_sg_list_t	sgl;
+		d_iov_t		iov;
+		char		*buf;
+
+		D_ALLOC(buf, 1024);
+		assert_non_null(buf);
+		memset(buf, 'D', 1024);
+		sgl.sg_nr = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs = &iov;
+		d_iov_set(&iov, buf, 1024);
+		rc = dfs_write(dfs, file1, &sgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		D_FREE(buf);
+		print_message("  Wrote 1024 bytes of data to file\n");
+	}
+
+	/* Get the directory OID for later use */
+	rc = dfs_obj2id(dir, &dir_oid);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 4.2: Corrupt - Set the hardlink bit on the dentry
+	 */
+	print_message("Setting hardlink bit on regular file's dentry...\n");
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t	dir_oh;
+		d_iov_t		dkey;
+		d_iov_t		akey;
+		d_sg_list_t	sgl;
+		d_iov_t		iov;
+		daos_iod_t	iod;
+		daos_recx_t	recx;
+		mode_t		mode;
+
+		/* Open the directory object */
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RW, &dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Fetch the current mode */
+		d_iov_set(&dkey, "testfile", strlen("testfile"));
+		d_iov_set(&akey, "DFS_INODE", strlen("DFS_INODE"));
+		d_iov_set(&iov, &mode, sizeof(mode_t));
+		sgl.sg_nr = 1;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs = &iov;
+		recx.rx_idx = 0;  /* MODE_IDX = 0 */
+		recx.rx_nr = sizeof(mode_t);
+		iod.iod_name = akey;
+		iod.iod_nr = 1;
+		iod.iod_recxs = &recx;
+		iod.iod_type = DAOS_IOD_ARRAY;
+		iod.iod_size = 1;
+
+		rc = daos_obj_fetch(dir_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Fetched mode from dentry: 0x%x\n", mode);
+
+		/* Set the hardlink bit (MODE_HARDLINK_BIT = 1U << 31) */
+		mode |= (1U << 31);
+		print_message("  Mode after setting hardlink bit: 0x%x\n", mode);
+
+		/* Update the mode */
+		rc = daos_obj_update(dir_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Updated dentry with spurious hardlink bit\n");
+
+		rc = daos_obj_close(dir_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Part 4.3: Verify dfs_osetattr fails on corrupted file
+	 */
+	print_message("Verifying dfs_osetattr fails on corrupted file...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup(dfs, "/hlm_test_dir", O_RDWR, &dir, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup_rel(dfs, dir, "testfile", O_RDWR, &file1, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Try to set mode - should fail because file claims to be hardlink but no HLM entry */
+	stbuf.st_mode = S_IFREG | 0600;
+	rc = dfs_osetattr(dfs, file1, &stbuf, DFS_SET_ATTR_MODE);
+	print_message("  dfs_osetattr returned: %d (expected non-zero failure)\n", rc);
+	assert_int_not_equal(rc, 0);
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 4.4: Test PRINT mode - should report spurious hardlink bit
+	 */
+	print_message("Testing PRINT mode - should report spurious hardlink bit...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 4.5: Test RELINK mode - should clear the hardlink bit
+	 */
+	print_message("Testing RELINK mode - should clear spurious hardlink bit...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_RELINK, "lf_spurious");
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 4.6: Verify dfs_osetattr now succeeds
+	 */
+	print_message("Verifying dfs_osetattr succeeds after repair...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup(dfs, "/hlm_test_dir", O_RDWR, &dir, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_lookup_rel(dfs, dir, "testfile", O_RDWR, &file1, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Now dfs_osetattr should succeed because hardlink bit is cleared */
+	stbuf.st_mode = S_IFREG | 0600;
+	rc = dfs_osetattr(dfs, file1, &stbuf, DFS_SET_ATTR_MODE);
+	print_message("  dfs_osetattr returned: %d (expected 0)\n", rc);
+	assert_int_equal(rc, 0);
+
+	/* Verify mode was changed */
+	rc = dfs_ostat(dfs, file1, &stbuf);
+	assert_int_equal(rc, 0);
+	print_message("  File mode after dfs_osetattr: 0%o (expected 0600)\n", stbuf.st_mode & 0777);
+	assert_int_equal(stbuf.st_mode & 0777, 0600);
+
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/* Cleanup scenario 4 - destroy container */
+	rc = daos_cont_destroy(arg->pool.poh, cname, 1, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Scenario 4 (spurious hardlink bit) completed successfully!\n");
+#endif
+
+	/*
+	 * ==========================================================================
+	 * SCENARIO 5: Hardlink bit on directory or symlink
+	 * ==========================================================================
+	 */
+	print_message("\n=== SCENARIO 5: Hardlink bit on directory or symlink ===\n");
+
+	/*
+	 * Part 5.1: Setup - Create container with a directory and a symlink
+	 */
+	print_message("Creating container with directory and symlink...\n");
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* Create a parent directory */
+	rc = dfs_open(dfs, NULL, "parent_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create a test directory */
+	rc = dfs_open(dfs, dir, "test_dir", S_IFDIR | 0755, O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL,
+		      &file1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file1);
+	assert_int_equal(rc, 0);
+
+	/* Create a symlink */
+	rc = dfs_open(dfs, dir, "test_symlink", S_IFLNK | 0777, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      "target", &file2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file2);
+	assert_int_equal(rc, 0);
+
+	/* Get the parent directory OID for later use */
+	rc = dfs_obj2id(dir, &dir_oid);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 5.2: Corrupt - Set the hardlink bit on directory and symlink
+	 */
+	print_message("Setting hardlink bit on directory and symlink dentries...\n");
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t parent_oh;
+		d_iov_t       dkey;
+		d_iov_t       akey;
+		d_sg_list_t   sgl;
+		d_iov_t       iov;
+		daos_iod_t    iod;
+		daos_recx_t   recx;
+		mode_t        mode;
+
+		/* Open the parent directory object */
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RW, &parent_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Set hardlink bit on directory "test_dir" */
+		d_iov_set(&dkey, "test_dir", strlen("test_dir"));
+		d_iov_set(&akey, "DFS_INODE", strlen("DFS_INODE"));
+		d_iov_set(&iov, &mode, sizeof(mode_t));
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = &iov;
+		recx.rx_idx   = 0; /* MODE_IDX = 0 */
+		recx.rx_nr    = sizeof(mode_t);
+		iod.iod_name  = akey;
+		iod.iod_nr    = 1;
+		iod.iod_recxs = &recx;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+
+		rc = daos_obj_fetch(parent_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Directory mode before: 0x%x\n", mode);
+
+		mode |= (1U << 31); /* MODE_HARDLINK_BIT */
+		print_message("  Directory mode after setting hardlink bit: 0x%x\n", mode);
+
+		rc = daos_obj_update(parent_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Set hardlink bit on symlink "test_symlink" */
+		d_iov_set(&dkey, "test_symlink", strlen("test_symlink"));
+
+		rc = daos_obj_fetch(parent_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Symlink mode before: 0x%x\n", mode);
+
+		mode |= (1U << 31); /* MODE_HARDLINK_BIT */
+		print_message("  Symlink mode after setting hardlink bit: 0x%x\n", mode);
+
+		rc = daos_obj_update(parent_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
+
+		print_message("  Updated both dentries with spurious hardlink bit\n");
+
+		rc = daos_obj_close(parent_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Part 5.3: Test PRINT mode - should report spurious hardlink bits
+	 */
+	print_message("Testing PRINT mode - should report spurious hardlink bits...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 5.4: Test RELINK mode - should clear the hardlink bits
+	 */
+	print_message("Testing RELINK mode - should clear spurious hardlink bits...\n");
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_RELINK, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Part 5.5: Verify hardlink bit is cleared by fetching dentries directly
+	 */
+	print_message("Verifying hardlink bit cleared via direct dentry fetch...\n");
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	{
+		daos_handle_t parent_oh;
+		d_iov_t       dkey;
+		d_iov_t       akey;
+		d_sg_list_t   sgl;
+		d_iov_t       iov;
+		daos_iod_t    iod;
+		daos_recx_t   recx;
+		mode_t        mode;
+
+		/* Open the parent directory object */
+		rc = daos_obj_open(coh, dir_oid, DAOS_OO_RO, &parent_oh, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Fetch directory mode and verify hardlink bit is cleared */
+		d_iov_set(&dkey, "test_dir", strlen("test_dir"));
+		d_iov_set(&akey, "DFS_INODE", strlen("DFS_INODE"));
+		d_iov_set(&iov, &mode, sizeof(mode_t));
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = &iov;
+		recx.rx_idx   = 0; /* MODE_IDX = 0 */
+		recx.rx_nr    = sizeof(mode_t);
+		iod.iod_name  = akey;
+		iod.iod_nr    = 1;
+		iod.iod_recxs = &recx;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+
+		rc = daos_obj_fetch(parent_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Directory mode from dentry: 0x%x\n", mode);
+		print_message("  Expected: S_IFDIR | 0755 = 0x%x (no hardlink bit)\n",
+			      S_IFDIR | 0755);
+		assert_true(S_ISDIR(mode));
+		assert_int_equal(mode & (1U << 31), 0); /* Hardlink bit should be cleared */
+		assert_int_equal(mode & 0777, 0755);
+		print_message("  Directory hardlink bit verified cleared\n");
+
+		/* Fetch symlink mode and verify hardlink bit is cleared */
+		d_iov_set(&dkey, "test_symlink", strlen("test_symlink"));
+
+		rc = daos_obj_fetch(parent_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("  Symlink mode from dentry: 0x%x\n", mode);
+		assert_true(S_ISLNK(mode));
+		assert_int_equal(mode & (1U << 31), 0); /* Hardlink bit should be cleared */
+		print_message("  Symlink hardlink bit verified cleared\n");
+
+		rc = daos_obj_close(parent_oh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Cleanup scenario 5 - destroy container */
+	rc = daos_cont_destroy(arg->pool.poh, cname, 1, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Scenario 5 (hardlink bit on directory/symlink) completed successfully!\n");
+	print_message("\ndfs_test_checker_hlm completed successfully!\n");
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: DFS container modes",
-	  dfs_test_modes, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
-	  dfs_test_lookup, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST4: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
-	  dfs_test_syml_follow, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST6: multi-threads read shared file",
-	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: DFS lookupx",
-	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: DFS IO sync error code",
-	  dfs_test_io_error_code, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST9: DFS IO async error code",
-	  dfs_test_io_error_code, async_enable, test_case_teardown},
-	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
-	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST11: Simple rename",
-	  dfs_test_rename, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST12: DFS API compat",
-	  dfs_test_compat, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
-	  dfs_test_handles, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
-	  dfs_test_mt_connect, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST15: DFS chown",
-	  dfs_test_chown, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST16: DFS stat mtime",
-	  dfs_test_mtime, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST17: multi-threads async IO",
-	  dfs_test_async_io_th, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST18: async IO",
-	  dfs_test_async_io, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST19: DFS readdir",
-	  dfs_test_readdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST20: dfs oclass hints",
-	  dfs_test_oclass_hints, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST21: dfs multiple pools",
-	  dfs_test_multiple_pools, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST22: dfs extended attributes",
-	  dfs_test_xattrs, test_case_teardown},
-	{ "DFS_UNIT_TEST23: dfs MWC container checker",
-	  dfs_test_checker, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST24: dfs MWC SB fix",
-	  dfs_test_fix_sb, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST25: dfs MWC root fix",
-	  dfs_test_relink_root, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
-	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST27: dfs pipeline find",
-	  dfs_test_pipeline_find, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
-	  dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST3: DFS lookup / lookup_rel", dfs_test_lookup, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST4: Simple Symlinks", dfs_test_syml, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW", dfs_test_syml_follow, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST6: multi-threads read shared file", dfs_test_read_shared_file, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST7: DFS lookupx", dfs_test_lookupx, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST8: DFS IO sync error code", dfs_test_io_error_code, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST9: DFS IO async error code", dfs_test_io_error_code, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST10: multi-threads mkdir same dir", dfs_test_mt_mkdir, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST11: Simple rename", dfs_test_rename, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST12: DFS API compat", dfs_test_compat, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST13: DFS l2g/g2l_all", dfs_test_handles, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST14: multi-threads connect to same container", dfs_test_mt_connect, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST15: DFS chown", dfs_test_chown, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST16: DFS stat mtime", dfs_test_mtime, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST17: multi-threads async IO", dfs_test_async_io_th, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST18: async IO", dfs_test_async_io, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST19: DFS readdir", dfs_test_readdir, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST20: dfs oclass hints", dfs_test_oclass_hints, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST21: dfs multiple pools", dfs_test_multiple_pools, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST22: dfs extended attributes", dfs_test_xattrs, test_case_teardown},
+    {"DFS_UNIT_TEST23: dfs MWC container checker", dfs_test_checker, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST24: dfs MWC SB fix", dfs_test_fix_sb, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST25: dfs MWC root fix", dfs_test_relink_root, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST26: dfs MWC chunk size fix", dfs_test_fix_chunk_size, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST29: dfs hardlink", dfs_test_hardlink, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST30: dfs hardlink chmod/chown", dfs_test_hardlink_chmod_chown, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST31: dfs hardlink rename", dfs_test_hardlink_rename, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST32: dfs hardlink xattr", dfs_test_hardlink_xattr, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST33: dfs exchange", dfs_test_exchange, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST34: dfs hardlink access", dfs_test_hardlink_access, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST35: dfs hardlink ostatx", dfs_test_hardlink_ostatx, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST36: dfs hardlink osetattr", dfs_test_hardlink_osetattr, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST37: dfs checker HLM", dfs_test_checker_hlm, async_disable, test_case_teardown},
 };
 
 static int

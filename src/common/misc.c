@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -105,9 +105,9 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 
 				if (src_sgl[i].sg_iovs[j].iov_len >
 				    dst_sgl[i].sg_iovs[j].iov_buf_len) {
-					D_ERROR("%d:%d "DF_U64" > "DF_U64"\n",
-					   i, j, src_sgl[i].sg_iovs[j].iov_len,
-					   src_sgl[i].sg_iovs[j].iov_buf_len);
+					D_ERROR("%d:%d " DF_U64 " > " DF_U64 "\n", i, j,
+						src_sgl[i].sg_iovs[j].iov_len,
+						dst_sgl[i].sg_iovs[j].iov_buf_len);
 					D_GOTO(out, rc = -DER_INVAL);
 				}
 				memcpy(dst_sgl[i].sg_iovs[j].iov_buf,

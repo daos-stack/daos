@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -633,6 +634,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	dfs->super_oid       = roots->cr_oids[0];
 	dfs->root.oid        = roots->cr_oids[1];
 	dfs->root.parent_oid = dfs->super_oid;
+	dfs->hlm_oid         = roots->cr_oids[2];
 
 	/** Verify SB */
 	rc = open_sb(coh, false, false, omode, dfs->super_oid, &dfs->attr, &dfs->super_oh,
@@ -711,17 +713,26 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 		dfs->root_stbuf.st_atim.tv_nsec = root_dir.mtime_nano;
 	}
 
+	/** Open hardlink metadata object */
+	if (!daos_obj_id_is_nil(dfs->hlm_oid)) {
+		rc = daos_obj_open(dfs->coh, dfs->hlm_oid, omode, &dfs->hlm_oh, NULL);
+		if (rc) {
+			D_ERROR("Failed to open hlm object: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(err_root, rc = daos_der2errno(rc));
+		}
+	}
+
 	/** if RW, allocate an OID for the namespace */
 	if (amode == O_RDWR) {
 		dfs->last_hi = (unsigned int)d_rand();
-		/** Avoid potential conflict with SB or ROOT */
-		if (dfs->last_hi <= 1)
-			dfs->last_hi = 2;
+		/** Avoid potential conflict with SB, ROOT, or HLM */
+		if (dfs->last_hi <= HLM_HI)
+			dfs->last_hi = HLM_HI + 1;
 
 		rc = daos_cont_alloc_oids(coh, 1, &dfs->oid.lo, NULL);
 		if (rc) {
 			D_ERROR("daos_cont_alloc_oids() Failed, " DF_RC "\n", DP_RC(rc));
-			D_GOTO(err_root, rc = daos_der2errno(rc));
+			D_GOTO(err_hlm, rc = daos_der2errno(rc));
 		}
 
 		dfs->oid.hi = dfs->last_hi;
@@ -737,6 +748,9 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	daos_prop_free(prop);
 	return rc;
 
+err_hlm:
+	if (daos_handle_is_valid(dfs->hlm_oh))
+		daos_obj_close(dfs->hlm_oh, NULL);
 err_root:
 	daos_obj_close(dfs->root.oh, NULL);
 err_super:
@@ -844,6 +858,8 @@ dfs_umount(dfs_t *dfs)
 	if (daos_handle_is_valid(dfs->th))
 		daos_tx_close(dfs->th, NULL);
 
+	if (daos_handle_is_valid(dfs->hlm_oh))
+		daos_obj_close(dfs->hlm_oh, NULL);
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
@@ -956,6 +972,7 @@ struct dfs_glob {
 	uuid_t           coh_uuid;
 	daos_obj_id_t    super_oid;
 	daos_obj_id_t    root_oid;
+	daos_obj_id_t    hlm_oid;
 	daos_epoch_t     th_epoch;
 };
 
@@ -1039,6 +1056,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->amode       = dfs->amode;
 	dfs_params->super_oid   = dfs->super_oid;
 	dfs_params->root_oid    = dfs->root.oid;
+	dfs_params->hlm_oid     = dfs->hlm_oid;
 	dfs_params->uid         = dfs->uid;
 	dfs_params->gid         = dfs->gid;
 	dfs_params->id          = dfs->attr.da_id;
@@ -1118,6 +1136,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 	dfs->super_oid       = dfs_params->super_oid;
 	dfs->root.oid        = dfs_params->root_oid;
 	dfs->root.parent_oid = dfs->super_oid;
+	dfs->hlm_oid         = dfs_params->hlm_oid;
 	if (daos_obj_id_is_nil(dfs->super_oid) || daos_obj_id_is_nil(dfs->root.oid)) {
 		D_ERROR("Invalid superblock or root object ID\n");
 		D_FREE(dfs);
@@ -1153,6 +1172,17 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
+	/* Open HLM (hardlink metadata) Object */
+	if (!daos_obj_id_is_nil(dfs->hlm_oid)) {
+		rc = daos_obj_open(coh, dfs->hlm_oid, obj_mode, &dfs->hlm_oh, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_open() failed for hlm, " DF_RC "\n", DP_RC(rc));
+			daos_obj_close(dfs->super_oh, NULL);
+			daos_obj_close(dfs->root.oh, NULL);
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
+	}
+
 	/** Create transaction handle */
 	dfs->th_epoch = dfs_params->th_epoch;
 	if (dfs->th_epoch == DAOS_EPOCH_MAX) {
@@ -1163,6 +1193,8 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 			D_ERROR("daos_tx_open_snap() failed, " DF_RC "\n", DP_RC(rc));
 			daos_obj_close(dfs->super_oh, NULL);
 			daos_obj_close(dfs->root.oh, NULL);
+			if (daos_handle_is_valid(dfs->hlm_oh))
+				daos_obj_close(dfs->hlm_oh, NULL);
 			D_GOTO(err_dfs, rc = daos_der2errno(rc));
 		}
 	}

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,21 +48,15 @@ dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size)
 static int
 set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 {
-	daos_handle_t oh;
-	d_sg_list_t   sgl;
-	d_iov_t       sg_iov;
-	daos_iod_t    iod;
-	daos_recx_t   recx;
-	daos_key_t    dkey;
-	int           rc;
-
-	/** Open parent object and fetch entry of obj from it */
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		return daos_der2errno(rc);
-
-	/** set dkey as the entry name */
-	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+	daos_handle_t    oh = DAOS_HDL_INVAL;
+	d_sg_list_t      sgl;
+	d_iov_t          sg_iov;
+	daos_iod_t       iod;
+	daos_recx_t      recx;
+	daos_key_t       dkey;
+	struct dfs_entry entry = {0};
+	bool             exists;
+	int              rc;
 
 	/** set akey as the inode name */
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
@@ -78,15 +73,57 @@ set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = &sg_iov;
 
-	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
-	if (rc) {
-		D_ERROR("Failed to update chunk size: " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
+retry:
+	if (dfs_is_hardlink(obj->mode)) {
+		/* For hardlinks, update chunk size in HLM with OID as dkey */
+		d_iov_set(&dkey, &obj->oid, sizeof(daos_obj_id_t));
+
+		rc = daos_obj_update(dfs->hlm_oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1,
+				     &iod, &sgl, NULL);
+		if (rc) {
+			D_ERROR("Failed to update chunk size in HLM: " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+	} else {
+		/** Open parent object and fetch entry of obj from it */
+		rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+
+		/** set dkey as the entry name */
+		d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+
+		rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
+				     NULL);
+		if (rc) {
+			D_ERROR("Failed to update chunk size: " DF_RC "\n", DP_RC(rc));
+			daos_obj_close(oh, NULL);
+			return daos_der2errno(rc);
+		}
+
+		if (S_ISREG(obj->mode)) {
+			/*
+			 * Check if the entry became a hardlink (another DFS instance may have
+			 * converted it)
+			 */
+			rc = fetch_entry(dfs->layout_v, oh, dfs->th, obj->name, strlen(obj->name),
+					 false, &exists, &entry, 0, NULL, NULL, NULL);
+			daos_obj_close(oh, NULL);
+			if (rc) {
+				D_ERROR("Failed to fetch entry: %d\n", rc);
+				return rc;
+			}
+			if (exists && dfs_is_hardlink(entry.mode)) {
+				/* Entry became a hardlink, update obj->mode and retry from HLM */
+				obj->mode = entry.mode;
+				goto retry;
+			}
+		} else {
+			daos_obj_close(oh, NULL);
+		}
 	}
 
-out:
-	daos_obj_close(oh, NULL);
-	return rc;
+	return 0;
 }
 
 int
@@ -126,7 +163,7 @@ dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 
 	rc = set_chunk_size(dfs, obj, csize);
 	if (rc)
-		return daos_der2errno(rc);
+		return rc;
 
 	/* need to update the array handle chunk size */
 	rc = daos_array_update_chunk_size(obj->oh, csize);
