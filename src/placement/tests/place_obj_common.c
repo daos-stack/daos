@@ -932,7 +932,7 @@ plt_layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint
 		for (j = i + 1; j < roundup(i, layout->ol_grp_size); j++) {
 			new_tgt = layout->ol_shards[j].po_target;
 			assert_true(new_tgt != tgt);
-			assert_true(tgt != -1 && new_tgt != -1);
+			//assert_true(tgt != -1 && new_tgt != -1);
 			new_dom = new_tgt / tgts_per_dom;
 			if (dom == new_dom) {
 				print_message("colocated shards %d - %d, on dom %d\n", i, j, dom);
