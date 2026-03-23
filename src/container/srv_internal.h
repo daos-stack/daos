@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,6 +61,7 @@ extern bool ec_agg_disabled;
 struct ec_eph {
 	d_rank_t	rank;
 	daos_epoch_t	eph;
+	uint64_t        ee_update_ts; /* update timestamp */
 };
 
 /* container EC aggregation epoch control descriptor, which is only on leader */
