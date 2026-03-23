@@ -63,8 +63,8 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
  *                              remap list.
  */
 int
-remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint, void *data)
+remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx, struct pool_target *tgt,
+		bool rebuilding, void *data)
 {
 	struct failed_shard *f_new;
 
@@ -80,9 +80,9 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_status = tgt->ta_comp.co_status;
 	f_new->fs_data      = data;
 
-	D_DEBUG(DB_PL, "tgt %u status %u flags %u reint %s\n", tgt->ta_comp.co_id,
-		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, for_reint ? "yes" : "no");
-	if (!for_reint) {
+	D_DEBUG(DB_PL, "tgt %u status %u flags %u order %s\n", tgt->ta_comp.co_id,
+		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, rebuilding ? "yes" : "no");
+	if (!rebuilding) { /* layout computation, enforce remapping order */
 		f_new->fs_tgt_id = -1;
 		remap_add_one(remap_list, f_new);
 	} else {
@@ -285,7 +285,8 @@ is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
 			}
 		} else if (comp->co_flags & PO_COMPF_DOWN2UP) {
 			/* remap is not required because writes on fallback will be discarded
-			 * anyway, down2up flag can ensure nobody reads data from this target.
+			 * anyway, rebuilding and reintegrating flags will be set for this target,
+			 * they can ensure nobody reads data from it.
 			 */
 			status = PO_COMP_ST_UPIN;
 		}
@@ -393,14 +394,15 @@ next_fail:
 
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
 		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
-			/* any target on the remapping path is being rebuilt */
+			/* if any target on the remapping path is being rebuilt */
 			l_shard->po_rebuilding = 1;
 
 		} else if (pool_target_is_down(spare_tgt)) {
-			/* the current spare target is being rebuilt */
+			/* if the current spare target is being rebuilt */
 			l_shard->po_rebuilding = 1;
 
 		} else if (pool_target_is_up(spare_tgt)) {
+			/* if the current spare target is being reintegrated */
 			l_shard->po_rebuilding    = 1;
 			l_shard->po_reintegrating = 1;
 		}

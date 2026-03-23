@@ -115,8 +115,8 @@ void
 reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
-remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint, void *data);
+remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx, struct pool_target *tgt,
+		bool rebuilding, void *data);
 
 int
 remap_insert_copy_one(d_list_t *remap_list, struct failed_shard *original);

@@ -166,13 +166,13 @@ jm_obj_shard_pd(struct jm_obj_placement *jmop, uint32_t shard)
  *				recent pool map changes, like reintegration.
  * \param[in]	new		The new layout that contains changes in layout
  *				that occurred due to pool status changes.
- * \param[in]	for_rebuild	diff calls to extract the rebuilding shards.
+ * \param[in]	rebuilding	diff calls to extract the rebuilding shards for scanner.
  * \param[out]	diff		The d_list that contains the differences that
  *				were calculated.
  */
 static inline void
 layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
-		 struct pl_obj_layout *new, d_list_t *diff, bool for_rebuild)
+		 struct pl_obj_layout *new, d_list_t *diff, bool rebuilding)
 {
 	int index;
 
@@ -196,9 +196,8 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		 * chosen to be rebuilt as well.
 		 */
 		if (reint_tgt != original_target ||
-		    (for_rebuild && original->ol_shards[index].po_rebuilding)) {
-			pool_map_find_target(jmap->jmp_map.pl_poolmap,
-					     reint_tgt, &temp_tgt);
+		    (rebuilding && original->ol_shards[index].po_rebuilding)) {
+			pool_map_find_target(jmap->jmp_map.pl_poolmap, reint_tgt, &temp_tgt);
 			if (pool_target_avail(temp_tgt, PO_COMP_ST_UPIN | PO_COMP_ST_UP |
 					      PO_COMP_ST_DRAIN))
 				remap_alloc_one(diff, index, temp_tgt, true, NULL);
@@ -356,7 +355,7 @@ struct dom_grp_used {
 };
 
 static inline void
-target_has_peer(struct pool_target *tgt, int gen_mode, bool *peer)
+target_has_rebuild_peer(struct pool_target *tgt, int gen_mode, bool *peer)
 {
 	/* should write to extra peer shard before completion of drain/reintegration */
 	D_ASSERT(gen_mode != CURRENT || peer != NULL);
@@ -469,7 +468,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			}
 		}
 
-		target_has_peer(spare_tgt, gen_mode, is_extending);
+		target_has_rebuild_peer(spare_tgt, gen_mode, is_extending);
 		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list, allow_version,
 					    gen_mode, f_shard, l_shard);
 		if (rc == 1) {
@@ -750,7 +749,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 					layout->ol_shards[k].po_reintegrating = 1;
 				}
 			}
-			target_has_peer(target, gen_mode, is_extending);
+			target_has_rebuild_peer(target, gen_mode, is_extending);
 		}
 	}
 
