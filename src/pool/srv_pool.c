@@ -232,6 +232,7 @@ struct pool_svc {
 	bool                    ps_force_notify; /* MS of PS membership */
 	struct pool_svc_sched	ps_reconf_sched;
 	struct pool_svc_sched   ps_rfcheck_sched;      /* Check all containers RF for the pool */
+	struct pool_svc_sched   ps_rebuild_sched;
 	uint32_t                ps_ops_enabled;        /* cached ds_pool_prop_svc_ops_enabled */
 	uint32_t                ps_ops_max;            /* cached ds_pool_prop_svc_ops_max */
 	uint32_t                ps_ops_age;            /* cached ds_pool_prop_svc_ops_age */
@@ -2286,10 +2287,7 @@ ds_pool_svc_rf_from_nreplicas(int nreplicas)
 	return svc_rf;
 }
 
-/*
- * There might be some rank status inconsistency, let's check and
- * fix it.
- */
+/* Compare the map with the group, and recover potentially lost events. */
 static int
 pool_svc_check_node_status(struct pool_svc *svc)
 {
@@ -2298,11 +2296,6 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	int			i;
 	int			rc = 0;
 
-	if (pool_disable_exclude) {
-		D_DEBUG(DB_MD, DF_UUID": skip: exclusion disabled\n", DP_UUID(svc->ps_uuid));
-		return 0;
-	}
-
 	D_DEBUG(DB_MD, DF_UUID": checking node status\n", DP_UUID(svc->ps_uuid));
 	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
 	doms_cnt = pool_map_find_ranks(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
@@ -2310,35 +2303,34 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	D_ASSERT(doms_cnt >= 0);
 	for (i = 0; i < doms_cnt; i++) {
 		struct swim_member_state state;
+		enum crt_event_source    src;
+		enum crt_event_type      type;
 
-		/* Only check if UPIN server is excluded or dead for now */
-		if (!(doms[i].do_comp.co_status & PO_COMP_ST_UPIN))
+		if (!(doms[i].do_comp.co_status & DC_POOL_GROUP_MAP_STATES))
 			continue;
 
 		rc = crt_rank_state_get(crt_group_lookup(NULL),
 					doms[i].do_comp.co_rank, &state);
 		if (rc != 0 && rc != -DER_NONEXIST) {
-			D_ERROR("failed to get status of rank %u: %d\n",
-				doms[i].do_comp.co_rank, rc);
+			DL_ERROR(rc, DF_UUID ": failed to get status of rank %u",
+				 DP_UUID(svc->ps_uuid), doms[i].do_comp.co_rank);
 			break;
 		}
+		D_DEBUG(DB_REBUILD, DF_UUID ": rank/state %d/%d\n", DP_UUID(svc->ps_uuid),
+			doms[i].do_comp.co_rank, rc == -DER_NONEXIST ? -1 : state.sms_status);
 
-		/* Since there is a big chance the INACTIVE node will become
-		 * ACTIVE soon, let's only evict the DEAD node rank for the
-		 * moment.
-		 */
-		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
-			doms[i].do_comp.co_rank,
-			rc == -DER_NONEXIST ? -1 : state.sms_status);
 		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD) {
-			rc = queue_event(svc, doms[i].do_comp.co_rank, 0 /* incarnation */,
-					 rc == -DER_NONEXIST ? CRT_EVS_GRPMOD : CRT_EVS_SWIM,
-					 CRT_EVT_DEAD);
-			if (rc) {
-				D_ERROR("failed to exclude rank %u: %d\n",
-					doms[i].do_comp.co_rank, rc);
-				break;
-			}
+			src  = rc == -DER_NONEXIST ? CRT_EVS_GRPMOD : CRT_EVS_SWIM;
+			type = CRT_EVT_DEAD;
+		} else {
+			src  = CRT_EVS_GRPMOD;
+			type = CRT_EVT_ALIVE;
+		}
+		rc = queue_event(svc, doms[i].do_comp.co_rank, 0 /* incarnation */, src, type);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to exclude rank %u", DP_UUID(svc->ps_uuid),
+				 doms[i].do_comp.co_rank);
+			break;
 		}
 	}
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
@@ -2481,6 +2473,8 @@ static int pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
 static int pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map,
 				    uint32_t map_version_for, bool sync_remove);
 static void pool_svc_rfcheck_ult(void *arg);
+static void
+pool_svc_rebuild_regen_ult(void *varg);
 
 /* Abort condition of ds_mgmt_get_self_heal_policy for pool_svc. */
 static bool
@@ -2499,8 +2493,7 @@ pool_svc_abort_gshp(void *arg)
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
-	struct pool_svc	       *svc = pool_svc_obj(rsvc);
-	uint64_t                sys_self_heal;
+	struct pool_svc        *svc         = pool_svc_obj(rsvc);
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version = 0;
 	uuid_t                  srv_pool_hdl;
@@ -2548,12 +2541,6 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 	cont_svc_up = true;
-
-	rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to get self-heal policy", DP_UUID(svc->ps_uuid));
-		goto out;
-	}
 
 	rc = init_events(svc);
 	if (rc != 0)
@@ -2629,10 +2616,16 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, true /* auto_recovery */,
-					0 /* delay_sec */);
-	if (rc != 0)
+	rc = pool_svc_schedule(svc, &svc->ps_rebuild_sched, pool_svc_rebuild_regen_ult,
+			       NULL /* arg */);
+	if (rc == -DER_OP_CANCELED) {
+		DL_INFO(rc, DF_UUID ": not scheduling rebuild regeneration", DP_UUID(svc->ps_uuid));
+		rc = 0;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to schedule rebuild regeneration",
+			 DP_UUID(svc->ps_uuid));
 		goto out;
+	}
 
 	rc = pool_svc_step_up_metrics(svc, rank, map_version, map_buf);
 	if (rc != 0) {
@@ -7118,6 +7111,71 @@ out:
 	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 }
 
+/* Must be used with pool_svc.ps_rebuild_sched (see container_of below). */
+static void
+pool_svc_rebuild_regen_ult(void *varg)
+{
+	struct pool_svc_sched *rebuild = varg;
+	struct pool_svc       *svc;
+	struct rdb_tx          tx;
+	daos_prop_t           *prop = NULL;
+	uint64_t               sys_self_heal;
+	int                    rc;
+
+	svc = container_of(rebuild, struct pool_svc, ps_rebuild_sched);
+
+	D_DEBUG(DB_MD, DF_UUID ": begin\n", DP_UUID(svc->ps_uuid));
+
+	if (rebuild->psc_canceled) {
+		rc = -DER_OP_CANCELED;
+		goto out;
+	}
+
+	/*
+	 * Pending events might cause a regenerated rebuild task to be aborted
+	 * in the near future.
+	 */
+	while (events_pending(svc)) {
+		dss_sleep(3000 /* ms */);
+		if (rebuild->psc_canceled) {
+			rc = -DER_OP_CANCELED;
+			goto out;
+		}
+	}
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out;
+	ABT_rwlock_rdlock(svc->ps_lock);
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_get_self_heal_policy(pool_svc_abort_gshp, svc, &sys_self_heal);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to get self-heal policy", DP_UUID(svc->ps_uuid));
+		goto out;
+	}
+
+	if (rebuild->psc_canceled) {
+		rc = -DER_OP_CANCELED;
+		goto out;
+	}
+
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, sys_self_heal, true /* auto_recovery */,
+					0 /* delay_sec */);
+
+out:
+	if (prop != NULL)
+		daos_prop_free(prop);
+	rebuild->psc_rc = rc;
+	sched_end(rebuild);
+	ABT_cond_broadcast(rebuild->psc_cv);
+	D_DEBUG(DB_MD, DF_UUID ": end: " DF_RC "\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+}
+
 /* If returning 0, this function must have scheduled func(arg). */
 static int
 pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*func)(void *),
@@ -7144,7 +7202,8 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*fun
 		return -DER_OP_CANCELED;
 	}
 
-	D_ASSERT(&svc->ps_reconf_sched == sched || &svc->ps_rfcheck_sched == sched);
+	D_ASSERT(sched == &svc->ps_reconf_sched || sched == &svc->ps_rfcheck_sched ||
+		 sched == &svc->ps_rebuild_sched);
 	sched_cancel_and_wait(sched);
 
 	sched_begin(sched, arg);
