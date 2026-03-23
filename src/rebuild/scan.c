@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -516,6 +516,8 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	if (rc != 0)
 		return rc;
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
+	D_ASSERT(tls != NULL);
 	/* If there are further targets failure during reintegration/extend/drain,
 	 * rebuild will choose replacement targets for the impacted objects anyway,
 	 * so we do not need reclaim these impacted shards by @ignore_rebuild_shard.
@@ -524,6 +526,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 					      mytarget, oid.id_shard,
 					      rpt->rt_rebuild_op == RB_OP_RECLAIM ? false : true);
 	pl_obj_layout_free(layout);
+	tls->rebuild_pool_obj_count++;
 	if (still_needed) {
 		if (new_layout_ver > 0) {
 			/* upgrade job reclaim */
@@ -542,10 +545,8 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 		return 0;
 	}
 
-	D_DEBUG(DB_REBUILD, "deleting stale object "DF_UOID" rank %u tgt %u oid layout %u/%u",
+	D_DEBUG(DB_REBUILD, "deleting stale object " DF_UOID " rank %u tgt %u oid layout %u/%u",
 		DP_UOID(oid), myrank, mytarget, oid.id_layout_ver, new_layout_ver);
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
 	tls->rebuild_pool_reclaim_obj_count++;
 
 	discard_epr.epr_hi = rpt->rt_reclaim_epoch;
