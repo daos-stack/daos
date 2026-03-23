@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -217,7 +218,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	dfuse_compute_inode(dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
-	rc = active_ie_init(ie, NULL);
+	rc = active_ie_init(ie);
 	if (rc != -DER_SUCCESS)
 		goto drop_oh;
 
