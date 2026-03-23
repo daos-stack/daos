@@ -32,7 +32,8 @@ distro_custom() {
         ldconfig
         
         if [[ "${ID:-}" == "sles" ]]; then
-            dnf install -y libfabric1 mercury-libfabric mercury daos-server daos-client daos-client-tests daos-tests-internal openmpi3 openmpi3-devel
+            dnf install -y daos-server daos-client daos-client-tests \
+                            daos-tests-internal openmpi3 openmpi3-devel
         else
             dnf install -y libfabric1 mercury-libfabric mercury
         fi
