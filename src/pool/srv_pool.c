@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2257,6 +2257,11 @@ static int pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map,
 				    uint32_t map_version_for, bool sync_remove);
 static void pool_svc_rfcheck_ult(void *arg);
 
+#define RESTART_RB_DELAY_ENV "D_RESTART_RB_DELAY"
+#define RESTART_RB_DELAY_MIN (60)
+#define RESTART_RB_DELAY_DEF (100)
+#define RESTART_RB_DELAY_MAX (600)
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
@@ -2268,6 +2273,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
+	uint64_t                age_sec, delay;
+	uint32_t                restart_rb_delay   = RESTART_RB_DELAY_DEF;
 	d_rank_t                rank               = dss_self_rank();
 	int			rc;
 
@@ -2367,7 +2374,18 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, 0);
+	rc = d_getenv_uint(RESTART_RB_DELAY_ENV, &restart_rb_delay);
+	if (rc == 0) {
+		if (restart_rb_delay < RESTART_RB_DELAY_MIN)
+			restart_rb_delay = RESTART_RB_DELAY_MIN;
+		if (restart_rb_delay > RESTART_RB_DELAY_MAX)
+			restart_rb_delay = RESTART_RB_DELAY_MAX;
+	}
+	age_sec = d_hlc_age2sec(dss_get_start_epoch());
+	delay   = age_sec < restart_rb_delay ? (restart_rb_delay - age_sec) : 0;
+	D_INFO("delay %d, " DF_U64 " seconds for ds_rebuild_regenerate_task\n", restart_rb_delay,
+	       delay);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop, delay);
 	if (rc != 0)
 		goto out;
 
