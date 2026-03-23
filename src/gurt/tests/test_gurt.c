@@ -1,6 +1,7 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2026 Google LLC
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,7 +89,7 @@ test_time(void **state)
 
 	timeleft = d_timeleft_ns(&t1);
 	/* This check shouldn't take 1 second */
-	assert_in_range(timeleft, 0, NSEC_PER_SEC);
+	assert_uint_in_range(timeleft, 0, NSEC_PER_SEC);
 
 	/* Sleep for 1 second.  Time should expire */
 	sleep(1);
