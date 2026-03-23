@@ -1,7 +1,7 @@
 /**
  *
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -166,14 +166,13 @@ jm_obj_shard_pd(struct jm_obj_placement *jmop, uint32_t shard)
  *				recent pool map changes, like reintegration.
  * \param[in]	new		The new layout that contains changes in layout
  *				that occurred due to pool status changes.
- * \param[in]	for_reint	diff calls from find_reint() to extract the reintegrating
- *                              shards.
+ * \param[in]	rebuilding	diff calls to extract the rebuilding shards for scanner.
  * \param[out]	diff		The d_list that contains the differences that
  *				were calculated.
  */
 static inline void
 layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
-		 struct pl_obj_layout *new, d_list_t *diff, bool for_reint)
+		 struct pl_obj_layout *new, d_list_t *diff, bool rebuilding)
 {
 	int index;
 
@@ -197,11 +196,8 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		 * chosen to be rebuilt as well.
 		 */
 		if (reint_tgt != original_target ||
-		    (for_reint && original->ol_shards[index].po_rebuilding) ||
-		    (temp_tgt->ta_comp.co_flags & PO_COMPF_DOWN2UP &&
-		     temp_tgt->ta_comp.co_status == PO_COMP_ST_UP)) {
-			pool_map_find_target(jmap->jmp_map.pl_poolmap,
-					     reint_tgt, &temp_tgt);
+		    (rebuilding && original->ol_shards[index].po_rebuilding)) {
+			pool_map_find_target(jmap->jmp_map.pl_poolmap, reint_tgt, &temp_tgt);
 			if (pool_target_avail(temp_tgt, PO_COMP_ST_UPIN | PO_COMP_ST_UP |
 					      PO_COMP_ST_DRAIN))
 				remap_alloc_one(diff, index, temp_tgt, true, NULL);
@@ -218,10 +214,8 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 				 * removed when placement is able to handle
 				 * this situation better
 				 */
-				D_DEBUG(DB_PL,
-					"skip remap %d to unavail tgt %u\n",
-					index, reint_tgt);
-
+				D_DEBUG(DB_PL, "skip remap %d to unavail tgt %u\n", index,
+					reint_tgt);
 		}
 	}
 }
@@ -360,6 +354,21 @@ struct dom_grp_used {
 	d_list_t	dgu_list;
 };
 
+static inline void
+target_has_rebuild_peer(struct pool_target *tgt, int gen_mode, bool *peer)
+{
+	/* should write to extra peer shard before completion of drain/reintegration */
+	D_ASSERT(gen_mode != CURRENT || peer != NULL);
+	if (gen_mode != CURRENT)
+		return;
+
+	if (pool_target_is_drain(tgt))
+		*peer = true;
+
+	if (pool_target_is_up(tgt) && !pool_target_is_down2up(tgt))
+		*peer = true;
+}
+
 /**
  * Try to remap all the failed shards in the @remap_list to proper
  * targets. The new target id will be updated in the @layout if the
@@ -398,7 +407,6 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 	uint64_t                key;
 	uint32_t		spares_left;
 	int                     rc;
-
 
 	remap_dump(remap_list, md, "remap:");
 
@@ -460,9 +468,9 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			}
 		}
 
-		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list,
-					    allow_version, gen_mode, f_shard, l_shard,
-					    is_extending);
+		target_has_rebuild_peer(spare_tgt, gen_mode, is_extending);
+		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list, allow_version,
+					    gen_mode, f_shard, l_shard);
 		if (rc == 1) {
 			/* Current shard is remapped, move the remap to the output list or
 			 * delete it.
@@ -732,12 +740,16 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 			} else {
 				if (domain != NULL)
 					setbit(dom_cur_grp_real, domain - root);
-				if (pool_target_down(target))
-					layout->ol_shards[k].po_rebuilding = 1;
-			}
 
-			if (is_extending != NULL && pool_target_is_up_or_drain(target))
-				*is_extending = true;
+				if (pool_target_is_down(target)) {
+					layout->ol_shards[k].po_rebuilding = 1;
+
+				} else if (pool_target_is_up(target)) {
+					layout->ol_shards[k].po_rebuilding    = 1;
+					layout->ol_shards[k].po_reintegrating = 1;
+				}
+			}
+			target_has_rebuild_peer(target, gen_mode, is_extending);
 		}
 	}
 

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,8 +63,8 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
  *                              remap list.
  */
 int
-remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint, void *data)
+remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx, struct pool_target *tgt,
+		bool rebuilding, void *data)
 {
 	struct failed_shard *f_new;
 
@@ -77,13 +78,11 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_rank = tgt->ta_comp.co_rank;
 	f_new->fs_index = tgt->ta_comp.co_index;
 	f_new->fs_status = tgt->ta_comp.co_status;
-	f_new->fs_data = data;
-	if (pool_target_is_down2up(tgt))
-		f_new->fs_down2up = 1;
+	f_new->fs_data      = data;
 
-	D_DEBUG(DB_PL, "tgt %u status %u flags %u reint %s\n", tgt->ta_comp.co_id,
-		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, for_reint ? "yes" : "no");
-	if (!for_reint) {
+	D_DEBUG(DB_PL, "tgt %u status %u flags %u order %s\n", tgt->ta_comp.co_id,
+		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, rebuilding ? "yes" : "no");
+	if (!rebuilding) { /* layout computation, enforce remapping order */
 		f_new->fs_tgt_id = -1;
 		remap_add_one(remap_list, f_new);
 	} else {
@@ -255,13 +254,7 @@ is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
 			status = PO_COMP_ST_UPIN;
 		} else if (status == PO_COMP_ST_UP) {
 			if (comp->co_flags & PO_COMPF_DOWN2UP) {
-				/* PO_COMP_ST_UP status with PO_COMPF_DOWN2UP flag
-				 * is the case of delay_rebuild exclude+reint.
-				 * Cannot mark it as UPIN to avoid it be used for
-				 * rebuild enumerate/fetch, as the data will be
-				 * discarded in reintegrate.
-				 */
-				/* status = PO_COMP_ST_UPIN; */
+				status = PO_COMP_ST_UPIN;
 			} else {
 				if (comp->co_fseq <= 1)
 					status = PO_COMP_ST_NEW;
@@ -290,6 +283,12 @@ is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
 				else
 					status = PO_COMP_ST_DOWNOUT;
 			}
+		} else if (comp->co_flags & PO_COMPF_DOWN2UP) {
+			/* remap is not required because writes on fallback will be discarded
+			 * anyway, rebuilding and reintegrating flags will be set for this target,
+			 * they can ensure nobody reads data from it.
+			 */
+			status = PO_COMP_ST_UPIN;
 		}
 	}
 
@@ -323,16 +322,12 @@ need_remap_comp(struct pool_component *comp, uint32_t allow_version,
  * spare target.
  */
 int
-determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		       bool spare_avail, d_list_t *remap_list, uint32_t allow_version,
-		       enum layout_gen_mode gen_mode, struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard, bool *is_extending)
+determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
+		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		       struct failed_shard *f_shard, struct pl_obj_shard *l_shard)
 {
 	if (!spare_avail)
 		goto next_fail;
-
-	if (is_extending != NULL && pool_target_is_up_or_drain(spare_tgt))
-		*is_extending = true;
 
 	/* The selected spare target is down as well */
 	if (need_remap_comp(&spare_tgt->ta_comp, allow_version, gen_mode)) {
@@ -392,20 +387,25 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 
 next_fail:
 	if (spare_avail) {
-		/* The selected spare target is up and ready */
 		l_shard->po_target = spare_tgt->ta_comp.co_id;
-		l_shard->po_fseq = f_shard->fs_fseq;
-		l_shard->po_rank = spare_tgt->ta_comp.co_rank;
-		l_shard->po_index = spare_tgt->ta_comp.co_index;
+		l_shard->po_fseq    = f_shard->fs_fseq;
+		l_shard->po_rank    = spare_tgt->ta_comp.co_rank;
+		l_shard->po_index   = spare_tgt->ta_comp.co_index;
 
-		/*
-		 * Mark the shard as 'rebuilding' so that read will skip this shard.
-		 * f_shard->fs_down2up is the case of delay_rebuild exclude+reint.
-		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
-		    f_shard->fs_down2up || pool_target_down(spare_tgt))
+		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+			/* if any target on the remapping path is being rebuilt */
 			l_shard->po_rebuilding = 1;
+
+		} else if (pool_target_is_down(spare_tgt)) {
+			/* if the current spare target is being rebuilt */
+			l_shard->po_rebuilding = 1;
+
+		} else if (pool_target_is_up(spare_tgt)) {
+			/* if the current spare target is being reintegrated */
+			l_shard->po_rebuilding    = 1;
+			l_shard->po_reintegrating = 1;
+		}
 	} else {
 		l_shard->po_shard = -1;
 		l_shard->po_target = -1;

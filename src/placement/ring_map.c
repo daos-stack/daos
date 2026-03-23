@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1021,9 +1022,8 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 			ring_map_dump(&rimap->rmp_map, true);
 
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
-		determine_valid_spares(spare_tgt, md, spare_avail,
-				       remap_list, -1, -1, f_shard, l_shard,
-				       NULL);
+		determine_valid_spares(spare_tgt, md, spare_avail, remap_list, -1, -1, f_shard,
+				       l_shard);
 	}
 
 	remap_dump(remap_list, md, "after remap:");
