@@ -196,9 +196,7 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		 * chosen to be rebuilt as well.
 		 */
 		if (reint_tgt != original_target ||
-		    (for_rebuild && original->ol_shards[index].po_rebuilding) ||
-		    (temp_tgt->ta_comp.co_flags & PO_COMPF_DOWN2UP &&
-		     temp_tgt->ta_comp.co_status == PO_COMP_ST_UP)) {
+		    (for_rebuild && original->ol_shards[index].po_rebuilding)) {
 			pool_map_find_target(jmap->jmp_map.pl_poolmap,
 					     reint_tgt, &temp_tgt);
 			if (pool_target_avail(temp_tgt, PO_COMP_ST_UPIN | PO_COMP_ST_UP |
@@ -471,6 +469,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			}
 		}
 
+		target_has_peer(spare_tgt, gen_mode, is_extending);
 		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list, allow_version,
 					    gen_mode, f_shard, l_shard);
 		if (rc == 1) {
@@ -486,8 +485,6 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 
 			if (spare_dom != NULL && dgu != NULL)
 				setbit(dgu->dgu_real, spare_dom - root);
-
-			target_has_peer(spare_tgt, gen_mode, is_extending);
 		}
 		current = remap_list->next;
 	}

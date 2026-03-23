@@ -392,12 +392,18 @@ next_fail:
 		l_shard->po_index   = spare_tgt->ta_comp.co_index;
 
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN || pool_target_is_down(spare_tgt))
+		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+			/* any target on the remapping path is being rebuilt */
 			l_shard->po_rebuilding = 1;
 
-		if (pool_target_is_up(spare_tgt))
-			l_shard->po_reintegrating = 1;
+		} else if (pool_target_is_down(spare_tgt)) {
+			/* the current spare target is being rebuilt */
+			l_shard->po_rebuilding = 1;
 
+		} else if (pool_target_is_up(spare_tgt)) {
+			l_shard->po_rebuilding    = 1;
+			l_shard->po_reintegrating = 1;
+		}
 	} else {
 		l_shard->po_shard = -1;
 		l_shard->po_target = -1;
