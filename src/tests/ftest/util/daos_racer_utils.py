@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -79,7 +79,7 @@ class DaosRacerCommand(ExecutableCommand):
             "OMPI_MCA_btl": "tcp,self",
             "OMPI_MCA_oob": "tcp",
             "OMPI_MCA_pml": "ob1",
-            "D_LOG_MASK": "ERR"
+            "D_LOG_MASK": "ERROR"
         }
         for key, val in default_env.items():
             if key not in self.env:

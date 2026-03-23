@@ -1,6 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -248,7 +248,7 @@ class DaosAgentManager(SubprocessManager):
 
         # Set default agent debug levels
         env_vars = {
-            "D_LOG_MASK": "DEBUG,RPC=ERR",
+            "D_LOG_MASK": "DEBUG,RPC=ERROR",
             "DD_MASK": "mgmt,io,md,epc,rebuild",
             "D_LOG_FILE_APPEND_PID": "1",
             "COVFILE": "/tmp/test.cov",

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -118,7 +119,7 @@ or query/manage an object inside a container.`
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelTrace)
 			if os.Getenv("D_LOG_MASK") == "" {
-				os.Setenv("D_LOG_MASK", "DEBUG,OBJECT=ERR,PLACEMENT=ERR")
+				os.Setenv("D_LOG_MASK", "DEBUG,OBJECT=ERROR,PLACEMENT=ERROR")
 			}
 			if os.Getenv("DD_MASK") == "" {
 				os.Setenv("DD_MASK", "mgmt")

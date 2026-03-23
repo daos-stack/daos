@@ -392,10 +392,9 @@
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #  # Currently supported values:
-#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
-#  #   FATAL, EMRG, EMIT
+#  #   DEBUG, INFO, NOTE, WARN, ERROR, CRIT, ALRT, FATAL, EMRG, EMIT
 #  #
-#  # default: ERR
+#  # default: ERROR
 #  log_mask: INFO
 #
 #  # Force specific path for DAOS debug logs.
@@ -563,8 +562,7 @@
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #  # Currently supported values:
-#  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
-#  #   FATAL, EMRG, EMIT
+#  #   DEBUG, INFO, NOTE, WARN, ERROR, CRIT, ALRT, FATAL, EMRG, EMIT
 #  #
 #  # default: ERR
 #  log_mask: INFO

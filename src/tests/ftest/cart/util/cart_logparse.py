@@ -1,11 +1,9 @@
-# /*
-#  * (C) Copyright 2016-2023 Intel Corporation.
-#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
-#  *
-#  * SPDX-License-Identifier: BSD-2-Clause-Patent
-# */
-
 """
+  (C) Copyright 2016-2023 Intel Corporation.
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+
 LogIter and LogLine class definitions.
 
 This provides a way of querying CaRT logfiles for processing.
@@ -28,13 +26,12 @@ class InvalidLogFile(Exception):
 LOG_LEVELS = {
     'EMIT': 1,
     'FATAL': 2,
-    'EMRG': 3,
     'CRIT': 4,
-    'ERR': 5,
+    'ERROR': 5,
     'WARN': 6,
     'NOTE': 7,
     'INFO': 8,
-    'DBUG': 9}
+    'DEBUG': 9}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
