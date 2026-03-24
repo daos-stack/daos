@@ -510,6 +510,36 @@ pipeline {
                 } // stage('Python Bandit check')
             }
         }
+        stage('Check PR') {
+            when { changeRequest() }
+            parallel {
+                stage('Branch name check') {
+                    when { changeRequest() }
+                    steps {
+                        script {
+                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
+                                error('Your PR branch name does not follow the rules. Please rename it ' +
+                                      'according to the rules described here: ' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
+                                      'Once you have renamed your branch locally to match the ' +
+                                      'format, close this PR and open a new one using the newly renamed ' +
+                                      'local branch.')
+                            }
+                        }
+                    }
+                }
+            } // parallel
+        } // stage('Check PR')
+        stage('Cancel Previous Builds') {
+            when {
+                beforeAgent true
+                expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
+            }
+            steps {
+                cancelPreviousBuilds()
+            }
+        }
+
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
@@ -641,7 +671,6 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-//                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --build-arg POINT_RELEASE=.5 '
                         }
@@ -678,6 +707,155 @@ pipeline {
                         }
                     }
                 }
+            }
+        }
+        stage('Unit Tests') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            parallel {
+                stage('Unit Test') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                            job_step_update(
+                                unitTest(timeout_time: 60,
+                                        unstash_opt: true,
+                                        inst_repos: daosRepos(),
+                                        inst_rpms: unitPackages(target: 'el9'),
+                                        image_version: 'el9.7',
+                                        )
+                            )
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_logs/']
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Unit Test bdev') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     unstash_opt: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7'))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_bdev_logs/']
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('NLT') {
+                    when {
+                        beforeAgent true
+                        expression { params.CI_NLT_TEST && !skipStage() }
+                    }
+                    agent {
+                        label params.CI_NLT_1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     inst_repos: daosRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7'))
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+                        //                 skipPublishingChecks: true,
+                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
+                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         valgrind_stash: 'nlt-memcheck'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         name: 'NLT server leaks',
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server'),
+                                         scm: 'daos-stack/daos'
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Unit Test with memcheck') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 160,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7'))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
+                                                     'unit_test_memcheck_logs/**/*.log'],
+                                         valgrind_stash: 'unit-memcheck'
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit Test with memcheck')
+                stage('Unit Test bdev with memcheck') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_NVME_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 180,
+                                     unstash_opt: true,
+                                     ignore_failure: true,
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7'))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+                                                     'unit_test_memcheck_bdev_logs/**/*.log'],
+                                         valgrind_stash: 'unit-bdev-memcheck'
+                            job_status_update()
+                        }
+                    }
+                } // stage('Unit Test bdev with memcheck')
             }
         }
         stage('Unit Tests') {
@@ -909,10 +1087,10 @@ pipeline {
                     }
                 } // stage('Functional on EL 9')
                 stage('Functional on SLES 15.7') {
-//                     when {
-//                         beforeAgent true
-//                         expression { !skipStage() }
-//                     }
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
                     agent {
                         label vm9_label('Leap15')
                     }
@@ -963,7 +1141,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner_fi'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
@@ -1032,11 +1210,11 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on EL 8.6')
+                } // stage('Test RPMs on EL 9.6')
                 stage('Test RPMs on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP_RPMs && !skipStage() }
+                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
