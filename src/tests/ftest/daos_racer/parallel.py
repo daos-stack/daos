@@ -1,7 +1,6 @@
-#!/usr/bin/python3
 """
 (C) Copyright 2021-2022 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,27 +33,24 @@ class DaosRacerParallelTest(TestWithServers):
         :avocado: tags=io,daos_racer
         :avocado: tags=DaosRacerParallelTest,test_daos_racer_parallel
         """
-        # Create the dmg command
-        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], self.get_dmg_command())
+        # Create the daos_racer command
+        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients, self.get_dmg_command())
         daos_racer.get_params(self)
 
-        # Create the orterun command
+        # Create the mpi command
         job_manager = get_job_manager(self)
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        job_manager.assign_processes(len(self.hostlist_clients))
+        job_manager.assign_processes(ppn=self.params.get('ppn', daos_racer.namespace))
         job_manager.assign_environment(daos_racer.env)
         job_manager.job = daos_racer
-        job_manager.check_results_list = ["<stderr>"]
-        job_manager.timeout = daos_racer.clush_timeout.value
-        self.log.info("Multi-process command: %s", str(job_manager))
+        job_manager.check_results_list = ["<stderr>", "No MPI found"]
+        job_manager.timeout = daos_racer.daos_racer_timeout.value
 
-        # Run the daos_racer command and check for errors
+        self.log_step("Run daos_racer with multiple clients")
         try:
             job_manager.run()
 
         except CommandFailure as error:
-            msg = f"daos_racer failed: {error}"
-            self.log.error(msg)
-            self.fail(msg)
+            self.fail(f"daos_racer failed: {error}")
 
-        self.log.info("Test passed!")
+        self.log_step("Test passed!")
