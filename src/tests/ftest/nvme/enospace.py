@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -740,8 +740,10 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.pool.set_property("reclaim", "disabled")
 
         # Repeat the test in loop.
-        for _loop in range(10):
-            self.log.info("-------enospc_no_aggregation Loop--------- %d", _loop)
+        for _loop in range(1, 11):
+            self.log("-------enospc_no_aggregation Loop--------- %d", _loop)
+            self.log_step(f"[Loop {_loop}] Run IOR to fill the pool")
+            self.pool.query()
             # Fill 75% of SCM pool
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
 
@@ -753,10 +755,11 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 self.start_ior_load(
                     storage='SCM', operation="Auto_Write", percent=40, log_file=log_file)
             except TestFail:
-                self.log.info('Expected to fail because of DER_NOSPACE')
+                self.log.info('[Loop %d] Expected to fail because of DER_NOSPACE', _loop)
             else:
-                self.fail('This test suppose to fail because of DER_NOSPACE'
-                          'but it got Passed')
+                self.pool.query()
+                self.fail(
+                    f'[Loop {_loop}] Writing to pool did not encounter DER_NOSPACE as expected')
 
             # Verify DER_NO_SPACE error count is expected and no other Error in client log.
             self.verify_enospace_log(log_file)
@@ -767,19 +770,22 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             # Wait for the SCM space to be released. (Usage goes below 60%)
             scm_released = False
             pool_usage = None
-            for count in range(6):
+            for count in range(1, 7):
                 time.sleep(10)
                 pool_usage = self.pool.pool_percentage_used()
-                self.log.info("Pool usage at iter %d: %s", count, pool_usage)
+                self.log.info(f"[Loop {_loop}] Pool usage at iter {count}: {pool_usage}")
                 if pool_usage["scm"] < 60:
                     scm_released = True
                     break
 
             # Verify that the SCM usage has gone down below 60%.
             if not scm_released:
-                msg = (f"Pool SCM used percentage should be < 60%. Actual = "
-                       f"{pool_usage['scm']}")
-                self.fail(msg)
+                self.fail(
+                    f"[Loop {_loop}] SCM usage is not below 60% after container destroy: "
+                    f"{pool_usage['scm']}")
 
         # Run last IO
+        self.log_step("Run last IO")
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
+
+        self.log.info("Test passed")
