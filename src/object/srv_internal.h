@@ -26,7 +26,29 @@
 
 extern struct dss_module_key obj_module_key;
 
-struct migr_res_manager;
+/* anchor point of resource waiter
+ * NB: resource control can be a independent library in the future.
+ */
+struct migr_res_waiter {
+	struct migrate_pool_tls *rw_tls;
+	/* link chain on resource manager */
+	d_list_t                 rw_link;
+	/* quantity of resource being demanded */
+	uint64_t                 rw_units;
+	/* start to wait since... */
+	uint64_t                 rw_wait_since;
+	/* eventual to wait on */
+	ABT_eventual             rw_eventual;
+	/* for eventual */
+	int                     *rw_rc;
+};
+
+/* resource handle */
+struct migr_res_handle {
+	int      rh_type;
+	int      rh_bkt;
+	uint64_t rh_units;
+};
 
 /* Per pool attached to the migrate tls(per xstream) */
 struct migrate_pool_tls {
@@ -80,8 +102,6 @@ struct migrate_pool_tls {
 	/* The current in-flight data size */
 	uint64_t                 mpt_inflight_size;
 
-	struct migr_res_manager *mpt_rmg;
-
 	/* reference count for the structure */
 	uint64_t                 mpt_refcount;
 	uint32_t		mpt_opc;
@@ -94,6 +114,11 @@ struct migrate_pool_tls {
 
 	/* migration init error */
 	int			mpt_init_err;
+
+	/* Watchdog: track progress to detect complete rebuild hang */
+	uint64_t                mpt_last_progress_obj_count; /* obj_count at last check */
+	uint64_t                mpt_last_progress_rec_count; /* rec_count at last check */
+	uint64_t                mpt_last_progress_ts;        /* time of last observed progress */
 };
 
 struct migrate_cont_hdl {
