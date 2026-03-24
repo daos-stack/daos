@@ -1110,7 +1110,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 	rc = gc_reclaim_pool(pool, credits, &empty);
 	if (rc) {
 		D_CRIT("gc_reclaim_pool failed " DF_RC "\n", DP_RC(rc));
-		return 0; /* caller can't do anything for it */
+		return rc;
 	}
 	total -= *credits; /* subtract the remained credits */
 
