@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+#
+# Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+# Runs lint and auto-fix for utils/build.config for the DAOS project.
+
+set -ue
+
+_print_githook_header "Build Config"
+
+file="utils/build.config"
+
+# Check if file is changed
+if [ -z "$(_git_diff_cached_files "${file}")" ]; then
+    echo "No changes to ${file}. Skipping"
+    exit 0
+fi
+
+echo "Checking and fixing ${file} for sorting and casing"
+
+# Use python to perform the check and fix
+python3 - <<EOF
+import sys
+import os
+
+def fix_build_config(filename):
+    if not os.path.exists(filename):
+        return
+
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    new_content = []
+    sections = []
+    current_section = None
+
+    # Simple parser to preserve comments and structure but group keys by section
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith(('#', ';')):
+            if current_section:
+                sections[-1]['items'].append(line)
+            else:
+                new_content.append(line)
+            continue
+
+        if stripped.startswith('[') and stripped.endswith(']'):
+            current_section = stripped[1:-1]
+            sections.append({'name': current_section, 'header': line, 'items': []})
+        elif '=' in stripped:
+            if current_section:
+                key, val = line.split('=', 1)
+                sections[-1]['items'].append((key.strip().lower(), val.strip()))
+            else:
+                # Outside section, just preserve
+                new_content.append(line)
+        else:
+            # Unknown line type, preserve
+            if current_section:
+                sections[-1]['items'].append(line)
+            else:
+                new_content.append(line)
+
+    # Process sections
+    for sec in sections:
+        new_content.append(sec['header'])
+
+        # Separate keys from other items (comments/blank lines) to sort them
+        keys_only = [item for item in sec['items'] if isinstance(item, tuple)]
+        others = [item for item in sec['items'] if not isinstance(item, tuple)]
+
+        # If the section is 'component', we usually don't want to sort if there's only one,
+        # but the mandate said "settings for components in each section".
+        if sec['name'] != 'component':
+            keys_only.sort(key=lambda x: x[0])
+
+        # Re-assemble: we'll put keys first then others for simplicity,
+        # or interleave. For build.config, usually it's just keys.
+        for key, val in keys_only:
+            new_content.append(f"{key}={val}\n")
+        for other in others:
+            new_content.append(other)
+
+    with open(filename, 'w') as f:
+        f.writelines(new_content)
+
+if __name__ == "__main__":
+    fix_build_config('${file}')
+EOF
