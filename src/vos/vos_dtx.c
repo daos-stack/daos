@@ -2560,8 +2560,7 @@ dtx_commit_pin(struct vos_container *cont, struct dtx_id dtis[], int count, int 
 		dae = riov.iov_buf;
 		D_ASSERT(dae->dae_preparing == 0);
 
-		if (vos_dae_is_abort(dae) || dae->dae_committed || dae->dae_committing ||
-		    dae->dae_need_release == 0)
+		if (dae->dae_aborted || dae->dae_committed || dae->dae_need_release == 0)
 			continue;
 
 		rc = bkts_add_dae(vos_cont2pool(cont), &bkts, dae);

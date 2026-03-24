@@ -263,7 +263,8 @@ struct vos_cache_metrics {
 	struct d_tm_node_t	*vcm_obj_hit;
 };
 
-void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrcis, const char *path, int tgt_id);
+void
+vos_cache_metrics_init(struct vos_cache_metrics *vc_metrics, const char *path, int tgt_id);
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
@@ -315,9 +316,7 @@ struct vos_pool {
 	/** memory attribute of the @vp_umm */
 	struct umem_attr	vp_uma;
 	/** memory class instance of the pool */
-	struct umem_instance	vp_umm;
-	/** Size of pool file */
-	uint64_t		vp_size;
+	struct umem_instance     vp_umm;
 	/** Features enabled for this pool */
 	uint64_t		vp_feats;
 	/** btr handle for the container table */

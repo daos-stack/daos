@@ -1,5 +1,12 @@
 # SPDX-License-Identifier: BSD-2-Clause-Patent
-# Copyright (c) 2024 Intel Corporation.
+# Copyright 2024 Intel Corporation.
+# Copyright 2026 Hewlett Packard Enterprise Development LP
+
+#
+# Use the following command to run the trivy scan manually
+# trivy fs -c utils/trivy/trivy.yaml .
+# Scan results are written to the trivy-report-daos.txt file.
+#
 
 cache:
   backend: fs

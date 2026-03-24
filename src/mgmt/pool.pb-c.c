@@ -3365,7 +3365,7 @@ const ProtobufCEnumDescriptor mgmt__pool_rebuild_status__state__descriptor =
   mgmt__pool_rebuild_status__state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_rebuild_status__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__pool_rebuild_status__field_descriptors[6] =
 {
   {
     "status",
@@ -3427,8 +3427,21 @@ static const ProtobufCFieldDescriptor mgmt__pool_rebuild_status__field_descripto
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "degraded",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolRebuildStatus, degraded),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_rebuild_status__field_indices_by_name[] = {
+  5,   /* field[5] = degraded */
   4,   /* field[4] = derived_state */
   2,   /* field[2] = objects */
   3,   /* field[3] = records */
@@ -3438,7 +3451,7 @@ static const unsigned mgmt__pool_rebuild_status__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_rebuild_status__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor =
 {
@@ -3448,7 +3461,7 @@ const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor =
   "Mgmt__PoolRebuildStatus",
   "mgmt",
   sizeof(Mgmt__PoolRebuildStatus),
-  5,
+  6,
   mgmt__pool_rebuild_status__field_descriptors,
   mgmt__pool_rebuild_status__field_indices_by_name,
   1,  mgmt__pool_rebuild_status__number_ranges,

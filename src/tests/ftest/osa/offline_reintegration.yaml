@@ -49,7 +49,7 @@ pool:
   svcn: 4
   rebuild_timeout: 240
   pool_query_timeout: 30
-  properties: scrub:timed,scrub_freq:1
+  properties: rd_fac:0,space_rb:0,scrub:timed,scrub_freq:1
 
 container:
   type: POSIX
@@ -58,8 +58,8 @@ container:
   properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
 
 ior:
-  clientslots:
-    slots: 48
+  client_processes:
+    np: 2
   test_file: /testFile
   repetitions: 2
   dfs_destroy: false

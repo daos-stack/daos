@@ -149,7 +149,7 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tg
 			rc = -DER_NONEXIST;
 			goto out;
 		}
-		fd = open(rdb_path, O_RDWR | O_CREAT, 0600);
+		fd = open(rdb_path, O_RDWR | O_CREAT, UMEM_FILE_MODE_DEFAULT);
 		if (fd < 0) {
 			rc = daos_errno2der(errno);
 			D_ERROR("failed to create/open the vos file %s:" DF_RC "\n", rdb_path,
@@ -200,7 +200,7 @@ ds_mgmt_tgt_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id, const cha
 	D_DEBUG(DB_MGMT, DF_UUID ": creating vos file %s (%ld bytes)\n", DP_UUID(uuid), path,
 		scm_size);
 
-	fd = open(path, O_CREAT | O_RDWR, 0600);
+	fd = open(path, O_CREAT | O_RDWR, UMEM_FILE_MODE_DEFAULT);
 	if (fd < 0) {
 		rc = daos_errno2der(errno);
 		D_ERROR(DF_UUID ": failed to create vos file %s: " DF_RC "\n", DP_UUID(uuid), path,

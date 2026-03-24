@@ -15,7 +15,7 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 100MB
+  scm_size: 128MB
   nvme_size: 1GiB
 
 container:

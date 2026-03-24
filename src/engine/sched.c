@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -179,7 +179,7 @@ unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 unsigned int	sched_relax_mode;
 unsigned int	sched_unit_runtime_max = 32; /* ms */
 bool		sched_watchdog_all;
-unsigned int    sched_inactive_max = 40000; /* ms */
+unsigned int    sched_inactive_max = 300000; /* ms, 5 mins */
 bool            sched_monitor_kill = true;
 
 enum {
@@ -2115,6 +2115,7 @@ sched_xs_monitor(struct dss_xstream *cur_dx)
 	struct sched_info     *info, *cur_info;
 	struct sched_hist_seq *hist;
 	unsigned int           gap;
+	char                 **strings = NULL;
 	int                    rc, i, inactive_tgt, inactive_id = -1;
 
 	D_ASSERT(is_monitor_xs(cur_dx));
@@ -2154,6 +2155,7 @@ sched_xs_monitor(struct dss_xstream *cur_dx)
 			inactive_id  = dx->dx_xs_id;
 			inactive_tgt = dx->dx_tgt_id;
 			gap          = cur_info->si_cur_ts - hist->sm_last_ts;
+			strings      = backtrace_symbols(&info->si_ult_func, 1);
 			break;
 		}
 	}
@@ -2161,8 +2163,10 @@ sched_xs_monitor(struct dss_xstream *cur_dx)
 	dss_sched_monitor_exit();
 
 	if (inactive_id >= 0) {
-		D_WARN("SCHED_MONITOR: xs %d (tgt:%d) is inactive for more than %u ms!\n",
-		       inactive_id, inactive_tgt, gap);
+		D_WARN("SCHED_MONITOR: xs %d (tgt:%d) is inactive for more than %u ms! symbol:%s\n",
+		       inactive_id, inactive_tgt, gap, strings != NULL ? strings[0] : NULL);
+		free(strings);
+
 		if (sched_monitor_kill) {
 			D_ERROR("SCHED_MONITOR: Killing engine...\n");
 			rc = kill(getpid(), SIGKILL);
@@ -2262,6 +2266,16 @@ sched_exec_time(uint64_t *msecs, const char *ult_name)
 	return 0;
 }
 
+static inline bool
+sched_monitor_enabled(struct dss_xstream *dx)
+{
+	if (sched_inactive_max == 0)
+		return false;
+
+	/* Monitor SYS & VOS xstreams only */
+	return dx->dx_xs_id == 0 || dx->dx_main_xs;
+}
+
 static void
 sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 {
@@ -2270,10 +2284,12 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	void (*thread_func)(void *);
 	int			 rc;
 
-	if (!watchdog_enabled(dx))
+	if (!watchdog_enabled(dx) && !sched_monitor_enabled(dx))
 		return;
 
-	info->si_ult_start = daos_getmtime_coarse();
+	if (watchdog_enabled(dx))
+		info->si_ult_start = daos_getmtime_coarse();
+
 	rc = ABT_unit_get_thread(unit, &thread);
 	D_ASSERT(rc == ABT_SUCCESS);
 	rc = ABT_thread_get_thread_func(thread, &thread_func);

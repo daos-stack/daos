@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -45,6 +45,7 @@ type Provider struct {
 	scm           ScmProvider
 	bdev          BdevProvider
 	vmdEnabled    bool
+	getTopology   topologyGetter
 }
 
 // DefaultProvider returns a provider populated with default parameters.
@@ -52,8 +53,10 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 	if engineStorage == nil {
 		engineStorage = new(Config)
 	}
-	return NewProvider(log, idx, engineStorage, system.DefaultProvider(),
+	p := NewProvider(log, idx, engineStorage, system.DefaultProvider(),
 		NewScmForwarder(log), NewBdevForwarder(log), NewMetadataForwarder(log))
+	p.getTopology = hwloc.NewProvider(log).GetTopology
+	return p
 }
 
 // FormatControlMetadata formats the storage used for control metadata.
@@ -202,6 +205,15 @@ func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 	return p.Sys.IsMounted(p.engineStorage.ControlMetadata.Path)
 }
 
+// AllowSpdkConfOverride returns true if override of SPDK JSON config file (daos_nvme.conf) has been
+// explicitly enabled within the ControlMetadata section of the server config file.
+func (p *Provider) AllowSpdkConfOverride() bool {
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		return false
+	}
+	return p.engineStorage.ControlMetadata.AllowSpdkConfOverride
+}
+
 // PrepareScm calls into storage SCM provider to attempt to configure PMem devices to be usable by
 // DAOS.
 func (p *Provider) PrepareScm(req ScmPrepareRequest) (*ScmPrepareResponse, error) {
@@ -272,10 +284,14 @@ func (p *Provider) MountScm() error {
 
 	switch cfg.Class {
 	case ClassRam:
+		disableHugepages := true
+		if cfg.Scm.DisableHugepages != nil {
+			disableHugepages = *cfg.Scm.DisableHugepages
+		}
 		req.Ramdisk = &RamdiskParams{
 			Size:             cfg.Scm.RamdiskSize,
 			NUMANode:         cfg.Scm.NumaNodeIndex,
-			DisableHugepages: cfg.Scm.DisableHugepages,
+			DisableHugepages: disableHugepages,
 		}
 	case ClassDcpm:
 		if len(cfg.Scm.DeviceList) != 1 {
@@ -334,10 +350,14 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 
 	switch class {
 	case ClassRam:
+		disableHugepages := true
+		if scmCfg.DisableHugepages != nil {
+			disableHugepages = *scmCfg.DisableHugepages
+		}
 		req.Ramdisk = &RamdiskParams{
 			Size:             scmCfg.RamdiskSize,
 			NUMANode:         scmCfg.NumaNodeIndex,
-			DisableHugepages: scmCfg.DisableHugepages,
+			DisableHugepages: disableHugepages,
 		}
 	case ClassDcpm:
 		if len(scmCfg.DeviceList) != 1 {
@@ -580,6 +600,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		AccelProps:       cfg.AccelProps,
 		SpdkRpcSrvProps:  cfg.SpdkRpcSrvProps,
 		AutoFaultyProps:  cfg.AutoFaultyProps,
+		SpdkIobufProps:   cfg.SpdkIobufProps,
 	}
 
 	for idx, tier := range cfg.Tiers.BdevConfigs() {
@@ -606,10 +627,11 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger, ctrl
 	vmdEnabled := p.vmdEnabled
 	engineIndex := p.engineIndex
 	engineStorage := p.engineStorage
+	getTopology := p.getTopology
 	p.RUnlock()
 
 	req, err := BdevWriteConfigRequestFromConfig(ctx, log, engineStorage,
-		vmdEnabled, hwloc.NewProvider(log).GetTopology)
+		vmdEnabled, getTopology)
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
@@ -718,4 +740,10 @@ func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemP
 		bdev:          bdev,
 		metadata:      meta,
 	}
+}
+
+// setTopologyGetter sets the topology getter function for the provider. This is
+// used in tests to inject a mock topology.
+func (p *Provider) setTopologyGetter(fn topologyGetter) {
+	p.getTopology = fn
 }

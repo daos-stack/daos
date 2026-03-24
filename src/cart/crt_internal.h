@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -153,6 +153,8 @@ void
 crt_hdlr_ctl_get_hostname(crt_rpc_t *rpc_req);
 void
 crt_hdlr_ctl_get_pid(crt_rpc_t *rpc_req);
+void
+crt_hdlr_ctl_dump_counters(crt_rpc_t *rpc_req);
 
 void
 crt_iv_init(crt_init_options_t *ops);

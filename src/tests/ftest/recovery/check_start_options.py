@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -321,7 +321,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         # 6. Remove the pool directory from the mount point.
         self.log_step("Remove the pool directory from the mount point.")
-        pool_path = self.server_managers[0].get_vos_path(pool)
+        pool_path = self.server_managers[0].get_vos_paths(pool)[0]
         pool_out = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_path, sudo=True)
         if not pool_out[0]:
