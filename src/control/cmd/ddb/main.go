@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// Copyright 2022-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -485,16 +485,73 @@ Mixed tree path examples:
 .Sp`
 
 const manLoggingSection = `.SH LOGGING
-The golang cli and the C engine use separate logging systems with different log levels.
+The Go CLI and the C engine use separate logging systems with different log levels.
 The \fI--debug=<log level>\fR option sets the log level for both systems to the closest matching
-levels.  The available log levels supported by this option are: \fBTRACE\fR, \fBDEBUG\fR (or
-\fBDBG\fR), \fBINFO\fR, \fBNOTICE\fR (or \fBNOTE\fR), \fBWARN\fR, \fBERROR\fR (or \fBERR\fR),
-\fBCRIT\fR, \fBALRT\fR, \fBFATAL\fR (or \fBEMRG\fr), and \fBEMIT\fR.  The default log level is
-\fBERROR\fR.
+levels. The available log levels are: \fBTRACE\fR, \fBDEBUG\fR (or \fBDBUG\fR), \fBINFO\fR,
+\fBNOTICE\fR (or \fBNOTE\fR), \fBWARN\fR, \fBERROR\fR (or \fBERR\fR), \fBCRIT\fR, \fBALRT\fR,
+\fBFATAL\fR (or \fBEMRG\fR), and \fBEMIT\fR. The default log level is \fBERROR\fR.
 
-To not pollute the console output, the logs can be redirected to a file using the
-\fI--log_dir=<path>\fR option.  However, \fBERROR\fR log messages or above will still be printed to
-the console regardless if the \fI--log_dir=<path>\fR option is used or not.`
+Logs can be redirected to a file using the \fI--log_dir=<path>\fR option. Note that \fBERROR\fR
+and above are always printed to the console, even when \fI--log_dir\fR is set.`
+
+const manMdOnSsdSection = `.SH MD-ON-SSD MODE
+.SS Overview
+The MD-on-SSD workflow differs from PMEM mode. In PMEM mode, mount points are permanently
+mounted and VOS files are created directly on PMEM devices. In MD-on-SSD mode, VOS files and
+other DAOS metadata reside permanently on NVMe devices and must be recreated on a tmpfs mount
+before ddb commands can operate on them.
+.PP
+The \fBprov_mem\fR command prepares the memory environment for ddb in MD-on-SSD mode. It
+recreates the VOS files on the specified tmpfs mount so that ddb commands can be run against
+them. Any modifications are automatically synced back to the NVMe devices; once finished, the
+tmpfs mount can simply be unmounted to free memory.
+.PP
+.SS Synopsis
+.Vb 1
+\&    prov_mem [flags] db_path tmpfs_mount
+.Ve
+.SS Description
+This command performs the following steps:
+.IP "1." 4
+Verifies the system is running in MD-on-SSD mode.
+.IP "2." 4
+Creates a tmpfs mount at the specified path (if not already mounted).
+.IP "3." 4
+Sets up the necessary directory structure.
+.IP "4." 4
+Recreates VOS pool target files on the tmpfs mount.
+.SS Arguments
+.TP
+.B db_path
+Path to the sys db.
+.TP
+.B tmpfs_mount
+Path to the tmpfs mountpoint.
+.SS Flags
+.TP
+.B \-s, \-\-tmpfs_size uint
+Size of the tmpfs mount in GiB. Defaults to the total size of all VOS files.
+.SS Examples
+Prepare the memory environment with an auto-calculated tmpfs size:
+.Sp
+.Vb 1
+\&    ddb prov_mem /path/to/sys/db /mnt/tmpfs
+.Ve
+.Sp
+Prepare the memory environment with a specific tmpfs size of 16 GiB:
+.Sp
+.Vb 1
+\&    ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
+.Ve
+.SS Notes
+.IP "*" 4
+The \fBtmpfs_mount\fR path must not already be a mount point; otherwise the command will fail
+with a "busy" error.
+.IP "*" 4
+If \fBtmpfs_size\fR is not specified, it is automatically calculated from the total size of
+all VOS files.
+.IP "*" 4
+This command requires the system to be configured for MD-on-SSD mode.`
 
 func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 	fmt.Fprintln(dest, manMacroSection)
@@ -522,6 +579,8 @@ func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 	}
 
 	fmt.Fprintln(dest, manPathSection)
+
+	fmt.Fprintln(dest, manMdOnSsdSection)
 
 	fmt.Fprint(dest, manLoggingSection)
 }
