@@ -539,7 +539,40 @@ pipeline {
                 cancelPreviousBuilds()
             }
         }
-
+        stage('Pre-build') {
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
+            parallel {
+                stage('Python Bandit check') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.code_scanning'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(add_repos: false) +
+                                                ' --build-arg FVERSION=37'
+                        }
+                    }
+                    steps {
+                        job_step_update(pythonBanditCheck())
+                    }
+                    post {
+                        always {
+                            // Bandit will have empty results if it does not
+                            // find any issues.
+                            junit testResults: 'bandit.xml',
+                                  allowEmptyResults: true
+                            job_status_update()
+                        }
+                    }
+                } // stage('Python Bandit check')
+            }
+        }
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
