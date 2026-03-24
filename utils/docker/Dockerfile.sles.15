@@ -1,0 +1,219 @@
+# Copyright 2018-2024 Intel Corporation
+# Copyright 2025 Google LLC
+# Copyright 2025 Hewlett Packard Enterprise Development LP
+# All rights reserved.
+#
+# 'recipe' for Docker to build an image of Leap based
+# environment for building the DAOS project.
+#
+
+# Pull base image
+ARG POINT_RELEASE=
+ARG BASE_DISTRO=registry.suse.com/suse/sle15:15.7
+FROM $BASE_DISTRO AS basic
+LABEL maintainer="daos@daos.groups.io"
+# Needed for later use of BASE_DISTRO
+ARG BASE_DISTRO
+
+# Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
+ARG CB0
+
+ARG REPO_FILE_URL
+ARG JENKINS_URL
+ARG REPOS
+ARG DAOS_LAB_CA_FILE_URL
+
+# Accept DAOS_NO_PROXY at build time
+ARG DAOS_NO_PROXY
+# Propagate into the build environment
+ENV no_proxy=${DAOS_NO_PROXY}
+ENV NO_PROXY=${DAOS_NO_PROXY}
+# Persist into /etc/environment for use by shells and services
+RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
+    echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
+
+
+RUN curl -k https://artifactory-1.daos.hpc.amslabs.hpecorp.net/artifactory/repo-files/HP_ENT_Bundle_CA.pem -o /etc/pki/trust/anchors/HP_ENT_Bundle_CA.pem && \
+    update-ca-certificates
+
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Products/SLE-Module-Development-Tools/15-SP7/x86_64/product/ sle-module-devtools
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Updates/SLE-Module-Development-Tools/15-SP7/x86_64/update/ sle-module-devtools-update
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Products/SLE-Product-SLES/15-SP7/x86_64/product/ sles-product
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Updates/SLE-Product-SLES/15-SP7/x86_64/update/ sles-product-update
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Products/SLE-Module-Basesystem/15-SP7/x86_64/product/ sle-basesystem
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Updates/SLE-Module-Basesystem/15-SP7/x86_64/update/ sle-basesystem-update
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Products/SLE-Module-Server-Applications/15-SP7/x86_64/product/ sle-server-apps
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Updates/SLE-Module-Server-Applications/15-SP7/x86_64/update/ sle-server-apps-update
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Products/SLE-Module-Development-Tools/15-SP7/x86_64/product/ sle-devtools
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Updates/SLE-Module-Development-Tools/15-SP7/x86_64/update/ sle-devtools-update
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Products/SLE-Module-Python3/15-SP7/x86_64/product/ sle-python3
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Updates/SLE-Module-Python3/15-SP7/x86_64/update/ sle-python3-update
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Products/SLE-Module-Packagehub-Subpackages/15-SP7/x86_64/product/ sle-packagehub
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Updates/SLE-Module-Packagehub-Subpackages/15-SP7/x86_64/update/ sle-packagehub-update
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Products/SLE-Module-HPC/15-SP7/x86_64/product/ sle-hpc
+RUN zypper ar https://slemaster.hpc.amslabs.hpecorp.net/repo/SUSE/Updates/SLE-Module-HPC/15-SP7/x86_64/update/ sle-hpc-update
+
+RUN zypper refresh
+
+# script to install OS updates basic tools and daos dependencies
+COPY ./utils/scripts/install-sles15.sh /tmp/install.sh
+RUN chmod +x /tmp/install.sh
+
+
+FROM basic
+
+RUN zypper --non-interactive update
+RUN /tmp/install.sh
+RUN zypper clean
+RUN rm -f /tmp/install.sh
+
+# Add DAOS users
+ARG UID=1000
+COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
+     /tmp/daos-server-user-setup.sh
+RUN set -e;                                    \
+    chmod +x /tmp/daos-server-user-setup.sh && \
+    /tmp/daos-server-user-setup.sh
+RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
+RUN echo "daos_agent:daos_agent" | chpasswd
+
+# Create directory for DAOS backend storage
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
+    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
+    chown daos_agent.daos_agent /var/run/daos_agent
+
+USER daos_server:daos_server
+
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
+COPY requirements-build.txt requirements-utest.txt ./
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+
+# for fpm
+ENV PATH=/opt/ruby-3.3/bin:$PATH
+
+WORKDIR /home/daos/pre
+RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
+COPY --chown=daos_server:daos_server SConstruct .
+COPY --chown=daos_server:daos_server deps deps
+COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
+COPY --chown=daos_server:daos_server site_scons/components site_scons/components
+COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh utils/scripts/copy_files.sh
+COPY --chown=daos_server:daos_server utils/scripts/create_spdk_pkgconfig.sh utils/scripts/create_spdk_pkgconfig.sh
+
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_KEEP_BUILD=no
+ARG DAOS_TARGET_TYPE=release
+ARG DAOS_PACKAGES_BUILD=yes
+
+# Now do an update to ensure software is up to date for the deps build.  If the
+# src hasn't changed then this won't do anything, but if it has then we want to
+# ensure that latest dependencies are used.
+# The dnf upgrade can add or re-enable distro repositories.
+USER root:root
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                             \
+        zypper upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        zypper clean all;                                                                               \
+    }
+USER daos_server:daos_server
+
+ARG DEPS_JOBS=1
+
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
+        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
+              TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
+    }
+
+COPY --chown=daos_server:daos_server utils/rpms utils/rpms
+COPY --chown=daos_server:daos_server utils/sl utils/sl
+
+# Build third party RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
+	export DISTRO="suse.sl157" &&                                           \
+	utils/rpms/build_packages.sh deps &&                                    \
+	mkdir -p /home/daos/rpms &&                                             \
+	mv *.rpm /home/daos/rpms;                                               \
+    }
+USER root:root
+
+# add the daos repos
+RUN rm -f /etc/zypp/services.d/container-suseconnect-zypp.service
+
+# TODO: Remove??
+# RUN curl https://artifactory-1.daos.hpc.amslabs.hpecorp.net/artifactory/repo-files/daos_ci-leap15-artifactory.repo -o /etc/zypp/repos.d/daos_ci-leap15-artifactory.repo
+# RUN sed -i "s/\$releasever/15.6/" /etc/zypp/repos.d/daos_ci-leap15-artifactory.repo
+# RUN zypper mr -d opensuse-15.6-repo-sle-update-proxy-artifactory
+# RUN zypper mr -d opensuse-15.6-repo-backports-update-proxy-artifactory
+RUN zypper mr -d SLE_BCI
+RUN zypper --non-interactive --gpg-auto-import-keys refresh
+
+
+USER daos_server:daos_server
+
+# Set a label.  This is useful for searching for DAOS images, but is also used
+# in github-actions to prune elements of the dockerfile below this point.
+LABEL DAOS=true
+
+WORKDIR /home/daos/daos/
+COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
+COPY --chown=daos_server:daos_server site_scons site_scons
+COPY --chown=daos_server:daos_server src src
+COPY --chown=daos_server:daos_server utils/build.config utils/
+COPY --chown=daos_server:daos_server utils/config utils/config
+COPY --chown=daos_server:daos_server utils/certs utils/certs
+COPY --chown=daos_server:daos_server utils/completion utils/completion
+
+ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+
+# Build DAOS
+RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
+        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=gcc     \
+              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE    \
+	      FIRMWARE_MGMT=1 &&                                           \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
+        go clean -cache &&                                                 \
+        cp -r utils/config/examples /opt/daos;                             \
+    }
+
+COPY --chown=daos_server:daos_server utils utils
+
+# Build DAOS RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
+	export DISTRO="suse.sl157" &&                                      \
+	utils/rpms/build_packages.sh daos &&                               \
+	mkdir -p /home/daos/rpms &&                                        \
+	cp *.rpm /home/daos/rpms;                                          \
+    }
+
+# Set environment variables
+ENV PATH=/opt/daos/bin:$PATH
+ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+# Build java and hadoop bindings
+WORKDIR /home/daos/daos/src/client/java
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
+        mkdir /home/daos/.m2 &&                                                               \
+        cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+        mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;      \
+    }
+WORKDIR /home/daos
+
+
+ARG DAOS_KEEP_SRC=no
+# Remove local copy
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre
