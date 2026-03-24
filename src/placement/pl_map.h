@@ -140,6 +140,35 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		struct pl_obj_layout *layout, d_list_t *remap_list,
 		bool fill_addition);
 
+static inline void
+target_set_rebuild_shard(struct pool_target *target, struct pl_obj_shard *shard)
+{
+	if (pool_target_is_down(target)) {
+		/* if the current spare target is being rebuilt */
+		shard->po_rebuilding = 1;
+
+	} else if (pool_target_is_up(target)) {
+		/* if the current spare target is being reintegrated */
+		shard->po_rebuilding    = 1;
+		shard->po_reintegrating = 1;
+	}
+}
+
+static inline void
+target_has_rebuild_peer(struct pool_target *tgt, int gen_mode, bool *peer)
+{
+	/* should write to extra peer shard before completion of drain/reintegration */
+	D_ASSERT(gen_mode != CURRENT || peer != NULL);
+	if (gen_mode != CURRENT)
+		return;
+
+	if (pool_target_is_drain(tgt))
+		*peer = true;
+
+	if (pool_target_is_up(tgt) && !pool_target_is_down2up(tgt))
+		*peer = true;
+}
+
 int
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
 		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,

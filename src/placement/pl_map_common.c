@@ -394,18 +394,10 @@ next_fail:
 
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
 		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
-			/* if any target on the remapping path is being rebuilt */
+			/* target on the remapping path is being rebuilt */
 			l_shard->po_rebuilding = 1;
-
-		} else if (pool_target_is_down(spare_tgt)) {
-			/* if the current spare target is being rebuilt */
-			l_shard->po_rebuilding = 1;
-
-		} else if (pool_target_is_up(spare_tgt)) {
-			/* if the current spare target is being reintegrated */
-			l_shard->po_rebuilding    = 1;
-			l_shard->po_reintegrating = 1;
 		}
+		target_set_rebuild_shard(spare_tgt, l_shard);
 	} else {
 		l_shard->po_shard = -1;
 		l_shard->po_target = -1;

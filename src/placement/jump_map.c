@@ -162,62 +162,49 @@ jm_obj_shard_pd(struct jm_obj_placement *jmop, uint32_t shard)
  *
  * \param[in]	jmap		A pointer to the jump map used to retrieve a
  *				reference to the pool map target.
- * \param[in]	original	The original layout calculated not including any
+ * \param[in]	old_lo		The original layout calculated not including any
  *				recent pool map changes, like reintegration.
- * \param[in]	new		The new layout that contains changes in layout
+ * \param[in]	new_lo		The new layout that contains changes in layout
  *				that occurred due to pool status changes.
  * \param[in]	rebuilding	diff calls to extract the rebuilding shards for scanner.
  * \param[out]	diff		The d_list that contains the differences that
  *				were calculated.
  */
-static inline void
-layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
-		 struct pl_obj_layout *new, d_list_t *diff, bool rebuilding)
+static inline int
+layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *old_lo,
+		 struct pl_obj_layout *new_lo, d_list_t *diff, bool rebuilding)
 {
 	int index;
+	int rc;
 
 	/* We assume they are the same size */
-	D_ASSERT(original->ol_nr == new->ol_nr);
+	D_ASSERT(old_lo->ol_nr == new_lo->ol_nr);
 
-	for (index = 0; index < original->ol_nr; ++index) {
-		uint32_t original_target = original->ol_shards[index].po_target;
-		uint32_t reint_tgt = new->ol_shards[index].po_target;
-		struct pool_target *temp_tgt;
+	for (index = 0; index < old_lo->ol_nr; ++index) {
+		uint32_t            old_tgt = old_lo->ol_shards[index].po_target;
+		uint32_t            new_tgt = new_lo->ol_shards[index].po_target;
+		bool                remap   = false;
+		struct pool_target *new_pot;
 
-		/* For reintegration, rebuilding shards should be added to the
-		 * reintegrated shards, since "DOWN" shard is being considered
-		 * during layout recalculation.
-		 */
+		if (new_tgt != old_tgt)
+			remap = true; /* migrate to a new target */
+		else if (rebuilding && old_lo->ol_shards[index].po_rebuilding)
+			remap = true; /* reintegration for down2up */
 
-		pool_map_find_target(jmap->jmp_map.pl_poolmap, original_target,
-				     &temp_tgt);
+		if (remap) {
+			rc = pool_map_find_target(jmap->jmp_map.pl_poolmap, new_tgt, &new_pot);
+			D_ASSERT(rc == 1);
 
-		/* Note: the delay rebuild targets(DOWN2UP target) should be
-		 * chosen to be rebuilt as well.
-		 */
-		if (reint_tgt != original_target ||
-		    (rebuilding && original->ol_shards[index].po_rebuilding)) {
-			pool_map_find_target(jmap->jmp_map.pl_poolmap, reint_tgt, &temp_tgt);
-			if (pool_target_avail(temp_tgt, PO_COMP_ST_UPIN | PO_COMP_ST_UP |
-					      PO_COMP_ST_DRAIN))
-				remap_alloc_one(diff, index, temp_tgt, true, NULL);
-			else
-				/* XXX: This isn't desirable - but it can happen
-				 * when a reintegration is happening when
-				 * something else fails. Placement will do a
-				 * pass to determine what failed (good), and
-				 * then do another pass to figure out where
-				 * things moved to. But that 2nd pass will
-				 * re-find failed things, and this diff function
-				 * will cause the failed targets to be re-added
-				 * to the layout as rebuilding. This should be
-				 * removed when placement is able to handle
-				 * this situation better
-				 */
-				D_DEBUG(DB_PL, "skip remap %d to unavail tgt %u\n", index,
-					reint_tgt);
+			if (pool_target_avail(new_pot,
+					      PO_COMP_ST_UPIN | PO_COMP_ST_UP | PO_COMP_ST_DRAIN)) {
+				rc = remap_alloc_one(diff, index, new_pot, true, NULL);
+				if (rc)
+					return rc;
+			}
+			/* else: it's a failure will be handled by later rebuild, just ignore it */
 		}
 	}
+	return 0;
 }
 
 /**
@@ -353,21 +340,6 @@ struct dom_grp_used {
 	uint8_t		*dgu_real;
 	d_list_t	dgu_list;
 };
-
-static inline void
-target_has_rebuild_peer(struct pool_target *tgt, int gen_mode, bool *peer)
-{
-	/* should write to extra peer shard before completion of drain/reintegration */
-	D_ASSERT(gen_mode != CURRENT || peer != NULL);
-	if (gen_mode != CURRENT)
-		return;
-
-	if (pool_target_is_drain(tgt))
-		*peer = true;
-
-	if (pool_target_is_up(tgt) && !pool_target_is_down2up(tgt))
-		*peer = true;
-}
 
 /**
  * Try to remap all the failed shards in the @remap_list to proper
@@ -738,16 +710,9 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 				if (rc)
 					D_GOTO(out, rc);
 			} else {
+				target_set_rebuild_shard(target, &layout->ol_shards[k]);
 				if (domain != NULL)
 					setbit(dom_cur_grp_real, domain - root);
-
-				if (pool_target_is_down(target)) {
-					layout->ol_shards[k].po_rebuilding = 1;
-
-				} else if (pool_target_is_up(target)) {
-					layout->ol_shards[k].po_rebuilding    = 1;
-					layout->ol_shards[k].po_reintegrating = 1;
-				}
 			}
 			target_has_rebuild_peer(target, gen_mode, is_extending);
 		}
@@ -975,7 +940,10 @@ jump_map_obj_extend_layout(struct pl_jump_map *jmap, struct jm_obj_placement *jm
 
 	obj_layout_dump(md->omd_id, new_layout);
 
-	layout_find_diff(jmap, layout, new_layout, &extend_list, false);
+	rc = layout_find_diff(jmap, layout, new_layout, &extend_list, false);
+	if (rc)
+		D_GOTO(out, rc);
+
 	if (!d_list_empty(&extend_list)) {
 		rc = pl_map_extend(layout, &extend_list);
 		if (rc != 0) {
@@ -1151,7 +1119,9 @@ jump_map_obj_find_diff(struct pl_map *map, uint32_t layout_ver, struct daos_obj_
 		D_GOTO(out, rc);
 
 	obj_layout_dump(md->omd_id, reint_layout);
-	layout_find_diff(jmap, layout, reint_layout, &reint_list, true);
+	rc = layout_find_diff(jmap, layout, reint_layout, &reint_list, true);
+	if (rc)
+		D_GOTO(out, rc);
 
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
 			     array_size, &idx, reint_layout, &reint_list, false);
