@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2025 Google LLC
+#  Copyright 2025-2026 Google LLC
 #  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -42,7 +42,7 @@ export daos_release
 
 export libfabric_min_version="1.20"
 export libfabric_version="1.22.0"
-export libfabric_release="5${distro_name}"
+export libfabric_release="6${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.1"
 export mercury_release="2${distro_name}"

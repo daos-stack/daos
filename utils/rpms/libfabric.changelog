@@ -1,4 +1,7 @@
 %changelog
+* Tue Mar 24 2026 Jeff Olivier <jeffolivier@google.com> - 1-22.0-6
+- Fix gcc 15 build
+
 * Wed Nov 19 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 1-22.0-5
 - Restore the RPM changelog, which has not been available since version 1.22.0-2
 
