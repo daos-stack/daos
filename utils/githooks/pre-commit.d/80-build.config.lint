@@ -67,24 +67,23 @@ def fix_build_config(filename):
     for sec in sections:
         new_content.append(sec['header'])
 
-        # Separate keys from other items (comments/blank lines) to sort them
         keys_only = [item for item in sec['items'] if isinstance(item, tuple)]
         others = [item for item in sec['items'] if not isinstance(item, tuple)]
 
-        # If the section is 'component', we usually don't want to sort if there's only one,
-        # but the mandate said "settings for components in each section".
         if sec['name'] != 'component':
             keys_only.sort(key=lambda x: x[0])
 
-        # Re-assemble: we'll put keys first then others for simplicity,
-        # or interleave. For build.config, usually it's just keys.
         for key, val in keys_only:
             new_content.append(f"{key}={val}\n")
         for other in others:
             new_content.append(other)
 
-    with open(filename, 'w') as f:
-        f.writelines(new_content)
+    if lines != new_content:
+        with open(filename, 'w') as f:
+            f.writelines(new_content)
+        print(f"  ERROR: {filename} was not correctly formatted. Auto-fixes applied.", file=sys.stderr)
+        print(f"  Please review with 'git diff {filename}' and re-stage the changes.", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     fix_build_config('${file}')
