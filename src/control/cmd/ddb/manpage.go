@@ -1,5 +1,5 @@
 //
-// Copyright 2025 Hewlett Packard Enterprise Development LP
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,23 +75,23 @@ To make it easier to navigate the tree, indexes can be used instead of the path 
 in the format [i]. Indexes and actual path values can be used together.
 .SS Path Examples
 VOS tree path examples:
-.Sp
-.Vb 1
-\&        /3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
-.Ve
-.Sp
+.sp
+.EX
+    /3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0\-1023]
+.EE
+.sp
 Index tree path examples:
-.Sp
-.Vb 1
-\&        [0]/[1]/[2]/[1]/[9]
-.Ve
-.Sp
+.sp
+.EX
+    [0]/[1]/[2]/[1]/[9]
+.EE
+.sp
 Mixed tree path examples:
-.Sp
-.Vb 1
-\&        /[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
-.Ve
-.Sp`
+.sp
+.EX
+    /[0]/939000573846355970.0.13.1/[2]/akey{5}/[0\-1023]
+.EE
+.sp`
 
 const manLoggingSection = `.SH LOGGING
 The Go CLI and the C engine use separate logging systems with different log levels.
@@ -142,16 +142,17 @@ Path to the tmpfs mountpoint.
 Size of the tmpfs mount in GiB. Defaults to the total size of all VOS files.
 .SS Examples
 Prepare the memory environment with an auto-calculated tmpfs size:
-.Sp
-.Vb 1
-\&    ddb prov_mem /path/to/sys/db /mnt/tmpfs
-.Ve
-.Sp
+.sp
+.EX
+    ddb prov_mem /path/to/sys/db /mnt/tmpfs
+.EE
+.sp
 Prepare the memory environment with a specific tmpfs size of 16 GiB:
-.Sp
-.Vb 1
-\&    ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
-.Ve
+.sp
+.EX
+    ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
+.EE
+.sp
 .SS Notes
 .IP "*" 4
 The \fBtmpfs_mount\fR path must not already be a mount point; otherwise the command will fail
