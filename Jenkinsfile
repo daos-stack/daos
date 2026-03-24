@@ -633,7 +633,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15') {
+                stage('Build on SLES 15') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('leap15') }
@@ -663,7 +663,7 @@ pipeline {
                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp157 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh suse.sl157 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {

@@ -9,7 +9,6 @@
 
 # Pull base image
 ARG POINT_RELEASE=
-# ARG BASE_DISTRO=registry.suse.com/suse/sle15
 ARG BASE_DISTRO=registry.suse.com/suse/sle15:15.7
 FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
@@ -61,17 +60,7 @@ COPY ./utils/scripts/install-sles15.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh
 
 
-# RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-#     /tmp/repo-helper.sh &&                          \
-#    rm -f /tmp/repo-helper.sh
-
 FROM basic
-# Install OS updates and package.  Include basic tools and daos dependencies
-# Install OS updates and package.  Include basic tools and daos dependencies
-# The unset commands are currently needed for the combination of running
-# with a local repository, yet needing a proxy to reach outside repositories.
-# This needs to be moved to a shell script like above in the future to
-# properly only remove the proxy variables only when they need to be removed
 
 RUN zypper --non-interactive update
 RUN /tmp/install.sh
@@ -98,14 +87,15 @@ USER daos_server:daos_server
 # Setup a python venv so that python packages can be installed locally.
 RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
-# for fpm
-ENV PATH=/opt/ruby-3.3/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 COPY requirements-build.txt requirements-utest.txt ./
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+
+# for fpm
+ENV PATH=/opt/ruby-3.3/bin:$PATH
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
@@ -156,24 +146,14 @@ RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { 
     }
 USER root:root
 
-# select compiler to use
-# Load the COMPILER arg early, and optionally install the Intel compiler
-# Do this before the CB1 to make best use of cache as this is a big
-# download, and make it optional on the value of COMPILER for the same
-# reason.  Tell zypper to only consider the oneAPI repo here using the
-# discouraged --repo flag, however this prevents an update of the entire
-# upstream package list which would be immediately discarded, then reloaded
-# below in the general update section.  Only install the compilers at
-# ~900Mb rather than the entire stack at ~3Gb download.
-ARG COMPILER=gcc
-
 # add the daos repos
 RUN rm -f /etc/zypp/services.d/container-suseconnect-zypp.service
 
-RUN curl https://artifactory-1.daos.hpc.amslabs.hpecorp.net/artifactory/repo-files/daos_ci-leap15-artifactory.repo -o /etc/zypp/repos.d/daos_ci-leap15-artifactory.repo
-RUN sed -i "s/\$releasever/15.6/" /etc/zypp/repos.d/daos_ci-leap15-artifactory.repo
-RUN zypper mr -d opensuse-15.6-repo-sle-update-proxy-artifactory
-RUN zypper mr -d opensuse-15.6-repo-backports-update-proxy-artifactory
+# TODO: Remove??
+# RUN curl https://artifactory-1.daos.hpc.amslabs.hpecorp.net/artifactory/repo-files/daos_ci-leap15-artifactory.repo -o /etc/zypp/repos.d/daos_ci-leap15-artifactory.repo
+# RUN sed -i "s/\$releasever/15.6/" /etc/zypp/repos.d/daos_ci-leap15-artifactory.repo
+# RUN zypper mr -d opensuse-15.6-repo-sle-update-proxy-artifactory
+# RUN zypper mr -d opensuse-15.6-repo-backports-update-proxy-artifactory
 RUN zypper mr -d SLE_BCI
 RUN zypper --non-interactive --gpg-auto-import-keys refresh
 
@@ -199,7 +179,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
-        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
+        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=gcc     \
               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE    \
 	      FIRMWARE_MGMT=1 &&                                           \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
