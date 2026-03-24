@@ -9,6 +9,8 @@
 #include <daos/pool_map.h>
 #include "rpc.h"
 
+/* Only for test. */
+
 #define DF_MAP                 DF_UUID ": map=%p"
 #define DP_MAP(pool_uuid, map) DP_UUID(pool_uuid), map
 
