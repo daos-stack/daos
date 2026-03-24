@@ -374,14 +374,14 @@ jobs:
       - name: Publish artifacts
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
@@ -642,14 +642,14 @@ jobs:
       - name: Publish artifacts
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
