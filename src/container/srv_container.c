@@ -1578,6 +1578,43 @@ out:
 static void
 cont_track_eph_leader_delete(struct cont_svc *svc, uuid_t cont_uuid);
 
+/* Delete the entry in the container UUIDs KVS (if added during create). */
+static int
+cont_delete_label(struct rdb_tx *tx, struct cont *cont, const char *label, uuid_t pool_uuid,
+		  uuid_t cont_uuid)
+{
+	d_iov_t key;
+	d_iov_t val;
+	int     rc;
+
+	d_iov_set(&key, (char *)label, strnlen(label, DAOS_PROP_MAX_LABEL_BUF_LEN));
+	d_iov_set(&val, NULL, 0);
+	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
+	if (rc == -DER_NONEXIST)
+		return 0;
+	else if (rc != 0)
+		return rc;
+
+	/* Ensure the label is indeed ours. */
+	if (val.iov_len != sizeof(uuid_t)) {
+		D_ERROR(DF_CONT ": invalid UUID value: label=%s len=%zu\n",
+			DP_CONT(pool_uuid, cont_uuid), label, val.iov_len);
+		return -DER_IO;
+	}
+	if (uuid_compare(val.iov_buf, cont_uuid) != 0) {
+		D_DEBUG(DB_MD, DF_CONT ": not our label: label=%s uuid=" DF_UUID "\n",
+			DP_CONT(pool_uuid, cont_uuid), label, DP_UUID(val.iov_buf));
+		return 0;
+	}
+
+	rc = rdb_tx_delete(tx, &cont->c_svc->cs_uuids, &key);
+	if (rc != 0)
+		return rc;
+
+	D_DEBUG(DB_MD, DF_CONT ": deleted label: %s\n", DP_CONT(pool_uuid, cont_uuid), label);
+	return 0;
+}
+
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc,
 	     int cont_proto_ver)
@@ -1589,6 +1626,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct d_ownership		owner;
 	uint32_t                        force;
 	struct daos_acl                *acl;
+	struct daos_prop_entry         *lbl_ent;
 
 	cont_destroy_in_get_data(rpc, opc_get(rpc->cr_opc), cont_proto_ver, &force, NULL);
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
@@ -1647,6 +1685,15 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out_prop;
 
+	/* Delete the label (if any) in the container UUIDs KVS. */
+	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
+	if (lbl_ent != NULL) {
+		rc = cont_delete_label(tx, cont, lbl_ent->dpe_str, pool_hdl->sph_pool->sp_uuid,
+				       cont->c_uuid);
+		if (rc != 0)
+			goto out_prop;
+	}
+
 	container_flags |= CONTAINER_F_DESTROYING;
 	d_iov_set(&val, &container_flags, sizeof(container_flags));
 	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
@@ -1658,16 +1705,19 @@ out:
 }
 
 static int
+cont_lookup_internal(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
+		     bool include_destroying, struct cont **cont);
+
+static int
 cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uuid, crt_rpc_t *rpc,
 		  int cont_proto_ver)
 {
 	struct rdb_tx           tx;
 	struct cont            *cont;
-	d_iov_t                 key;
-	d_iov_t                 val;
-	int                     rc;
 	daos_prop_t            *prop = NULL;
 	struct daos_prop_entry *lbl_ent;
+	d_iov_t                 key;
+	int                     rc;
 	bool                    need_destroy_oid_oit_kvs = false;
 
 	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_POST)) {
@@ -1684,7 +1734,7 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 		goto out;
 	ABT_rwlock_wrlock(svc->cs_lock);
 
-	rc = cont_lookup(&tx, svc, uuid, &cont);
+	rc = cont_lookup_internal(&tx, svc, uuid, true /* include_destroying */, &cont);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			/*
@@ -1739,37 +1789,30 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 	if (rc != 0)
 		goto out_cont;
 
-	/* Delete entry in container UUIDs KVS (if added during create) */
+	/*
+	 * Previous versions do not delete the label in cont_destroy. On the
+	 * other hand, if the label _has_ been deleted in cont_destroy, and
+	 * reused by a different container, the cont_delete_label call will
+	 * detect that by checking the container UUID, and keep the label
+	 * intact.
+	 */
 	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop, true);
 	if (rc != 0)
 		goto out_cont;
 	D_ASSERT(prop != NULL);
 	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
 	if (lbl_ent) {
-		d_iov_set(&key, lbl_ent->dpe_str,
-			  strnlen(lbl_ent->dpe_str, DAOS_PROP_MAX_LABEL_BUF_LEN));
-		d_iov_set(&val, NULL, 0);
-		rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_uuids, &key, &val);
-		if (rc != -DER_NONEXIST) {
-			if (rc == 0) {
-				rc = rdb_tx_delete(&tx, &cont->c_svc->cs_uuids, &key);
-				if (rc != 0)
-					goto out_prop;
-				D_DEBUG(DB_MD, DF_CONT": deleted label: %s\n",
-					DP_CONT(pool_hdl->sph_pool->sp_uuid,
-						cont->c_uuid),
-						lbl_ent->dpe_str);
-			} else {
-				goto out_prop;
-			}
-		}
+		rc = cont_delete_label(&tx, cont, lbl_ent->dpe_str, pool_hdl->sph_pool->sp_uuid,
+				       cont->c_uuid);
+		if (rc != 0)
+			goto out_prop;
 	}
 
 	/* Destroy the container attribute KVS. */
 	d_iov_set(&key, cont->c_uuid, sizeof(uuid_t));
 	rc = rdb_tx_destroy_kvs(&tx, &cont->c_svc->cs_conts, &key);
 	if (rc != 0)
-		goto out_prop;
+		goto out_cont;
 
 	rc = rdb_tx_commit(&tx);
 
@@ -2402,7 +2445,6 @@ cont_lookup_internal(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t
 
 	d_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 	d_iov_set(&tmp, NULL, 0);
-	/* check if the container exists or not */
 	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &tmp);
 	if (rc != 0)
 		D_GOTO(err, rc);
@@ -2499,7 +2541,7 @@ err:
 int
 cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 {
-	return cont_lookup_internal(tx, svc, uuid, true /* include_destroying */, cont);
+	return cont_lookup_internal(tx, svc, uuid, false /* include_destroying */, cont);
 }
 
 static int
@@ -4602,7 +4644,8 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	(void)val;
 
 	if (key->iov_len != sizeof(uuid_t)) {
-		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
+		D_ERROR(DF_UUID ": invalid key size: key=" DF_U64 "\n", DP_UUID(ap->pool_uuid),
+			key->iov_len);
 		return -DER_IO;
 	}
 
@@ -4906,9 +4949,11 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	/* Lookup container, see if it matches filter specification before adding to ap->conts[] */
 	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
-			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+	if (rc == -DER_NONEXIST) {
+		/* Continue iterating. */
+		return 0;
+	} else if (rc != 0) {
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(ap->pool_uuid, cont_uuid));
 		return rc;
 	}
 
@@ -4937,7 +4982,6 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 
 	pcinfo = &ap->conts[ap->ncont];
-	ap->ncont++;
 	uuid_copy(pcinfo->pci_id.pci_uuid, cont_uuid);
 
 	/* TODO: Specify client cont_proto_version. This is invoked from a pool client RPC */
@@ -4953,6 +4997,7 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_prop_read() failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		memset(&pcinfo->pci_cinfo, 0, sizeof(pcinfo->pci_cinfo));
 		goto out_cont;
 	}
 
@@ -4962,6 +5007,8 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			DAOS_PROP_LABEL_MAX_LEN);
 		pcinfo->pci_id.pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 	}
+
+	ap->ncont++;
 
 	daos_prop_free(prop);
 
@@ -5079,8 +5126,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
-			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(ap->pool_uuid, cont_uuid));
 		return rc;
 	}
 
@@ -5414,8 +5460,7 @@ ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx)
 
 	rc = cont_lookup(tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
-			DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out, rc);
 	}
 
@@ -5718,8 +5763,7 @@ ds_cont_prop_iv_update(struct cont_svc *svc, uuid_t cont_uuid)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -5876,7 +5920,8 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	case CONT_OPEN_BYLABEL:
 		cont_op_in_get_label(rpc, opc, cont_proto_ver, &clbl);
 		olbl_out = crt_reply_get(rpc);
-		rc       = cont_lookup_bylabel(&tx, svc, clbl, &cont);
+		/* FIXME: We should avoid looking up the container UUID if dup_op. */
+		rc = cont_lookup_bylabel(&tx, svc, clbl, &cont);
 		if (rc != 0)
 			goto out_commit;
 		/* NB: call common cont_op_with_cont() same as CONT_OPEN case */
@@ -6353,8 +6398,8 @@ ds_cont_set_prop_srv_handler(crt_rpc_t *rpc)
 	else /* CONT_PROP_SET_BYLABEL */
 		rc = cont_lookup_bylabel(&tx, svc, cont_label, &cont);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to look up container '%s'", DP_UUID(pool_uuid),
-			 cont_id);
+		DL_INFO(rc, DF_UUID ": failed to look up container '%s'", DP_UUID(pool_uuid),
+			cont_id);
 		D_GOTO(out_lock, rc);
 	}
 
@@ -6410,7 +6455,7 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
