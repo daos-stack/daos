@@ -1,5 +1,5 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
+# Copyright 2025-2026 Google LLC
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
@@ -15,6 +15,7 @@ LICENSE="BSD"
 ARCH=${isa}
 DESCRIPTION="DAOS version of libfuse"
 URL="https://github.com/daos-stack/fused.git"
+RPM_CHANGELOG="fused.changelog"
 
 files=()
 TARGET_PATH="${includedir}/fused"
