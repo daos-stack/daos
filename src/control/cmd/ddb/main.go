@@ -78,7 +78,13 @@ the '-w' option must be included.
 
 If the command requires it, the VOS file must be provided with the parameter 
 --vos-path. The VOS file will be opened before any commands are executed. See
-the command‑specific help for details.`
+the command‑specific help for details.
+
+A DAOS file system can operate in different modes depending on the available hardware resources.
+The two primary modes are MD-on-SSD and PMEM. In MD-on-SSD mode (the default), metadata is stored
+on NVMe devices, which requires additional preliminary steps before using ddb. See the MD-on-SSD
+MODE section of the manpage for details.
+`
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
 
