@@ -2420,7 +2420,8 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 		D_ASSERT(rc == 1);
 
 		/* The target that (re-)joined the system after DTX cannot be the leader. */
-		if ((*p_tgt)->ta_comp.co_in_ver <= version)
+		if ((*p_tgt)->ta_comp.co_status == PO_COMP_ST_UPIN &&
+		    (*p_tgt)->ta_comp.co_in_ver <= version)
 			D_GOTO(out, rc = 0);
 	}
 

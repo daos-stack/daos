@@ -19,7 +19,7 @@ update_tgt_up_to_upin(uuid_t pool_uuid, struct pool_map *map, struct pool_target
 	D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to UPIN\n", DP_MAP(pool_uuid, map),
 		DP_TARGET(target));
 	target->ta_comp.co_flags = 0;
-	target->ta_comp.co_in_ver = ++(*version);
+	++(*version);
 	target->ta_comp.co_status = PO_COMP_ST_UPIN;
 	if (print_changes)
 		D_PRINT(DF_MAP ": " DF_TARGET " is reintegrated.\n", DP_MAP(pool_uuid, map),

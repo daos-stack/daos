@@ -1938,7 +1938,6 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 					child->do_comp.co_rank, child->do_comp.co_id,
 					child->do_comp.co_status, status);
 				child->do_comp.co_status = status;
-				child->do_comp.co_in_ver = version;
 				*updated = true;
 			}
 			break;
