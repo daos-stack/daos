@@ -54,3 +54,33 @@ updates:
       - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
+
+  - package-ecosystem: gomod
+    target-branch: master
+    directory: /src/control
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+
+  - package-ecosystem: gomod
+    target-branch: release/2.6
+    directory: /src/control
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+
+  - package-ecosystem: gomod
+    target-branch: release/2.6.4-aurora
+    directory: /src/control
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
