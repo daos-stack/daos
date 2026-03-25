@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +8,7 @@ from functools import partial
 
 from apricot import TestWithServers
 from data_utils import assert_val_in_list
+from exception_utils import CommandFailure
 from ior_utils import get_ior
 from job_manager_utils import get_job_manager
 
@@ -74,10 +75,6 @@ class RbldInteractive(TestWithServers):
                 - 'dmg pool reintegrate'
                 - 'dmg system reintegrate'
         """
-        # Time to wait between rebuild start and manual stop.
-        # If we stop too early rebuild might not have started yet.
-        # Ideally, if we could poll the "actual" rebuild status this would not be necessary.
-        secs_between_rebuild_start_and_manual_stop = 4
 
         ior_flags_read = self.params.get('flags_read', '/run/ior/*')
         ior_ppn = self.params.get('ppn', '/run/ior/*')
@@ -100,8 +97,15 @@ class RbldInteractive(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{exclude_method} - Manually stop rebuild')
-        time.sleep(secs_between_rebuild_start_and_manual_stop)
-        pool.rebuild_stop()
+        for i in range(3):
+            try:
+                pool.rebuild_stop()
+                break
+            except CommandFailure as error:
+                if i == 2 or 'DER_NONEXIST' not in str(error):
+                    raise
+                self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
+                time.sleep(3)
 
         self.log_step(f'{exclude_method} - Wait for rebuild to stop')
         pool.wait_for_rebuild_to_stop(interval=3)
@@ -145,8 +149,15 @@ class RbldInteractive(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{reint_method} - Manually stop rebuild')
-        time.sleep(secs_between_rebuild_start_and_manual_stop)
-        pool.rebuild_stop()
+        for i in range(3):
+            try:
+                pool.rebuild_stop()
+                break
+            except CommandFailure as error:
+                if i == 2 or 'DER_NONEXIST' not in str(error):
+                    raise
+                self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
+                time.sleep(3)
 
         self.log_step(f'{reint_method} - Wait for rebuild to stop')
         pool.wait_for_rebuild_to_stop(interval=3)

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -150,11 +150,30 @@ type ctlAddrParams struct {
 	port           int
 	replicaAddrSrc replicaAddrGetter
 	lookupHost     ipLookupFn
+	ctlIface       netInterface // optional: if set, use this interface for bind address
 }
 
 func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
-	ipStr := "0.0.0.0"
+	// If a control interface is configured, use its first IPv4 address.
+	if params.ctlIface != nil {
+		ip, err := getFirstIPv4Addr(params.ctlIface)
+		if err != nil {
+			return nil, errors.Wrap(err, "getting control interface address")
+		}
 
+		// If this node is a replica, verify the control interface address matches
+		// the configured replica address. A mismatch would break raft connectivity.
+		if repAddr, err := params.replicaAddrSrc.ReplicaAddr(); err == nil {
+			if !repAddr.IP.Equal(ip) {
+				return nil, config.FaultConfigControlInterfaceMismatch(ip.String(), repAddr.IP.String())
+			}
+		}
+
+		return &net.TCPAddr{IP: ip, Port: params.port}, nil
+	}
+
+	// Fall back to legacy behavior: use replica address if available, otherwise 0.0.0.0.
+	ipStr := "0.0.0.0"
 	if repAddr, err := params.replicaAddrSrc.ReplicaAddr(); err == nil {
 		ipStr = repAddr.IP.String()
 	}
@@ -167,11 +186,17 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 	return ctlAddr, nil
 }
 
-func createListener(ctlAddr *net.TCPAddr, listen netListenFn) (net.Listener, error) {
+func createListener(ctlAddr *net.TCPAddr, listen netListenFn, bindToCtlAddr bool) (net.Listener, error) {
 	// Create and start listener on management network.
-	lis, err := listen("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
+	// Only bind to ctlAddr.IP if explicitly requested (i.e., control_iface is set),
+	// otherwise bind to all interfaces (0.0.0.0) for backwards compatibility.
+	bindAddr := fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port)
+	if bindToCtlAddr {
+		bindAddr = ctlAddr.String()
+	}
+	lis, err := listen("tcp4", bindAddr)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to listen on management interface")
+		return nil, errors.Wrapf(err, "unable to listen on %s", bindAddr)
 	}
 
 	return lis, nil
@@ -730,9 +755,12 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 		return
 	}
 
+	// Use the same bind address as the control plane listener.
+	bindAddr := srv.ctlAddr.IP.String()
+
 	srv.OnEnginesStarted(func(ctxIn context.Context) error {
 		srv.log.Debug("starting Prometheus exporter")
-		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, bindAddr, srv.harness.Instances())
 		if err != nil {
 			return err
 		}
@@ -873,6 +901,35 @@ func getGrpcOpts(log logging.Logger, cfgTransport *security.TransportConfig, ldr
 
 type netInterface interface {
 	Addrs() ([]net.Addr, error)
+}
+
+// getFirstIPv4Addr returns the first (lowest) IPv4 address from the interface.
+// If multiple IPv4 addresses exist, the lowest one is returned for determinism.
+func getFirstIPv4Addr(iface netInterface) (net.IP, error) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get interface addresses")
+	}
+
+	var ipv4s []net.IP
+	for _, a := range addrs {
+		if ipNet, ok := a.(*net.IPNet); ok && ipNet.IP != nil {
+			if v4 := ipNet.IP.To4(); v4 != nil {
+				ipv4s = append(ipv4s, v4)
+			}
+		}
+	}
+
+	if len(ipv4s) == 0 {
+		return nil, errors.New("no IPv4 addresses on interface")
+	}
+
+	// Sort for deterministic selection (lowest address first).
+	sort.Slice(ipv4s, func(i, j int) bool {
+		return bytes.Compare(ipv4s[i], ipv4s[j]) < 0
+	})
+
+	return ipv4s[0], nil
 }
 
 func getSrxSetting(cfg *config.Server) (int32, error) {

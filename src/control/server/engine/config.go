@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,8 +31,9 @@ const (
 	envLogDbgStreams = "DD_MASK"
 	envLogSubsystems = "DD_SUBSYS"
 
-	minABTThreadStackSizeDCPM = 20480
-	minABTThreadStackSizeUCX  = 32768
+	minABTThreadStackSizeDCPM    = 20480
+	minABTThreadStackSizeUCX     = 32768
+	minABTThreadStackSizeMdOnSsd = 24576
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -213,11 +214,6 @@ func (fc *FabricConfig) Validate() error {
 	}
 
 	return nil
-}
-
-// GetAuthKeyEnv returns the environment variable string for the auth key.
-func (fc *FabricConfig) GetAuthKeyEnv() string {
-	return fmt.Sprintf("D_PROVIDER_AUTH_KEY=%s", fc.AuthKey)
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -420,6 +416,37 @@ func (c *Config) UpdatePMDKEnvars() error {
 
 	if isDCPM {
 		return c.UpdatePMDKEnvarsStackSizeDCPM()
+	}
+	return nil
+}
+
+// Ensure at least 24KiB ABT stack size for md_on_ssd.
+func (c *Config) UpdateMdOnSsdStackSize() error {
+	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+	if err != nil {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeMdOnSsd))
+		return nil
+	}
+	// Ensure at least 24KiB ABT stack size for an engine in md_on_ssd mode.
+	stackSizeValue, err := strconv.Atoi(stackSizeStr)
+	if err != nil {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+			stackSizeStr)
+	}
+	if stackSizeValue < minABTThreadStackSizeMdOnSsd {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for MD on SSD, found %d", minABTThreadStackSizeMdOnSsd,
+			stackSizeValue)
+	}
+	return nil
+}
+
+// Ensure 24k for md_on_ssd configuration
+func (c *Config) UpdateABTEnvarsMdOnSsd() error {
+
+	if c.Storage.Tiers.HasBdevRoleMeta() {
+		return c.UpdateMdOnSsdStackSize()
 	}
 	return nil
 }
@@ -787,6 +814,13 @@ func (c *Config) WithStorageAutoFaultyCriteria(enable bool, maxIoErrs, maxCsumEr
 	c.Storage.AutoFaultyProps.Enable = enable
 	c.Storage.AutoFaultyProps.MaxIoErrs = maxIoErrs
 	c.Storage.AutoFaultyProps.MaxCsumErrs = maxCsumErrs
+	return c
+}
+
+// WithStorageSpdkIobufProps specifies SPDK I/O buffer pool settings in the I/O Engine.
+func (c *Config) WithStorageSpdkIobufProps(smallPoolCount, largePoolCount uint32) *Config {
+	c.Storage.SpdkIobufProps.SmallPoolCount = smallPoolCount
+	c.Storage.SpdkIobufProps.LargePoolCount = largePoolCount
 	return c
 }
 

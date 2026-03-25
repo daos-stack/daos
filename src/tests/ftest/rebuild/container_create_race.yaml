@@ -28,7 +28,7 @@ testparams:
 pool:
   scm_size: 8G
   pool_query_timeout: 15
-  properties: rd_fac:1
+  properties: rd_fac:1,space_rb:0
 
 container:
   type: POSIX

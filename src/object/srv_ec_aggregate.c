@@ -1428,10 +1428,10 @@ agg_peer_update_ult(void *arg)
 
 		if (peer == pidx)
 			continue;
+retry:
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag  = entry->ae_peer_pshards[peer].sd_tgt_idx;
-retry:
 		peer_retry = false;
 		rc = ds_obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				       DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
@@ -2687,7 +2687,8 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
 
-	rc = dss_ult_execute(ec_agg_init_ult, agg_param, NULL, NULL, DSS_XS_SYS, 0, 0);
+	rc = dss_ult_execute(ec_agg_init_ult, agg_param, NULL, NULL, DSS_XS_SYS, 0,
+			     DSS_DEEP_STACK_SZ);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

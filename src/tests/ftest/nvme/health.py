@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -47,24 +48,51 @@ class NvmeHealth(ServerFillUp):
         # Calculate the potential number of pools and use up to the max from config
         potential_num_pools = int((nvme_per_engine / (min_nvme_per_target * targets_per_engine)))
         actual_num_pools = min(max_num_pools, potential_num_pools)
+        self.log.debug("Calculating pool size and quantity")
+        self.log.debug(
+            "  scm_per_engine:                   %s * %s = %s",
+            space_per_engine['scm'], total_pool_percentage, scm_per_engine)
+        self.log.debug(
+            "  nvme_per_engine:                  %s * %s = %s",
+            space_per_engine['nvme'], total_pool_percentage, nvme_per_engine)
+        self.log.debug(
+            "  potential_num_pools:              %s / (%s * %s) = %s",
+            nvme_per_engine, min_nvme_per_target, targets_per_engine, potential_num_pools)
 
         # consider 1GiB RDB memory consume for MD-on-SSD
         rdb_size = 1073741824
         if self.server_managers[0].manager.job.using_control_metadata:
-            min_scm_per_pool = 104857600
+            min_scm_per_pool = 1073741824
             potential_num_pools = int(scm_per_engine / (min_scm_per_pool + rdb_size))
             actual_num_pools = min(potential_num_pools, actual_num_pools)
+            self.log.debug(
+                "  potential_num_pools (md on ssd):  %s / (%s + %s) = %s",
+                scm_per_engine, scm_per_engine, rdb_size, potential_num_pools)
+
+        self.log.debug(
+            "  actual_num_pools:                 min(%s, %s) = %s",
+            max_num_pools, potential_num_pools, actual_num_pools)
 
         # Split available space across the number of pools to be created
         scm_per_pool = int(scm_per_engine / actual_num_pools)
+        self.log.debug(
+            "  scm_per_pool:                     %s / %s = %s",
+            scm_per_engine, actual_num_pools, scm_per_pool)
         if self.server_managers[0].manager.job.using_control_metadata:
+            self.log.debug(
+                "  scm_per_pool (md on ssd):         %s - %s = %s",
+                scm_per_pool, rdb_size, int(scm_per_pool - rdb_size))
             scm_per_pool = int(scm_per_pool - rdb_size)
+
         nvme_per_pool = int(nvme_per_engine / actual_num_pools)
+        self.log.debug(
+            "  nvme_per_pool:                    %s / %s = %s",
+            nvme_per_engine, actual_num_pools, nvme_per_pool)
 
         # Create the pools
         pool_list = []
         for pool_num in range(actual_num_pools):
-            self.log.info("-- Creating pool number = %s", pool_num)
+            self.log.info("-- Creating pool number %s of %s", pool_num + 1, actual_num_pools)
             try:
                 pool_list.append(self.get_pool(scm_size=scm_per_pool, nvme_size=nvme_per_pool))
             except TestFail as error:
