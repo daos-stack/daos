@@ -3894,6 +3894,22 @@ migrate_ult(void *arg)
 
 	D_ASSERT(pool_tls != NULL);
 	pool = pool_tls->mpt_pool;
+	while (atomic_load(&pool->spc_pool->sp_discarding) != 0) {
+		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(pool_tls));
+		dss_sleep(2 * 1000);
+		if (pool_tls->mpt_fini)
+			D_GOTO(out, rc);
+
+		ABT_mutex_lock(pool->spc_pool->sp_mutex);
+		if (pool->spc_pool->sp_discard_status) {
+			rc = pool->spc_pool->sp_discard_status;
+			ABT_mutex_unlock(pool->spc_pool->sp_mutex);
+			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n", DP_RB_MPT(pool_tls),
+				DP_RC(rc));
+			D_GOTO(out, rc);
+                }
+		ABT_mutex_unlock(pool->spc_pool->sp_mutex);
+        }
 
 	rc =
 	    dsc_pool_open(pool_tls->mpt_pool_uuid, pool_tls->mpt_poh_uuid, 0, NULL,
