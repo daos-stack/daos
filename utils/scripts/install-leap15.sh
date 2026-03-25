@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# (C) Copyright 2025 Google LLC
+# Copyright 2025-2026 Google LLC
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -29,6 +29,7 @@ dnf --nodocs install ${dnf_install_args} \
     fuse3 \
     gcc \
     gcc-c++ \
+    gcc-toolset-12 \
     git \
     go \
     go-race \

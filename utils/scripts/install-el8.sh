@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# (C) Copyright 2025 Google LLC
+# Copyright 2025-2026 Google LLC
 
 # Install OS updates and packages as required for building DAOS on EL 8 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -34,6 +34,7 @@ dnf --nodocs install ${dnf_install_args} \
     fuse3 \
     gcc \
     gcc-c++ \
+    gcc-toolset-12 \
     git \
     glibc-langpack-en \
     golang \
