@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -204,6 +205,12 @@ dc_tls_get(unsigned int tag)
 		return dc_tls_init(tag, getpid());
 
 	return (struct daos_thread_local_storage *)pthread_getspecific(dc_tls_key);
+}
+
+void
+dc_tls_reset(void)
+{
+	dc_tls_thread_init = false;
 }
 
 struct daos_thread_local_storage *

@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@
 #include "client_internal.h"
 #include <daos/mgmt.h>
 #include <daos/rpc.h>
+#include <daos/tls.h>
 
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
@@ -47,6 +48,11 @@ int
 daos_eq_lib_init(crt_init_options_t *crt_info)
 {
 	int rc;
+
+	/* We may change the func name in the future since it initializes too much than eq_lib. */
+
+	dc_tls_reset();
+	daos_dti_reset();
 
 	D_MUTEX_LOCK(&daos_eq_lock);
 	if (eq_ref > 0) {
@@ -92,8 +98,6 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
-	if (rc == 0)
-		daos_dti_reset();
 
 	return rc;
 crt:
@@ -106,6 +110,8 @@ daos_eq_lib_reset_after_fork(void)
 {
 	crt_init_options_t *crt_info;
 	int                 rc;
+
+	d_log_reset();
 
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;

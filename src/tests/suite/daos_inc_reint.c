@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -253,6 +253,9 @@ ir_race(test_arg_t *arg, bool create)
 		/* Wait for ir_rank_reint can be run firstly on parent. */
 		sleep(3);
 
+		rc = daos_reinit();
+		assert_rc_equal(rc, 0);
+
 		if (create)
 			ir_cont_create(arg, &conts[3]);
 		else
@@ -260,12 +263,16 @@ ir_race(test_arg_t *arg, bool create)
 
 		/* Do NOT exit immediately, otherwise, the pipeline for parent may be broken. */
 		sleep(15);
+		print_message("Child process complete and exit\n");
+
+		daos_fini();
 		exit(0);
 	} else {
 		/* Incremental reintegration will internally repeat to handle the race. */
 		rc = ir_rank_reint(arg, 1, false);
 		assert_rc_equal(rc, 0);
 		waitpid(pid, &rc, 0);
+		print_message("Parent process wait child %d, got %d\n", pid, rc);
 	}
 
 	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
