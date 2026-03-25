@@ -342,13 +342,13 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 		       struct failed_shard *f_shard, struct pl_obj_layout *layout)
 {
 	struct pl_obj_shard *l_shard     = &layout->ol_shards[f_shard->fs_shard_idx];
-	unsigned int         remap_flags = 0;
 
 	if (!spare_avail)
 		goto next_fail;
 
 	/* The selected spare target is down as well */
-	if (need_remap_comp(&spare_tgt->ta_comp, allow_version, gen_mode, &remap_flags)) {
+	if (need_remap_comp(&spare_tgt->ta_comp, allow_version, gen_mode,
+			    &f_shard->fs_remap_flags)) {
 		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET
 			".\n", DP_TARGET(spare_tgt));
 
@@ -390,7 +390,6 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 
 		f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 		f_shard->fs_status = spare_tgt->ta_comp.co_status;
-		f_shard->fs_remap_flags |= remap_flags;
 
 		d_list_del_init(&f_shard->fs_list);
 		remap_add_one(remap_list, f_shard);
