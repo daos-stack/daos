@@ -3790,12 +3790,12 @@ migrate_ult(void *arg)
 		if (pool->spc_pool->sp_discard_status) {
 			rc = pool->spc_pool->sp_discard_status;
 			ABT_mutex_unlock(pool->spc_pool->sp_mutex);
-			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n", DP_RB_MPT(pool_tls),
-				DP_RC(rc));
+			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n",
+				DP_RB_MPT(pool_tls), DP_RC(rc));
 			D_GOTO(out, rc);
-                }
+		}
 		ABT_mutex_unlock(pool->spc_pool->sp_mutex);
-        }
+	}
 
 	rc =
 	    dsc_pool_open(pool_tls->mpt_pool_uuid, pool_tls->mpt_poh_uuid, 0, NULL,
