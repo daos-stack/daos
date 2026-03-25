@@ -7,6 +7,9 @@ extra_servers:
 
 timeout: 1100
 
+setup:
+  start_servers_once: false
+
 skip_add_log_msg: true
 
 server_config:
