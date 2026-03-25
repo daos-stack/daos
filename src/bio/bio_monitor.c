@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -224,11 +224,11 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_uuid)
 	if (rc == 0)
 		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
 				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Device: " DF_UUID " set faulty\n", DP_UUID(dev_uuid));
+				  "Device: " DF_UUID " set faulty", DP_UUID(dev_uuid));
 	else
 		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
 				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Device: " DF_UUID " set faulty failed: %d\n", DP_UUID(dev_uuid),
+				  "Device: " DF_UUID " set faulty failed: %d", DP_UUID(dev_uuid),
 				  rc);
 	return rc;
 }
@@ -788,12 +788,12 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 	if (rc == 0)
 		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
 				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Device: " DF_UUID " auto faulty detect\n",
+				  "Device: " DF_UUID " auto faulty detect",
 				  DP_UUID(bbs->bb_dev->bb_uuid));
 	else
 		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
 				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Device: " DF_UUID " auto faulty detect failed: %d\n",
+				  "Device: " DF_UUID " auto faulty detect failed: %d",
 				  DP_UUID(bbs->bb_dev->bb_uuid), rc);
 }
 

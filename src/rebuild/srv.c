@@ -26,6 +26,8 @@
 #include "rebuild_internal.h"
 
 #define RBLD_CHECK_INTV	 2000	/* milliseconds interval to check*/
+#define RBLD_LOG_INTV     300    /* seconds interval to print logs */
+#define RBLD_LOG_INTV_CNT (RBLD_LOG_INTV * 1000 / RBLD_CHECK_INTV)
 struct rebuild_global	rebuild_gst;
 unsigned int            rebuild_wait_ec_pause = 0;
 
@@ -85,6 +87,38 @@ rpt_stale(struct rebuild_tgt_pool_tracker *rpt)
 	if (!found)
 		D_ERROR(DF_RB ": rebuild_tls not found\n", DP_RB_RPT(rpt));
 	return !found;
+}
+
+enum {
+	RPT_ABORT_NONE = 0,
+	RPT_ABORT_ORPHANED_RECLAIM,
+	RPT_ABORT_GENERAL_STALE,
+};
+
+static int
+rpt_should_abort(struct rebuild_tgt_pool_tracker *rpt, struct ds_iv_ns *ns, struct rebuild_iv *iv)
+{
+	/* Abort orphaned rpt whose leader is gone. After PS leader switch,
+	 * reclaim tasks are not regenerated (UPIN not in DOWN/UP/DRAIN),
+	 * so this rpt has no matching rgt on the new leader and IV updates
+	 * are silently dropped.
+	 */
+	if (rpt->rt_leader_term < ns->iv_master_term && rpt->rt_scan_done &&
+	    (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM || rpt->rt_rebuild_op == RB_OP_RECLAIM)) {
+		D_ERROR(DF_UUID " ver %d gen %u op %s: stale term " DF_U64 " < " DF_U64
+				", abort orphaned rpt\n",
+			DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_rebuild_gen,
+			RB_OP_STR(rpt->rt_rebuild_op), rpt->rt_leader_term, ns->iv_master_term);
+
+		return RPT_ABORT_ORPHANED_RECLAIM;
+	}
+
+	if (iv->riv_pull_done && rpt_stale(rpt)) {
+		D_ERROR(DF_RB " is stale, exit the ULT.\n", DP_RB_RPT(rpt));
+		return RPT_ABORT_GENERAL_STALE;
+	}
+
+	return RPT_ABORT_NONE;
 }
 
 struct rebuild_pool_tls *
@@ -893,12 +927,6 @@ enum {
 static bool
 rebuild_is_stoppable(struct rebuild_global_pool_tracker *rgt, bool force, int *rcp)
 {
-	/* NAK if nothing is rebuilding */
-	if (rgt == NULL) {
-		*rcp = -DER_NONEXIST;
-		return false;
-	}
-
 	/* NAK if another rebuild is queued for the same pool (it would run after this one stopped)
 	 */
 	if (!d_list_empty(&rebuild_gst.rg_queue_list)) {
@@ -962,19 +990,18 @@ ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 
 	/* admin stop command only for specific cases (and force option for failing op:Fail_reclaim)
 	 */
+	if (rgt == NULL) {
+		D_INFO(DF_UUID ": nothing found to stop\n", DP_UUID(pool->sp_uuid));
+		return -DER_NONEXIST;
+	}
 	if (rebuild_is_stoppable(rgt, force, &rc)) {
 		D_INFO(DF_RB ": stopping rebuild force=%u opc %u(%s)\n", DP_RB_RGT(rgt), force,
 		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
 		rgt->rgt_abort           = 1;
 		rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 	} else {
-		if (rgt) {
-			D_INFO(DF_RB ": NOT stopping rebuild force=%u opc %u(%s), rc=%d\n",
-			       DP_RB_RGT(rgt), force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
-		} else {
-			DL_INFO(rc, DF_UUID ": nothing found to stop", DP_UUID(pool->sp_uuid));
-			return rc;
-		}
+		D_INFO(DF_RB ": NOT stopping rebuild force=%u opc %u(%s), rc=%d\n", DP_RB_RGT(rgt),
+		       force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
 	}
 
 	/* admin stop command does not usually terminate op:Fail_reclaim, but it is always
@@ -994,7 +1021,9 @@ static void
 rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			    struct rebuild_global_pool_tracker *rgt)
 {
-	double                last_print = 0;
+	uint64_t              check_cnt      = 0;
+	uint64_t              last_print_cnt = 0;
+	uint64_t              log_cnt_intv   = 1;
 	unsigned int          total;
 	struct sched_req_attr attr = {0};
 	d_rank_t              myrank;
@@ -1016,13 +1045,12 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 	while (1) {
 		struct daos_rebuild_status *rs = &rgt->rgt_status;
 		char                        sbuf[RBLD_SBUF_LEN];
-		double                      now;
 		char                       *str;
 		d_rank_list_t               rank_list     = {0};
 		bool                        rebuild_abort = false;
 		int                         i;
 
-		now = ABT_get_wtime();
+		check_cnt++;
 		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = map_ranks_init(pool->sp_map,
 				    PO_COMP_ST_UP | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
@@ -1062,7 +1090,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 				}
 			}
 
-			if (now - last_print > 20)
+			if (check_cnt - last_print_cnt >= log_cnt_intv)
 				D_INFO(DF_RB " rank %d, status 0x%x.\n", DP_RB_RGT(rgt),
 				       dom->do_comp.co_rank, dom->do_comp.co_status);
 
@@ -1081,6 +1109,18 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		}
 		ABT_rwlock_unlock(pool->sp_lock);
 		map_ranks_fini(&rank_list);
+
+		/* Abort orphaned rgt if the node is no longer the leader.
+		 * After PS leader switch, this rgt becomes orphaned and should be aborted.
+		 */
+		if (rgt->rgt_leader_term < pool->sp_iv_ns->iv_master_term &&
+		    (rgt->rgt_opc == RB_OP_FAIL_RECLAIM || rgt->rgt_opc == RB_OP_RECLAIM)) {
+			D_INFO(DF_RB " op %s: stale term " DF_U64 " < " DF_U64
+				     ", abort orphaned rgt\n",
+			       DP_RB_RGT(rgt), RB_OP_STR(rgt->rgt_opc), rgt->rgt_leader_term,
+			       pool->sp_iv_ns->iv_master_term);
+			rebuild_abort = true;
+		}
 
 		if (rebuild_abort) {
 			rgt->rgt_abort = 1;
@@ -1118,15 +1158,17 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			 rs->rs_state, rs->rs_errno, rs->rs_fail_rank, rgt->rgt_stable_epoch,
 			 rgt->rgt_reclaim_epoch, rs->rs_seconds);
 
-		D_INFO("%s", sbuf);
 		if (rs->rs_state == DRS_COMPLETED || rebuild_gst.rg_abort || rgt->rgt_abort) {
+			D_INFO("%s", sbuf);
 			D_PRINT("%s", sbuf);
 			break;
 		}
 
-		/* print something at least for each 10 seconds */
-		if (now - last_print > 10) {
-			last_print = now;
+		/* Exponential backoff to print at most every RBLD_LOG_INTV seconds */
+		if (check_cnt - last_print_cnt >= log_cnt_intv) {
+			last_print_cnt = check_cnt;
+			log_cnt_intv   = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
+			D_INFO("%s", sbuf);
 			D_PRINT("%s", sbuf);
 		}
 sleep:
@@ -2052,11 +2094,9 @@ rebuild_task_ult(void *arg)
 	int					rc;
 
 	cur_ts = daos_gettime_coarse();
+	/* rebuild_ults() prevents dequeuing the task until schedule time is reached. */
 	D_ASSERT(task->dst_schedule_time != (uint64_t)-1);
-	if (cur_ts < task->dst_schedule_time) {
-		D_INFO("rebuild task sleep " DF_U64 " second\n", task->dst_schedule_time - cur_ts);
-		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
-	}
+	D_ASSERT(cur_ts >= task->dst_schedule_time);
 
 	rc = ds_pool_lookup(task->dst_pool_uuid, &pool);
 	if (pool == NULL) {
@@ -2273,12 +2313,13 @@ rebuild_ults(void *arg)
 
 		task = d_list_entry(rebuild_gst.rg_queue_list.next, struct rebuild_task, dst_list);
 		while (&rebuild_gst.rg_queue_list != &task->dst_list) {
-			/* If a pool is already handling a rebuild operation,
-			 * wait to start the next operation until the current
-			 * one completes
+			/* If a pool is currently handling a rebuild, wait for it to finish.
+			 * Skip this pool now if its rebuild task is scheduled for later
+			 * (allow for merging of other tasks into this one in ds_rebuild_schedule().
 			 */
 			if (pool_is_rebuilding(task->dst_pool_uuid) ||
-			    task->dst_schedule_time == (uint64_t)-1) {
+			    task->dst_schedule_time == (uint64_t)-1 ||
+			    (daos_gettime_coarse() < task->dst_schedule_time)) {
 				struct rebuild_task *head_task = task;
 
 				/* jump to next pool */
@@ -2896,6 +2937,8 @@ rebuild_tgt_status_check_ult(void *arg)
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
 	struct sched_req_attr	attr = { 0 };
 	uint32_t                         reported_dtx_resyc_ver = 0;
+	uint64_t                         check_cnt              = 0;
+	uint64_t                         log_cnt_intv           = 1;
 
 	D_ASSERT(rpt != NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rpt->rt_pool_uuid);
@@ -3021,19 +3064,21 @@ rebuild_tgt_status_check_ult(void *arg)
 			}
 		}
 
-		D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
-			     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
-		       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
-		       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
-		       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+		if (check_cnt % log_cnt_intv == 0 || rpt->rt_global_done || rpt->rt_abort) {
+			D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
+				     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
+			       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
+			       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
+			       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+			log_cnt_intv = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
+		}
+		check_cnt++;
 		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
 		sched_req_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
-		if (iv.riv_pull_done && rpt_stale(rpt)) {
-			D_ERROR(DF_RB " is stale, exit the ULT.\n", DP_RB_RPT(rpt));
+		if (rpt_should_abort(rpt, rpt->rt_pool->sp_iv_ns, &iv) != RPT_ABORT_NONE)
 			break;
-		}
 	}
 
 	sched_req_put(rpt->rt_ult);
