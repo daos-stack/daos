@@ -40,3 +40,17 @@ updates:
       - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
+
+  - package-ecosystem: github-actions
+    target-branch: release/2.6.4-aurora
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gha-versions:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
