@@ -822,7 +822,7 @@ retry:
 			res->res_data.mem_ser_err++; /* counted as serious error */
 			DL_ERROR(rc,
 				 DF_RB " waited for 10 minutes, total memory errors: %lu/%lu,"
-				       " total waiters: %lu, total revived: %lu\n",
+				       " total waiters: %lu, total revived: %lu",
 				 DP_RB_MRO(mrone), res->res_data.mem_ser_err, res->res_data.mem_err,
 				 res->res_data.mem_waiting, res->res_data.mem_revived);
 		}
