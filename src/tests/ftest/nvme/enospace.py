@@ -741,7 +741,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Repeat the test in loop.
         for _loop in range(1, 11):
-            self.log("-------enospc_no_aggregation Loop--------- %d", _loop)
+            self.log.info("-------enospc_no_aggregation Loop--------- %d", _loop)
             self.log_step(f"[Loop {_loop}] Run IOR to fill the pool")
             self.pool.query()
             # Fill 75% of SCM pool
@@ -773,7 +773,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             for count in range(1, 7):
                 time.sleep(10)
                 pool_usage = self.pool.pool_percentage_used()
-                self.log.info(f"[Loop {_loop}] Pool usage at iter {count}: {pool_usage}")
+                self.log.info('[Loop %d] Pool usage at iter %d: %s', _loop, count, pool_usage)
                 if pool_usage["scm"] < 60:
                     scm_released = True
                     break
