@@ -114,7 +114,7 @@ void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 struct failed_shard *
-remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, bool for_diff,
+remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, int tgt_id,
 		unsigned int remap_flags, void *data);
 
 int

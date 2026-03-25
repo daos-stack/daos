@@ -199,7 +199,8 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *old_lo,
 					      PO_COMP_ST_UPIN | PO_COMP_ST_UP | PO_COMP_ST_DRAIN)) {
 				struct failed_shard *shard;
 
-				shard = remap_alloc_one(index, new_pot, true, 0, NULL);
+				shard = remap_alloc_one(index, new_pot, new_pot->ta_comp.co_id, 0,
+							NULL);
 				if (!shard)
 					return -DER_NOMEM;
 
@@ -696,8 +697,8 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 					realloc_grp_used = true;
 				}
 
-				shard =
-				    remap_alloc_one(k, target, false, remap_flags, remap_grp_used);
+				/* will be remapped to another target, just pass in -1 */
+				shard = remap_alloc_one(k, target, -1, remap_flags, remap_grp_used);
 				if (!shard)
 					D_GOTO(out, rc = -DER_NOMEM);
 

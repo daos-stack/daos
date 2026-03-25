@@ -63,7 +63,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
  *                              remap list.
  */
 struct failed_shard *
-remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, bool for_diff,
+remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, int tgt_id,
 		unsigned int remap_flags, void *data)
 {
 	struct failed_shard *f_new;
@@ -80,10 +80,10 @@ remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, bool for_diff,
 	f_new->fs_status = tgt->ta_comp.co_status;
 	f_new->fs_data      = data;
 	f_new->fs_remap_flags = remap_flags;
-	f_new->fs_tgt_id      = for_diff ? tgt->ta_comp.co_id : -1;
+	f_new->fs_tgt_id      = tgt_id;
 
 	D_DEBUG(DB_PL, "tgt %u status %u flags %u order %s\n", tgt->ta_comp.co_id,
-		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, for_diff ? "no" : "yes");
+		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, tgt_id == -1 ? "yes" : "no");
 	return f_new;
 }
 
@@ -247,9 +247,9 @@ is_comp_avaible(struct pool_component *comp, uint32_t allow_version, enum layout
 		 * is available.
 		 */
 		if (status & (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN)) {
-			status = PO_COMP_ST_UPIN;
 			flags =
 			    (status & PO_COMP_ST_DRAIN) ? PL_SHARD_HAS_PEER : PL_SHARD_REBUILDING;
+			status = PO_COMP_ST_UPIN;
 
 		} else if (status == PO_COMP_ST_UP) {
 			flags = PL_SHARD_REBUILDING | PL_SHARD_REINTEGRATING;

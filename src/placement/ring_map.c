@@ -1081,7 +1081,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 
 			if (pool_target_unavail(tgt, for_reint)) {
 				struct failed_shard *shard =
-				    remap_alloc_one(k, tgt, for_reint, 0, NULL);
+				    remap_alloc_one(k, tgt, tgt->ta_comp.co_id, 0, NULL);
 
 				if (!shard)
 					D_GOTO(out, rc);
