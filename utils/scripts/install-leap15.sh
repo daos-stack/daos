@@ -78,8 +78,8 @@ dnf --nodocs install ${dnf_install_args} \
     which \
     yasm
 
-update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11
-update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110
+update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 110
 
 # shellcheck disable=SC2086
 dnf install ${dnf_install_args} ruby-devel
