@@ -71,7 +71,6 @@ class DaosAggregationThrottling(IorTestBase):
         out = self.run_ior_with_pool(create_pool=False)
         metric_after_aggregate = IorCommand.get_ior_metrics(out)
 
-        # When DAOS-5057 is fixed, adjust the percentage.
         expected_perf_diff = 35.0
 
         self.verify_performance(metric_before_aggregate,
