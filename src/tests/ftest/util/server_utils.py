@@ -142,6 +142,9 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+        # Option to format storage when starting the servers. Defaults to True.
+        self._format_storage_on_start = True
+
     @property
     def engines(self):
         """Get the total number of engines.
@@ -181,6 +184,20 @@ class DaosServerManager(SubprocessManager):
 
         """
         return self.get_host_ranks(self.management_service_hosts)
+
+    @property
+    def format_storage_on_start(self):
+        """Whether or not to format storage when starting the servers."""
+        return self._format_storage_on_start
+
+    @format_storage_on_start.setter
+    def format_storage_on_start(self, value):
+        """Set whether or not to format storage when starting the servers.
+
+        Args:
+            value (bool): whether or not to format storage when starting the servers
+        """
+        self._format_storage_on_start = value
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -660,18 +677,19 @@ class DaosServerManager(SubprocessManager):
         # Prepare the servers
         self.prepare()
 
-        # Start the servers and wait for them to be ready for storage format
-        self.detect_format_ready()
+        if self.format_storage_on_start:
+            # Start the servers and wait for them to be ready for storage format
+            self.detect_format_ready()
 
-        # Collect storage and network information from the servers.
-        self.information.collect_storage_information()
-        self.information.collect_network_information()
+            # Collect storage and network information from the servers.
+            self.information.collect_storage_information()
+            self.information.collect_network_information()
 
-        # Format storage and wait for server to change ownership
-        self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
-        # be further investigated.
-        self.dmg.storage_format(timeout=self.storage_format_timeout.value)
+            # Format storage and wait for server to change ownership
+            self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
+            # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
+            # be further investigated.
+            self.dmg.storage_format(timeout=self.storage_format_timeout.value)
 
         # Wait for all the engines to start
         self.detect_engine_start()
