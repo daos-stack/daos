@@ -34,7 +34,6 @@ dnf --nodocs install ${dnf_install_args} \
     fuse3 \
     gcc \
     gcc-c++ \
-    gcc-toolset-12 \
     git \
     glibc-langpack-en \
     golang \
@@ -117,5 +116,8 @@ else
     # shellcheck disable=SC2086
     dnf install ${dnf_install_args} maven
 fi
+
+# if available, install to get c++20 support
+dnf install -y gcc-toolset-12 || true
 
 gem install fpm

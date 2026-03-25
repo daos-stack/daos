@@ -28,8 +28,7 @@ dnf --nodocs install ${dnf_install_args} \
     flex \
     fuse3 \
     gcc \
-    gcc-c++ \
-    gcc-toolset-12 \
+    gcc11-c++ \
     git \
     go \
     go-race \
@@ -78,6 +77,9 @@ dnf --nodocs install ${dnf_install_args} \
     valgrind-devel \
     which \
     yasm
+
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11
+update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11
 
 # shellcheck disable=SC2086
 dnf install ${dnf_install_args} ruby-devel
