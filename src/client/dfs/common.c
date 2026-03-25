@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -643,8 +644,15 @@ create_dir(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, dfs_obj_t *dir)
 	if (cid == 0) {
 		if (parent->d.oclass == 0)
 			cid = dfs->attr.da_dir_oclass_id;
-		else
+		else {
 			cid = parent->d.oclass;
+			/*
+			 * If the parent oclass is EC, do not use that for a directory and use the
+			 * container default instead.
+			 */
+			if (daos_cid_is_ec(cid))
+				cid = dfs->attr.da_dir_oclass_id;
+		}
 	}
 
 	/** Allocate an OID for the dir - local operation */

@@ -26,7 +26,7 @@ struct vos_file_parts {
 /* Parse a path to a VOS file to get needed parts for initializing vos */
 int vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts);
 
-/* See ddb_iov_to_printable_buf for how the keys will be printed */
+/* See ddb_key_to_printable_buf for how the keys will be printed */
 int ddb_parse_key(const char *input, daos_key_t *key);
 
 /* Parse a string into the parts of a dtx_id. See DF_DTIF for how the format of the dtx_id is

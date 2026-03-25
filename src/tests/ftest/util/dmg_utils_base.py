@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -885,6 +885,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.EraseSubCommand()
             elif self.sub_command.value == "exclude":
                 self.sub_command_class = self.ExcludeSubCommand()
+            elif self.sub_command.value == "get-prop":
+                self.sub_command_class = self.GetPropSubCommand()
             elif self.sub_command.value == "leader-query":
                 self.sub_command_class = self.LeaderQuerySubCommand()
             elif self.sub_command.value == "list-pools":
@@ -895,6 +897,10 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.RebuildSubCommand()
             elif self.sub_command.value == "reintegrate":
                 self.sub_command_class = self.ReintegrateSubCommand()
+            elif self.sub_command.value == "self-heal":
+                self.sub_command_class = self.SelfHealSubCommand()
+            elif self.sub_command.value == "set-prop":
+                self.sub_command_class = self.SetPropSubCommand()
             elif self.sub_command.value == "start":
                 self.sub_command_class = self.StartSubCommand()
             elif self.sub_command.value == "stop":
@@ -944,6 +950,14 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/system/exclude/*", "exclude")
                 self.ranks = FormattedParameter("--ranks={}")
                 self.rank_hosts = FormattedParameter("--rank-hosts={}")
+
+        class GetPropSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system get-prop command."""
+
+            def __init__(self):
+                """Create a dmg system get-prop command object."""
+                super().__init__("/run/dmg/system/get-prop/*", "get-prop")
+                self.properties = BasicParameter(None, position=1)
 
         class LeaderQuerySubCommand(CommandWithParameters):
             """Defines an object for the dmg system leader-query command."""
@@ -1010,6 +1024,36 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/system/rebuild/stop/*", "stop")
                     self.verbose = FormattedParameter("--verbose", False)
                     self.force = FormattedParameter("--force", False)
+
+        class SelfHealSubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg system self-heal command."""
+
+            def __init__(self):
+                """Create a dmg system self-heal command object."""
+                super().__init__("/run/dmg/system/self-heal/*", "self-heal")
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg system sub command object."""
+                if self.sub_command.value == "eval":
+                    self.sub_command_class = self.EvalSubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class EvalSubCommand(CommandWithParameters):
+                """Defines an object for the dmg system self-heal eval command."""
+
+                def __init__(self):
+                    """Create a dmg system self-heal eval command object."""
+                    super().__init__("/run/dmg/system/self-heal/eval/*", "eval")
+
+        class SetPropSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system set-prop command."""
+
+            def __init__(self):
+                """Create a dmg system set-prop command object."""
+                super().__init__("/run/dmg/system/set-prop/*", "set-prop")
+                self.properties = BasicParameter(None, position=1)
 
         class StartSubCommand(CommandWithParameters):
             """Defines an object for the dmg system start command."""
