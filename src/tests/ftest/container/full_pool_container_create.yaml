@@ -12,7 +12,7 @@ server_config:
 timeout: 900
 
 pool:
-  size: 50G
+  size: 10G
   threshold_percent: 0.1  # 10%
 
 container:
