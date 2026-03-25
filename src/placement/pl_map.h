@@ -73,6 +73,7 @@ struct failed_shard {
 	uint16_t	fs_rank;
 	uint8_t		fs_index;
 	uint8_t          fs_status;
+	unsigned int     fs_remap_flags;
 };
 
 #define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"
@@ -111,12 +112,10 @@ crc(uint64_t data, uint32_t init_val)
 
 void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
-void
-reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
-int
-remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx, struct pool_target *tgt,
-		bool rebuilding, void *data);
+struct failed_shard *
+remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, bool for_diff,
+		unsigned int remap_flags, void *data);
 
 int
 remap_insert_copy_one(d_list_t *remap_list, struct failed_shard *original);
@@ -140,39 +139,10 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		struct pl_obj_layout *layout, d_list_t *remap_list,
 		bool fill_addition);
 
-static inline void
-target_set_rebuild_shard(struct pool_target *target, struct pl_obj_shard *shard)
-{
-	if (pool_target_is_down(target)) {
-		/* if the current spare target is being rebuilt */
-		shard->po_rebuilding = 1;
-
-	} else if (pool_target_is_up(target)) {
-		/* if the current spare target is being reintegrated */
-		shard->po_rebuilding    = 1;
-		shard->po_reintegrating = 1;
-	}
-}
-
-static inline void
-target_has_rebuild_peer(struct pool_target *tgt, int gen_mode, bool *peer)
-{
-	/* should write to extra peer shard before completion of drain/reintegration */
-	D_ASSERT(gen_mode != CURRENT || peer != NULL);
-	if (gen_mode != CURRENT)
-		return;
-
-	if (pool_target_is_drain(tgt))
-		*peer = true;
-
-	if (pool_target_is_up(tgt) && !pool_target_is_down2up(tgt))
-		*peer = true;
-}
-
 int
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
 		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
-		       struct failed_shard *f_shard, struct pl_obj_shard *l_shard);
+		       struct failed_shard *f_shard, struct pl_obj_layout *layout);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
@@ -182,10 +152,30 @@ int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 bool
-is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
-		enum layout_gen_mode gen_mode);
+is_comp_avaible(struct pool_component *comp, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		unsigned int *remap_flags);
 bool
-need_remap_comp(struct pool_component *comp, uint32_t allow_status,
-		enum layout_gen_mode gen_mode);
+need_remap_comp(struct pool_component *comp, uint32_t allow_status, enum layout_gen_mode gen_mode,
+		unsigned int *remap_flags);
+
+enum {
+	PL_SHARD_REBUILDING    = (1 << 0),
+	PL_SHARD_REINTEGRATING = (1 << 1),
+	PL_SHARD_HAS_PEER      = (1 << 2),
+};
+
+static inline void
+layout_set_shard_flags(struct pl_obj_layout *layout, int shard_idx, enum layout_gen_mode gen_mode,
+		       unsigned int remap_flags)
+{
+	if (remap_flags & PL_SHARD_REBUILDING)
+		layout->ol_shards[shard_idx].po_rebuilding = 1;
+
+	if (remap_flags & PL_SHARD_REINTEGRATING)
+		layout->ol_shards[shard_idx].po_reintegrating = 1;
+
+	if ((remap_flags & PL_SHARD_HAS_PEER) && gen_mode == CURRENT)
+		layout->ol_shard_peers++;
+}
 
 #endif /* __PL_MAP_H__ */

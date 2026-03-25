@@ -986,8 +986,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 {
 	struct failed_shard *f_shard;
 	struct pool_map		 *map = rimap->rmp_map.pl_poolmap;
-	struct pl_target	 *plts;
-	struct pl_obj_shard	 *l_shard;
+	struct pl_target         *plts;
 	struct pool_target	 *tgts;
 	struct pool_target	 *spare_tgt;
 	d_list_t		 *current;
@@ -1006,9 +1005,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	spare_idx = rop->rop_begin;
 
 	while (current != remap_list) {
-		f_shard = d_list_entry(current, struct failed_shard,
-				       fs_list);
-		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
+		f_shard = d_list_entry(current, struct failed_shard, fs_list);
 
 		spare_avail = ring_remap_next_spare(rimap, rop, &spare_idx);
 		D_DEBUG(DB_PL, "obj:"DF_OID", select spare:%d grp_size:%u, "
@@ -1023,7 +1020,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
 		determine_valid_spares(spare_tgt, md, spare_avail, remap_list, -1, -1, f_shard,
-				       l_shard);
+				       layout);
 	}
 
 	remap_dump(remap_list, md, "after remap:");
@@ -1083,9 +1080,13 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 			layout->ol_shards[k].po_index = tgt->ta_comp.co_index;
 
 			if (pool_target_unavail(tgt, for_reint)) {
-				rc = remap_alloc_one(remap_list, k, tgt, for_reint, NULL);
-				if (rc)
+				struct failed_shard *shard =
+				    remap_alloc_one(k, tgt, for_reint, 0, NULL);
+
+				if (!shard)
 					D_GOTO(out, rc);
+
+				d_list_add_tail(&shard->fs_list, remap_list);
 			}
 		}
 		grp_start += grp_dist;
