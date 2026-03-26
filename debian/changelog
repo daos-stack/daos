@@ -1,3 +1,9 @@
+daos (2.6.4-21) unstable; urgency=medium
+  [ Dalton Bohning ]
+  * Bump version
+
+ -- Dalton Bohning <dalton.bohning@hpe.com>  Mon, 23 Mar 2026 11:30:00 -0800
+
 daos (2.6.4-19) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * Bump PMDK (libpmemobj) version to 2.1.3
