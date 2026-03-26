@@ -204,22 +204,21 @@ Symlink Object
 
 ## Access Permissions
 
-All DFS objects (files, directories, and symlinks) inherit the access
-permissions of the DFS container that they are created with. So the permission
-checks are done on dfs_mount(). If that succeeds and the user has access to the
-container, then they will be able to access all objects in the DFS
-namespace.
+DFS checks access at multiple levels. Container access is checked at mount/open
+time, and per-object permissions are also enforced using each entry's
+uid/gid/mode metadata. Mutating operations are additionally gated by mount mode
+(read-only vs read-write).
 
 setuid(), setgid() programs, supplementary groups, ACLs are not supported in the
 DFS namespace.
 
 ## Time settings
 
-DFS stores the mtime (modify) and ctime (change) in the inode information of an object. the mtime is
-actively maintained for just file objects (changing a file contents updates the mtime value that
-would be returned on stat). At this time, mtime for directory objects and ctime for all objects are
-not actively maintained. atime (access) is not stored in DFS and stat returns the max value between
-mtime and ctime for atime.
+DFS stores mtime (modify) and ctime (change) in inode metadata. mtime is
+actively maintained for file content changes and may also be set explicitly via
+attribute updates. ctime is actively maintained for metadata changes (for
+example chmod and xattr updates). atime (access) is not stored in DFS; stat
+returns atime as max(mtime, ctime).
 
 ## Container Hints
 
@@ -249,6 +248,45 @@ pool):
  - SX if rd\_fac == 0
  - EC\_nP1GX if rd\_fac == 1
  - EC\_nP2GX if rd\_fac == 2
+
+## Snapshot Mount Semantics
+
+DFS can be mounted against a snapshot epoch, in which case operations use a
+snapshot transaction handle internally. This provides a stable, read-consistent
+view for APIs that use the mount transaction handle.
+
+When no snapshot epoch is requested, DFS uses `DAOS_TX_NONE` for regular
+non-transactional access.
+
+## Handle Serialization and Transfer
+
+DFS supports exporting/importing mount handles for process transfer:
+
+- `dfs_local2global` / `dfs_global2local`: serialize and restore a DFS mount
+  using already-available pool/container handles.
+- `dfs_local2global_all` / `dfs_global2local_all`: serialize and restore with
+  pool/container context included.
+
+`dfs_global2local_all` requires DFS module initialization (`dfs_init`) before
+use.
+
+## Path Resolution and Symlink Limits
+
+Relative-path lookup follows symlinks recursively, with a bounded recursion
+depth to avoid infinite loops in cyclic links. If that bound is exceeded, DFS
+returns `ELOOP`.
+
+## Concurrency and Thread Safety
+
+DFS includes internal locking for mount/module state and selected shared state.
+This prevents races in mount/finalize and handle-management paths. Callers
+should still treat individual DFS objects and user buffers with normal
+application-level synchronization rules.
+
+## Error Model
+
+DFS public APIs return errno-style error codes. Internally, lower-level DAOS
+DER return codes are translated before being surfaced by DFS APIs.
 
 # DFS control flow
 
@@ -304,7 +342,7 @@ sequenceDiagram
     Note over B: Check permissions
     B->>C: daos_obj_open
     Note over C: Allocate handle<br/>Calculate object layout<br/>Check class validity
-    C->>B: Return array object handle
+    C->>B: Return object handle
     Note over B: Allocate directory handle<br/>Save object info
     B->>A: Return directory handle
 ```
