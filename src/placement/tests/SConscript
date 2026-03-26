@@ -24,6 +24,11 @@ def scons():
                                        'jump_map_pda_layout.c',
                                        'jump_map_dist.c',
                                        'placement_test.c'])
+    jump_pl_test_srcs = []
+    for _src in ['pl_map', 'ring_map', 'jump_map', 'jump_map_versions', 'pl_map_common']:
+        jump_pl_test_srcs.extend(
+            denv.SharedObject(target='pld_' + _src, source='../' + _src + '.c'))
+
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
 
     libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm']
@@ -31,7 +36,8 @@ def scons():
     ring_pl_test = denv.d_program('ring_pl_map', ring_test_tgt, LIBS=libraries)
 
     jump_pl_test = denv.d_program('jump_pl_map',
-                                  jump_test_tgt + ['../../pool/srv_pool_map.c'], LIBS=libraries)
+                                  jump_test_tgt + jump_pl_test_srcs + \
+				  ['../../pool/srv_pool_map.c'], LIBS=libraries)
 
     pl_bench = denv.d_program('pl_bench', pl_bench_tgt, LIBS=libraries)
 

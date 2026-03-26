@@ -2335,8 +2335,8 @@ basic_down2up_test_oid(daos_obj_id_t oid)
 	struct pl_map        *pl_map;
 	uint32_t              num_pd, fdoms_per_pd, nodes_per_fdom, vos_per_tgt, num_tgts;
 	uint32_t              i, fault_dom, new_dom;
-	uint32_t              down_shard_tgt, down_shard_new_tgt       = 0;
-	uint32_t              downout_shard_tgt, downout_shard_new_tgt = 0;
+	uint32_t              down_shard_tgt = 0, down_shard_new_tgt = 0;
+	uint32_t              downout_shard_tgt = 0, downout_shard_new_tgt = 0;
 	uint32_t              downout_tgt, down_tgt;
 	int                   downout_shard, down_shard;
 	struct pl_obj_layout *layout = NULL;
