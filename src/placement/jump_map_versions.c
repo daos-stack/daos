@@ -654,7 +654,7 @@ dom_tgts_are_avaible(struct pool_domain *dom, uint32_t allow_version, enum layou
 		struct pool_target *tgt;
 
 		tgt = &dom->do_targets[i];
-		if (is_comp_avaible(&tgt->ta_comp, allow_version, gen_mode, NULL))
+		if (!comp_need_remap(&tgt->ta_comp, allow_version, gen_mode, NULL))
 			return true;
 	}
 	return false;

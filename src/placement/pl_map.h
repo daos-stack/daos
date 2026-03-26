@@ -152,29 +152,28 @@ int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 bool
-is_comp_avaible(struct pool_component *comp, uint32_t allow_version, enum layout_gen_mode gen_mode,
-		unsigned int *remap_flags);
-bool
-need_remap_comp(struct pool_component *comp, uint32_t allow_status, enum layout_gen_mode gen_mode,
+comp_need_remap(struct pool_component *comp, uint32_t allow_status, enum layout_gen_mode gen_mode,
 		unsigned int *remap_flags);
 
 enum {
-	PL_SHARD_REBUILDING    = (1 << 0),
-	PL_SHARD_REINTEGRATING = (1 << 1),
-	PL_SHARD_HAS_PEER      = (1 << 2),
+	/* rebuilding this shard */
+	PL_IS_REBUILDING = (1 << 0),
+	/* integrating this shard */
+	PL_IS_REINTEGRATING = (1 << 1),
+	/* has peer shard for rebuild (writes land to both of shards) */
+	PL_HAS_PEER = (1 << 2),
 };
 
 static inline void
-layout_set_shard_flags(struct pl_obj_layout *layout, int shard_idx, enum layout_gen_mode gen_mode,
-		       unsigned int remap_flags)
+layout_set_shard_flags(struct pl_obj_layout *layout, int shard_idx, unsigned int remap_flags)
 {
-	if (remap_flags & PL_SHARD_REBUILDING)
+	if (remap_flags & PL_IS_REBUILDING)
 		layout->ol_shards[shard_idx].po_rebuilding = 1;
 
-	if (remap_flags & PL_SHARD_REINTEGRATING)
+	if (remap_flags & PL_IS_REINTEGRATING)
 		layout->ol_shards[shard_idx].po_reintegrating = 1;
 
-	if ((remap_flags & PL_SHARD_HAS_PEER) && gen_mode == CURRENT)
+	if (remap_flags & PL_HAS_PEER)
 		layout->ol_shard_peers++;
 }
 

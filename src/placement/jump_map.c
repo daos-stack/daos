@@ -679,7 +679,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 			layout->ol_shards[k].po_index = target->ta_comp.co_index;
 
 			/** If target is failed queue it for remap*/
-			if (need_remap_comp(&target->ta_comp, allow_version, gen_mode,
+			if (comp_need_remap(&target->ta_comp, allow_version, gen_mode,
 					    &remap_flags)) {
 				struct failed_shard *shard;
 
@@ -704,7 +704,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 
 				remap_add_one(&remap_list, shard);
 			} else {
-				layout_set_shard_flags(layout, k, gen_mode, remap_flags);
+				layout_set_shard_flags(layout, k, remap_flags);
 				if (domain != NULL)
 					setbit(dom_cur_grp_real, domain - root);
 			}
@@ -1008,29 +1008,25 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 		D_ERROR("get_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
-
 	obj_layout_dump(oid, layout);
 
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL,
-				  &root);
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
 	rc = 0;
 
-	if (is_pool_map_adding(jmap->jmp_map.pl_poolmap) && gen_mode == CURRENT)
-		layout->ol_shard_peers++;
-
+	if (is_pool_map_adding(jmap->jmp_map.pl_poolmap))
+		layout->ol_shard_peers++; /* may or may not, have to check */
 	/**
 	 * If the layout is being extended or drained, it need recreate the layout
 	 * strictly by rebuild version to make sure both new and old shards being
 	 * updated.
 	 */
-	if (layout->ol_shard_peers > 0) {
+	if (layout->ol_shard_peers > 0 && gen_mode == CURRENT) {
 		D_DEBUG(DB_PL, "Add shard peers for " DF_OID " ver=%d\n", DP_OID(oid), md->omd_ver);
 		rc = jump_map_obj_extend_layout(jmap, &jmop, layout_version, md, layout);
 		if (rc)
 			D_GOTO(out, rc);
 	}
-
 	*layout_pp = layout;
 out:
 	jm_obj_placement_fini(&jmop);
