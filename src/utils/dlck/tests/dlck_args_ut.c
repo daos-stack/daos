@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,7 +34,7 @@ void
 __wrap_argp_failure(const struct argp_state *__restrict __state, int __status, int __errnum,
 		    const char *__restrict __fmt, ...)
 {
-	check_expected(__state);
+	check_expected_ptr(__state);
 	assert_int_equal(__status, PARSER_FAILURE);
 	assert_int_equal(__errnum, PARSER_FAILURE);
 }
@@ -41,7 +42,7 @@ __wrap_argp_failure(const struct argp_state *__restrict __state, int __status, i
 static error_t
 argp_common_parser_mock(int key, char *arg, struct argp_state *state)
 {
-	check_expected(key);
+	check_expected_int(key);
 	assert_non_null(state);
 	assert_ptr_equal(state->input, &Ctrl.common);
 
@@ -51,7 +52,7 @@ argp_common_parser_mock(int key, char *arg, struct argp_state *state)
 static error_t
 argp_file_parser_mock(int key, char *arg, struct argp_state *state)
 {
-	check_expected(key);
+	check_expected_int(key);
 	assert_non_null(state);
 	assert_ptr_equal(state->input, &Ctrl.files);
 
@@ -61,7 +62,7 @@ argp_file_parser_mock(int key, char *arg, struct argp_state *state)
 static error_t
 argp_engine_parser_mock(int key, char *arg, struct argp_state *state)
 {
-	check_expected_ptr(key);
+	check_expected_int(key);
 	assert_non_null(state);
 	assert_ptr_equal(state->input, &Ctrl.engine);
 
@@ -107,9 +108,9 @@ test_parser_children_connection(void **unused)
 	char *argv[] = {APP_NAME_MOCK};
 
 	for (int i = 0; i < ARRAY_SIZE(keys); ++i) {
-		expect_value(argp_common_parser_mock, key, keys[i]);
-		expect_value(argp_file_parser_mock, key, keys[i]);
-		expect_value(argp_engine_parser_mock, key, keys[i]);
+		expect_int_value(argp_common_parser_mock, key, keys[i]);
+		expect_int_value(argp_file_parser_mock, key, keys[i]);
+		expect_int_value(argp_engine_parser_mock, key, keys[i]);
 	}
 
 	dlck_args_parse(argc, argv, &Ctrl);
@@ -121,7 +122,7 @@ test_engine_parser_END_no_storage_path_fail(void **state_ptr)
 	struct argp_state *state = *state_ptr;
 	error_t            ret;
 
-	expect_value(__wrap_argp_failure, __state, state);
+	expect_uint_value(__wrap_argp_failure, __state, (uintptr_t)state);
 
 	ret = Argp_engine_parser_real(ARGP_KEY_END, NULL, state);
 	assert_int_equal(ret, PARSER_FAILURE);
