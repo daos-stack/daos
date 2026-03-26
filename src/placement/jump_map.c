@@ -418,7 +418,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 
 			D_ASSERT(dgu != NULL);
 			if (layout_ver <= 1)
-				rebuild_key = crc(key, crc(key, f_shard->fs_shard_idx));
+				rebuild_key = crc(key, crc(key, shard_id));
 			else /* hash OID differently so we don't land to the same target */
 				rebuild_key = jm_crc(oid.lo, oid.hi, 0xDead2Bad);
 
@@ -1106,8 +1106,8 @@ jump_map_obj_find_diff(struct pl_map *map, uint32_t layout_ver, struct daos_obj_
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
-			     array_size, &idx, reint_layout, &reint_list, false);
+	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id, array_size, &idx,
+			     reint_layout, &reint_list);
 out:
 	jm_obj_placement_fini(&jop);
 	remap_list_free_all(&reint_list);

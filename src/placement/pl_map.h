@@ -132,12 +132,10 @@ op_get_grp_size(unsigned int domain_nr, unsigned int *grp_size,
 		daos_obj_id_t oid);
 
 int
-remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
-		struct daos_obj_shard_md *shard_md, uint32_t rebuild_ver,
-		uint32_t *tgt_id, uint32_t *shard_idx,
-		unsigned int array_size, int *idx,
-		struct pl_obj_layout *layout, d_list_t *remap_list,
-		bool fill_addition);
+remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shard_md *shard_md,
+		uint32_t rebuild_ver, uint32_t *tgt_id, uint32_t *shard_idx,
+		unsigned int array_size, int *idx, struct pl_obj_layout *layout,
+		d_list_t *remap_list);
 
 int
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,

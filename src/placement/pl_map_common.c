@@ -78,7 +78,7 @@ remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, int tgt_id,
 	f_new->fs_rank = tgt->ta_comp.co_rank;
 	f_new->fs_index = tgt->ta_comp.co_index;
 	f_new->fs_status = tgt->ta_comp.co_status;
-	f_new->fs_data      = data;
+	f_new->fs_data        = data;
 	f_new->fs_remap_flags = remap_flags;
 	f_new->fs_tgt_id      = tgt_id;
 
@@ -181,12 +181,9 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 }
 
 int
-remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
-		struct daos_obj_shard_md *shard_md, uint32_t r_ver,
-		uint32_t *tgt_id, uint32_t *shard_idx,
-		unsigned int array_size, int *idx,
-		struct pl_obj_layout *layout, d_list_t *remap_list,
-		bool fill_addition)
+remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shard_md *shard_md,
+		uint32_t r_ver, uint32_t *tgt_id, uint32_t *shard_idx, unsigned int array_size,
+		int *idx, struct pl_obj_layout *layout, d_list_t *remap_list)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
@@ -202,11 +199,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		 * shard might need move to, so let's include
 		 * UPIN status here as well.
 		 */
-		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_UP ||
+		if (f_shard->fs_status == PO_COMP_ST_DOWN || f_shard->fs_status == PO_COMP_ST_UP ||
 		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
-		    f_shard->fs_status == PO_COMP_ST_UPIN ||
-		    fill_addition == true) {
+		    f_shard->fs_status == PO_COMP_ST_UPIN) {
 			/*
 			 * Target id is used for rw, but rank is used
 			 * for rebuild, perhaps they should be unified.
@@ -315,7 +310,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
 		       struct failed_shard *f_shard, struct pl_obj_layout *layout)
 {
-	struct pl_obj_shard *l_shard     = &layout->ol_shards[f_shard->fs_shard_idx];
+	struct pl_obj_shard *l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
 	if (!spare_avail)
 		goto next_fail;
@@ -380,9 +375,9 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 next_fail:
 	if (spare_avail) {
 		l_shard->po_target = spare_tgt->ta_comp.co_id;
-		l_shard->po_fseq    = f_shard->fs_fseq;
-		l_shard->po_rank    = spare_tgt->ta_comp.co_rank;
-		l_shard->po_index   = spare_tgt->ta_comp.co_index;
+		l_shard->po_fseq   = f_shard->fs_fseq;
+		l_shard->po_rank   = spare_tgt->ta_comp.co_rank;
+		l_shard->po_index  = spare_tgt->ta_comp.co_index;
 		layout_set_shard_flags(layout, f_shard->fs_shard_idx, f_shard->fs_remap_flags);
 	} else {
 		l_shard->po_shard = -1;

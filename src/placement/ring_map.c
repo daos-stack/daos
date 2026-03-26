@@ -1197,8 +1197,8 @@ ring_obj_find_rebuild(struct pl_map *map, uint32_t gl_layout_ver, struct daos_ob
 	if (rc)
 		goto out;
 
-	remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx,
-			array_size, &idx, layout, &remap_list, false);
+	remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx, array_size, &idx, layout,
+			&remap_list);
 out:
 	remap_list_free_all(&remap_list);
 	if (shards_count > SHARDS_ON_STACK_COUNT)
