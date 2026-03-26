@@ -507,6 +507,23 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error)) from error
 
+    def detect_no_format_start(self):
+        """Detect when all the daos_servers have started without formatting storage.
+
+        Raises:
+            ServerFailed: if there was an error starting the servers.
+
+        """
+        self.log.info("<SERVER> Waiting for servers to start w/o storage format")
+        self.manager.job.update_pattern("normal", len(self._hosts))
+        try:
+            self.manager.run()
+        except CommandFailure as error:
+            self.manager.kill()
+            raise ServerFailed(
+                "Failed to start servers w/o storage format: {}".format(error)) from error
+        return True
+
     def detect_engine_start(self, hosts_qty=None):
         """Detect when all the engines have started.
 
@@ -677,19 +694,22 @@ class DaosServerManager(SubprocessManager):
         # Prepare the servers
         self.prepare()
 
-        if self.format_storage_on_start:
-            # Start the servers and wait for them to be ready for storage format
-            self.detect_format_ready()
+        if not self.format_storage_on_start:
+            self.detect_no_format_start()
+            return True
 
-            # Collect storage and network information from the servers.
-            self.information.collect_storage_information()
-            self.information.collect_network_information()
+        # Start the servers and wait for them to be ready for storage format
+        self.detect_format_ready()
 
-            # Format storage and wait for server to change ownership
-            self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-            # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
-            # be further investigated.
-            self.dmg.storage_format(timeout=self.storage_format_timeout.value)
+        # Collect storage and network information from the servers.
+        self.information.collect_storage_information()
+        self.information.collect_network_information()
+
+        # Format storage and wait for server to change ownership
+        self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
+        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
+        # be further investigated.
+        self.dmg.storage_format(timeout=self.storage_format_timeout.value)
 
         # Wait for all the engines to start
         self.detect_engine_start()
