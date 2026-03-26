@@ -15,12 +15,6 @@ arch=$(uname -i)
 
 dnf_install_args="${1:-}"
 
-dnf --nodocs install ${dnf_isntall_args} gcc11-c++ gcc
-
-update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110
-update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 110
-update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-11 110
-
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
     boost-devel \
@@ -33,6 +27,8 @@ dnf --nodocs install ${dnf_install_args} \
     fdupes \
     flex \
     fuse3 \
+    gcc \
+    gcc11-c++ \
     git \
     go \
     go-race \
@@ -81,6 +77,10 @@ dnf --nodocs install ${dnf_install_args} \
     valgrind-devel \
     which \
     yasm
+
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110
+update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 110
+update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-11 110
 
 # shellcheck disable=SC2086
 dnf install ${dnf_install_args} ruby-devel
