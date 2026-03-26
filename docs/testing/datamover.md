@@ -1,123 +1,165 @@
 # DataMover
 
+
+!!! note
+  The example below makes use of a DAOS pool and its POSIX directory setup as part of
+  [Run IOR and mdtest](https://docs.daos.io/v2.6/testing/ior/). It also makes use of data
+  written to the same pool as part of [Run dbench](https://docs.daos.io/v2.6/testing/dbench/).
+
 ## 'daos' utility (single process)
 
-Create Second container:
+Use the `daos filesystem copy` command to copy data between containers.
+
+
+1. Create a new container:
 
 ```sh
-# Create Second container
-$ export DAOS_CONT2=cont2
-$ daos container create --type POSIX $DAOS_CONT2 $DAOS_POOL
-Successfully created container 158469db-70d2-4a5d-aac9-3c06cbfa7459
+$ daos cont create test_pool test_cont2 --type=POSIX
+Successfully created container cec2bb35-dc65-4397-9672-8ef2607e31ea type POSIX
+  Container UUID : cec2bb35-dc65-4397-9672-8ef2607e31ea
+  Container Label: test_cont2
+  Container Type : POSIX
 ```
 
-Pool Query before copy:
+
+2. Query the pool before copying data:
 
 ```sh
-$ dmg pool query $DAOS_POOL
-
-Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
+$ dmg pool query test_pool
+Pool e0630b72-68e5-4dbc-b6ec-e1b1c201f8aa, ntarget=24, disabled=0, leader=1, version=1, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
-- Target(VOS) count:64
-- SCM:
-  Total size: 48 GB
-  Free: 48 GB, min:743 MB, max:744 MB, mean:744 MB
-- NVMe:
-  Total size: 800 GB
-  Free: 499 GB, min:7.7 GB, max:7.9 GB, mean:7.8 GB
-Rebuild idle, 0 objs, 0 recs
+- Target count:24
+- Storage tier 0 (SCM):
+  Total size: 74 GB
+  Free: 59 GB, min:2.4 GB, max:2.5 GB, mean:2.5 GB
+- Storage tier 1 (NVME):
+  Total size: 786 GB
+  Free: 742 GB, min:31 GB, max:33 GB, mean:31 GB
 ```
 
-Move data from POSIX directory into a DAOS container:
+
+3. Copy data from POSIX directory into the new DAOS container:
 
 ```sh
-# moving everything under /tmp/daos_dfuse to new cont $DAOS_CONT2
-$ daos filesystem copy --src /tmp/daos_dfuse/ --dst daos://$DAOS_POOL/$DAOS_CONT2
-Successfully copied to DAOS: /
+$ daos filesystem copy --src /tmp/daos_dfuse/ --dst daos://test_pool/test_cont2
+Successfully copied to DAOS: daos://test_pool/test_cont2
+    Directories: 554
+    Files:       33341
+    Links:       0
 ```
 
-Pool Query to confirm data got copied (Free space has reduced from last
+!!! note
+  The `daos://test_pool/test_cont2` destination path utilizes the `test_pool` pool and `test_cont`
+  container labels
+
+
+4. Query the pool to confirm the data copy (Free space has been reduced from last
 pool query):
 
 ```sh
-dmg pool query $DAOS_POOL
-Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
+$ dmg pool query test_pool
+Pool e0630b72-68e5-4dbc-b6ec-e1b1c201f8aa, ntarget=24, disabled=0, leader=1, version=1, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
-- Target(VOS) count:64
-- SCM:
-  Total size: 48 GB
-  Free: 47 GB, min:738 MB, max:739 MB, mean:739 MB
-- NVMe:
-  Total size: 800 GB
-  Free: 338 GB, min:5.1 GB, max:5.5 GB, mean:5.3 GB
-Rebuild idle, 0 objs, 0 recs
+- Target count:24
+- Storage tier 0 (SCM):
+  Total size: 74 GB
+  Free: 59 GB, min:2.4 GB, max:2.5 GB, mean:2.5 GB
+- Storage tier 1 (NVME):
+  Total size: 786 GB
+  Free: 698 GB, min:29 GB, max:31 GB, mean:29 GB
 ```
 
-Move data from DAOS container to POSIX directory:
+
+5. Copy data from the new DAOS container to POSIX directory:
 
 ```sh
 $ mkdir /tmp/daos_dfuse/daos_container_copy
-
-$ daos filesystem copy --src daos://$DAOS_POOL/$DAOS_CONT2 --dst /tmp/daos_dfuse/daos_container_copy
-
-$ mkdir /tmp/daos_dfuse/daos_cont_copy// failed, File exists
-Successfully copied to POSIX: /tmp/daos_dfuse/daos_cont_copy/
+$ daos filesystem copy --src daos://test_pool/test_cont2 --dst /tmp/daos_dfuse/daos_container_copy
+Successfully copied to DAOS: /tmp/daos_dfuse/daos_container_copy
+    Directories: 554
+    Files:       33341
+    Links:       0
 ```
 
-Pool Query to confirm data got copied:
+
+6. Query the pool to confirm data copy (Free space has been further reduced from last
+pool query):
 
 ```sh
-$ dmg pool query $DAOS_POOL
-Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
+$ dmg pool query test_pool
+Pool e0630b72-68e5-4dbc-b6ec-e1b1c201f8aa, ntarget=24, disabled=0, leader=1, version=1, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
-- Target(VOS) count:64
-- SCM:
-  Total size: 48 GB
-  Free: 47 GB, min:732 MB, max:733 MB, mean:732 MB
-- NVMe:
-  Total size: 800 GB
-  Free: 128 GB, min:1.8 GB, max:2.3 GB, mean:2.0 GB
-Rebuild idle, 0 objs, 0 recs
+- Target count:24
+- Storage tier 0 (SCM):
+  Total size: 74 GB
+  Free: 59 GB, min:2.4 GB, max:2.5 GB, mean:2.5 GB
+- Storage tier 1 (NVME):
+  Total size: 786 GB
+  Free: 655 GB, min:27 GB, max:29 GB, mean:27 GB
 ```
 
-Check data inside the POSIX directories:
+
+7. Check data inside the POSIX directories:
 
 ```sh
 $ ls -latr /tmp/daos_dfuse/
-total 157286400
--rw-rw-r-- 1 standan standan 161061273600 Apr 29 23:23 testfile
-drwxrwxr-x 1 standan standan           64 Apr 29 23:28 test-dir.0-0
-drwxrwxr-x 1 standan standan           64 Apr 29 23:30 clients
-drwxrwxr-x 1 standan standan           64 Apr 30 00:02 daos_container_copy
-
+total 20971520
+-rw-r--r-- 1 hendersp ldap 21474836480 Mar 19 17:46 testfile
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 17:55 test-dir.0-0
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 21:50 clients
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 22:48 daos_container_copy
+$
 $ ls -latr /tmp/daos_dfuse/daos_container_copy
-drwx------ 1 standan standan 64 Apr 30 00:02 daos_dfuse
-drwx------ 1 standan standan 64 Apr 30 00:11 testfile
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 22:37 clients
+-rw-r--r-- 1 hendersp ldap 21474836480 Mar 19 22:46 testfile
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 22:48 test-dir.0-0
 ```
 
 ## mpifileutils (multi-process)
 
-Build mpifileutils package:
+Use the `mpifileutils` command to move data between containers.
+
+1. Build mpifileutils package:
+
+Load mpich module or set it's path in your environment
 
 ```sh
-# load mpich module or set it's path in your environment
-$ module load mpi/mpich-x86_64
+$ module load mpi/mpich
+$ module list
+Currently Loaded Modulefiles:
+ 1) mpich/5.0.0b1.lua
+```
 or
+```sh
 $ export LD_LIBRARY_PATH=<mpich lib path>:$LD_LIBRARY_PATH
 $ export PATH=<mpich bin path>:$PATH
+```
 
-# install daos-devel, if missing
-$ sudo yum install -y daos-devel
+Install dependencies
+```sh
+$ sudo dnf install -y daos-devel libattr-devel bzip2-devel
+```
 
-# Build Dependencies
-$ mkdir install
-$ installdir=`pwd`/install
+Build other dependencies
+```sh
+$ installdir=${HOME}/software/mpifileutils
+$ mkdir $installdir
 
-$ mkdir deps
-$ cd deps
+$ cd /tmp
+$ mkdir deps; cd deps
 $ wget https://github.com/hpc/libcircle/releases/download/v0.3/libcircle-0.3.0.tar.gz
-$ wget https://github.com/llnl/lwgrp/releases/download/v1.0.2/lwgrp-1.0.2.tar.gz
-$ wget https://github.com/llnl/dtcmp/releases/download/v1.1.0/dtcmp-1.1.0.tar.gz
+$ wget https://github.com/llnl/lwgrp/releases/download/v1.0.4/lwgrp-1.0.4.tar.gz
+$ wget https://github.com/llnl/dtcmp/releases/download/v1.1.4/dtcmp-1.1.4.tar.gz
+$ wget https://github.com/libarchive/libarchive/releases/download/v3.5.1/libarchive-3.5.1.tar.gz
 
 $ tar -zxf libcircle-0.3.0.tar.gz
 $ cd libcircle-0.3.0
@@ -125,257 +167,303 @@ $ ./configure --prefix=$installdir
 $ make install
 $ cd ..
 
-$ tar -zxf lwgrp-1.0.2.tar.gz
-$ cd lwgrp-1.0.2
+$ tar -zxf lwgrp-1.0.4.tar.gz
+$ cd lwgrp-1.0.4
 $ ./configure --prefix=$installdir
 $ make install
 $ cd ..
 
-$ tar -zxf dtcmp-1.1.0.tar.gz
-$ cd dtcmp-1.1.0
+$ tar -zxf dtcmp-1.1.4.tar.gz
+$ cd dtcmp-1.1.4
+$ export LD_LIBRARY_PATH=$installdir/lib64:$LD_LIBRARY_PATH
 $ ./configure --prefix=$installdir --with-lwgrp=$installdir
 $ make install
 $ cd ..
-$ cd ..
 
-
-# Build mpifileutils
-$ git clone https://github.com/hpc/mpifileutils
-$ mkdir build
-$ cd build
-
-$ cmake3 ../mpifileutils/ -DWITH_DTCMP_PREFIX=<path/to/dtcmp/install> -DWITH_LibCircle_PREFIX=<path/to/lib/circle/install> -DWITH_CART_PREFIX=/usr/ -DWITH_DAOS_PREFIX=/usr/ -DCMAKE_INSTALL_PREFIX=<path/where/mpifileutils/need/to/be/installed> -DENABLE_DAOS=ON -DENABLE_LIBARCHIVE=OFF
-
+$ tar -zxf libarchive-3.5.1.tar.gz
+$ cd libarchive-3.5.1/
+$ ./configure --prefix=$installdir
 $ make install
-
-# On launch node set mpifileutils LD_LIBRARY_PATH and PATH
-$ export LD_LIBRARY_PATH=<mpifileutils/lib/path>:$LD_LIBRARY_PATH
-$ export PATH=<mpifileutils/bin/path>:$PATH
+$ cd ..
 ```
 
-Create Second container:
+Build mpifileutils
 
 ```sh
-$ daos container create --type POSIX $DAOS_POOL
-Successfully created container caf0135c-def8-45a5-bac3-d0b969e67c8b
+$ wget https://github.com/hpc/mpifileutils/releases/download/v0.11.1/mpifileutils-v0.11.1.tgz
+$ tar -zxf mpifileutils-v0.11.1.tgz
+$ cd mpifileutils-v0.11.1/
+$ cmake .. -DWITH_LibArchive_PREFIX=$installdir -DWITH_DTCMP_PREFIX=$installdir -DWITH_LibCircle_PREFIX=$installdir -DCMAKE_INSTALL_PREFIX=$installdir -DWITH_DAOS_PREFIX=/usr/ -DENABLE_DAOS=ON -DMPI_C_COMPILER=${HOME}/software/mpich/bin/mpicc -DMPI_CXX_COMPILER=${HOME}/software/mpich/bin/mpicxx
+$ make -j install
+$ cd
 
-$ export DAOS_CONT2=<cont uuid>
-```
-
-Move data from POSIX directory into a DAOS container:
-
-```sh
-$ mpirun -hostfile /path/to/hostfile -np 16 /path/to/mpifileutils/install/bin/dcp --bufsize 64MB --chunksize 128MB /tmp/daos_dfuse daos://$DAOS_POOL/$DAOS_CONT2/
-
-[2021-04-30T01:16:48] Walking /tmp/daos_dfuse
-[2021-04-30T01:16:58] Walked 24207 items in 10.030 secs (2413.415 items/sec) ...
-[2021-04-30T01:17:01] Walked 34245 items in 13.298 secs (2575.138 items/sec) ...
-[2021-04-30T01:17:01] Walked 34245 items in 13.300 seconds (2574.867 items/sec)
-[2021-04-30T01:17:01] Copying to /
-[2021-04-30T01:17:01] Items: 34245
-[2021-04-30T01:17:01]   Directories: 904
-[2021-04-30T01:17:01]   Files: 33341
-[2021-04-30T01:17:01]   Links: 0
-[2021-04-30T01:17:01] Data: 150.127 GiB (4.611 MiB per file)
-[2021-04-30T01:17:01] Creating 904 directories
-[2021-04-30T01:17:01] Creating 33341 files.
-[2021-04-30T01:17:02] Copying data.
-[2021-04-30T01:17:12] Copied 4.049 GiB (3%) in 10.395 secs (398.867 MiB/s) 375 secs left ...
-[2021-04-30T01:22:37] Copied 8.561 GiB (6%) in 335.113 secs (26.160 MiB/s) 5541 secs left ...
-[2021-04-30T01:22:37] Copied 150.127 GiB (100%) in 335.113 secs (458.742 MiB/s) done
-[2021-04-30T01:22:37] Copy data: 150.127 GiB (161197834240 bytes)
-[2021-04-30T01:22:37] Copy rate: 458.741 MiB/s (161197834240 bytes in 335.114 seconds)
-[2021-04-30T01:22:37] Syncing data to disk.
-[2021-04-30T01:22:37] Sync completed in 0.017 seconds.
-[2021-04-30T01:22:37] Fixing permissions.
-[2021-04-30T01:22:37] Updated 34245 items in 0.176 seconds (194912.821 items/sec)
-[2021-04-30T01:22:37] Syncing directory updates to disk.
-[2021-04-30T01:22:37] Sync completed in 0.012 seconds.
-[2021-04-30T01:22:37] Started: Apr-30-2021,01:17:01
-[2021-04-30T01:22:37] Completed: Apr-30-2021,01:22:37
-[2021-04-30T01:22:37] Seconds: 336.013
-[2021-04-30T01:22:37] Items: 34245
-[2021-04-30T01:22:37]   Directories: 904
-[2021-04-30T01:22:37]   Files: 33341
-[2021-04-30T01:22:37]   Links: 0
-[2021-04-30T01:22:37] Data: 150.127 GiB (161197834240 bytes)
-[2021-04-30T01:22:37] Rate: 457.513 MiB/s (161197834240 bytes in 336.013 seconds)
+$ export LD_LIBRARY_PATH=${HOME}/software/mpifileutils/lib64/:$LD_LIBRARY_PATH
+$ export PATH=${HOME}/software/mpifileutils/bin/:$PATH
+$ which dcp
+~/software/mpifileutils/bin/dcp
 ```
 
 
-Pool Query to verify data was copied (free space should reduce):
+2. Create a new container:
 
 ```sh
-$ dmg pool query $DAOS_POOL
+$ daos cont create test_pool test_cont3 --type=POSIX
+Successfully created container 86e9c9a3-8667-4ad4-9a0c-364a318acb6b type POSIX
+  Container UUID : 86e9c9a3-8667-4ad4-9a0c-364a318acb6b
+  Container Label: test_cont3
+  Container Type : POSIX
+```
 
-Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
+
+3. Query the pool before moving data:
+
+```sh
+$ dmg pool query test_pool
+Pool e0630b72-68e5-4dbc-b6ec-e1b1c201f8aa, ntarget=24, disabled=0, leader=1, version=1, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
-- Target(VOS) count:64
-- SCM:
-  Total size: 48 GB
-  Free: 47 GB, min:734 MB, max:735 MB, mean:735 MB
-- NVMe:
-  Total size: 800 GB
-  Free: 338 GB, min:5.2 GB, max:5.4 GB, mean:5.3 GB
-Rebuild idle, 0 objs, 0 recs
+- Target count:24
+- Storage tier 0 (SCM):
+  Total size: 74 GB
+  Free: 59 GB, min:2.4 GB, max:2.5 GB, mean:2.5 GB
+- Storage tier 1 (NVME):
+  Total size: 786 GB
+  Free: 655 GB, min:27 GB, max:29 GB, mean:27 GB
 ```
 
 
-
-Move data from DAOS container to POSIX directory:
+4. Move data from POSIX directory into the new DAOS container:
 
 ```sh
-$ mkdir /tmp/daos_dfuse/daos_container_copy
-
-$ mpirun -hostfile /path/to/hostfile -np 16 dcp --bufsize 64MB --chunksize 128MB daos://$DAOS_POOL/$DAOS_CONT2/ /tmp/daos_dfuse/daos_container_copy
-
-[2021-04-30T01:26:11] Walking /
-[2021-04-30T01:26:14] Walked 34246 items in 2.648 secs (12930.593 items/sec) ...
-[2021-04-30T01:26:14] Walked 34246 items in 2.650 seconds (12923.056 items/sec)
-[2021-04-30T01:26:14] Copying to /tmp/daos_dfuse/daos_container_copy
-[2021-04-30T01:26:14] Items: 34246
-[2021-04-30T01:26:14]   Directories: 905
-[2021-04-30T01:26:14]   Files: 33341
-[2021-04-30T01:26:14]   Links: 0
-[2021-04-30T01:26:14] Data: 150.127 GiB (4.611 MiB per file)
-[2021-04-30T01:26:14] Creating 905 directories
-[2021-04-30T01:26:14] Original directory exists, skip the creation: `/tmp/daos_dfuse/daos_container_copy/' (errno=17 File exists)
-[2021-04-30T01:26:14] Creating 33341 files.
-[2021-04-30T01:26:19] Copying data.
-[2021-04-30T01:26:29] Copied 3.819 GiB (3%) in 10.213 secs (382.922 MiB/s) 391 secs left ...
-[2021-04-30T01:32:02] Copied 150.127 GiB (100%) in 343.861 secs (447.070 MiB/s) done
-[2021-04-30T01:32:02] Copy data: 150.127 GiB (161197834240 bytes)
-[2021-04-30T01:32:02] Copy rate: 447.069 MiB/s (161197834240 bytes in 343.862 seconds)
-[2021-04-30T01:32:02] Syncing data to disk.
-[2021-04-30T01:32:02] Sync completed in 0.020 seconds.
-[2021-04-30T01:32:02] Fixing permissions.
-[2021-04-30T01:32:17] Updated 34162 items in 14.955 secs (2284.295 items/sec) ...
-[2021-04-30T01:32:17] Updated 34246 items in 14.955 secs (2289.890 items/sec) done
-[2021-04-30T01:32:17] Updated 34246 items in 14.956 seconds (2289.772 items/sec)
-[2021-04-30T01:32:17] Syncing directory updates to disk.
-[2021-04-30T01:32:17] Sync completed in 0.022 seconds.
-[2021-04-30T01:32:17] Started: Apr-30-2021,01:26:14
-[2021-04-30T01:32:17] Completed: Apr-30-2021,01:32:17
-[2021-04-30T01:32:17] Seconds: 363.327
-[2021-04-30T01:32:17] Items: 34246
-[2021-04-30T01:32:17]   Directories: 905
-[2021-04-30T01:32:17]   Files: 33341
-[2021-04-30T01:32:17]   Links: 0
-[2021-04-30T01:32:17] Data: 150.127 GiB (161197834240 bytes)
-[2021-04-30T01:32:17] Rate: 423.118 MiB/s (161197834240 bytes in 363.327 seconds)
+$ mpirun -hosts $CLIENT_NODES -np 16 -wdir /tmp/daos_dfuse ${HOME}/software/mpifileutils/bin/dcp --bufsize 64MB --chunksize 128MB /tmp/daos_dfuse daos://test_pool/test_cont3/
+[2026-03-20T18:01:05] Walking /
+[2026-03-20T18:01:09] Walked 66910 items in 2.577 secs (25964.570 items/sec) ...
+[2026-03-20T18:01:09] Walked 66910 items in 2.582 seconds (25914.574 items/sec)
+[2026-03-20T18:01:09] Copying to /
+[2026-03-20T18:01:09] Items: 66910
+[2026-03-20T18:01:09]   Directories: 228
+[2026-03-20T18:01:09]   Files: 66682
+[2026-03-20T18:01:09]   Links: 0
+[2026-03-20T18:01:09] Data: 40.254 GiB (633.000 KiB per file)
+[2026-03-20T18:01:09] Creating 228 directories
+[2026-03-20T18:01:09] Original directory exists, skip the creation: `//' (errno=17 File exists)
+[2026-03-20T18:01:09] Creating 66682 files.
+[2026-03-20T18:01:12] Copying data.
+[2026-03-20T18:01:27] Copied 363.957 MiB (1%) in 15.000 secs (24.264 MiB/s) 1684 secs left ...
+[2026-03-20T18:19:46] Copied 810.250 MiB (2%) in 1114.103 secs (744.721 KiB/s) 55564 secs left ...
+[2026-03-20T18:19:46] Copied 40.254 GiB (100%) in 1114.103 secs (36.999 MiB/s) done
+[2026-03-20T18:19:46] Copy data: 40.254 GiB (43222794240 bytes)
+[2026-03-20T18:19:46] Copy rate: 36.999 MiB/s (43222794240 bytes in 1114.103 seconds)
+[2026-03-20T18:19:46] Syncing data to disk.
+[2026-03-20T18:19:46] Sync completed in 0.001 seconds.
+[2026-03-20T18:19:46] Fixing permissions.
+[2026-03-20T18:19:53] Updated 67790 items in 6.090 seconds (11130.953 items/sec)
+[2026-03-20T18:19:53] Syncing directory updates to disk.
+[2026-03-20T18:19:53] Sync completed in 0.001 seconds.
+[2026-03-20T18:19:53] Started: Mar-20-2026,18:01:03
+[2026-03-20T18:19:53] Completed: Mar-20-2026,18:19:53
+[2026-03-20T18:19:53] Seconds: 1129.781
+[2026-03-20T18:19:53] Items: 67790
+[2026-03-20T18:19:53]   Directories: 1108
+[2026-03-20T18:19:53]   Files: 66682
+[2026-03-20T18:19:53]   Links: 0
+[2026-03-20T18:19:53] Data: 40.254 GiB (43222794240 bytes)
+[2026-03-20T18:19:53] Rate: 36.485 MiB/s (43222794240 bytes in 1129.781 seconds)
 ```
 
 
-Pool Query to very data was copied:
+5. Query the pool to verify data was copied (free space has been reduced):
 
-```
-$ dmg pool query $DAOS_POOL
-
-Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
+```sh
+$ dmg pool query test_pool
+Pool e0630b72-68e5-4dbc-b6ec-e1b1c201f8aa, ntarget=24, disabled=0, leader=1, version=1, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
-- Target(VOS) count:64
-- SCM:
-  Total size: 48 GB
-  Free: 47 GB, min:728 MB, max:730 MB, mean:729 MB
-- NVMe:
-  Total size: 800 GB
-  Free: 176 GB, min:2.6 GB, max:3.0 GB, mean:2.8 GB
-Rebuild idle, 0 objs, 0 recs
+- Target count:24
+- Storage tier 0 (SCM):
+  Total size: 74 GB
+  Free: 59 GB, min:2.4 GB, max:2.5 GB, mean:2.4 GB
+- Storage tier 1 (NVME):
+  Total size: 786 GB
+  Free: 569 GB, min:23 GB, max:27 GB, mean:24 GB
 ```
 
 
-Check data inside the POSIX directories:
+6. Move data from the new DAOS container to POSIX directory:
+
+```sh
+$ mkdir /tmp/daos_dfuse/test_cont3_copy
+$ mpirun -hosts $CLIENT_NODES -np 16 -wdir /tmp/daos_dfuse ${HOME}/software/mpifileutils/bin/dcp --bufsize 64MB --chunksize 128MB daos://test_pool/test_cont3/ /tmp/daos_dfuse/test_cont3_copy
+[2026-03-20T18:31:28] Walking /
+[2026-03-20T18:31:31] Walked 67790 items in 2.685 secs (25248.913 items/sec) ...
+[2026-03-20T18:31:31] Walked 67790 items in 2.686 seconds (25241.379 items/sec)
+[2026-03-20T18:31:31] Copying to /test_cont3_copy
+[2026-03-20T18:31:31] Items: 67790
+[2026-03-20T18:31:31]   Directories: 1108
+[2026-03-20T18:31:31]   Files: 66682
+[2026-03-20T18:31:31]   Links: 0
+[2026-03-20T18:31:31] Data: 40.254 GiB (633.000 KiB per file)
+[2026-03-20T18:31:31] Creating 1108 directories
+[2026-03-20T18:31:31] Original directory exists, skip the creation: `/test_cont3_copy/' (errno=17 File exists)
+[2026-03-20T18:31:31] Creating 66682 files.
+[2026-03-20T18:31:37] Copying data.
+[2026-03-20T18:31:52] Copied 305.402 MiB (1%) in 15.012 secs (20.345 MiB/s) 2011 secs left ...
+[2026-03-20T18:49:34] Copied 752.625 MiB (2%) in 1076.404 secs (715.984 KiB/s) 57877 secs left ...
+[2026-03-20T18:49:34] Copied 40.254 GiB (100%) in 1076.404 secs (38.295 MiB/s) done
+[2026-03-20T18:49:34] Copy data: 40.254 GiB (43222794240 bytes)
+[2026-03-20T18:49:34] Copy rate: 38.295 MiB/s (43222794240 bytes in 1076.404 seconds)
+[2026-03-20T18:49:34] Syncing data to disk.
+[2026-03-20T18:49:34] Sync completed in 0.001 seconds.
+[2026-03-20T18:49:34] Fixing permissions.
+[2026-03-20T18:49:40] Updated 67790 items in 6.317 seconds (10731.073 items/sec)
+[2026-03-20T18:49:40] Syncing directory updates to disk.
+[2026-03-20T18:49:40] Sync completed in 0.001 seconds.
+[2026-03-20T18:49:40] Started: Mar-20-2026,18:31:31
+[2026-03-20T18:49:40] Completed: Mar-20-2026,18:49:40
+[2026-03-20T18:49:40] Seconds: 1089.640
+[2026-03-20T18:49:40] Items: 67790
+[2026-03-20T18:49:40]   Directories: 1108
+[2026-03-20T18:49:40]   Files: 66682
+[2026-03-20T18:49:40]   Links: 0
+[2026-03-20T18:49:40] Data: 40.254 GiB (43222794240 bytes)
+[2026-03-20T18:49:40] Rate: 37.829 MiB/s (43222794240 bytes in 1089.640 seconds)
+```
+
+
+7. Query the pool to very data was copied (free space has been further reduced):
+
+```sh
+$ dmg pool query test_pool
+Pool e0630b72-68e5-4dbc-b6ec-e1b1c201f8aa, ntarget=24, disabled=0, leader=1, version=1, state=Ready
+Pool health info:
+- Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
+Pool space info:
+- Target count:24
+- Storage tier 0 (SCM):
+  Total size: 74 GB
+  Free: 58 GB, min:2.4 GB, max:2.5 GB, mean:2.4 GB
+- Storage tier 1 (NVME):
+  Total size: 786 GB
+  Free: 482 GB, min:19 GB, max:23 GB, mean:20 GB
+```
+
+
+8. Check data inside the POSIX directories:
 
 ```sh
 $ ls -latr /tmp/daos_dfuse/
-
-total 157286400
--rw-rw-r-- 1 standan standan 161061273600 Apr 29 23:23 testfile
-drwxrwxr-x 1 standan standan           64 Apr 29 23:28 test-dir.0-0
-drwxrwxr-x 1 standan standan           64 Apr 29 23:30 clients
-drwxr-xr-x 1 standan standan           64 Apr 30 01:25 daos_container_copy
-
-ls -latr /tmp/daos_dfuse/daos_container_copy
-drwxr-xr-x 1 standan standan 64 Apr 30 01:26 daos_dfuse
+total 20971520
+-rw-r--r-- 1 hendersp ldap 21474836480 Mar 19 17:46 testfile
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 17:55 test-dir.0-0
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 21:50 clients
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 22:48 daos_container_copy
+drwxr-xr-x 1 hendersp ldap         104 Mar 20 18:49 test_cont3_copy
+$
+$ ls -latr /tmp/daos_dfuse/test_cont3_copy
+total 20971520
+-rw-r--r-- 1 hendersp ldap 21474836480 Mar 20 18:49 testfile
+drwxr-xr-x 1 hendersp ldap         104 Mar 20 18:49 daos_container_copy
+drwxr-xr-x 1 hendersp ldap         104 Mar 20 18:49 test-dir.0-0
+drwxr-xr-x 1 hendersp ldap         104 Mar 20 18:49 clients
+$
+$ ls -latr /tmp/daos_dfuse/daos_container_copy
+total 20971520
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 22:37 clients
+-rw-r--r-- 1 hendersp ldap 21474836480 Mar 19 22:46 testfile
+drwxr-xr-x 1 hendersp ldap         104 Mar 19 22:48 test-dir.0-0
 ```
 
-
-For more details on datamover, reference
-[DAOS Support](https://github.com/hpc/mpifileutils/blob/main/DAOS-Support.md)
-on the mpifileutils website.
+!!! note
+  For more details on datamover, reference
+  [DAOS Support](https://github.com/hpc/mpifileutils/blob/main/DAOS-Support.md)
+  on the mpifileutils website.
 
 
 ## Clean Up
 
-Remove one of the copy created using datamover
+1. Remove the copy created using datamover
 
 ```sh
 $ rm -rf /tmp/daos_dfuse/daos_container_copy
 ```
 
-Remove dfuse mountpoint:
+
+2. Remove dfuse mountpoint:
 
 ```sh
-# unmount dfuse
 $ pdsh -w $CLIENT_NODES 'fusermount3 -uz /tmp/daos_dfuse'
-
-# remove mount dir
 $ pdsh -w $CLIENT_NODES rm -rf /tmp/daos_dfuse
 ```
 
-List containers to be destroyed:
+
+3. List containers to be destroyed:
 
 ```sh
-# list containers
-$ daos pool list-containers $DAOS_POOL  # sample output
-
-# sample output
-cd46cf6e-f886-4682-8077-e3cbcd09b43a
-caf0135c-def8-45a5-bac3-d0b969e67c8b
+$ daos pool list-containers test_pool
+Containers in pool test_pool:
+  Label
+  -----
+  test_cont
+  test_cont2
+  test_cont3
 ```
 
-Destroy Containers:
+
+4. Destroy Containers:
 
 ```sh
-# destroy container1
-$ daos container destroy $DAOS_POOL $DAOS_CONT
+$ daos container destroy test_pool test_cont
+Successfully destroyed container test_cont
+$ daos container destroy test_pool test_cont2
+Successfully destroyed container test_cont2
+$ daos container destroy test_pool test_cont3
+Successfully destroyed container test_cont3
+$
 
-# destroy container2
-$ daos container destroy $DAOS_POOL $DAOS_CONT2
+$ daos pool list-containers test_pool
+No containers.
 ```
 
-List Pools to be destroyed:
+
+5. List Pools to be destroyed:
 
 ```sh
-# list pool
 $ dmg pool list
-
-# sample output
-Pool UUID                            Svc Replicas
----------                            ------------
-b22220ea-740d-46bc-84ad-35ed3a28aa31 [1-3]
+Pool          Size   State Used Imbalance Disabled
+----          ----   ----- ---- --------- --------
+autotest_pool 47 GB  Ready 2%   0%        0/24
+test_pool     786 GB Ready 0%   0%        0/24
 ```
 
 
-Destroy Pool:
+6. Destroy Pool:
 
 ```sh
-# destroy pool
-$ dmg pool destroy $DAOS_POOL
+$ dmg pool destroy autotest_pool
+Pool-destroy command succeeded
+$ dmg pool destroy test_pool
+Pool-destroy command succeeded
+$
+
+$ dmg pool list
+No pools in system
 ```
 
 
-Stop Agents:
+7. Stop Agents:
 
 ```sh
-# stop agents
 $ pdsh -S -w $CLIENT_NODES "sudo systemctl stop daos_agent"
 ```
 
-Stop Servers:
+
+8. Stop Servers:
 
 ```sh
-# stop servers
-
 $ pdsh -S -w $SERVER_NODES "sudo systemctl stop daos_server"
 ```

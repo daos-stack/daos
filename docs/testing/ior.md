@@ -25,11 +25,14 @@ section of the Administration Guide contains further information on IOR and mdte
 
 ```sh
 $ module load mpi/mpich-x86_64 # or any other MPI stack
+
+$ cd /tmp
 $ git clone https://github.com/hpc/ior.git
 $ cd ior
+$ git checkout 4.0.0
 $ ./bootstrap
-$ mkdir build;cd build
-$ ../configure --with-daos=/usr --prefix=<your_dir>
+$ mkdir build; cd build
+$ ../configure --with-daos=/usr --prefix=$HOME/software/ior
 $ make
 $ make install
 ```
@@ -40,6 +43,38 @@ This example uses the default IOR `API=POSIX`, and requires that the DAOS POSIX 
 is dfuse-mounted at `/tmp/daos_dfuse` on all client nodes. Refer to
 [DFuse (DAOS FUSE)](https://docs.daos.io/v2.6/user/filesystem/#dfuse-daos-fuse)
 for details on dfuse mounts.
+
+Example dfuse-mounted DAOS POSIX container:
+
+```sh
+$ dmg pool create --size=25% -u ${USER}@ test_pool
+Creating DAOS pool with 25% of all storage
+Pool created with 8.64%,91.36% storage tier ratio
+-------------------------------------------------
+  UUID                 : e0630b72-68e5-4dbc-b6ec-e1b1c201f8aa
+  Service Leader       : 1
+  Service Ranks        : [0-1]
+  Storage Ranks        : [0-1]
+  Total Size           : 860 GB
+  Storage tier 0 (SCM) : 74 GB (37 GB / rank)
+  Storage tier 1 (NVMe): 786 GB (393 GB / rank)
+
+$ daos cont create test_pool test_cont --type=POSIX
+Successfully created container 90e3d9a3-2eab-4f08-b912-7c468e5dce56 type POSIX
+  Container UUID : 90e3d9a3-2eab-4f08-b912-7c468e5dce56
+  Container Label: test_cont
+  Container Type : POSIX
+
+$ clush -B -w $CLIENT_NODES mkdir /tmp/daos_dfuse
+$ clush -B -w $CLIENT_NODES dfuse /tmp/daos_dfuse test_pool test_cont
+$ clush -B -w $CLIENT_NODES "df -h | grep fuse"
+----------------
+client-[1-2]
+----------------
+dfuse                                                       802G   16G  787G   2% /tmp/daos_dfuse
+$
+```
+
 The per-task performance over a dfuse mount is limited.
 To obtain better performance, the POSIX API can be used in conjunction with the
 [IOIL](https://docs.daos.io/v2.6/user/filesystem/#interception-library) interception library.
@@ -49,57 +84,56 @@ information (`ior -a DFS --dfs.pool=$DAOS_POOL --daos.cont=$DAOS_CONT ...`).
 ```sh
 $ module load mpi/mpich-x86_64 # or any other MPI stack
 
-$ mpirun -hostfile /path/to/hostfile_clients -np 30 <your_dir>/bin/ior -a POSIX -b 5G -t 1M -v -W -w -r -R -i 1 -o /tmp/daos_dfuse/testfile
+$ mpirun -hosts $CLIENT_NODES -np 10 ${HOME}/software/ior/bin/ior -a POSIX -b 2G -t 1M -v -W -w -r -R -i 1 -o /tmp/daos_dfuse/testfile
 
-IOR-3.4.0+dev: MPI Coordinated Test of Parallel I/O
-Began               : Thu Apr 29 23:23:09 2021
-Command line        : ior -a POSIX -b 5G -t 1M -v -W -w -r -R -i 1 -o /tmp/daos_dfuse/testfile
-Machine             : Linux wolf-86.wolf.example.com
-Start time skew across all tasks: 0.00 sec
+IOR-4.0.0: MPI Coordinated Test of Parallel I/O
+Began               : Thu Mar 19 17:42:44 2026
+Command line        : ${HOME}/software/ior/bin/ior -a POSIX -b 2G -t 1M -v -W -w -r -R -i 1 -k -o /tmp/daos_dfuse/testfile
+Machine             : Linux brd-233.daos.hpc.amslabs.hpecorp.net
 TestID              : 0
-StartTime           : Thu Apr 29 23:23:09 2021
-Path                : /tmp/daos_dfuse/testfile
-FS                  : 789.8 GiB   Used FS: 16.5%   Inodes: -0.0 Mi   Used Inodes: 0.0%
-Participating tasks : 30
+StartTime           : Thu Mar 19 17:42:44 2026
+Path                : /tmp/daos_dfuse_test/testfile
+FS                  : 801.2 GiB   Used FS: 1.9%   Inodes: -0.0 Mi   Used Inodes: 0.0%
+Participating tasks : 10
 
 Options:
 api                 : POSIX
 apiVersion          :
-test filename       : /tmp/daos_dfuse/testfile
+test filename       : /tmp/daos_dfuse_test/testfile
 access              : single-shared-file
 type                : independent
 segments            : 1
 ordering in a file  : sequential
 ordering inter file : no tasks offsets
-nodes               : 3
-tasks               : 30
-clients per node    : 10
+nodes               : 2
+tasks               : 10
+clients per node    : 5
 repetitions         : 1
 xfersize            : 1 MiB
-blocksize           : 5 GiB
-aggregate filesize  : 150 GiB
+blocksize           : 2 GiB
+aggregate filesize  : 20 GiB
 verbose             : 1
 
 Results:
 
 access    bw(MiB/s)  IOPS       Latency(s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   total(s)   iter
 ------    ---------  ----       ----------  ---------- ---------  --------   --------   --------   --------   ----
-Commencing write performance test: Thu Apr 29 23:23:09 2021
-write     1299.23    1299.84    0.022917    5242880    1024.00    10.79      118.17     0.000377   118.22     0
+Commencing write performance test: Thu Mar 19 17:42:44 2026
+write     101.04     101.04     0.098970    2097152    1024.00    0.005258   202.69     0.003326   202.70     0
 Verifying contents of the file(s) just written.
-Thu Apr 29 23:25:07 2021
+Thu Mar 19 17:46:08 2026
 
-Commencing read performance test: Thu Apr 29 23:25:35 2021
+Commencing read performance test: Thu Mar 19 17:47:54 2026
 
-read      5429       5431       0.005523    5242880    1024.00    0.012188   28.28      0.000251   28.29      0
-Max Write: 1299.23 MiB/sec (1362.35 MB/sec)
-Max Read:  5429.38 MiB/sec (5693.11 MB/sec)
+read      30912      30992      0.000321    2097152    1024.00    0.004187   0.660818   0.003185   0.662533   0
+Max Write: 101.04 MiB/sec (105.95 MB/sec)
+Max Read:  30911.67 MiB/sec (32413.23 MB/sec)
 
 Summary of all tests:
 Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)   Min(OPs)  Mean(OPs)     StdDev    Mean(s) Stonewall(s) Stonewall(MiB) Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt   blksiz    xsize aggs(MiB)   API RefNum
-write        1299.23    1299.23    1299.23       0.00    1299.23    1299.23    1299.23       0.00  118.22343         NA            NA     0     30  10    1   0     0        1         0    0      1 5368709120  1048576  153600.0 POSIX      0
-read         5429.38    5429.38    5429.38       0.00    5429.38    5429.38    5429.38       0.00   28.29054         NA            NA     0     30  10    1   0     0        1         0    0      1 5368709120  1048576  153600.0 POSIX      0
-Finished            : Thu Apr 29 23:26:03 2021
+write         101.04     101.04     101.04       0.00     101.04     101.04     101.04       0.00  202.69653         NA            NA     0     10   5    1   0     0        1         0    0      1 2147483648  1048576   20480.0 POSIX      0
+read        30911.67   30911.67   30911.67       0.00   30911.67   30911.67   30911.67       0.00    0.66253         NA            NA     0     10   5    1   0     0        1         0    0      1 2147483648  1048576   20480.0 POSIX      0
+Finished            : Thu Mar 19 17:47:55 2026
 ```
 
 ## Run mdtest
@@ -107,26 +141,24 @@ Finished            : Thu Apr 29 23:26:03 2021
 Use mdtest to create 30K files using `API=POSIX` (as for IOR, using `-a DFS` will provide much better performance):
 
 ```sh
-$ mpirun -hostfile /path/to/hostfile_clients -np 10 <your_dir>/bin/mdtest -a POSIX -z 0 -F -C -i 1 -n 3334 -e 4096 -d /tmp/daos_dfuse/ -w 4096
+$ mpirun -hosts $CLIENT_NODES -np 10 ${HOME}/software/ior/bin/mdtest -a POSIX -z 0 -F -C -i 1 -n 3334 -e 4096 -d /tmp/daos_dfuse -w 4096
+-- started at 03/19/2026 17:55:06 --
 
--- started at 04/29/2021 23:28:11 --
-
-mdtest-3.4.0+dev was launched with 10 total task(s) on 3 node(s)
-Command line used: mdtest '-a' 'POSIX' '-z' '0' '-F' '-C' '-i' '1' '-n' '3334' '-e' '4096' '-d' '/tmp/daos_dfuse/' '-w' '4096'
-Path: /tmp/daos_dfuse
-FS: 36.5 GiB   Used FS: 18.8%   Inodes: 2.3 Mi   Used Inodes: 5.9%
-
-Nodemap: 1001001001
+mdtest-4.0.0 was launched with 10 total task(s) on 2 node(s)
+Command line used: ${HOME}/software/ior/bin/mdtest '-a' 'POSIX' '-z' '0' '-F' '-C' '-i' '1' '-n' '3334' '-e' '4096' '-d' '/tmp/daos_dfuse' '-w' '4096'
+Path                : /tmp/daos_dfuse_test
+FS                  : 36.4 GiB   Used FS: 16.8%   Inodes: 2.3 Mi   Used Inodes: 6.8%
+Nodemap: 1010101010
 10 tasks, 33340 files
 
 SUMMARY rate: (of 1 iterations)
-   Operation                      Max            Min           Mean        Std Dev
-   ---------                      ---            ---           ----        -------
-   File creation             :       2943.697       2943.674       2943.686          0.006
-   File stat                 :          0.000          0.000          0.000          0.000
-   File read                 :          0.000          0.000          0.000          0.000
-   File removal              :          0.000          0.000          0.000          0.000
-   Tree creation             :       1079.858       1079.858       1079.858          0.000
-   Tree removal              :          0.000          0.000          0.000          0.000
--- finished at 04/29/2021 23:28:22 --
+   Operation                     Max            Min           Mean        Std Dev
+   ---------                     ---            ---           ----        -------
+   File creation                2568.636       2568.636       2568.636          0.000
+   File stat                       0.000          0.000          0.000          0.000
+   File read                       0.000          0.000          0.000          0.000
+   File removal                    0.000          0.000          0.000          0.000
+   Tree creation                 496.015        496.015        496.015          0.000
+   Tree removal                    0.000          0.000          0.000          0.000
+-- finished at 03/19/2026 17:55:20 --
 ```

@@ -36,31 +36,54 @@ as well as the MPICH 4.x releases.
 To build MPICH, including ROMIO with the DAOS ADIO driver:
 
 ```bash
-export MPI_LIB=""
+$ sudo dnf install -y daos-devel
 
-# to clone the latest development snapshot:
-git clone https://github.com/pmodels/mpich
-cd mpich
+$ export MPI_LIB=""
+$ PREFIX=$HOME/software/mpich
 
-# to clone a specific tagged version:
-git clone -b v3.4.3 https://github.com/pmodels/mpich mpich-3.4.3
-cd mpich-3.4.3
+$ cd /tmp
+$ git clone https://github.com/pmodels/mpich
+$ cd mpich/
+$ git submodule update --init
+$ ./autogen.sh
+$ ./configure --prefix=$PREFIX --disable-fortran --enable-romio --enable-cxx --enable-g=all --enable-debuginfo --with-device=ch3:nemesis --with-file-system=ufs+daos --with-daos=/usr
+$ make -j8; make install
+```
 
-git submodule update --init
+Optionally create a module file to use with the `module` command
 
-./autogen.sh
+```bash
+$ ${PREFIX}/bin/mpirun --version
+HYDRA build details:
+    Version:                                 5.0.0b1
+    Release Date:                            unreleased development copy
+    CC:                              gcc
+    Configure options:                       '--disable-option-checking' '--prefix=/home/hendersp/software/mpich' '--enable-fortran=all' '--enable-romio' '--enable-cxx' '--enable-g=all' '--enable-debuginfo' '--with-device=ch3:nemesis' '--with-file-system=ufs+daos' '--with-daos=/usr' '--disable-fortran' '--cache-file=/dev/null' '--srcdir=.' 'CC=gcc' 'CFLAGS= -g -O2' 'LDFLAGS= ' 'LIBS= ' 'CPPFLAGS= -I/tmp/mpich/src/mpl/include -I/tmp/mpich/modules/json-c -D_REENTRANT -I/tmp/mpich/src/mpi/romio/include -I/tmp/mpich/src/pmi/include'
+    Process Manager:                         pmi
+    Launchers available:                     ssh rsh fork slurm ll lsf sge manual persist
+    Topology libraries available:            hwloc
+    Resource management kernels available:   user slurm ll lsf sge pbs cobalt
+    Demux engines available:                 poll select
 
-PREFIX=$HOME/software/mpich
-# or PREFIX=$HOME/software/mpich-3.4.3 for a specific tagged version
-mkdir -p $PREFIX
+$ echo $MODULEPATH
+/etc/scl/modulefiles:/usr/share/Modules/modulefiles:/etc/modulefiles:/usr/share/modulefiles
 
-./configure --prefix=$PREFIX --enable-fortran=all --enable-romio \
- --enable-cxx --enable-g=all --enable-debuginfo --with-device=ch3:nemesis \
- --with-file-system=ufs+daos --with-daos=/usr
+$ sudo mkdir /usr/share/modulefiles/mpich
+$ sudo vim /usr/share/modulefiles/mpich/5.0.0b1.lua
+$ cat /usr/share/modulefiles/mpich/5.0.0b1.lua
+#%Module 1.0
+#
+#  MPICH module for use with 'environment-modules' package:
+#
+conflict                mpi
+prepend-path            PATH            /home/hendersp/software/mpich/bin
+prepend-path            LD_LIBRARY_PATH /home/hendersp/software/mpich/lib64
+prepend-path            INCLUDE         /home/hendersp/software/mpich/include
 
-# compiling 3.4.3 may need FFLAGS=-fallow-argument-mismatch on the configure command line
-
-make -j8; make install
+$ module add mpich/5.0.0b1.lua
+$ module list
+Currently Loaded Modulefiles:
+ 1) mpich/5.0.0b1.lua
 ```
 
 This assumes that DAOS is installed into the `/usr` tree, which is the case for
