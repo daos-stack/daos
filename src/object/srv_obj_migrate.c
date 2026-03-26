@@ -2216,7 +2216,7 @@ migrate_one_ult(void *arg)
 
 	data_units = data_size * ioa->ioa_fanout;
 	if (migr_res_is_hulk(data_units))
-		rc = migrate_res_hold(tls, MIGR_HULK, data_units, &mrone->mo_data_rsh);
+		rc = migrate_res_hold(tls, MIGR_HULK, 1, &mrone->mo_data_rsh);
 	else
 		rc = migrate_res_hold(tls, MIGR_DATA, data_units, &mrone->mo_data_rsh);
 	if (rc)
