@@ -15,6 +15,7 @@ import (
 	"os/user"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2015,8 +2016,6 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 	for name, tc := range map[string]struct {
 		evt                *events.RASEvent
 		setupEngines       func(*testing.T, logging.Logger, *EngineHarness)
-		setupMockStartReq  bool
-		timeout            time.Duration
 		expErr             error
 		expEngineRestarted bool
 		expLogContains     []string
@@ -2029,7 +2028,6 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 				Hostname:    testHostname,
 				Timestamp:   "",
 			},
-			timeout:            1 * time.Second,
 			expErr:             errors.New("bad event timestamp"),
 			expEngineRestarted: false,
 		},
@@ -2041,7 +2039,6 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 				Hostname:    testHostname,
 				Timestamp:   "not-a-valid-timestamp",
 			},
-			timeout:            1 * time.Second,
 			expErr:             errors.New("bad event timestamp"),
 			expEngineRestarted: false,
 		},
@@ -2060,7 +2057,6 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			timeout:            1 * time.Second,
 			expErr:             errors.New("no instance found for rank 99"),
 			expEngineRestarted: false,
 		},
@@ -2079,7 +2075,6 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			timeout:            1 * time.Second,
 			expErr:             errors.New("no instance found for rank"),
 			expEngineRestarted: false,
 		},
@@ -2094,44 +2089,12 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
 				setupEngine(t, log, h, false)
 			},
-			setupMockStartReq:  true,
-			timeout:            2 * time.Second,
 			expEngineRestarted: true,
 			expLogContains: []string{
-				fmt.Sprintf("rank %d:%x (instance 0) suicide", testRank, testIncarnation),
+				fmt.Sprintf("rank %d:%d (instance 0) suicide", testRank, testIncarnation),
 				testHostname,
 			},
 		},
-		//		"engine stops during wait": {
-		//			evt: &events.RASEvent{
-		//				ID:          events.RASEngineSuicide,
-		//				Rank:        uint32(testRank),
-		//				Incarnation: testIncarnation,
-		//				Hostname:    testHostname,
-		//				Timestamp:   validTimestamp,
-		//			},
-		//			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-		//				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
-		//				e._superblock.Rank = ranklist.NewRankPtr(uint32(testRank))
-		//				rCfg := &engine.TestRunnerConfig{}
-		//				rCfg.Running.SetTrue()
-		//				e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
-		//				if err := h.AddInstance(e); err != nil {
-		//					t.Fatal(err)
-		//				}
-		//
-		//				go func() {
-		//					time.Sleep(200 * time.Millisecond)
-		//					rCfg.Running.SetFalse()
-		//				}()
-		//			},
-		//			setupMockStartReq:  true,
-		//			timeout:            3 * time.Second,
-		//			expEngineRestarted: true,
-		//			expLogContains: []string{
-		//				"suicide",
-		//			},
-		//		},
 		"timeout waiting for engine to stop": {
 			evt: &events.RASEvent{
 				ID:          events.RASEngineSuicide,
@@ -2143,7 +2106,6 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
 				setupEngine(t, log, h, true)
 			},
-			timeout:            500 * time.Millisecond,
 			expErr:             errors.New("did not stop"),
 			expEngineRestarted: false,
 		},
@@ -2160,8 +2122,6 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 					setupEngine(t, log, h, false, uint32(i))
 				}
 			},
-			setupMockStartReq:  true,
-			timeout:            2 * time.Second,
 			expEngineRestarted: true,
 			expLogContains: []string{
 				"rank 2:42 (instance 2) suicide",
@@ -2172,7 +2132,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx, cancel := context.WithTimeout(test.Context(t), tc.timeout)
+			ctx, cancel := context.WithTimeout(test.Context(t), time.Second)
 			defer cancel()
 
 			harness := NewEngineHarness(log)
@@ -2185,54 +2145,45 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 				log:     log,
 				harness: harness,
 			}
-			finished := struct {
-				o  sync.Once
-				ch chan struct{}
-			}{
-				ch: make(chan struct{}),
-			}
-			restartRequested := false
 
-			if tc.setupMockStartReq && len(harness.instances) > 0 {
+			var wg sync.WaitGroup
+			var restartRequested atomic.Bool
+
+			if len(harness.instances) > 0 {
 				targetRank := ranklist.Rank(tc.evt.Rank)
-				for _, inst := range harness.instances {
+				for i, inst := range harness.instances {
 					rank, err := inst.GetRank()
 					if err != nil || rank != targetRank {
-						finished.o.Do(func() { close(finished.ch) })
 						continue
 					}
 
 					ei, ok := inst.(*EngineInstance)
 					if !ok {
-						finished.o.Do(func() { close(finished.ch) })
 						continue
 					}
 
-					go func(e *EngineInstance) {
+					wg.Add(1)
+
+					go func(e *EngineInstance, idx int) {
+						defer wg.Done()
 						select {
 						case <-ctx.Done():
 						case <-e.startRequested:
-							restartRequested = true
+							restartRequested.Store(true)
 						case <-time.After(2 * time.Second):
 						}
-						finished.o.Do(func() { close(finished.ch) })
-					}(ei)
+					}(ei, i)
 				}
-			} else {
-				close(finished.ch)
 			}
 
 			err := handleEngineSuicide(ctx, srv, tc.evt)
-
-			//if tc.setupMockStartReq && len(harness.instances) > 0 {
-			<-finished.ch
-			//}
+			wg.Wait()
 
 			test.CmpErr(t, tc.expErr, err)
 
-			if tc.expEngineRestarted != restartRequested {
+			if tc.expEngineRestarted != restartRequested.Load() {
 				t.Errorf("expected engine restarted=%v, got=%v",
-					tc.expEngineRestarted, restartRequested)
+					tc.expEngineRestarted, restartRequested.Load())
 			}
 
 			logOutput := buf.String()

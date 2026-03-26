@@ -793,7 +793,7 @@ func handleEngineSuicide(ctx context.Context, srv *server, evt *events.RASEvent)
 	}
 	engine := instances[0]
 
-	srv.log.Infof("%s was notified @ %s of rank %d:%x (instance %d) suicide", ts, evt.Hostname,
+	srv.log.Infof("%s was notified @ %s of rank %d:%d (instance %d) suicide", ts, evt.Hostname,
 		evt.Rank, evt.Incarnation, engine.Index())
 
 	// Wait until engine is stopped.
@@ -801,8 +801,6 @@ func handleEngineSuicide(ctx context.Context, srv *server, evt *events.RASEvent)
 	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
 		return errors.Errorf("rank %d (instance %d) did not stop", evt.Rank, engine.Index())
 	}
-
-	// TODO: Check if rank should be restarted?
 
 	engine.requestStart(ctx)
 
