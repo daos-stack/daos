@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -488,6 +488,10 @@ out:
 	return rc;
 }
 
+#define RECLAIM_SKIPPED_MAX    50           /* skipped too many objects may cause ENOSPACE */
+#define RECLAIM_LOG_INTERVAL   1800         /* 30 minutes */
+#define RECLAIM_BUSY_THRESHOLD (300 * 1000) /* 300 seconds */
+
 static int
 obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	    struct daos_obj_md *md, struct rebuild_tgt_pool_tracker *rpt,
@@ -499,6 +503,8 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	struct rebuild_pool_tls *tls;
 	daos_epoch_range_t	discard_epr;
 	bool			still_needed;
+	unsigned int             busy_tried = 0;
+	uint64_t                 log_since  = 0;
 	int			rc;
 
 	/*
@@ -510,6 +516,8 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	if (rc != 0)
 		return rc;
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
+	D_ASSERT(tls != NULL);
 	/* If there are further targets failure during reintegration/extend/drain,
 	 * rebuild will choose replacement targets for the impacted objects anyway,
 	 * so we do not need reclaim these impacted shards by @ignore_rebuild_shard.
@@ -518,6 +526,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 					      mytarget, oid.id_shard,
 					      rpt->rt_rebuild_op == RB_OP_RECLAIM ? false : true);
 	pl_obj_layout_free(layout);
+	tls->rebuild_pool_obj_count++;
 	if (still_needed) {
 		if (new_layout_ver > 0) {
 			/* upgrade job reclaim */
@@ -536,10 +545,8 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 		return 0;
 	}
 
-	D_DEBUG(DB_REBUILD, "deleting stale object "DF_UOID" rank %u tgt %u oid layout %u/%u",
+	D_DEBUG(DB_REBUILD, "deleting stale object " DF_UOID " rank %u tgt %u oid layout %u/%u",
 		DP_UOID(oid), myrank, mytarget, oid.id_layout_ver, new_layout_ver);
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
 	tls->rebuild_pool_reclaim_obj_count++;
 
 	discard_epr.epr_hi = rpt->rt_reclaim_epoch;
@@ -550,17 +557,40 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	 * to delete
 	 */
 	do {
+		uint64_t now;
+
 		/* Inform the iterator and delete the object */
 		*acts |= VOS_ITER_CB_DELETE;
 		rc = vos_discard(param->ip_hdl, &oid, &discard_epr, NULL, NULL);
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
-			DP_RC(rc), DP_UOID(oid));
+		busy_tried++;
+		if (busy_tried >= RECLAIM_BUSY_THRESHOLD) { /* too many retries, time to skip */
+			busy_tried = 0;
+			if (tls->rebuild_pool_reclaim_skipped < RECLAIM_SKIPPED_MAX) {
+				tls->rebuild_pool_reclaim_skipped++;
+				D_ERROR(DF_RB " stop retrying reclaim after 5 minutes (rc=%d), "
+					      "skip busy object=" DF_UOID ", total skipped=" DF_U64
+					      "\n",
+					DP_RB_RPT(rpt), rc, DP_UOID(oid),
+					tls->rebuild_pool_reclaim_skipped);
+				rc = 0;
+				break;
+			}
+		}
+		D_DEBUG(DB_REBUILD, "retry by " DF_RC "/" DF_UOID "\n", DP_RC(rc), DP_UOID(oid));
 		/* Busy - inform iterator and yield */
 		*acts |= VOS_ITER_CB_YIELD;
-		dss_sleep(0);
+		dss_sleep(1); /* 1 ms */
+
+		now = daos_gettime_coarse();
+		if (now - log_since >= RECLAIM_LOG_INTERVAL &&
+		    tls->rebuild_pool_reclaim_skipped > 0) {
+			D_INFO(DF_RB " reclaim skipped total " DF_U64 " busy objects\n",
+			       DP_RB_RPT(rpt), tls->rebuild_pool_reclaim_skipped);
+			log_since = now;
+		}
 	} while (1);
 
 	if (rc != 0)
