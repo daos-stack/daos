@@ -2533,6 +2533,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	daos_handle_t		coh;
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
+	int                       blocked = 0;
 
 	D_ASSERT(type == VOS_ITER_COUUID);
 	if (uuid_compare(arg->cont_uuid, entry->ie_couuid) == 0) {
@@ -2572,8 +2573,10 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
-			DP_RC(rc), DP_UUID(entry->ie_couuid));
+		if ((++blocked) % 500 == 1)
+			D_WARN("Discard on container " DF_UUID " is blocked for %d times (%d)\n",
+			       DP_UUID(entry->ie_couuid), blocked, rc);
+
 		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
 
@@ -2607,6 +2610,7 @@ pool_child_discard(void *data)
 	uint32_t		myrank;
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
+	int                      blocked = 0;
 
 	myrank = dss_self_rank();
 	addr.pta_rank = myrank;
@@ -2651,8 +2655,10 @@ pool_child_discard(void *data)
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
-			DP_RC(rc), DP_UUID(arg->pool_uuid));
+		if ((++blocked) % 500 == 1)
+			D_WARN("Discard on pool " DF_UUID " is blocked for %d times (%d)\n",
+			       DP_UUID(arg->pool_uuid), blocked, rc);
+
 		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
 
