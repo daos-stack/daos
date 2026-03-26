@@ -64,7 +64,7 @@ All Optane PMem modules in a DAOS server must have the same capacity.
     for 4th gen Intel Xeon Scalable processors has been cancelled,
     and is not supported by DAOS.
 
-[PMDK](https://github.com/pmem/pmdk) is used as the programming interface
+[PMDK](https://github.com/daos-stack/pmdk) is used as the programming interface
 when using Optane Persistent Memory.
 
 

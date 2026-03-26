@@ -1,5 +1,6 @@
 # Copyright 2018-2024 Intel Corporation
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025 Google LLC
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Leap based
@@ -119,16 +120,6 @@ USER root:root
 # below in the general update section.  Only install the compilers at
 # ~900Mb rather than the entire stack at ~3Gb download.
 ARG COMPILER=gcc
-RUN if [ "$COMPILER" = "icc" ]; then                                                                     \
-        if [ -z "$REPO_FILE_URL" ] || true; then                                                         \
-            rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
-            dnf config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                     \
-        fi;                                                                                              \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
-        dnf install intel-oneapi-compiler-dpcpp-cpp &&                                                   \
-        dnf clean all;                                                                                   \
-    fi
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1

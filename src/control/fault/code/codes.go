@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -158,6 +158,7 @@ const (
 	ServerPoolHasContainers
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
+	ServerTransparentHugepageEnabled
 )
 
 // server config fault codes
@@ -198,6 +199,7 @@ const (
 	ServerConfigEngineBdevRolesMismatch
 	ServerConfigSysRsvdZero
 	ServerConfigBdevExcludeClash
+	ServerConfigScmHugeEnabled
 )
 
 // SPDK library bindings codes

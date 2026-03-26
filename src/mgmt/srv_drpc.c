@@ -971,6 +971,10 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
 				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes, false);
 
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
+		  DF_UUID ": reintegrate: rank=%u n_target_idx=%zu target_idx[0]=%u", req->id,
+		  req->rank, req->n_targetidx, req->n_targetidx > 0 ? req->targetidx[0] : -1);
+
 	d_rank_list_free(svc_ranks);
 
 out:

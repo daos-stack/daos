@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1384,8 +1384,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		ABT_cond_wait(pooltgts->dpt_cv, pooltgts->dpt_mutex);
 	} while (1);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
-	D_DEBUG(DB_MGMT, DF_UUID": ready to destroy targets\n",
-		DP_UUID(td_in->td_pool_uuid));
+	D_INFO(DF_UUID ": ready to destroy targets\n", DP_UUID(td_in->td_pool_uuid));
 
 	if (engine_in_check()) {
 		rc = chk_engine_pool_stop(td_in->td_pool_uuid, true);

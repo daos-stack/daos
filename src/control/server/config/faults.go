@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -151,6 +151,15 @@ func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
 		fmt.Sprintf("the SCM class in engine %d is different from engine %d",
 			curIdx, seenIdx),
 		"ensure that each I/O Engine has a single SCM tier with the same class and restart",
+	)
+}
+
+func FaultConfigScmDiffHugeEnabled(curIdx, seenIdx int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigScmHugeEnabled,
+		fmt.Sprintf("the scm_hugepages_disabled in engine %d is different from engine %d",
+			curIdx, seenIdx),
+		"ensure that each I/O Engine has the same setting for this parameter and restart",
 	)
 }
 
