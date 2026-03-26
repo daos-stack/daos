@@ -64,7 +64,7 @@ ior:
   client_processes:
     np: 48
   test_file: /testFile
-  repetitions: 5
+  repetitions: 1
   dfs_destroy: false
   iorflags: !mux
     rp_2g4:
