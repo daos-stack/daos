@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1575,6 +1575,9 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
 	if (!rc) {
+		if (!locked)
+			D_INFO(DF_CONT ": vos container created on tgt %u\n",
+			       DP_CONT(pool_uuid, cont_uuid), dss_get_module_info()->dmi_tgt_id);
 		rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 		if (rc == 0) {
 			if (cont_out != NULL)
@@ -1593,6 +1596,10 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 				D_ERROR("failed to destroy "DF_UUID": %d\n",
 					DP_UUID(cont_uuid), rc_tmp);
 		}
+	} else {
+		if (!locked)
+			DL_ERROR(rc, DF_CONT ": failed to create vos container on tgt %u",
+				 DP_CONT(pool_uuid, cont_uuid), dss_get_module_info()->dmi_tgt_id);
 	}
 
 	if (!locked)
