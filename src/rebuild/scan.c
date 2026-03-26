@@ -505,6 +505,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	bool			still_needed;
 	unsigned int             busy_tried = 0;
 	uint64_t                 log_since  = 0;
+	int                      blocked    = 0;
 	int			rc;
 
 	/*
@@ -565,6 +566,10 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
+		if ((++blocked) % 500 == 1)
+			D_WARN("Discard for object " DF_UOID " is blocked for %d times (%d)\n",
+			       DP_UOID(oid), blocked, rc);
+
 		busy_tried++;
 		if (busy_tried >= RECLAIM_BUSY_THRESHOLD) { /* too many retries, time to skip */
 			busy_tried = 0;
@@ -579,7 +584,6 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 				break;
 			}
 		}
-		D_DEBUG(DB_REBUILD, "retry by " DF_RC "/" DF_UOID "\n", DP_RC(rc), DP_UOID(oid));
 		/* Busy - inform iterator and yield */
 		*acts |= VOS_ITER_CB_YIELD;
 		dss_sleep(1); /* 1 ms */
