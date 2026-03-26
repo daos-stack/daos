@@ -2608,6 +2608,9 @@ pool_child_discard(void *data)
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
+	if (1)
+		return 0;
+
 	myrank = dss_self_rank();
 	addr.pta_rank = myrank;
 	addr.pta_target = dss_get_module_info()->dmi_tgt_id;
