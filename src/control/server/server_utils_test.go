@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -1988,7 +1989,15 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 	}
 }
 
+const (
+	testContextTimeout    = 1 * time.Second
+	testHandlerTimeout    = 1 * time.Second
+	testSubscriptionDelay = 50 * time.Millisecond
+)
+
 func TestServer_handleEngineSuicide(t *testing.T) {
+	const testRestartRequestWait = 2 * time.Second
+
 	testRank := ranklist.Rank(1)
 	testIncarnation := uint64(42)
 	testHostname := "test-host-1"
@@ -2132,7 +2141,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx, cancel := context.WithTimeout(test.Context(t), time.Second)
+			ctx, cancel := context.WithTimeout(test.Context(t), testContextTimeout)
 			defer cancel()
 
 			harness := NewEngineHarness(log)
@@ -2170,7 +2179,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 						case <-ctx.Done():
 						case <-e.startRequested:
 							restartRequested.Store(true)
-						case <-time.After(2 * time.Second):
+						case <-time.After(testRestartRequestWait):
 						}
 					}(ei, i)
 				}
@@ -2197,52 +2206,69 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 	}
 }
 
-//func TestServer_handleEngineSuicide_ErrorHandling(t *testing.T) {
-//	log, buf := logging.NewTestLogger(t.Name())
-//	defer test.ShowBufferOnFailure(t, buf)
-//
-//	ctx := test.Context(t)
-//
-//	harness := NewEngineHarness(log)
-//	pubSub := events.NewPubSub(ctx, log)
-//
-//	srv := &server{
-//		log:       log,
-//		harness:   harness,
-//		pubSub:    pubSub,
-//		evtLogger: control.NewEventLogger(log),
-//	}
-//
-//	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
-//		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
-//			switch evt.ID {
-//			case events.RASEngineSuicide:
-//				if err := handleEngineSuicide(ctx, srv, evt); err != nil {
-//					srv.log.Errorf("handleEngineSuicide: %s", err)
-//				}
-//			}
-//		}))
-//
-//	evt := &events.RASEvent{
-//		ID:          events.RASEngineSuicide,
-//		Rank:        1,
-//		Incarnation: 42,
-//		Hostname:    "test-host",
-//		Timestamp:   time.Now().Format(time.RFC3339),
-//	}
-//
-//	pubSub.Publish(evt)
-//
-//	time.Sleep(900 * time.Millisecond)
-//
-//	t.Log(buf.String())
-//	if !strings.Contains(buf.String(), "handleEngineSuicide") {
-//		t.Error("expected error to be logged by handler")
-//	}
-//	if !strings.Contains(buf.String(), "no instance found") {
-//		t.Errorf("expected 'no instance found' in log, got:\n%s", buf.String())
-//	}
-//}
+func TestServer_handleEngineSuicide_ErrorHandling(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	// Channel to signal when handler completes
+	handlerDone := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:       log,
+		harness:   harness,
+		pubSub:    pubSub,
+		evtLogger: control.MockEventLogger(log),
+	}
+
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			log.Debugf("ErrorHandling test handler called for event: ID=%v, Type=%v", evt.ID, evt.Type)
+			switch evt.ID {
+			case events.RASEngineSuicide:
+				log.Debugf("ErrorHandling test handling suicide event")
+				if err := handleEngineSuicide(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSuicide: %s", err)
+				}
+				once.Do(func() { close(handlerDone) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSuicide,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for handler to complete or timeout
+	select {
+	case <-handlerDone:
+		// Handler completed
+	case <-time.After(testHandlerTimeout):
+		t.Fatal("timeout waiting for handler to complete")
+	}
+
+	t.Log(buf.String())
+	if !strings.Contains(buf.String(), "handleEngineSuicide") {
+		t.Error("expected error to be logged by handler")
+	}
+	if !strings.Contains(buf.String(), "no instance found") {
+		t.Errorf("expected 'no instance found' in log, got:\n%s", buf.String())
+	}
+}
 
 func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
 	validTimestamp := time.Now().Format(time.RFC3339)
@@ -2286,7 +2312,7 @@ func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx, cancel := context.WithTimeout(test.Context(t), 1*time.Second)
+			ctx, cancel := context.WithTimeout(test.Context(t), testContextTimeout)
 			defer cancel()
 
 			harness := NewEngineHarness(log)
@@ -2309,85 +2335,135 @@ func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
 	}
 }
 
-//func TestServer_registerFollowerSubscriptions_includesSuicide(t *testing.T) {
-//	log, buf := logging.NewTestLogger(t.Name())
-//	defer test.ShowBufferOnFailure(t, buf)
-//
-//	ctx := test.Context(t)
-//
-//	harness := NewEngineHarness(log)
-//	pubSub := events.NewPubSub(ctx, log)
-//
-//	srv := &server{
-//		log:       log,
-//		harness:   harness,
-//		pubSub:    pubSub,
-//		evtLogger: control.NewEventLogger(log),
-//	}
-//
-//	registerFollowerSubscriptions(srv)
-//
-//	evt := &events.RASEvent{
-//		ID:          events.RASEngineSuicide,
-//		Rank:        1,
-//		Incarnation: 42,
-//		Hostname:    "test-host",
-//		Timestamp:   time.Now().Format(time.RFC3339),
-//	}
-//
-//	pubSub.Publish(evt)
-//	time.Sleep(100 * time.Millisecond)
-//
-//	logOutput := buf.String()
-//	hasHandler := strings.Contains(logOutput, "handleEngineSuicide") ||
-//		strings.Contains(logOutput, "no instance found") ||
-//		strings.Contains(logOutput, "handling suicide")
-//
-//	if !hasHandler {
-//		t.Errorf("suicide handler does not appear to be registered\nLog:\n%s", logOutput)
-//	}
-//}
-//
-//func TestServer_registerLeaderSubscriptions_includesSuicide(t *testing.T) {
-//	log, buf := logging.NewTestLogger(t.Name())
-//	defer test.ShowBufferOnFailure(t, buf)
-//
-//	ctx := test.Context(t)
-//
-//	harness := NewEngineHarness(log)
-//	pubSub := events.NewPubSub(ctx, log)
-//
-//	svc := newTestMgmtSvc(t, log)
-//
-//	srv := &server{
-//		log:        log,
-//		harness:    harness,
-//		pubSub:     pubSub,
-//		evtLogger:  control.NewEvenEventtLogger(log),
-//		membership: svc.membership,
-//		sysdb:      svc.sysdb,
-//		mgmtSvc:    svc,
-//	}
-//
-//	registerLeaderSubscriptions(srv)
-//
-//	evt := &events.RASEvent{
-//		ID:          events.RASEngineSuicide,
-//		Rank:        1,
-//		Incarnation: 42,
-//		Hostname:    "test-host",
-//		Timestamp:   time.Now().Format(time.RFC3339),
-//	}
-//
-//	pubSub.Publish(evt)
-//	time.Sleep(100 * time.Millisecond)
-//
-//	logOutput := buf.String()
-//	hasHandler := strings.Contains(logOutput, "handleEngineSuicide") ||
-//		strings.Contains(logOutput, "no instance found") ||
-//		strings.Contains(logOutput, "handling suicide")
-//
-//	if !hasHandler {
-//		t.Errorf("suicide handler does not appear to be registered\nLog:\n%s", logOutput)
-//	}
-//}
+func TestServer_registerFollowerSubscriptions_includesSuicide(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	// Channel to signal when ANY handler processes the event
+	eventProcessed := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:       log,
+		harness:   harness,
+		pubSub:    pubSub,
+		evtLogger: control.MockEventLogger(log),
+	}
+
+	registerFollowerSubscriptions(srv)
+
+	// Add a secondary subscriber to detect when event is processed
+	// This ensures the event has gone through the pubsub system
+	pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			if evt.ID == events.RASEngineSuicide {
+				once.Do(func() { close(eventProcessed) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSuicide,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for event to be processed or timeout
+	select {
+	case <-eventProcessed:
+		// Event was processed
+	case <-time.After(testHandlerTimeout):
+		t.Fatal("timeout waiting for suicide event to be processed")
+	}
+
+	logOutput := buf.String()
+	hasHandler := strings.Contains(logOutput, "handleEngineSuicide") ||
+		strings.Contains(logOutput, "no instance found") ||
+		strings.Contains(logOutput, "handling suicide")
+
+	if !hasHandler {
+		t.Errorf("suicide handler does not appear to be registered\nLog:\n%s", logOutput)
+	}
+}
+
+func TestServer_registerLeaderSubscriptions_includesSuicide(t *testing.T) {
+	const testProcessingTimeout = 2 * time.Second
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	svc := newTestMgmtSvc(t, log)
+
+	// Channel to signal when ANY handler processes the event
+	eventProcessed := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:        log,
+		harness:    harness,
+		pubSub:     pubSub,
+		evtLogger:  control.MockEventLogger(log),
+		membership: svc.membership,
+		sysdb:      svc.sysdb,
+		mgmtSvc:    svc,
+	}
+
+	registerLeaderSubscriptions(srv)
+
+	// Add a secondary subscriber to detect when event is processed
+	// This ensures the event has gone through the pubsub system
+	pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			if evt.ID == events.RASEngineSuicide {
+				once.Do(func() { close(eventProcessed) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSuicide,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for event to be processed or timeout
+	select {
+	case <-eventProcessed:
+		// Event was processed
+	case <-time.After(testProcessingTimeout):
+		t.Fatal("timeout waiting for suicide event to be processed")
+	}
+
+	logOutput := buf.String()
+	hasHandler := strings.Contains(logOutput, "handleEngineSuicide") ||
+		strings.Contains(logOutput, "no instance found") ||
+		strings.Contains(logOutput, "handling suicide")
+
+	if !hasHandler {
+		t.Errorf("suicide handler does not appear to be registered\nLog:\n%s", logOutput)
+	}
+}
