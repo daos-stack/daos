@@ -110,6 +110,13 @@ USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
+# Enable globally for all subsequent RUN commands
+ENV PATH="/opt/rh/gcc-toolset-12/root/usr/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/rh/gcc-toolset-12/root/usr/lib64:${LD_LIBRARY_PATH}"
+
+# Verify the GCC version (will show GCC 12.x)
+RUN gcc --version
+
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
         scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
               TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
