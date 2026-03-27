@@ -228,6 +228,36 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shar
 	return 0;
 }
 
+/* State-machine of remapping component
+ *
+ * ┌──────────────┬──────────────┬────────┬──────────────────────────────────────────────┐
+ * │   Status     │   gen_mode   │ remap  │  flags / effect                              │
+ * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
+ * │ UPIN         │ ANY          │ false  │ —  (target healthy, nothing to do)           │
+ * │ DOWNOUT      │ ANY          │ true   │ —  (always remap, early return)              │
+ * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
+ * │ DOWN         │ PRE_REBUILD  │ false  │ IS_REBUILDING  (mark no-read, no migration)  │
+ * │ DOWN         │ CURRENT      │ true   │ IS_REBUILDING  (migrate to spare, write-only)│
+ * │ DOWN         │ POST_REBUILD │ true   │ -  (rebuild complete, treat as DOWNOUT)      │
+ * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
+ * │ DRAIN        │ PRE_REBUILD  │ false  │ —  (still UPIN from pre-drain view)          │
+ * │ DRAIN        │ CURRENT      │ false  │ HAS_PEER  (keep in place, extend layout)     │
+ * │ DRAIN        │ POST_REBUILD │ true   │ —  (drain complete, treat as DOWNOUT)        │
+ * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
+ * │ UP (down2up) │ PRE_REBUILD  │ false  │ IS_REBUILDING | IS_REINTEGRATING             │
+ * │ UP (down2up) │ CURRENT      │ false  │ IS_REBUILDING | IS_REINTEGRATING             │
+ * │ UP (down2up) │ POST_REBUILD │ false  │ -  (reintegration complete, treat as UPIN)   │
+ * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
+ * │ UP (regular) │ PRE_REBUILD  │ true   │ —  (not yet reintegrated, use fallback)      │
+ * │ UP (regular) │ CURRENT      │ true   │ HAS_PEER  (migrate + extend layout)          │
+ * │ UP (regular) │ POST_REBUILD │ false  │ —  (reintegration complete, treat as UPIN)   │
+ * └──────────────┴──────────────┴────────┴──────────────────────────────────────────────┘
+ *
+ * Flags:
+ *   IS_REBUILDING    → po_rebuilding=1     skip shard on read
+ *   IS_REINTEGRATING → po_reintegrating=1  shard is being reintegrated
+ *   HAS_PEER         → ol_shard_peers++    triggers extend_layout (dual-write to old+new)
+ */
 bool
 comp_need_remap(struct pool_component *comp, uint32_t allow_version, enum layout_gen_mode gen_mode,
 		unsigned int *remap_flags)
