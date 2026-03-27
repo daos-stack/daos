@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
- * (C) Copyright 2025 Vdura Inc.
+ * Copyright 2022-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -184,14 +184,15 @@ open_pool_test(void **state)
 {
 	daos_handle_t		 poh;
 	struct dt_vos_pool_ctx	*tctx = *state;
+	struct vos_file_parts    path_parts = {0};
 
-	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", NULL, &poh, 0, false));
+	assert_success(vos_path_parse(tctx->dvt_pmem_file, &path_parts));
 
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, 0, false));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &poh, 0, false));
 	assert_success(dv_pool_close(poh));
 
 	/* should be able to open again after closing */
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, 0, false));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &poh, 0, false));
 	assert_success(dv_pool_close(poh));
 }
 
@@ -1087,10 +1088,13 @@ static int
 dv_test_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx = *state;
+	struct vos_file_parts   path_parts = {0};
+
+	assert_success(vos_path_parse(tctx->dvt_pmem_file, &path_parts));
 
 	active_entry_handler_called = 0;
 	committed_entry_handler_called = 0;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0, true));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &tctx->dvt_poh, 0, true));
 	return 0;
 }
 
@@ -1108,11 +1112,13 @@ pool_flags_tests(void **state)
 {
 	daos_handle_t           poh;
 	struct dt_vos_pool_ctx *tctx = *state;
+	struct vos_file_parts   path_parts = {0};
 	uint64_t                compat_flags;
 	uint64_t                incompat_flags;
 
+	assert_success(vos_path_parse(tctx->dvt_pmem_file, &path_parts));
 	assert_success(
-	    dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, VOS_POF_FOR_FEATURE_FLAG, true));
+	    dv_pool_open(tctx->dvt_pmem_file, &path_parts, &poh, VOS_POF_FOR_FEATURE_FLAG, true));
 	assert_success(dv_pool_get_flags(poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == 0);
 	assert(incompat_flags == 0);
@@ -1171,11 +1177,13 @@ helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_sta
 				   bool write_mode)
 {
 	const char *path = tctx->dvt_pmem_file;
+	struct vos_file_parts path_parts = {0};
 
 	assert_int_equal(stat(path, &fs[FILE_STATE_PRE].stat), 0);
 	sha256sum(path, fs[FILE_STATE_PRE].digest);
 
-	assert_success(dv_pool_open(path, NULL, &tctx->dvt_poh, 0, write_mode));
+	assert_success(vos_path_parse(path, &path_parts));
+	assert_success(dv_pool_open(path, &path_parts, &tctx->dvt_poh, 0, write_mode));
 	update_value_to_modify_tests((void **)&tctx);
 	assert_success(dv_pool_close(tctx->dvt_poh));
 

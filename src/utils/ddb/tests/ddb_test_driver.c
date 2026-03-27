@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2022-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -306,6 +306,7 @@ int
 ddb_teardown_vos(void **state)
 {
 	struct dt_vos_pool_ctx		*tctx = *state;
+	struct vos_file_parts            path_parts = {0};
 	int                              rc   = 0;
 
 	if (tctx == NULL) {
@@ -314,7 +315,8 @@ ddb_teardown_vos(void **state)
 	}
 
 	if (tctx->dvt_special_pool_destroy) {
-		rc = dv_pool_destroy(tctx->dvt_pmem_file, NULL);
+		assert_success(vos_path_parse(tctx->dvt_pmem_file, &path_parts));
+		rc = dv_pool_destroy(tctx->dvt_pmem_file, &path_parts);
 	} else {
 		vos_self_init("/mnt/daos", false, 0);
 		assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
