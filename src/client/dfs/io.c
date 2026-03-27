@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -128,6 +129,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_size
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
+	if (sgl == NULL)
+		return EINVAL;
 	if (read_size == NULL)
 		return EINVAL;
 	if ((obj->flags & O_ACCMODE) == O_WRONLY)
@@ -183,12 +186,17 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_siz
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
+	if (iod == NULL)
+		return EINVAL;
+	if (sgl == NULL)
+		return EINVAL;
 	if (read_size == NULL)
 		return EINVAL;
 	if ((obj->flags & O_ACCMODE) == O_WRONLY)
 		return EPERM;
 
 	if (iod->iod_nr == 0) {
+		*read_size = 0;
 		if (ev) {
 			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
