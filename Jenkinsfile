@@ -583,9 +583,6 @@ pipeline {
         booleanParam(name: 'CI_BUILD_LEAP15',
                      defaultValue: true,
                      description: 'Build sources and RPMs on Leap 15')
-        booleanParam(name: 'CI_BUILD_LEAP15_ICC',
-                     defaultValue: true,
-                     description: 'Build sources on Leap 15 with Intel-C')
         booleanParam(name: 'CI_BUILD_BULLSEYE',
                      defaultValue: true,
                      description: 'Build sources and RPMs with Bullseye code coverage')
