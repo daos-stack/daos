@@ -512,7 +512,7 @@ class PreReqComponent():
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
                               ['default', 'dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('COMPILER', "Set the compiler family to use", 'gcc',
-                              ['gcc', 'covc', 'clang'], ignorecase=2))
+                              ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with google sanitizers', None))
