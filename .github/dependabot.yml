@@ -64,6 +64,10 @@ updates:
       go-modules:
         patterns:
           - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
 
   - package-ecosystem: gomod
     target-branch: release/2.6
@@ -74,6 +78,10 @@ updates:
       go-modules:
         patterns:
           - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
 
   - package-ecosystem: gomod
     target-branch: release/2.6.4-aurora
@@ -84,3 +92,7 @@ updates:
       go-modules:
         patterns:
           - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
