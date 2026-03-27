@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,19 +15,20 @@
  * Add a new failed shard into remap list
  *
  * \param[in] remap_list        List for the failed shard to be added onto.
- * \param[in] f_new             Failed shard to be added.
+ * \param[in] shard             Failed shard to be added.
  */
 void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 {
 	struct failed_shard     *f_shard;
-
 	d_list_t                *tmp;
 
 	D_DEBUG(DB_PL, "fnew: %u/%d/%u/%u", f_new->fs_shard_idx,
 		f_new->fs_tgt_id, f_new->fs_fseq, f_new->fs_status);
 
-	/* All failed shards are sorted by fseq in ascending order */
+	/* layout computation, enforce remapping order:
+	 * All failed shards are sorted by fseq in ascending order.
+	 */
 	d_list_for_each(tmp, remap_list) {
 		f_shard = d_list_entry(tmp, struct failed_shard, fs_list);
 		/*
@@ -56,20 +58,19 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 /**
  * Allocate a new failed shard then add it into remap list
  *
- * \param[in] remap_list        List for the failed shard to be added onto.
  * \param[in] shard_idx         The shard number of the failed shard.
  * \param[in] tgt               The failed target that will be added to the
  *                              remap list.
  */
-int
-remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint, void *data)
+struct failed_shard *
+remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, int tgt_id,
+		unsigned int remap_flags, void *data)
 {
 	struct failed_shard *f_new;
 
 	D_ALLOC_PTR(f_new);
 	if (f_new == NULL)
-		return -DER_NOMEM;
+		return NULL;
 
 	D_INIT_LIST_HEAD(&f_new->fs_list);
 	f_new->fs_shard_idx = shard_idx;
@@ -77,21 +78,13 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_rank = tgt->ta_comp.co_rank;
 	f_new->fs_index = tgt->ta_comp.co_index;
 	f_new->fs_status = tgt->ta_comp.co_status;
-	f_new->fs_data = data;
-	if (pool_target_is_down2up(tgt))
-		f_new->fs_down2up = 1;
+	f_new->fs_data        = data;
+	f_new->fs_remap_flags = remap_flags;
+	f_new->fs_tgt_id      = tgt_id;
 
-	D_DEBUG(DB_PL, "tgt %u status %u flags %u reint %s\n", tgt->ta_comp.co_id,
-		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, for_reint ? "yes" : "no");
-	if (!for_reint) {
-		f_new->fs_tgt_id = -1;
-		remap_add_one(remap_list, f_new);
-	} else {
-		f_new->fs_tgt_id = tgt->ta_comp.co_id;
-		d_list_add_tail(&f_new->fs_list, remap_list);
-	}
-
-	return 0;
+	D_DEBUG(DB_PL, "tgt %u status %u flags %u order %s\n", tgt->ta_comp.co_id,
+		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, tgt_id == -1 ? "yes" : "no");
+	return f_new;
 }
 
 /**
@@ -188,12 +181,9 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 }
 
 int
-remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
-		struct daos_obj_shard_md *shard_md, uint32_t r_ver,
-		uint32_t *tgt_id, uint32_t *shard_idx,
-		unsigned int array_size, int *idx,
-		struct pl_obj_layout *layout, d_list_t *remap_list,
-		bool fill_addition)
+remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shard_md *shard_md,
+		uint32_t r_ver, uint32_t *tgt_id, uint32_t *shard_idx, unsigned int array_size,
+		int *idx, struct pl_obj_layout *layout, d_list_t *remap_list)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
@@ -209,11 +199,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 		 * shard might need move to, so let's include
 		 * UPIN status here as well.
 		 */
-		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_UP ||
+		if (f_shard->fs_status == PO_COMP_ST_DOWN || f_shard->fs_status == PO_COMP_ST_UP ||
 		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
-		    f_shard->fs_status == PO_COMP_ST_UPIN ||
-		    fill_addition == true) {
+		    f_shard->fs_status == PO_COMP_ST_UPIN) {
 			/*
 			 * Target id is used for rw, but rank is used
 			 * for rebuild, perhaps they should be unified.
@@ -241,79 +229,74 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 }
 
 bool
-is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
-		enum layout_gen_mode gen_mode)
+comp_need_remap(struct pool_component *comp, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		unsigned int *remap_flags)
 {
 	unsigned int status = comp->co_status;
+	unsigned int flags  = 0;
+	bool         remap  = true;
 
+	if (status == PO_COMP_ST_UPIN)
+		return false; /* do nothing for UPIN */
+
+	if (status == PO_COMP_ST_DOWNOUT)
+		return true; /* always remap */
+
+	/* NB: if @remap is false, @flags is applied to the current shard/target, otherwise
+	 * it's applied to the remapped shard/target.
+	 */
 	if (gen_mode == PRE_REBUILD) {
-		/* For pre rebuild mode, it needs to revert the status
-		 * to the original state first, then check if the component
-		 * is available.
+		/* remap decision is based on the target status before transition */
+		if (status == PO_COMP_ST_DOWN) {
+			remap = false;            /* transited from UPIN, no remap */
+			flags = PL_IS_REBUILDING; /* no read */
+
+		} else if (status == PO_COMP_ST_DRAIN) {
+			remap = false; /* transited from UPIN, no remap */
+
+		} else if (status == PO_COMP_ST_UP && (comp->co_flags & PO_COMPF_DOWN2UP)) {
+			remap = false; /* transited UPIN->DOWN->UP, no remap */
+			flags = PL_IS_REBUILDING | PL_IS_REINTEGRATING;
+		}
+	} else {
+		/* Check if the target state is within the allow version, otherwise
+		 * it needs to revert the target state to its original state first.
 		 */
-		if (status & (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN)) {
-			status = PO_COMP_ST_UPIN;
+		if (status == PO_COMP_ST_DOWN) {
+			if (comp->co_fseq > allow_version)
+				remap = false; /* future failure, don't handle it */
+			else
+				flags = PL_IS_REBUILDING; /* remap, write only */
+
+		} else if (status == PO_COMP_ST_DRAIN) {
+			if (comp->co_fseq > allow_version) {
+				remap = false; /* futuren drain, don't handle it */
+
+			} else if (gen_mode == CURRENT) {
+				flags = PL_HAS_PEER;
+				remap = false;
+			}
 		} else if (status == PO_COMP_ST_UP) {
-			if (comp->co_flags & PO_COMPF_DOWN2UP) {
-				/* PO_COMP_ST_UP status with PO_COMPF_DOWN2UP flag
-				 * is the case of delay_rebuild exclude+reint.
-				 * Cannot mark it as UPIN to avoid it be used for
-				 * rebuild enumerate/fetch, as the data will be
-				 * discarded in reintegrate.
-				 */
-				/* status = PO_COMP_ST_UPIN; */
-			} else {
-				if (comp->co_fseq <= 1)
-					status = PO_COMP_ST_NEW;
-				else
-					status = PO_COMP_ST_DOWNOUT;
-			}
-		}
+			if (comp->co_in_ver > allow_version) {
+				/* future reintegration, do nothing but remap */
 
-		return status & PO_COMP_ST_UPIN;
-	}
+			} else if (comp->co_flags & PO_COMPF_DOWN2UP) {
+				/* no remap, write only */
+				flags = PL_IS_REBUILDING | PL_IS_REINTEGRATING;
+				remap = false;
 
-	/**
-	 * Check if the target state is within the allow version, otherwise
-	 * it needs to revert the target state to its original state first.
-	 */
-	if (status & (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN)) {
-		if (comp->co_fseq > allow_version)
-			status = PO_COMP_ST_UPIN;
-	} else if (status == PO_COMP_ST_UP) {
-		if (comp->co_in_ver > allow_version) {
-			if (comp->co_flags & PO_COMPF_DOWN2UP) {
-			       status = PO_COMP_ST_DOWN;
-			} else {
-				if (comp->co_fseq <= 1)
-					status = PO_COMP_ST_NEW;
+			} else { /* regular reintegration */
+				if (gen_mode == CURRENT)
+					flags = PL_HAS_PEER; /* remap to fallback for CURRENT */
 				else
-					status = PO_COMP_ST_DOWNOUT;
+					remap = false;
 			}
 		}
 	}
+	if (remap_flags)
+		*remap_flags |= flags;
 
-	if (gen_mode == POST_REBUILD) {
-		if (status & (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN))
-			status = PO_COMP_ST_DOWNOUT;
-		else if (status & PO_COMP_ST_UP)
-			status = PO_COMP_ST_UPIN;
-
-		return status & PO_COMP_ST_UPIN;
-	}
-
-	/* If the layout is generated by current pool map, then both
-	 * UPIN and DRAIN target are avalid, i.e. it does not need to
-	 * be remapped anymore.
-	 */
-	return status & (PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN);
-}
-
-bool
-need_remap_comp(struct pool_component *comp, uint32_t allow_version,
-		enum layout_gen_mode gen_mode)
-{
-	return !is_comp_avaible(comp, allow_version, gen_mode);
+	return remap;
 }
 
 /**
@@ -323,19 +306,18 @@ need_remap_comp(struct pool_component *comp, uint32_t allow_version,
  * spare target.
  */
 int
-determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		       bool spare_avail, d_list_t *remap_list, uint32_t allow_version,
-		       enum layout_gen_mode gen_mode, struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard, bool *is_extending)
+determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
+		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		       struct failed_shard *f_shard, struct pl_obj_layout *layout)
 {
+	struct pl_obj_shard *l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
+
 	if (!spare_avail)
 		goto next_fail;
 
-	if (is_extending != NULL && pool_target_is_up_or_drain(spare_tgt))
-		*is_extending = true;
-
 	/* The selected spare target is down as well */
-	if (need_remap_comp(&spare_tgt->ta_comp, allow_version, gen_mode)) {
+	if (comp_need_remap(&spare_tgt->ta_comp, allow_version, gen_mode,
+			    &f_shard->fs_remap_flags)) {
 		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET
 			".\n", DP_TARGET(spare_tgt));
 
@@ -392,20 +374,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 
 next_fail:
 	if (spare_avail) {
-		/* The selected spare target is up and ready */
 		l_shard->po_target = spare_tgt->ta_comp.co_id;
-		l_shard->po_fseq = f_shard->fs_fseq;
-		l_shard->po_rank = spare_tgt->ta_comp.co_rank;
-		l_shard->po_index = spare_tgt->ta_comp.co_index;
-
-		/*
-		 * Mark the shard as 'rebuilding' so that read will skip this shard.
-		 * f_shard->fs_down2up is the case of delay_rebuild exclude+reint.
-		 */
-		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
-		    f_shard->fs_down2up || pool_target_down(spare_tgt))
-			l_shard->po_rebuilding = 1;
+		l_shard->po_fseq   = f_shard->fs_fseq;
+		l_shard->po_rank   = spare_tgt->ta_comp.co_rank;
+		l_shard->po_index  = spare_tgt->ta_comp.co_index;
+		layout_set_shard_flags(layout, f_shard->fs_shard_idx, f_shard->fs_remap_flags);
 	} else {
 		l_shard->po_shard = -1;
 		l_shard->po_target = -1;
