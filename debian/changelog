@@ -1,9 +1,15 @@
-daos (2.6.4-17) unstable; urgency=medium
+daos (2.6.4-20) unstable; urgency=medium
+  [ Dalton Bohning ]
+  * Tag 2.6.4-aurora.p5
+
+ -- Dalton Bohning <dalton.bohning@hpe.com>  Thu, 26 Mar 2026 15:00:00 -0800
+
+ daos (2.6.4-17) unstable; urgency=medium
   [ Dalton Bohning ]
   * Tag 2.6.4-aurora.p4
 
  -- Dalton Bohning <dalton.bohning@hpe.com>  Fri, 06 Mar 2026 13:00:00 -0800
- 
+
 daos (2.6.4-14) unstable; urgency=medium
   [ Mohamad Chaarawi ]
   * Tag 2.6.4-aurora.p3
