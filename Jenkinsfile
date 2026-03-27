@@ -352,7 +352,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
     String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
     String uploadTarget = kwargs.get('uploadTarget', distro)
-    String dockerTag = jobStatusKey("${name}-${distro}-${compiler}").toLowerCase()
+    String dockerTag = jobStatusKey("build-${distro}-${compiler}").toLowerCase()
     String bullseye = 'false'
     if (compiler == 'covc') {
         bullseye = 'true'
