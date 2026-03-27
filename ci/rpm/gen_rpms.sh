@@ -19,8 +19,8 @@ fi
 function mv_rpms() {
   local dir="${1}"
   if ls -1 ./*.rpm; then
-    mkdir -p /home/daos/rpms/${dir}
-    cp ./*.rpm /home/daos/rpms/${dir}
+    mkdir -p "/home/daos/rpms/${dir}"
+    cp ./*.rpm "/home/daos/rpms/${dir}"
     rm -f ./*.rpm
   fi
 }

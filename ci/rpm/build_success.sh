@@ -43,10 +43,10 @@ elif [ -d /var/cache/pbuilder/ ]; then
 fi
 
 if [ -d /home/daos/rpms/ ]; then
-  for dir in $(ls -d /home/daos/rpms/* | xargs -n 1 basename); do
-    if [ -d /home/daos/rpms/${dir} ]; then
+  for dir in $(find /home/daos/rpms/ -maxdepth 1 -mindepth 1 -type d -printf '%f\n'); do
+    if [ -d "/home/daos/rpms/${dir}" ]; then
       mkdir -p "${artdir}/${dir}"
-      cp /home/daos/rpms/${dir}/*.rpm "${artdir}/${dir}"
+      cp "/home/daos/rpms/${dir}"/*.rpm "${artdir}/${dir}"
     fi
   done
 else
