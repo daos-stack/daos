@@ -366,6 +366,11 @@ func parseOpts(args []string, opts *cliOptions) error {
 func main() {
 	var opts cliOptions
 
+	// Must be called before any write to stdout.
+	if err := logging.DisableCStdoutBuffering(); err != nil {
+		exitWithError(err)
+	}
+
 	if err := parseOpts(os.Args[1:], &opts); err != nil {
 		exitWithError(err)
 	}

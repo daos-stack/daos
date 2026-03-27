@@ -145,7 +145,7 @@ void uploadNewRPMs(String target, String stage) {
     buildRpmPost target: target,
                  condition: stage,
                  rpmlint: false,
-                 productArtifacts: ['daos', 'deps', 'daos-bullseye']
+                 productArtifacts: ['daos', 'deps', 'bullseye']
 }
 
 String vm9_label(String distro) {
@@ -866,7 +866,7 @@ pipeline {
                         'Build on Leap 15': scriptedBuildStage(
                             name: 'Build on Leap 15',
                             distro:'leap15',
-                            rpmDistro: 'suse.lp155',
+                            rpmDistro: 'suse.lp156',
                             compiler: 'gcc',
                             runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
                             buildRpms: true,
@@ -876,7 +876,7 @@ pipeline {
                                                              parallel_build: true) +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg POINT_RELEASE=.5' +
+                                             ' --build-arg POINT_RELEASE=.6' +
                                              ' -f utils/docker/Dockerfile.leap.15 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -884,28 +884,6 @@ pipeline {
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
                             artifacts: "config.log-leap15-gcc"
-                        ),
-                        'Build on Leap 15 with Intel-C and TARGET_PREFIX': scriptedBuildStage(
-                            name: 'Build on Leap 15 with Intel-C and TARGET_PREFIX',
-                            distro:'leap15',
-                            compiler: 'icc',
-                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
-                            buildRpms: false,
-                            release: env.DAOS_RELVAL,
-                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
-                                                             deps_build: true,
-                                                             parallel_build: true) +
-                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                             ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg POINT_RELEASE=.5' +
-                                             ' --build-arg COMPILER=icc' +
-                                             ' -f utils/docker/Dockerfile.leap.15 .',
-                            sconsBuildArgs: [
-                                parallel_build: true,
-                                build_deps: 'yes',
-                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
-                            ],
-                            artifacts: "config.log-leap15-intelc"
                         ),
                         'Build on EL 9 with Bullseye': scriptedBuildStage(
                             name: 'Build on EL 9 with Bullseye',
@@ -1290,7 +1268,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
+                            label 'docker_runner_fi'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +

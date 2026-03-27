@@ -33,7 +33,7 @@ export DAOS_RELVAL="${2}"
 code_coverage="${3:-false}"
 build_types="deps daos"
 if [[ "${code_coverage}" == "true" ]]; then
-  build_types="deps daos-bullseye"
+  build_types="deps bullseye"
 fi
 rm -f ./*.rpm
 rm -rf /home/daos/rpms/*

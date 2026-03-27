@@ -15,7 +15,7 @@ fi
 if [[ "${build_type}" =~ daos|all ]]; then
   utils/rpms/daos.sh false
 fi
-if [[ "${build_type}" =~ daos-bullseye ]]; then
+if [[ "${build_type}" =~ bullseye ]]; then
   utils/rpms/bullseye.sh
   utils/rpms/daos.sh true
 fi
