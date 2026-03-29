@@ -21,6 +21,7 @@
 #include "ddb_parse.h"
 #include "ddb.h"
 #include "ddb_vos.h"
+#include "ddb_rpc.h"
 #include "ddb_printer.h"
 #include "ddb_tree_path.h"
 
@@ -781,7 +782,6 @@ sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id, da
 
 #define DEFAULT_NVME_CONF "/mnt/daos/daos_nvme.conf"
 #define DEFAULT_DB_PATH   "/mnt/daos"
-#define DDB_PATH_MAX      256
 
 int
 ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
@@ -1224,8 +1224,7 @@ int
 ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
 {
 	char                 db_path[DDB_PATH_MAX] = DEFAULT_DB_PATH;
-	struct bio_dev_info *dev_info              = NULL, *tmp;
-	d_list_t             dev_list;
+	struct bio_dev_info  dev_info;
 	int                  rc, dev_cnt = 0;
 
 	DDB_POOL_SHOULD_CLOSE(ctx);
@@ -1239,24 +1238,29 @@ ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
 	}
 
 	ddb_printf(ctx, "List devices, db_path='%s'\n", db_path);
-	D_INIT_LIST_HEAD(&dev_list);
-	rc = dv_dev_list(db_path, &dev_list, &dev_cnt);
+	rc = ddb_rpc_server_init(ctx, db_path);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	rc = ddb_rpc_dev_list_init(ctx, &dev_cnt);
 	if (rc) {
 		ddb_errorf(ctx, "List device failed. " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
 	ddb_printf(ctx, "%d SSD devices in total\n", dev_cnt);
-	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
-		ddb_printf(ctx, "Device:" DF_UUIDF " [inuse:%s, faulty:%s, plugged:%s]\n",
-			   DP_UUID(dev_info->bdi_dev_id),
-			   dev_info->bdi_flags & NVME_DEV_FL_INUSE ? "yes" : "no ",
-			   dev_info->bdi_flags & NVME_DEV_FL_FAULTY ? "yes" : "no ",
-			   dev_info->bdi_flags & NVME_DEV_FL_PLUGGED ? "yes" : "no ");
+	for (int i = 0; i < dev_cnt; ++i) {
+		ddb_rpc_dev_list(ctx, &dev_info);
 
-		d_list_del_init(&dev_info->bdi_link);
-		bio_free_dev_info(dev_info);
+		ddb_printf(ctx, "Device:" DF_UUIDF " [inuse:%s, faulty:%s, plugged:%s]\n",
+			   DP_UUID(dev_info.bdi_dev_id),
+			   dev_info.bdi_flags & NVME_DEV_FL_INUSE ? "yes" : "no ",
+			   dev_info.bdi_flags & NVME_DEV_FL_FAULTY ? "yes" : "no ",
+			   dev_info.bdi_flags & NVME_DEV_FL_PLUGGED ? "yes" : "no ");
 	}
+
+	(void) ddb_rpc_server_fini(ctx);
 
 	return 0;
 }

@@ -13,7 +13,9 @@
 #include <daos_obj.h>
 #include <daos_types.h>
 #include "ddb.h"
+
 #define COMMAND_NAME_MAX 64
+#define DDB_PATH_MAX      256
 
 #define SUCCESS(rc) ((rc) == DER_SUCCESS)
 

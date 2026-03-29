@@ -50,6 +50,11 @@ struct ddb_array {
 	struct dv_indexed_tree_path *ddba_path;
 };
 
+int
+dv_init(const char *db_path);
+void
+dv_fini();
+
 /* Open and close a pool for a ddb_ctx */
 int
     dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
@@ -215,7 +220,7 @@ void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
 int ddb_vtp_verify(daos_handle_t poh, struct dv_tree_path *vtp);
 
 int
-dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt);
+dv_dev_list(d_list_t *dev_list, int *dev_cnt);
 int
 dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid);
 int

@@ -90,6 +90,10 @@ struct ddb_ctx {
 	bool			 dc_write_mode;
 	const char              *dc_pool_path;
 	const char              *dc_db_path;
+
+	/** pipes for communication with the child process */
+	int tx;
+	int rx;
 };
 
 void ddb_ctx_init(struct ddb_ctx *ctx);

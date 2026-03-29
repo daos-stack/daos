@@ -27,6 +27,19 @@
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
 
+
+int
+dv_init(const char *db_path)
+{
+        return vos_self_init(db_path, true, 0);
+}
+
+void
+dv_fini()
+{
+	vos_self_fini();
+}
+
 int
 dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
 	     bool write_mode)
@@ -2077,22 +2090,15 @@ dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_
 }
 
 int
-dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt)
+dv_dev_list(d_list_t *dev_list, int *dev_cnt)
 {
 	int rc;
-
-	rc = vos_self_init(db_path, true, 0);
-	if (rc) {
-		DL_ERROR(rc, "Initialize standalone VOS failed.");
-		return rc;
-	}
 
 	D_ASSERT(d_list_empty(dev_list));
 	rc = bio_dev_list(vos_xsctxt_get(), dev_list, dev_cnt);
 	if (rc)
 		DL_ERROR(rc, "Failed to list devices.");
 
-	vos_self_fini();
 	return rc;
 }
 
