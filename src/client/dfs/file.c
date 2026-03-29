@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,7 +54,7 @@ set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 	daos_iod_t    iod;
 	daos_recx_t   recx;
 	daos_key_t    dkey;
-	int           rc;
+	int           rc, rc2;
 
 	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
@@ -85,7 +86,9 @@ set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 	}
 
 out:
-	daos_obj_close(oh, NULL);
+	rc2 = daos_obj_close(oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
 	return rc;
 }
 
@@ -94,6 +97,8 @@ dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
 {
 	int rc;
 
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
 	if (obj == NULL)
 		return EINVAL;
 	if (!S_ISDIR(obj->mode))
@@ -117,6 +122,8 @@ dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 {
 	int rc;
 
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
 	if (obj == NULL)
 		return EINVAL;
 	if (!S_ISREG(obj->mode))
@@ -126,7 +133,7 @@ dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 
 	rc = set_chunk_size(dfs, obj, csize);
 	if (rc)
-		return daos_der2errno(rc);
+		return rc;
 
 	/* need to update the array handle chunk size */
 	rc = daos_array_update_chunk_size(obj->oh, csize);
@@ -144,6 +151,8 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if (size == NULL)
 		return EINVAL;
 
 	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
