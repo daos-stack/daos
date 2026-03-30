@@ -2450,12 +2450,14 @@ static int
 obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		      uint32_t rpc_map_ver, uint32_t flags)
 {
+	struct ds_pool *pool = child->sc_pool->spc_pool;
+
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		/* EC aggregation is still inflight, rebuild should wait until it's paused */
 		if (ds_cont_child_ec_aggregating(child)) {
 			D_ERROR(DF_CONT " ec aggregate still active, rebuilding %d\n",
-				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
-				atomic_load(&child->sc_pool->spc_pool->sp_rebuilding));
+				DP_CONT(pool->sp_uuid, child->sc_uuid),
+				atomic_load(&pool->sp_rebuilding));
 			return -DER_UPDATE_AGAIN;
 		}
 	}
@@ -2463,7 +2465,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	if (!obj_is_modification_opc(opc) && (opc != DAOS_OBJ_RPC_CPD || flags & ORF_CPD_RDONLY))
 		return 0;
 
-	if (atomic_load(&child->sc_pool->spc_pool->sp_rebuilding)) {
+	if (atomic_load(&pool->sp_rebuilding)) {
 		uint32_t version;
 
 		ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD,
@@ -2480,10 +2482,8 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	 * vos discard to finish, which otherwise might discard these new in-flight
 	 * I/O update.
 	 */
-	if ((flags & ORF_REINTEGRATING_IO) &&
-	    (child->sc_pool->spc_pool->sp_need_discard &&
-	     child->sc_pool->spc_discard_done == 0)) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+	if ((flags & ORF_REINTEGRATING_IO) && atomic_load(&pool->sp_discarding) > 0) {
+		D_ERROR("reintegrating " DF_UUID " retry.\n", DP_UUID(pool->sp_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
 
