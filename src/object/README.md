@@ -61,7 +61,7 @@ A set of replicated shard, or a set of data and parity shards belonging to the s
 is called redundancy group. An object can be chunked into multiple redundancy groups, which spread
 across many storage targets, in order to achieve higher I/O concurrency for better performance and
 large capacity. Targets for placing shards of a same redundancy group are selected from different
-fault domains, the default fault domain is "engine", it can be set to other domain like "node" or
+fault domains, the default fault domain is "node", it can be set to other domain like "rank" or
 "rack" in future releases.
 
 DAOS has over a hundred pre-defined object classes and specific naming conventions for these
