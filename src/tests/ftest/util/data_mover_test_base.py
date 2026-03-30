@@ -1,5 +1,6 @@
 """
-(C) Copyright 2018-2024 Intel Corporation.
+Copyright 2018-2024 Intel Corporation.
+Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +13,6 @@ from os.path import join
 from command_utils_base import BasicParameter, EnvironmentVariables
 from data_mover_utils import (ContClone, DcpCommand, DdeserializeCommand, DserializeCommand,
                               DsyncCommand, FsCopy, uuid_from_obj)
-from dfuse_utils import get_dfuse, start_dfuse
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from general_utils import create_string_buffer, get_log_file
@@ -924,109 +924,3 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 self.fail("stderr expected {}: {}".format(expected, test_desc))
 
         return result
-
-    def run_dm_activities_with_ior(self, tool, pool, cont, create_dataset=False):
-        """Generic method to perform various datamover activities using ior
-
-        Args:
-            tool (str): specify the tool name to be used
-            pool (TestPool): source pool object
-            cont (TestContainer): source container object
-            create_dataset (bool, optional): boolean to create initial set of data using ior.
-                Defaults to False.
-        """
-        # Set the tool to use
-        self.set_tool(tool)
-
-        if create_dataset:
-            # create initial data-sets with ior
-            self.run_ior_with_params("DAOS", self.ior_cmd.test_file.value, pool, cont)
-
-        # create cont2
-        cont2 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-
-        # perform various datamover activities
-        daos_path = None
-        read_back_cont = None
-        read_back_pool = None
-        if tool == 'CONT_CLONE':
-            result = self.run_datamover(
-                self.test_id + " (cont to cont2)",
-                src_path=format_path(pool, cont),
-                dst_path=format_path(pool))
-            read_back_cont = self.parse_create_cont_label(result.stdout_text)
-            read_back_pool = pool
-        elif tool == 'DSERIAL':
-            # Create pool2
-            pool2 = self.get_pool()
-            # Use dfuse as a shared intermediate for serialize + deserialize
-            dfuse_cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-            self.dfuse = get_dfuse(self, self.dfuse_hosts)
-            start_dfuse(self, self.dfuse, pool, dfuse_cont)
-            self.serial_tmp_dir = self.dfuse.mount_dir.value
-
-            # Serialize/Deserialize container 1 to a new cont2 in pool2
-            result = self.run_datamover(
-                self.test_id + " (cont->HDF5->cont2)",
-                src_path=format_path(pool, cont),
-                dst_pool=pool2)
-
-            # Get the destination cont2 uuid
-            read_back_cont = self.parse_create_cont_label(result.stdout_text)
-            read_back_pool = pool2
-        elif tool in ['FS_COPY', 'DCP']:
-            # copy from daos cont to cont2
-            self.run_datamover(
-                self.test_id + " (cont to cont2)",
-                src_path=format_path(pool, cont),
-                dst_path=format_path(pool, cont2))
-        else:
-            self.fail("Invalid tool: {}".format(tool))
-
-        # move data from daos to posix FS and vice versa
-        if tool in ['FS_COPY', 'DCP']:
-            posix_path = self.new_posix_test_path(shared=True)
-            # copy from daos cont2 to posix file system
-            self.run_datamover(
-                self.test_id + " (cont2 to posix)",
-                src_path=format_path(pool, cont2),
-                dst_path=posix_path)
-
-            # create cont3
-            cont3 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-
-            # copy from posix file system to daos cont3
-            self.run_datamover(
-                self.test_id + " (posix to cont3)",
-                src_path=posix_path,
-                dst_path=format_path(pool, cont3))
-            read_back_cont = cont3
-            read_back_pool = pool
-        test_file = os.path.basename(self.ior_cmd.test_file.value)
-        if tool in ['FS_COPY', 'DCP']:
-            # the result is that a NEW directory is created in the destination
-            daos_path = os.path.join(os.sep, os.path.basename(posix_path), test_file)
-        elif tool in ['CONT_CLONE', 'DSERIAL']:
-            daos_path = os.path.join(os.sep, test_file)
-        else:
-            self.fail("Invalid tool: {}".format(tool))
-
-        # Original flags used for write
-        flags = self.ior_cmd.flags.value
-
-        # Remove read and write from flags if present
-        flags = re.sub(" *-r", "", flags)
-        flags = re.sub(" *-R", "", flags)
-        flags = re.sub(" *-w", "", flags)
-        flags = re.sub(" *-W", "", flags)
-
-        # Remove stonewall
-        flags = re.sub(" *-D [0-9]+", "", flags)
-
-        # Add read flags
-        flags += " -r -R"
-
-        # update ior params, read back and verify data from cont3
-        self.run_ior_with_params(
-            "DAOS", daos_path, read_back_pool, read_back_cont,
-            flags=flags)
