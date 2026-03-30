@@ -1,5 +1,10 @@
 //
+<<<<<<< HEAD
 // (C) Copyright 2021-2022 Intel Corporation.
+=======
+// Copyright 2021-2024 Intel Corporation.
+// Copyright 2026 Hewlett Packard Enterprise Development LP
+>>>>>>> 285fdec1ad (Fix incompatibility with updated prometheus library)
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	pclient "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -198,7 +204,11 @@ func TestControl_scrapeMetrics(t *testing.T) {
 			result, err := scrapeMetrics(test.Context(t), req)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(
+				pclient.MetricFamily{},
+				pclient.Metric{},
+				pclient.Gauge{},
+			)); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
