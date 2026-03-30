@@ -38,7 +38,6 @@ variables will need to be defined:
 - CLIENT\_NODES
 - SERVER\_NODES
 - ALL\_NODES
-- USER_GROUP
 
 For example, if you want to use admin-1 as the admin node, client-1 and
 client-2 as client nodes, and server-\[1-3\] as server nodes,
@@ -59,9 +58,6 @@ ALL_NODES="$ADMIN_NODES,$CLIENT_NODES,$SERVER_NODES"
     `$ADMIN_NODES` from the `ALL_NODES` assignment to prevent duplication.
     For example: `ALL_NODES=$CLIENT_NODES,$SERVER_NODES`
 
-The `USER_GROUP` variable should be assigned one of the user's groups for
-the purpose of setting file access. 
-
 
 ## RPM Installation
 
@@ -80,23 +76,23 @@ daos-server RPM.
 
 3. Install epel-release on all nodes:
 
-		clush -B -w $ALL_NODES 'sudo yum install -y epel-release'
+		clush -B -w $ALL_NODES 'sudo dnf install -y epel-release'
 
-4. Install `mercury-ucx` RPMs on all nodes. For more details, reference [UCX Fabric Support](https://docs.daos.io/v2.6/admin/ucx/#ucx-fabric-support).
+4. Install `mercury-ucx` or `mercury-libfabric` RPMs on all nodes. For more details, reference [Network Requirements](https://docs.daos.io/v2.6/admin/hardware/#network-requirements).
 
-		clush -B -w $ALL_NODES 'sudo yum install -y mercury-ucx
+		clush -B -w $ALL_NODES 'sudo dnf install -y mercury-ucx
 
 5. Install the `daos-admin` RPMs on the admin nodes:
 
-		clush -B -w $ADMIN_NODES 'sudo yum install -y daos-admin'
+		clush -B -w $ADMIN_NODES 'sudo dnf install -y daos-admin'
 
 6. Install the `daos-server` RPMs on the server nodes:
 
-		clush -B -w $SERVER_NODES 'sudo yum install -y daos-server'
+		clush -B -w $SERVER_NODES 'sudo dnf install -y daos-server'
 
 7. Install the `daos-client` RPMs on the client nodes:
 
-		clush -B -w $CLIENT_NODES 'sudo yum install -y daos-client'
+		clush -B -w $CLIENT_NODES 'sudo dnf install -y daos-client'
 
 
 ## Generate certificates
@@ -189,12 +185,12 @@ for more information.
 7. Set the ownership of the admin certificates on each admin node:
 
 
-		clush -B -w $ADMIN_NODES sudo chown $USER:$USER_GROUP /etc/daos/certs/daosCA.crt
-		clush -B -w $ADMIN_NODES sudo chown $USER:$USER_GROUP /etc/daos/certs/admin.\*
+		clush -B -w $ADMIN_NODES sudo chown $USER: /etc/daos/certs/daosCA.crt
+		clush -B -w $ADMIN_NODES sudo chown $USER: /etc/daos/certs/admin.\*
 
 8. Set the ownership of the client certificates on each client node:
 
-		clush -B -w $CLIENT_NODES sudo chown $USER:$USER_GROUP /etc/daos/certs/daosCA.crt
+		clush -B -w $CLIENT_NODES sudo chown $USER: /etc/daos/certs/daosCA.crt
 		clush -B -w $CLIENT_NODES sudo chown daos_agent:daos_agent /etc/daos/certs/agent.\*
 
 9. Set the ownership of the server certificates on each server node:

@@ -126,7 +126,7 @@ drwxr-xr-x 1 hendersp ldap         104 Mar 19 22:48 test-dir.0-0
 
 ## mpifileutils (multi-process)
 
-Use the `mpifileutils` command to move data between containers.
+Use `mpifileutils` to move data between containers.
 
 1. Build mpifileutils package:
 
@@ -458,12 +458,12 @@ No pools in system
 7. Stop Agents:
 
 ```sh
-$ pdsh -S -w $CLIENT_NODES "sudo systemctl stop daos_agent"
+$ clush -B -w $CLIENT_NODES "sudo systemctl stop daos_agent"
 ```
 
 
 8. Stop Servers:
 
 ```sh
-$ pdsh -S -w $SERVER_NODES "sudo systemctl stop daos_server"
+$ clush -B -w $SERVER_NODES "sudo systemctl stop daos_server"
 ```
