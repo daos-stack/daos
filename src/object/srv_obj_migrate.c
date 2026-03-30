@@ -2231,7 +2231,7 @@ migrate_one_ult(void *arg)
 
 	data_units = data_size * ioa->ioa_fanout;
 	if (migr_res_is_hulk(data_units))
-		rc = migrate_res_hold(tls, MIGR_HULK, data_units, &mrone->mo_data_rsh);
+		rc = migrate_res_hold(tls, MIGR_HULK, 1, &mrone->mo_data_rsh);
 	else
 		rc = migrate_res_hold(tls, MIGR_DATA, data_units, &mrone->mo_data_rsh);
 	if (rc)
@@ -3870,24 +3870,21 @@ migrate_ult(void *arg)
 
 	D_ASSERT(pool_tls != NULL);
 	pool = pool_tls->mpt_pool;
-	/* Only reintegrating targets/pool needs to discard the object, if sp_need_discard is 0,
-	 * either the target does not need to discard, or discard has been done.
-	 * spc_discard_done means discarding has been done in the current VOS target.
-	 */
-	if (pool->spc_pool->sp_need_discard) {
-		while (!pool->spc_discard_done) {
-			D_DEBUG(DB_REBUILD, DF_RB " wait for discard to finish.\n",
-				DP_RB_MPT(pool_tls));
-			dss_sleep(2 * 1000);
-			if (pool_tls->mpt_fini)
-				D_GOTO(out, rc);
-		}
+	while (atomic_load(&pool->spc_pool->sp_discarding) != 0) {
+		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(pool_tls));
+		dss_sleep(2 * 1000);
+		if (pool_tls->mpt_fini)
+			D_GOTO(out, rc);
+
+		ABT_mutex_lock(pool->spc_pool->sp_mutex);
 		if (pool->spc_pool->sp_discard_status) {
 			rc = pool->spc_pool->sp_discard_status;
-			D_DEBUG(DB_REBUILD, DF_RB " discard failure: " DF_RC, DP_RB_MPT(pool_tls),
-				DP_RC(rc));
+			ABT_mutex_unlock(pool->spc_pool->sp_mutex);
+			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n",
+				DP_RB_MPT(pool_tls), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
+		ABT_mutex_unlock(pool->spc_pool->sp_mutex);
 	}
 
 	rc =
