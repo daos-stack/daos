@@ -69,7 +69,9 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 		struct daos_prop_entry *entry;
 
 		/** Check the EC Cell size property on pool */
-		pool_prop                          = daos_prop_alloc(1);
+		pool_prop = daos_prop_alloc(1);
+		if (pool_prop == NULL)
+			return ENOMEM;
 		pool_prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_EC_CELL_SZ;
 
 		rc = daos_pool_query(poh, NULL, NULL, pool_prop, NULL);
@@ -401,7 +403,7 @@ err_destroy:
 	if (rc != EEXIST) {
 		rc2 = daos_cont_destroy(poh, str, 1, NULL);
 		if (rc2)
-			D_ERROR("daos_cont_destroy failed " DF_RC "\n", DP_RC(rc));
+			D_ERROR("daos_cont_destroy failed " DF_RC "\n", DP_RC(rc2));
 	}
 err_prop:
 	daos_prop_free(prop);
@@ -564,7 +566,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	d_iov_t              marker;
 	bool                 mark_data = true;
 	struct timespec      current_time;
-	int                  rc;
+	int                  rc, rc2;
 
 	rc = clock_gettime(CLOCK_REALTIME, &current_time);
 	if (rc)
@@ -613,6 +615,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 		D_ERROR("Failed to mark OID in OIT: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
+	rc = 0;
 
 	/** descend into directories */
 	if (S_ISDIR(obj->mode)) {
@@ -631,7 +634,9 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	}
 
 out_obj:
-	rc = dfs_release(obj);
+	rc2 = dfs_release(obj);
+	if (rc == 0)
+		rc = rc2;
 	return rc;
 }
 
@@ -735,6 +740,8 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	if (rc)
 		return errno;
 	now_tm = localtime(&now.tv_sec);
+	if (now_tm == NULL)
+		return errno ? errno : EINVAL;
 	len    = strftime(now_name, sizeof(now_name), "%Y-%m-%d-%H:%M:%S", now_tm);
 	if (len == 0)
 		return EINVAL;
@@ -908,7 +915,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			D_GOTO(out_lf2, rc = daos_der2errno(rc));
 		}
 
-		clock_gettime(CLOCK_REALTIME, &current_time);
+		rc = clock_gettime(CLOCK_REALTIME, &current_time);
 		if (rc)
 			D_GOTO(out_lf2, rc = errno);
 		oit_args->num_scanned += nr_entries;
@@ -991,7 +998,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			D_GOTO(out_lf2, rc = daos_der2errno(rc));
 		}
 
-		clock_gettime(CLOCK_REALTIME, &current_time);
+		rc = clock_gettime(CLOCK_REALTIME, &current_time);
 		if (rc)
 			D_GOTO(out_lf2, rc = errno);
 		oit_args->num_scanned += nr_entries;
@@ -1457,6 +1464,7 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, uid_t uid, d_string_t gro
 
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
 	if (daos_obj_id_is_nil(roots->cr_oids[0]) || daos_obj_id_is_nil(roots->cr_oids[1])) {
+		rc = EIO;
 		D_ERROR("Invalid superblock or root object ID: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_prop, rc = EIO);
 	}
@@ -1569,7 +1577,7 @@ scan_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	struct dfs_scan_args *scan_args = (struct dfs_scan_args *)args;
 	dfs_obj_t            *obj;
 	struct timespec       current_time;
-	int                   rc;
+	int                   rc, rc2;
 
 	rc = clock_gettime(CLOCK_REALTIME, &current_time);
 	if (rc)
@@ -1631,7 +1639,9 @@ scan_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	}
 
 out_obj:
-	rc = dfs_release(obj);
+	rc2 = dfs_release(obj);
+	if (rc == 0)
+		rc = rc2;
 	return rc;
 }
 
@@ -1654,6 +1664,8 @@ dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *s
 	if (rc)
 		return errno;
 	now_tm = localtime(&now.tv_sec);
+	if (now_tm == NULL)
+		return errno ? errno : EINVAL;
 	len    = strftime(now_name, sizeof(now_name), "%Y-%m-%d-%H:%M:%S", now_tm);
 	if (len == 0)
 		return EINVAL;
