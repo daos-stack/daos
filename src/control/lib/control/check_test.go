@@ -223,7 +223,7 @@ func TestControl_SystemCheckQuery_ReportsSorted(t *testing.T) {
 	}
 }
 
-func TestControl_SystemCheckReportRegister(t *testing.T) {
+func TestControl_SystemCheckEngineReport(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *SystemCheckEngineReportReq
