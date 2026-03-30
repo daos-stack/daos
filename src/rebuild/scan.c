@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2017-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -262,6 +262,25 @@ rebuild_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	return rc;
 }
 
+/* rebuild_leader_status_check() will sync IV by rebuild_leader_status_notify() riv_stable_epoch
+ * every RBLD_CHECK_INTV (2000mS), and update to rpt->rt_stable_epoch in rebuild_iv_ent_refresh().
+ */
+static int
+rpt_wait_rebuild_epoch(struct rebuild_tgt_pool_tracker *rpt)
+{
+	int wait_cnt     = 0;
+	int wait_intv    = 200; /* milliseconds */
+	int wait_cnt_max = 180;
+
+	while (rpt->rt_stable_epoch == 0 && wait_cnt++ < wait_cnt_max)
+		dss_sleep(wait_intv);
+
+	if (rpt->rt_stable_epoch != 0)
+		return 0;
+
+	return -DER_TIMEDOUT;
+}
+
 static void
 rebuild_objects_send_ult(void *data)
 {
@@ -277,6 +296,14 @@ rebuild_objects_send_ult(void *data)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
+
+	if (rpt->rt_stable_epoch == 0) {
+		rc = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed", DP_RB_RPT(rpt));
+			goto out;
+		}
+	}
 
 	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
 	if (oids == NULL)
@@ -587,10 +614,25 @@ rebuild_obj_ult(void *data)
 	struct rebuild_obj_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
+	if (rpt->rt_stable_epoch == 0) {
+		int rc;
+
+		rc = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed, abort the rebuild",
+				 DP_RB_RPT(rpt));
+			if (rpt->rt_errno == 0)
+				rpt->rt_errno = rc;
+			rpt->rt_abort = 1;
+		}
+		goto out;
+	}
+
 	ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
 			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
+out:
 	rpt_put(rpt);
 	D_FREE(arg);
 }
