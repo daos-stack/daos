@@ -13,12 +13,15 @@ server_config:
       nr_xs_helpers: 1
       log_file: daos_server_0.log
       storage: auto
+      env_vars:
+        - D_LOG_FLUSH=DEBUG
     1:
       targets: 4
       nr_xs_helpers: 1
       log_file: daos_server_1.log
       storage: auto
-
+      env_vars:
+        - D_LOG_FLUSH=DEBUG
 pool:
   size: 10%
 
