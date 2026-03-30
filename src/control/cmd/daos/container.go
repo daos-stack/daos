@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -397,9 +398,12 @@ func (cmd *containerCreateCmd) getCreateProps() (*daos.ContainerPropertyList, er
 		grpProp.SetString(cmd.Group.String())
 	}
 
+	// Use POSIX container type by default, if none is specified
+	typeProp := createPropList.MustAddEntryByType(daos.ContainerPropLayoutType)
 	if hasType() {
-		typeProp := createPropList.MustAddEntryByType(daos.ContainerPropLayoutType)
 		typeProp.SetValue(uint64(cmd.Type.Type))
+	} else {
+		typeProp.SetValue(uint64(C.DAOS_PROP_CO_LAYOUT_POSIX))
 	}
 
 	return createPropList, nil

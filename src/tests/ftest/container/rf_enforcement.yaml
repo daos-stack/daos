@@ -36,6 +36,7 @@ container:
       properties: rd_fac:3
     rf_4:
       properties: rd_fac:4
+  type: NONE
 rebuild:
   traffic_oc: !mux
     object_class_sx:

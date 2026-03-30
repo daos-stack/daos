@@ -18,6 +18,6 @@ pool:
   scm_size: 500000000
 container:
   cont_types:
-    - ""
+    - "NONE"
     - "POSIX"
   control_method: daos

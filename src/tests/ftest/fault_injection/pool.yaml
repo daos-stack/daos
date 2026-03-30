@@ -35,6 +35,7 @@ container:
   dkey_size: 10
   data_array: 10
   control_method: daos
+  type: NONE
 
 object_class: OC_RP_3G1
 
