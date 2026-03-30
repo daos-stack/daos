@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2018-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -187,6 +187,9 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		/** Open the array object for the file */
 		rc = daos_array_open_with_attr(dfs->coh, file->oid, DAOS_TX_NONE, DAOS_OO_RW, 1,
 					       chunk_size, &file->oh, NULL);
+		D_ERROR("lxzlxz dfs %p, name %s, file oid " DF_OID ", parent oid " DF_OID
+			", daos_array_open_with_attr rc %d\n",
+			dfs, file->name, DP_OID(file->oid), DP_OID(parent->oid), rc);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n", DP_RC(rc));
 			return daos_der2errno(rc);
@@ -201,8 +204,17 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
 		entry->chunk_size                     = chunk_size;
 
+		daos_cont_info_t cinfo;
+
+		rc = daos_cont_query(dfs->coh, &cinfo, NULL, NULL);
+		D_ERROR("lxzlxz dfs %p, co uuid " DF_UUID ", query rc %d\n", dfs,
+			DP_UUID(cinfo.ci_uuid), rc);
+
+		D_ERROR("lxzlxz dfs %p, name %s, insert_entry begin\n", dfs, file->name);
 		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
+		D_ERROR("lxzlxz dfs %p, name %s, insert_entry rc %d, oexcl %d\n", dfs, file->name,
+			rc, oexcl);
 		if (rc == EEXIST && !oexcl) {
 			int rc2;
 
@@ -378,6 +390,7 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	if (rc)
 		return rc;
 
+	D_ERROR("lxzlxz dfs %p name %s\n", dfs, name);
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
 		return ENOMEM;

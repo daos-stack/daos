@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2453,7 +2453,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	struct ds_pool *pool = child->sc_pool->spc_pool;
 
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
-		/* EC aggregation is still inflight, rebuild should wait until it's paused */
+		/* EC aggregation is still in-flight, rebuild should wait until it's paused */
 		if (ds_cont_child_ec_aggregating(child)) {
 			D_ERROR(DF_CONT " ec aggregate still active, rebuilding %d\n",
 				DP_CONT(pool->sp_uuid, child->sc_uuid),
@@ -3030,12 +3030,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	D_DEBUG(DB_IO,
-		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_X64", pmv %u/%u dti "DF_DTI" layout %u.\n",
-		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
-		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti), ioc.ioc_layout_ver);
+		DF_CONT "rpc %p opc %d oid " DF_UOID " dkey " DF_KEY " tag/xs %d/%d epc " DF_X64
+			", pmv %u/%u dti " DF_DTI " layout %u.\n",
+		DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid), rpc, opc, DP_UOID(orw->orw_oid),
+		DP_KEY(&orw->orw_dkey), dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id, orw->orw_epoch, orw->orw_map_ver, ioc.ioc_map_ver,
+		DP_DTI(&orw->orw_dti), ioc.ioc_layout_ver);
 
 	if (obj_rpc_is_fetch(rpc) && !(orw->orw_flags & ORF_EC_RECOV) &&
 	    (orw->orw_epoch != 0 && orw->orw_epoch != DAOS_EPOCH_MAX))
