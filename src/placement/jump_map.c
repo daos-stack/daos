@@ -1,7 +1,7 @@
 /**
  *
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -703,12 +703,17 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 					D_GOTO(out, rc = -DER_NOMEM);
 
 				remap_add_one(&remap_list, shard);
+				/* remapping requires full layout */
+				if (i == md->omd_grp_spec)
+					md->omd_grp_spec = PL_GRP_MAX;
 			} else {
 				layout_set_shard_flags(layout, k, remap_flags);
 				if (domain != NULL)
 					setbit(dom_cur_grp_real, domain - root);
 			}
 		}
+		if (i >= md->omd_grp_spec)
+			break; /* caller doesn't require the full layout */
 	}
 
 	if (fail_tgt_cnt > 0)
@@ -776,6 +781,9 @@ obj_layout_alloc_and_get(struct pl_jump_map *jmap, uint32_t layout_ver,
 			DP_RC(rc));
 		return rc;
 	}
+
+	if (gen_mode != PRE_REBUILD || !(md->omd_flags & PL_FL_GRP_SPEC))
+		md->omd_grp_spec = PL_GRP_MAX; /* full layout */
 
 	rc = get_object_layout(jmap, layout_ver, *layout_p, jmop, allow_version, gen_mode, md);
 	if (rc) {

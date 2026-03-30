@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2023 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,7 +140,7 @@ typedef struct {
 /* Leave a few extra bits for now */
 #define MAX_OBJ_LAYOUT_VERSION		0xFFF0
 
-/** object metadata stored in the global OI table of container */
+/** metadata for object layout computation */
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
 	uint32_t		omd_ver;
@@ -155,6 +155,12 @@ struct daos_obj_md {
 	 * PO_COMP_TP_GRP and with PO_COMP_TP_GRP layer in pool map.
 	 */
 	uint32_t		omd_pdom_lvl;
+	/* extra flags for placement */
+	unsigned int            omd_flags;
+	/* it should be set when PL_FL_GRP_SPEC is set, it's the group ID that
+	 * layout computation should reach then return(reduce computation time).
+	 */
+	unsigned int            omd_grp_spec;
 };
 
 /** object shard metadata stored in each container shard */
