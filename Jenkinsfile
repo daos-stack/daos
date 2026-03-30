@@ -1047,13 +1047,12 @@ pipeline {
                     steps {
                         job_step_update(
                             unitTest(timeout_time: 150,
-                                     unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: getScriptOutput(
-                                        'ci/unit/required_packages.sh el9 true'),
+                                     inst_rpms: unitTestInstRpms('el9'),
                                      image_version: 'el9.7',
                                      compiler: 'covc',
                                      test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_opt: true,
                                      unstash_tests: false,
                                      ignore_failure: true,
                                      coverage_stash: 'nlt_bullseye'))
