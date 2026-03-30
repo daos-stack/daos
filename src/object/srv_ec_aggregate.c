@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2523,6 +2523,8 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 
 	props = dc_cont_hdl2props(info->api_cont_hdl);
 	md.omd_id = entry->ie_oid.id_pub;
+	md.omd_grp_spec = entry->ie_oid.id_shard / daos_oclass_grp_size(&oca);
+	md.omd_flags    = PL_FL_GRP_SPEC;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
 	md.omd_pdom_lvl = props.dcp_perf_domain;
