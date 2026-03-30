@@ -108,6 +108,16 @@ struct pl_map_attr {
 	int		pa_target_nr;
 };
 
+enum {
+	/* setting this flag allows placement algorithm to finish layout computation
+	 * after reaching the specified shard.
+	 */
+	PL_FL_GRP_SPEC,
+};
+
+/* don't overflow integer */
+#define PL_GRP_MAX (1 << 30)
+
 int pl_init(void);
 void pl_fini(void);
 
