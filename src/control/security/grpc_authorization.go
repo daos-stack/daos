@@ -44,6 +44,7 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/StopRanks":                  {ComponentServer},
 	"/ctl.CtlSvc/ResetFormatRanks":           {ComponentServer},
 	"/ctl.CtlSvc/StartRanks":                 {ComponentServer},
+	"/ctl.CtlSvc/CheckEngineRepair":          {ComponentServer},
 	"/mgmt.MgmtSvc/Join":                     {ComponentServer},
 	"/mgmt.MgmtSvc/ClusterEvent":             {ComponentServer},
 	"/mgmt.MgmtSvc/LeaderQuery":              {ComponentAdmin},
