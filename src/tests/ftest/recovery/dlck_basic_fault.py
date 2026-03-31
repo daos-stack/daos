@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+  Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -39,14 +39,12 @@ class DlckBasicFaultTest(TestWithServers):
             control_metadata_dir = os.path.join(log_dir, "control_metadata")
             engine_path_dir = os.path.join(control_metadata_dir, "engine0")
             nvme_conf=os.path.join(engine_path_dir, "daos_nvme.conf")
-            self.log.info(f"directory: {os.listdir(control_metadata_dir)}")
-            self.log.info(f"directory: {os.listdir(engine_path_dir)}")
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
         if fault_inject_file == "None set for now":
-            self.fail("D_FI_CONFIG environment variable not set, cannot run fault injection test")
+            self.fail(f"D_FI_CONFIG environment variable not set, cannot run fault injection test")
         env_str = "D_FI_CONFIG={} ".format(fault_inject_file)
-        self.log.info("Fault injection file contents")
-        cmd = "cat {}".format(fault_inject_file)        
+        self.log.info(f"Fault injection file contents")
+        cmd = "cat {}".format(fault_inject_file)
         host = self.server_managers[0].hosts[0:1]
         run_remote(self.log, self.hostlist_clients[0], cmd, timeout=30)
         dmg.system_stop()
@@ -60,7 +58,7 @@ class DlckBasicFaultTest(TestWithServers):
         result = dlck_cmd.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
-        self.log.info("dlck basic test output:\n%s", result)
+        self.log.info(f"dlck basic test output: %s \n", result)
         # Now, run the other fault injection flags without rebooting or creating any new pools.
         # Rebooting the servers or creating the new pools will result in injecting fault in
         # the wrong test code. Fault injections should done only for the dlck alone.
@@ -72,12 +70,12 @@ class DlckBasicFaultTest(TestWithServers):
                     if count == 0:
                         f.write(f"- {key}: \'{value}\'\n")
                     else:
-                        f.write(f"  {key}: \'{value}\'\n")  
-                    count += 1           
+                        f.write(f"  {key}: \'{value}\'\n")
+                    count += 1
             self.log.info("Reading the updated fault injection file contents")
             with open(fault_inject_file, 'r') as f:
                 file_data = f.read()
-                self.log.info("\n%s", file_data)
+                self.log.info(f"\n%s", file_data)
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
             if self.server_managers[0].manager.job.using_control_metadata:
