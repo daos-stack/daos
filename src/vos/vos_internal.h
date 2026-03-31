@@ -264,7 +264,7 @@ struct vos_pool {
 	uint32_t                 vp_opened : 30;
 	uint32_t                 vp_dying  : 1;
 	/** exclusive handle (see VOS_POF_EXCL) */
-	int                      vp_excl : 1, vp_gc_nospc : 1;
+	unsigned int             vp_excl : 1, vp_gc_nospc : 1;
 	/* this pool is for sysdb */
 	bool			vp_sysdb;
 	/** this pool is for rdb */
