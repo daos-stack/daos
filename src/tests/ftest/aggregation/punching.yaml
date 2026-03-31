@@ -15,8 +15,10 @@ server_config:
 pool: !mux
   default:
     size: 100%
+    properties: rd_fac:0
   md_on_ssd_p2:
     size: 100%
+    properties: rd_fac:0
     mem_ratio: 25
 container:
   type: POSIX
@@ -29,8 +31,10 @@ mdtest:
   iteration: 1
   manager: "MPICH"
   mdtest_params:
-    api: 'DFS'
+    api: DFS
     write_bytes: 4194304
     branching_factor: 1
     num_of_files_dirs: 4000
     depth: 0
+    dfs_oclass: S1
+    dfs_dir_oclass: SX
