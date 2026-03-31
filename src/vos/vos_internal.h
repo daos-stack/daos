@@ -297,11 +297,10 @@ struct vos_pool {
 	struct d_ulink		vp_hlink;
 	/** number of openers */
 	uint32_t                vp_opened;
-	uint32_t                vp_dying:1,
-				vp_opening:1,
-	/** exclusive handle (see VOS_POF_EXCL) */
-				vp_excl:1,
-				vp_gc_nospc:1;
+	uint32_t                vp_dying : 1, vp_opening : 1,
+	    /** exclusive handle (see VOS_POF_EXCL) */
+	    vp_excl : 1;
+	unsigned int             vp_gc_nospc;
 	ABT_mutex		vp_mutex;
 	ABT_cond		vp_cond;
 	/* this pool is for sysdb */
