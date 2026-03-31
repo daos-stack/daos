@@ -39,7 +39,6 @@ variables will need to be defined:
 - CLIENT\_NODES
 - SERVER\_NODES
 - ALL\_NODES
-- USER_GROUP
 
 For example, if you want to use admin-1 as the admin node, client-1 and
 client-2 as client nodes, and server-\[1-3\] as server nodes,
@@ -60,8 +59,6 @@ ALL_NODES="$ADMIN_NODES,$CLIENT_NODES,$SERVER_NODES"
     `$ADMIN_NODES` from the `ALL_NODES` assignment to prevent duplication.
     For example: `ALL_NODES=$CLIENT_NODES,$SERVER_NODES`
 
-The `USER_GROUP` variable should be assigned one of the user's groups for
-the purpose of setting file access. 
 
 
 ## RPM Installation
@@ -189,12 +186,12 @@ for more information.
 
 7. Set the ownership of the admin certificates on each admin node:
 
-		pdsh -S -w $ADMIN_NODES sudo chown $USER:$USER /etc/daos/certs/daosCA.crt
-		pdsh -S -w $ADMIN_NODES sudo chown $USER:$USER /etc/daos/certs/admin.*
+		pdsh -S -w $ADMIN_NODES sudo chown $USER: /etc/daos/certs/daosCA.crt
+		pdsh -S -w $ADMIN_NODES sudo chown $USER: /etc/daos/certs/admin.*
 
 8. Set the ownership of the client certificates on each client node:
 
-		pdsh -S -w $CLIENT_NODES sudo chown $USER:$USER /etc/daos/certs/daosCA.crt
+		pdsh -S -w $CLIENT_NODES sudo chown $USER: /etc/daos/certs/daosCA.crt
 		pdsh -S -w $CLIENT_NODES sudo chown daos_agent:daos_agent /etc/daos/certs/agent.*
 
 9. Set the ownership of the server certificates on each server node:
