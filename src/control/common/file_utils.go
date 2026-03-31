@@ -7,12 +7,6 @@
 
 package common
 
-/*
-#cgo CFLAGS: -I${SRCDIR}/../../include/
-#include "daos_srv/control.h"
-*/
-import "C"
-
 import (
 	"fmt"
 	"io"
