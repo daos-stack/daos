@@ -18,7 +18,7 @@ from distro_utils import detect
 from run_utils import run_remote
 
 
-def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
+def run_build_test(self, cache_mode, il_lib=None):
     """Run an actual test from above."""
     # Create a pool, container and start dfuse.
     self.log_step('Creating a single pool and container')
@@ -31,28 +31,20 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     cache_time = '2d'
     # Timeout in minutes.  This is per command so up to double this or more as there are two
     # scons commands which can both take a long time.
-    build_time = 240
+    build_time = 60
 
     dfuse_namespace = None
-
-    with_pil4dfs = False
-    if il_lib is not None:
-        if il_lib == 'libpil4dfs.so':
-            with_pil4dfs = True
 
     # Run the deps build in parallel for speed/coverage however the daos build itself does
     # not yet work under the interception library so run this part in serial.
     build_jobs = 6 * 5
 
-    # Note that run_on_vms does not tell ftest where to run, this should be set according to
-    # the test tags so the test can run with appropriate settings.
     remote_env = EnvironmentVariables()
-    if run_on_vms:
-        dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
-        build_jobs = 6 * 2
-        if with_pil4dfs:
-            # crashed previously with 6 * 2
-            build_jobs = 5 * 2
+
+    if il_lib is not None:
+        dfuse_namespace = "/run/dfuse_il/*"
+        build_jobs = 4
+        build_time *= 2
         remote_env['D_IL_MAX_EQ'] = '0'
 
     dfuse = get_dfuse(self, self.hostlist_clients, dfuse_namespace)
@@ -63,8 +55,6 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         cont_attrs['dfuse-dentry-time'] = cache_time
         cont_attrs['dfuse-ndentry-time'] = cache_time
     elif cache_mode == 'writethrough':
-        if il_lib is not None:
-            build_time *= 2
         cont_attrs['dfuse-data-cache'] = '1m'
         cont_attrs['dfuse-attr-time'] = cache_time
         cont_attrs['dfuse-dentry-time'] = cache_time
@@ -109,13 +99,10 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
         remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
-        remote_env['DD_MASK'] = 'all'
-        remote_env['DD_SUBSYS'] = 'all'
-        remote_env['D_LOG_MASK'] = 'WARN,IL=WARN'
+        remote_env['D_LOG_MASK'] = 'INFO'
         if il_lib == 'libpil4dfs.so':
             remote_env['D_IL_NO_BYPASS'] = '1'
             remote_env['D_IL_COMPATIBLE'] = '1'
-            remote_env['D_IL_MAX_EQ'] = '0'
 
     preload_cmd = remote_env.to_export_str()
 
