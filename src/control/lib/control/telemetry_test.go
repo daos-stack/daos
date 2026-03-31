@@ -1,10 +1,6 @@
 //
-<<<<<<< HEAD
-// (C) Copyright 2021-2022 Intel Corporation.
-=======
 // Copyright 2021-2024 Intel Corporation.
 // Copyright 2026 Hewlett Packard Enterprise Development LP
->>>>>>> 285fdec1ad (Fix incompatibility with updated prometheus library)
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
