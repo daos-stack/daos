@@ -14,7 +14,7 @@ class DlckBasicTest(TestWithServers):
 
     :avocado: recursive
     """
-    def test_dlck_basic_test(self):
+    def test_dlck_basic(self):
         """Basic Test: Run 'dlck' command
 
         :avocado: tags=all,daily_regression
@@ -33,20 +33,20 @@ class DlckBasicTest(TestWithServers):
             log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
             control_metadata_dir = os.path.join(log_dir, "control_metadata")
             engine_path_dir = os.path.join(control_metadata_dir, "engine0")
-            nvme_conf=os.path.join(engine_path_dir, "daos_nvme.conf")
+            nvme_conf = os.path.join(engine_path_dir, "daos_nvme.conf")
         dmg.system_stop()
         host = self.server_managers[0].hosts[0:1]
         if self.server_managers[0].manager.job.using_control_metadata:
             dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], nvme_conf=nvme_conf,
-                                  storage_mount=scm_mount)
+                                   storage_mount=scm_mount)
         else:
             dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], storage_mount=scm_mount)
         self.log_step("Run dlck command to check the health of the pool and storage")
         result = dlck_cmd.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
-        self.log.info(f"dlck basic test output: %s\n", result)
+        self.log.info(f"dlck basic test output: {result}\n")
         dmg.system_start()
         if errors:
-            self.fail("Errors detected:\n {}".format("\n".join(errors)))
-        self.log.info(f"dlck basic test passed with no errors")
+            self.fail(f"Errors detected: {errors} \n")
+        self.log.info("dlck basic test passed with no errors")

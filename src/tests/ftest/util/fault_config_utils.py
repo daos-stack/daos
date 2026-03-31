@@ -1,6 +1,6 @@
 """
-  (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2019-2024 Intel Corporation.
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -262,22 +262,22 @@ FAULTS = {
         'max_faults': '1'},
     'DAOS_FAULT_POOL_NVME_HEALTH': {
         'id': '131584',
-        'interval': '2', # skip sys_db
-        'max_faults': '1'}, 
+        'interval': '2',  # skip sys_db
+        'max_faults': '1'},
     'DAOS_FAULT_POOL_OPEN_BIO': {
         'id': '131585'},
     'DAOS_FAULT_POOL_OPEN_UMEM': {
         'id': '131586',
-        'interval': '2'}, # skip sys_db
+        'interval': '2'},  # skip sys_db
     'DAOS_FAULT_POOL_OPEN_MAGIC': {
         'id': '131587',
-        'interval': '2'}, # skip sys_db
+        'interval': '2'},  # skip sys_db
     'DAOS_FAULT_POOL_OPEN_VERSION': {
         'id': '131588',
-        'interval': '2'}, # skip sys_db
+        'interval': '2'},  # skip sys_db
     'DAOS_FAULT_POOL_OPEN_UUID': {
         'id': '131589',
-        'interval': '2'}, # skip sys_db
+        'interval': '2'},  # skip sys_db
     'DAOS_FAULT_BTREE_OPEN_INV_CLASS': {
         'id': '131590',
         'interval': '28',  # containers tree fine-tuned

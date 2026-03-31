@@ -17,7 +17,7 @@ class DlckBasicFaultTest(TestWithServers):
 
     :avocado: recursive
     """
-    def test_dlck_basic_fault_test(self):
+    def test_dlck_basic_fault(self):
         """Basic Fault Test: Run 'dlck' injecting basic faults.
 
         :avocado: tags=all,full_regression
@@ -38,12 +38,12 @@ class DlckBasicFaultTest(TestWithServers):
             log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
             control_metadata_dir = os.path.join(log_dir, "control_metadata")
             engine_path_dir = os.path.join(control_metadata_dir, "engine0")
-            nvme_conf=os.path.join(engine_path_dir, "daos_nvme.conf")
+            nvme_conf = os.path.join(engine_path_dir, "daos_nvme.conf")
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
         if fault_inject_file == "None set for now":
-            self.fail(f"D_FI_CONFIG environment variable not set, cannot run fault injection test")
+            self.fail("D_FI_CONFIG environment variable not set")
         env_str = "D_FI_CONFIG={} ".format(fault_inject_file)
-        self.log.info(f"Fault injection file contents")
+        self.log.info("Fault injection file contents")
         cmd = "cat {}".format(fault_inject_file)
         host = self.server_managers[0].hosts[0:1]
         run_remote(self.log, self.hostlist_clients[0], cmd, timeout=30)
@@ -51,14 +51,14 @@ class DlckBasicFaultTest(TestWithServers):
         # Run the testing with the first fault which is injected at the beginning of the test.
         if self.server_managers[0].manager.job.using_control_metadata:
             dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], nvme_conf=nvme_conf,
-                                  storage_mount=scm_mount, env_str=env_str)
+                                   storage_mount=scm_mount, env_str=env_str)
         else:
             dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], storage_mount=scm_mount,
                                    env_str=env_str)
         result = dlck_cmd.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
-        self.log.info(f"dlck basic test output: %s \n", result)
+        self.log.info(f"dlck basic test output: {result} \n")
         # Now, run the other fault injection flags without rebooting or creating any new pools.
         # Rebooting the servers or creating the new pools will result in injecting fault in
         # the wrong test code. Fault injections should done only for the dlck alone.
@@ -75,12 +75,12 @@ class DlckBasicFaultTest(TestWithServers):
             self.log.info("Reading the updated fault injection file contents")
             with open(fault_inject_file, 'r') as f:
                 file_data = f.read()
-                self.log.info(f"\n%s", file_data)
+                self.log.info(f"\n {file_data}")
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
             if self.server_managers[0].manager.job.using_control_metadata:
                 dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], nvme_conf=nvme_conf,
-                                      storage_mount=scm_mount, env_str=env_str)
+                                       storage_mount=scm_mount, env_str=env_str)
             else:
                 dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], storage_mount=scm_mount,
                                        env_str=env_str)

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +32,7 @@ class DlckCommand(CommandWithParameters):
         # Pass environment variable string
         self.env_str = ""
         if env_str is not None:
-           self.env_str = str(env_str)
+            self.env_str = str(env_str)
 
         # We need to run with sudo.
         self.sudo = sudo
