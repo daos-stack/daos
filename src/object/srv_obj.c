@@ -5988,7 +5988,7 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 out:
-	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS, DLOG_ERR, DB_IO, rc,
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_NONEXIST, DLOG_ERR, DB_IO, rc,
 		  "Handled collective query RPC %p %s forwarding for obj " DF_UOID " on rank %u XS "
 		  "%u/%u epc " DF_X64 " pmv %u, with dti " DF_DTI ", dct_nr %u, forward width %u, "
 		  "forward depth %u",
