@@ -7,7 +7,7 @@ import time
 
 from apricot import TestWithServers
 from general_utils import check_file_exists
-from recovery_utils import query_detect
+from recovery_utils import query_detect, wait_for_check_query
 from run_utils import command_as_user, run_remote
 
 # Enum values used in this test
@@ -278,90 +278,44 @@ class DMGCheckStartOptionsTest(TestWithServers):
     def test_check_start_failout(self):
         """Test dmg check start --failout=on.
 
-        See the state diagram attached to the ticket.
-
-        1. Create a pool.
-        2. Inject orphan pool fault.
-        3. Enable checker and set policy to --all-interactive.
+        1. Create a pool and inject orphan pool fault to it.
+        2. Enable checker.
+        3. Inject fault to artificially cause the failure during repair.
+        daos faults set-param --location=DAOS_CHK_LEADER_FAIL_REGPOOL
         4. Start the checker with --failout=on.
-        5. Query and check that it detected the orphan pool.
-        6. Remove the pool directory from the mount point.
-        7. Repair the pool.
-        8. Query and verify that Current status is FAILED. i.e., State is failed.
+        dmg check start --failout=on
+        5. Query and verify that Current status is FAILED.
 
-        Jira ID: DAOS-17818
+        Jira ID: DAOS-18394
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_failout
         """
-        # 1. Create a pool.
         self.log_step("Create a pool")
         pool = self.get_pool(connect=False)
 
-        # 2. Inject orphan pool fault.
         self.log_step("Inject orphan pool fault")
         dmg_command = self.get_dmg_command()
         dmg_command.faults_mgmt_svc_pool(
             pool=pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_MS")
 
-        # 3. Enable checker and set policy to --all-interactive.
-        self.log_step("Enable checker and set policy to --all-interactive.")
+        self.log_step("Enable checker.")
         dmg_command.check_enable()
-        dmg_command.check_set_policy(all_interactive=True)
 
-        # 4. Start the checker with --failout=on.
+        self.log_step("Inject fault to artificially cause the failure during repair.")
+        self.get_daos_command().faults_set_param(location="DAOS_CHK_LEADER_FAIL_REGPOOL")
+
         self.log_step("Start the checker with --failout=on.")
         dmg_command.check_start(failout="on")
 
-        # 5. Query and check that it detected the orphan pool.
-        self.log_step("Query and check that it detected the orphan pool.")
-        query_reports = query_detect(dmg_command, "orphan pool")
-
-        # 6. Remove the pool directory from the mount point.
-        self.log_step("Remove the pool directory from the mount point.")
-        pool_path = self.server_managers[0].get_vos_paths(pool)[0]
-        pool_out = check_file_exists(
-            hosts=self.hostlist_servers, filename=pool_path, sudo=True)
-        if not pool_out[0]:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control "
-                   "plane after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
-        command = command_as_user(command=f"rm -rf {pool_path}", user="root")
-        remove_result = run_remote(
-            log=self.log, hosts=self.hostlist_servers, command=command)
-        if not remove_result.passed:
-            self.fail(f"Failed to remove {pool_path} from {remove_result.failed_hosts}")
-        success_nodes = remove_result.passed_hosts
-        if self.hostlist_servers != success_nodes:
-            msg = (f"Failed to remove pool directory! All = {self.hostlist_servers}, "
-                   f"Success = {success_nodes}")
-            self.fail(msg)
-
-        # 7. Repair the pool.
-        self.log_step("Repair the pool.")
-        seq_num = str(query_reports[0]["seq"])
-        dmg_command.check_repair(seq_num=seq_num, action="0")
-
-        # 8. Query and verify that Current status is FAILED.
         self.log_step("Query and verify that Current status is FAILED.")
-        status_failed = False
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "FAILED":
-                status_failed = True
-                break
-            time.sleep(5)
-        if not status_failed:
-            self.fail("Current status isn't FAILED!")
+        wait_for_check_query(dmg=dmg_command, status="FAILED")
 
-        # Disable the checker to prepare for the tearDown.
+        self.log_step("Disable the checker to prepare for the tearDown.")
         dmg_command.check_disable()
-        # The pool is orphan pool, so skip the cleanup.
+        # The pool is corrupted and we can't destroy it, so skip the cleanup.
         pool.skip_cleanup()
 
     def query_nr_reports(self, dmg_command, nr_exp_reports):
