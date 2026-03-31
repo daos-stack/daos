@@ -76,6 +76,7 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	D_INIT_LIST_HEAD(&cpr->cpr_shutdown_link);
 	D_INIT_LIST_HEAD(&cpr->cpr_shard_list);
 	D_INIT_LIST_HEAD(&cpr->cpr_pending_list);
+	D_INIT_LIST_HEAD(&cpr->cpr_ult_list);
 	cpr->cpr_refs = 1;
 	uuid_copy(cpr->cpr_uuid, cpb->cpb_uuid);
 	cpr->cpr_thread = ABT_THREAD_NULL;

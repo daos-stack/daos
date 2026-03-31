@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -227,6 +228,9 @@ void
 obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
 {
 	int i;
+
+	if (!D_LOG_ENABLED(DB_PL))
+		return;
 
 	D_DEBUG(DB_PL, "dump layout for "DF_OID", ver %d\n",
 		DP_OID(oid), layout->ol_ver);

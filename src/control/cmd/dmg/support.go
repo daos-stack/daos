@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,34 +35,6 @@ type collectLogCmd struct {
 	support.CollectLogSubCmd
 	bld strings.Builder
 	support.LogTypeSubCmd
-}
-
-// gRPC call to initiate the rsync and copy the logs to Admin (central location).
-func (cmd *collectLogCmd) rsyncLog() error {
-	hostName, err := support.GetHostName()
-	if err != nil {
-		return err
-	}
-
-	req := &control.CollectLogReq{
-		TargetFolder:         cmd.TargetFolder,
-		AdminNode:            hostName,
-		LogFunction:          support.RsyncLogEnum,
-		FileTransferExecArgs: cmd.FileTransferExecArgs,
-	}
-	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
-	resp, err := control.CollectLog(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-	if err != nil && cmd.StopOnError {
-		return err
-	}
-	if len(resp.GetHostErrors()) > 0 {
-		if err := pretty.UpdateErrorSummary(resp, "rsync", &cmd.bld); err != nil {
-			return err
-		}
-		return resp.Errors()
-	}
-
-	return nil
 }
 
 // gRPC call to Archive the logs on individual servers.
@@ -126,7 +99,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	// set of support collection steps to show in progress bar
 	progress := support.ProgressBar{
-		Total:     len(LogCollection) + len(DmgInfoCollection) + 1, // Extra 1 is for rsync operation.
+		Total:     len(LogCollection) + len(DmgInfoCollection),
 		NoDisplay: cmd.JSONOutputEnabled(),
 	}
 
@@ -228,12 +201,6 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	params.FileTransferExecArgs = cmd.FileTransferExecArgs
-	// R sync the logs from servers
-	rsyncerr := cmd.rsyncLog()
-	fmt.Print(progress.Display())
-	if rsyncerr != nil && cmd.StopOnError {
-		return rsyncerr
-	}
 
 	// Archive the logs
 	if cmd.Archive {
@@ -244,14 +211,12 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			return err
 		}
 
-		// Archive the logs on Server node via gRPC in case of rsync failure and logs can not be
-		// copied to central/Admin node.
-		if rsyncerr != nil {
-			err = cmd.archLogsOnServer()
-			if err != nil && cmd.StopOnError {
-				return err
-			}
+		// Archive the logs on Server Node
+		err = cmd.archLogsOnServer()
+		if err != nil && cmd.StopOnError {
+			return err
 		}
+
 		fmt.Print(progress.Display())
 	}
 
