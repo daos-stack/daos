@@ -446,7 +446,12 @@ dss_rebuild_check_one(void *data)
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
 
-	status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
+		/* use rec_count to simulate progress when no object need to be reclaim */
+		status->rec_count += pool_tls->rebuild_pool_obj_count;
+	}
+
 	status->tobe_obj_count += pool_tls->rebuild_pool_obj_count;
 	ABT_mutex_unlock(status->lock);
 
@@ -2506,14 +2511,14 @@ rebuild_tgt_status_check_ult(void *arg)
 			}
 		}
 
-		D_INFO(DF_UUID" ver %d gen %u obj "DF_U64" rec "DF_U64" size "
-		       DF_U64" scan done %d pull done %d scan gl done %d"
-		       " gl done %d status %d abort %s\n",
+		D_INFO(DF_UUID " ver %d gen %u obj " DF_U64 "/" DF_U64 " rec " DF_U64
+			       " size " DF_U64 " scan done %d pull done %d scan gl done %d"
+			       " gl done %d status %d abort %s\n",
 		       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
-		       rpt->rt_pool->sp_rebuild_gen,
-		       iv.riv_obj_count, iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done,
-		       iv.riv_pull_done, rpt->rt_global_scan_done,
-		       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+		       rpt->rt_pool->sp_rebuild_gen, iv.riv_toberb_obj_count, iv.riv_obj_count,
+		       iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done, iv.riv_pull_done,
+		       rpt->rt_global_scan_done, rpt->rt_global_done, iv.riv_status,
+		       rpt->rt_abort ? "yes" : "no");
 		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
