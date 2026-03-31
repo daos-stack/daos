@@ -215,6 +215,9 @@ out:
 	return rc;
 }
 
+bool
+vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
+
 int
 ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 {
@@ -260,6 +263,10 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 			memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
 			strncpy(path_parts.vf_db_path, pa.pa_db_path,
 				sizeof(path_parts.vf_db_path) - 1);
+		}
+		if (!vmd_wa_can_proceed(&ctx, path_parts.vf_db_path)) {
+			rc = -DER_NO_SERVICE;
+			D_GOTO(done, rc);
 		}
 		rc = dv_pool_open(pa.pa_pool_path, &path_parts, &ctx.dc_poh, 0, ctx.dc_write_mode);
 		if (!SUCCESS(rc))
