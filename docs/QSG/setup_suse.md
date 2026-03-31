@@ -80,7 +80,7 @@ daos-server RPM.
 
 		clush -B -w $ALL_NODES 'sudo zypper --non-interactive refresh'
 
-4. Install `mercury-ucx` RPMs on all nodes. For more details, reference [UCX Fabric Support](https://docs.daos.io/v2.6/admin/ucx/#ucx-fabric-support).
+4. Install `mercury-ucx` or `mercury-libfabric` RPMs on all nodes. For more details, reference [Network Requirements](https://docs.daos.io/v2.6/admin/hardware/#network-requirements).
 
 		clush -B -w $ALL_NODES 'sudo zypper install -y mercury-ucx
 
