@@ -140,8 +140,7 @@ class PosixSimul(TestWithServers):
         # test 30, readdir, individual mode, dfuse returns NULL for readdir of an empty dir
         # test 39, link, individual mode, daos does not support hard link
         # test 40, link, individual mode, daos does not support hard link
-        # test 41, fcntl locking, individual mode, daos does not support flock
-        self.run_simul(exclude="9,18,20,30,39,40,41")
+        self.run_simul(exclude="9,18,20,30,39,40")
         self.log.info('Test passed')
 
     def test_posix_expected_failures(self):
@@ -152,6 +151,6 @@ class PosixSimul(TestWithServers):
         :avocado: tags=posix,simul,dfuse
         :avocado: tags=PosixSimul,test_posix_expected_failures
         """
-        faillist = {"9", "18", "20", "30", "39", "40", "41"}
+        faillist = {"9", "18", "20", "30", "39", "40"}
         self.run_simul(faillist=faillist)
         self.log.info('Test passed')
