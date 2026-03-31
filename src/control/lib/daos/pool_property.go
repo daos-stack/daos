@@ -35,11 +35,6 @@ import (
 import "C"
 
 const (
-	DefaultFilePerm = C.DEFAULT_FILE_PERM
-	DefaultDirPerm  = C.DEFAULT_DIR_PERM
-)
-
-const (
 	// MaxLabelLength is the maximum length of a label.
 	MaxLabelLength = C.DAOS_PROP_LABEL_MAX_LEN
 )

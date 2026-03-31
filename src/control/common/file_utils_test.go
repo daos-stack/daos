@@ -179,14 +179,14 @@ func TestUtils_HasPrefixPath(t *testing.T) {
 	}
 }
 
-func TestUtils_Mkdir(t *testing.T) {
-	exp_perm := 0777
+func TestUtils_MkdirForcePerm(t *testing.T) {
+	expPerm := 0777
 
 	testDir, clean := CreateTestDir(t)
 	defer clean()
 
 	testPath := path.Join(testDir, "foo")
-	err := MkdirForcePerm(testPath, os.FileMode(exp_perm))
+	err := MkdirForcePerm(testPath, os.FileMode(expPerm))
 	if err != nil {
 		t.Fatalf("Unexpected error: %q", err)
 	}
@@ -197,7 +197,7 @@ func TestUtils_Mkdir(t *testing.T) {
 	}
 
 	perm := int(info.Mode().Perm())
-	if perm != exp_perm {
-		t.Fatalf("Created directory has unexpected permissions: %04o instead of %04o", perm, exp_perm)
+	if perm != expPerm {
+		t.Fatalf("Created directory has unexpected permissions: %04o instead of %04o", perm, expPerm)
 	}
 }
