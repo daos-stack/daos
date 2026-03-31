@@ -239,19 +239,10 @@ func (msp *MockSysProvider) Getegid() int {
 	return msp.cfg.GetegidRes
 }
 
-// Mkdir creates a new directory with the specified name and permission
-// bits (before umask).
+// Mkdir creates a new directory with the specified name and permission bits (umask ignored).
 func (msp *MockSysProvider) Mkdir(path string, flags os.FileMode) error {
 	if msp.cfg.RealMkdir {
-		return os.Mkdir(path, flags)
-	}
-	return msp.cfg.MkdirErr
-}
-
-// Mkdir2 creates a new directory with the specified name and permission bits (umask ignored).
-func (msp *MockSysProvider) Mkdir2(path string, flags os.FileMode) error {
-	if msp.cfg.RealMkdir {
-		return common.Mkdir2(path, flags)
+		return common.MkdirForcePerm(path, flags)
 	}
 	return msp.cfg.MkdirErr
 }

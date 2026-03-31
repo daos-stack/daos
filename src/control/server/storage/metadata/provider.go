@@ -29,7 +29,7 @@ type (
 		Getfs(device string) (string, error)
 		GetfsType(path string) (*system.FsType, error)
 		GetDeviceLabel(string) (string, error)
-		Mkdir2(string, os.FileMode) error
+		Mkdir(string, os.FileMode) error
 		Mkfs(req system.MkfsReq) error
 		RemoveAll(string) error
 		Stat(string) (os.FileInfo, error)
@@ -202,7 +202,7 @@ func (p *Provider) setupDataDir(req storage.MetadataFormatRequest) error {
 		return errors.Wrap(err, "removing old control metadata subdirectory")
 	}
 
-	if err := p.sys.Mkdir2(req.DataPath, perms); err != nil {
+	if err := p.sys.Mkdir(req.DataPath, perms); err != nil {
 		return errors.Wrap(err, "creating control metadata subdirectory")
 	}
 
@@ -212,7 +212,7 @@ func (p *Provider) setupDataDir(req storage.MetadataFormatRequest) error {
 
 	for _, idx := range req.EngineIdxs {
 		engPath := storage.ControlMetadataEngineDir(req.DataPath, idx)
-		if err := p.sys.Mkdir2(engPath, perms); err != nil {
+		if err := p.sys.Mkdir(engPath, perms); err != nil {
 			return errors.Wrapf(err, "creating control metadata engine %d subdirectory", idx)
 		}
 

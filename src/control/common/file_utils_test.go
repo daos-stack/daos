@@ -179,14 +179,14 @@ func TestUtils_HasPrefixPath(t *testing.T) {
 	}
 }
 
-func TestUtils_Mkdir2(t *testing.T) {
+func TestUtils_Mkdir(t *testing.T) {
 	exp_perm := 0777
 
 	testDir, clean := CreateTestDir(t)
 	defer clean()
 
 	testPath := path.Join(testDir, "foo")
-	err := Mkdir2(testPath, os.FileMode(exp_perm))
+	err := MkdirForcePerm(testPath, os.FileMode(exp_perm))
 	if err != nil {
 		t.Fatalf("Unexpected error: %q", err)
 	}

@@ -34,7 +34,7 @@ type (
 		Chown(string, int, int) error
 		Getegid() int
 		Geteuid() int
-		Mkdir2(string, os.FileMode) error
+		Mkdir(string, os.FileMode) error
 		RemoveAll(string) error
 		Stat(string) (os.FileInfo, error)
 	}
@@ -174,7 +174,7 @@ func (p *Provider) MakeMountPath(path string, tgtUID, tgtGID int) error {
 		switch {
 		case os.IsNotExist(err):
 			// subdir missing, attempt to create and chown
-			if err := p.sys.Mkdir2(ps, defaultMountPointPerms); err != nil {
+			if err := p.sys.Mkdir(ps, defaultMountPointPerms); err != nil {
 				return errors.Wrapf(err, "failed to create directory %q", ps)
 			}
 			if err := p.sys.Chown(ps, tgtUID, tgtGID); err != nil {

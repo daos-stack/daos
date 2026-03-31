@@ -88,7 +88,7 @@ func RecoverLocalReplica(log logging.Logger, cfg *DatabaseConfig) error {
 }
 
 func createRaftDir(dbPath string) error {
-	if err := common.Mkdir2(dbPath, common.DefaultDirPerm); err != nil && !os.IsExist(err) {
+	if err := common.MkdirForcePerm(dbPath, common.DefaultDirPerm); err != nil && !os.IsExist(err) {
 		return errors.Wrap(err, "failed to create raft directory")
 	}
 	return nil
