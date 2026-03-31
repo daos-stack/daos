@@ -41,63 +41,80 @@
 #define NAME_VMD             "vmd"
 #define METHOD_ENABLE_VMD    "enable_vmd"
 
-static bool
-is_vmd_enabled(struct json_object *vmd_subsystem)
+#define JSON_TRUE            ((json_bool)1)
+
+static int
+is_vmd_enabled(struct ddb_ctx *ctx, struct json_object *vmd_subsystem, bool *enabled)
 {
 	struct json_object *config;
-	struct json_object *method;
 	struct json_object *name;
 	int                 methods_num;
 	int                 rc;
 
 	rc = json_object_object_get_ex(vmd_subsystem, KEY_SUBSYSTEM_CONFIG, &config);
-	D_ASSERTF(rc == 1, "VMD subsystem does not have a '%s' key.\n", KEY_SUBSYSTEM_CONFIG);
+	if (rc != JSON_TRUE) {
+		ddb_errorf(ctx, "VMD subsystem does not have a '%s' key.\n", KEY_SUBSYSTEM_CONFIG);
+		return -DER_PROTO;
+	}
 
 	methods_num = json_object_array_length(config);
 	for (int i = 0; i < methods_num; i++) {
-		method = json_object_array_get_idx(config, i);
+		struct json_object *method = json_object_array_get_idx(config, i);
 		D_ASSERT(method != NULL);
 
 		rc = json_object_object_get_ex(method, KEY_METHOD_NAME, &name);
-		D_ASSERTF(rc == 1, "Config[%d] does not have a '%s' key.\n", i, KEY_METHOD_NAME);
+		if (rc != JSON_TRUE) {
+			ddb_errorf(ctx, "Config[%d] does not have a '%s' key.\n", i,
+				   KEY_METHOD_NAME);
+			return -DER_PROTO;
+		}
 
 		if (strncmp(json_object_get_string(name), METHOD_ENABLE_VMD,
 			    sizeof(METHOD_ENABLE_VMD)) == 0) {
-			return true;
+			*enabled = true;
+			return DER_SUCCESS;
 		}
 	}
 
-	return false;
+	*enabled = false;
+
+	return DER_SUCCESS;
 }
 
-static struct json_object *
-get_vmd_subsystem(struct json_object *subsystems)
+static int
+get_vmd_subsystem(struct ddb_ctx *ctx, struct json_object *subsystems,
+		  struct json_object **vmd_subsystem)
 {
-	struct json_object *subsystem;
-	struct json_object *name;
-	int                 subsystems_num = json_object_array_length(subsystems);
-	int                 rc;
+	int subsystems_num = json_object_array_length(subsystems);
 
 	for (int i = 0; i < subsystems_num; i++) {
-		subsystem = json_object_array_get_idx(subsystems, i);
+		struct json_object *subsystem = json_object_array_get_idx(subsystems, i);
+		struct json_object *name;
+		int                 rc;
+
 		D_ASSERT(subsystem != NULL);
 
 		rc = json_object_object_get_ex(subsystem, KEY_SUBSYSTEM_NAME, &name);
-		D_ASSERTF(rc == 1, "Subsystem[%d] does not have a '%s' key.\n", i,
-			  KEY_SUBSYSTEM_NAME);
+		if (rc != JSON_TRUE) {
+			ddb_errorf(ctx, "Subsystem[%d] does not have a '%s' key.\n", i,
+				   KEY_SUBSYSTEM_NAME);
+			return -DER_PROTO;
+		}
 
 		if (strncmp(json_object_get_string(name), NAME_VMD, sizeof(NAME_VMD)) == 0) {
-			return subsystem;
+			*vmd_subsystem = subsystem;
+			return DER_SUCCESS;
 		}
 	}
 
-	return NULL;
+	*vmd_subsystem = NULL;
+
+	return DER_SUCCESS;
 }
 
-static bool
-vmd_subsystem_required(const char *db_path)
+static int
+vmd_subsystem_required(struct ddb_ctx *ctx, const char *db_path, bool *is_required)
 {
-	bool                is_required = false;
 	struct json_object *root;
 	struct json_object *subsystems;
 	struct json_object *vmd_subsystem;
@@ -105,22 +122,34 @@ vmd_subsystem_required(const char *db_path)
 	int                 rc;
 
 	D_ASPRINTF(nvme_conf, "%s/%s", db_path, VOS_NVME_CONF);
-	D_ASSERT(nvme_conf != NULL);
+	if (nvme_conf == NULL) {
+		return -DER_NOMEM;
+	}
 
 	root = json_object_from_file(nvme_conf);
-	D_ASSERTF(root != NULL, "%s\n", json_util_get_last_err());
+	if (root == NULL) {
+		ddb_errorf(ctx, "%s\n", json_util_get_last_err());
+		return -DER_PROTO;
+	}
 
 	rc = json_object_object_get_ex(root, KEY_SUBSYSTEMS, &subsystems);
-	D_ASSERTF(rc == 1, "File %s does not have '%s' key\n", nvme_conf, KEY_SUBSYSTEMS);
+	if (rc != JSON_TRUE) {
+		ddb_errorf(ctx, "File %s does not have '%s' key\n", nvme_conf, KEY_SUBSYSTEMS);
+		return -DER_PROTO;
+	}
 
-	vmd_subsystem = get_vmd_subsystem(subsystems);
-	if (vmd_subsystem != NULL) {
-		is_required = is_vmd_enabled(vmd_subsystem);
+	rc = get_vmd_subsystem(ctx, subsystems, &vmd_subsystem);
+	if (rc == DER_SUCCESS) {
+		if (vmd_subsystem != NULL) {
+			rc = is_vmd_enabled(ctx, vmd_subsystem, is_required);
+		} else {
+			*is_required = false;
+		}
 	}
 
 	json_object_put(root);
 
-	return is_required;
+	return rc;
 }
 
 #define SPDK_INIT_AFTER_VMD_USED_MSG                                                               \
@@ -137,13 +166,18 @@ vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path)
 	static bool spdk_used_once = false;
 	static bool vmd_used_once  = false;
 	bool        vmd_required;
+	int         rc;
 
 	if (vmd_used_once) {
 		ddb_error(ctx, SPDK_INIT_AFTER_VMD_USED_MSG);
 		return false;
 	}
 
-	vmd_required = vmd_subsystem_required(db_path);
+	rc = vmd_subsystem_required(ctx, db_path, &vmd_required);
+	if (rc != DER_SUCCESS) {
+		/** assume the most restrictive scenario to prevent DDB from crashing */
+		vmd_required = true;
+	}
 
 	if (vmd_required) {
 		if (spdk_used_once) {
