@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 1
+  test_servers: 3
   test_clients: 1
 
 # Hard limit the test at ten hours, however individual tests have lower timeouts, if the timeout
@@ -10,15 +10,23 @@ timeout: 36000
 server_config:
   name: daos_server
   crt_timeout: 120
-  engines_per_host: 1
+  engines_per_host: 2
   engines:
     0:
-      targets: 4
-      nr_xs_helpers: 0
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      log_file: daos_server0.log
       storage: auto
+      targets: 4
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      log_file: daos_server1.log
+      storage: auto
+      targets: 4
 
 pool:
-  size: 20G
+  size: 90%
 
 container:
   type: POSIX
@@ -29,8 +37,5 @@ dfuse:
   thread_count: 36
   enable_local_flock: true
 
-dfuse_vm:
-  cores: '0-3'
-  eq_count: 2
-  thread_count: 8
+dfuse_il:
   enable_local_flock: true
