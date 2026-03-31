@@ -17,6 +17,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -205,6 +206,6 @@ func WriteSuperblock(sbPath string, sb *Superblock) error {
 		return err
 	}
 
-	return errors.Wrapf(common.WriteFileAtomic(sbPath, data, common.DefaultFilePerm),
+	return errors.Wrapf(common.WriteFileAtomic(sbPath, data, daos.DefaultFilePerm),
 		"Failed to write Superblock to %s", sbPath)
 }

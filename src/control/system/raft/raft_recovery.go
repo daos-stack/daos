@@ -23,6 +23,7 @@ import (
 	"go.etcd.io/bbolt"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -88,7 +89,7 @@ func RecoverLocalReplica(log logging.Logger, cfg *DatabaseConfig) error {
 }
 
 func createRaftDir(dbPath string) error {
-	if err := common.MkdirForcePerm(dbPath, common.DefaultDirPerm); err != nil && !os.IsExist(err) {
+	if err := common.MkdirForcePerm(dbPath, daos.DefaultDirPerm); err != nil && !os.IsExist(err) {
 		return errors.Wrap(err, "failed to create raft directory")
 	}
 	return nil

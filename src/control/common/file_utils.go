@@ -29,9 +29,7 @@ import (
 const (
 	// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
 	// log message context refers to caller not callee.
-	UtilLogDepth    = 4
-	DefaultFilePerm = C.DEFAULT_FILE_PERM
-	DefaultDirPerm  = C.DEFAULT_DIR_PERM
+	UtilLogDepth = 4
 )
 
 // GetFilenames returns names of files in a directory.

@@ -20,13 +20,14 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
-	aioBlockSize       = humanize.KiByte * 4    // device block size hardcoded to 4096 bytes
-	defaultAioFileMode = common.DefaultFilePerm // AIO file permissions
+	aioBlockSize       = humanize.KiByte * 4  // device block size hardcoded to 4096 bytes
+	defaultAioFileMode = daos.DefaultFilePerm // AIO file permissions
 )
 
 func createEmptyFile(log logging.Logger, path string, size uint64) error {

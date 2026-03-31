@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,6 +33,11 @@ import (
 #cgo LDFLAGS: -ldaos_common -lgurt -lcart
 */
 import "C"
+
+const (
+	DefaultFilePerm = C.DEFAULT_FILE_PERM
+	DefaultDirPerm  = C.DEFAULT_DIR_PERM
+)
 
 const (
 	// MaxLabelLength is the maximum length of a label.

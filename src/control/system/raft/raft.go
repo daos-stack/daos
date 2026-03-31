@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
@@ -269,7 +270,7 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 
 	// Boltdb file permissions on create are set to 0600.
 	// The os.Chmod ensures the final permissions for both the user and their group are the same.
-	err = os.Chmod(dbCfg.DBFilePath(), common.DefaultFilePerm)
+	err = os.Chmod(dbCfg.DBFilePath(), daos.DefaultFilePerm)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to set permissions for boltdb at %s", dbCfg.DBFilePath())
 	}
