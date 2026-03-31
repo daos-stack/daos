@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,6 +75,8 @@ struct pl_obj_layout {
 	uint32_t		 ol_grp_size;
 	uint32_t		 ol_grp_nr;
 	uint32_t		 ol_nr;
+	/* number of peer targets, this field is added for reint/extension/drain placement */
+	unsigned int             ol_shard_peers;
 	struct pl_obj_shard	*ol_shards;
 };
 

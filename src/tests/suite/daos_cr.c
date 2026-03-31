@@ -4044,6 +4044,119 @@ cr_engine_report_fail(void **state)
 	cr_cleanup(arg, &pool, 1);
 }
 
+/*
+ * 1. Create two pools and three containers for each.
+ * 2. Fault injection to make all containers' label inconsistent.
+ * 3. Start checker with CONT_BAD_LABEL:CIA_INTERACT
+ * 4. Query checker, should show six interactions.
+ * 5. Check repair the container label with trust PS (pool/container service).
+ * 6. Query checker, container label should have been repaired.
+ * 7. Switch to normal mode and verify the container label.
+ * 8. Cleanup.
+ */
+static void
+cr_scan_cont_parallel(void **state)
+{
+	test_arg_t            *arg      = *state;
+	struct test_pool       pools[2] = {0};
+	struct test_cont       conts[6] = {0};
+	struct daos_check_info dcis[2]  = {0};
+	char                  *label    = NULL;
+	uint32_t               classes[3];
+	uint32_t               actions[3];
+	int                    rc;
+	int                    i;
+	int                    j;
+	bool                   once;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("CR30: scan multiple containers in parallel\n");
+
+	for (i = 0; i < 2; i++) {
+		rc = cr_pool_create(state, &pools[i], true, TCC_NONE);
+		assert_rc_equal(rc, 0);
+
+		for (j = 0; j < 3; j++) {
+			rc = cr_cont_create(state, &pools[i], &conts[i * 3 + j], 1);
+			assert_rc_equal(rc, 0);
+		}
+	}
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_RESET, 0, NULL, "CONT_BAD_LABEL:CIA_INTERACT");
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++) {
+		classes[i] = TCC_CONT_BAD_LABEL;
+		actions[i] = TCA_INTERACT;
+	}
+
+	for (i = 0; i < 2; i++, once = false) {
+again:
+		cr_pool_wait(1, &pools[i].pool_uuid, &dcis[i]);
+
+		rc = cr_ins_verify(&dcis[i], TCIS_RUNNING);
+		assert_rc_equal(rc, 0);
+
+		rc = cr_pool_verify(&dcis[i], pools[i].pool_uuid, TCPS_PENDING, 3, classes, actions,
+				    NULL);
+		/* Report for different containers maybe asynchronously, wait 3 seconds and retry */
+		if (rc == -DER_INVAL && !once) {
+			sleep(3);
+			once = true;
+			goto again;
+		}
+
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = cr_check_set_policy(TCPF_NONE, "CONT_BAD_LABEL:CIA_TRUST_PS");
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++)
+		actions[i] = TCA_TRUST_PS;
+
+	for (i = 0; i < 2; i++) {
+		cr_ins_wait(1, &pools[i].pool_uuid, &dcis[i]);
+
+		rc = cr_ins_verify(&dcis[i], TCIS_COMPLETED);
+		assert_rc_equal(rc, 0);
+
+		rc = cr_pool_verify(&dcis[i], pools[i].pool_uuid, TCPS_CHECKED, 3, classes, actions,
+				    NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++) {
+		for (j = 0; j < 3; j++) {
+			rc = cr_cont_get_label(state, &pools[i], &conts[i * 3 + j], j == 0, &label);
+			assert_rc_equal(rc, 0);
+
+			D_ASSERTF(strcmp(label, conts[i * 3 + j].label) == 0,
+				  "Cont (" DF_UUID ") label is not repaired: %s vs %s\n",
+				  DP_UUID(conts[i * 3 + j].uuid), label, conts[i * 3 + j].label);
+
+			D_FREE(label);
+		}
+
+		cr_dci_fini(&dcis[i]);
+	}
+
+	cr_cleanup(arg, pools, 2);
+}
+
 /* clang-format off */
 static const struct CMUnitTest cr_tests[] = {
 	{ "CR1: start checker for specified pools",
@@ -4108,6 +4221,8 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_leader_report_fail, async_disable, test_case_teardown},
 	{ "CR31: Engine handle report failure",
 	  cr_engine_report_fail, async_disable, test_case_teardown},
+	{ "CR32: scan multiple containers in parallel",
+	  cr_scan_cont_parallel, async_disable, test_case_teardown},
 };
 /* clang-format on */
 

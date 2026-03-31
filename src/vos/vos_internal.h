@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
- * (C) Copyright 2025 Google LLC
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -300,7 +300,8 @@ struct vos_pool {
 	uint32_t                vp_dying:1,
 				vp_opening:1,
 	/** exclusive handle (see VOS_POF_EXCL) */
-				vp_excl:1;
+				vp_excl:1,
+				vp_gc_nospc:1;
 	ABT_mutex		vp_mutex;
 	ABT_cond		vp_cond;
 	/* this pool is for sysdb */

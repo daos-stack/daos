@@ -1753,10 +1753,17 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_minor_epc	 = entry.en_minor_epc;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
+	D_ASSERTF(it_entry->ie_recx.rx_nr != 0, "sel_ext_lo:" DF_U64 ", epoch:" DF_U64 "/%u\n",
+		  ext->ex_lo, entry.en_epoch, entry.en_minor_epc);
+
 	ext = &entry.en_ext;
 	/* Also export the original extent and the visibility flags */
 	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
+	D_ASSERTF(it_entry->ie_orig_recx.rx_nr != 0,
+		  "orig_ext_lo:" DF_U64 ", epoch:" DF_U64 "/%u\n", ext->ex_lo, entry.en_epoch,
+		  entry.en_minor_epc);
+
 	it_entry->ie_vis_flags = entry.en_visibility;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;
