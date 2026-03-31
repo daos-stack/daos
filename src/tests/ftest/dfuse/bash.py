@@ -141,6 +141,9 @@ class DfuseBashCmd(TestWithServers):
             f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
             '--group_reporting --exitall_on_error --continue_on_error=none',
         ]
+        cmd = ('curl "https://jenkins.daos.hpc.amslabs.hpecorp.net" '
+               f'-o {fuse_root_dir}/download.html')
+        commands.append(cmd)
 
         for cmd in commands:
             self.log_step(f'Running command: {cmd}')
