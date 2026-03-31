@@ -5555,14 +5555,28 @@ out_lock:
 				"%d.\n", DP_UUID(in->psi_op.pi_uuid), rc);
 		daos_prop_free(prop);
 	}
-	/* If self_heal.exclude is set, resume event handling. */
+	/* self_heal evaluation:
+	 * If self_heal.exclude is set, resume event handling.
+	 * If self_heal.rebuild is set, regenerate rebuild tasks.
+	 */
 	if (rc == 0 && !dup_op) {
 		struct daos_prop_entry *entry;
 
 		entry = daos_prop_entry_get(prop_in, DAOS_PROP_PO_SELF_HEAL);
-		if (entry != NULL && daos_prop_is_set(entry) &&
-		    entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)
-			resume_event_handling(svc);
+		if (entry != NULL && daos_prop_is_set(entry)) {
+			if (entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)
+				resume_event_handling(svc);
+
+			/* FIXME: also check if prop self_heal (before prop_in) was missing rebuild?
+			 */
+			if (entry->dpe_val &
+			    (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) {
+				D_INFO(DF_UUID
+				       ": regenerating rebuild tasks due to self_heal change\n",
+				       DP_UUID(svc->ps_pool->sp_uuid));
+				ds_rebuild_regenerate_task(svc->ps_pool, prop_in, 0);
+			}
+		}
 	}
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
