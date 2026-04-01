@@ -807,11 +807,12 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 	return nil
 }
 
-// registerFollowerSubscriptions stops handling received forwarded (in addition
-// to local) events and starts forwarding events to the new MS leader.
-// Log events on the host that they were raised (and first published) on.
-// This is the initial behavior before leadership has been determined.
-func registerFollowerSubscriptions(srv *server) {
+// registerSubscriptions doesn't handle received forwarded events but forwardable events are sent to
+// the MS leader. Received events are logged on the host that they were raised (and first published)
+// on. This is the initial behavior for all servers and only changes when leadership has been
+// determined (when we change subscribers via registerLeaderSubscriptions). A handler is subscribed
+// for local engine self-termination events.
+func registerSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
@@ -887,8 +888,11 @@ func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
 	}
 }
 
-// registerLeaderSubscriptions stops forwarding events to MS and instead starts
-// handling received forwarded (and local) events.
+// registerLeaderSubscriptions doesn't forward events to MS but instead handles received events by
+// subscribing the management service membership and system-DB to StateChange event-type. Received
+// events are logged on the host that they were raised (and first published) on. This behavior is
+// triggered when a new leader steps-up. A handler is subscribed for local engine self-termination
+// events and another for handling forwarded rank-dead events.
 func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)

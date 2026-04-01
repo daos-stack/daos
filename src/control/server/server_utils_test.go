@@ -2335,7 +2335,7 @@ func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
 	}
 }
 
-func TestServer_registerFollowerSubscriptions_includesSelfTerminated(t *testing.T) {
+func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -2353,9 +2353,12 @@ func TestServer_registerFollowerSubscriptions_includesSelfTerminated(t *testing.
 		harness:   harness,
 		pubSub:    pubSub,
 		evtLogger: control.MockEventLogger(log),
+		cfg: &config.Server{
+			DisableAutoEngineRestart: false,
+		},
 	}
 
-	registerFollowerSubscriptions(srv)
+	registerSubscriptions(srv)
 
 	// Add a secondary subscriber to detect when event is processed
 	// This ensures the event has gone through the pubsub system

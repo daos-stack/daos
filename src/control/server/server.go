@@ -464,7 +464,7 @@ func (srv *server) setupGrpc() error {
 }
 
 func (srv *server) registerEvents() {
-	registerFollowerSubscriptions(srv)
+	registerSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
@@ -505,7 +505,7 @@ func (srv *server) registerEvents() {
 	)
 	srv.sysdb.OnLeadershipLost(func() error {
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
-		registerFollowerSubscriptions(srv)
+		registerSubscriptions(srv)
 		return nil
 	})
 }
