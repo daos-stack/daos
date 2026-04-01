@@ -128,26 +128,29 @@ vmd_subsystem_required(struct ddb_ctx *ctx, const char *db_path, bool *is_requir
 
 	root = json_object_from_file(nvme_conf);
 	if (root == NULL) {
-		ddb_errorf(ctx, "%s\n", json_util_get_last_err());
+		ddb_errorf(ctx, "Cannot open %s file: %s\n", nvme_conf, json_util_get_last_err());
+		D_FREE(nvme_conf);
 		return -DER_PROTO;
 	}
 
 	rc = json_object_object_get_ex(root, KEY_SUBSYSTEMS, &subsystems);
 	if (rc != JSON_TRUE) {
 		ddb_errorf(ctx, "File %s does not have '%s' key\n", nvme_conf, KEY_SUBSYSTEMS);
-		return -DER_PROTO;
-	}
-
-	rc = get_vmd_subsystem(ctx, subsystems, &vmd_subsystem);
-	if (rc == DER_SUCCESS) {
-		if (vmd_subsystem != NULL) {
-			rc = is_vmd_enabled(ctx, vmd_subsystem, is_required);
-		} else {
-			*is_required = false;
+		rc = -DER_PROTO;
+	} else {
+		rc = get_vmd_subsystem(ctx, subsystems, &vmd_subsystem);
+		if (rc == DER_SUCCESS) {
+			if (vmd_subsystem != NULL) {
+				rc = is_vmd_enabled(ctx, vmd_subsystem, is_required);
+			} else {
+				*is_required = false;
+			}
 		}
 	}
 
 	json_object_put(root);
+
+	D_FREE(nvme_conf);
 
 	return rc;
 }
