@@ -18,8 +18,7 @@
 //@Library(value='pipeline-lib@your_branch') _
 
 // Name of branch to be tested
-// For master, this is just some wildly high number
-test_branch = '1000'
+test_branch = 'master'
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -119,7 +118,7 @@ pipeline {
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
         string(name: 'BaseBranch',
-               defaultValue: 'master',
+               defaultValue: test_branch,
                description: 'The base branch to run daily-testing against (i.e. master, or a PR\'s branch)')
         // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
