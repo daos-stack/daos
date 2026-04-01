@@ -186,7 +186,7 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
-        strint(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
