@@ -96,7 +96,11 @@ dv_pool_destroy(const char *path, struct vos_file_parts *path_parts)
 		flags |= VOS_POF_RDB;
 
 	rc = vos_pool_destroy_ex(path, path_parts->vf_pool_uuid, flags);
+	if (!SUCCESS(rc))
+		D_ERROR("Failed to destroy pool: " DF_RC "\n", DP_RC(rc));
+
 	vos_self_fini();
+
 	return rc;
 }
 
