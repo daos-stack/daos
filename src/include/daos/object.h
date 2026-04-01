@@ -155,7 +155,7 @@ struct daos_obj_md {
 	 * PO_COMP_TP_GRP and with PO_COMP_TP_GRP layer in pool map.
 	 */
 	uint32_t		omd_pdom_lvl;
-	/* extra flags for placement */
+	/* extra flags for placement, see pl_layout_gen_bits */
 	unsigned int            omd_flags;
 	/* it should be set when PL_FL_GRP_SPEC is set, it's the group ID that
 	 * layout computation should reach then return(reduce computation time).
