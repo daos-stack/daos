@@ -7,7 +7,8 @@ import time
 
 from apricot import TestWithServers
 from exception_utils import CommandFailure
-from recovery_utils import wait_for_check_complete
+from general_utils import report_errors
+from recovery_utils import wait_for_check_complete, wait_for_check_query
 
 
 class DMGCheckStartCornerCaseTest(TestWithServers):
@@ -15,6 +16,23 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
     :avocado: recursive
     """
+
+    def check_query_result(self, dmg_command):
+        """Check that report count is 1 and it had detected dangling pool.
+
+        If the count isn't 1 or the checker didn't detect dangling pool, fail the test.
+
+        Args:
+            dmg_command (DmgCommand): DmgCommand object needed to call dmg check query.
+        """
+        reports = wait_for_check_query(dmg_command, "RUNNING")["reports"]
+        # Check the report count. It should be 1.
+        self.assertEqual(len(reports), 1, "Unexpected reports count at initial start!")
+        # Check that it detected dangling pool.
+        msg = reports[0]["msg"]
+        exp_msg = "dangling pool"
+        if exp_msg not in msg:
+            self.fail(f"'{exp_msg}' is not in '{msg}'!")
 
     def test_start_single_pool(self):
         """Test dmg check start corner cases with single healthy pool.
@@ -409,3 +427,85 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
             expected_props = {"label": container.label.value}
             label_verified = container.verify_prop(expected_props=expected_props)
             self.assertTrue(label_verified, f"{container.label.value} label isn't fixed!")
+
+    def test_stale_entry(self):
+        """Test stale entry doesn't appear in Action Required table.
+
+        When checker is restarted, stale entry in Action Required table shouldn't appear.
+
+        This method also tests the following corner cases:
+        1. Run check commands when checker isn’t enabled.
+        2. Connect to pool while checker status is RUNNING.
+
+        See the following ticket for the steps and the expected output.
+
+        Jira ID: DAOS-18360
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,cat_recov
+        :avocado: tags=DMGCheckStartCornerCaseTest,test_stale_entry
+        """
+        self.log_step("Enable checker while system is Joined and verify the error message.")
+        errors = []
+        dmg_command = self.get_dmg_command()
+        try:
+            dmg_command.check_enable(stop=False)
+        except CommandFailure as command_failure:
+            exp_msg = f"members not in expected states"
+            if exp_msg not in str(command_failure):
+                msg = ("dmg check enable while system is Joined didn't return expected message! "
+                       f"{exp_msg}")
+                errors.append(msg)
+            else:
+                self.log.info("dmg check enable while system is Joined failed as expected.")
+
+        self.log_step("Start checker while system is Joined and verify the error message.")
+        try:
+            dmg_command.check_start()
+        except CommandFailure as command_failure:
+            exp_msg = f"system checker is not enabled"
+            if exp_msg not in str(command_failure):
+                msg = ("dmg check start while system is Joined didn't return expected message! "
+                       f"{exp_msg}")
+                errors.append(msg)
+            else:
+                self.log.info("dmg check start while system is Joined failed as expected.")
+
+        self.log_step("Create a pool.")
+        pool = self.get_pool()
+
+        self.log_step("Inject fault. For example, dangling pool.")
+        dmg_command.faults_pool_svc(
+            pool=pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_ENGINE")
+
+        self.log_step("System stop and enble checker.")
+        dmg_command.check_enable()
+
+        self.log_step("Set policy to --all-interactive.")
+        dmg_command.check_set_policy(all_interactive=True)
+
+        self.log_step("Start checker.")
+        dmg_command.check_start()
+
+        self.log_step("Query and verify that the fault is detected.")
+        self.check_query_result(dmg_command=dmg_command)
+
+        self.log_step("Connect to pool while checker status is RUNNING.")
+        connect_result = pool.connect()
+        self.assertFalse(connect_result, "Pool connect while checker is running worked!")
+
+        self.log_step("Restart checker.")
+        dmg_command.check_stop()
+        dmg_command.check_start()
+
+        self.log_step("Query and verify that the fault is still there and there’s no duplicate.")
+        self.check_query_result(dmg_command=dmg_command)
+
+        self.log_step("Disable the checker to prepare for the tearDown.")
+        dmg_command.check_disable()
+
+        # Don't try to destroy the pool during tearDown because it's corrupted.
+        pool.skip_cleanup()
+
+        report_errors(test=self, errors=errors)
