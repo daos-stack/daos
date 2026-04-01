@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// Copyright 2021-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -2175,6 +2175,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				cfg: &config.Server{
 					DisableAutoEngineRestart: tc.disableAutoEngineRestart,
 				},
+				rankRestartTimes: make(map[uint32]time.Time),
 			}
 
 			var wg sync.WaitGroup
@@ -2228,6 +2229,115 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 	}
 }
 
+func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
+	testRank := ranklist.Rank(1)
+	testIncarnation := uint64(42)
+	testHostname := "test-host-1"
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+	harness := NewEngineHarness(log)
+
+	// Setup engine
+	e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+	e._superblock.Rank = ranklist.NewRankPtr(uint32(testRank))
+	rCfg := &engine.TestRunnerConfig{}
+	rCfg.Running.Store(false)
+	e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
+	e.ready.SetFalse()
+	if err := harness.AddInstance(e); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := &server{
+		log:     log,
+		harness: harness,
+		cfg: &config.Server{
+			DisableAutoEngineRestart:     false,
+			EngineRestartMinDelaySeconds: 2, // 2 seconds for testing
+		},
+		rankRestartTimes: make(map[uint32]time.Time),
+	}
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation,
+		Hostname:    testHostname,
+		Timestamp:   validTimestamp,
+	}
+
+	// First restart should succeed
+	err := handleEngineSelfTerminated(ctx, srv, evt)
+	if err != nil {
+		t.Fatalf("first restart failed: %v", err)
+	}
+
+	// Wait for restart to be requested
+	select {
+	case <-e.startRequested:
+		// Expected
+	case <-time.After(1 * time.Second):
+		t.Fatal("expected restart request but it didn't happen")
+	}
+
+	// Second restart immediately after should be rate-limited
+	evt2 := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation + 1,
+		Hostname:    testHostname,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	err = handleEngineSelfTerminated(ctx, srv, evt2)
+	if err != nil {
+		t.Fatalf("second restart call failed: %v", err)
+	}
+
+	// Verify no restart was requested (rate-limited)
+	select {
+	case <-e.startRequested:
+		t.Fatal("restart should have been rate-limited but wasn't")
+	case <-time.After(100 * time.Millisecond):
+		// Expected - no restart
+	}
+
+	// Verify rate-limit log message
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "rate-limited") {
+		t.Errorf("expected log to contain 'rate-limited', got: %s", logOutput)
+	}
+
+	// Wait for the delay to expire
+	time.Sleep(2100 * time.Millisecond)
+
+	// Third restart after delay should succeed
+	evt3 := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation + 2,
+		Hostname:    testHostname,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	err = handleEngineSelfTerminated(ctx, srv, evt3)
+	if err != nil {
+		t.Fatalf("third restart failed: %v", err)
+	}
+
+	// Verify restart was requested
+	select {
+	case <-e.startRequested:
+		// Expected
+	case <-time.After(1 * time.Second):
+		t.Fatal("expected restart request after delay but it didn't happen")
+	}
+}
+
 func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -2249,6 +2359,7 @@ func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 		cfg: &config.Server{
 			DisableAutoEngineRestart: false,
 		},
+		rankRestartTimes: make(map[uint32]time.Time),
 	}
 
 	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
@@ -2347,6 +2458,7 @@ func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
 				cfg: &config.Server{
 					DisableAutoEngineRestart: false,
 				},
+				rankRestartTimes: make(map[uint32]time.Time),
 			}
 
 			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
@@ -2384,6 +2496,7 @@ func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 		cfg: &config.Server{
 			DisableAutoEngineRestart: false,
 		},
+		rankRestartTimes: make(map[uint32]time.Time),
 	}
 
 	registerSubscriptions(srv)
@@ -2459,6 +2572,7 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 		cfg: &config.Server{
 			DisableAutoEngineRestart: false,
 		},
+		rankRestartTimes: make(map[uint32]time.Time),
 	}
 
 	registerLeaderSubscriptions(srv)

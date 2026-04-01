@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// Copyright 2018-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -167,6 +167,9 @@ type server struct {
 	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
 	onShutdown       []func()
+
+	rankRestartMu    sync.Mutex
+	rankRestartTimes map[uint32]time.Time
 }
 
 func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -183,12 +186,13 @@ func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.Fault
 	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	return &server{
-		log:         log,
-		cfg:         cfg,
-		hostname:    hostname,
-		runningUser: cu,
-		faultDomain: faultDomain,
-		harness:     harness,
+		log:              log,
+		cfg:              cfg,
+		hostname:         hostname,
+		runningUser:      cu,
+		faultDomain:      faultDomain,
+		harness:          harness,
+		rankRestartTimes: make(map[uint32]time.Time),
 	}, nil
 }
 

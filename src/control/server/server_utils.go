@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// Copyright 2021-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -802,12 +803,38 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 	srv.log.Infof("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts, evt.Hostname,
 		evt.Rank, evt.Incarnation, engine.Index())
 
+	// Check if rank can be restarted based on rate limiting
+	minDelay := 300 // default 5 minutes
+	if srv.cfg.EngineRestartMinDelaySeconds > 0 {
+		minDelay = srv.cfg.EngineRestartMinDelaySeconds
+	}
+	minDelayDuration := time.Duration(minDelay) * time.Second
+
+	srv.rankRestartMu.Lock()
+	lastRestart, hasRestarted := srv.rankRestartTimes[evt.Rank]
+	now := time.Now()
+
+	if hasRestarted {
+		elapsed := now.Sub(lastRestart)
+		if elapsed < minDelayDuration {
+			remaining := minDelayDuration - elapsed
+			srv.rankRestartMu.Unlock()
+			srv.log.Noticef("rank %d restart rate-limited: %s remaining until next restart allowed (min delay: %s)",
+				evt.Rank, remaining.Round(time.Second), minDelayDuration)
+			return nil
+		}
+	}
+
+	srv.rankRestartTimes[evt.Rank] = now
+	srv.rankRestartMu.Unlock()
+
 	// Wait until engine is stopped.
 	pollFn := func(e Engine) bool { return !e.IsStarted() }
 	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
 		return errors.Errorf("rank %d (instance %d) did not stop", evt.Rank, engine.Index())
 	}
 
+	srv.log.Infof("restarting rank %d (instance %d) after self-termination", evt.Rank, engine.Index())
 	engine.requestStart(ctx)
 
 	return nil

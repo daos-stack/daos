@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// Copyright 2020-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -98,8 +98,9 @@ type Server struct {
 	Path string `yaml:"-"` // path to config file
 
 	// Behavior flags
-	AutoFormat               bool `yaml:"-"`
-	DisableAutoEngineRestart bool `yaml:"disable_auto_engine_restart"`
+	AutoFormat                   bool `yaml:"-"`
+	DisableAutoEngineRestart     bool `yaml:"disable_auto_engine_restart"`
+	EngineRestartMinDelaySeconds int  `yaml:"engine_restart_min_delay_sec,omitempty"`
 
 	deprecatedParams `yaml:",inline"`
 }
