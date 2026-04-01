@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// Copyright 2022-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -78,7 +78,13 @@ the '-w' option must be included.
 
 If the command requires it, the VOS file must be provided with the parameter 
 --vos-path. The VOS file will be opened before any commands are executed. See
-the command‑specific help for details.`
+the command‑specific help for details.
+
+A DAOS file system can operate in different modes depending on the available hardware resources.
+The two primary modes are MD-on-SSD and PMEM. In MD-on-SSD mode (the default), metadata is stored
+on NVMe devices, which requires additional preliminary steps before using ddb. See the MD-on-SSD
+MODE section of the manpage for details.
+`
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
 
@@ -366,6 +372,11 @@ func parseOpts(args []string, opts *cliOptions) error {
 func main() {
 	var opts cliOptions
 
+	// Must be called before any write to stdout.
+	if err := logging.DisableCStdoutBuffering(); err != nil {
+		exitWithError(err)
+	}
+
 	if err := parseOpts(os.Args[1:], &opts); err != nil {
 		exitWithError(err)
 	}
@@ -402,157 +413,10 @@ func createGrumbleApp(ctx *DdbContext) *grumble.App {
 	return app
 }
 
-const manMacroSection = `.\" Miscellaneous Helper macros
-.de Sp \" Vertical space (when we can't use .PP)
-.if t .sp .5v
-.if n .sp
-..
-.de Vb \" Begin verbatim text
-.ft CW
-.nf
-.ne \\$1
-..
-.de Ve \" End verbatim text
-.ft R
-.fi
-..
-.\" ========================================================================
-.\"`
-
-const manArgsHeader = `.SH ARGUMENTS
-.SS Application Arguments`
-
-const manCmdsHeader = `.SH COMMANDS
-.SS Available Commands`
-
-const manPathSection = `.SH PATH
-.SS VOS Tree Path
-Many of the commands take a VOS tree path. The format for this path is [cont]/[obj]/[dkey]/[akey]/[extent].
-.TP
-.B cont
-The full container uuid.
-.TP
-.B obj
-The object id.
-.TP
-.B keys (akey, dkey)
-There are multiple types of keys:
-.RS
-.IP "*" 4
-.B string keys
-are simply the string value. If the size of the key is greater than strlen(key), then
-the size is included at the end of the string value. Example: 'akey{5}' is the key: akey with a null
-terminator at the end.
-.IP "*" 4
-.B number keys
-are formatted as '{[type]: NNN}' where type is 'uint8, uint16, uint32, or uint64'. NNN
-can be a decimal or hex number. Example: '{uint32: 123456}'
-.IP "*" 4
-.B binary keys
-are formatted as '{bin: 0xHHH}' where HHH is the hex representation of the binary key.
-Example: '{bin: 0x1a2b}'
-.RE
-.TP
-.B extent
-For array values in the format {lo-hi}.
-.SS Index Tree Path
-.RE
-To make it easier to navigate the tree, indexes can be used instead of the path part. The index is
-in the format [i]. Indexes and actual path values can be used together.
-.SS Path Examples
-VOS tree path examples:
-.Sp
-.Vb 1
-\&        /3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
-.Ve
-.Sp
-Index tree path examples:
-.Sp
-.Vb 1
-\&        [0]/[1]/[2]/[1]/[9]
-.Ve
-.Sp
-Mixed tree path examples:
-.Sp
-.Vb 1
-\&        /[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
-.Ve
-.Sp`
-
-const manLoggingSection = `.SH LOGGING
-The golang cli and the C engine use separate logging systems with different log levels.
-The \fI--debug=<log level>\fR option sets the log level for both systems to the closest matching
-levels.  The available log levels supported by this option are: \fBTRACE\fR, \fBDEBUG\fR (or
-\fBDBG\fR), \fBINFO\fR, \fBNOTICE\fR (or \fBNOTE\fR), \fBWARN\fR, \fBERROR\fR (or \fBERR\fR),
-\fBCRIT\fR, \fBALRT\fR, \fBFATAL\fR (or \fBEMRG\fr), and \fBEMIT\fR.  The default log level is
-\fBERROR\fR.
-
-To not pollute the console output, the logs can be redirected to a file using the
-\fI--log_dir=<path>\fR option.  However, \fBERROR\fR log messages or above will still be printed to
-the console regardless if the \fI--log_dir=<path>\fR option is used or not.`
-
-func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
-	fmt.Fprintln(dest, manMacroSection)
-
-	parser.WriteManPage(dest)
-
-	fmt.Fprintln(dest, manArgsHeader)
-	for _, arg := range parser.Args() {
-		fmt.Fprintf(dest, ".TP\n.B %s\n%s\n", arg.Name, arg.Description)
-	}
-
-	fmt.Fprintln(dest, manCmdsHeader)
-	for _, cmd := range app.Commands().All() {
-		if cmd.Name == "manpage" {
-			continue
-		}
-
-		var cmdHelp string
-		if cmd.LongHelp != "" {
-			cmdHelp = cmd.LongHelp
-		} else {
-			cmdHelp = cmd.Help
-		}
-		fmt.Fprintf(dest, ".TP\n.B %s\n%s\n", cmd.Name, cmdHelp)
-	}
-
-	fmt.Fprintln(dest, manPathSection)
-
-	fmt.Fprint(dest, manLoggingSection)
-}
-
 // Run the command in 'run' using the grumble app. shlex is used to parse the string into an argv/c format
 func runCmdStr(app *grumble.App, p *flags.Parser, cmd string, args ...string) error {
 	if p != nil {
-		app.AddCommand(&grumble.Command{
-			Name:      "manpage",
-			Help:      "Generate an application man page in groff format.",
-			LongHelp:  "Generate an application man page in groff format. This command is used internally to generate the man page for the application and is not intended for general use.",
-			HelpGroup: "",
-			Flags: func(a *grumble.Flags) {
-				a.String("o", "output", "", "Output file for the man page. If not provided, the man page will be printed to stdout.")
-			},
-			Run: func(c *grumble.Context) error {
-				dest := os.Stdout
-				if c.Flags.String("output") != "" {
-					fd, err := os.Create(c.Flags.String("output"))
-					if err != nil {
-						return errors.Wrapf(err, "Error creating file %q", c.Flags.String("output"))
-					}
-					defer func() {
-						err = fd.Close()
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "Error closing file %q: %s\n", c.Flags.String("output"), err)
-						}
-					}()
-					dest = fd
-				}
-
-				fprintManPage(dest, app, p)
-				return nil
-			},
-			Completer: nil,
-		})
+		addManPageCommand(app, p)
 	}
 
 	return app.RunCommand(append([]string{cmd}, args...))

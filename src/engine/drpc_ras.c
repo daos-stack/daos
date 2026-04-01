@@ -1,6 +1,6 @@
 /*
- * (C) Copyright 2021-2023 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2021-2023 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,7 +37,6 @@ safe_self_rank(void)
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
 	if (rc != 0) {
-		D_ERROR("failed to get self rank: "DF_RC"\n", DP_RC(rc));
 		rank = CRT_NO_RANK;
 	}
 

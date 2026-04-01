@@ -2064,7 +2064,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 	sorter = &map->po_domain_sorters[i];
 	D_ASSERT(sorter->cs_type == type);
 
-	if (id == PO_COMP_ID_ALL) {
+	if (type == PO_COMP_TP_ROOT || id == PO_COMP_ID_ALL) {
 		if (domain_pp != NULL)
 			*domain_pp = tmp;
 		return sorter->cs_nr;
@@ -2429,7 +2429,7 @@ update_failed_cnt_helper(struct pool_domain *dom,
 
 	if (dom->do_children == NULL) {
 		for (i = 0; i < dom->do_target_nr; ++i) {
-			if (pool_target_down(&dom->do_targets[i]))
+			if (pool_target_is_down(&dom->do_targets[i]))
 				num_failed++;
 		}
 	} else {

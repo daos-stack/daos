@@ -46,7 +46,6 @@ ior:
   dfs_chunk: 1048576
   dfs_group: daos_server
   dfs_oclass: SX
-  dfs_dir_oclass: SX
   transfer_size: 1M
   flags: '-w -i 1 -k -E'
   signature: 123
