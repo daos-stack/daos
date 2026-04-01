@@ -256,14 +256,9 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	if (!SUCCESS(rc))
 		D_GOTO(done, rc);
 	if (open) {
-		rc = vos_path_parse(pa.pa_pool_path, &path_parts);
+		rc = parse_vos_file_parts(pa.pa_pool_path, pa.pa_db_path, &path_parts);
 		if (!SUCCESS(rc))
 			D_GOTO(done, rc);
-		if (pa.pa_db_path != NULL && strnlen(pa.pa_db_path, PATH_MAX) != 0) {
-			memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-			strncpy(path_parts.vf_db_path, pa.pa_db_path,
-				sizeof(path_parts.vf_db_path) - 1);
-		}
 		if (!vmd_wa_can_proceed(&ctx, path_parts.vf_db_path)) {
 			rc = -DER_NO_SERVICE;
 			D_GOTO(done, rc);

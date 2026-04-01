@@ -93,20 +93,9 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
-	/*
-	 * Currently the vos file is required to be in the same path daos_engine created it in.
-	 * This is so that the sys_db file exists and the pool uuid and target id can be obtained
-	 * from the path. It should be considered in the future how to get these from another
-	 * source.
-	 */
-	rc = vos_path_parse(opt->path, &path_parts);
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
-
-	if (opt->db_path != NULL && strnlen(opt->db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, opt->db_path, sizeof(path_parts.vf_db_path) - 1);
-	}
 
 	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
 
@@ -1133,14 +1122,9 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
 		opt->db_path = ctx->dc_db_path;
 
-	rc = vos_path_parse(opt->path, &path_parts);
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
-
-	if (opt->db_path != NULL && strnlen(opt->db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, opt->db_path, sizeof(path_parts.vf_db_path) - 1);
-	}
 
 	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
 
@@ -1195,14 +1179,9 @@ ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
 
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
-	rc = vos_path_parse(opt->path, &path_parts);
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
-
-	if (opt->db_path != NULL && strnlen(opt->db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, opt->db_path, sizeof(path_parts.vf_db_path) - 1);
-	}
 
 	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
 
