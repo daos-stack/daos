@@ -126,6 +126,12 @@ vmd_subsystem_required(struct ddb_ctx *ctx, const char *db_path, bool *is_requir
 		return -DER_NOMEM;
 	}
 
+	if (access(nvme_conf, F_OK) != 0) {
+		*is_required = false;
+		D_FREE(nvme_conf);
+		return DER_SUCCESS;
+	}
+
 	root = json_object_from_file(nvme_conf);
 	if (root == NULL) {
 		ddb_errorf(ctx, "Cannot open %s file: %s\n", nvme_conf, json_util_get_last_err());
