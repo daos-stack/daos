@@ -769,10 +769,10 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 	})
 }
 
-// Handle local engine suicide and restart engine to rejoin system.
-func handleEngineSuicide(ctx context.Context, srv *server, evt *events.RASEvent) error {
+// Handle local engine self termination and restart engine to rejoin system.
+func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RASEvent) error {
 
-	srv.log.Infof("handling suicide")
+	srv.log.Infof("handling engine self termination")
 
 	ts, err := evt.GetTimestamp()
 	if err != nil {
@@ -793,7 +793,7 @@ func handleEngineSuicide(ctx context.Context, srv *server, evt *events.RASEvent)
 	}
 	engine := instances[0]
 
-	srv.log.Infof("%s was notified @ %s of rank %d:%d (instance %d) suicide", ts, evt.Hostname,
+	srv.log.Infof("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts, evt.Hostname,
 		evt.Rank, evt.Incarnation, engine.Index())
 
 	// Wait until engine is stopped.
@@ -818,9 +818,9 @@ func registerFollowerSubscriptions(srv *server) {
 	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
-			case events.RASEngineSuicide:
-				if err := handleEngineSuicide(ctx, srv, evt); err != nil {
-					srv.log.Errorf("handleEngineSuicide: %s", err)
+			case events.RASEngineSelfTerminated:
+				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
 				}
 			}
 		}))
@@ -904,9 +904,9 @@ func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
-			case events.RASEngineSuicide:
-				if err := handleEngineSuicide(ctx, srv, evt); err != nil {
-					srv.log.Errorf("handleEngineSuicide: %s", err)
+			case events.RASEngineSelfTerminated:
+				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
 				}
 			}
 		}))

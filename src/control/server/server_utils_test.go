@@ -1995,7 +1995,7 @@ const (
 	testSubscriptionDelay = 50 * time.Millisecond
 )
 
-func TestServer_handleEngineSuicide(t *testing.T) {
+func TestServer_handleEngineSelfTerminated(t *testing.T) {
 	const testRestartRequestWait = 2 * time.Second
 
 	testRank := ranklist.Rank(1)
@@ -2031,7 +2031,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 	}{
 		"nil event timestamp": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        uint32(testRank),
 				Incarnation: testIncarnation,
 				Hostname:    testHostname,
@@ -2042,7 +2042,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 		},
 		"invalid event timestamp": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        uint32(testRank),
 				Incarnation: testIncarnation,
 				Hostname:    testHostname,
@@ -2053,7 +2053,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 		},
 		"rank not found in harness": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        99, // Non-existent rank
 				Incarnation: testIncarnation,
 				Hostname:    testHostname,
@@ -2071,7 +2071,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 		},
 		"filter instances error - nil superblock": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        uint32(testRank),
 				Incarnation: testIncarnation,
 				Hostname:    testHostname,
@@ -2089,7 +2089,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 		},
 		"successful restart - engine already stopped": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        uint32(testRank),
 				Incarnation: testIncarnation,
 				Hostname:    testHostname,
@@ -2100,13 +2100,13 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 			},
 			expEngineRestarted: true,
 			expLogContains: []string{
-				fmt.Sprintf("rank %d:%d (instance 0) suicide", testRank, testIncarnation),
+				fmt.Sprintf("rank %d:%d (instance 0) self terminated", testRank, testIncarnation),
 				testHostname,
 			},
 		},
 		"timeout waiting for engine to stop": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        uint32(testRank),
 				Incarnation: testIncarnation,
 				Hostname:    testHostname,
@@ -2120,7 +2120,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 		},
 		"multiple engines - restart correct one": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        2,
 				Incarnation: testIncarnation,
 				Hostname:    testHostname,
@@ -2133,7 +2133,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 			},
 			expEngineRestarted: true,
 			expLogContains: []string{
-				"rank 2:42 (instance 2) suicide",
+				"rank 2:42 (instance 2) self terminated",
 			},
 		},
 	} {
@@ -2185,7 +2185,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 				}
 			}
 
-			err := handleEngineSuicide(ctx, srv, tc.evt)
+			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
 			wg.Wait()
 
 			test.CmpErr(t, tc.expErr, err)
@@ -2206,7 +2206,7 @@ func TestServer_handleEngineSuicide(t *testing.T) {
 	}
 }
 
-func TestServer_handleEngineSuicide_ErrorHandling(t *testing.T) {
+func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -2230,10 +2230,10 @@ func TestServer_handleEngineSuicide_ErrorHandling(t *testing.T) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			log.Debugf("ErrorHandling test handler called for event: ID=%v, Type=%v", evt.ID, evt.Type)
 			switch evt.ID {
-			case events.RASEngineSuicide:
-				log.Debugf("ErrorHandling test handling suicide event")
-				if err := handleEngineSuicide(ctx, srv, evt); err != nil {
-					srv.log.Errorf("handleEngineSuicide: %s", err)
+			case events.RASEngineSelfTerminated:
+				log.Debugf("ErrorHandling test handling engine self termination event")
+				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
 				}
 				once.Do(func() { close(handlerDone) })
 			}
@@ -2243,7 +2243,7 @@ func TestServer_handleEngineSuicide_ErrorHandling(t *testing.T) {
 	time.Sleep(testSubscriptionDelay)
 
 	evt := &events.RASEvent{
-		ID:          events.RASEngineSuicide,
+		ID:          events.RASEngineSelfTerminated,
 		Type:        events.RASTypeInfoOnly,
 		Rank:        1,
 		Incarnation: 42,
@@ -2262,7 +2262,7 @@ func TestServer_handleEngineSuicide_ErrorHandling(t *testing.T) {
 	}
 
 	t.Log(buf.String())
-	if !strings.Contains(buf.String(), "handleEngineSuicide") {
+	if !strings.Contains(buf.String(), "handleEngineSelfTerminated") {
 		t.Error("expected error to be logged by handler")
 	}
 	if !strings.Contains(buf.String(), "no instance found") {
@@ -2270,7 +2270,7 @@ func TestServer_handleEngineSuicide_ErrorHandling(t *testing.T) {
 	}
 }
 
-func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
+func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
 	validTimestamp := time.Now().Format(time.RFC3339)
 
 	for name, tc := range map[string]struct {
@@ -2279,7 +2279,7 @@ func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
 	}{
 		"zero incarnation": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        1,
 				Incarnation: 0,
 				Hostname:    "test-host",
@@ -2289,7 +2289,7 @@ func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
 		},
 		"very high rank number": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        999999,
 				Incarnation: 1,
 				Hostname:    "test-host",
@@ -2299,7 +2299,7 @@ func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
 		},
 		"max incarnation value": {
 			evt: &events.RASEvent{
-				ID:          events.RASEngineSuicide,
+				ID:          events.RASEngineSelfTerminated,
 				Rank:        1,
 				Incarnation: ^uint64(0),
 				Hostname:    "test-host",
@@ -2321,7 +2321,7 @@ func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
 				harness: harness,
 			}
 
-			err := handleEngineSuicide(ctx, srv, tc.evt)
+			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
 
 			if err == nil {
 				t.Fatalf("expected error, got nil")
@@ -2335,7 +2335,7 @@ func TestServer_handleEngineSuicide_EdgeCases(t *testing.T) {
 	}
 }
 
-func TestServer_registerFollowerSubscriptions_includesSuicide(t *testing.T) {
+func TestServer_registerFollowerSubscriptions_includesSelfTerminated(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -2361,7 +2361,7 @@ func TestServer_registerFollowerSubscriptions_includesSuicide(t *testing.T) {
 	// This ensures the event has gone through the pubsub system
 	pubSub.Subscribe(events.RASTypeInfoOnly,
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
-			if evt.ID == events.RASEngineSuicide {
+			if evt.ID == events.RASEngineSelfTerminated {
 				once.Do(func() { close(eventProcessed) })
 			}
 		}))
@@ -2370,7 +2370,7 @@ func TestServer_registerFollowerSubscriptions_includesSuicide(t *testing.T) {
 	time.Sleep(testSubscriptionDelay)
 
 	evt := &events.RASEvent{
-		ID:          events.RASEngineSuicide,
+		ID:          events.RASEngineSelfTerminated,
 		Type:        events.RASTypeInfoOnly,
 		Rank:        1,
 		Incarnation: 42,
@@ -2385,20 +2385,20 @@ func TestServer_registerFollowerSubscriptions_includesSuicide(t *testing.T) {
 	case <-eventProcessed:
 		// Event was processed
 	case <-time.After(testHandlerTimeout):
-		t.Fatal("timeout waiting for suicide event to be processed")
+		t.Fatal("timeout waiting for engine self terminated event to be processed")
 	}
 
 	logOutput := buf.String()
-	hasHandler := strings.Contains(logOutput, "handleEngineSuicide") ||
+	hasHandler := strings.Contains(logOutput, "handleEngineSelfTerminated") ||
 		strings.Contains(logOutput, "no instance found") ||
-		strings.Contains(logOutput, "handling suicide")
+		strings.Contains(logOutput, "handling engine self termination")
 
 	if !hasHandler {
-		t.Errorf("suicide handler does not appear to be registered\nLog:\n%s", logOutput)
+		t.Errorf("engine self termination handler does not appear to be registered\nLog:\n%s", logOutput)
 	}
 }
 
-func TestServer_registerLeaderSubscriptions_includesSuicide(t *testing.T) {
+func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T) {
 	const testProcessingTimeout = 2 * time.Second
 
 	log, buf := logging.NewTestLogger(t.Name())
@@ -2431,7 +2431,7 @@ func TestServer_registerLeaderSubscriptions_includesSuicide(t *testing.T) {
 	// This ensures the event has gone through the pubsub system
 	pubSub.Subscribe(events.RASTypeInfoOnly,
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
-			if evt.ID == events.RASEngineSuicide {
+			if evt.ID == events.RASEngineSelfTerminated {
 				once.Do(func() { close(eventProcessed) })
 			}
 		}))
@@ -2440,7 +2440,7 @@ func TestServer_registerLeaderSubscriptions_includesSuicide(t *testing.T) {
 	time.Sleep(testSubscriptionDelay)
 
 	evt := &events.RASEvent{
-		ID:          events.RASEngineSuicide,
+		ID:          events.RASEngineSelfTerminated,
 		Type:        events.RASTypeInfoOnly,
 		Rank:        1,
 		Incarnation: 42,
@@ -2455,15 +2455,15 @@ func TestServer_registerLeaderSubscriptions_includesSuicide(t *testing.T) {
 	case <-eventProcessed:
 		// Event was processed
 	case <-time.After(testProcessingTimeout):
-		t.Fatal("timeout waiting for suicide event to be processed")
+		t.Fatal("timeout waiting for engine self terminated event to be processed")
 	}
 
 	logOutput := buf.String()
-	hasHandler := strings.Contains(logOutput, "handleEngineSuicide") ||
+	hasHandler := strings.Contains(logOutput, "handleEngineSelfTerminated") ||
 		strings.Contains(logOutput, "no instance found") ||
-		strings.Contains(logOutput, "handling suicide")
+		strings.Contains(logOutput, "handling engine self termination")
 
 	if !hasHandler {
-		t.Errorf("suicide handler does not appear to be registered\nLog:\n%s", logOutput)
+		t.Errorf("engine self termination handler does not appear to be registered\nLog:\n%s", logOutput)
 	}
 }

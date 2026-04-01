@@ -89,14 +89,14 @@ and updating objects.
 
 A DAOS engine may be excluded from the group map because of inactivity
 for example. When an engine becomes aware of it's removal from the
-group map it will self-terminate (referred to as "suicide") to protect
+group map it will self-terminate to protect
 data integrity and system stability.
 
-When an engine commits suicide, it raises a `engine_suicide` RAS event
+When an engine self terminates, it raises a `engine_self_terminated` RAS event
 (INFO_ONLY, NOTICE severity) containing the rank and incarnation information.
 The control plane automatically handles this event by:
 
-1. Detecting the suicide event through the RAS event system
+1. Detecting the engine self terminated event through the RAS event system
 2. Identifying the engine instance associated with the rank
 3. Waiting for the engine process to fully stop
 4. Automatically restarting the engine to rejoin the system

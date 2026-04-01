@@ -599,11 +599,11 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 			       self_rank);
 
 			/**
-			 * Send RAS event to inform local server of intentional suicide before
-			 * raising a SIGKILL to ourselves. Local daos_server can then decide
+			 * Send RAS event to inform local server of intentional self termination
+			 * before raising a SIGKILL to ourselves. Local daos_server can then decide
 			 * whether to restart rank.
 			 */
-			rc = ds_notify_rank_suicide(rank, incarnation);
+			rc = ds_notify_rank_self_terminated(rank, incarnation);
 			if (rc)
 				D_ERROR("failed to handle %u/%u event: " DF_RC "\n", src, type,
 					DP_RC(rc));
