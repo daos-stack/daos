@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -214,6 +214,14 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
+	if (!vos_agg && cont->sc_pool->spc_ec_agg_pause_gate != 0) {
+		D_DEBUG(DB_EPC,
+			DF_CONT ": skip EC aggregation during rebuild prepare gate " DF_U64 "\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			cont->sc_pool->spc_ec_agg_pause_gate);
+		return false;
+	}
+
 	if (vos_agg) {
 		if (!cont->sc_vos_agg_active)
 			D_DEBUG(DB_EPC, DF_CONT": resume VOS aggregation after reintegration.\n",
@@ -329,8 +337,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	uint32_t		flags = 0;
 	int			i, rc = 0;
 
-	change_hlc = max(cont->sc_snapshot_delete_hlc,
-			 cont->sc_pool->spc_rebuild_end_hlc);
+	change_hlc = cont->sc_snapshot_delete_hlc;
 	if (param->ap_full_scan_hlc < change_hlc) {
 		/* Snapshot has been deleted or rebuild happens since the last
 		 * aggregation, let's restart from 0.
@@ -992,11 +999,13 @@ void
 ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeout)
 {
 	uint64_t start_time = daos_wallclock_secs();
-	int      wait_intv  = 10;
+	int      wait_intv  = 1;
 	int      waited     = 0;
 
 	D_DEBUG(DB_MD, DF_UUID "[%d]: wait for pausing EC aggregation\n",
 		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+	D_INFO(DF_UUID "[%d]: wait for local EC aggregation to pause\n",
+	       DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
 
 	if (wait_timeout == 0 || wait_timeout > WAIT_EC_PAUSE_MAX)
 		wait_timeout = WAIT_EC_PAUSE_MAX; /* 10 minutes by default */
@@ -1005,10 +1014,6 @@ ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeo
 		struct ds_cont_child *coc;
 		bool                  paused = true;
 
-		/* Wait for pausing aggregation
-		 * XXX: There is no global barrier so we always wait for at least 10 seconds to
-		 * lower the chance that remote targets are still running EC aggregation.
-		 */
 		if (wait_intv > wait_timeout - waited)
 			wait_intv = wait_timeout - waited;
 
@@ -1025,7 +1030,7 @@ ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeo
 
 		waited = daos_wallclock_secs() - start_time;
 		if (waited >= wait_timeout) {
-			D_WARN("can't pause EC aggregation after %d seconds\n", waited);
+			D_WARN("can't pause local EC aggregation after %d seconds\n", waited);
 			return; /* XXX what can I do? */
 		}
 

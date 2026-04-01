@@ -1,6 +1,6 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,7 +71,7 @@ enum daos_module_id {
 #define DAOS_POOL_VERSION     7
 #define DAOS_CONT_VERSION     8
 #define DAOS_OBJ_VERSION      10
-#define DAOS_REBUILD_VERSION  4
+#define DAOS_REBUILD_VERSION  5
 #define DAOS_RSVC_VERSION     5
 #define DAOS_RDB_VERSION      5
 #define DAOS_RDBT_VERSION     3

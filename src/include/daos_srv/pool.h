@@ -1,6 +1,6 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -183,6 +183,8 @@ struct ds_pool_child {
 	 * interfering rebuild process.
 	 */
 	uint64_t	spc_rebuild_fence;
+	/* Block new EC aggregation rounds before rebuild fence is assigned. */
+	uint64_t                 spc_ec_agg_pause_gate;
 
 	/* The HLC when current rebuild ends, which will be used to compare
 	 * with the aggregation full scan start HLC to know whether the

@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2017-2022 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,11 +44,14 @@ enum rebuild_operation {
 
 extern struct crt_proto_format rebuild_proto_fmt;
 
+/* clang-format off */
 #define DAOS_ISEQ_REBUILD_SCAN	/* input fields */		 \
 	((uuid_t)		(rsi_pool_uuid)		CRT_VAR) \
 	((uint64_t)		(rsi_leader_term)	CRT_VAR) \
 	((uint64_t)		(rsi_reclaim_epoch)	CRT_VAR) \
+	((uint64_t)		(rsi_rebuild_fence)	CRT_VAR) \
 	((int32_t)		(rsi_rebuild_op)	CRT_VAR) \
+	((uint32_t)		(rsi_phase)		CRT_VAR) \
 	((uint32_t)		(rsi_tgts_num)		CRT_VAR) \
 	((uint32_t)		(rsi_ns_id)		CRT_VAR) \
 	((uint32_t)		(rsi_rebuild_ver)	CRT_VAR) \

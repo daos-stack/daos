@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1374,7 +1374,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 static int
 rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 		       struct pool_target_id_list *tgts_failed, uint32_t layout_version,
-		       daos_rebuild_opc_t rebuild_op)
+		       daos_rebuild_opc_t rebuild_op, uint32_t phase, uint64_t rebuild_fence)
 {
 	struct rebuild_scan_in	*rsi;
 	struct rebuild_scan_out	*rso;
@@ -1449,6 +1449,8 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
 	rsi->rsi_rebuild_ver = rgt->rgt_rebuild_ver;
 	rsi->rsi_rebuild_gen = rgt->rgt_rebuild_gen;
+	rsi->rsi_phase         = phase;
+	rsi->rsi_rebuild_fence = rebuild_fence;
 	if (rebuild_op == RB_OP_RECLAIM || rebuild_op == RB_OP_FAIL_RECLAIM)
 		D_ASSERT(rgt->rgt_reclaim_epoch != 0);
 
@@ -1465,7 +1467,7 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	else
 		DL_ERROR(rc, DF_RB " scan broadcast send failed.", DP_RB_RGT(rgt));
 
-	rgt->rgt_init_scan = 1;
+	rgt->rgt_init_scan    = (phase == RB_SCAN_START);
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
 	DL_INFO(rc, DF_RB " got stable/reclaim epoch " DF_X64 "/" DF_X64, DP_RB_RGT(rgt),
 		rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch);
@@ -1762,6 +1764,7 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
 	uint64_t	leader_term;
+	uint64_t        rebuild_fence;
 	uint32_t	version;
 	uint32_t	generation;
 	int		rc;
@@ -1793,14 +1796,34 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	(*p_rgt)->rgt_num_op_freclaim_fail = task->dst_num_op_freclaim_fail;
 	D_INFO(DF_RB "\n", DP_RB_RGT(*p_rgt));
 
-	/* broadcast scan RPC to all targets */
-	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts,
-				    task->dst_new_layout_version, task->dst_rebuild_op);
+	/* phase-1: globally gate new EC agg rounds and drain current ones */
+	D_INFO(DF_RB ": start global EC agg pause prepare\n", DP_RB_RGT(*p_rgt));
+	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
+				    task->dst_rebuild_op, RB_SCAN_PREPARE, 0);
 	if (rc)
-		DL_ERROR(rc, DF_RB ": object scan failed", DP_RB_RGT(*p_rgt));
-	else
-		rc = 1;
+		goto cancel_pause;
 
+	/* Assign rebuild fence only after global EC aggregation pause succeeds. */
+	rebuild_fence = d_hlc_get();
+	D_INFO(DF_RB ": global EC agg pause completed, assign rebuild fence " DF_U64 "\n",
+	       DP_RB_RGT(*p_rgt), rebuild_fence);
+
+	/* phase-2: broadcast scan RPC to all targets */
+	D_INFO(DF_RB ": start rebuild with fence " DF_U64 "\n", DP_RB_RGT(*p_rgt), rebuild_fence);
+	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
+				    task->dst_rebuild_op, RB_SCAN_START, rebuild_fence);
+	if (rc) {
+		DL_ERROR(rc, DF_RB ": object scan failed", DP_RB_RGT(*p_rgt));
+		goto cancel_pause;
+	}
+
+	rc = 1;
+	return rc;
+
+cancel_pause:
+	D_INFO(DF_RB ": cancel global EC agg pause\n", DP_RB_RGT(*p_rgt));
+	rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
+			       task->dst_rebuild_op, RB_SCAN_CANCEL, 0);
 	return rc;
 }
 
@@ -2870,6 +2893,7 @@ rebuild_fini_one(void *arg)
 	D_ASSERT(rpt->rt_rebuild_fence != 0);
 	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
 		dpc->spc_rebuild_fence = 0;
+		dpc->spc_ec_agg_pause_gate = 0;
 		dpc->spc_rebuild_end_hlc = d_hlc_get();
 		D_DEBUG(DB_REBUILD, DF_RB ": Reset aggregation end hlc " DF_U64 "\n",
 			DP_RB_RPT(rpt), dpc->spc_rebuild_end_hlc);
@@ -3123,6 +3147,7 @@ rebuild_prepare_one(void *data)
 	 * cross the epoch to cause problem.
 	 */
 	D_ASSERT(rpt->rt_rebuild_fence != 0);
+	dpc->spc_ec_agg_pause_gate = 0;
 	dpc->spc_rebuild_fence = rpt->rt_rebuild_fence;
 	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " rebuild eph " DF_X64 "\n",
 		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
@@ -3131,6 +3156,50 @@ put:
 	ds_pool_child_put(dpc);
 
 	return rc;
+}
+
+static int
+rebuild_prepare_pause_one(void *data)
+{
+	struct rebuild_tgt_pool_tracker *rpt = data;
+	struct ds_pool_child            *dpc;
+
+	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	if (dpc == NULL) {
+		D_INFO(DF_UUID ": Local VOS pool isn't ready yet.\n", DP_UUID(rpt->rt_pool_uuid));
+		return -DER_STALE;
+	}
+
+	if (!dpc->spc_no_storage) {
+		if (dpc->spc_ec_agg_pause_gate == 0) {
+			dpc->spc_ec_agg_pause_gate = d_hlc_get();
+			D_INFO(DF_RB ": set local EC agg pause gate " DF_U64 "\n", DP_RB_RPT(rpt),
+			       dpc->spc_ec_agg_pause_gate);
+		}
+		ds_cont_child_wait_ec_agg_pause(dpc, rebuild_wait_ec_pause);
+		D_INFO(DF_RB ": local EC agg pause drained\n", DP_RB_RPT(rpt));
+	}
+
+	ds_pool_child_put(dpc);
+	return 0;
+}
+
+static int
+rebuild_cancel_pause_one(void *data)
+{
+	struct rebuild_tgt_pool_tracker *rpt = data;
+	struct ds_pool_child            *dpc;
+
+	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	if (dpc == NULL)
+		return 0;
+
+	if (dpc->spc_rebuild_fence == 0)
+		dpc->spc_ec_agg_pause_gate = 0;
+	D_INFO(DF_RB ": clear local EC agg pause gate\n", DP_RB_RPT(rpt));
+
+	ds_pool_child_put(dpc);
+	return 0;
 }
 
 static int
@@ -3295,6 +3364,67 @@ out:
 	}
 	daos_prop_fini(&prop);
 
+	return rc;
+}
+
+int
+rebuild_tgt_prepare_pause(crt_rpc_t *rpc, uint64_t *stable_epoch)
+{
+	struct rebuild_scan_in          *rsi = crt_req_get(rpc);
+	struct ds_pool                  *pool;
+	struct rebuild_tgt_pool_tracker *rpt = NULL;
+	int                              rc;
+
+	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
+	if (rc)
+		return rc;
+
+	rc = rpt_create(pool, rsi->rsi_master_rank, rsi->rsi_rebuild_ver, rsi->rsi_leader_term,
+			rsi->rsi_rebuild_gen, rsi->rsi_layout_ver, rsi->rsi_reclaim_epoch,
+			rsi->rsi_tgts_num, &rpt);
+	if (rc)
+		D_GOTO(out_pool, rc);
+
+	rpt->rt_rebuild_op = rsi->rsi_rebuild_op;
+	rc                 = ds_pool_task_collective(rpt->rt_pool_uuid,
+						     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+						     rebuild_prepare_pause_one, rpt, 0);
+	if (rc)
+		D_GOTO(out_rpt, rc);
+
+	*stable_epoch = d_hlc_get();
+out_rpt:
+	rpt_put(rpt);
+out_pool:
+	ds_pool_put(pool);
+	return rc;
+}
+
+int
+rebuild_tgt_cancel_pause(crt_rpc_t *rpc)
+{
+	struct rebuild_scan_in          *rsi = crt_req_get(rpc);
+	struct ds_pool                  *pool;
+	struct rebuild_tgt_pool_tracker *rpt = NULL;
+	int                              rc;
+
+	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
+	if (rc)
+		return rc;
+
+	rc = rpt_create(pool, rsi->rsi_master_rank, rsi->rsi_rebuild_ver, rsi->rsi_leader_term,
+			rsi->rsi_rebuild_gen, rsi->rsi_layout_ver, rsi->rsi_reclaim_epoch,
+			rsi->rsi_tgts_num, &rpt);
+	if (rc)
+		D_GOTO(out_pool, rc);
+
+	rpt->rt_rebuild_op = rsi->rsi_rebuild_op;
+	rc                 = ds_pool_task_collective(rpt->rt_pool_uuid,
+						     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+						     rebuild_cancel_pause_one, rpt, 0);
+	rpt_put(rpt);
+out_pool:
+	ds_pool_put(pool);
 	return rc;
 }
 

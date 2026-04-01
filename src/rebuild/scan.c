@@ -1005,8 +1005,6 @@ rebuild_scanner(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
-
 	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
 	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
 	if (rc != 0)
@@ -1160,6 +1158,31 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	D_ASSERT(rsi != NULL);
 
 	D_INFO(DF_RB "\n", DP_RB_RSI(rsi));
+
+	if (rsi->rsi_phase == RB_SCAN_PREPARE) {
+		uint64_t stable_epoch = 0;
+
+		D_INFO(DF_RB ": handle global EC agg pause prepare\n", DP_RB_RSI(rsi));
+		rc                     = rebuild_tgt_prepare_pause(rpc, &stable_epoch);
+		rout                   = crt_reply_get(rpc);
+		rout->rso_status       = rc;
+		rout->rso_stable_epoch = stable_epoch;
+		D_INFO(DF_RB ": global EC agg pause prepare done, stable epoch " DF_U64
+			     ", rc=" DF_RC "\n",
+		       DP_RB_RSI(rsi), stable_epoch, DP_RC(rc));
+		dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
+		return;
+	}
+
+	if (rsi->rsi_phase == RB_SCAN_CANCEL) {
+		D_INFO(DF_RB ": handle global EC agg pause cancel\n", DP_RB_RSI(rsi));
+		rc                     = rebuild_tgt_cancel_pause(rpc);
+		rout                   = crt_reply_get(rpc);
+		rout->rso_status       = rc;
+		rout->rso_stable_epoch = 0;
+		dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
+		return;
+	}
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous

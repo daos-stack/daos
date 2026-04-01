@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2017-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -233,6 +233,12 @@ struct rebuild_global {
 extern struct rebuild_global rebuild_gst;
 extern unsigned int          rebuild_wait_ec_pause;
 
+enum rebuild_scan_phase {
+	RB_SCAN_PREPARE = 0,
+	RB_SCAN_START   = 1,
+	RB_SCAN_CANCEL  = 2,
+};
+
 struct rebuild_task {
 	d_list_t			dst_list;
 	uuid_t				dst_pool_uuid;
@@ -372,6 +378,12 @@ rebuild_tgt_status_check_ult(void *arg);
 
 int
 rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
+
+int
+rebuild_tgt_prepare_pause(crt_rpc_t *rpc, uint64_t *stable_epoch);
+
+int
+rebuild_tgt_cancel_pause(crt_rpc_t *rpc);
 
 bool
 rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
