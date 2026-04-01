@@ -52,7 +52,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'provider-2.6-testing' ? 'TZ=UTC\n0 12 * * 6' : '')
+        cron(env.BRANCH_NAME == 'provider-2.6-testing' ? 'TZ=UTC\n0 6 * * 0' : '')
     }
 
     environment {
@@ -199,7 +199,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-tcp',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
@@ -213,7 +213,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-tcp-provider',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
@@ -227,7 +227,7 @@ pipeline {
                             pragma_suffix: '-hw-large-tcp',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_TCP_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
@@ -241,7 +241,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
@@ -256,7 +256,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
@@ -271,7 +271,7 @@ pipeline {
                             pragma_suffix: '-hw-large-ucx',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
