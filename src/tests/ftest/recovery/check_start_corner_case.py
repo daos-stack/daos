@@ -452,7 +452,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         try:
             dmg_command.check_enable(stop=False)
         except CommandFailure as command_failure:
-            exp_msg = f"members not in expected states"
+            exp_msg = "members not in expected states"
             if exp_msg not in str(command_failure):
                 msg = ("dmg check enable while system is Joined didn't return expected message! "
                        f"{exp_msg}")
@@ -464,7 +464,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         try:
             dmg_command.check_start()
         except CommandFailure as command_failure:
-            exp_msg = f"system checker is not enabled"
+            exp_msg = "system checker is not enabled"
             if exp_msg not in str(command_failure):
                 msg = ("dmg check start while system is Joined didn't return expected message! "
                        f"{exp_msg}")
@@ -479,7 +479,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         dmg_command.faults_pool_svc(
             pool=pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_ENGINE")
 
-        self.log_step("System stop and enble checker.")
+        self.log_step("System stop and enable checker.")
         dmg_command.check_enable()
 
         self.log_step("Set policy to --all-interactive.")
