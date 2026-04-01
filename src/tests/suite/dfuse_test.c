@@ -1,6 +1,7 @@
 /**
- * (C) Copyright 2021-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2021-2024 Intel Corporation.
+ * Copyright 2026 Google LLC
+ * Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -656,7 +657,7 @@ do_directory(void **state)
 		int  fd;
 
 		rc = snprintf(fname, 17, "file_%02d", i);
-		assert_in_range(rc, 0, 16);
+		assert_int_in_range(rc, 0, 16);
 
 		fd = openat(dfd, fname, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 		assert_return_code(fd, errno);
