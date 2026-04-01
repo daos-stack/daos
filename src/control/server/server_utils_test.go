@@ -1993,6 +1993,7 @@ const (
 	testContextTimeout    = 1 * time.Second
 	testHandlerTimeout    = 1 * time.Second
 	testSubscriptionDelay = 50 * time.Millisecond
+	testProcessingDelay   = 100 * time.Millisecond
 )
 
 func TestServer_handleEngineSelfTerminated(t *testing.T) {
@@ -2418,6 +2419,8 @@ func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 		t.Fatal("timeout waiting for engine self terminated event to be processed")
 	}
 
+	time.Sleep(testProcessingDelay)
+
 	logOutput := buf.String()
 	hasHandler := strings.Contains(logOutput, "handleEngineSelfTerminated") ||
 		strings.Contains(logOutput, "no instance found") ||
@@ -2490,6 +2493,8 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 	case <-time.After(testProcessingTimeout):
 		t.Fatal("timeout waiting for engine self terminated event to be processed")
 	}
+
+	time.Sleep(testProcessingDelay)
 
 	logOutput := buf.String()
 	hasHandler := strings.Contains(logOutput, "handleEngineSelfTerminated") ||
