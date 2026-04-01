@@ -291,7 +291,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
         :avocado: tags=recovery,cat_recov
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_failout
         """
-        self.log_step("Create a pool")
+        self.log_step("Create a pool.")
         pool = self.get_pool(connect=False)
 
         self.log_step("Inject orphan pool fault")
