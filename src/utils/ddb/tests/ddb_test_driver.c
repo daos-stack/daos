@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2022-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -213,8 +213,7 @@ ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx)
 			return rc;
 		}
 
-		snprintf(tctx->dvt_pmem_file, ARRAY_SIZE(tctx->dvt_pmem_file),
-			 "%s/ddb_vos_test", dir);
+		snprintf(tctx->dvt_pmem_file, ARRAY_SIZE(tctx->dvt_pmem_file), "%s/vos-0", dir);
 	}
 	if (uuid_is_null(tctx->dvt_pool_uuid))
 		uuid_parse(pool_uuid, tctx->dvt_pool_uuid);
@@ -531,20 +530,26 @@ struct ddb_test_driver_arguments {
 static int
 ddb_test_driver_arguments_parse(uint32_t argc, char **argv, struct ddb_test_driver_arguments *args)
 {
-	struct option	program_options[] = {
-		{ "create_vos", optional_argument, NULL,	'c' },
-		{ NULL }
-	};
+	struct option   program_options[] = {{"create_vos", no_argument, NULL, 'c'},
+					     {"filter", required_argument, NULL, 'f'},
+					     {NULL}};
 	int		index = 0, opt;
 
 	memset(args, 0, sizeof(*args));
 
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "c", program_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "cf:", program_options, &index)) != -1) {
 		switch (opt) {
 		case 'c':
 			args->dtda_create_vos_file = true;
+			break;
+		case 'f':
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+			cmocka_set_test_filter(optarg);
+#else
+			printf("Test filtering disabled at compile time.\n");
+#endif
 			break;
 		case '?':
 			printf("'%c' is unknown\n", optopt);
@@ -645,16 +650,12 @@ int main(int argc, char *argv[])
 	do {if (char_in_tests(c, test_suites, ARRAY_SIZE(test_suites))) \
 		rc += func(); } while (0)
 
-		/* filtering suites and tests */
-		char test_suites[] = "";
-#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-		cmocka_set_test_filter("**");
-#endif
-		RUN_TEST_SUIT('a', ddb_parse_tests_run);
-		RUN_TEST_SUIT('b', ddb_vos_tests_run);
-		RUN_TEST_SUIT('c', ddb_commands_tests_run);
-		RUN_TEST_SUIT('d', ddb_commands_print_tests_run);
-		RUN_TEST_SUIT('e', ddb_path_tests_run);
+	char test_suites[] = "";
+	RUN_TEST_SUIT('a', ddb_parse_tests_run);
+	RUN_TEST_SUIT('b', ddb_vos_tests_run);
+	RUN_TEST_SUIT('c', ddb_commands_tests_run);
+	RUN_TEST_SUIT('d', ddb_commands_print_tests_run);
+	RUN_TEST_SUIT('e', ddb_path_tests_run);
 
 done:
 	ddb_fini();
