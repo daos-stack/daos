@@ -6,9 +6,7 @@
 import time
 
 from apricot import TestWithServers
-from general_utils import check_file_exists
 from recovery_utils import query_detect, wait_for_check_query
-from run_utils import command_as_user, run_remote
 
 # Enum values used in this test
 ENUM_CIC_POOL_NONEXIST_ON_MS = 4
