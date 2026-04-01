@@ -329,18 +329,32 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	uint32_t		flags = 0;
 	int			i, rc = 0;
 
-	change_hlc = max(cont->sc_snapshot_delete_hlc,
-			 cont->sc_pool->spc_rebuild_end_hlc);
+	change_hlc = cont->sc_snapshot_delete_hlc;
 	if (param->ap_full_scan_hlc < change_hlc) {
-		/* Snapshot has been deleted or rebuild happens since the last
-		 * aggregation, let's restart from 0.
-		 */
+		/* Snapshot delete invalidates the whole aggregation history. */
 		epoch_min = 0;
 		flags |= VOS_AGG_FL_FORCE_SCAN;
-		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
+		D_DEBUG(DB_EPC, "snapshot delete hlc "DF_X64" > full "DF_X64"\n",
 			change_hlc, param->ap_full_scan_hlc);
 	} else {
 		epoch_min = get_hae(cont, param->ap_vos_agg);
+		/*
+		 * Rebuild changes EC data/parity layout, but does not recreate
+		 * garbage below the global EC aggregation boundary. For EC
+		 * aggregation, roll the local progress back to the boundary
+		 * instead of forcing a full scan from epoch 0.
+		 */
+		if (!param->ap_vos_agg && param->ap_full_scan_hlc < cont->sc_pool->spc_rebuild_end_hlc) {
+			D_DEBUG(DB_EPC, DF_CONT" rebuild end hlc "DF_X64
+				" > full "DF_X64", rollback EC agg eph "DF_X64
+				" -> boundary "DF_X64"\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				cont->sc_pool->spc_rebuild_end_hlc,
+				param->ap_full_scan_hlc, cont->sc_ec_agg_eph,
+				cont->sc_ec_agg_eph_boundary);
+			epoch_min = cont->sc_ec_agg_eph_boundary;
+			cont->sc_ec_agg_eph = epoch_min;
+		}
 	}
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
