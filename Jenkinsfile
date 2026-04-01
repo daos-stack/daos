@@ -72,7 +72,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'TZ=UTC\n0 12 * * 6' : '')
+        cron(env.BRANCH_NAME == 'weekly-2.8-testing' ? 'TZ=UTC\n0 12 * * 6' : '')
     }
 
     environment {
