@@ -2023,12 +2023,30 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		evt                *events.RASEvent
-		setupEngines       func(*testing.T, logging.Logger, *EngineHarness)
-		expErr             error
-		expEngineRestarted bool
-		expLogContains     []string
+		evt                      *events.RASEvent
+		setupEngines             func(*testing.T, logging.Logger, *EngineHarness)
+		disableAutoEngineRestart bool
+		expErr                   error
+		expEngineRestarted       bool
+		expLogContains           []string
 	}{
+		"auto restart disabled by config": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupEngine(t, log, h, false)
+			},
+			disableAutoEngineRestart: true,
+			expEngineRestarted:       false,
+			expLogContains: []string{
+				"automatic engine restart disabled",
+			},
+		},
 		"nil event timestamp": {
 			evt: &events.RASEvent{
 				ID:          events.RASEngineSelfTerminated,
@@ -2153,6 +2171,9 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			srv := &server{
 				log:     log,
 				harness: harness,
+				cfg: &config.Server{
+					DisableAutoEngineRestart: tc.disableAutoEngineRestart,
+				},
 			}
 
 			var wg sync.WaitGroup
@@ -2224,6 +2245,9 @@ func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 		harness:   harness,
 		pubSub:    pubSub,
 		evtLogger: control.MockEventLogger(log),
+		cfg: &config.Server{
+			DisableAutoEngineRestart: false,
+		},
 	}
 
 	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
@@ -2319,6 +2343,9 @@ func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
 			srv := &server{
 				log:     log,
 				harness: harness,
+				cfg: &config.Server{
+					DisableAutoEngineRestart: false,
+				},
 			}
 
 			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
@@ -2426,6 +2453,9 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 		membership: svc.membership,
 		sysdb:      svc.sysdb,
 		mgmtSvc:    svc,
+		cfg: &config.Server{
+			DisableAutoEngineRestart: false,
+		},
 	}
 
 	registerLeaderSubscriptions(srv)

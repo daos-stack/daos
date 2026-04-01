@@ -98,7 +98,8 @@ type Server struct {
 	Path string `yaml:"-"` // path to config file
 
 	// Behavior flags
-	AutoFormat bool `yaml:"-"`
+	AutoFormat               bool `yaml:"-"`
+	DisableAutoEngineRestart bool `yaml:"disable_auto_engine_restart"`
 
 	deprecatedParams `yaml:",inline"`
 }

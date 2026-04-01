@@ -774,6 +774,12 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 
 	srv.log.Infof("handling engine self termination")
 
+	// Check if automatic restart is disabled
+	if srv.cfg.DisableAutoEngineRestart {
+		srv.log.Infof("automatic engine restart disabled by configuration")
+		return nil
+	}
+
 	ts, err := evt.GetTimestamp()
 	if err != nil {
 		return errors.Wrapf(err, "bad event timestamp %q", evt.Timestamp)

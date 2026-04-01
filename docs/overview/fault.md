@@ -109,3 +109,11 @@ system with a new incarnation number and resume normal operations.
 This self-healing mechanism allows DAOS to automatically recover from
 transient engine failures without administrator intervention, improving
 overall system availability.
+
+#### Disabling Automatic Restart
+
+The automatic restart behavior can be disabled by setting the
+`disable_auto_engine_restart` configuration option to `true` in the
+daos_server.yml file. When disabled, engines that self-terminate will
+not be automatically restarted by the control plane, requiring manual
+intervention to restart the affected engine instances.
