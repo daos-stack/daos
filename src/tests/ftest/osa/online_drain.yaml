@@ -36,7 +36,7 @@ server_config:
 pool:
   scm_size: 12G
   nvme_size: 108G
-  rebuild_timeout: 120
+  rebuild_timeout: 240
   pool_query_timeout: 30
   properties: rd_fac:0,space_rb:0,scrub:timed,scrub_freq:1
 
