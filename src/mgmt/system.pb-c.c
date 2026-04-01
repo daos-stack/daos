@@ -322,6 +322,96 @@ void   mgmt__system_exclude_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__system_exclude_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__system_remove_ranks_req__init
+                     (Mgmt__SystemRemoveRanksReq         *message)
+{
+  static const Mgmt__SystemRemoveRanksReq init_value = MGMT__SYSTEM_REMOVE_RANKS_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__system_remove_ranks_req__get_packed_size
+                     (const Mgmt__SystemRemoveRanksReq *message)
+{
+  assert(message->base.descriptor == &mgmt__system_remove_ranks_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__system_remove_ranks_req__pack
+                     (const Mgmt__SystemRemoveRanksReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__system_remove_ranks_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__system_remove_ranks_req__pack_to_buffer
+                     (const Mgmt__SystemRemoveRanksReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__system_remove_ranks_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__SystemRemoveRanksReq *
+       mgmt__system_remove_ranks_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__SystemRemoveRanksReq *)
+     protobuf_c_message_unpack (&mgmt__system_remove_ranks_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__system_remove_ranks_req__free_unpacked
+                     (Mgmt__SystemRemoveRanksReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__system_remove_ranks_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__system_remove_ranks_resp__init
+                     (Mgmt__SystemRemoveRanksResp         *message)
+{
+  static const Mgmt__SystemRemoveRanksResp init_value = MGMT__SYSTEM_REMOVE_RANKS_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__system_remove_ranks_resp__get_packed_size
+                     (const Mgmt__SystemRemoveRanksResp *message)
+{
+  assert(message->base.descriptor == &mgmt__system_remove_ranks_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__system_remove_ranks_resp__pack
+                     (const Mgmt__SystemRemoveRanksResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__system_remove_ranks_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__system_remove_ranks_resp__pack_to_buffer
+                     (const Mgmt__SystemRemoveRanksResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__system_remove_ranks_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__SystemRemoveRanksResp *
+       mgmt__system_remove_ranks_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__SystemRemoveRanksResp *)
+     protobuf_c_message_unpack (&mgmt__system_remove_ranks_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__system_remove_ranks_resp__free_unpacked
+                     (Mgmt__SystemRemoveRanksResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__system_remove_ranks_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__system_drain_req__init
                      (Mgmt__SystemDrainReq         *message)
 {
@@ -1822,6 +1912,108 @@ const ProtobufCMessageDescriptor mgmt__system_exclude_resp__descriptor =
   mgmt__system_exclude_resp__field_indices_by_name,
   1,  mgmt__system_exclude_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__system_exclude_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__system_remove_ranks_req__field_descriptors[3] =
+{
+  {
+    "sys",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__SystemRemoveRanksReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "ranks",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__SystemRemoveRanksReq, ranks),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "hosts",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__SystemRemoveRanksReq, hosts),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__system_remove_ranks_req__field_indices_by_name[] = {
+  2,   /* field[2] = hosts */
+  1,   /* field[1] = ranks */
+  0,   /* field[0] = sys */
+};
+static const ProtobufCIntRange mgmt__system_remove_ranks_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__system_remove_ranks_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.SystemRemoveRanksReq",
+  "SystemRemoveRanksReq",
+  "Mgmt__SystemRemoveRanksReq",
+  "mgmt",
+  sizeof(Mgmt__SystemRemoveRanksReq),
+  3,
+  mgmt__system_remove_ranks_req__field_descriptors,
+  mgmt__system_remove_ranks_req__field_indices_by_name,
+  1,  mgmt__system_remove_ranks_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__system_remove_ranks_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__system_remove_ranks_resp__field_descriptors[1] =
+{
+  {
+    "results",
+    1,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__SystemRemoveRanksResp, n_results),
+    offsetof(Mgmt__SystemRemoveRanksResp, results),
+    &shared__rank_result__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__system_remove_ranks_resp__field_indices_by_name[] = {
+  0,   /* field[0] = results */
+};
+static const ProtobufCIntRange mgmt__system_remove_ranks_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__system_remove_ranks_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.SystemRemoveRanksResp",
+  "SystemRemoveRanksResp",
+  "Mgmt__SystemRemoveRanksResp",
+  "mgmt",
+  sizeof(Mgmt__SystemRemoveRanksResp),
+  1,
+  mgmt__system_remove_ranks_resp__field_descriptors,
+  mgmt__system_remove_ranks_resp__field_indices_by_name,
+  1,  mgmt__system_remove_ranks_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__system_remove_ranks_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__system_drain_req__field_descriptors[4] =

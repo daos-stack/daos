@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// Copyright 2019-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,6 +35,7 @@ type SystemCmd struct {
 	Start        systemStartCmd        `command:"start" description:"Perform start of stopped DAOS system"`
 	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
 	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
+	RemoveRanks  systemRemoveRanksCmd  `command:"remove-ranks" description:"Remove ranks from DAOS system database"`
 	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
 	Reintegrate  systemReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate ranks or hosts into all relevant pools in DAOS system"`
 	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
@@ -328,6 +329,59 @@ type systemClearExcludeCmd struct {
 
 func (cmd *systemClearExcludeCmd) Execute(_ []string) error {
 	return cmd.execute(true)
+}
+
+type systemRemoveRanksCmd struct {
+	baseRankListCmd
+	Force bool `short:"f" long:"force" description:"Force removal without confirmation prompt"`
+}
+
+func (cmd *systemRemoveRanksCmd) Execute(_ []string) error {
+	if err := cmd.validateHostsRanks(); err != nil {
+		return err
+	}
+	if cmd.Ranks.Count() == 0 && cmd.Hosts.Count() == 0 {
+		return errNoRanks
+	}
+	ranksToRemove := cmd.Ranks.String()
+	if cmd.Hosts.Count() > 0 {
+		ranksToRemove = fmt.Sprintf("ranks from hosts: %s", cmd.Hosts.String())
+	}
+
+	if !cmd.JSONOutputEnabled() {
+		cmd.Noticef("WARNING: This will permanently remove %s from the MS database and "+
+			"removed ranks cannot be added back without reformatting", ranksToRemove)
+
+		// Prompt for confirmation unless --force is specified
+		if !cmd.Force && !common.GetConsent(cmd.Logger) {
+			return errors.New("consent not given")
+		}
+	}
+
+	req := &control.SystemRemoveRanksReq{}
+	req.Hosts.Replace(&cmd.Hosts.HostSet)
+	req.Ranks.Replace(&cmd.Ranks.RankSet)
+
+	resp, err := control.SystemRemoveRanks(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	removed := ranklist.NewRankSet()
+	for _, result := range resp.Results {
+		removed.Add(ranklist.Rank(result.Rank))
+	}
+
+	if resp.Errors() != nil {
+		cmd.Errorf("Errors: %s", resp.Errors())
+	}
+	cmd.Infof("removed ranks: %s", removed)
+
+	return resp.Errors()
 }
 
 type systemDrainCmd struct {

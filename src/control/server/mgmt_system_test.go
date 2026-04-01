@@ -1,7 +1,7 @@
 //
-// (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// Copyright 2020-2024 Intel Corporation.
+// Copyright 2025 Google LLC
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -3740,6 +3740,452 @@ func TestServer_MgmtSvc_checkReplaceRank(t *testing.T) {
 
 			gotErr := svc.checkReplaceRank(ctx, tc.rankToReplace)
 			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_SystemRemoveRanks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *mgmtpb.SystemRemoveRanksReq
+		members    system.Members
+		pools      []string
+		drpcResps  []*mockDrpcResponse
+		expResults []*sharedpb.RankResult
+		expErr     error
+	}{
+		"nil request": {
+			req:    nil,
+			expErr: errors.New("nil request"),
+		},
+		"not leader": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   "wrong-system",
+				Ranks: "0",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+			},
+			expErr: FaultWrongSystem("wrong-system", build.DefaultSystemName),
+		},
+		"no ranks or hosts": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys: build.DefaultSystemName,
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+			},
+			expErr: errors.New("no hosts or ranks specified"),
+		},
+		"invalid rank": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "99",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+			},
+			expErr: errors.New("invalid rank"),
+		},
+		"invalid host": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Hosts: "10.0.0.99",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "excluded"),
+			},
+			expErr: errors.New("invalid host"),
+		},
+		"success - single rank": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "1",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "excluded"),
+			},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0",
+					},
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:  1,
+					State: "removed",
+				},
+			},
+		},
+		"success - admin excluded rank": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "3",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 3, 1, "adminexcluded"),
+			},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0",
+					},
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:  3,
+					State: "removed",
+				},
+			},
+		},
+		"success - multiple ranks": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "1,2",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "excluded"),
+				mockMember(t, 2, 1, "excluded"),
+			},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0",
+					},
+				},
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0",
+					},
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:  1,
+					State: "removed",
+				},
+				{
+					Rank:  2,
+					State: "removed",
+				},
+			},
+		},
+		"multiple results - mixed success and errors": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "1,2,3,4",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "excluded"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "adminexcluded"),
+				mockMember(t, 4, 3, "excluded"),
+			},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0",
+					},
+				},
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0",
+					},
+				},
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0,4",
+					},
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:  1,
+					State: "removed",
+				},
+				{
+					Rank:    2,
+					Errored: true,
+					Msg:     "rank must be in Excluded or AdminExcluded state (current state: Joined)",
+				},
+				{
+					Rank:  3,
+					State: "removed",
+				},
+				{
+					Rank:    4,
+					Errored: true,
+					Msg:     "rank 4 is enabled on pool",
+				},
+			},
+		},
+		"error - rank in joined state": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "0",
+			},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:    0,
+					Errored: true,
+					Msg:     "rank must be in Excluded or AdminExcluded state (current state: Joined)",
+				},
+			},
+		},
+		"error - rank in stopped state": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "1",
+			},
+			members: system.Members{
+				mockMember(t, 1, 1, "stopped"),
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:    1,
+					Errored: true,
+					Msg:     "rank must be in Excluded or AdminExcluded state (current state: Stopped)",
+				},
+			},
+		},
+		"error - rank in starting state": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "2",
+			},
+			members: system.Members{
+				mockMember(t, 2, 1, "starting"),
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:    2,
+					Errored: true,
+					Msg:     "rank must be in Excluded or AdminExcluded state (current state: Starting)",
+				},
+			},
+		},
+		"error - rank in ready state": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "3",
+			},
+			members: system.Members{
+				mockMember(t, 3, 1, "ready"),
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:    3,
+					Errored: true,
+					Msg:     "rank must be in Excluded or AdminExcluded state (current state: Ready)",
+				},
+			},
+		},
+		"error - no service ranks available": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "0",
+			},
+			members: system.Members{
+				// Pool-service will not respond without joined service rank.
+				mockMember(t, 0, 1, "excluded"),
+			},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:    0,
+					Errored: true,
+					Msg:     "unable to find any available service ranks",
+				},
+			},
+		},
+		"error - rank enabled in pool": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "1",
+			},
+			members: system.Members{
+				// One pool-service rank has to be joined for any response.
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "excluded"),
+			},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0-4",
+					},
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:    1,
+					Errored: true,
+					Msg:     "rank 1 is enabled on pool 00000001",
+				},
+			},
+		},
+		"multiple results - all failures different reasons": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "1,2,3",
+			},
+			members: system.Members{
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 3, "excluded"),
+			},
+			pools: []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0,3",
+					},
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:    1,
+					Errored: true,
+					Msg:     "rank must be in Excluded or AdminExcluded state (current state: Stopped)",
+				},
+				{
+					Rank:    2,
+					Errored: true,
+					Msg:     "rank must be in Excluded or AdminExcluded state (current state: Joined)",
+				},
+				{
+					Rank:    3,
+					Errored: true,
+					Msg:     "rank 3 is enabled on pool",
+				},
+			},
+		},
+		"multiple results - some ranks not found": {
+			req: &mgmtpb.SystemRemoveRanksReq{
+				Sys:   build.DefaultSystemName,
+				Ranks: "1,2",
+			},
+			members: system.Members{
+				mockMember(t, 1, 1, "excluded"),
+			},
+			expErr: errors.New("invalid rank: 2"),
+			pools:  []string{test.MockUUID(1)},
+			drpcResps: []*mockDrpcResponse{
+				{
+					Message: &mgmtpb.PoolQueryResp{
+						EnabledRanks: "0",
+					},
+				},
+			},
+			expResults: []*sharedpb.RankResult{
+				{
+					Rank:  1,
+					State: "removed",
+				},
+				{
+					Rank:    2,
+					Errored: true,
+					Msg:     "failed to find rank 2:",
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.MustLogContext(t)
+			svc := newTestMgmtSvc(t, log)
+			svc.membership = system.NewMembership(log, svc.sysdb)
+
+			for _, m := range tc.members {
+				if _, err := svc.membership.Add(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			for _, uuidStr := range tc.pools {
+				addTestPoolService(t, svc.sysdb, &system.PoolService{
+					PoolUUID: uuid.MustParse(uuidStr),
+					State:    system.PoolServiceStateReady,
+					Replicas: []ranklist.Rank{0},
+					Storage: &system.PoolServiceStorage{
+						CreationRankStr: "0",
+					},
+				})
+			}
+
+			if len(tc.drpcResps) > 0 {
+				cfg := new(mockDrpcClientConfig)
+				for _, mock := range tc.drpcResps {
+					cfg.setSendMsgResponseList(t, mock)
+				}
+				mdc := newMockDrpcClient(cfg)
+				setupSvcDrpcClient(svc, 0, mdc)
+			}
+
+			gotResp, gotErr := svc.SystemRemoveRanks(ctx, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(sharedpb.RankResult{}),
+				cmpopts.IgnoreFields(sharedpb.RankResult{}, "Addr"),
+			}
+
+			// For error messages that contain dynamic content, use substring matching
+			for i, expResult := range tc.expResults {
+				if expResult.Errored && i < len(gotResp.Results) {
+					gotMsg := gotResp.Results[i].Msg
+					if !strings.Contains(gotMsg, expResult.Msg) {
+						t.Fatalf("expected error message to contain %q, got %q", expResult.Msg, gotMsg)
+					}
+					// Clear the message for full comparison
+					tc.expResults[i].Msg = gotResp.Results[i].Msg
+				}
+			}
+
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
+			}
+
+			// Verify ranks were actually removed or retained based on success/failure
+			for _, result := range gotResp.Results {
+				_, err := svc.membership.Get(ranklist.Rank(result.Rank))
+				if result.Errored {
+					// Failed removals should still exist in membership
+					if err != nil && !strings.Contains(err.Error(), "not found") {
+						t.Fatalf("rank %d should still exist in membership after failed removal, got err: %v", result.Rank, err)
+					}
+				} else {
+					// Successful removals should not exist
+					if err == nil {
+						t.Fatalf("rank %d still exists in membership after removal", result.Rank)
+					}
+				}
+			}
 		})
 	}
 }
