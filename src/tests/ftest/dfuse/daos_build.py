@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
   (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -19,7 +19,13 @@ from run_utils import run_remote
 
 
 def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
-    """Run an actual test from above."""
+    """Run an actual test from above.
+    
+    Args:
+        cache_mode (str): Cache mode. writeback, writethrough, metadata, data, or nocache.
+        il_lib (str): Interception library. Defaults to None.
+        run_on_vms (bool): Whether to run on VMs. Defaults to False.
+    """
     # Create a pool, container and start dfuse.
     self.log_step('Creating a single pool and container')
     pool = self.get_pool(connect=False)
