@@ -907,7 +907,7 @@ pipeline {
                                             ' COMPILER=covc'
                             ],
                             artifacts: "config.log-el9-covc",
-                            uploadTarget: 'el9'
+                            uploadTarget: 'el9-bullseye'
                         )
                     ) // parallel
                 } // script
