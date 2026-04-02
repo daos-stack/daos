@@ -1990,38 +1990,37 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 }
 
 const (
-	testContextTimeout    = 1 * time.Second
-	testHandlerTimeout    = 1 * time.Second
-	testSubscriptionDelay = 50 * time.Millisecond
-	testProcessingDelay   = 100 * time.Millisecond
+	testContextTimeout     = 1 * time.Second
+	testHandlerTimeout     = 1 * time.Second
+	testRestartRequestWait = 3 * time.Second
+	testSubscriptionDelay  = 50 * time.Millisecond
+	testProcessingDelay    = 100 * time.Millisecond
 )
 
-func TestServer_handleEngineSelfTerminated(t *testing.T) {
-	const testRestartRequestWait = 2 * time.Second
+func setupTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRunning bool, ranks ...uint32) {
+	t.Helper()
 
+	rank := uint32(1)
+	if len(ranks) != 0 {
+		rank = ranks[0]
+	}
+
+	e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+	e._superblock.Rank = ranklist.NewRankPtr(rank)
+	rCfg := &engine.TestRunnerConfig{}
+	rCfg.Running.Store(isRunning)
+	e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
+	e.ready.Store(isRunning)
+	if err := h.AddInstance(e); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestServer_handleEngineSelfTerminated(t *testing.T) {
 	testRank := ranklist.Rank(1)
 	testIncarnation := uint64(42)
 	testHostname := "test-host-1"
 	validTimestamp := time.Now().Format(time.RFC3339)
-
-	setupEngine := func(t *testing.T, log logging.Logger, h *EngineHarness, isRunning bool, ranks ...uint32) {
-		t.Helper()
-
-		rank := uint32(testRank)
-		if len(ranks) != 0 {
-			rank = ranks[0]
-		}
-
-		e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
-		e._superblock.Rank = ranklist.NewRankPtr(rank)
-		rCfg := &engine.TestRunnerConfig{}
-		rCfg.Running.Store(isRunning)
-		e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
-		e.ready.SetFalse()
-		if err := h.AddInstance(e); err != nil {
-			t.Fatal(err)
-		}
-	}
 
 	for name, tc := range map[string]struct {
 		evt                      *events.RASEvent
@@ -2040,7 +2039,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Timestamp:   validTimestamp,
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-				setupEngine(t, log, h, false)
+				setupTestEngine(t, log, h, false)
 			},
 			disableEngineAutoRestart: true,
 			expEngineRestarted:       false,
@@ -2115,7 +2114,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Timestamp:   validTimestamp,
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-				setupEngine(t, log, h, false)
+				setupTestEngine(t, log, h, false)
 			},
 			expEngineRestarted: true,
 			expLogContains: []string{
@@ -2132,7 +2131,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Timestamp:   validTimestamp,
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-				setupEngine(t, log, h, true)
+				setupTestEngine(t, log, h, true)
 			},
 			expErr:             errors.New("did not stop"),
 			expEngineRestarted: false,
@@ -2147,7 +2146,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
 				for i := 0; i < 3; i++ {
-					setupEngine(t, log, h, false, uint32(i))
+					setupTestEngine(t, log, h, false, uint32(i))
 				}
 			},
 			expEngineRestarted: true,
@@ -2240,17 +2239,7 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 
 	ctx := test.Context(t)
 	harness := NewEngineHarness(log)
-
-	// Setup engine
-	e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
-	e._superblock.Rank = ranklist.NewRankPtr(uint32(testRank))
-	rCfg := &engine.TestRunnerConfig{}
-	rCfg.Running.Store(false)
-	e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
-	e.ready.SetFalse()
-	if err := harness.AddInstance(e); err != nil {
-		t.Fatal(err)
-	}
+	setupTestEngine(t, log, harness, false)
 
 	srv := &server{
 		log:     log,
@@ -2262,6 +2251,16 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 		rankRestartTimes: make(map[uint32]time.Time),
 	}
 
+	// Get reference to the engine instance for monitoring startRequested
+	instances, err := harness.FilterInstancesByRankSet("1")
+	if err != nil || len(instances) == 0 {
+		t.Fatalf("failed to get engine instance: %v", err)
+	}
+	e, ok := instances[0].(*EngineInstance)
+	if !ok {
+		t.Fatal("failed to cast to EngineInstance")
+	}
+
 	evt := &events.RASEvent{
 		ID:          events.RASEngineSelfTerminated,
 		Rank:        uint32(testRank),
@@ -2270,72 +2269,87 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 		Timestamp:   validTimestamp,
 	}
 
+	// Setup goroutine to consume startRequested channel to prevent blocking
+	restartCount := atomic.Uint32{}
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-e.startRequested:
+				restartCount.Add(1)
+			case <-time.After(testRestartRequestWait):
+				return
+			}
+		}
+	}()
+
 	// First restart should succeed
-	err := handleEngineSelfTerminated(ctx, srv, evt)
+	err = handleEngineSelfTerminated(ctx, srv, evt)
 	if err != nil {
 		t.Fatalf("first restart failed: %v", err)
 	}
 
 	// Wait for restart to be requested
-	select {
-	case <-e.startRequested:
-		// Expected
-	case <-time.After(testHandlerTimeout):
-		t.Fatal("expected restart request but it didn't happen")
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 1 {
+		t.Fatalf("expected 1 restart request, got %d", restartCount.Load())
 	}
 
-	//	// Second restart immediately after should be rate-limited
-	//	evt2 := &events.RASEvent{
-	//		ID:          events.RASEngineSelfTerminated,
-	//		Rank:        uint32(testRank),
-	//		Incarnation: testIncarnation + 1,
-	//		Hostname:    testHostname,
-	//		Timestamp:   time.Now().Format(time.RFC3339),
-	//	}
-	//
-	//	err = handleEngineSelfTerminated(ctx, srv, evt2)
-	//	if err != nil {
-	//		t.Fatalf("second restart call failed: %v", err)
-	//	}
-	//
-	//	// Verify no restart was requested (rate-limited)
-	//	select {
-	//	case <-e.startRequested:
-	//		t.Fatal("restart should have been rate-limited but wasn't")
-	//	case <-time.After(100 * time.Millisecond):
-	//		// Expected - no restart
-	//	}
-	//
-	//	// Verify rate-limit log message
-	//	logOutput := buf.String()
-	//	if !strings.Contains(logOutput, "rate-limited") {
-	//		t.Errorf("expected log to contain 'rate-limited', got: %s", logOutput)
-	//	}
-	//
-	//	// Wait for the delay to expire
-	//	time.Sleep(2100 * time.Millisecond)
-	//
-	//	// Third restart after delay should succeed
-	//	evt3 := &events.RASEvent{
-	//		ID:          events.RASEngineSelfTerminated,
-	//		Rank:        uint32(testRank),
-	//		Incarnation: testIncarnation + 2,
-	//		Hostname:    testHostname,
-	//		Timestamp:   time.Now().Format(time.RFC3339),
-	//	}
-	//
-	//	err = handleEngineSelfTerminated(ctx, srv, evt3)
-	//	if err != nil {
-	//		t.Fatalf("third restart failed: %v", err)
-	//	}
-	//
-	//	// Verify restart was requested
-	//	select {
-	//	case <-e.startRequested:
-	//		// Expected
-	//	case <-time.After(1 * time.Second):
-	//		t.Fatal("expected restart request after delay but it didn't happen")
-	//	}
+	// Second restart immediately after should be rate-limited
+	evt2 := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation + 1,
+		Hostname:    testHostname,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	err = handleEngineSelfTerminated(ctx, srv, evt2)
+	if err != nil {
+		t.Fatalf("second restart call failed: %v", err)
+	}
+
+	// Verify no restart was requested (rate-limited)
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 1 {
+		t.Fatalf("expected restart to be rate-limited, got %d restarts", restartCount.Load())
+	}
+
+	// Verify rate-limit log message
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "rate-limited") {
+		t.Errorf("expected log to contain 'rate-limited', got: %s", logOutput)
+	}
+
+	// Wait for the EngineAutoRestartMinDelay to expire
+	time.Sleep(time.Duration(srv.cfg.EngineAutoRestartMinDelay) * time.Second)
+
+	// Third restart after delay should succeed
+	evt3 := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation + 2,
+		Hostname:    testHostname,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	err = handleEngineSelfTerminated(ctx, srv, evt3)
+	if err != nil {
+		t.Fatalf("third restart failed: %v", err)
+	}
+
+	// Verify restart was requested
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 2 {
+		t.Fatalf("expected 2 total restarts after delay, got %d", restartCount.Load())
+	}
+
+	// Cleanup
+	ctx.Done()
+	<-doneCh
 }
 
 func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
