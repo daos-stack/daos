@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2018-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,7 @@
 #include <math.h>
 #include <daos/common.h>
 #include <daos/container.h>
+#include <daos/object.h>
 
 #include "dfs_internal.h"
 
@@ -936,10 +937,37 @@ dfs_cont_put(dfs_t *dfs, daos_handle_t coh)
 int
 dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 {
+	int rc;
+
 	if (dfs == NULL || !dfs->mounted || attr == NULL)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+
+	/*
+	 * Persisted attrs may keep dir/file oclass as 0 to indicate default
+	 * resolution at object creation time. Materialize effective classes
+	 * here using the same class-selection logic as oid generation.
+	 */
+	if (attr->da_dir_oclass_id == 0) {
+		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, dfs->dir_oclass_hint, 0,
+					 &attr->da_dir_oclass_id);
+		if (rc) {
+			D_ERROR("daos_obj_get_oclass() failed for dir class " DF_RC "\n",
+				DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+	}
+
+	if (attr->da_file_oclass_id == 0) {
+		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, dfs->file_oclass_hint, 0,
+					 &attr->da_file_oclass_id);
+		if (rc) {
+			D_ERROR("daos_obj_get_oclass() failed for file class " DF_RC "\n",
+				DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+	}
 
 	return 0;
 }

@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2019-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +9,7 @@
 #include "dfs_test.h"
 #include <daos/dfs_lib_int.h>
 #include <daos/array.h>
+#include <daos/object.h>
 #include <daos_types.h>
 #include <daos/placement.h>
 #include <pthread.h>
@@ -259,6 +260,23 @@ dfs_test_modes(void **state)
 	/** mount in Relaxed mode should succeed */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR | DFS_RELAXED, &dfs);
 	assert_int_equal(rc, 0);
+	{
+		dfs_attr_t       qattr           = {0};
+		daos_oclass_id_t exp_dir_oclass  = 0;
+		daos_oclass_id_t exp_file_oclass = 0;
+
+		rc = dfs_query(dfs, &qattr);
+		assert_int_equal(rc, 0);
+		rc = daos_obj_get_oclass(coh, DAOS_OT_MULTI_HASHED, 0, 0, &exp_dir_oclass);
+		assert_rc_equal(rc, 0);
+		rc = daos_obj_get_oclass(coh, DAOS_OT_ARRAY_BYTE, 0, 0, &exp_file_oclass);
+		assert_rc_equal(rc, 0);
+
+		assert_true(qattr.da_dir_oclass_id != 0);
+		assert_true(qattr.da_file_oclass_id != 0);
+		assert_int_equal(qattr.da_dir_oclass_id, exp_dir_oclass);
+		assert_int_equal(qattr.da_file_oclass_id, exp_file_oclass);
+	}
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDONLY | DFS_RELAXED, &dfs);

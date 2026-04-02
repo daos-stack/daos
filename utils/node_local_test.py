@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Node local test (NLT).
 
-(C) Copyright 2020-2024 Intel Corporation.
-(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
-(C) Copyright 2025 Google LLC
-(C) Copyright 2025 Enakta Labs Ltd
+Copyright 2020-2024 Intel Corporation.
+Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+Copyright 2025 Google LLC
+Copyright 2025 Enakta Labs Ltd
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -2247,6 +2247,22 @@ class PosixTests():
 
         if dfuse.stop():
             self.fatal_errors = True
+
+        container.destroy()
+
+    def test_oclass_defaults_query(self):
+        """Test container query returns resolved default file/dir object classes"""
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_defaults_test')
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query', self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+
+        response = rc.json['response']
+        assert response['container_type'] == 'POSIX'
+        assert response.get('dir_object_class') not in (None, '')
+        assert response.get('file_object_class') not in (None, '')
 
         container.destroy()
 
