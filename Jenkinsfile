@@ -17,6 +17,9 @@
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
 
+// Name of branch to be tested
+test_branch = 'master'
+
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
@@ -30,9 +33,6 @@ void job_step_update(def value=currentBuild.currentResult) {
     // job_status_update(env.STAGE_NAME, value)
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
-
-// For master, this is just some wildly high number
-next_version = '1000'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -72,7 +72,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'daily-testing' ? 'TZ=UTC\n0 0 * * 0-5' : '')
+        cron(env.BRANCH_NAME == 'daily-testing' ? 'TZ=UTC\n0 0 * * 1-5' : '')
     }
 
     environment {
@@ -118,7 +118,7 @@ pipeline {
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
         string(name: 'BaseBranch',
-               defaultValue: 'master',
+               defaultValue: test_branch,
                description: 'The base branch to run daily-testing against (i.e. master, or a PR\'s branch)')
         // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
@@ -186,6 +186,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_ofed5',
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
@@ -285,9 +288,9 @@ pipeline {
                             name: 'Functional on EL 8',
                             pragma_suffix: '-vm',
                             distro: 'el8',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: vm9_label('EL8'),
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: '-hw',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
@@ -299,9 +302,9 @@ pipeline {
                             name: 'Functional on EL 9',
                             pragma_suffix: '-vm',
                             distro: 'el9',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: vm9_label('EL9'),
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: '-hw',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
@@ -314,9 +317,9 @@ pipeline {
                             pragma_suffix: '-vm',
                             distro: 'leap15',
                             image_version: 'leap15.6',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: '-hw',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
@@ -328,9 +331,9 @@ pipeline {
                             name: 'Functional on Ubuntu 20.04',
                             pragma_suffix: '-vm',
                             distro: 'ubuntu20',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: vm9_label('Ubuntu'),
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: '-hw',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
@@ -341,9 +344,9 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
@@ -354,9 +357,9 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
@@ -367,9 +370,9 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
@@ -381,9 +384,9 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            base_branch: env.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version,
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
@@ -395,9 +398,9 @@ pipeline {
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
@@ -409,9 +412,9 @@ pipeline {
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,large',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
@@ -422,9 +425,9 @@ pipeline {
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,large',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
