@@ -273,7 +273,7 @@ pipeline {
                             distro: 'el8',
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL8'),
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -288,7 +288,7 @@ pipeline {
                             distro: 'el9',
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL9'),
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -304,7 +304,7 @@ pipeline {
                             image_version: 'leap15.6',
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -319,7 +319,7 @@ pipeline {
                             distro: 'ubuntu20',
                             base_branch: params.BaseBranch,
                             label: vm9_label('Ubuntu'),
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -333,7 +333,7 @@ pipeline {
                             pragma_suffix: '-hw-medium',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -347,7 +347,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -361,7 +361,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -375,7 +375,7 @@ pipeline {
                             pragma_suffix: '-hw-large',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,large',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -389,7 +389,7 @@ pipeline {
                             pragma_suffix: '-hw-large-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
-                            next_version: test_branch,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,large',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
