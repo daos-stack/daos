@@ -175,15 +175,14 @@ struct ds_pool_child {
 	struct sched_request	*spc_flush_req;	/* Dedicated VEA flush ULT */
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
-	d_list_t		spc_cont_list;
+	d_list_t                 spc_cont_list;
 	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
-	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
-	 * vos aggregation can not cross this epoch during rebuild to avoid
-	 * interfering rebuild process.
+	/* Stores the local HLC token set by the PREPARE phase.  Non-zero
+	 * blocks new EC aggregation rounds during rebuild.  rebuild_fini_one()
+	 * compares this value against rt_ec_pause_token to decide whether this
+	 * rebuild still owns the gate.
 	 */
-	uint64_t	spc_rebuild_fence;
-	/* Block new EC aggregation rounds before rebuild fence is assigned. */
 	uint64_t                 spc_ec_agg_pause_gate;
 
 	/* The HLC when current rebuild ends, which will be used to compare

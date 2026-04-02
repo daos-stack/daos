@@ -1374,10 +1374,10 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 static int
 rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 		       struct pool_target_id_list *tgts_failed, uint32_t layout_version,
-		       daos_rebuild_opc_t rebuild_op, uint32_t phase, uint64_t rebuild_fence)
+		       daos_rebuild_opc_t rebuild_op, uint32_t phase)
 {
-	struct rebuild_scan_in	*rsi;
-	struct rebuild_scan_out	*rso;
+	struct rebuild_scan_in  *rsi;
+	struct rebuild_scan_out *rso;
 	d_rank_list_t		*excluded = NULL;
 	crt_rpc_t		*rpc;
 	int			rc;
@@ -1449,8 +1449,7 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
 	rsi->rsi_rebuild_ver = rgt->rgt_rebuild_ver;
 	rsi->rsi_rebuild_gen = rgt->rgt_rebuild_gen;
-	rsi->rsi_phase         = phase;
-	rsi->rsi_rebuild_fence = rebuild_fence;
+	rsi->rsi_phase       = phase;
 	if (rebuild_op == RB_OP_RECLAIM || rebuild_op == RB_OP_FAIL_RECLAIM)
 		D_ASSERT(rgt->rgt_reclaim_epoch != 0);
 
@@ -1763,16 +1762,14 @@ static int
 rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
-	uint64_t	leader_term;
-	uint64_t        rebuild_fence;
-	uint32_t	version;
-	uint32_t	generation;
-	int		rc;
+	uint64_t leader_term;
+	uint32_t version;
+	uint32_t generation;
+	int      rc;
 
 	rc = ds_pool_svc_term_get(pool->sp_uuid, &leader_term);
 	if (rc) {
-		D_ERROR("Get pool service term failed: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("Get pool service term failed: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1783,9 +1780,8 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	if (version < task->dst_map_ver)
 		generation = ++pool->sp_rebuild_gen;
 
-	rc = rebuild_prepare(pool, task->dst_map_ver, generation,
-			     leader_term, task->dst_reclaim_eph, &task->dst_tgts,
-			     task->dst_rebuild_op, p_rgt);
+	rc = rebuild_prepare(pool, task->dst_map_ver, generation, leader_term,
+			     task->dst_reclaim_eph, &task->dst_tgts, task->dst_rebuild_op, p_rgt);
 	if (rc <= 0)
 		return rc;
 
@@ -1796,22 +1792,21 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	(*p_rgt)->rgt_num_op_freclaim_fail = task->dst_num_op_freclaim_fail;
 	D_INFO(DF_RB "\n", DP_RB_RGT(*p_rgt));
 
-	/* phase-1: globally gate new EC agg rounds and drain current ones */
+	/* phase-1: globally gate new EC agg rounds and drain current ones.
+	 * Each target generates a local HLC token for the gate.
+	 */
 	D_INFO(DF_RB ": start global EC agg pause prepare\n", DP_RB_RGT(*p_rgt));
 	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
-				    task->dst_rebuild_op, RB_SCAN_PREPARE, 0);
+				    task->dst_rebuild_op, RB_SCAN_PREPARE);
 	if (rc)
 		goto cancel_pause;
 
-	/* Assign rebuild fence only after global EC aggregation pause succeeds. */
-	rebuild_fence = d_hlc_get();
-	D_INFO(DF_RB ": global EC agg pause completed, assign rebuild fence " DF_U64 "\n",
-	       DP_RB_RGT(*p_rgt), rebuild_fence);
+	D_INFO(DF_RB ": global EC agg pause completed\n", DP_RB_RGT(*p_rgt));
 
 	/* phase-2: broadcast scan RPC to all targets */
-	D_INFO(DF_RB ": start rebuild with fence " DF_U64 "\n", DP_RB_RGT(*p_rgt), rebuild_fence);
+	D_INFO(DF_RB ": start rebuild scan\n", DP_RB_RGT(*p_rgt));
 	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
-				    task->dst_rebuild_op, RB_SCAN_START, rebuild_fence);
+				    task->dst_rebuild_op, RB_SCAN_START);
 	if (rc) {
 		DL_ERROR(rc, DF_RB ": object scan failed", DP_RB_RGT(*p_rgt));
 		goto cancel_pause;
@@ -1823,7 +1818,7 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 cancel_pause:
 	D_INFO(DF_RB ": cancel global EC agg pause\n", DP_RB_RGT(*p_rgt));
 	rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
-			       task->dst_rebuild_op, RB_SCAN_CANCEL, 0);
+			       task->dst_rebuild_op, RB_SCAN_CANCEL);
 	return rc;
 }
 
@@ -2887,21 +2882,19 @@ rebuild_fini_one(void *arg)
 	if (dpc == NULL)
 		return 0;
 
-	/* Reset rebuild epoch, then reset the aggregation epoch, so
-	 * it can aggregate the rebuild epoch.
+	/* Reset EC agg pause gate if this rebuild still owns it, then
+	 * set the aggregation end HLC so aggregation can restart.
 	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
-		dpc->spc_rebuild_fence = 0;
+	if (rpt->rt_ec_pause_token == dpc->spc_ec_agg_pause_gate) {
 		dpc->spc_ec_agg_pause_gate = 0;
-		dpc->spc_rebuild_end_hlc = d_hlc_get();
+		dpc->spc_rebuild_end_hlc   = d_hlc_get();
 		D_DEBUG(DB_REBUILD, DF_RB ": Reset aggregation end hlc " DF_U64 "\n",
 			DP_RB_RPT(rpt), dpc->spc_rebuild_end_hlc);
 	} else {
 		D_DEBUG(DB_REBUILD,
-			DF_RB ": pool is still being rebuilt rt_rebuild_fence " DF_U64
-			      " spc_rebuild_fence " DF_U64 "\n",
-			DP_RB_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
+			DF_RB ": pool is still being rebuilt rt_ec_pause_token " DF_U64
+			      " spc_ec_agg_pause_gate " DF_U64 "\n",
+			DP_RB_RPT(rpt), rpt->rt_ec_pause_token, dpc->spc_ec_agg_pause_gate);
 	}
 
 	ds_pool_child_put(dpc);
@@ -3143,14 +3136,12 @@ rebuild_prepare_one(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	/* Set the rebuild epoch per VOS container, so VOS aggregation will not
-	 * cross the epoch to cause problem.
+	/* Read the HLC token that PREPARE wrote into the gate so that
+	 * rebuild_fini_one() can tell whether this rebuild still owns it.
 	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	dpc->spc_ec_agg_pause_gate = 0;
-	dpc->spc_rebuild_fence = rpt->rt_rebuild_fence;
-	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " rebuild eph " DF_X64 "\n",
-		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
+	rpt->rt_ec_pause_token = dpc->spc_ec_agg_pause_gate;
+	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " ec_pause_token " DF_U64 "\n",
+		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_ec_pause_token);
 
 put:
 	ds_pool_child_put(dpc);
@@ -3171,11 +3162,9 @@ rebuild_prepare_pause_one(void *data)
 	}
 
 	if (!dpc->spc_no_storage) {
-		if (dpc->spc_ec_agg_pause_gate == 0) {
-			dpc->spc_ec_agg_pause_gate = d_hlc_get();
-			D_INFO(DF_RB ": set local EC agg pause gate " DF_U64 "\n", DP_RB_RPT(rpt),
-			       dpc->spc_ec_agg_pause_gate);
-		}
+		dpc->spc_ec_agg_pause_gate = d_hlc_get();
+		D_INFO(DF_RB ": set local EC agg pause gate token " DF_U64 "\n", DP_RB_RPT(rpt),
+		       dpc->spc_ec_agg_pause_gate);
 		ds_cont_child_wait_ec_agg_pause(dpc, rebuild_wait_ec_pause);
 		D_INFO(DF_RB ": local EC agg pause drained\n", DP_RB_RPT(rpt));
 	}
@@ -3194,9 +3183,10 @@ rebuild_cancel_pause_one(void *data)
 	if (dpc == NULL)
 		return 0;
 
-	if (dpc->spc_rebuild_fence == 0)
+	if (dpc->spc_ec_agg_pause_gate != 0) {
 		dpc->spc_ec_agg_pause_gate = 0;
-	D_INFO(DF_RB ": clear local EC agg pause gate\n", DP_RB_RPT(rpt));
+		D_INFO(DF_RB ": cancel local EC agg pause gate\n", DP_RB_RPT(rpt));
+	}
 
 	ds_pool_child_put(dpc);
 	return 0;
@@ -3336,12 +3326,10 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rpt->rt_rebuild_fence = d_hlc_get();
-	rc                    = ds_pool_task_collective(rpt->rt_pool_uuid,
-							PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-							rebuild_prepare_one, rpt, 0);
+	rc = ds_pool_task_collective(rpt->rt_pool_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     rebuild_prepare_one, rpt, 0);
 	if (rc) {
-		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);
 		D_GOTO(out, rc);
 	}

@@ -207,17 +207,11 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
-		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			atomic_load(&pool->sp_rebuilding), pool->sp_rebuild_scan);
-		return false;
-	}
-
-	if (!vos_agg && cont->sc_pool->spc_ec_agg_pause_gate != 0) {
+	if (cont->sc_pool->spc_ec_agg_pause_gate != 0 && !vos_agg) {
 		D_DEBUG(DB_EPC,
-			DF_CONT ": skip EC aggregation during rebuild prepare gate " DF_U64 "\n",
+			DF_CONT ": skip EC aggregation during rebuild %d, %d gate " DF_U64 "\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			atomic_load(&pool->sp_rebuilding), pool->sp_rebuild_scan,
 			cont->sc_pool->spc_ec_agg_pause_gate);
 		return false;
 	}
@@ -388,38 +382,15 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	if (cont->sc_snapshots_nr + 1 < MAX_SNAPSHOT_LOCAL) {
 		snapshots = snapshots_local;
 	} else {
-		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) *
-			sizeof(daos_epoch_t));
+		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) * sizeof(daos_epoch_t));
 		if (snapshots == NULL)
 			return -DER_NOMEM;
 	}
 
-	if (cont->sc_pool->spc_rebuild_fence != 0) {
-		uint64_t rebuild_fence = cont->sc_pool->spc_rebuild_fence;
-		int	j;
-		int	insert_idx;
-
-		/* insert rebuild_fetch into the snapshot list */
-		D_DEBUG(DB_EPC, "rebuild fence "DF_X64"\n", rebuild_fence);
-		for (j = 0, insert_idx = 0; j < cont->sc_snapshots_nr; j++) {
-			if (cont->sc_snapshots[j] < rebuild_fence) {
-				snapshots[j] = cont->sc_snapshots[j];
-				insert_idx++;
-			} else {
-				snapshots[j + 1] = cont->sc_snapshots[j];
-			}
-		}
-		snapshots[insert_idx] = rebuild_fence;
-		snapshots_nr = cont->sc_snapshots_nr + 1;
-	} else {
-		/* Since sc_snapshots might be freed by other ULT, let's
-		 * always copy here.
-		 */
-		snapshots_nr = cont->sc_snapshots_nr;
-		if (snapshots_nr > 0)
-			memcpy(snapshots, cont->sc_snapshots,
-					snapshots_nr * sizeof(daos_epoch_t));
-	}
+	/* Since sc_snapshots might be freed by other ULT, let's always copy here. */
+	snapshots_nr = cont->sc_snapshots_nr;
+	if (snapshots_nr > 0)
+		memcpy(snapshots, cont->sc_snapshots, snapshots_nr * sizeof(daos_epoch_t));
 
 	/* Find highest snapshot less than last aggregated epoch. */
 	for (i = 0; i < snapshots_nr && snapshots[i] < epoch_min; ++i)

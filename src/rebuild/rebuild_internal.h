@@ -77,13 +77,14 @@ struct rebuild_tgt_pool_tracker {
 	uint64_t		rt_stable_epoch;
 
 	/* Only used by reclaim job to discard those half-rebuild data */
-	uint64_t		rt_reclaim_epoch;
-	/* local rebuild epoch mainly to constrain the VOS aggregation
-	 * to make sure aggregation will not cross the epoch
+	uint64_t                 rt_reclaim_epoch;
+	/* HLC token read from spc_ec_agg_pause_gate during START phase.
+	 * Used in rebuild_fini_one() to check whether this rebuild still
+	 * owns the EC agg pause gate.
 	 */
-	uint64_t		rt_rebuild_fence;
+	uint64_t                 rt_ec_pause_token;
 
-	uint32_t		rt_leader_rank;
+	uint32_t                 rt_leader_rank;
 
 	/* Global dtx resync version */
 	uint32_t		rt_global_dtx_resync_version;
