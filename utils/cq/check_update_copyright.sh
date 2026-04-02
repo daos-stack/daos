@@ -158,7 +158,7 @@ for file in $files; do
                 sed -i '' -re 's/^([[:blank:]]*)\/\*[[:blank:]]*(.*Copyright.*Intel Corporation.*)[[:blank:]]*\*\//\1\/\*\n\1 \* \2\n\1 \*\//' "$file"
             fi
         fi
-        # 2. Fix Intel copyright format (comma vs dot, remove (C), ensure dot at end)
+        # 2. Fix Intel copyright format (comma vs dot, ensure dot at end)
         if grep -qE '^[[:blank:]]*[\*/#]*[[:blank:]]*Copyright [0-9]{4}(-[0-9]{4})?,[[:blank:]]*Intel Corporation' "$file"; then
             if [[ "$os" == 'Linux' ]]; then
                 sed -i -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \2 Intel Corporation./' "$file"
