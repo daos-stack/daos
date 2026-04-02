@@ -475,7 +475,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         self.log_step("Create a pool.")
         pool = self.get_pool()
 
-        self.log_step("Inject fault. For example, dangling pool.")
+        self.log_step("Inject dangling pool.")
         dmg_command.faults_pool_svc(
             pool=pool.identifier, checker_report_class="CIC_POOL_NONEXIST_ON_ENGINE")
 
