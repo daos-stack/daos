@@ -1163,7 +1163,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		uint64_t stable_epoch = 0;
 
 		D_INFO(DF_RB ": handle global EC agg pause prepare\n", DP_RB_RSI(rsi));
-		rc                     = rebuild_tgt_prepare_pause(rpc, &stable_epoch);
+		rc                     = rebuild_tgt_stop_agg(rpc, &stable_epoch);
 		rout                   = crt_reply_get(rpc);
 		rout->rso_status       = rc;
 		rout->rso_stable_epoch = stable_epoch;
@@ -1176,7 +1176,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	if (rsi->rsi_phase == RB_SCAN_CANCEL) {
 		D_INFO(DF_RB ": handle global EC agg pause cancel\n", DP_RB_RSI(rsi));
-		rc                     = rebuild_tgt_cancel_pause(rpc);
+		rc                     = rebuild_tgt_resume_agg(rpc);
 		rout                   = crt_reply_get(rpc);
 		rout->rso_status       = rc;
 		rout->rso_stable_epoch = 0;

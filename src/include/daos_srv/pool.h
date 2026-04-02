@@ -185,10 +185,6 @@ struct ds_pool_child {
 	 */
 	uint64_t                 spc_ec_agg_pause_gate;
 
-	/* The HLC when current rebuild ends, which will be used to compare
-	 * with the aggregation full scan start HLC to know whether the
-	 * aggregation needs to be restarted from 0. */
-	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
@@ -221,6 +217,13 @@ static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
 	return (atomic_load(&pool->sp_rebuilding) > 0 || pool->sp_rebuild_scan > 0);
+}
+
+/* Returns true if EC aggregation is gated by a rebuild PREPARE phase. */
+static inline bool
+ds_pool_child_ec_agg_paused(struct ds_pool_child *dpc)
+{
+	return dpc->spc_ec_agg_pause_gate != 0;
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.

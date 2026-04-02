@@ -2887,9 +2887,7 @@ rebuild_fini_one(void *arg)
 	 */
 	if (rpt->rt_ec_pause_token == dpc->spc_ec_agg_pause_gate) {
 		dpc->spc_ec_agg_pause_gate = 0;
-		dpc->spc_rebuild_end_hlc   = d_hlc_get();
-		D_DEBUG(DB_REBUILD, DF_RB ": Reset aggregation end hlc " DF_U64 "\n",
-			DP_RB_RPT(rpt), dpc->spc_rebuild_end_hlc);
+		D_DEBUG(DB_REBUILD, DF_RB ": Reset aggregation\n", DP_RB_RPT(rpt));
 	} else {
 		D_DEBUG(DB_REBUILD,
 			DF_RB ": pool is still being rebuilt rt_ec_pause_token " DF_U64
@@ -3356,7 +3354,7 @@ out:
 }
 
 int
-rebuild_tgt_prepare_pause(crt_rpc_t *rpc, uint64_t *stable_epoch)
+rebuild_tgt_stop_agg(crt_rpc_t *rpc, uint64_t *stable_epoch)
 {
 	struct rebuild_scan_in          *rsi = crt_req_get(rpc);
 	struct ds_pool                  *pool;
@@ -3389,7 +3387,7 @@ out_pool:
 }
 
 int
-rebuild_tgt_cancel_pause(crt_rpc_t *rpc)
+rebuild_tgt_resume_agg(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in          *rsi = crt_req_get(rpc);
 	struct ds_pool                  *pool;

@@ -1326,15 +1326,13 @@ agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	int                    i;
 	int                    rc;
 
-	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
-		/* We currently pause EC aggregation for rebuild, so just cancel the
-		 * aggregation for the current stripe. It means the following peer status
-		 * check may not be checked at all, but let's keep the code because it could
-		 * be useful in the future.
-		 */
-		D_ERROR(DF_UOID " pauses EC aggregation for rebuild\n", DP_UOID(entry->ae_oid));
+	/* Abort early if rebuild PREPARE has gated EC agg on this target. */
+	if (ds_pool_child_ec_agg_paused(agg_param->ap_cont->sc_pool)) {
+		D_DEBUG(DB_EPC, DF_UOID ": abort peer check, EC agg gated for rebuild\n",
+			DP_UOID(entry->ae_oid));
 		return -DER_OP_CANCELED;
 	}
+	D_ASSERT(!ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool));
 
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map, &targets,
 				       &failed_tgts_cnt);
@@ -1915,12 +1913,15 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 
 	/* avoid race between EC aggregation and rebuild scanner */
 	agg_param->ap_cont->sc_ec_agg_updates++;
-	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
-		D_DEBUG(DB_EPC, DF_UOID " abort as rebuild started\n", DP_UOID(entry->ae_oid));
+	/* Abort early if rebuild PREPARE has gated EC agg on this target. */
+	if (ds_pool_child_ec_agg_paused(agg_param->ap_cont->sc_pool)) {
+		D_DEBUG(DB_EPC, DF_UOID ": abort stripe update, EC agg gated for rebuild\n",
+			DP_UOID(entry->ae_oid));
 		update_vos = false;
 		rc         = -1;
 		goto out;
 	}
+	D_ASSERT(!ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool));
 
 	if (DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL))
 		D_GOTO(out, rc = -DER_DATA_LOSS);
@@ -2340,12 +2341,16 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
 	int	rc;
 
-	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
-		D_INFO(DF_UUID ": abort ec aggregation, sp_rebuilding %d\n",
+	/* Gate is set during rebuild PREPARE phase to drain in-flight EC agg rounds.
+	 * By the time rebuild starts (sp_rebuilding > 0), all EC agg must be drained.
+	 */
+	if (ds_pool_child_ec_agg_paused(agg_param->ap_cont->sc_pool)) {
+		D_INFO(DF_UUID ": abort ec aggregation, ec_agg_pause_gate " DF_U64 "\n",
 		       DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
-		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
+		       agg_param->ap_cont->sc_pool->spc_ec_agg_pause_gate);
 		return true;
 	}
+	D_ASSERT(!ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool));
 
 	D_ASSERT(agg_param->ap_yield_func != NULL);
 	rc = agg_param->ap_yield_func(agg_param->ap_yield_arg);
@@ -2550,16 +2555,12 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(agg_param->ap_initialized);
 
-	/* If rebuild started, abort it to save conflict window with rebuild
-	 * (see obj_inflight_io_check()).
-	 */
-	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
-		D_INFO(DF_CONT " abort as rebuild started, sp_rebuilding %d\n",
-		       DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
-			       agg_param->ap_pool_info.api_cont_uuid),
-		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
+	/* Abort early per VOS iteration entry if rebuild PREPARE has gated EC agg. */
+	if (ds_pool_child_ec_agg_paused(agg_param->ap_cont->sc_pool)) {
+		D_DEBUG(DB_EPC, ": abort iteration, EC agg gated for rebuild\n");
 		return -1;
 	}
+	D_ASSERT(!ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool));
 
 	switch (type) {
 	case VOS_ITER_OBJ:
@@ -2839,10 +2840,11 @@ retry:
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
-	if (rc == -DER_BUSY && !ds_pool_is_rebuilding(cont->sc_pool->spc_pool)) {
+	if (rc == -DER_BUSY) {
 		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
 		 * yield and try again.
 		 */
+		D_ASSERT(!ds_pool_is_rebuilding(cont->sc_pool->spc_pool));
 		opm = cont->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
 		d_tm_inc_counter(opm->opm_ec_agg_blocked, 1);
 		blocks++;
@@ -2855,11 +2857,8 @@ retry:
 	}
 
 update_hae:
-	/* clear the flag before next turn's cont_aggregate_runnable(), to save conflict
-	 * window with rebuild (see obj_inflight_io_check()).
-	 */
-	if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool))
-		cont->sc_ec_agg_active = 0;
+	/* EC agg is globally drained before rebuild starts; they must not run concurrently. */
+	D_ASSERT(!ds_pool_is_rebuilding(cont->sc_pool->spc_pool));
 
 	if (rc == 0) {
 		/* If pool map updated during this round of aggregation, the sc_ec_agg_eph

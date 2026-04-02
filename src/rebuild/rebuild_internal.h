@@ -381,10 +381,10 @@ int
 rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
 
 int
-rebuild_tgt_prepare_pause(crt_rpc_t *rpc, uint64_t *stable_epoch);
+rebuild_tgt_stop_agg(crt_rpc_t *rpc, uint64_t *stable_epoch);
 
 int
-rebuild_tgt_cancel_pause(crt_rpc_t *rpc);
+rebuild_tgt_resume_agg(crt_rpc_t *rpc);
 
 bool
 rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,

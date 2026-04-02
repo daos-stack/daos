@@ -63,10 +63,11 @@ agg_rate_ctl(void *arg)
 		return -1;
 
 	/*
-	 * XXX temporary workaround: EC aggregation needs to be paused during rebuilding
-	 * to avoid the race between EC rebuild and EC aggregation.
-	 **/
-	if (ds_pool_is_rebuilding(pool) && cont->sc_ec_agg_active && !param->ap_vos_agg)
+	 * Abort EC aggregation if the pool is rebuilding or if a rebuild
+	 * PREPARE phase has gated new EC agg rounds on this target.
+	 */
+	if (!param->ap_vos_agg && cont->sc_ec_agg_active &&
+	    (ds_pool_is_rebuilding(pool) || ds_pool_child_ec_agg_paused(cont->sc_pool)))
 		return -1;
 
 	/* When system is idle or under space pressure, let aggregation run in tight mode */
@@ -379,10 +380,10 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
 		hlc, epoch_max, epoch_min, cont->sc_aggregation_max);
 
-	if (cont->sc_snapshots_nr + 1 < MAX_SNAPSHOT_LOCAL) {
+	if (cont->sc_snapshots_nr < MAX_SNAPSHOT_LOCAL) {
 		snapshots = snapshots_local;
 	} else {
-		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) * sizeof(daos_epoch_t));
+		D_ALLOC(snapshots, cont->sc_snapshots_nr * sizeof(daos_epoch_t));
 		if (snapshots == NULL)
 			return -DER_NOMEM;
 	}
@@ -973,8 +974,6 @@ ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeo
 	int      wait_intv  = 1;
 	int      waited     = 0;
 
-	D_DEBUG(DB_MD, DF_UUID "[%d]: wait for pausing EC aggregation\n",
-		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
 	D_INFO(DF_UUID "[%d]: wait for local EC aggregation to pause\n",
 	       DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
 
