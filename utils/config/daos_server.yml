@@ -307,7 +307,7 @@
 ## by default. Set this option to true to disable automatic restarts entirely.
 #
 ## default: false
-#disable_auto_engine_restart: false
+#disable_engine_auto_restart: true
 #
 #
 ## Minimum delay (in seconds) between automatic restarts of the same rank.
@@ -319,7 +319,7 @@
 ## rate-limited and skipped.
 #
 ## default: 300 (5 minutes)
-#engine_restart_min_delay_sec: 300
+#engine_auto_restart_min_delay: 120
 #
 #
 ## If desired, a set of client-side environment variables may be

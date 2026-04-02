@@ -47,6 +47,10 @@ const (
 
 	// maxLineChars is the maximum number of chars per line in a formatted byte string.
 	maxLineChars = 32
+
+	// defaultEngineAutoRestartMinDelay is the minimum number of seconds between automatic engine
+	// restarts that are triggered when engine_self_terminated RAS events are received.
+	defaultEngineAutoRestartMinDelay = 300 // 5 minutes
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -776,7 +780,7 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 	srv.log.Infof("handling engine self termination")
 
 	// Check if automatic restart is disabled
-	if srv.cfg.DisableAutoEngineRestart {
+	if srv.cfg.DisableEngineAutoRestart {
 		srv.log.Infof("automatic engine restart disabled by configuration")
 		return nil
 	}
@@ -804,9 +808,9 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 		evt.Rank, evt.Incarnation, engine.Index())
 
 	// Check if rank can be restarted based on rate limiting
-	minDelay := 300 // default 5 minutes
-	if srv.cfg.EngineRestartMinDelaySeconds > 0 {
-		minDelay = srv.cfg.EngineRestartMinDelaySeconds
+	minDelay := defaultEngineAutoRestartMinDelay
+	if srv.cfg.EngineAutoRestartMinDelay > 0 {
+		minDelay = srv.cfg.EngineAutoRestartMinDelay
 	}
 	minDelayDuration := time.Duration(minDelay) * time.Second
 

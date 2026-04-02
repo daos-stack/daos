@@ -89,8 +89,7 @@ and updating objects.
 
 A DAOS engine may be excluded from the group map because of inactivity
 for example. When an engine becomes aware of it's removal from the
-group map it will self-terminate to protect
-data integrity and system stability.
+group map it will self-terminate to protect data integrity and system stability.
 
 When an engine self terminates, it raises a `engine_self_terminated` RAS event
 (INFO_ONLY, NOTICE severity) containing the rank and incarnation information.
@@ -101,19 +100,19 @@ The control plane automatically handles this event by:
 3. Waiting for the engine process to fully stop
 4. Automatically restarting the engine to rejoin the system
 
-This automatic restart mechanism is implemented in both follower and leader
-control servers to ensure local engine recovery happens regardless of
-management service leadership state. The restarted engine will rejoin the
-system with a new incarnation number and resume normal operations.
+This automatic restart mechanism is implemented in all control servers to ensure
+local engine recovery happens regardless of management service leadership state.
+The restarted engine will rejoin the system with a new incarnation number and
+resume normal operations.
 
-This self-healing mechanism allows DAOS to automatically recover from
-transient engine failures without administrator intervention, improving
-overall system availability.
+This self-healing mechanism allows DAOS to automatically recover system
+membership state from transient engine failures without administrator
+intervention, improving overall system availability.
 
 #### Disabling Automatic Restart
 
 The automatic restart behavior can be disabled by setting the
-`disable_auto_engine_restart` configuration option to `true` in the
-daos_server.yml file. When disabled, engines that self-terminate will
-not be automatically restarted by the control plane, requiring manual
+`disable_engine_auto_restart` configuration option to `true` in the
+daos_server.yml file. When auto restart is disabled, engines that self-terminate
+will not be automatically restarted by the control plane, requiring manual
 intervention to restart the affected engine instances.

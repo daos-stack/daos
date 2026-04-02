@@ -606,7 +606,7 @@ mgmt_svc_replicas:
 - hostX:10002
 fault_cb: ""
 hyperthreads: false
-disable_auto_engine_restart: false
+disable_engine_auto_restart: false
 `
 	)
 
