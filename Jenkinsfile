@@ -17,6 +17,9 @@
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
 
+// Name of branch to be tested
+test_branch = 'release/2.8'
+
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
@@ -30,9 +33,6 @@ void job_step_update(def value=currentBuild.currentResult) {
     // job_status_update(env.STAGE_NAME, value)
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
-
-// For master, this is just some wildly high number
-next_version = '1000'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -72,7 +72,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'TZ=UTC\n0 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'weekly-2.8-testing' ? 'TZ=UTC\n0 12 * * 6' : '')
     }
 
     environment {
@@ -114,7 +114,7 @@ pipeline {
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
         string(name: 'BaseBranch',
-               defaultValue: 'master',
+               defaultValue: test_branch,
                description: 'The base branch to run daily-testing against (i.e. master, or a PR\'s branch)')
         // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
@@ -274,7 +274,7 @@ pipeline {
                             distro: 'el8',
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL8'),
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -289,7 +289,7 @@ pipeline {
                             distro: 'el9',
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL9'),
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -305,7 +305,7 @@ pipeline {
                             image_version: 'leap15.6',
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -320,7 +320,7 @@ pipeline {
                             distro: 'ubuntu20',
                             base_branch: params.BaseBranch,
                             label: vm9_label('Ubuntu'),
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -334,7 +334,7 @@ pipeline {
                             pragma_suffix: '-hw-medium',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -348,7 +348,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -362,7 +362,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -376,7 +376,7 @@ pipeline {
                             pragma_suffix: '-hw-large',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,large',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -390,7 +390,7 @@ pipeline {
                             pragma_suffix: '-hw-large-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
-                            next_version: next_version,
+                            next_version: params.BaseBranch,
                             stage_tags: 'hw,large',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
