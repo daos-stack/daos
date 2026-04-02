@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  Copyright 2025-2026 Google LLC
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -159,19 +159,11 @@ for file in $files; do
             fi
         fi
         # 2. Fix Intel copyright format (comma vs dot, remove (C), ensure dot at end)
-        if grep -qE '^[[:blank:]]*[\*/#]*[[:blank:]]*(\(C\)[[:blank:]]*)?Copyright [0-9]{4}(-[0-9]{4})?,[[:blank:]]*Intel Corporation' "$file"; then
+        if grep -qE '^[[:blank:]]*[\*/#]*[[:blank:]]*Copyright [0-9]{4}(-[0-9]{4})?,[[:blank:]]*Intel Corporation' "$file"; then
             if [[ "$os" == 'Linux' ]]; then
-                sed -i -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)(\(C\)[[:blank:]]*)?Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \3 Intel Corporation./' "$file"
+                sed -i -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \2 Intel Corporation./' "$file"
             else
-                sed -i '' -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)(\(C\)[[:blank:]]*)?Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \3 Intel Corporation./' "$file"
-            fi
-        fi
-        # 3. Just remove (C) from any copyright if present
-        if grep -qE '^[[:blank:]]*[\*/#]*[[:blank:]]*\(C\)[[:blank:]]*Copyright' "$file"; then
-            if [[ "$os" == 'Linux' ]]; then
-                sed -i -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)\(C\)[[:blank:]]*(Copyright)/\1\2/' "$file"
-            else
-                sed -i '' -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)\(C\)[[:blank:]]*(Copyright)/\1\2/' "$file"
+                sed -i '' -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \2 Intel Corporation./' "$file"
             fi
         fi
     fi
