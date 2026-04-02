@@ -23,9 +23,8 @@ struct pl_map_ops;
  */
 struct pl_map_ops {
 	/** create a placement map */
-	int (*o_create)(struct pool_map *poolmap,
-			struct pl_map_init_attr *mia,
-			struct pl_map **mapp);
+	int (*o_create)(struct pool_map *poolmap, struct pl_map_init_attr *mia,
+			struct pl_map **map_ptr);
 	/** destroy a placement map */
 	void (*o_destroy)(struct pl_map *map);
 	/** query placement map attributes */

@@ -633,8 +633,7 @@ ring_map_hash_build(struct pl_ring_map *rimap)
  * Create a ring placement map
  */
 static int
-ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
-		struct pl_map **mapp)
+ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia, struct pl_map **map_ptr)
 {
 	struct pl_ring_map *rimap;
 	int		    rc;
@@ -659,7 +658,7 @@ ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	if (rc != 0)
 		goto err_out;
 
-	*mapp = &rimap->rmp_map;
+	*map_ptr = &rimap->rmp_map;
 	return 0;
 err_out:
 	ring_map_destroy(&rimap->rmp_map);
