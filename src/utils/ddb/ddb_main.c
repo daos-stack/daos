@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
- * (C) Copyright 2025 Vdura Inc.
+ * Copyright 2022-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -215,6 +215,9 @@ out:
 	return rc;
 }
 
+bool
+vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
+
 int
 ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 {
@@ -224,6 +227,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	int			 rc;
 	struct ddb_ctx		 ctx = {0};
 	bool                     open = true;
+	struct vos_file_parts    path_parts = {0};
 
 	D_ASSERT(io_ft);
 	ctx.dc_io_ft = *io_ft;
@@ -252,8 +256,14 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	if (!SUCCESS(rc))
 		D_GOTO(done, rc);
 	if (open) {
-		rc =
-		    dv_pool_open(pa.pa_pool_path, pa.pa_db_path, &ctx.dc_poh, 0, ctx.dc_write_mode);
+		rc = parse_vos_file_parts(pa.pa_pool_path, pa.pa_db_path, &path_parts);
+		if (!SUCCESS(rc))
+			D_GOTO(done, rc);
+		if (!vmd_wa_can_proceed(&ctx, path_parts.vf_db_path)) {
+			rc = -DER_NO_SERVICE;
+			D_GOTO(done, rc);
+		}
+		rc = dv_pool_open(pa.pa_pool_path, &path_parts, &ctx.dc_poh, 0, ctx.dc_write_mode);
 		if (!SUCCESS(rc))
 			D_GOTO(done, rc);
 	}
