@@ -109,10 +109,38 @@ This self-healing mechanism allows DAOS to automatically recover system
 membership state from transient engine failures without administrator
 intervention, improving overall system availability.
 
+#### Rate Limiting
+
+To prevent restart storms and ensure system stability, automatic engine restarts
+are rate-limited on a per-rank basis. By default, a minimum delay of 300 seconds
+(5 minutes) is enforced between consecutive restart attempts for the same rank.
+If an engine self-terminates again before this delay expires, the restart request
+is rejected and logged at NOTICE level.
+
+The rate-limiting interval can be customized by setting the
+`engine_auto_restart_min_delay` configuration option (in seconds) in the
+daos_server.yml file. For example:
+
+```yaml
+engine_auto_restart_min_delay: 600  # 10 minutes between restarts
+```
+
+This protection mechanism prevents scenarios where:
+- Repeated transient failures cause excessive restart cycling
+- A misconfigured engine continuously self-terminates
+- Cascading failures overwhelm the control plane with restart requests
+
 #### Disabling Automatic Restart
 
-The automatic restart behavior can be disabled by setting the
+The automatic restart behavior can be completely disabled by setting the
 `disable_engine_auto_restart` configuration option to `true` in the
-daos_server.yml file. When auto restart is disabled, engines that self-terminate
-will not be automatically restarted by the control plane, requiring manual
-intervention to restart the affected engine instances.
+daos_server.yml file:
+
+```yaml
+disable_engine_auto_restart: true
+```
+
+When auto restart is disabled, engines that self-terminate will not be
+automatically restarted by the control plane, requiring manual intervention
+to restart the affected engine instances. This setting may be useful for
+debugging scenarios or when custom external restart management is preferred.
