@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -4149,7 +4149,7 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 
 		obj_args = dc_task_get_args(obj_auxi->obj_task);
 		sub_anchors_free(obj_args, obj_auxi->opc);
-	} else if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE) {
+	} else if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE && D_LOG_ENABLED(DB_REBUILD)) {
 		for (int i = 0; i < sub_anchors->sa_anchors_nr; i++) {
 			daos_anchor_t *sub_anchor;
 
