@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2019-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,6 +43,7 @@ dfs_test_mount(void **state)
 	daos_handle_t		poh_tmp, coh_tmp;
 	dfs_t			*dfs;
 	int			rc;
+	dfs_attr_t               attr = {0};
 
 	if (arg->myrank != 0)
 		return;
@@ -84,6 +85,11 @@ dfs_test_mount(void **state)
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
+	/** check if dir/file oclass is not 0 */
+	rc = dfs_query(dfs, &attr);
+	assert_rc_equal(rc, 0);
+	assert_int_not_equal(attr.da_dir_oclass_id, 0);
+	assert_int_not_equal(attr.da_file_oclass_id, 0);
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);

@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2018-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -937,29 +937,30 @@ dfs_cont_put(dfs_t *dfs, daos_handle_t coh)
 int
 dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 {
-	int rc = 0;
-	dfs_obj_info_t info;
+	int rc;
 
 	if (dfs == NULL || !dfs->mounted || attr == NULL)
 		return EINVAL;
 
+	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+
 	if (!dfs->attr.da_dir_oclass_id) {
 		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0, 0,
-								 &info.doi_dir_oclass_id);
-		dfs->attr.da_dir_oclass_id = info.doi_dir_oclass_id;
+					 &attr->da_dir_oclass_id);
+		if (rc) {
+			D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
 	}
 
 	if (!dfs->attr.da_file_oclass_id) {
 		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, 0, 0,
-								 &info.doi_file_oclass_id);
-		dfs->attr.da_file_oclass_id = info.doi_file_oclass_id;
+					 &attr->da_file_oclass_id);
+		if (rc) {
+			D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
 	}
-	if (rc) {
-		D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
-		return daos_der2errno(rc);
-	}
-
-	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
 
 	return 0;
 }

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Node local test (NLT).
 
-(C) Copyright 2020-2024 Intel Corporation.
-(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
-(C) Copyright 2025 Google LLC
-(C) Copyright 2025 Enakta Labs Ltd
+Copyright 2020-2024 Intel Corporation.
+Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+Copyright 2025 Google LLC
+Copyright 2025 Enakta Labs Ltd
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -2218,6 +2218,20 @@ class PosixTests():
 
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_oclass(self):
+        """Test container object class with default options"""
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test')
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.json['response']['dir_object_class']
+        assert rc.json['response']['file_object_class']
+        assert rc.json['response']['dir_object_class'] != "UNKNOWN"
+        assert rc.json['response']['file_object_class'] != "UNKNOWN"
+        container.destroy()
+
         """Test container object class options"""
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
