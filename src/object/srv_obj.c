@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2453,7 +2453,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	struct ds_pool *pool = child->sc_pool->spc_pool;
 
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
-		/* EC aggregation is still inflight, rebuild should wait until it's paused */
+		/* EC aggregation is still in-flight, rebuild should wait until it's paused */
 		if (ds_cont_child_ec_aggregating(child)) {
 			D_ERROR(DF_CONT " ec aggregate still active, rebuilding %d\n",
 				DP_CONT(pool->sp_uuid, child->sc_uuid),
@@ -3379,8 +3379,10 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
 		param.ip_flags |= VOS_IT_RECX_VISIBLE;
-		dump_enum_anchor(oei->oei_oid, &anchors->ia_dkey, "dkey");
-		dump_enum_anchor(oei->oei_oid, &anchors->ia_akey, "akey");
+		if (D_LOG_ENABLED(DB_REBUILD)) {
+			dump_enum_anchor(oei->oei_oid, &anchors->ia_dkey, "dkey");
+			dump_enum_anchor(oei->oei_oid, &anchors->ia_akey, "akey");
+		}
 		if (daos_anchor_get_flags(&anchors->ia_dkey) &
 		      DIOF_WITH_SPEC_EPOCH) {
 			/* For obj verification case. */
@@ -4870,6 +4872,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		if (dcsr->dcsr_opc != DCSO_UPDATE)
 			continue;
 
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
+
 		dcu = &dcsr->dcsr_update;
 		rc = vos_dedup_verify(iohs[i]);
 		if (rc != 0) {
@@ -4928,6 +4932,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 	/* P5: punch and vos_update_end. */
 	for (i = 0; i < dcde->dcde_write_cnt; i++) {
 		dcsr = &dcsrs[dcri[i].dcri_req_idx];
+
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
 
 		if (dcsr->dcsr_opc == DCSO_UPDATE) {
 			rc = dtx_sub_init(dth, &dcsr->dcsr_oid,

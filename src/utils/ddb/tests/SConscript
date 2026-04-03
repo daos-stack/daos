@@ -52,7 +52,10 @@ def scons():
     # This function is validated by its respective unit tests.
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_dtx_discard_invalid'])
 
-    libs = ['uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj']
+    libs = [
+        'uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj',
+        'json-c',
+    ]
     src = ['ddb_ut.c', 'ddb_vos_ut.c']
     # vos and mock object files to wrap vos symbols
     vos_obj = tenv.Object(Glob('../../../vos/*.c'))
