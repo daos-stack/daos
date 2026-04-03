@@ -2174,7 +2174,8 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				cfg: &config.Server{
 					DisableEngineAutoRestart: tc.disableEngineAutoRestart,
 				},
-				rankRestartTimes: make(map[uint32]time.Time),
+				rankRestartTimes:   make(map[uint32]time.Time),
+				rankRestartPending: make(map[uint32]*time.Timer),
 			}
 
 			var wg sync.WaitGroup
@@ -2248,7 +2249,8 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 			DisableEngineAutoRestart:  false,
 			EngineAutoRestartMinDelay: 2, // 2 seconds for testing
 		},
-		rankRestartTimes: make(map[uint32]time.Time),
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
 	}
 
 	// Get reference to the engine instance for monitoring startRequested
@@ -2280,13 +2282,13 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 				return
 			case <-e.startRequested:
 				restartCount.Add(1)
-			case <-time.After(testRestartRequestWait):
+			case <-time.After(5 * time.Second):
 				return
 			}
 		}
 	}()
 
-	// First restart should succeed
+	// First restart should succeed immediately
 	err = handleEngineSelfTerminated(ctx, srv, evt)
 	if err != nil {
 		t.Fatalf("first restart failed: %v", err)
@@ -2298,7 +2300,7 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 		t.Fatalf("expected 1 restart request, got %d", restartCount.Load())
 	}
 
-	// Second restart immediately after should be rate-limited
+	// Second restart immediately after should be deferred (not rejected)
 	evt2 := &events.RASEvent{
 		ID:          events.RASEngineSelfTerminated,
 		Rank:        uint32(testRank),
@@ -2312,22 +2314,44 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 		t.Fatalf("second restart call failed: %v", err)
 	}
 
-	// Verify no restart was requested (rate-limited)
+	// Verify no immediate restart (deferred)
 	time.Sleep(testProcessingDelay)
 	if restartCount.Load() != 1 {
-		t.Fatalf("expected restart to be rate-limited, got %d restarts", restartCount.Load())
+		t.Fatalf("expected restart to be deferred, got %d restarts", restartCount.Load())
 	}
 
-	// Verify rate-limit log message
+	// Verify deferred restart log message
 	logOutput := buf.String()
-	if !strings.Contains(logOutput, "rate-limited") {
-		t.Errorf("expected log to contain 'rate-limited', got: %s", logOutput)
+	if !strings.Contains(logOutput, "restart deferred") {
+		t.Errorf("expected log to contain 'restart deferred', got: %s", logOutput)
 	}
 
-	// Wait for the EngineAutoRestartMinDelay to expire
+	// Verify pending timer exists
+	srv.rankRestartMu.Lock()
+	if _, exists := srv.rankRestartPending[evt.Rank]; !exists {
+		srv.rankRestartMu.Unlock()
+		t.Fatal("expected pending restart timer to exist")
+	}
+	srv.rankRestartMu.Unlock()
+
+	// Wait for the deferred restart to trigger
 	time.Sleep(time.Duration(srv.cfg.EngineAutoRestartMinDelay) * time.Second)
 
-	// Third restart after delay should succeed
+	// Verify deferred restart was executed
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 2 {
+		t.Fatalf("expected 2 total restarts after deferred delay, got %d", restartCount.Load())
+	}
+
+	// Verify pending timer was cleaned up
+	srv.rankRestartMu.Lock()
+	if _, exists := srv.rankRestartPending[evt.Rank]; exists {
+		srv.rankRestartMu.Unlock()
+		t.Fatal("expected pending restart timer to be cleaned up")
+	}
+	srv.rankRestartMu.Unlock()
+
+	// Third event immediately after deferred restart should again be deferred
 	evt3 := &events.RASEvent{
 		ID:          events.RASEngineSelfTerminated,
 		Rank:        uint32(testRank),
@@ -2338,17 +2362,22 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 
 	err = handleEngineSelfTerminated(ctx, srv, evt3)
 	if err != nil {
-		t.Fatalf("third restart failed: %v", err)
+		t.Fatalf("third restart call failed: %v", err)
 	}
 
-	// Verify restart was requested
+	// Should still be 2 restarts (third is deferred)
 	time.Sleep(testProcessingDelay)
 	if restartCount.Load() != 2 {
-		t.Fatalf("expected 2 total restarts after delay, got %d", restartCount.Load())
+		t.Fatalf("expected third restart to be deferred, got %d restarts", restartCount.Load())
 	}
 
 	// Cleanup
-	ctx.Done()
+	srv.rankRestartMu.Lock()
+	for rank, timer := range srv.rankRestartPending {
+		timer.Stop()
+		delete(srv.rankRestartPending, rank)
+	}
+	srv.rankRestartMu.Unlock()
 	<-doneCh
 }
 
@@ -2373,7 +2402,8 @@ func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 		cfg: &config.Server{
 			DisableEngineAutoRestart: false,
 		},
-		rankRestartTimes: make(map[uint32]time.Time),
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
 	}
 
 	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
@@ -2472,7 +2502,8 @@ func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
 				cfg: &config.Server{
 					DisableEngineAutoRestart: false,
 				},
-				rankRestartTimes: make(map[uint32]time.Time),
+				rankRestartTimes:   make(map[uint32]time.Time),
+				rankRestartPending: make(map[uint32]*time.Timer),
 			}
 
 			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
@@ -2510,7 +2541,8 @@ func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 		cfg: &config.Server{
 			DisableEngineAutoRestart: false,
 		},
-		rankRestartTimes: make(map[uint32]time.Time),
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
 	}
 
 	registerSubscriptions(srv)
@@ -2586,7 +2618,8 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 		cfg: &config.Server{
 			DisableEngineAutoRestart: false,
 		},
-		rankRestartTimes: make(map[uint32]time.Time),
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
 	}
 
 	registerLeaderSubscriptions(srv)

@@ -168,8 +168,9 @@ type server struct {
 	onEnginesStarted []func(context.Context) error
 	onShutdown       []func()
 
-	rankRestartMu    sync.Mutex
-	rankRestartTimes map[uint32]time.Time
+	rankRestartMu      sync.Mutex
+	rankRestartTimes   map[uint32]time.Time
+	rankRestartPending map[uint32]*time.Timer
 }
 
 func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -186,13 +187,14 @@ func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.Fault
 	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	return &server{
-		log:              log,
-		cfg:              cfg,
-		hostname:         hostname,
-		runningUser:      cu,
-		faultDomain:      faultDomain,
-		harness:          harness,
-		rankRestartTimes: make(map[uint32]time.Time),
+		log:                log,
+		cfg:                cfg,
+		hostname:           hostname,
+		runningUser:        cu,
+		faultDomain:        faultDomain,
+		harness:            harness,
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
 	}, nil
 }
 

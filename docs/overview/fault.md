@@ -114,8 +114,13 @@ intervention, improving overall system availability.
 To prevent restart storms and ensure system stability, automatic engine restarts
 are rate-limited on a per-rank basis. By default, a minimum delay of 300 seconds
 (5 minutes) is enforced between consecutive restart attempts for the same rank.
-If an engine self-terminates again before this delay expires, the restart request
-is rejected and logged at NOTICE level.
+
+When an engine self-terminates within the minimum delay period, the control plane
+schedules a deferred restart that will automatically trigger when the delay expires.
+If multiple self-termination events occur for the same rank during the delay period
+(this would be unexpected) only the most recent event triggers a deferred restart.
+This ensures the engine is restarted exactly once after the delay, regardless of
+how many self-termination events occur.
 
 The rate-limiting interval can be customized by setting the
 `engine_auto_restart_min_delay` configuration option (in seconds) in the

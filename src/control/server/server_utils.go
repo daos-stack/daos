@@ -822,8 +822,40 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 		elapsed := now.Sub(lastRestart)
 		if elapsed < minDelayDuration {
 			remaining := minDelayDuration - elapsed
+
+			// Cancel any existing pending restart timer for this rank
+			if existingTimer, exists := srv.rankRestartPending[evt.Rank]; exists {
+				existingTimer.Stop()
+			}
+
+			// Schedule deferred restart after remaining delay
+			srv.rankRestartPending[evt.Rank] = time.AfterFunc(remaining, func() {
+				srv.log.Noticef("deferred restart triggered for rank %d (instance %d) after rate-limit delay",
+					evt.Rank, engine.Index())
+
+				// Wait until engine is stopped
+				pollFn := func(e Engine) bool { return !e.IsStarted() }
+				if err := pollInstanceState(ctx, instances, pollFn); err != nil {
+					srv.log.Errorf("rank %d (instance %d) did not stop before deferred restart",
+						evt.Rank, engine.Index())
+					srv.rankRestartMu.Lock()
+					delete(srv.rankRestartPending, evt.Rank)
+					srv.rankRestartMu.Unlock()
+					return
+				}
+
+				srv.log.Noticef("restarting rank %d (instance %d) after rate-limit delay", evt.Rank, engine.Index())
+				engine.requestStart(ctx)
+
+				// Update restart time and clear pending flag
+				srv.rankRestartMu.Lock()
+				srv.rankRestartTimes[evt.Rank] = time.Now()
+				delete(srv.rankRestartPending, evt.Rank)
+				srv.rankRestartMu.Unlock()
+			})
+
 			srv.rankRestartMu.Unlock()
-			srv.log.Noticef("rank %d restart rate-limited: %s remaining until next restart allowed (min delay: %s)",
+			srv.log.Noticef("rank %d restart deferred: will restart in %s (min delay: %s)",
 				evt.Rank, remaining.Round(time.Second), minDelayDuration)
 			return nil
 		}
