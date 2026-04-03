@@ -15,6 +15,7 @@ def scons():
     libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'ssl', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal', 'numa']
+    libraries += ['daos_mgmt_rpc']
 
     denv.require('argobots', 'protobufc', 'pmdk', 'isal')
 

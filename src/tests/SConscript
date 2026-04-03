@@ -18,7 +18,7 @@ def build_tests(env, prereqs):
     denv.compiler_setup()
 
     libs_server = ['dts', 'daos_tests', 'daos_common_pmem', 'cart', 'gurt', 'uuid', 'pthread',
-                   'dpar', 'isal', 'protobuf-c', 'cmocka']
+                   'dpar', 'isal', 'protobuf-c', 'cmocka', 'daos_mgmt_rpc']
     libs_client = ['dts', 'daos_tests', 'daos', 'daos_common', 'daos_tests', 'gurt', 'cart', 'uuid',
                    'pthread', 'dpar', 'cmocka']
 
@@ -88,6 +88,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../gurt')])
     denv.AppendUnique(LIBPATH=[Dir('../common')])
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+    denv.AppendUnique(LIBPATH=[Dir('../mgmt')])
     denv.AppendUnique(LIBPATH=[Dir('../cart')])
     denv.AppendUnique(LIBPATH=[Dir('../vos')])
     denv.AppendUnique(LIBPATH=[Dir('../bio')])
@@ -104,6 +105,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../gurt')])
     denv.AppendUnique(LIBPATH=[Dir('../common')])
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+    denv.AppendUnique(LIBPATH=[Dir('../mgmt')])
     denv.AppendUnique(LIBPATH=[Dir('../cart')])
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
 

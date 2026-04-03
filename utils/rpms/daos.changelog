@@ -1,4 +1,9 @@
 %changelog
+* Thu Apr 02 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-2
+- Fix ASAN ODR violation: move src/mgmt/rpc.c into new libdaos_mgmt_rpc.so
+  shared library to ensure mgmt_proto_fmt_v3/v4 globals are defined exactly
+  once in the process (DAOS-18760)
+
 * Wed Apr 01 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.9.100-1
 - Bump version to 2.9.100
 

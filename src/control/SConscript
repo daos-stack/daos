@@ -123,7 +123,8 @@ def install_go_bin(env, name, libs=None, install_man=False):
         menv = env.Clone()
         # This runs code from the build area so needs LD_LIBRARY_PATH set.
         menv.d_enable_ld_path(["cart", "gurt", "client/api", "common", "client/dfs", "utils",
-                               "utils/self_test", "vos", "common/dav_v2", "bio", "utils/ddb"])
+                               "utils/self_test", "vos", "common/dav_v2", "bio", "utils/ddb",
+                               'mgmt'])
         menv.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
         menv.Install('$PREFIX/share/man/man8', build_path)
 
@@ -169,21 +170,20 @@ def scons():
                              "-L$BUILD_DIR/src/cart "
                              "-L$BUILD_DIR/src/common/dav_v2 "
                              "-L$BUILD_DIR/src/common "
+                             "-L$BUILD_DIR/src/mgmt "
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils "
                              "-L$BUILD_DIR/src/utils/self_test "
                              "$_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
         install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos',
-                                            'daos_self_test'],
+                                            'daos_mgmt_rpc', 'daos_self_test'],
                        install_man=True)
 
     if not prereqs.server_requested():
         return
 
     senv = denv.Clone()
-
-    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
@@ -204,6 +204,7 @@ def scons():
                             "-L$BUILD_DIR/src/cart "
                             "-L$BUILD_DIR/src/common/dav_v2 "
                             "-L$BUILD_DIR/src/common "
+                            "-L$BUILD_DIR/src/mgmt "
                             "-L$BUILD_DIR/src/utils/ddb "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib "

@@ -24,7 +24,7 @@
 
 Name:          daos
 Version:       2.9.100
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -466,6 +466,7 @@ fi
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
 %{_libdir}/libdaos_common.so
+%{_libdir}/libdaos_mgmt_rpc.so
 
 %if %{with server}
 %files server
