@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -939,6 +939,15 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 			continue;
 		}
 
+		/* Two overlapped extents won't have same epoch */
+		D_ASSERTF(this_ent->en_epoch != next_ent->en_epoch ||
+			      this_ent->en_minor_epc != next_ent->en_minor_epc,
+			  "this_ent: epoch[" DF_U64 "/%u], ext[" DF_U64 "," DF_U64 "] "
+			  "next_ent: epoch[" DF_U64 "/%u], ext[" DF_U64 "," DF_U64 "]\n",
+			  this_ent->en_epoch, this_ent->en_minor_epc, this_ext->ex_lo,
+			  this_ext->ex_hi, next_ent->en_epoch, next_ent->en_minor_epc,
+			  next_ext->ex_lo, next_ext->ex_hi);
+
 		if (evt_ent_is_later(this_ent, next_ent)) {
 			/* Case #2, next rect is partially under this rect,
 			 * Truncate left end of next_ent, reinsert.
@@ -970,6 +979,13 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
 		if (rc != 0)
 			return rc;
+
+		D_ASSERTF(next_ext->ex_lo > this_ext->ex_lo,
+			  "this: epoch[" DF_U64 "/%u], ext[" DF_U64 "," DF_U64 "] "
+			  "next: epoch[" DF_U64 "/%u], ext[" DF_U64 "," DF_U64 "]\n",
+			  this_ent->en_epoch, this_ent->en_minor_epc, this_ext->ex_lo,
+			  this_ext->ex_hi, next_ent->en_epoch, next_ent->en_minor_epc,
+			  next_ext->ex_lo, next_ext->ex_hi);
 
 		if (next_ext->ex_hi >= this_ext->ex_hi) {
 			/* Case #3, truncate this_ent */

@@ -44,6 +44,7 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
 #define DAOS_POOL_GLOBAL_VERSION_WITH_DATA_THRESH 3
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SRV_HDLS    4
+#define DAOS_POOL_GLOBAL_VERSION_WITH_OP_VAL_FIX  4
 
 #define PS_OPS_PER_SEC                            4096
 
@@ -3763,7 +3764,7 @@ ds_pool_svc_ops_lookup(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid
 	bool                      need_put_svc = false;
 	struct ds_pool_svc_op_key op_key;
 	d_iov_t                   op_key_enc = {.iov_buf = NULL};
-	struct ds_pool_svc_op_val op_val;
+	struct ds_pool_svc_op_val op_val     = {0};
 	d_iov_t                   val;
 	bool                      duplicate = false;
 	int                       rc  = 0;
@@ -4238,7 +4239,7 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	crt_bulk_t                      bulk;
 	uint32_t                        cli_pool_version;
 	bool                            dup_op = false;
-	struct ds_pool_svc_op_val       op_val;
+	struct ds_pool_svc_op_val       op_val          = {0};
 	bool                            transfer_map    = false;
 	bool                            fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                            fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
@@ -4722,7 +4723,7 @@ pool_disconnect_handler(crt_rpc_t *rpc, int handler_version)
 	d_iov_t                         key;
 	d_iov_t                         value;
 	bool                            dup_op = false;
-	struct ds_pool_svc_op_val       op_val;
+	struct ds_pool_svc_op_val       op_val          = {0};
 	bool                            fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                            fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
 	int				rc;
@@ -5143,7 +5144,7 @@ pool_list_cont_handler(crt_rpc_t *rpc, int handler_version)
 	}
 
 	/* Call container service to get the list */
-	rc = ds_cont_list(in->plci_op.pi_uuid, &cont_buf, &ncont);
+	rc = ds_cont_list(in->plci_op.pi_uuid, true /* include_destroying */, &cont_buf, &ncont);
 	if (rc != 0) {
 		D_GOTO(out_svc, rc);
 	} else if ((ncont_in > 0) && (ncont > ncont_in)) {
@@ -5773,7 +5774,7 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 	daos_prop_t                     *prop_in = NULL;
 	daos_prop_t			*prop = NULL;
 	bool                             dup_op  = false;
-	struct ds_pool_svc_op_val        op_val;
+	struct ds_pool_svc_op_val        op_val          = {0};
 	bool                             fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                             fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
 	int				rc;
@@ -6177,7 +6178,22 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc, uuid_t pool_uuid, cr
 	if (rc && rc != -DER_NONEXIST) {
 		D_ERROR(DF_UUID ": failed to lookup service ops KVS: %d\n", DP_UUID(pool_uuid), rc);
 		D_GOTO(out_free, rc);
-	} else if (rc == -DER_NONEXIST) {
+	}
+	if (rc == 0 && svc->ps_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_OP_VAL_FIX) {
+		/*
+		 * Destroy and recreate ds_pool_prop_svc_ops because it may contain
+		 * uninitialized ds_pool_svc_op_val.ov_resvd fields.
+		 */
+		D_INFO(DF_UUID ": destroying and recreating service ops KVS\n", DP_UUID(pool_uuid));
+		rc = rdb_tx_destroy_kvs(tx, &svc->ps_root, &ds_pool_prop_svc_ops);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to destroy service ops KVS",
+				 DP_UUID(pool_uuid));
+			goto out_free;
+		}
+		rc = -DER_NONEXIST;
+	}
+	if (rc == -DER_NONEXIST) {
 		struct rdb_kvs_attr attr;
 		uint32_t            svc_ops_num;
 
@@ -6737,7 +6753,7 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry = NULL;
 	bool                             dup_op = false;
-	struct ds_pool_svc_op_val        op_val;
+	struct ds_pool_svc_op_val        op_val          = {0};
 	bool                             fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                             fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
 
@@ -6842,7 +6858,7 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
 	bool                             dup_op = false;
-	struct ds_pool_svc_op_val        op_val;
+	struct ds_pool_svc_op_val        op_val          = {0};
 	bool                             fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                             fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
 
@@ -7895,6 +7911,14 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		delay = -1;
 	else if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
+	else if ((opc == MAP_EXCLUDE) || (opc == MAP_REINT) || (opc == MAP_DRAIN)) {
+		/* Delay during queuing rebuild(s) if we may have multiple-rank event or command
+		 * (processed as a sequence of ranks). See ds_rebuild_schedule(), rebuild_ults().
+		 */
+		D_INFO(DF_UUID ": scheduling rebuild for map opc %d with 5 second delay\n",
+		       DP_UUID(svc->ps_pool->sp_uuid), opc);
+		delay = 5;
+	}
 
 	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
@@ -8093,7 +8117,7 @@ pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr
 	if (rc != 0)
 		goto out;
 
-	rc = ds_cont_list(svc->ps_uuid, &dpci, &cont_nr);
+	rc = ds_cont_list(svc->ps_uuid, false /* include_destroying */, &dpci, &cont_nr);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -8437,7 +8461,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	struct pool_svc          *svc;
 	struct rdb_tx             tx;
 	bool                      dup_op = false;
-	struct ds_pool_svc_op_val op_val;
+	struct ds_pool_svc_op_val op_val    = {0};
 	uuid_t                   *hdl_uuids = NULL;
 	size_t                    hdl_uuids_size;
 	int                       n_hdl_uuids     = 0;
@@ -8900,7 +8924,7 @@ pool_attr_set_handler(crt_rpc_t *rpc, int handler_version)
 	crt_bulk_t                bulk;
 	struct rdb_tx		  tx;
 	bool                      dup_op = false;
-	struct ds_pool_svc_op_val op_val;
+	struct ds_pool_svc_op_val op_val          = {0};
 	bool                      fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                      fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
 	int			  rc;
@@ -8982,7 +9006,7 @@ pool_attr_del_handler(crt_rpc_t *rpc, int handler_version)
 	crt_bulk_t                bulk;
 	struct rdb_tx		  tx;
 	bool                      dup_op = false;
-	struct ds_pool_svc_op_val op_val;
+	struct ds_pool_svc_op_val op_val          = {0};
 	bool                      fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                      fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
 	int			  rc;
