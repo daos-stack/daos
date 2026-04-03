@@ -1574,6 +1574,15 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		D_GOTO(post, rc);
 	}
 
+	/*
+	 * Convert recxs back to VOS-space before computing checksums, so that
+	 * csum chunk boundaries match the VOS offsets where data and csums will
+	 * be stored. Must happen after fetch (needs DAOS-space) and before
+	 * migrate_csum_calc().
+	 */
+	if (daos_oclass_is_ec(&mrone->mo_oca))
+		mrone_recx_daos2_vos(mrone, iods, iod_num);
+
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
 	rc = migrate_csum_calc(csummer, mrone, iods, iod_num, sgls, p_csum_iov, &iod_csums);
 	if (rc != 0) {
@@ -1585,9 +1594,6 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 post:
 	for (i = 0; i < sgl_cnt; i++)
 		d_sgl_fini(&sgls[i], false);
-
-	if (daos_oclass_is_ec(&mrone->mo_oca))
-		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
 	rc = bio_iod_post(vos_ioh2desc(ioh), rc);
 	if (rc)
