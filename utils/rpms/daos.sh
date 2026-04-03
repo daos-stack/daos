@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-#  Copyright 2025 Google LLC
-#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#  (C) Copyright 2025 Google LLC
+#  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -56,7 +56,7 @@ TARGET_PATH="${libdir}"
 list_files files "${SL_PREFIX}/lib64/libgurt.so.*" \
   "${SL_PREFIX}/lib64/libcart.so.*" \
   "${SL_PREFIX}/lib64/libdaos_common.so" \
-  "${SL_PREFIX}/lib64/libdaos_mgmt_rpc.so"
+  "${SL_PREFIX}/lib64/libdaos_mgmt_crtproto.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 

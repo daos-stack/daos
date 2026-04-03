@@ -25,12 +25,12 @@ def scons():
                                  'check.pb-c.c', 'shared/ranks.pb-c.c',
                                  'system.pb-c.c']) + chk_pb
 
-    mgmt_rpc_lib = denv.d_library('daos_mgmt_rpc',
-                                  denv.SharedObject(['rpc.c']) + pb_objs,
-                                  LIBS=['daos_common', 'cart', 'gurt'])
-    denv.Install('$PREFIX/lib64/', mgmt_rpc_lib)
+    mgmt_crtproto_lib = denv.d_library('daos_mgmt_crtproto',
+                                       denv.SharedObject(['rpc.c']),
+                                       LIBS=['daos_common', 'cart', 'gurt'])
+    denv.Install('$PREFIX/lib64/', mgmt_crtproto_lib)
 
-    libdaos_tgts.extend(denv.SharedObject(['cli_mgmt.c', 'cli_query.c', 'cli_debug.c']))
+    libdaos_tgts.extend(pb_objs + denv.SharedObject(['cli_mgmt.c', 'cli_query.c', 'cli_debug.c']))
 
     if not prereqs.server_requested():
         return
@@ -52,8 +52,8 @@ def scons():
         'srv_util.c',
         'srv.c',
     ]
-    mgmt_srv = senv.d_library('mgmt', srcs,
-                              LIBS=['daos_mgmt_rpc', 'daos_common_pmem', 'cart', 'gurt'],
+    mgmt_srv = senv.d_library('mgmt', [pb_objs, srcs],
+                              LIBS=['daos_mgmt_crtproto', 'daos_common_pmem', 'cart', 'gurt'],
                               install_off='../..')
     senv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 

@@ -466,7 +466,7 @@ fi
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
 %{_libdir}/libdaos_common.so
-%{_libdir}/libdaos_mgmt_rpc.so
+%{_libdir}/libdaos_mgmt_crtproto.so
 
 %if %{with server}
 %files server

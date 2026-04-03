@@ -1,6 +1,6 @@
 """
-  Copyright 2018-2023 Intel Corporation.
-  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -2298,8 +2298,6 @@ class DaosContext():
             os.path.join(path, 'libdaos.so.{}'.format(daos_version)),
             mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(os.path.join(path, 'libdaos_common.so'),
-                    mode=ctypes.RTLD_GLOBAL)
-        ctypes.CDLL(os.path.join(path, 'libdaos_mgmt_rpc.so'),
                     mode=ctypes.RTLD_GLOBAL)
 
         try:

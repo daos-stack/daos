@@ -170,14 +170,13 @@ def scons():
                              "-L$BUILD_DIR/src/cart "
                              "-L$BUILD_DIR/src/common/dav_v2 "
                              "-L$BUILD_DIR/src/common "
-                             "-L$BUILD_DIR/src/mgmt "
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils "
                              "-L$BUILD_DIR/src/utils/self_test "
                              "$_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
         install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos',
-                                            'daos_mgmt_rpc', 'daos_self_test'],
+                                            'daos_self_test'],
                        install_man=True)
 
     if not prereqs.server_requested():
@@ -204,7 +203,6 @@ def scons():
                             "-L$BUILD_DIR/src/cart "
                             "-L$BUILD_DIR/src/common/dav_v2 "
                             "-L$BUILD_DIR/src/common "
-                            "-L$BUILD_DIR/src/mgmt "
                             "-L$BUILD_DIR/src/utils/ddb "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib "
