@@ -111,7 +111,7 @@ pipeline {
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
         string(name: 'TestProviderUCX',
-               defaultValue: 'ucx+ud_x',
+               defaultValue: 'ucx+dc_x',
                description: 'Test-provider to use for the Functional Hardware Medium UCX ' +
                             'Provider Stage; i.e. "ucx+ud_x", "ucx+dc_x"')
         string(name: 'CI_RPM_TEST_VERSION',
