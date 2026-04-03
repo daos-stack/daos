@@ -715,7 +715,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	struct rebuild_scan_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
 	struct pl_map			*map = NULL;
-	struct daos_obj_md		md;
+	struct daos_obj_md               md  = {0};
 	daos_unit_oid_t			oid = ent->ie_oid;
 	unsigned int			tgt_array[LOCAL_ARRAY_SIZE];
 	unsigned int			shard_array[LOCAL_ARRAY_SIZE];
@@ -761,6 +761,10 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
 	md.omd_pdom_lvl = arg->co_props.dcp_perf_domain;
 	md.omd_pda = daos_cont_props2pda(&arg->co_props, daos_oclass_is_ec(oc_attr));
+	/* only generate layout up to this group and skip remaining part */
+	md.omd_flags    = PL_FL_GRP_SPEC;
+	md.omd_grp_spec = oid.id_shard / grp_size;
+
 	tgts = tgt_array;
 	shards = shard_array;
 	switch (rpt->rt_rebuild_op) {
