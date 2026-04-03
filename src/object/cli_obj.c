@@ -1574,6 +1574,7 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	md->omd_id	= oid;
 	md->omd_ver	= 0;
 	md->omd_pda	= 0;
+	md->omd_flags   = 0;
 	return 0;
 }
 
