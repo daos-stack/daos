@@ -1,6 +1,6 @@
 /*
- * Copyright 2021-2023 Intel Corporation.
- * Copyright 2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */

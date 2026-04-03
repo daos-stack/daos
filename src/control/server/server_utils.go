@@ -1,6 +1,6 @@
 //
-// Copyright 2021-2024 Intel Corporation.
-// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -777,11 +777,11 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 // Handle local engine self termination and restart engine to rejoin system.
 func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RASEvent) error {
 
-	srv.log.Infof("handling engine self termination")
+	srv.log.Tracef("handling engine self termination")
 
 	// Check if automatic restart is disabled
 	if srv.cfg.DisableEngineAutoRestart {
-		srv.log.Infof("automatic engine restart disabled by configuration")
+		srv.log.Debugf("automatic engine restart disabled by configuration")
 		return nil
 	}
 
@@ -804,7 +804,7 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 	}
 	engine := instances[0]
 
-	srv.log.Infof("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts, evt.Hostname,
+	srv.log.Noticef("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts, evt.Hostname,
 		evt.Rank, evt.Incarnation, engine.Index())
 
 	// Check if rank can be restarted based on rate limiting
@@ -838,7 +838,7 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 		return errors.Errorf("rank %d (instance %d) did not stop", evt.Rank, engine.Index())
 	}
 
-	srv.log.Infof("restarting rank %d (instance %d) after self-termination", evt.Rank, engine.Index())
+	srv.log.Noticef("restarting rank %d (instance %d) after self-termination", evt.Rank, engine.Index())
 	engine.requestStart(ctx)
 
 	return nil
