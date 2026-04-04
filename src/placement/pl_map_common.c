@@ -336,14 +336,11 @@ comp_need_remap(struct pool_component *comp, uint32_t allow_version, enum layout
  * spare target.
  */
 int
-determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
-		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
+determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, d_list_t *remap_list,
+		       uint32_t allow_version, enum layout_gen_mode gen_mode,
 		       struct failed_shard *f_shard, struct pl_obj_layout *layout)
 {
 	struct pl_obj_shard *l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
-
-	if (!spare_avail)
-		goto next_fail;
 
 	/* The selected spare target is down as well */
 	if (comp_need_remap(&spare_tgt->ta_comp, allow_version, gen_mode,
@@ -351,16 +348,15 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET
 			".\n", DP_TARGET(spare_tgt));
 
-		/* If the spare target fseq > the current object pool
-		 * version, the current failure shard will be handled
-		 * by the following rebuild.
+		/* If the spare target fseq > the current object pool version, the current
+		 * failure shard will be handled by the following rebuild.
 		 */
 		if (spare_tgt->ta_comp.co_fseq > md->omd_ver) {
-			D_DEBUG(DB_PL, DF_OID", "DF_TARGET", ver: %d\n",
-				DP_OID(md->omd_id), DP_TARGET(spare_tgt),
-				md->omd_ver);
-			spare_avail = false;
-			goto next_fail;
+			D_DEBUG(DB_PL, DF_OID ", " DF_TARGET ", ver: %d\n", DP_OID(md->omd_id),
+				DP_TARGET(spare_tgt), md->omd_ver);
+			l_shard->po_shard  = -1;
+			l_shard->po_target = -1;
+			return 1;
 		}
 
 		/*
@@ -402,17 +398,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 		return 0; /* try next spare */
 	}
 
-next_fail:
-	if (spare_avail) {
-		l_shard->po_target = spare_tgt->ta_comp.co_id;
-		l_shard->po_fseq   = f_shard->fs_fseq;
-		l_shard->po_rank   = spare_tgt->ta_comp.co_rank;
-		l_shard->po_index  = spare_tgt->ta_comp.co_index;
-		layout_set_shard_flags(layout, f_shard->fs_shard_idx, f_shard->fs_remap_flags);
-	} else {
-		l_shard->po_shard = -1;
-		l_shard->po_target = -1;
-	}
+	l_shard->po_target = spare_tgt->ta_comp.co_id;
+	l_shard->po_fseq   = f_shard->fs_fseq;
+	l_shard->po_rank   = spare_tgt->ta_comp.co_rank;
+	l_shard->po_index  = spare_tgt->ta_comp.co_index;
+	layout_set_shard_flags(layout, f_shard->fs_shard_idx, f_shard->fs_remap_flags);
 
 	return 1; /* try next shard */
 }

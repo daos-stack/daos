@@ -387,10 +387,8 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 	struct pool_domain      *spare_dom = NULL;
 	struct pool_domain      *root, *curr_pd;
 	d_list_t                *current;
-	daos_obj_id_t           oid;
-	bool                    spare_avail = true;
-	uint64_t                key;
-	uint32_t		spares_left;
+	daos_obj_id_t            oid;
+	uint64_t                 key;
 	int                     rc;
 
 	remap_dump(remap_list, md, "remap:");
@@ -398,8 +396,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 	current = remap_list->next;
 	spare_tgt = NULL;
 	oid = md->omd_id;
-	key         = jm_oid_hash(layout_ver, oid);
-	spares_left = count_available_spares(jmap, layout, failed_in_layout);
+	key       = jm_oid_hash(layout_ver, oid);
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -424,36 +421,23 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 		 * risk because of failures up to this point. Rebuilding data
 		 * on a non-redundant other fault domain won't make this worse.
 		 */
-		if (spare_avail) {
-			dgu = f_shard->fs_data;
+		dgu = f_shard->fs_data;
 
-			D_ASSERT(dgu != NULL);
-			if (layout_ver <= 1)
-				rebuild_key = crc(key, crc(key, shard_id));
-			else /* hash OID differently so we don't land to the same target */
-				rebuild_key = jm_crc(oid.lo, oid.hi, 0xDead2Bad);
+		D_ASSERT(dgu != NULL);
+		if (layout_ver == 1)
+			rebuild_key = crc(key, crc(key, shard_id));
+		else /* hash OID differently so we don't land to the same target */
+			rebuild_key = jm_crc(oid.lo, oid.hi, 0xDead2Bad);
 
-			curr_pd = jm_obj_shard_pd(jmop, shard_id);
-			get_target(root, curr_pd, layout_ver, &spare_tgt, &spare_dom, rebuild_key,
-				   dom_used, dom_full, dgu->dgu_used, dgu->dgu_real, tgts_used,
-				   shard_id, allow_version, gen_mode, fdom_lvl, jmop->jmop_grp_size,
-				   &spares_left, &spare_avail);
-			if (layout_ver > 0) {
-				/*
-				 * After 2.4 (layout_ver > 0), it will always assign each shard
-				 * to one target, so it might put multiple shards in the same
-				 * target, if there are not enough targets.
-				 * Though before 2.4 (layout_ver == 0), it will set the shard as -1,
-				 * if there are no spare targets.
-				 */
-				D_ASSERT(spare_tgt != NULL);
-				D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
-					DP_TARGET(spare_tgt));
-			}
-		}
+		curr_pd = jm_obj_shard_pd(jmop, shard_id);
+		get_target(root, curr_pd, layout_ver, &spare_tgt, &spare_dom, rebuild_key, dom_used,
+			   dom_full, dgu->dgu_used, dgu->dgu_real, tgts_used, shard_id,
+			   allow_version, gen_mode, fdom_lvl, jmop->jmop_grp_size);
 
-		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list, allow_version,
-					    gen_mode, f_shard, layout);
+		D_DEBUG(DB_PL, "Trying new target: " DF_TARGET "\n", DP_TARGET(spare_tgt));
+
+		rc = determine_valid_spares(spare_tgt, md, remap_list, allow_version, gen_mode,
+					    f_shard, layout);
 		if (rc == 1) {
 			d_list_del(&f_shard->fs_list);
 			D_FREE(f_shard);
@@ -675,7 +659,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 				get_target(root, curr_pd, layout_ver, &target, &domain, key,
 					   dom_used, dom_full, dom_cur_grp_used, dom_cur_grp_real,
 					   tgts_used, k, allow_version, gen_mode, fdom_lvl,
-					   jmop->jmop_grp_size, NULL, NULL);
+					   jmop->jmop_grp_size);
 			}
 
 			if (target == NULL) {
