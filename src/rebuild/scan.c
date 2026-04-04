@@ -318,7 +318,7 @@ rebuild_objects_send_ult(void *data)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_ALLOC_ARRAY(punched_ephs, REBUILD_SEND_LIMIT);
-	if (ephs == NULL)
+	if (punched_ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	arg.count = 0;
