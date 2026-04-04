@@ -473,7 +473,8 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
                 self.log.info("dmg check start while system is Joined failed as expected.")
 
         self.log_step("Create a pool.")
-        pool = self.get_pool()
+        # Don't try to destroy the pool during tearDown because it's corrupted.
+        pool = self.get_pool(register_cleanup=False)
 
         self.log_step("Inject dangling pool.")
         dmg_command.faults_pool_svc(
@@ -504,8 +505,5 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         self.log_step("Disable the checker to prepare for the tearDown.")
         dmg_command.check_disable()
-
-        # Don't try to destroy the pool during tearDown because it's corrupted.
-        pool.skip_cleanup()
 
         report_errors(test=self, errors=errors)
