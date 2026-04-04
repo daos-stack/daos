@@ -2227,10 +2227,10 @@ class PosixTests():
                           show_stdout=True, use_json=True)
         print(rc)
         assert rc.returncode == 0
-        assert 'dir_object_class' in rc.json['response'] and
-            rc.json['response']['dir_object_class'] != "UNKNOWN"
-        assert 'file_object_class' in rc.json['response'] and
-            rc.json['response']['file_object_class'] != "UNKNOWN"
+        assert 'dir_object_class' in rc.json['response'] and \
+                    rc.json['response']['dir_object_class'] != "UNKNOWN"
+        assert 'file_object_class' in rc.json['response'] and \
+                    rc.json['response']['file_object_class'] != "UNKNOWN"
         container.destroy()
 
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
