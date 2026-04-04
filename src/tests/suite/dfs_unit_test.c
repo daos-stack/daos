@@ -1,6 +1,6 @@
 /**
- * Copyright 2019-2024 Intel Corporation.
- * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +44,7 @@ dfs_test_mount(void **state)
 	dfs_t			*dfs;
 	int			rc;
 	dfs_attr_t               attr = {0};
+	daos_oclass_id_t         exp_doc, exp_foc;
 
 	if (arg->myrank != 0)
 		return;
@@ -85,11 +86,17 @@ dfs_test_mount(void **state)
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
-	/** check if dir/file oclass is not 0 */
+
+	/** check if dir/file oclass is what is expected*/
 	rc = dfs_query(dfs, &attr);
 	assert_rc_equal(rc, 0);
-	assert_int_not_equal(attr.da_dir_oclass_id, 0);
-	assert_int_not_equal(attr.da_file_oclass_id, 0);
+	rc = daos_obj_get_oclass(coh, DAOS_OT_MULTI_HASHED, 0, 0, &exp_doc);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(attr.da_dir_oclass_id, exp_doc);
+	rc = daos_obj_get_oclass(coh, DAOS_OT_ARRAY_BYTE, 0, 0, &exp_foc);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(attr.da_file_oclass_id, exp_foc);
+
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
