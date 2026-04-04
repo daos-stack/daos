@@ -292,7 +292,8 @@ class DMGCheckStartOptionsTest(TestWithServers):
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_failout
         """
         self.log_step("Create a pool.")
-        pool = self.get_pool(connect=False)
+        # Don't try to destroy the pool during tearDown because it's corrupted.
+        pool = self.get_pool(connect=False, register_cleanup=False)
 
         self.log_step("Inject orphan pool fault")
         dmg_command = self.get_dmg_command()
@@ -313,8 +314,6 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         self.log_step("Disable the checker to prepare for the tearDown.")
         dmg_command.check_disable()
-        # The pool is corrupted and we can't destroy it, so skip the cleanup.
-        pool.skip_cleanup()
 
     def query_nr_reports(self, dmg_command, nr_exp_reports):
         """
