@@ -4870,6 +4870,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		if (dcsr->dcsr_opc != DCSO_UPDATE)
 			continue;
 
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
+
 		dcu = &dcsr->dcsr_update;
 		rc = vos_dedup_verify(iohs[i]);
 		if (rc != 0) {
@@ -4928,6 +4930,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 	/* P5: punch and vos_update_end. */
 	for (i = 0; i < dcde->dcde_write_cnt; i++) {
 		dcsr = &dcsrs[dcri[i].dcri_req_idx];
+
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
 
 		if (dcsr->dcsr_opc == DCSO_UPDATE) {
 			rc = dtx_sub_init(dth, &dcsr->dcsr_oid,
