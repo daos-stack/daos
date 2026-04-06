@@ -235,17 +235,26 @@ crt_gdata_dump(void)
 	D_INFO("settings:\n");
 	DUMP_GDATA_FIELD("%d", cg_post_init);
 	DUMP_GDATA_FIELD("%d", cg_post_incr);
+	DUMP_GDATA_FIELD("%d", cg_mrecv_buf);
+	DUMP_GDATA_FIELD("%d", cg_mrecv_buf_copy);
 	DUMP_GDATA_FIELD("%d", cg_timeout);
+	DUMP_GDATA_FIELD("%d", cg_progress_busy);
+	DUMP_GDATA_FIELD("%d", cg_progress_legacy);
+	DUMP_GDATA_FIELD("%u", cg_progress_spindown_ms);
 	DUMP_GDATA_FIELD("%d", cg_swim_ctx_idx);
+	DUMP_GDATA_FIELD("%d", cg_swim_tc);
 	DUMP_GDATA_FIELD("%d", cg_credit_ep_ctx);
 	DUMP_GDATA_FIELD("%d", cg_iv_inline_limit);
 	DUMP_GDATA_FIELD("%d", cg_auto_swim_disable);
 	DUMP_GDATA_FIELD("%d", cg_server);
 	DUMP_GDATA_FIELD("%d", cg_use_sensors);
+	DUMP_GDATA_FIELD("%d", cg_thread_mode_single);
+	DUMP_GDATA_FIELD("%d", cg_mem_device);
 	DUMP_GDATA_FIELD("%d", cg_provider_is_primary);
 	DUMP_GDATA_FIELD("0x%lx", cg_rpcid);
 	DUMP_GDATA_FIELD("%ld", cg_num_cores);
 	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
+	DUMP_GDATA_FIELD("%d", cg_bulk_quota);
 }
 
 static enum crt_traffic_class
@@ -609,7 +618,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	char *save_provider_str = NULL, *save_interface_str = NULL, *save_domain_str = NULL,
 	     *save_port_str = NULL, *save_auth_key_str = NULL;
 	bool port_auto_adjust = false, thread_mode_single = false, progress_busy = false,
-	     mem_device = false;
+	     mem_device = false, progress_legacy = false;
+	unsigned int progress_spindown = CRT_HG_PROGRESS_SPINDOWN_MS;
 	int i;
 
 	d_signal_register();
@@ -692,6 +702,12 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	CRT_ENV_OPT_GET(opt, mem_device, D_MEM_DEVICE);
 	crt_gdata.cg_mem_device = mem_device;
+
+	CRT_ENV_OPT_GET(opt, progress_legacy, D_PROGRESS_LEGACY);
+	crt_gdata.cg_progress_legacy = progress_legacy;
+
+	CRT_ENV_OPT_GET(opt, progress_spindown, D_PROGRESS_SPINDOWN);
+	crt_gdata.cg_progress_spindown_ms = progress_spindown;
 
 	if (provider == NULL) {
 		D_ERROR("No provider specified\n");

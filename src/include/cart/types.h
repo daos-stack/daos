@@ -96,6 +96,12 @@ typedef struct crt_init_options {
 
 	/** use memory device */
 	bool             cio_mem_device;
+
+	/** use legacy progress method */
+	bool             cio_progress_legacy;
+
+	/** progress spindown time in milliseconds */
+	unsigned int     cio_progress_spindown;
 } crt_init_options_t;
 
 typedef int		crt_status_t;
