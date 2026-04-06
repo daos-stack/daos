@@ -263,6 +263,25 @@ rebuild_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	return rc;
 }
 
+/* rebuild_leader_status_check() will sync IV by rebuild_leader_status_notify() riv_stable_epoch
+ * every RBLD_CHECK_INTV (2000mS), and update to rpt->rt_stable_epoch in rebuild_iv_ent_refresh().
+ */
+static int
+rpt_wait_rebuild_epoch(struct rebuild_tgt_pool_tracker *rpt)
+{
+	int wait_cnt     = 0;
+	int wait_intv    = 200; /* milliseconds */
+	int wait_cnt_max = 180;
+
+	while (rpt->rt_stable_epoch == 0 && wait_cnt++ < wait_cnt_max)
+		dss_sleep(wait_intv);
+
+	if (rpt->rt_stable_epoch != 0)
+		return 0;
+
+	return -DER_TIMEDOUT;
+}
+
 static void
 rebuild_objects_send_ult(void *data)
 {
@@ -278,6 +297,14 @@ rebuild_objects_send_ult(void *data)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
+
+	if (rpt->rt_stable_epoch == 0) {
+		rc = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed", DP_RB_RPT(rpt));
+			goto out;
+		}
+	}
 
 	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
 	if (oids == NULL)
@@ -510,6 +537,8 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	if (rc != 0)
 		return rc;
 
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
+	D_ASSERT(tls != NULL);
 	/* If there are further targets failure during reintegration/extend/drain,
 	 * rebuild will choose replacement targets for the impacted objects anyway,
 	 * so we do not need reclaim these impacted shards by @ignore_rebuild_shard.
@@ -518,6 +547,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 					      mytarget, oid.id_shard,
 					      rpt->rt_rebuild_op == RB_OP_RECLAIM ? false : true);
 	pl_obj_layout_free(layout);
+	tls->rebuild_pool_obj_count++;
 	if (still_needed) {
 		if (new_layout_ver > 0) {
 			/* upgrade job reclaim */
@@ -536,10 +566,8 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 		return 0;
 	}
 
-	D_DEBUG(DB_REBUILD, "deleting stale object "DF_UOID" rank %u tgt %u oid layout %u/%u",
+	D_DEBUG(DB_REBUILD, "deleting stale object " DF_UOID " rank %u tgt %u oid layout %u/%u",
 		DP_UOID(oid), myrank, mytarget, oid.id_layout_ver, new_layout_ver);
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
 	tls->rebuild_pool_reclaim_obj_count++;
 
 	discard_epr.epr_hi = rpt->rt_reclaim_epoch;
@@ -586,10 +614,25 @@ rebuild_obj_ult(void *data)
 	struct rebuild_obj_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 
+	if (rpt->rt_stable_epoch == 0) {
+		int rc;
+
+		rc = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed, abort the rebuild",
+				 DP_RB_RPT(rpt));
+			if (rpt->rt_errno == 0)
+				rpt->rt_errno = rc;
+			rpt->rt_abort = 1;
+		}
+		goto out;
+	}
+
 	ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
 			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
+out:
 	rpt_put(rpt);
 	D_FREE(arg);
 }
