@@ -53,13 +53,13 @@ class DaosRacerParallelTest(TestWithServers):
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients, self.get_dmg_command())
         daos_racer.get_params(self)
 
-        # Create the orterun command
+        # Create the mpi command
         job_manager = get_job_manager(self)
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager.assign_processes(len(self.hostlist_clients))
         job_manager.assign_environment(daos_racer.env)
         job_manager.job = daos_racer
-        job_manager.check_results_list = ["<stderr>"]
+        job_manager.check_results_list = ["<stderr>", "No MPI found"]
         job_manager.timeout = daos_racer.clush_timeout.value
         self.log.info("Multi-process command: %s", str(job_manager))
 
