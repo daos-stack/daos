@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ package security
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -43,14 +44,7 @@ func TestSecurity_CommonNameToComponent(t *testing.T) {
 		})
 	}
 }
-func inList(c Component, compList []Component) bool {
-	for _, comp := range compList {
-		if c == comp {
-			return true
-		}
-	}
-	return false
-}
+
 func TestSecurity_ComponentHasAccess(t *testing.T) {
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := map[string][]Component{
@@ -77,7 +71,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/SystemRebuildManage":      {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemSelfHealEval":       {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
@@ -99,7 +93,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/PoolRebuildStart":         {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/PoolRebuildStop":          {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/PoolSelfHealEval":         {ComponentAdmin, ComponentServer},
-		"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
+		"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAdmin, ComponentAgent},
 		"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
 		"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":             {ComponentAdmin},
@@ -146,11 +140,11 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		t.Fatalf("%s has test cases for the following methods that are not in methodAuthorizations:\n%s", t.Name(), strings.Join(invalid, "\n"))
 	}
 
-	for method, correctComponent := range testCases {
+	for method, correctComponents := range testCases {
 		methodName := strings.SplitAfterN(method, "/", 3)[2]
 		t.Run(methodName, func(t *testing.T) {
 			for _, comp := range allComponents {
-				if inList(comp, correctComponent) {
+				if slices.Contains(correctComponents, comp) {
 					test.AssertTrue(t, comp.HasAccess(method), fmt.Sprintf("%s should have access to %s but does not", comp, methodName))
 				} else {
 					test.AssertFalse(t, comp.HasAccess(method), fmt.Sprintf("%s should not have access to %s but does", comp, methodName))
@@ -162,7 +156,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 
 func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 	for name, tc := range map[string]struct {
-		service interface{}
+		service any
 		prefix  string
 	}{
 		"mgmt rpcs": {
@@ -202,7 +196,7 @@ func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 
 func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
 	for name, tc := range map[string]struct {
-		service interface{}
+		service any
 		prefix  string
 	}{
 		"mgmt rpcs": {
