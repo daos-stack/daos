@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,18 @@ static void
 context_quotas_init(struct crt_context *ctx);
 static void
 context_quotas_finalize(struct crt_context *ctx);
+
+/* Progress methods */
+static int
+crt_progress_legacy(struct crt_context *ctx, int64_t timeout);
+static int
+crt_progress_event(struct crt_context *ctx, int64_t timeout_us);
+static int
+crt_progress_cond_legacy(struct crt_context *ctx, int64_t timeout, crt_progress_cond_cb_t cond_cb,
+			 void *arg);
+static int
+crt_progress_event_cond(struct crt_context *ctx, int64_t timeout_us, crt_progress_cond_cb_t cond_cb,
+			void *arg);
 
 static struct crt_ep_inflight *
 epi_link2ptr(d_list_t *rlink)
@@ -154,6 +166,14 @@ crt_context_init(struct crt_context *ctx)
 
 	D_INIT_LIST_HEAD(&ctx->cc_quotas.rpc_waitq);
 	D_INIT_LIST_HEAD(&ctx->cc_link);
+
+	if (crt_gdata.cg_progress_legacy) {
+		ctx->cc_prog_func      = crt_progress_legacy;
+		ctx->cc_prog_cond_func = crt_progress_cond_legacy;
+	} else {
+		ctx->cc_prog_func      = crt_progress_event;
+		ctx->cc_prog_cond_func = crt_progress_event_cond;
+	}
 
 	/* create timeout binheap */
 	bh_node_cnt = CRT_DEFAULT_CREDITS_PER_EP_CTX * 64;
@@ -1794,21 +1814,84 @@ crt_context_empty(crt_provider_t provider, int locked)
 	return rc;
 }
 
-int
-crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
-		  crt_progress_cond_cb_t cond_cb, void *arg)
+static int
+crt_progress_legacy(struct crt_context *ctx, int64_t timeout)
 {
-	struct crt_context	*ctx;
-	int64_t			 hg_timeout;
-	uint64_t		 now;
-	uint64_t		 end = 0;
-	int			 rc = 0;
+	int rc = 0;
+
+	/**
+	 * call progress once w/o any timeout before processing timed out
+	 * requests in case any replies are pending in the queue
+	 */
+	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT))
+		D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+
+	/**
+	 * process timeout and progress callback after this initial call to
+	 * progress
+	 */
+	crt_context_timeout_check(ctx);
+	if (ctx->cc_prog_cb != NULL)
+		timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
+
+	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
+		/** call progress once again with the real timeout */
+		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT))
+			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+	}
+
+	return rc;
+}
+
+static int
+crt_progress_event(struct crt_context *ctx, int64_t timeout_us)
+{
+	struct timespec *deadline_p, now = {.tv_sec = 0, .tv_nsec = 0};
+	int              rc;
+
+	crt_context_timeout_check(ctx);
+	if (ctx->cc_prog_cb != NULL)
+		timeout_us = ctx->cc_prog_cb(ctx, timeout_us, ctx->cc_prog_cb_arg);
+
+	if (timeout_us > 0) {
+		d_gettime_coarse(&now);
+		deadline_p = &now;
+		d_timeinc(deadline_p, (uint64_t)(timeout_us * 1000));
+	} else
+		deadline_p = NULL;
+
+	rc = crt_hg_event_progress(&ctx->cc_hg_ctx, deadline_p);
+	if (unlikely(rc && rc != -DER_TIMEDOUT))
+		D_ERROR("crt_hg_event_progress failed, rc: %d.\n", rc);
+
+	return rc;
+}
+
+int
+crt_progress(crt_context_t crt_ctx, int64_t timeout_us)
+{
+	struct crt_context *ctx = crt_ctx;
 
 	/** validate input parameters */
-	if (unlikely(crt_ctx == CRT_CONTEXT_NULL || cond_cb == NULL)) {
-		D_ERROR("invalid parameter (%p)\n", cond_cb);
+	if (unlikely(ctx == NULL)) {
+		D_ERROR("invalid parameter (NULL crt_ctx).\n");
 		return -DER_INVAL;
 	}
+	D_ASSERT(ctx->cc_prog_func != NULL);
+
+	return ctx->cc_prog_func(ctx, timeout_us);
+}
+
+static int
+crt_progress_cond_legacy(struct crt_context *ctx, int64_t timeout, crt_progress_cond_cb_t cond_cb,
+			 void *arg)
+{
+	int64_t  hg_timeout;
+	uint64_t now;
+	uint64_t end = 0;
+	int      rc  = 0;
 
 	/**
 	 * Invoke the callback once first, in case the condition is met before
@@ -1821,8 +1904,6 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	if (unlikely(rc < 0))
 		/** something wrong happened during the callback execution */
 		return rc;
-
-	ctx = crt_ctx;
 
 	/** Progress with callback and non-null timeout */
 	if (timeout > 0) {
@@ -1889,44 +1970,79 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	return rc;
 }
 
-int
-crt_progress(crt_context_t crt_ctx, int64_t timeout)
+static int
+crt_progress_event_cond(struct crt_context *ctx, int64_t timeout_us, crt_progress_cond_cb_t cond_cb,
+			void *arg)
 {
-	struct crt_context	*ctx;
-	int			 rc = 0;
+	struct timespec now = {.tv_sec = 0, .tv_nsec = 0}, deadline = {.tv_sec = 0, .tv_nsec = 0};
+	int64_t         progress_timeout;
+	int             rc;
+
+	/** Invoke the callback once first, in case the condition is met before calling progress */
+	rc = cond_cb(arg);
+	if (rc > 0)
+		return DER_SUCCESS;
+	if (unlikely(rc < 0))
+		return rc;
+
+	/**
+	 * For infinite timeout, use a mercury timeout of 1 ms to avoid being blocked indefinitely
+	 * if another thread has called progress behind our back.
+	 */
+	if (timeout_us < 0) {
+		progress_timeout = 1000;
+	} else if (timeout_us == 0) {
+		progress_timeout = 0;
+	} else { /** timeout_us > 0 */
+		/** similarly, probe more frequently if timeout_us is large */
+		if (timeout_us > 1000 * 1000)
+			progress_timeout = 1000 * 1000;
+		else
+			progress_timeout = timeout_us;
+
+		d_gettime_coarse(&now);
+		deadline = now;
+		d_timeinc(&deadline, (uint64_t)(timeout_us * 1000));
+	}
+
+	/**
+	 * loop until callback returns non-null value or deadline is reached (if timeout_us is
+	 * a positive value)
+	 */
+	do {
+		rc = crt_progress_event(ctx, progress_timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+			D_ERROR("crt_progress_event failed with %d\n", rc);
+			return rc;
+		}
+
+		rc = cond_cb(arg);
+		if (rc > 0)
+			return DER_SUCCESS;
+		if (unlikely(rc < 0))
+			return rc;
+
+	} while ((timeout_us < 0) ||
+		 (timeout_us > 0 && d_gettime_coarse(&now) == 0 && d_timeless(&now, &deadline)));
+
+	return -DER_TIMEDOUT;
+}
+
+int
+crt_progress_cond(crt_context_t crt_ctx, int64_t timeout_us, crt_progress_cond_cb_t cond_cb,
+		  void *arg)
+{
+	struct crt_context *ctx = crt_ctx;
 
 	/** validate input parameters */
-	if (unlikely(crt_ctx == CRT_CONTEXT_NULL)) {
-		D_ERROR("invalid parameter (NULL crt_ctx).\n");
+	if (unlikely(ctx == NULL || cond_cb == NULL)) {
+		D_ERROR("invalid parameter (%p)\n", cond_cb);
 		return -DER_INVAL;
 	}
 
-	ctx = crt_ctx;
+	D_ASSERT(ctx->cc_prog_cond_func != NULL);
 
-	/**
-	 * call progress once w/o any timeout before processing timed out
-	 * requests in case any replies are pending in the queue
-	 */
-	rc = crt_hg_progress(&ctx->cc_hg_ctx, 0);
-	if (unlikely(rc && rc != -DER_TIMEDOUT))
-		D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
-
-	/**
-	 * process timeout and progress callback after this initial call to
-	 * progress
-	 */
-	crt_context_timeout_check(ctx);
-	if (ctx->cc_prog_cb != NULL)
-		timeout = ctx->cc_prog_cb(ctx, timeout, ctx->cc_prog_cb_arg);
-
-	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
-		/** call progress once again with the real timeout */
-		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
-		if (unlikely(rc && rc != -DER_TIMEDOUT))
-			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
-	}
-
-	return rc;
+	return ctx->cc_prog_cond_func(ctx, timeout_us, cond_cb, arg);
 }
 
 /**
