@@ -332,13 +332,34 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	change_hlc = max(cont->sc_snapshot_delete_hlc,
 			 cont->sc_pool->spc_rebuild_end_hlc);
 	if (param->ap_full_scan_hlc < change_hlc) {
-		/* Snapshot has been deleted or rebuild happens since the last
-		 * aggregation, let's restart from 0.
-		 */
-		epoch_min = 0;
-		flags |= VOS_AGG_FL_FORCE_SCAN;
-		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
-			change_hlc, param->ap_full_scan_hlc);
+		if (cont->sc_snapshot_delete_hlc > param->ap_full_scan_hlc) {
+			/* Snapshot has been deleted since the last aggregation,
+			 * must restart from epoch 0 to properly handle the
+			 * changed snapshot boundaries.
+			 */
+			epoch_min = 0;
+			flags |= VOS_AGG_FL_FORCE_SCAN;
+			D_DEBUG(DB_EPC, "snapshot delete hlc "DF_X64" > full "DF_X64
+				", restart from epoch 0\n",
+				cont->sc_snapshot_delete_hlc, param->ap_full_scan_hlc);
+		} else {
+			/* Rebuild happened since last aggregation.
+			 * EC aggregation: sc_ec_agg_eph already reset by pool map
+			 * change (ds_cont_child_reset_ec_agg_eph_all), no need to
+			 * restart from 0.
+			 * VOS aggregation: use HAE as resume point with force scan.
+			 * Source-only targets have no new data below HAE.
+			 * Destination targets with fresh containers have HAE=0
+			 * naturally.
+			 */
+			epoch_min = get_hae(cont, param->ap_vos_agg);
+			flags |= VOS_AGG_FL_FORCE_SCAN;
+			D_DEBUG(DB_EPC, "rebuild end hlc "DF_X64" > full "DF_X64
+				", resume %s aggregation from HAE "DF_X64"\n",
+				cont->sc_pool->spc_rebuild_end_hlc,
+				param->ap_full_scan_hlc,
+				param->ap_vos_agg ? "VOS" : "EC", epoch_min);
+		}
 	} else {
 		epoch_min = get_hae(cont, param->ap_vos_agg);
 	}
