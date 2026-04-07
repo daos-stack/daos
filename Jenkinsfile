@@ -105,7 +105,7 @@ pipeline {
         // test stage launch.py --nvme argument is hard-coded in each stage definition to avoid the
         // stages from duplicating testing.
         string(name: 'TestProvider',
-               defaultValue: '',
+               defaultValue: 'ucx+dc_x',
                description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
