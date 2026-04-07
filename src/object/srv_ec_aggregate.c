@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,6 +60,9 @@
 #include "srv_internal.h"
 
 #define EC_AGG_ITERATION_MAX	1024
+#define EC_AGG_PROCESS_CREDITS  128
+#define EC_AGG_FILTER_CREDITS   1
+#define EC_AGG_SCAN_CREDITS     20
 
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
@@ -2150,6 +2153,7 @@ agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
 					DP_RC(rc));
 				D_GOTO(out, rc);
 			}
+			agg_param->ap_credits += EC_AGG_PROCESS_CREDITS;
 			D_ASSERT(agg_entry->ae_cur_stripe.as_extent_cnt == 0);
 		}
 	}
@@ -2172,6 +2176,7 @@ agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 				DP_RC(rc));
 			return rc;
 		}
+		agg_param->ap_credits += EC_AGG_PROCESS_CREDITS;
 
 		agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
 		agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
@@ -2449,14 +2454,14 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 			DP_OID(desc->id_oid.id_pub),
 			daos_obj_id2class(desc->id_oid.id_pub));
 		*acts = VOS_ITER_CB_SKIP;
-		agg_param->ap_credits++;
+		agg_param->ap_credits += EC_AGG_FILTER_CREDITS;
 		goto done;
 	}
 
 	if (!daos_oclass_is_ec(&oca)) { /* Skip non-EC object */
 		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" non-ec obj\n",
 			DP_UOID(desc->id_oid));
-		agg_param->ap_credits++;
+		agg_param->ap_credits += EC_AGG_FILTER_CREDITS;
 		*acts = VOS_ITER_CB_SKIP;
 		goto done;
 	}
@@ -2471,14 +2476,14 @@ check:
 			D_DEBUG(DB_EPC, "Skip key:"DF_KEY" agg_epoch="DF_X64" filter="DF_X64"\n",
 				DP_KEY(&desc->id_key), desc->id_agg_write,
 				agg_param->ap_filter_eph);
-		agg_param->ap_credits++;
+		agg_param->ap_credits += EC_AGG_FILTER_CREDITS;
 		*acts = VOS_ITER_CB_SKIP;
 		goto done;
 	}
 
 	/* This MUST be the last check */
 	if (desc->id_type == VOS_ITER_OBJ && vos_bkt_iter_skip(ih, desc)) {
-		agg_param->ap_credits++;
+		agg_param->ap_credits += EC_AGG_FILTER_CREDITS;
 		*acts |= VOS_ITER_CB_SKIP;
 		goto done;
 	}
@@ -2526,6 +2531,8 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 
 	props = dc_cont_hdl2props(info->api_cont_hdl);
 	md.omd_id = entry->ie_oid.id_pub;
+	md.omd_grp_spec = entry->ie_oid.id_shard / daos_oclass_grp_size(&oca);
+	md.omd_flags    = PL_FL_GRP_SPEC;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
 	md.omd_pdom_lvl = props.dcp_perf_domain;
@@ -2589,7 +2596,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	agg_param->ap_credits += 20;
+	agg_param->ap_credits += EC_AGG_SCAN_CREDITS;
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
 		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",

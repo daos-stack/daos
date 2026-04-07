@@ -1,6 +1,6 @@
 /**
- * Copyright 2019-2024 Intel Corporation.
- * Copyright 2026 Google LLC
+ * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */

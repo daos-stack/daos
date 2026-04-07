@@ -56,10 +56,13 @@ extern struct crt_proto_format rebuild_proto_fmt;
 	((uint32_t)		(rsi_rebuild_ver)	CRT_VAR) \
 	((uint32_t)		(rsi_master_rank)	CRT_VAR) \
 	((uint32_t)		(rsi_rebuild_gen)	CRT_VAR) \
-	((uint32_t)		(rsi_layout_ver)	CRT_VAR)
+	((uint32_t)		(rsi_layout_ver)	CRT_VAR) \
+	((uint32_t)		(rsi_phase)		CRT_VAR) \
+	((uint64_t)		(rsi_padding)		CRT_VAR)
 
 #define DAOS_OSEQ_REBUILD_SCAN	/* output fields */		 \
 	((uint64_t)		(rso_stable_epoch)	CRT_VAR) \
+	((uint64_t)		(rso_padding)		CRT_VAR) \
 	((int32_t)		(rso_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)
@@ -71,9 +74,11 @@ CRT_RPC_DECLARE(rebuild_scan, DAOS_ISEQ_REBUILD_SCAN, DAOS_OSEQ_REBUILD_SCAN)
 	((daos_unit_oid_t)	(roi_oids)		CRT_ARRAY) \
 	((uint64_t)		(roi_ephs)		CRT_ARRAY) \
 	((uuid_t)		(roi_uuids)		CRT_ARRAY) \
+	((uint64_t)		(roi_padding)		CRT_VAR) \
 	((uint32_t)		(roi_shards)		CRT_ARRAY)
 
 #define DAOS_OSEQ_REBUILD	/* output fields */		 \
+	((uint64_t)		(roo_padding)		CRT_VAR) \
 	((int32_t)		(roo_status)		CRT_VAR)
 
 CRT_RPC_DECLARE(rebuild, DAOS_ISEQ_REBUILD, DAOS_OSEQ_REBUILD)
