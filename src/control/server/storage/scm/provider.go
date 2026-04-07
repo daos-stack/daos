@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -51,14 +52,24 @@ type (
 		Mkfs(system.MkfsReq) error
 	}
 
+	// ProviderConfig contains dependencies for a Provider.
+	ProviderConfig struct {
+		Log         logging.Logger
+		Backend     Backend
+		Sys         SystemProvider
+		Mounter     storage.MountProvider
+		THPDetector hardware.THPDetector
+	}
+
 	// Provider encapsulates configuration and logic for
 	// providing SCM management and interrogation.
 	Provider struct {
-		log       logging.Logger
-		backend   Backend
-		sys       SystemProvider
-		mounter   storage.MountProvider
-		kernelCfg map[string]string
+		log         logging.Logger
+		backend     Backend
+		sys         SystemProvider
+		mounter     storage.MountProvider
+		thpDetector hardware.THPDetector
+		kernelCfg   system.KernelConfig
 	}
 )
 
@@ -92,27 +103,32 @@ func validateFormatRequest(r storage.ScmFormatRequest) error {
 
 // DefaultProvider returns an initialized *Provider suitable for use with production code.
 func DefaultProvider(log logging.Logger) *Provider {
-	return NewProvider(log, defaultCmdRunner(log), system.DefaultProvider(), mount.DefaultProvider(log))
+	return NewProvider(&ProviderConfig{
+		Log:     log,
+		Backend: defaultCmdRunner(log),
+		Sys:     system.DefaultProvider(),
+		Mounter: mount.DefaultProvider(log),
+	})
 }
 
 // NewProvider returns an initialized *Provider.
-func NewProvider(log logging.Logger, backend Backend, sys SystemProvider, mounter storage.MountProvider) *Provider {
+func NewProvider(cfg *ProviderConfig) *Provider {
 	// Parse kernel config once at provider init; it doesn't change at runtime.
 	// NB: If kernel config is needed outside of the scm provider, consider
 	// moving to a sync.Once-based accessor in the system package instead.
 	kernelCfg, err := system.ParseKernelConfig()
 	if err != nil {
-		log.Debugf("failed to parse kernel config: %s", err)
+		cfg.Log.Infof("failed to parse kernel config: %s", err)
 	}
 
-	p := &Provider{
-		log:       log,
-		backend:   backend,
-		sys:       sys,
-		mounter:   mounter,
-		kernelCfg: kernelCfg,
+	return &Provider{
+		log:         cfg.Log,
+		backend:     cfg.Backend,
+		sys:         cfg.Sys,
+		mounter:     cfg.Mounter,
+		thpDetector: cfg.THPDetector,
+		kernelCfg:   kernelCfg,
 	}
-	return p
 }
 
 // Scan attempts to scan the system for SCM storage components.
@@ -436,6 +452,27 @@ func (p *Provider) formatDcpm(req storage.ScmFormatRequest) (*storage.ScmFormatR
 	}, nil
 }
 
+// ramdiskHugepageOpt checks whether hugepages can be used for a tmpfs mount
+// and returns the appropriate mount option. It returns an error if hugepages
+// are requested but not available.
+func (p *Provider) ramdiskHugepageOpt(kernelCfg system.KernelConfig) (string, error) {
+	if !kernelCfg.IsEnabled("CONFIG_TRANSPARENT_HUGEPAGE") {
+		return "", FaultHugepagesNotSupported
+	}
+
+	if p.thpDetector != nil {
+		enabled, err := p.thpDetector.IsTHPEnabled()
+		if err != nil {
+			p.log.Noticef("unable to check transparent hugepage status: %s", err)
+		} else if !enabled {
+			p.log.Notice("transparent hugepages globally disabled but per-mount huge=always will still work; " +
+				"consider aligning global THP policy with server config")
+		}
+	}
+
+	return "huge=always", nil
+}
+
 // mountDcpm attempts to mount a DCPM device at the specified mountpoint.
 func (p *Provider) mountDcpm(device, target string) (*storage.MountResponse, error) {
 	return p.mounter.Mount(storage.MountRequest{
@@ -469,14 +506,14 @@ func (p *Provider) mountRamdisk(target string, params *storage.RamdiskParams, ke
 
 // doMountRamdisk performs the actual ramdisk mount. It is separated from mountRamdisk
 // to allow unit testing with synthetic kernel config values.
-func (p *Provider) doMountRamdisk(target string, params *storage.RamdiskParams, kernelCfg map[string]string) (*storage.MountResponse, error) {
+func (p *Provider) doMountRamdisk(target string, params *storage.RamdiskParams, kernelCfg system.KernelConfig) (*storage.MountResponse, error) {
 	if params == nil {
 		return nil, FaultFormatMissingParam
 	}
 
 	var mountOpts []string
 
-	if system.IsKernelConfigEnabled(kernelCfg, "CONFIG_NUMA") {
+	if kernelCfg.IsEnabled("CONFIG_NUMA") {
 		// https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html
 		// mpol=prefer:Node prefers to allocate memory from the given Node
 		mountOpts = append(mountOpts, fmt.Sprintf("mpol=prefer:%d", params.NUMANode))
@@ -486,10 +523,14 @@ func (p *Provider) doMountRamdisk(target string, params *storage.RamdiskParams, 
 	if params.Size > 0 {
 		mountOpts = append(mountOpts, fmt.Sprintf("size=%dg", params.Size))
 	}
-	if !params.DisableHugepages && system.IsKernelConfigEnabled(kernelCfg, "CONFIG_TRANSPARENT_HUGEPAGE") {
-		mountOpts = append(mountOpts, "huge=always")
-	} else if !params.DisableHugepages {
-		p.log.Debug("transparent hugepage kernel support not detected; skipping tmpfs huge option")
+	if !params.DisableHugepages {
+		hugeOpt, err := p.ramdiskHugepageOpt(kernelCfg)
+		if err != nil {
+			return nil, err
+		}
+		if hugeOpt != "" {
+			mountOpts = append(mountOpts, hugeOpt)
+		}
 	}
 
 	return p.mounter.Mount(storage.MountRequest{

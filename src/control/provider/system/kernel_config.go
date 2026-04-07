@@ -18,10 +18,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// KernelConfig is a parsed kernel configuration, mapping option names
+// (e.g. "CONFIG_TRANSPARENT_HUGEPAGE") to their values (e.g. "y", "m", "n").
+type KernelConfig map[string]string
+
 // parseKernelConfig parses kernel configuration from a reader into a map of
 // config option names to their raw string values.
-func parseKernelConfig(r io.Reader) (map[string]string, error) {
-	config := make(map[string]string)
+func parseKernelConfig(r io.Reader) (KernelConfig, error) {
+	config := make(KernelConfig)
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
@@ -50,7 +54,7 @@ func parseKernelConfig(r io.Reader) (map[string]string, error) {
 
 // parseKernelConfigFile opens and parses a kernel config file at the given path.
 // If the path ends in .gz, the file is decompressed before parsing.
-func parseKernelConfigFile(path string) (map[string]string, error) {
+func parseKernelConfigFile(path string) (KernelConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "opening kernel config %s", path)
@@ -74,7 +78,7 @@ func parseKernelConfigFile(path string) (map[string]string, error) {
 // If overridePath is non-empty, only that path is tried. Otherwise, it
 // tries /proc/config.gz (if CONFIG_IKCONFIG_PROC is enabled), then falls
 // back to /boot/config-<kernel-release>.
-func ParseKernelConfig(overridePath ...string) (map[string]string, error) {
+func ParseKernelConfig(overridePath ...string) (KernelConfig, error) {
 	if len(overridePath) > 0 && overridePath[0] != "" {
 		return parseKernelConfigFile(overridePath[0])
 	}
@@ -96,16 +100,16 @@ func ParseKernelConfig(overridePath ...string) (map[string]string, error) {
 	return parseKernelConfigFile(bootConfig)
 }
 
-// IsKernelConfigEnabled returns true if the given config option is enabled
-// (set to "y" or "m") in the provided config map. Returns false if config is nil.
-func IsKernelConfigEnabled(config map[string]string, key string) bool {
-	val, ok := config[key]
+// IsEnabled returns true if the given config option is enabled
+// (set to "y" or "m"). Returns false if the receiver is nil.
+func (c KernelConfig) IsEnabled(key string) bool {
+	val, ok := c[key]
 	return ok && (val == "y" || val == "m")
 }
 
-// GetKernelConfigValue returns the raw value of a kernel config option and
-// a boolean indicating whether the option was present in the config.
-func GetKernelConfigValue(config map[string]string, key string) (string, bool) {
-	val, ok := config[key]
+// GetValue returns the raw value of a kernel config option and
+// a boolean indicating whether the option was present.
+func (c KernelConfig) GetValue(key string) (string, bool) {
+	val, ok := c[key]
 	return val, ok
 }

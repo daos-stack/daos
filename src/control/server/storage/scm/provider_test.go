@@ -285,7 +285,8 @@ func TestProvider_CheckFormat(t *testing.T) {
 			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
 				Ramdisk: &storage.RamdiskParams{
-					Size: 1,
+					Size:             1,
+					DisableHugepages: true,
 				},
 				Dcpm: &storage.DeviceParams{
 					Device: goodDevice,
@@ -415,7 +416,8 @@ func TestProvider_CheckFormat(t *testing.T) {
 				req = &storage.ScmFormatRequest{
 					Mountpoint: tc.mountPoint,
 					Ramdisk: &storage.RamdiskParams{
-						Size: 1,
+						Size:             1,
+						DisableHugepages: true,
 					},
 				}
 			}
@@ -466,7 +468,8 @@ func TestProvider_Format(t *testing.T) {
 			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
 				Ramdisk: &storage.RamdiskParams{
-					Size: 1,
+					Size:             1,
+					DisableHugepages: true,
 				},
 				Dcpm: &storage.DeviceParams{
 					Device: goodDevice,
@@ -519,7 +522,8 @@ func TestProvider_Format(t *testing.T) {
 			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
 				Ramdisk: &storage.RamdiskParams{
-					Size: 1,
+					Size:             1,
+					DisableHugepages: true,
 				},
 			},
 			expResponse: &storage.ScmFormatResponse{
@@ -546,7 +550,8 @@ func TestProvider_Format(t *testing.T) {
 			request: &storage.ScmFormatRequest{
 				Mountpoint: badMountPoint,
 				Ramdisk: &storage.RamdiskParams{
-					Size: 1,
+					Size:             1,
+					DisableHugepages: true,
 				},
 			},
 			makeMountpointErr: errors.New("mock MakeMountpoint"),
@@ -557,7 +562,8 @@ func TestProvider_Format(t *testing.T) {
 				Force:      true,
 				Mountpoint: goodMountPoint,
 				Ramdisk: &storage.RamdiskParams{
-					Size: 1,
+					Size:             1,
+					DisableHugepages: true,
 				},
 			},
 			alreadyMounted: true,
@@ -572,7 +578,8 @@ func TestProvider_Format(t *testing.T) {
 				Force:      true,
 				Mountpoint: goodMountPoint,
 				Ramdisk: &storage.RamdiskParams{
-					Size: 1,
+					Size:             1,
+					DisableHugepages: true,
 				},
 			},
 			alreadyMounted:     true,
@@ -583,7 +590,8 @@ func TestProvider_Format(t *testing.T) {
 			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
 				Ramdisk: &storage.RamdiskParams{
-					Size: 1,
+					Size:             1,
+					DisableHugepages: true,
 				},
 			},
 			chownErr: errors.New("chown failed"),
@@ -594,7 +602,8 @@ func TestProvider_Format(t *testing.T) {
 				Force:      true,
 				Mountpoint: goodMountPoint,
 				Ramdisk: &storage.RamdiskParams{
-					Size: 1,
+					Size:             1,
+					DisableHugepages: true,
 				},
 			},
 			alreadyMounted: true,
@@ -838,7 +847,8 @@ func TestProvider_Format(t *testing.T) {
 				req = &storage.ScmFormatRequest{
 					Mountpoint: tc.mountPoint,
 					Ramdisk: &storage.RamdiskParams{
-						Size: 1,
+						Size:             1,
+						DisableHugepages: true,
 					},
 				}
 			}
@@ -899,7 +909,7 @@ func TestProvider_doMountRamdisk(t *testing.T) {
 	for name, tc := range map[string]struct {
 		target       string
 		params       *storage.RamdiskParams
-		kernelCfg    map[string]string
+		kernelCfg    system.KernelConfig
 		expMountOpts string
 		expErr       error
 	}{
@@ -913,7 +923,7 @@ func TestProvider_doMountRamdisk(t *testing.T) {
 				Size:     1,
 				NUMANode: 0,
 			},
-			kernelCfg: map[string]string{
+			kernelCfg: system.KernelConfig{
 				"CONFIG_NUMA":                 "y",
 				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
 			},
@@ -925,7 +935,7 @@ func TestProvider_doMountRamdisk(t *testing.T) {
 				Size:     2,
 				NUMANode: 1,
 			},
-			kernelCfg: map[string]string{
+			kernelCfg: system.KernelConfig{
 				"CONFIG_NUMA":                 "y",
 				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
 			},
@@ -937,21 +947,21 @@ func TestProvider_doMountRamdisk(t *testing.T) {
 				Size:     1,
 				NUMANode: 0,
 			},
-			kernelCfg: map[string]string{
+			kernelCfg: system.KernelConfig{
 				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
 			},
 			expMountOpts: "size=1g,huge=always",
 		},
-		"NUMA enabled; THP disabled": {
+		"NUMA enabled; THP not in kernel config": {
 			target: "/mnt/daos",
 			params: &storage.RamdiskParams{
 				Size:     1,
 				NUMANode: 0,
 			},
-			kernelCfg: map[string]string{
+			kernelCfg: system.KernelConfig{
 				"CONFIG_NUMA": "y",
 			},
-			expMountOpts: "mpol=prefer:0,size=1g",
+			expErr: FaultHugepagesNotSupported,
 		},
 		"NUMA enabled; hugepages disabled in params": {
 			target: "/mnt/daos",
@@ -960,7 +970,7 @@ func TestProvider_doMountRamdisk(t *testing.T) {
 				NUMANode:         0,
 				DisableHugepages: true,
 			},
-			kernelCfg: map[string]string{
+			kernelCfg: system.KernelConfig{
 				"CONFIG_NUMA":                 "y",
 				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
 			},
@@ -973,24 +983,34 @@ func TestProvider_doMountRamdisk(t *testing.T) {
 				NUMANode:         0,
 				DisableHugepages: true,
 			},
-			kernelCfg:    map[string]string{},
+			kernelCfg:    system.KernelConfig{},
 			expMountOpts: "size=1g",
 		},
-		"kernel config nil": {
+		"kernel config nil; hugepages not in params": {
+			target: "/mnt/daos",
+			params: &storage.RamdiskParams{
+				Size:             1,
+				NUMANode:         0,
+				DisableHugepages: true,
+			},
+			kernelCfg:    nil,
+			expMountOpts: "size=1g",
+		},
+		"kernel config nil; hugepages requested": {
 			target: "/mnt/daos",
 			params: &storage.RamdiskParams{
 				Size:     1,
 				NUMANode: 0,
 			},
-			kernelCfg:    nil,
-			expMountOpts: "size=1g",
+			kernelCfg: nil,
+			expErr:    FaultHugepagesNotSupported,
 		},
 		"zero size": {
 			target: "/mnt/daos",
 			params: &storage.RamdiskParams{
 				NUMANode: 0,
 			},
-			kernelCfg: map[string]string{
+			kernelCfg: system.KernelConfig{
 				"CONFIG_NUMA":                 "y",
 				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
 			},
@@ -1024,15 +1044,15 @@ func TestProvider_mountRamdisk(t *testing.T) {
 	testKernelConfig := "CONFIG_NUMA=y\nCONFIG_TRANSPARENT_HUGEPAGE=y\n"
 
 	for name, tc := range map[string]struct {
-		kernelCfg        map[string]string // pre-populated on provider
-		kernelConfigPath string            // override path passed via request
-		configContent    string            // content written to override file
-		badPath          bool              // set override path to nonexistent file
+		kernelCfg        system.KernelConfig // pre-populated on provider
+		kernelConfigPath string              // override path passed via request
+		configContent    string              // content written to override file
+		badPath          bool                // set override path to nonexistent file
 		expErr           error
 		expMountOpts     string
 	}{
 		"kernel config cached at init": {
-			kernelCfg: map[string]string{
+			kernelCfg: system.KernelConfig{
 				"CONFIG_NUMA":                 "y",
 				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
 			},
@@ -1050,12 +1070,13 @@ func TestProvider_mountRamdisk(t *testing.T) {
 			expErr:  errors.New("parsing kernel config"),
 		},
 		"kernel config cached; override path ignored": {
-			kernelCfg: map[string]string{
-				"CONFIG_NUMA": "y",
+			kernelCfg: system.KernelConfig{
+				"CONFIG_NUMA":                 "y",
+				"CONFIG_TRANSPARENT_HUGEPAGE": "y",
 			},
 			configContent: testKernelConfig,
-			// THP comes from cached config (missing), not override file
-			expMountOpts: "mpol=prefer:0,size=1g",
+			// Uses cached config, not override file
+			expMountOpts: "mpol=prefer:0,size=1g,huge=always",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

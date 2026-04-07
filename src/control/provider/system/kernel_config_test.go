@@ -16,41 +16,41 @@ import (
 func TestParseKernelConfig(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input  string
-		expect map[string]string
+		expect KernelConfig
 	}{
 		"empty": {
 			input:  "",
-			expect: map[string]string{},
+			expect: KernelConfig{},
 		},
 		"comments only": {
 			input: `# This is a comment
 # Another comment
 `,
-			expect: map[string]string{},
+			expect: KernelConfig{},
 		},
 		"builtin option": {
 			input:  "CONFIG_NUMA=y",
-			expect: map[string]string{"CONFIG_NUMA": "y"},
+			expect: KernelConfig{"CONFIG_NUMA": "y"},
 		},
 		"module option": {
 			input:  "CONFIG_EXT4_FS=m",
-			expect: map[string]string{"CONFIG_EXT4_FS": "m"},
+			expect: KernelConfig{"CONFIG_EXT4_FS": "m"},
 		},
 		"disabled option": {
 			input:  "CONFIG_DEBUG=n",
-			expect: map[string]string{"CONFIG_DEBUG": "n"},
+			expect: KernelConfig{"CONFIG_DEBUG": "n"},
 		},
 		"string value": {
 			input:  `CONFIG_DEFAULT_HOSTNAME="(none)"`,
-			expect: map[string]string{"CONFIG_DEFAULT_HOSTNAME": `"(none)"`},
+			expect: KernelConfig{"CONFIG_DEFAULT_HOSTNAME": `"(none)"`},
 		},
 		"integer value": {
 			input:  "CONFIG_LOG_BUF_SHIFT=17",
-			expect: map[string]string{"CONFIG_LOG_BUF_SHIFT": "17"},
+			expect: KernelConfig{"CONFIG_LOG_BUF_SHIFT": "17"},
 		},
 		"hex value": {
 			input:  "CONFIG_PHYSICAL_START=0x1000000",
-			expect: map[string]string{"CONFIG_PHYSICAL_START": "0x1000000"},
+			expect: KernelConfig{"CONFIG_PHYSICAL_START": "0x1000000"},
 		},
 		"mixed content": {
 			input: `#
@@ -67,7 +67,7 @@ CONFIG_HZ=1000
 # Memory management
 CONFIG_TRANSPARENT_HUGEPAGE=y
 `,
-			expect: map[string]string{
+			expect: KernelConfig{
 				"CONFIG_NUMA":                 "y",
 				"CONFIG_SMP":                  "y",
 				"CONFIG_MODULES":              "m",
@@ -81,7 +81,7 @@ CONFIG_TRANSPARENT_HUGEPAGE=y
 			input: `  CONFIG_FOO=y
 	CONFIG_BAR=m
 `,
-			expect: map[string]string{
+			expect: KernelConfig{
 				"CONFIG_FOO": "y",
 				"CONFIG_BAR": "m",
 			},
@@ -100,8 +100,8 @@ CONFIG_TRANSPARENT_HUGEPAGE=y
 	}
 }
 
-func TestIsKernelConfigEnabled(t *testing.T) {
-	config := map[string]string{
+func TestKernelConfig_IsEnabled(t *testing.T) {
+	config := KernelConfig{
 		"CONFIG_NUMA":     "y",
 		"CONFIG_EXT4_FS":  "m",
 		"CONFIG_DEBUG":    "n",
@@ -139,7 +139,7 @@ func TestIsKernelConfigEnabled(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result := IsKernelConfigEnabled(config, tc.key)
+			result := config.IsEnabled(tc.key)
 			if result != tc.expect {
 				t.Errorf("expected %v, got %v", tc.expect, result)
 			}
@@ -157,7 +157,8 @@ func TestIsKernelConfigEnabled(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result := IsKernelConfigEnabled(nil, tc.key)
+			var nilCfg KernelConfig
+			result := nilCfg.IsEnabled(tc.key)
 			if result != tc.expect {
 				t.Errorf("expected %v, got %v", tc.expect, result)
 			}
@@ -165,8 +166,8 @@ func TestIsKernelConfigEnabled(t *testing.T) {
 	}
 }
 
-func TestGetKernelConfigValue(t *testing.T) {
-	config := map[string]string{
+func TestKernelConfig_GetValue(t *testing.T) {
+	config := KernelConfig{
 		"CONFIG_NUMA": "y",
 		"CONFIG_HZ":   "1000",
 	}
@@ -193,7 +194,7 @@ func TestGetKernelConfigValue(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			val, ok := GetKernelConfigValue(config, tc.key)
+			val, ok := config.GetValue(tc.key)
 			if val != tc.expectVal {
 				t.Errorf("expected value %q, got %q", tc.expectVal, val)
 			}

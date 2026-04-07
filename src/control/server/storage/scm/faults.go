@@ -98,6 +98,12 @@ var (
 		"kernel config is unavailable; unable to determine tmpfs mount options",
 		"set kernel_config_path in the server config to specify an alternate location "+
 			"(e.g. a bind-mounted host kernel config in containerized environments)")
+
+	// FaultHugepagesNotSupported indicates that hugepages were requested
+	// but the kernel does not have CONFIG_TRANSPARENT_HUGEPAGE enabled.
+	FaultHugepagesNotSupported = scmFault(code.ScmHugepagesNotSupported,
+		"hugepages requested but kernel does not support transparent hugepages (CONFIG_TRANSPARENT_HUGEPAGE not set)",
+		"set scm_hugepages_disabled: true in the server config, or rebuild the kernel with CONFIG_TRANSPARENT_HUGEPAGE")
 )
 
 // FaultIpmctlBadVersion represents an error where an incompatible version of

@@ -87,6 +87,7 @@ const (
 	ScmRamdiskBadSize
 	ScmConfigTierMissing
 	ScmKernelConfigUnavailable
+	ScmHugepagesNotSupported
 )
 
 // Bdev fault codes
