@@ -145,8 +145,14 @@ $ export PATH=<mpich bin path>:$PATH
 ```
 
 Install dependencies
+
+For RHEL:
 ```sh
 $ sudo dnf install -y daos-devel libattr-devel bzip2-devel
+```
+For SLES:
+```sh
+$ sudo zypper install -y daos-devel libattr-devel libbz2-devel
 ```
 
 Build other dependencies
@@ -193,6 +199,7 @@ Build mpifileutils
 $ wget https://github.com/hpc/mpifileutils/releases/download/v0.11.1/mpifileutils-v0.11.1.tgz
 $ tar -zxf mpifileutils-v0.11.1.tgz
 $ cd mpifileutils-v0.11.1/
+$ mkdir build; cd build
 $ cmake .. -DWITH_LibArchive_PREFIX=$installdir -DWITH_DTCMP_PREFIX=$installdir -DWITH_LibCircle_PREFIX=$installdir -DCMAKE_INSTALL_PREFIX=$installdir -DWITH_DAOS_PREFIX=/usr/ -DENABLE_DAOS=ON -DMPI_C_COMPILER=${HOME}/software/mpich/bin/mpicc -DMPI_CXX_COMPILER=${HOME}/software/mpich/bin/mpicxx
 $ make -j install
 $ cd
@@ -396,8 +403,8 @@ $ rm -rf /tmp/daos_dfuse/daos_container_copy
 2. Remove dfuse mountpoint:
 
 ```sh
-$ pdsh -w $CLIENT_NODES 'fusermount3 -uz /tmp/daos_dfuse'
-$ pdsh -w $CLIENT_NODES rm -rf /tmp/daos_dfuse
+$ clush -B -w $CLIENT_NODES 'fusermount3 -uz /tmp/daos_dfuse'
+$ clush -B -w $CLIENT_NODES rm -rf /tmp/daos_dfuse
 ```
 
 

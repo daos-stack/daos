@@ -80,7 +80,7 @@ daos-server RPM.
 
 4. Install `mercury-ucx` or `mercury-libfabric` RPMs on all nodes. For more details, reference [Network Requirements](https://docs.daos.io/v2.6/admin/hardware/#network-requirements).
 
-		clush -B -w $ALL_NODES 'sudo dnf install -y mercury-ucx
+		clush -B -w $ALL_NODES 'sudo dnf install -y mercury-ucx'
 
 5. Install the `daos-admin` RPMs on the admin nodes:
 

@@ -82,7 +82,7 @@ daos-server RPM.
 
 4. Install `mercury-ucx` or `mercury-libfabric` RPMs on all nodes. For more details, reference [Network Requirements](https://docs.daos.io/v2.6/admin/hardware/#network-requirements).
 
-		clush -B -w $ALL_NODES 'sudo zypper install -y mercury-ucx
+		clush -B -w $ALL_NODES 'sudo zypper install -y mercury-ucx'
 
 5. Install the `daos-admin` RPMs on the admin nodes:
 
@@ -94,7 +94,7 @@ daos-server RPM.
 
 7. Install the `daos-client` RPMs on the client nodes:
 
-		pclush -Bdsh -w $CLIENT_NODES 'sudo zypper install -y daos-client'
+		clush -B -w $CLIENT_NODES 'sudo zypper install -y daos-client'
 
 
 ## Generate certificates
@@ -146,60 +146,60 @@ for more information.
 2.  Copy the certificates to a common location on each node in order to
     move them to the final location:
 
-		pdsh -S -w $ALL_NODES -x $(hostname -s) scp -r $(hostname -s):/tmp/daosCA /tmp
+		clush -B -w $ALL_NODES --copy /tmp/daosCA --dest /tmp
 
 3.  Copy the certificates to their default location (/etc/daos) on each
     admin node:
 
-		pdsh -S -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
-		pdsh -S -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/admin.crt /etc/daos/certs/.
-		pdsh -S -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/admin.key /etc/daos/certs/.
+		clush -B -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
+		clush -B -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/admin.crt /etc/daos/certs/.
+		clush -B -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/admin.key /etc/daos/certs/.
 
 	!!! note
 			If the /etc/daos/certs directory does not exist on the admin nodes then use the following command to create it:
 
-				pdsh -S -w $ADMIN_NODES sudo mkdir /etc/daos/certs
+				clush -B -w $ADMIN_NODES sudo mkdir /etc/daos/certs
 
 4.  Copy the certificates to their default location (/etc/daos) on each
     client node:
 
-		pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
-		pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/.
-		pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.key /etc/daos/certs/.
+		clush -B -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
+		clush -B -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/.
+		clush -B -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.key /etc/daos/certs/.
 
 	!!! note
 		If the /etc/daos/certs directory does not exist on the client nodes, use the following command to create it:
 
-			pdsh -S -w $CLIENT_NODES sudo mkdir /etc/daos/certs
+			clush -B -w $CLIENT_NODES sudo mkdir /etc/daos/certs
 
 5. Copy the certificates to their default location (/etc/daos) on each
     server node:
 
-		pdsh -S -w $SERVER_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
-		pdsh -S -w $SERVER_NODES sudo cp /tmp/daosCA/certs/server.crt /etc/daos/certs/.
-		pdsh -S -w $SERVER_NODES sudo cp /tmp/daosCA/certs/server.key /etc/daos/certs/.
-		pdsh -S -w $SERVER_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/clients/agent.crt
+		clush -B -w $SERVER_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
+		clush -B -w $SERVER_NODES sudo cp /tmp/daosCA/certs/server.crt /etc/daos/certs/.
+		clush -B -w $SERVER_NODES sudo cp /tmp/daosCA/certs/server.key /etc/daos/certs/.
+		clush -B -w $SERVER_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/clients/agent.crt
 
 6. Cleanup the temp directory
 
-		pdsh -S -w $ALL_NODES sudo rm -rf /tmp/daosCA
+		clush -B -w $ALL_NODES sudo rm -rf /tmp/daosCA
 
 7. Set the ownership of the admin certificates on each admin node:
 
-		pdsh -S -w $ADMIN_NODES sudo chown $USER: /etc/daos/certs/daosCA.crt
-		pdsh -S -w $ADMIN_NODES sudo chown $USER: /etc/daos/certs/admin.*
+		clush -B -w $ADMIN_NODES sudo chown $USER: /etc/daos/certs/daosCA.crt
+		clush -B -w $ADMIN_NODES sudo chown $USER: /etc/daos/certs/admin.*
 
 8. Set the ownership of the client certificates on each client node:
 
-		pdsh -S -w $CLIENT_NODES sudo chown $USER: /etc/daos/certs/daosCA.crt
-		pdsh -S -w $CLIENT_NODES sudo chown daos_agent:daos_agent /etc/daos/certs/agent.*
+		clush -B -w $CLIENT_NODES sudo chown $USER: /etc/daos/certs/daosCA.crt
+		clush -B -w $CLIENT_NODES sudo chown daos_agent:daos_agent /etc/daos/certs/agent.*
 
 9. Set the ownership of the server certificates on each server node:
 
-		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/daosCA.crt
-		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/server.*
-		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clients/agent.crt
-		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clients
+		clush -B -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/daosCA.crt
+		clush -B -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/server.*
+		clush -B -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clients/agent.crt
+		clush -B -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clients
 
 
 ## Hardware Provisioning
