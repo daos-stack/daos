@@ -149,7 +149,6 @@ func (cfg *Server) WithFabricProvider(provider string) *Server {
 // WithFabricAuthKey sets the top-level fabric authorization key.
 func (cfg *Server) WithFabricAuthKey(key string) *Server {
 	cfg.Fabric.AuthKey = key
-	cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	for _, engine := range cfg.Engines {
 		engine.Fabric.AuthKey = cfg.Fabric.AuthKey
 	}
@@ -409,10 +408,6 @@ func (cfg *Server) Load(log logging.Logger) error {
 	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
-	}
-
-	if cfg.Fabric.AuthKey != "" {
-		cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	}
 
 	if len(cfg.deprecatedParams.AccessPoints) > 0 {
@@ -919,7 +914,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenHelperStreamCount := -1
 	seenScmCls := storage.ClassNone
 	seenScmClsIdx := -1
-	seenScmHuge := false
+	var seenScmHuge *bool
 	seenScmHugeIdx := -1
 
 	for idx, engine := range cfg.Engines {
@@ -968,10 +963,18 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			seenScmCls = scmConf.Class
 			seenScmClsIdx = idx
 
-			if seenScmHugeIdx != -1 && scmConf.Scm.DisableHugepages != seenScmHuge {
-				log.Debugf("scm_hugepages_disabled entry %v in %d doesn't match %d",
-					scmConf.Scm.DisableHugepages, idx, seenScmHugeIdx)
-				return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+			if seenScmHugeIdx != -1 {
+				switch {
+				case scmConf.Scm.DisableHugepages == nil && seenScmHuge == nil:
+				case scmConf.Scm.DisableHugepages != nil && seenScmHuge == nil:
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				case scmConf.Scm.DisableHugepages == nil && seenScmHuge != nil:
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				case *scmConf.Scm.DisableHugepages != *seenScmHuge:
+					log.Debugf("scm_hugepages_disabled entry %v in %d doesn't match %d",
+						*scmConf.Scm.DisableHugepages, idx, seenScmHugeIdx)
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				}
 			}
 			seenScmHuge = scmConf.Scm.DisableHugepages
 			seenScmHugeIdx = idx

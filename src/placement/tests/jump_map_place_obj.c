@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -352,7 +353,7 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	for (i = 0; i < node_count; i++) {
 		uint32_t idx = md_len + domains_only_len + i;
 
-		assert_in_range(idx, md_len + domains_only_len, domain_tree_len - 1);
+		assert_int_in_range(idx, md_len + domains_only_len, domain_tree_len - 1);
 		domain_tree[idx] = ctx->domain_nr + i;
 		rank_list.rl_ranks[i] = ctx->domain_nr + i;
 	}
