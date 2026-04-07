@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2017-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -318,20 +318,21 @@ struct rebuild_iv {
 	uint64_t	riv_size;
 	uint64_t	riv_leader_term;
 	uint64_t	riv_stable_epoch;
+	uint64_t        riv_reserve[3];
 	uint32_t	riv_seconds;
 	uint32_t	riv_dtx_resyc_version;
 	uint32_t	riv_global_dtx_resyc_version;
-	unsigned int	riv_rank;
-	unsigned int	riv_master_rank;
-	unsigned int	riv_ver;
-	unsigned int	riv_rebuild_gen;
+	uint32_t        riv_rank;
+	uint32_t        riv_master_rank;
+	uint32_t        riv_ver;
+	uint32_t        riv_rebuild_gen;
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
 			riv_pull_done:1,
 			riv_sync:1;
-	int		riv_status;
-
+	int32_t  riv_status;
+	uint32_t riv_bukid; /* bucket ID */
 };
 
 extern struct dss_module_key rebuild_module_key;
