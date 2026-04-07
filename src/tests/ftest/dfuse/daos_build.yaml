@@ -22,6 +22,8 @@ pool:
 
 container:
   type: POSIX
+  file_oclass: S1
+  dir_oclass: S1
   control_method: daos
 
 dfuse:

@@ -135,7 +135,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
             'python3 -m pip install pip --upgrade',
             f'python3 -m pip install -r {build_dir}/requirements-build.txt',
-            f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
+            f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only USE_INSTALLED=fused,lz4,isal,isal_crypto',
             f'daos filesystem query {mount_dir}',
             f'daos filesystem evict {build_dir}',
             f'daos filesystem query {mount_dir}',
