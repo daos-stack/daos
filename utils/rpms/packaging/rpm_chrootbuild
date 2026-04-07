@@ -53,6 +53,14 @@ EOF
 repo_adds=()
 repo_dels=()
 
+# Only for Leap 15.6 chroot
+# see ../../docker/Dockerfile.leap.15 for more details
+if [[ "${CHROOT_NAME}" == *opensuse-leap-15.6* ]]; then
+    repo_adds+=("--enablerepo=*opensuse-devel-languages-lua-*")
+    repo_adds+=("--enablerepo=*opensuse-network-cluster-*")
+    repo_adds+=("--enablerepo=*opensuse-oss-*")
+fi
+
 echo -e "config_opts['yum.conf'] += \"\"\"\n" >> mock.cfg
 
 if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
@@ -120,6 +128,23 @@ baseurl=${repo//\//%2F}\n\
 enabled=1\n" >> mock.cfg
 done
 echo "\"\"\"" >> mock.cfg
+
+# Only for Leap 15.6 chroot
+# see ../../docker/Dockerfile.leap.15 for more details
+if [[ "${CHROOT_NAME}" == *opensuse-leap-15.6* ]]; then
+    # Ensure lua-lmod is installed in the chroot
+    cat >> mock.cfg <<'EOF'
+
+_pkgs = config_opts.get('chroot_additional_packages')
+if _pkgs is None:
+    config_opts['chroot_additional_packages'] = ['lua-lmod']
+elif isinstance(_pkgs, str):
+    config_opts['chroot_additional_packages'] = f"{_pkgs} lua-lmod".strip()
+else:
+    config_opts['chroot_additional_packages'] = list(_pkgs) + ['lua-lmod']
+EOF
+
+fi
 
 if [ -n "$DISTRO_VERSION" ]; then
     releasever_opt=("--config-opts=releasever=$DISTRO_VERSION")
