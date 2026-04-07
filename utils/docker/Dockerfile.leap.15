@@ -45,6 +45,20 @@ RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
     dnf clean all &&      \
     rm -f /tmp/install.sh
 
+# According to https://pkgs.org/search/?q=lua-lmod, Leap 15.6 only has lua-lmod-8.7.34.
+# This version has a problem with loading modules, as described in https://github.com/TACC/Lmod/issues/687.
+# This affects MPI detection in scons, so DAOS cannot be built with MPI support.
+# A custom source of the package is required in CI to install a valid version
+# of lua-lmod and its dependencies:
+# opensuse-network-cluster for lua-lmod (>=8.7.55)
+# opensuse-oss for lua53, lua53-luaterm,, sqlite3-tcl, tcl
+# opensuse-devel-languages-lua for lua53-luafilesystem, lua53-luaposix
+ARG JENKINS_URL
+RUN if [ -n "$JENKINS_URL" ]; then \
+    dnf -y remove lua-lmod; \
+    dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*'; \
+    fi
+
 # Add DAOS users
 ARG UID=1000
 COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
