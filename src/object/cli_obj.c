@@ -5413,18 +5413,6 @@ args_fini:
 			D_ASSERT(d_list_empty(head));
 		}
 
-		/* Free sub_anchors on final task completion (error or non-EOF success).
-		 * For the EOF case, anchor_update_check_eof() already freed and NULLed it,
-		 * so sub_anchors_free() is a no-op (obj_get_sub_anchors returns NULL).
-		 * KEY2ANCHOR also uses sub_anchors but is not an enum opc, handle separately.
-		 */
-		if ((obj_is_enum_opc(obj_auxi->opc) || obj_auxi->opc == DAOS_OBJ_RPC_KEY2ANCHOR) &&
-		    obj_auxi->sub_anchors) {
-			daos_obj_list_t *list_args = dc_task_get_args(task);
-
-			sub_anchors_free(list_args, obj_auxi->opc);
-		}
-
 		if (obj_auxi->is_ec_obj)
 			obj_ec_comp_cb(obj_auxi);
 		else
