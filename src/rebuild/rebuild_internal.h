@@ -78,10 +78,12 @@ struct rebuild_tgt_pool_tracker {
 
 	/* Only used by reclaim job to discard those half-rebuild data */
 	uint64_t		rt_reclaim_epoch;
-	/* local rebuild epoch mainly to constrain the VOS aggregation
-	 * to make sure aggregation will not cross the epoch
+	/*
+	 * XX: remove this.
+	 * rebuild_fini_one() compare this value against rt_rebuild_start to
+	 * decide whether this rebuild still owns this vos pool's rebuild.
 	 */
-	uint64_t		rt_rebuild_fence;
+	uint64_t                 rt_rebuild_start;
 
 	uint32_t		rt_leader_rank;
 

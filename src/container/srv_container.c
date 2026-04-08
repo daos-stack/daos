@@ -1945,12 +1945,6 @@ cont_refresh_track_eph_one(void *data)
 	if (rc)
 		return rc;
 
-	/* temporarily stop refreshing sc_ec_agg_eph_boundary when rebuild is running,
-	 * so VOS aggregation can't progress to higher epoch.
-	 */
-	if (ds_pool_is_rebuilding(cont_child->sc_pool->spc_pool))
-		goto out;
-
 	D_DEBUG(DB_MD, DF_CONT": %s ec agg boundary eph "DF_X64"->"DF_X64", "
 		": %s stable eph "DF_X64"->"DF_X64"\n",
 		DP_CONT(arg->pool_uuid, arg->cont_uuid),
@@ -1973,7 +1967,7 @@ cont_refresh_track_eph_one(void *data)
 		else
 			rc = 0;
 	}
-out:
+
 	ds_cont_child_put(cont_child);
 	return rc;
 }

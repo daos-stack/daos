@@ -2869,20 +2869,15 @@ rebuild_fini_one(void *arg)
 	if (dpc == NULL)
 		return 0;
 
-	/* Reset rebuild epoch, then reset the aggregation epoch, so
-	 * it can aggregate the rebuild epoch.
-	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
-		dpc->spc_rebuild_fence = 0;
-		dpc->spc_rebuild_end_hlc = d_hlc_get();
-		D_DEBUG(DB_REBUILD, DF_RB ": Reset aggregation end hlc " DF_U64 "\n",
-			DP_RB_RPT(rpt), dpc->spc_rebuild_end_hlc);
+	D_ASSERT(rpt->rt_rebuild_start != 0);
+	if (rpt->rt_rebuild_start == dpc->spc_rebuild_start) {
+		dpc->spc_rebuild_start = 0;
+		D_DEBUG(DB_REBUILD, DF_RB ": Reset rebuild start epoch\n", DP_RB_RPT(rpt));
 	} else {
 		D_DEBUG(DB_REBUILD,
-			DF_RB ": pool is still being rebuilt rt_rebuild_fence " DF_U64
-			      " spc_rebuild_fence " DF_U64 "\n",
-			DP_RB_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
+			DF_RB ": pool is still being rebuilt rt_rebuild_start " DF_U64
+			      " spc_rebuild_start " DF_U64 "\n",
+			DP_RB_RPT(rpt), rpt->rt_rebuild_start, dpc->spc_rebuild_start);
 	}
 
 	ds_pool_child_put(dpc);
@@ -3129,13 +3124,10 @@ rebuild_prepare_one(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	/* Set the rebuild epoch per VOS container, so VOS aggregation will not
-	 * cross the epoch to cause problem.
-	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	dpc->spc_rebuild_fence = rpt->rt_rebuild_fence;
+	D_ASSERT(rpt->rt_rebuild_start != 0);
+	dpc->spc_rebuild_start = rpt->rt_rebuild_start;
 	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " rebuild eph " DF_X64 "\n",
-		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
+		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_start);
 
 put:
 	ds_pool_child_put(dpc);
@@ -3215,7 +3207,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
 		return rc;
 	}
-	/* must set rebuild flag before setting rt_rebuild_fence, it's reset in rebuild_tgt_fini */
+	/* must set rebuild flag before yield, it's reset in rebuild_tgt_fini */
 	atomic_fetch_add(&pool->sp_rebuilding, 1);
 
 	if (ds_pool_get_version(pool) < rsi->rsi_rebuild_ver) {
@@ -3279,12 +3271,12 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rpt->rt_rebuild_fence = d_hlc_get();
+	rpt->rt_rebuild_start = d_hlc_get();
 	rc                    = ds_pool_task_collective(rpt->rt_pool_uuid,
 							PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 							rebuild_prepare_one, rpt, 0);
 	if (rc) {
-		rpt->rt_rebuild_fence = 0;
+		rpt->rt_rebuild_start = 0;
 		rebuild_pool_tls_destroy(pool_tls);
 		D_GOTO(out, rc);
 	}

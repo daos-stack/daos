@@ -160,7 +160,7 @@ struct ds_cont_child {
 struct agg_param {
 	void			*ap_data;
 	struct ds_cont_child	*ap_cont;
-	daos_epoch_t             ap_epc_aggregated;
+	daos_epoch_t             ap_full_scan_hlc;
 	bool			ap_vos_agg;
 };
 
