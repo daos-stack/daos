@@ -3439,7 +3439,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		 * by setting this flag.
 		 * NB: it's a lockess write to shared data structure and it's harmless.
 		 */
-		ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_scan = 1;
+		atomic_fetch_add(&ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_scanning, 1);
 		flags = DTX_FOR_MIGRATION;
 	}
 
