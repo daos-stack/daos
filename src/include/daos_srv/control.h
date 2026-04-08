@@ -16,7 +16,11 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <daos/common.h>
+
+#define DEFAULT_FILE_PERM               (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)
+#define DEFAULT_DIR_PERM                (S_IRWXU | S_IRWXG)
 
 #define NVME_PCI_DEV_TYPE_VMD           "vmd"
 #define NVME_DETAIL_BUFLEN              1024
