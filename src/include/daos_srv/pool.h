@@ -95,11 +95,8 @@ struct ds_pool {
 	uint32_t                 sp_rebuild_gen;
 	ATOMIC int               sp_rebuilding;
 	ATOMIC int               sp_discarding;
-	/**
-	 * someone has already messaged this pool to for rebuild scan,
-	 * NB: all xstreams can do lockless-write on it but it's OK
-	 */
-	int                      sp_rebuild_scan;
+	/* someone has already messaged this pool to for rebuild scan */
+	ATOMIC int               sp_rebuild_scanning;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -174,16 +171,7 @@ struct ds_pool_child {
 	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
 
-	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
-	 * vos aggregation can not cross this epoch during rebuild to avoid
-	 * interfering rebuild process.
-	 */
-	uint64_t	spc_rebuild_fence;
-
-	/* The HLC when current rebuild ends, which will be used to compare
-	 * with the aggregation full scan start HLC to know whether the
-	 * aggregation needs to be restarted from 0. */
-	uint64_t	spc_rebuild_end_hlc;
+	uint64_t                 spc_rebuild_start;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
@@ -215,7 +203,8 @@ struct ds_pool_svc_op_val {
 static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
-	return (atomic_load(&pool->sp_rebuilding) > 0 || pool->sp_rebuild_scan > 0);
+	return (atomic_load(&pool->sp_rebuilding) > 0 ||
+		atomic_load(&pool->sp_rebuild_scanning) > 0);
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.
