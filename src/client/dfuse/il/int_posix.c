@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -807,6 +807,9 @@ child_hdlr(void)
 	if (rc)
 		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
 	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
+
+	saved_errno = 0;
+
 	rc = daos_eq_create(&ioil_eqh);
 	if (rc)
 		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
