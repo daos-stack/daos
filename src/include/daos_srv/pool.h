@@ -96,11 +96,8 @@ struct ds_pool {
 	uint32_t                 sp_rebuild_gen;
 	ATOMIC int               sp_rebuilding;
 	ATOMIC int               sp_discarding;
-	/**
-	 * someone has already messaged this pool to for rebuild scan,
-	 * NB: all xstreams can do lockless-write on it but it's OK
-	 */
-	int                      sp_rebuild_scan;
+	/* someone has already messaged this pool to for rebuild scan */
+	ATOMIC int               sp_rebuild_scanning;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -219,7 +216,8 @@ struct ds_pool_svc_op_val {
 static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
-	return (atomic_load(&pool->sp_rebuilding) > 0 || pool->sp_rebuild_scan > 0);
+	return (atomic_load(&pool->sp_rebuilding) > 0 ||
+		atomic_load(&pool->sp_rebuild_scanning) > 0);
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.

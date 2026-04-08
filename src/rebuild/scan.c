@@ -1316,8 +1316,6 @@ tls_lookup:
 		D_GOTO(out, rc);
 	}
 
-	atomic_fetch_add(&rpt->rt_pool->sp_rebuilding, 1); /* reset in rebuild_tgt_fini */
-
 	rpt_get(rpt);
 	/* step-3: start scan leader */
 	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_XS_SELF, 0, 0, NULL);
@@ -1331,8 +1329,10 @@ out:
 		tls->rebuild_pool_status = rc;
 
 	if (rpt) {
-		if (rc)
+		if (rc) {
+			atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
 			rpt_delete(rpt);
+		}
 		rpt_put(rpt);
 	}
 	rout = crt_reply_get(rpc);

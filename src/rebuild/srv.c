@@ -2900,7 +2900,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuilding) > 0);
 	atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
-	rpt->rt_pool->sp_rebuild_scan = 0;
+
+	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuild_scanning) > 0);
+	atomic_store(&rpt->rt_pool->sp_rebuild_scanning, 0);
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
@@ -3213,6 +3215,8 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
 		return rc;
 	}
+	/* must set rebuild flag before setting rt_rebuild_fence, it's reset in rebuild_tgt_fini */
+	atomic_fetch_add(&pool->sp_rebuilding, 1);
 
 	if (ds_pool_get_version(pool) < rsi->rsi_rebuild_ver) {
 		D_INFO(DF_RB " map %u < rsi_rebuild_ver %u\n", DP_RB_RSI(rsi),
@@ -3299,6 +3303,7 @@ out:
 			}
 			rpt_put(rpt);
 		}
+		atomic_fetch_sub(&pool->sp_rebuilding, 1);
 		ds_pool_put(pool);
 	}
 	daos_prop_fini(&prop);

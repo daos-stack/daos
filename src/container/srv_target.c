@@ -210,7 +210,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
 		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			atomic_load(&pool->sp_rebuilding), pool->sp_rebuild_scan);
+			atomic_load(&pool->sp_rebuilding), atomic_load(&pool->sp_rebuild_scanning));
 		return false;
 	}
 
@@ -331,16 +331,19 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 
 	change_hlc = max(cont->sc_snapshot_delete_hlc,
 			 cont->sc_pool->spc_rebuild_end_hlc);
-	if (param->ap_full_scan_hlc < change_hlc) {
-		/* Snapshot has been deleted or rebuild happens since the last
-		 * aggregation, let's restart from 0.
-		 */
+
+	if (param->ap_epc_aggregated < cont->sc_snapshot_delete_hlc) {
+		/* Snapshot deleted: always full scan from epoch 0 */
 		epoch_min = 0;
 		flags |= VOS_AGG_FL_FORCE_SCAN;
-		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
-			change_hlc, param->ap_full_scan_hlc);
+		D_DEBUG(DB_EPC,
+			"%s full scan (snap delete): change hlc " DF_X64 " > full " DF_X64 "\n",
+			param->ap_vos_agg ? "VOS" : "EC", change_hlc, param->ap_epc_aggregated);
+
 	} else {
 		epoch_min = get_hae(cont, param->ap_vos_agg);
+		if (param->ap_epc_aggregated < cont->sc_pool->spc_rebuild_end_hlc)
+			flags |= VOS_AGG_FL_FORCE_SCAN;
 	}
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
@@ -463,8 +466,8 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		flags &= ~VOS_AGG_FL_FORCE_MERGE;
 	rc = agg_cb(cont, &epoch_range, flags, param);
 out:
-	if (rc == 0 && epoch_min == 0)
-		param->ap_full_scan_hlc = hlc;
+	if (rc == 0)
+		param->ap_epc_aggregated = hlc;
 
 	D_DEBUG(DB_EPC, DF_CONT "[%d]: Aggregating finished. %d\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, rc);
