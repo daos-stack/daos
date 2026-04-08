@@ -12,6 +12,7 @@
 #include <math.h>
 #include <daos/common.h>
 #include <daos/container.h>
+#include <daos/object.h>
 
 #include "dfs_internal.h"
 
@@ -936,10 +937,30 @@ dfs_cont_put(dfs_t *dfs, daos_handle_t coh)
 int
 dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 {
+	int rc;
+
 	if (dfs == NULL || !dfs->mounted || attr == NULL)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+
+	if (!dfs->attr.da_dir_oclass_id) {
+		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0, 0,
+					 &attr->da_dir_oclass_id);
+		if (rc) {
+			D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+	}
+
+	if (!dfs->attr.da_file_oclass_id) {
+		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, 0, 0,
+					 &attr->da_file_oclass_id);
+		if (rc) {
+			D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+	}
 
 	return 0;
 }
