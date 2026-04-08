@@ -3590,5 +3590,8 @@ cont_mark_slave(struct d_hlink *link, void *arg)
 int
 dc_cont_mark_all_slave(void)
 {
+	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_AFTER_FORK))
+		return 0;
+
 	return daos_hhash_traverse(DAOS_HTYPE_CO, cont_mark_slave, NULL);
 }
