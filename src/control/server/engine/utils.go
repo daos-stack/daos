@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
-// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -59,7 +58,7 @@ type LogLevel uint
 // LogLevels matching D_LOG API priority strings.
 const (
 	LogLevelUndefined LogLevel = iota
-	LogLevelDebug
+	LogLevelDbug
 	LogLevelInfo
 	LogLevelNote
 	LogLevelWarn
@@ -72,8 +71,8 @@ const (
 
 func (ll LogLevel) String() string {
 	switch ll {
-	case LogLevelDebug:
-		return "DEBUG"
+	case LogLevelDbug:
+		return "DBUG"
 	case LogLevelInfo:
 		return "INFO"
 	case LogLevelNote:
@@ -98,8 +97,8 @@ func (ll LogLevel) String() string {
 // StrToLogLevel takes an input string and returns a LogLevel type object.
 func StrToLogLevel(s string) LogLevel {
 	switch strings.ToUpper(s) {
-	case "DEBUG":
-		return LogLevelDebug
+	case "DEBUG", "DBUG":
+		return LogLevelDbug
 	case "INFO":
 		return LogLevelInfo
 	case "NOTE":
@@ -123,7 +122,7 @@ func StrToLogLevel(s string) LogLevel {
 
 var (
 	validLogLevels = []string{
-		"DEBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "FATAL",
+		"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "FATAL",
 		"EMRG", "EMIT",
 	}
 	validLogStreams = []string{

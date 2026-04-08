@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -721,7 +721,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				Masks: "DEBUG",
 			},
 			cfgMasks: "ERR",
-			expMasks: "DEBUG",
+			expMasks: "DBUG",
 		},
 		"all values specified in request": {
 			req: ctlpb.SetLogMasksReq{
@@ -729,7 +729,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 				Streams:    "MGMT",
 				Subsystems: "MISC",
 			},
-			expMasks:   "ERR,MISC=DEBUG",
+			expMasks:   "ERR,MISC=DBUG",
 			expStreams: "MGMT",
 		},
 		"reset all masks; simple": {
@@ -755,7 +755,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 			},
 			cfgMasks:   "info,dtx=debug,vos=debug,object=debug",
 			cfgStreams: "io,epc",
-			expMasks:   "INFO,dtx=DEBUG,vos=DEBUG,object=DEBUG",
+			expMasks:   "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
 			expStreams: "io,epc",
 		},
 	} {
