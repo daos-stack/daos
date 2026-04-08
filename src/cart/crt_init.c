@@ -265,6 +265,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	unsigned int mrecv_buf          = CRT_HG_MRECV_BUF;
 	unsigned int mrecv_buf_copy     = 0; /* buf copy disabled by default */
 	char        *swim_traffic_class = NULL;
+	uint32_t     mrc_enable         = 0;
 	int          rc                 = 0;
 
 	crt_env_dump();
@@ -341,8 +342,17 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	crt_env_get(FI_UNIVERSE_SIZE, &fi_univ_size);
-	if (fi_univ_size == 0) {
+	if (fi_univ_size == 0)
 		d_setenv("FI_UNIVERSE_SIZE", "2048", 1);
+
+	/* Disable MRC on servers and enable on clients by default */
+	mrc_enable = server ? 0 : 1;
+	crt_env_get(CRT_MRC_ENABLE, &mrc_enable);
+
+	if (mrc_enable == 0) {
+		D_INFO("Disabling mr caching\n");
+		d_setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
+		d_setenv("UCX_RCACHE_ENABLE", "n", 1);
 	}
 
 	if (credits > CRT_MAX_CREDITS_PER_EP_CTX)
@@ -592,8 +602,6 @@ file_limit_bump(void)
 static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
-	uint32_t mrc_enable = 0;
-
 	/* Avoid applying same settings multiple times */
 	if (g_prov_settings_applied[prov] == true)
 		return;
@@ -618,15 +626,6 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 
 	if (prov == CRT_PROV_OFI_TCP || prov == CRT_PROV_OFI_TCP_RXM)
 		file_limit_bump();
-
-	if (prov == CRT_PROV_OFI_CXI)
-		mrc_enable = 1;
-
-	crt_env_get(CRT_MRC_ENABLE, &mrc_enable);
-	if (mrc_enable == 0) {
-		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
-		d_setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
-	}
 
 	g_prov_settings_applied[prov] = true;
 }
