@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +12,7 @@
 #include <math.h>
 #include <daos/common.h>
 #include <daos/container.h>
+#include <daos/object.h>
 
 #include "dfs_internal.h"
 
@@ -260,7 +262,9 @@ dfs_hdl_insert(const char *str, int type, const char *pool, daos_handle_t *oh,
 		daos_size_t len;
 
 		D_ASSERT(pool);
-		len = snprintf(cont_pool, strlen(pool) + strlen(str) + 2, "%s/%s", pool, str);
+		len = snprintf(cont_pool, sizeof(cont_pool), "%s/%s", pool, str);
+		if (len >= sizeof(cont_pool))
+			D_GOTO(err_free, rc = ENAMETOOLONG);
 		D_ASSERT(len == strlen(pool) + strlen(str) + 1);
 		strncpy(hdl->value, cont_pool, len + 1);
 		rlink = d_hash_rec_find_insert(coh_hash, hdl->value, len + 1, &hdl->entry);
@@ -296,7 +300,9 @@ dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force)
 		return 0;
 
 	D_ASSERT(pool);
-	len = snprintf(cont_pool, strlen(pool) + strlen(cont) + 2, "%s/%s", pool, cont);
+	len = snprintf(cont_pool, sizeof(cont_pool), "%s/%s", pool, cont);
+	if (len >= sizeof(cont_pool))
+		return ENAMETOOLONG;
 	D_ASSERT(len == strlen(pool) + strlen(cont) + 1);
 
 	if (force) {
@@ -648,7 +654,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 		rc = get_oclass_hints(dfs->attr.da_hints, &dfs->dir_oclass_hint,
 				      &dfs->file_oclass_hint, entry->dpe_val);
 		if (rc)
-			D_GOTO(err_prop, rc);
+			D_GOTO(err_super, rc);
 	}
 
 	/*
@@ -931,10 +937,30 @@ dfs_cont_put(dfs_t *dfs, daos_handle_t coh)
 int
 dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 {
+	int rc;
+
 	if (dfs == NULL || !dfs->mounted || attr == NULL)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+
+	if (!dfs->attr.da_dir_oclass_id) {
+		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0, 0,
+					 &attr->da_dir_oclass_id);
+		if (rc) {
+			D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+	}
+
+	if (!dfs->attr.da_file_oclass_id) {
+		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, 0, 0,
+					 &attr->da_file_oclass_id);
+		if (rc) {
+			D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+	}
 
 	return 0;
 }
@@ -1221,6 +1247,10 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 		glob->iov_buf_len = total_size;
 		return 0;
 	}
+	if (glob->iov_buf_len < total_size) {
+		glob->iov_buf_len = total_size;
+		return ENOBUFS;
+	}
 
 	ptr = glob->iov_buf;
 
@@ -1255,6 +1285,7 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 	rc              = dfs_local2global(dfs, &dfs_iov);
 	if (rc)
 		return rc;
+	glob->iov_len = total_size;
 
 	return 0;
 }

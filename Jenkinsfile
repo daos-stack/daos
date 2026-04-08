@@ -429,8 +429,7 @@ pipeline {
                 }
             }
         }
-        stage('Prepare Environment Variables') {
-            // TODO: Could/should these be moved to the environment block?
+        stage('Prepare') {
             parallel {
                 stage('Get Commit Message') {
                     steps {
@@ -451,11 +450,6 @@ pipeline {
                         }
                     }
                 }
-            }
-        }
-        stage('Check PR') {
-            when { changeRequest() }
-            parallel {
                 stage('Branch name check') {
                     when { changeRequest() }
                     steps {
@@ -471,8 +465,8 @@ pipeline {
                         }
                     }
                 }
-            } // parallel
-        } // stage('Check PR')
+            }
+        }
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
@@ -648,13 +642,13 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg POINT_RELEASE=.5 '
+                                                ' --build-arg POINT_RELEASE=.6 '
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -663,7 +657,7 @@ pipeline {
                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -679,44 +673,6 @@ pipeline {
                         }
                         cleanup {
                             uploadNewRPMs('leap15', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('leap15', 'icc') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-icc" +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg COMPILER=icc' +
-                                                ' --build-arg POINT_RELEASE=.5 '
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-intelc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
                             job_status_update()
                         }
                     }
@@ -1006,7 +962,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
+                            label 'docker_runner_fi'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
