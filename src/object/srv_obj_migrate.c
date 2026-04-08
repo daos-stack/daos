@@ -1064,11 +1064,11 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				    VOS_OF_REBUILD, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
+		daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
 			DL_ERROR(rc, DF_RB ": migrate failed", DP_RB_MRO(mrone));
 			D_GOTO(out, rc);
 		}
-		daos_csummer_free_ic(csummer, &iod_csums);
 	}
 
 out:
@@ -1574,6 +1574,15 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		D_GOTO(post, rc);
 	}
 
+	/*
+	 * Convert recxs back to VOS-space before computing checksums, so that
+	 * csum chunk boundaries match the VOS offsets where data and csums will
+	 * be stored. Must happen after fetch (needs DAOS-space) and before
+	 * migrate_csum_calc().
+	 */
+	if (daos_oclass_is_ec(&mrone->mo_oca))
+		mrone_recx_daos2_vos(mrone, iods, iod_num);
+
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
 	rc = migrate_csum_calc(csummer, mrone, iods, iod_num, sgls, p_csum_iov, &iod_csums);
 	if (rc != 0) {
@@ -1585,9 +1594,6 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 post:
 	for (i = 0; i < sgl_cnt; i++)
 		d_sgl_fini(&sgls[i], false);
-
-	if (daos_oclass_is_ec(&mrone->mo_oca))
-		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
 	rc = bio_iod_post(vos_ioh2desc(ioh), rc);
 	if (rc)
@@ -3870,24 +3876,21 @@ migrate_ult(void *arg)
 
 	D_ASSERT(pool_tls != NULL);
 	pool = pool_tls->mpt_pool;
-	/* Only reintegrating targets/pool needs to discard the object, if sp_need_discard is 0,
-	 * either the target does not need to discard, or discard has been done.
-	 * spc_discard_done means discarding has been done in the current VOS target.
-	 */
-	if (pool->spc_pool->sp_need_discard) {
-		while (!pool->spc_discard_done) {
-			D_DEBUG(DB_REBUILD, DF_RB " wait for discard to finish.\n",
-				DP_RB_MPT(pool_tls));
-			dss_sleep(2 * 1000);
-			if (pool_tls->mpt_fini)
-				D_GOTO(out, rc);
-		}
+	while (atomic_load(&pool->spc_pool->sp_discarding) != 0) {
+		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(pool_tls));
+		dss_sleep(2 * 1000);
+		if (pool_tls->mpt_fini)
+			D_GOTO(out, rc);
+
+		ABT_mutex_lock(pool->spc_pool->sp_mutex);
 		if (pool->spc_pool->sp_discard_status) {
 			rc = pool->spc_pool->sp_discard_status;
-			D_DEBUG(DB_REBUILD, DF_RB " discard failure: " DF_RC, DP_RB_MPT(pool_tls),
-				DP_RC(rc));
+			ABT_mutex_unlock(pool->spc_pool->sp_mutex);
+			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n",
+				DP_RB_MPT(pool_tls), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
+		ABT_mutex_unlock(pool->spc_pool->sp_mutex);
 	}
 
 	rc =
@@ -4618,8 +4621,10 @@ migrate_check_one(void *data)
 		migrate_pool_tls_get(tls);
 		tls->mpt_post_process_started = 1;
 		D_ALLOC_PTR(ult_arg);
-		if (ult_arg == NULL)
+		if (ult_arg == NULL) {
+			migrate_pool_tls_put(tls);
 			D_GOTO(out, rc = -DER_NOMEM);
+		}
 
 		ult_arg->rpa_tls = tls;
 		ult_arg->rpa_migrated_root = &tls->mpt_migrated_root;
@@ -4760,10 +4765,6 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		return -DER_NONEXIST;
 	}
 
-	/* NB: let's send object list to 0 xstream to simplify the migrate
-	 * object handling process for now, for example avoid lock to insert
-	 * objects in the object tree.
-	 */
 	tgt_ep.ep_rank = target->ta_comp.co_rank;
 	index = target->ta_comp.co_index;
 	ABT_rwlock_unlock(pool->sp_lock);

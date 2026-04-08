@@ -429,8 +429,7 @@ pipeline {
                 }
             }
         }
-        stage('Prepare Environment Variables') {
-            // TODO: Could/should these be moved to the environment block?
+        stage('Prepare') {
             parallel {
                 stage('Get Commit Message') {
                     steps {
@@ -451,11 +450,6 @@ pipeline {
                         }
                     }
                 }
-            }
-        }
-        stage('Check PR') {
-            when { changeRequest() }
-            parallel {
                 stage('Branch name check') {
                     when { changeRequest() }
                     steps {
@@ -471,8 +465,8 @@ pipeline {
                         }
                     }
                 }
-            } // parallel
-        } // stage('Check PR')
+            }
+        }
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
