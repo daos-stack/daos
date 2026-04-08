@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2026 Google LLC
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
