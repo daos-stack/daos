@@ -449,7 +449,7 @@ ds_mgmt_tgt_setup(void)
 
 	stored_mode = umask(0);
 	/** create NEWBORNS directory if it does not exist already */
-	rc = mkdir(newborns_path, S_IRWXU);
+	rc = mkdir(newborns_path, DEFAULT_DIR_PERM);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
 		umask(stored_mode);
@@ -457,7 +457,7 @@ ds_mgmt_tgt_setup(void)
 	}
 
 	/** create ZOMBIES directory if it does not exist already */
-	rc = mkdir(zombies_path, S_IRWXU);
+	rc = mkdir(zombies_path, DEFAULT_DIR_PERM);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
 		umask(stored_mode);
@@ -648,7 +648,7 @@ struct tgt_create_args {
 static void *
 tgt_create_preallocate(void *arg)
 {
-	struct tgt_create_args	*tca = arg;
+	struct tgt_create_args  *tca = arg;
 	int			 rc;
 
 	(void)dss_xstream_set_affinity(tca->tca_dx);
@@ -677,7 +677,7 @@ tgt_create_preallocate(void *arg)
 		if (rc)
 			goto out;
 
-		rc = mkdir(tca->tca_newborn, 0700);
+		rc = mkdir(tca->tca_newborn, DEFAULT_DIR_PERM);
 		if (rc < 0 && errno != EEXIST) {
 			rc = daos_errno2der(errno);
 			D_ERROR("failed to created pool directory: "DF_RC"\n",
@@ -712,6 +712,7 @@ tgt_create_preallocate(void *arg)
 	}
 out:
 	tca->tca_rc = rc;
+
 	return NULL;
 }
 

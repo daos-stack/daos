@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +32,6 @@ class TargetFailure(IorTestBase):
             results (dict): A dictionary object to store the ior metrics
             job_num (int): Assigned job number
             file_name (str): File name used for self.ior_cmd.test_file.
-            oclass (str): Value for dfs_oclass and dfs_dir_oclass.
             pool (TestPool): Pool to run IOR.
             container (TestContainer): Container to run IOR.
         """
@@ -73,7 +72,7 @@ class TargetFailure(IorTestBase):
         reintegrating the excluded target will bring back the system to the usable state.
 
         1. Run two server ranks and create a pool and a container with --properties=rd_fac:1.
-        2. Run IOR with --dfs.oclass RP_2G1/EC_2P1G1 --dfs.dir_oclass RP_2G1/EC_2P1G1
+        2. Run IOR with --dfs.oclass RP_2G1/EC_2P1G1
         3. While the IOR is running, exclude one target from each server rank so that IO
         fails even with replication.
         4. Verify the IOR failed.

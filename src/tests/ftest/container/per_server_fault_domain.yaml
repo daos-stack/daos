@@ -36,7 +36,6 @@ ior:
   transfer_size: 1M
   block_size: 20G
   dfs_oclass: RP_3GX
-  dfs_dir_oclass: RP_3GX
 
 cont_property:
   rf_1: rf_lvl:2,rf:1

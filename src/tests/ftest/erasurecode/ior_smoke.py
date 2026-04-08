@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -32,5 +33,4 @@ class EcodIor(IorTestBase):
 
         for oclass in obj_class:
             self.ior_cmd.dfs_oclass.update(oclass)
-            self.ior_cmd.dfs_dir_oclass.update(oclass)
             self.run_ior_with_pool()

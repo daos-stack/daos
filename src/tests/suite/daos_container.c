@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -4039,6 +4039,43 @@ co_op_dup_timing(void **state)
 	test_teardown((void **)&arg);
 }
 
+/* Opening a DESTROYING container should fail. */
+static void
+co_open_destroying(void **state)
+{
+	test_arg_t   *arg   = *state;
+	char         *label = "c_open_destroying";
+	uuid_t        uuid;
+	daos_handle_t coh;
+	int           rc;
+
+	par_barrier(PAR_COMM_WORLD);
+
+	if (arg->myrank != 0)
+		goto out;
+
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("created container '%s' (" DF_UUIDF ")\n", label, DP_UUID(uuid));
+
+	print_message("destroying container '%s' with fault injection\n", label);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_DESTROY_FAIL_POST | DAOS_FAIL_ALWAYS);
+	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	assert_rc_equal(rc, -DER_NOMEM);
+
+	print_message("attempting to open DESTROYING container '%s'\n", label);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_CONT_DESTROYING);
+
+	print_message("destroying container '%s'\n", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+
+out:
+	par_barrier(PAR_COMM_WORLD);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -4111,6 +4148,7 @@ static const struct CMUnitTest co_tests[] = {
     {"CONT33: exclusive open", co_exclusive_open, NULL, test_case_teardown},
     {"CONT34: evict handles", co_evict_hdls, NULL, test_case_teardown},
     {"CONT35: container duplicate op detection timing", co_op_dup_timing, NULL, test_case_teardown},
+    {"CONT36: open DESTROYING", co_open_destroying, NULL, test_case_teardown},
 };
 
 int
