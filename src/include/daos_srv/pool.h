@@ -175,16 +175,7 @@ struct ds_pool_child {
 	d_list_t		spc_cont_list;
 	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
-	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
-	 * vos aggregation can not cross this epoch during rebuild to avoid
-	 * interfering rebuild process.
-	 */
-	uint64_t	spc_rebuild_fence;
-
-	/* The HLC when current rebuild ends, which will be used to compare
-	 * with the aggregation full scan start HLC to know whether the
-	 * aggregation needs to be restarted from 0. */
-	uint64_t	spc_rebuild_end_hlc;
+	uint64_t                 spc_rebuild_start;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
