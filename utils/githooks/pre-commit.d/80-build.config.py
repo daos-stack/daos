@@ -10,7 +10,7 @@
 
 import os
 import sys
-import subprocess
+import subprocess  # nosec B404
 import unittest
 
 
@@ -29,7 +29,9 @@ def git_diff_cached_files(file_path):
         return True
 
     cmd = ['git', 'diff', target, '--cached', '--name-only', '--diff-filter=d', '--', file_path]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, check=False,
+        shell=False)  # nosec B603
     return result.stdout.strip()
 
 
