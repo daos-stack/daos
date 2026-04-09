@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2025 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -99,6 +99,8 @@ enum vos_pool_open_flags {
 	VOS_POF_FOR_FEATURE_FLAG = (1 << 7),
 	/** To identify this is a recreate operation. */
 	VOS_POF_FOR_RECREATE = (1 << 8),
+	/** Caller does checkpointing periodically */
+	VOS_POF_EXTERNAL_CHKPT = (1 << 9),
 };
 
 enum vos_oi_attr {
@@ -182,6 +184,8 @@ typedef struct {
 	daos_size_t		ci_used;
 	/** Highest (Last) aggregated epoch */
 	daos_epoch_t		ci_hae;
+	/** latest epoch for writes that require aggregation */
+	daos_epoch_t            ci_agg_write;
 	/** TODO */
 } vos_cont_info_t;
 
@@ -385,7 +389,7 @@ enum {
 	VOS_IT_FOR_MIGRATION = (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED = (1 << 6),
-	/** Cleanup stale DTX entry. */
+	/** Discard object (shard) */
 	VOS_IT_FOR_DISCARD = (1 << 7),
 	/** Entry is not committed */
 	VOS_IT_UNCOMMITTED = (1 << 8),

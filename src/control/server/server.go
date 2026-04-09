@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -74,7 +74,7 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
-	if err := cfg.SetNrHugepages(log, smi); err != nil {
+	if err := cfg.SetNrHugepages(log, smi.HugepageSizeKiB); err != nil {
 		return err
 	}
 
@@ -106,7 +106,15 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 	}
 
 	for _, ec := range cfg.Engines {
+		if err := ec.UpdateABTEnvarsUCX(); err != nil {
+			return err
+		}
+
 		if err := ec.UpdatePMDKEnvars(); err != nil {
+			return err
+		}
+
+		if err := ec.UpdateABTEnvarsMdOnSsd(); err != nil {
 			return err
 		}
 	}
@@ -145,15 +153,16 @@ type server struct {
 	netDevClass []hardware.NetDevClass
 	listener    net.Listener
 
-	harness      *EngineHarness
-	membership   *system.Membership
-	sysdb        *raft.Database
-	pubSub       *events.PubSub
-	evtForwarder *control.EventForwarder
-	evtLogger    *control.EventLogger
-	ctlSvc       *ControlService
-	mgmtSvc      *mgmtSvc
-	grpcServer   *grpc.Server
+	harness       *EngineHarness
+	membership    *system.Membership
+	sysdb         *raft.Database
+	pubSub        *events.PubSub
+	evtForwarder  *control.EventForwarder
+	evtLogger     *control.EventLogger
+	ctlSvc        *ControlService
+	mgmtSvc       *mgmtSvc
+	grpcServer    *grpc.Server
+	controlClient *control.Client
 
 	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
@@ -237,6 +246,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
+	srv.controlClient = rpcClient
 
 	// Create event distribution primitives.
 	srv.pubSub = events.NewPubSub(ctx, srv.log)
@@ -300,21 +310,37 @@ func (srv *server) setCoreDumpFilter() error {
 func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
-	ctlAddr, err := getControlAddr(ctlAddrParams{
+	params := ctlAddrParams{
 		port:           srv.cfg.ControlPort,
 		replicaAddrSrc: srv.sysdb,
 		lookupHost:     net.LookupIP,
-	})
+	}
+
+	// If a control interface is configured, look it up and pass it to getControlAddr.
+	// Also track whether we should bind to a specific IP (only when control_iface is set).
+	bindToCtlAddr := false
+	if srv.cfg.ControlInterface != "" {
+		iface, err := net.InterfaceByName(srv.cfg.ControlInterface)
+		if err != nil {
+			return config.FaultConfigBadControlInterface(srv.cfg.ControlInterface, err)
+		}
+		params.ctlIface = iface
+		bindToCtlAddr = true
+		srv.log.Debugf("using control interface %s for listener", srv.cfg.ControlInterface)
+	}
+
+	ctlAddr, err := getControlAddr(params)
 	if err != nil {
 		return err
 	}
 
-	listener, err := createListener(ctlAddr, net.Listen)
+	listener, err := createListener(ctlAddr, net.Listen, bindToCtlAddr)
 	if err != nil {
 		return err
 	}
 	srv.ctlAddr = ctlAddr
 	srv.listener = listener
+	srv.log.Debugf("control plane listener bound to %s", ctlAddr)
 
 	return nil
 }
@@ -344,17 +370,15 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 
 // addEngines creates and adds engine instances to harness then starts goroutine to execute
 // callbacks when all engines are started.
-func (srv *server) addEngines(ctx context.Context) error {
+func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	iommuEnabled, err := topology.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
-	if err != nil {
-		return err
-	}
+	iommuChecker := topology.DefaultIOMMUDetector(srv.log)
+	thpChecker := topology.DefaultTHPDetector(srv.log)
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
+	if err := prepBdevStorage(srv, smi, iommuChecker, thpChecker); err != nil {
 		return err
 	}
 
@@ -503,12 +527,14 @@ func (srv *server) start(ctx context.Context) error {
 		build.DaosVersion, os.Getpid(), srv.ctlAddr)
 
 	drpcSetupReq := &drpcServerSetupReq{
-		log:     srv.log,
-		sockDir: srv.cfg.SocketDir,
-		engines: srv.harness.Instances(),
-		tc:      srv.cfg.TransportConfig,
-		sysdb:   srv.sysdb,
-		events:  srv.pubSub,
+		log:             srv.log,
+		sockDir:         srv.cfg.SocketDir,
+		engines:         srv.harness.Instances(),
+		transportConfig: srv.cfg.TransportConfig,
+		sysdb:           srv.sysdb,
+		events:          srv.pubSub,
+		client:          srv.controlClient,
+		msReplicas:      srv.cfg.MgmtSvcReplicas,
 	}
 	// Single daos_server dRPC server to handle all engine requests
 	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
@@ -632,7 +658,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.addEngines(ctx); err != nil {
+	if err := srv.addEngines(ctx, smi); err != nil {
 		return err
 	}
 

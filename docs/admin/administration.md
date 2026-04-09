@@ -34,7 +34,7 @@ Below is an example of a RAS event signaling an exclusion of an unresponsive
 engine:
 
 ```
-&&& RAS EVENT id: [swim_rank_dead] ts: [2021-11-21T13:32:31.747408+0000] host: [wolf-112.wolf.hpdd.intel.com] type: [STATE_CHANGE] sev: [NOTICE] msg: [SWIM marked rank as dead.] pid: [253454] tid: [1] rank: [6] inc: [63a058833280000]
+&&& RAS EVENT id: [swim_rank_dead] ts: [2021-11-21T13:32:31.747408+0000] host: [wolf-112.wolf.example.com] type: [STATE_CHANGE] sev: [NOTICE] msg: [SWIM marked rank as dead.] pid: [253454] tid: [1] rank: [6] inc: [63a058833280000]
 ```
 
 ### Event List
@@ -44,32 +44,35 @@ severity, message, description, and cause.
 
 |Event|Event type|Severity|Message|Description|Cause|
 |:----|:----|:----|:----|:----|:----|
-| device\_set\_faulty| INFO\_ONLY| NOTICE or ERROR| Device: <uuid\> set faulty / Device: <uuid\> set faulty failed: <rc\> / Device: <uuid\> auto faulty detect / Device: <uuid\> auto faulty detect failed: <rc\> | Indicates that a device has either been explicitly automatically set as faulty. Device UUID specified in event data. | Either DMG set nvme-faulty command was used to explicitly set device as faulty or an error threshold was reached on a device which has triggered an auto faulty reaction. |
-| device\_media\_error| INFO\_ONLY| ERROR| Device: <uuid\> <error-type\> error logged from tgt\_id:<idx\> | Indicates that a device media error has been detected for a specific target. The error type could be unmap, write, read or checksum (csum). Device UUID and target ID specified in event data. | Media error occurred on backing device. |
-| device\_unplugged| INFO\_ONLY| NOTICE| Device: <uuid\> unplugged | Indicates device was physically removed from host. | NVMe SSD physically removed from host. |
-| device\_plugged| INFO\_ONLY| NOTICE| Detected hot plugged device: <bdev-name\> | Indicates device was physically inserted into host. | NVMe SSD physically added to host. |
-| device\_replace| INFO\_ONLY| NOTICE or ERROR| Replaced device: <uuid\> with device: <uuid\> [failed: <rc\>] | Indicates that a faulty device was replaced with a new device and if the operation failed. The old and new device IDs as well as any non-zero return code are specified in the event data. | Device was replaced using DMG nvme replace command. |
-| device\_link\_speed\_changed| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link speed changed to <transfer-rate\> (max <transfer-rate\>)| Indicates that an NVMe device link speed has changed. The negotiated and maximum device link speeds are indicated in the event message field and the severity is set to warning if the negotiated speed is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link speed was previously downgraded and has returned to maximum or link speed has downgraded to a value that is less than its maximum capability.|
-| device\_link\_width\_changed| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link width changed to <pcie-link-lanes\> (max <pcie-link-lanes\>)| Indicates that an NVMe device link width has changed. The negotiated and maximum device link widths are indicated in the event message field and the severity is set to warning if the negotiated width is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link width was previously downgraded and has returned to maximum or link width has downgraded to a value that is less than its maximum capability.|
+| unknown\_ras\_event| INFO\_ONLY| NOTICE| Unknown RAS event| Indicates an unidentified or undefined RAS event has occurred.| Internal placeholder for unknown events.|
 | engine\_format\_required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine that has unformatted storage.|
 | engine\_died| STATE\_CHANGE| ERROR| DAOS engine <idx\> exited exited unexpectedly: <error\> | Indicates engine instance <idx\> unexpectedly. <error> describes the exit state returned from exited daos\_engine process.| N/A                          |
 | engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx\> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
 | engine\_clock\_drift| INFO\_ONLY   | ERROR| clock drift detected| Indicates CART comms layer has detected clock skew between engines.| NTP may not be syncing clocks across DAOS system.      |
-| engine\_join\_failed| INFO\_ONLY| ERROR | DAOS engine <idx\> (rank <rank\>) was not allowed to join the system | Join operation failed for the given engine instance ID and rank (if assigned). | Reason should be provided in the extended info field of the event data. |
 | pool\_corruption\_detected| INFO\_ONLY| ERROR | Data corruption detected| Indicates a corruption in pool data has been detected. The event fields will contain pool and container UUIDs. | A corruption was found by the checksum scrubber. |
-| pool\_destroy\_deferred| INFO\_ONLY| WARNING | pool:<uuid\> destroy is deferred| Indicates a destroy operation has been deferre. | Pool destroy in progress but not complete. |
 | pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. The event data field contains pool map version and pool operation identifier. | When a pool rank becomes unavailable a rebuild will be triggered.   |
 | pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. The event data field includes the pool map version and pool operation identifier.  | N/A|
 | pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. The event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
 | pool\_replicas\_updated| STATE\_CHANGE| NOTICE| List of pool service replica ranks has been updated.| Indicates a pool service replica list has changed. The event contains the new service replica list in a custom payload. | When a pool service replica rank becomes unavailable a new rank is selected to replace it (if available). |
-| pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
-| container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
+| pool\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
+| pool\_destroy\_deferred| INFO\_ONLY| WARNING | pool:<uuid\> destroy is deferred| Indicates a destroy operation has been deferred. | Pool destroy in progress but not complete. |
+| pool\_start\_failed| INFO\_ONLY| ERROR| Pool <uuid\> start failed: <rc\>| Indicates that a pool failed to start. The pool UUID and error code are specified in the event data.| Pool start operation encountered an error during startup.|
+| container\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
 | rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]] OR incompatible DB UUID: <uuid\> | Indicates the given RDB's layout version does not match any of the versions supported by the currently running DAOS software, or the given RDB's UUID does not match the expected UUID (usually because the RDB belongs to a pool created by a pre-2.0 DAOS version).| DAOS engine is started with rdb data in local storage that has an incompatible layout version.|
 | swim\_rank\_alive| STATE\_CHANGE| NOTICE| TBD| The SWIM protocol has detected the specified rank is responsive.| A remote DAOS engine has become responsive.|
 | swim\_rank\_dead| STATE\_CHANGE| NOTICE| SWIM rank marked as dead.| The SWIM protocol has detected the specified rank is unresponsive.| A remote DAOS engine has become unresponsive.|
 | system\_start\_failed| INFO\_ONLY| ERROR| System startup failed, <errors\>| Indicates that a user initiated controlled startup failed. <errors\> shows which ranks failed.| Ranks failed to start.|
 | system\_stop\_failed| INFO\_ONLY| ERROR| System shutdown failed during <action\> action, <errors\>  | Indicates that a user initiated controlled shutdown failed. <action\> identifies the failing shutdown action and <errors\> shows which ranks failed.| Ranks failed to stop.|
-| system\_fabric\_provider\_changed| NOTICE| System fabric provider has changed: <old-provider\> -> <new-provider\>| Indicates that the system-wide fabric provider has been updated. No other specific information is included in event data.| A system-wide fabric provider change has been intentionally applied to all joined ranks.|
+| device\_set\_faulty| INFO\_ONLY| NOTICE or ERROR| Device: <uuid\> set faulty / Device: <uuid\> set faulty failed: <rc\> / Device: <uuid\> auto faulty detect / Device: <uuid\> auto faulty detect failed: <rc\> | Indicates that a device has either been explicitly automatically set as faulty. Device UUID specified in event data. | Either DMG set nvme-faulty command was used to explicitly set device as faulty or an error threshold was reached on a device which has triggered an auto faulty reaction. |
+| device\_media\_error| INFO\_ONLY| ERROR| Device: <uuid\> <error-type\> error logged from tgt\_id:<idx\> | Indicates that a device media error has been detected for a specific target. The error type could be unmap, write, read or checksum (csum). Device UUID and target ID specified in event data. | Media error occurred on backing device. |
+| device\_unplugged| INFO\_ONLY| NOTICE| Device: <uuid\> unplugged | Indicates device was physically removed from host. | NVMe SSD physically removed from host. |
+| device\_plugged| INFO\_ONLY| NOTICE| Detected hot plugged device: <bdev-name\> | Indicates device was physically inserted into host. | NVMe SSD physically added to host. |
+| device\_replace| INFO\_ONLY| NOTICE or ERROR| Replaced device: <uuid\> with device: <uuid\> [failed: <rc\>] | Indicates that a faulty device was replaced with a new device and if the operation failed. The old and new device IDs as well as any non-zero return code are specified in the event data. | Device was replaced using DMG nvme replace command. |
+| system\_fabric\_provider\_changed| INFO\_ONLY| NOTICE| System fabric provider has changed: <old-provider\> -> <new-provider\>| Indicates that the system-wide fabric provider has been updated. No other specific information is included in event data.| A system-wide fabric provider change has been intentionally applied to all joined ranks.|
+| engine\_join\_failed| INFO\_ONLY| ERROR | DAOS engine <idx\> (rank <rank\>) was not allowed to join the system | Join operation failed for the given engine instance ID and rank (if assigned). | Reason should be provided in the extended info field of the event data. |
+| device\_link\_speed\_changed| INFO\_ONLY| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link speed changed to <transfer-rate\> (max <transfer-rate\>)| Indicates that an NVMe device link speed has changed. The negotiated and maximum device link speeds are indicated in the event message field and the severity is set to warning if the negotiated speed is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link speed was previously downgraded and has returned to maximum or link speed has downgraded to a value that is less than its maximum capability.|
+| device\_link\_width\_changed| INFO\_ONLY| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link width changed to <pcie-link-lanes\> (max <pcie-link-lanes\>)| Indicates that an NVMe device link width has changed. The negotiated and maximum device link widths are indicated in the event message field and the severity is set to warning if the negotiated width is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link width was previously downgraded and has returned to maximum or link width has downgraded to a value that is less than its maximum capability.|
+| device\_led\_set| INFO\_ONLY| NOTICE| LED on device <device\> set to state <state\>| Indicates that the LED state has been changed on a device. Device identifier and LED state are specified in the event message.| LED control command was issued to change device LED state for visual identification or fault indication.|
 
 ## System Logging
 
@@ -580,7 +583,7 @@ following `daos_server` log entries to indicate the parameters are written to
 the engine's NVMe config:
 
 ```bash
-DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.hpdd.intel.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
+DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.example.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
 Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
 ```
 
@@ -642,41 +645,18 @@ This LED activity visually indicates a fault and that the device needs to be rep
 longer in use by DAOS.
 The LED of the VMD device will remain in this state until replaced by a new device.
 
-!!! note
-    Full NVMe hot plug capability will be available and supported in DAOS 2.6 release.
-    Use is currently intended for testing only and is not supported for production.
-
-- To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
-and bound instead to a user-space driver so that the device can be used with DAOS.
-
-To rebind a SSD on a single host, run the following command (replace SSD PCI address and
-hostname with appropriate values):
+- If VMD is not enabled, then in order to use a newly added (hot-inserted) SSD it needs to be
+unbound from the kernel driver and bound instead to a user-space driver so that the device can be
+used with DAOS. To rebind an SSD on a single host, run the following command (replace SSD PCI
+address and hostname with appropriate values):
 ```bash
 $ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
 Command completed successfully
 ```
 
 The device will now be bound to a user-space driver (e.g. VFIO) and can be accessed by
-DAOS I/O engine processes (and used in the following `dmg storage replace nvme` command
-as a new device).
-
-- Once an engine is using a newly added (hot-inserted) SSD it can be added to the persistent
-NVMe config (stored on SCM) so that on engine restart the new device will be used.
-
-To update the engine's persistent NVMe config with the new SSD transport address, run the
-following command (replace SSD PCI address, engine index and hostname with appropriate values):
-```bash
-$ dmg storage nvme-add-device -a 0000:84:00.0 -e 0 -l wolf-167
-Command completed successfully
-```
-
-The optional [--tier-index|-t] command parameter can be used to specify which storage tier to
-insert the SSD into, if specified then the server will attempt to insert the device into the tier
-specified by the index, if not specified then the server will attempt to insert the device into
-the bdev tier with the lowest index value (the first bdev tier).
-
-The device will now be registered in the engine's persistent NVMe config so that when restarted,
-the newly added SSD will be used.
+DAOS I/O engine processes. Now the new device can be used in the following
+`dmg storage replace nvme` command.
 
 - Replace an excluded SSD with a New Device:
 ```bash
@@ -920,7 +900,7 @@ access_points:
 port: 10001
 transport_config:
   allow_insecure: true
-log_file: /tmp/daos_agent-tmp.log
+log_file: /var/log/daos/daos_agent-tmp.log
 ```
 
 
@@ -1047,6 +1027,12 @@ An examples workflow would be:
   rank will be created).
 - Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
 
+!!! note
+    `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. The
+    subsequent state of the rank will then no longer be `AdminExcluded`. This special case reduces
+    a chance that a duplicate rank entry is introduced inadvertently because the rank to be replaced
+    is in the `AdminExcluded` state and so is recreated rather than replaced.
+
 ### System Erase
 
 To erase the DAOS sorage configuration, the `dmg system erase`
@@ -1102,6 +1088,28 @@ the system (this can be checked with `dmg system query -v`).
 After extending the system, the cache of the `daos_agent` service of the client
 nodes needs to be refreshed.  For detailed information, please refer to the
 [1][System Deployment documentation].
+
+### Adding or removing Management Service (MS) replicas
+
+The DAOS Management Service (MS) runs on a selected subset of `daos_server` nodes.
+An administrator may add or remove hosts from the MS replica list.
+
+1. Stop I/O and safely shut down all `daos_server` and `daos_agent` processes.
+2. Update the `mgmt_svc_replicas` list in the `daos_server` configuration file.
+3. Update the `access_points` list in the `daos_agent` configuration file.
+4. Update `hostlist` in the `dmg` configuration file, if applicable.
+5. Restart all `daos_server` and `daos_agent` processes.
+
+To verify that the updated MS replicas came up correctly:
+1. Use the `dmg system query` command to check that all expected ranks have come up in the Joined state.
+   The command should not time out.
+2. Use the `dmg system leader-query` to ensure a leader election has completed.
+
+!!! warning
+    When removing or replacing MS replicas, do *not* replace all old replicas with
+    new ones.
+    At least one old replica must remain in the list to act as a data source for
+    the new replicas. 
 
 
 ## Software Upgrade

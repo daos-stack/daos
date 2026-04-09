@@ -1,7 +1,9 @@
 hosts:
   test_servers: 5
   test_clients: 3
-timeout: 5000
+
+timeout: 900
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -9,26 +11,27 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+
 pool:
   size: 95%
+
 container:
   type: POSIX
-  control_method: daos
+
 largefilecount:
   api:
     - DFS
     - POSIX
+    - MPIIO
+    - HDF5
+    - HDF5-VOL
   object_class:
     ior_oclass:          # Run once with SX and then with EC_16P2GX
       - SX
@@ -36,16 +39,17 @@ largefilecount:
     mdtest_oclass:       # Run once with S1 and then with EC_16P2G1
       - S1
       - EC_2P1G1
+
 ior:
-  np: 30
-  dfs_destroy: false
+  client_processes:
+    np: 30
   flags: "-v -D 300 -W -w -r -R"
   test_file: /testFile
-  repetitions: 1
   transfer_size: '1M'
   block_size: '7G'
   env_vars:
     - D_IL_REPORT=1
+
 dfuse:
   disable_caching: true
 
@@ -54,7 +58,6 @@ mdtest:
     np: 30
   num_of_files_dirs: 33334     # creating total of 1M files
   test_dir: "/"
-  iteration: 1
   dfs_destroy: false
   manager: "MPICH"
   flags: "-F -C"
@@ -63,3 +66,6 @@ mdtest:
   depth: 0
   env_vars:
     - D_IL_REPORT=1
+
+hdf5_vol:
+  plugin_path: /usr/lib64/mpich/lib

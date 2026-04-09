@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
-#  Copyright 2025 Google LLC
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Google LLC
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -55,8 +55,6 @@ targets=(
     '*README*'
     '*LICENSE*'
     '*NOTICE*'
-    '*.txt'
-    '*.md'
     # Entries without a wildcard
     'Makefile'
     'Jenkinsfile'
@@ -148,6 +146,26 @@ for file in $files; do
          [ "$git_vercode" -ge 2030000 ] &&
          [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
         continue
+    fi
+
+    if [[ "$mode" == "githook" ]]; then
+        # Fix Intel copyright format if needed
+        # 1. Split single line C-style comment
+        if grep -qE '^[[:blank:]]*\/\*[[:blank:]]*.*Copyright.*Intel Corporation.*[[:blank:]]*\*\/' "$file"; then
+            if [[ "$os" == 'Linux' ]]; then
+                sed -i -re 's/^([[:blank:]]*)\/\*[[:blank:]]*(.*Copyright.*Intel Corporation.*)[[:blank:]]*\*\//\1\/\*\n\1 \* \2\n\1 \*\//' "$file"
+            else
+                sed -i '' -re 's/^([[:blank:]]*)\/\*[[:blank:]]*(.*Copyright.*Intel Corporation.*)[[:blank:]]*\*\//\1\/\*\n\1 \* \2\n\1 \*\//' "$file"
+            fi
+        fi
+        # 2. Fix Intel copyright format (comma vs dot, ensure dot at end)
+        if grep -qE '^[[:blank:]]*[\*/#]*[[:blank:]]*Copyright [0-9]{4}(-[0-9]{4})?,[[:blank:]]*Intel Corporation' "$file"; then
+            if [[ "$os" == 'Linux' ]]; then
+                sed -i -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \2 Intel Corporation./' "$file"
+            else
+                sed -i '' -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \2 Intel Corporation./' "$file"
+            fi
+        fi
     fi
 
     # Check for existing copyright in user's domain

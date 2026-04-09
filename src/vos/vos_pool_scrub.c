@@ -739,8 +739,7 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 	 * partial extents. Unit test multiple_overlapping_extents() verifies
 	 * this case. srv_csum.c has some logic that might be useful/reused.
 	 */
-	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchor,
-			 obj_iter_scrub_pre_cb, NULL, ctx, NULL);
+	rc = vos_iterate_obj(&param, &anchor, obj_iter_scrub_pre_cb, NULL, ctx, NULL);
 
 	if (rc != DER_SUCCESS) {
 		if (rc == -DER_INPROGRESS)
@@ -879,7 +878,7 @@ cont_iter_is_loaded_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	 * initialized if csums are enabled
 	 */
 	if (!args->args_found_unloaded_container)
-		args->args_found_unloaded_container = !args->args_ctx->sc_cont.scs_props_fetched;
+		args->args_found_unloaded_container = !args->args_ctx->sc_cont.scs_csummer_inited;
 
 	sc_cont_teardown(ctx);
 	return 0;

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -608,7 +609,7 @@ blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create
 		int	flags = O_RDWR;
 
 		while (1) {
-			fd = open(path, flags, 0600);
+			fd = open(path, flags, UMEM_FILE_MODE_DEFAULT);
 			if (fd >= 0)
 				break;
 

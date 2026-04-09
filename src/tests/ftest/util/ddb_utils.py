@@ -1,10 +1,9 @@
 """
   (C) Copyright 2022 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
 
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 from run_utils import run_remote
@@ -33,13 +32,16 @@ class DdbCommandBase(CommandWithParameters):
         self.host = server_host
 
         # Write mode that's necessary for the commands that alters the data such as load.
-        self.write_mode = FormattedParameter("-w", default=False)
+        self.write_mode = FormattedParameter("-w", default=False, position=1)
 
-        # Command to run on the VOS file that contains container, object info, etc.
-        self.single_command = BasicParameter(None, position=2)
+        # Path to the system database. Used for MD-on-SSD.
+        self.db_path = BasicParameter(None, position=2)
 
         # VOS file path.
-        self.vos_path = BasicParameter(None, position=1)
+        self.vos_path = FormattedParameter("--vos_path {}", position=3)
+
+        # Command to run on the VOS file that contains container, object info, etc.
+        self.single_command = BasicParameter(None, position=4)
 
         # Members needed for run().
         self.verbose = verbose
@@ -81,38 +83,19 @@ class DdbCommand(DdbCommandBase):
     with the indices, so it's better for tests to use the UUID.
     """
 
-    def __init__(self, server_host, path, mount_point, pool_uuid, vos_file):
+    def __init__(self, server_host, path, vos_path):
         """Constructor that sets the common variables for sub-commands.
 
         Args:
             server_host (NodeSet): Server host to run the command.
             path (str): Path to the ddb command. Pass in self.bin for our wolf/CI env.
-            mount_point (str): DAOS mount point where pool directory is created. e.g.,
-                /mnt/daos, /mnt/daos0.
-            pool_uuid (str): Pool UUID.
-            vos_file (str): VOS file name that's located in /mnt/daos/<pool_uuid>. It's
-                usually in the form of vos-0, vos-1, and so on.
+            vos_path (str): VOS file path, e.g. /mnt/daos/<pool_uuid>/vos-0
         """
         super().__init__(server_host, path)
-
-        # Construct the VOS file path where ddb will inject the command.
-        self.update_vos_path(mount_point, pool_uuid, vos_file)
-
-    def update_vos_path(self, mount_point, pool_uuid, vos_file):
-        """Update the vos_path ddb command argument.
-
-        Args:
-            mount_point (str): DAOS mount point where pool directory is created. e.g.,
-                /mnt/daos, /mnt/daos0.
-            pool_uuid (str): Pool UUID.
-            vos_file (str): VOS file name that's located in /mnt/daos/<pool_uuid>. It's
-                usually in the form of vos-0, vos-1, and so on.
-        """
-        vos_path = os.path.join(mount_point, pool_uuid.lower(), vos_file)
         self.vos_path.update(vos_path, "vos_path")
 
     def list_component(self, component_path=None):
-        """Call ddb -R "ls <component_path>"
+        """Call ddb ls <component_path>
 
         ls is similar to the Linux ls command. It lists objects inside the container,
         dkeys inside the object, and so on.
@@ -180,11 +163,11 @@ class DdbCommand(DdbCommandBase):
         return self.run()
 
     def remove_component(self, component_path):
-        """Call ddb -w -R "rm <component_path>"
+        """Call ddb -w rm <component_path>
 
         Args:
-            component_path (str): Component that comes after rm. e.g., [0]/[1] for first
-                container, second object.
+            component_path (str): Component that comes after rm. e.g., [0]/[1] for first container,
+                second object.
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
@@ -300,5 +283,23 @@ class DdbCommand(DdbCommandBase):
         """
         self.write_mode.value = True
         self.single_command.value = " ".join(["dtx_cmt_clear", component_path])
+
+        return self.run()
+
+    def prov_mem(self, db_path, tmpfs_mount):
+        """Call ddb --vos_path "" prov_mem <db_path> <tmpfs_mount>.
+
+        Args:
+            db_path (str): Path to the system database. e.g.,
+                /var/tmp/daos_testing/control_metadata/daos_control/engine0
+            tmpfs_mount (str): Path to the tmpfs mount point. Directory that needs to be created
+                beforehand. e.g., /mnt/daos_load
+
+        Returns:
+            CommandResult: groups of command results from the same hosts with the same return status
+        """
+        self.vos_path.value = '""'
+        cmd = ["prov_mem", db_path, tmpfs_mount]
+        self.single_command.value = " ".join(cmd)
 
         return self.run()

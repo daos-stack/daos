@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,7 +27,7 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	rc = chk_engine_start(csi->csi_gen, csi->csi_ranks.ca_count, csi->csi_ranks.ca_arrays,
 			      csi->csi_policies.ca_count, csi->csi_policies.ca_arrays,
 			      csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays, csi->csi_api_flags,
-			      csi->csi_phase, csi->csi_leader_rank, csi->csi_flags,
+			      csi->csi_ns_ver, csi->csi_leader_rank, csi->csi_flags,
 			      csi->csi_iv_uuid, &clues);
 	if (rc > 0) {
 		D_ALLOC_PTR(rank);
@@ -144,7 +145,7 @@ ds_chk_act_hdlr(crt_rpc_t *rpc)
 	struct chk_act_out	*cao = crt_reply_get(rpc);
 	int			 rc;
 
-	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_cla, cai->cai_act, cai->cai_flags);
+	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_act);
 
 	cao->cao_status = rc;
 	rc = crt_reply_send(rpc);
@@ -248,18 +249,21 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 static void
 ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 {
-	struct chk_rejoin_in	*cri = crt_req_get(rpc);
-	struct chk_rejoin_out	*cro = crt_reply_get(rpc);
-	uuid_t			*pools = NULL;
-	int			 pool_nr = 0;
-	int			 rc;
+	struct chk_rejoin_in  *cri     = crt_req_get(rpc);
+	struct chk_rejoin_out *cro     = crt_reply_get(rpc);
+	uuid_t                *pools   = NULL;
+	d_rank_list_t         *ranks   = NULL;
+	int                    pool_nr = 0;
+	int                    rc;
 
 	rc = chk_leader_rejoin(cri->cri_gen, cri->cri_rank, cri->cri_iv_uuid, &cro->cro_flags,
-			       &pool_nr, &pools);
+			       &cro->cro_ns_ver, &pool_nr, &pools, &ranks);
 
 	cro->cro_status = rc;
 	if (rc == 0) {
-		cro->cro_pools.ca_count = pool_nr;
+		cro->cro_ranks.ca_count  = ranks->rl_nr;
+		cro->cro_ranks.ca_arrays = ranks->rl_ranks;
+		cro->cro_pools.ca_count  = pool_nr;
 		cro->cro_pools.ca_arrays = pools;
 	}
 
@@ -268,6 +272,20 @@ ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 		D_ERROR("Failed to reply check rejoin: "DF_RC"\n", DP_RC(rc));
 
 	D_FREE(pools);
+}
+
+static void
+ds_chk_set_policy_hdlr(crt_rpc_t *rpc)
+{
+	struct chk_set_policy_in  *cspi = crt_req_get(rpc);
+	struct chk_set_policy_out *cspo = crt_reply_get(rpc);
+	int                        rc;
+
+	cspo->cspo_status = chk_engine_set_policy(cspi->cspi_gen, cspi->cspi_policies.ca_count,
+						  cspi->cspi_policies.ca_arrays);
+	rc                = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("Failed to reply check set policy: " DF_RC "\n", DP_RC(rc));
 }
 
 static int
@@ -292,6 +310,14 @@ ds_chk_init(void)
 		goto out;
 
 	rc = chk_iv_init();
+	if (rc != 0)
+		goto out;
+
+	rc = chk_leader_init();
+	if (rc != 0)
+		goto out;
+
+	rc = chk_engine_init();
 
 out:
 	return rc;
@@ -300,6 +326,9 @@ out:
 static int
 ds_chk_fini(void)
 {
+	chk_engine_fini();
+	chk_leader_fini();
+
 	return chk_iv_fini();
 }
 
@@ -308,14 +337,14 @@ ds_chk_setup(void)
 {
 	int	rc;
 
-	/* Do NOT move chk_vos_init into ds_chk_init, because sys_db is not ready at that time. */
-	chk_vos_init();
+	/* Do NOT move chk_vos_setup into ds_chk_init, because sys_db is not ready at that time. */
+	chk_vos_setup();
 
-	rc = chk_leader_init();
+	rc = chk_leader_setup();
 	if (rc != 0)
 		goto out_vos;
 
-	rc = chk_engine_init();
+	rc = chk_engine_setup();
 	if (rc != 0)
 		goto out_leader;
 
@@ -332,9 +361,9 @@ ds_chk_setup(void)
 	goto out_done;
 
 out_leader:
-	chk_leader_fini();
+	chk_leader_cleanup();
 out_vos:
-	chk_vos_fini();
+	chk_vos_cleanup();
 out_done:
 	return rc;
 }
@@ -342,11 +371,9 @@ out_done:
 static int
 ds_chk_cleanup(void)
 {
-	chk_engine_pause();
-	chk_leader_pause();
-	chk_engine_fini();
-	chk_leader_fini();
-	chk_vos_fini();
+	chk_engine_cleanup();
+	chk_leader_cleanup();
+	chk_vos_cleanup();
 
 	return 0;
 }
@@ -365,15 +392,17 @@ static struct daos_rpc_handler chk_handlers[] = {
 #undef X
 
 struct dss_module chk_module = {
-	.sm_name		= "chk",
-	.sm_mod_id		= DAOS_CHK_MODULE,
-	.sm_ver			= DAOS_CHK_VERSION,
-	.sm_init		= ds_chk_init,
-	.sm_fini		= ds_chk_fini,
-	.sm_setup		= ds_chk_setup,
-	.sm_cleanup		= ds_chk_cleanup,
-	.sm_proto_count		= 1,
-	.sm_proto_fmt		= {&chk_proto_fmt},
-	.sm_cli_count		= {0},
-	.sm_handlers		= {chk_handlers},
+    .sm_name        = "chk",
+    .sm_mod_id      = DAOS_CHK_MODULE,
+    .sm_ver         = DAOS_CHK_VERSION,
+    .sm_init        = ds_chk_init,
+    .sm_fini        = ds_chk_fini,
+    .sm_setup       = ds_chk_setup,
+    .sm_cleanup     = ds_chk_cleanup,
+    .sm_proto_count = 1,
+    .sm_proto_fmt   = {&chk_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {chk_handlers},
 };
+
+DEFINE_RPC_PROTOCOL(chk, DAOS_CHK_MODULE);

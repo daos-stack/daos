@@ -16,6 +16,7 @@
 #include <gurt/list.h>
 
 #include <cart/iv.h>
+#include <daos_version.h>
 
 /* DAOS iv cache provide a general interface for daos to use cart IV.
  * Each pool has one iv namespace, which is created when the  pool is
@@ -76,12 +77,17 @@ struct ds_iv_class {
  * type.
  *
  * When IV callback arrives, it will locate the cache entry in namespace
- * by the key. If there is only one entry for the class, then only using
+ * by the key and version. If there is only one entry for the class, then only using
  * class_id can locate the entry, otherwise using key + key_cmp callback.
  */
 struct ds_iv_key {
 	d_rank_t	rank;
 	int		class_id;
+	/*
+	 * Version number for rolling upgrade support, used with key to
+	 * distinguish between multiple cache entries of the same class.
+	 */
+	daos_version_t  version;
 	char		key_buf[IV_KEY_BUF_SIZE];
 };
 
@@ -313,6 +319,8 @@ int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 
 void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint64_t term);
 void ds_iv_ns_cleanup(struct ds_iv_ns *ns);
+int
+	     ds_iv_ns_reint_prep(struct ds_iv_ns *ns);
 void ds_iv_ns_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_start(struct ds_iv_ns *ns);

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -213,6 +214,8 @@ evt_iter_intent(struct evt_iterator *iter)
 		return DAOS_INTENT_DISCARD;
 	if (iter->it_options & EVT_ITER_FOR_MIGRATION)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_options & EVT_ITER_FOR_CHECK)
+		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -395,7 +398,6 @@ int
 evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	       const struct evt_rect *rect, const daos_anchor_t *anchor)
 {
-	struct vos_iterator	*oiter = vos_hdl2iter(ih);
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
 	struct evt_entry_array	*enta;
@@ -445,8 +447,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		rtmp = *rect;
 	}
 
-	rc = evt_ent_array_fill(tcx, fopc, vos_iter_intent(oiter),
-				&iter->it_filter, &rtmp, enta);
+	rc = evt_ent_array_fill(tcx, fopc, evt_iter_intent(iter), &iter->it_filter, &rtmp, enta);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -475,7 +476,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 
 		rc = 0;
 	}
- out:
+out:
 	return rc;
 }
 

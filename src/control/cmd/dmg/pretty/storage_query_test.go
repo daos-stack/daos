@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -269,9 +270,11 @@ func TestPretty_getTierRolesForHost(t *testing.T) {
 func TestPretty_PrintHostStorageUsageMapMdOnSsd(t *testing.T) {
 	var (
 		noStorage                    = control.MockServerScanResp(t, "noStorage")
-		withSpaceUsage               = control.MockServerScanResp(t, "withSpaceUsage")
+		withSpaceUsageRolesAll       = control.MockServerScanResp(t, "withSpaceUsageRolesAll")
 		withSpaceUsageRolesSeparate1 = control.MockServerScanResp(t,
 			"withSpaceUsageRolesSeparate1")
+		withSpaceUsageRolesSeparate1NilRank = control.MockServerScanResp(t,
+			"withSpaceUsageRolesSeparate1NilRank")
 		withSpaceUsageRolesSeparate2 = control.MockServerScanResp(t,
 			"withSpaceUsageRolesSeparate2")
 		bothFailed = control.MockServerScanResp(t, "bothFailed")
@@ -315,7 +318,7 @@ func TestPretty_PrintHostStorageUsageMapMdOnSsd(t *testing.T) {
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: withSpaceUsage,
+							Message: withSpaceUsageRolesAll,
 						},
 					},
 				},
@@ -336,7 +339,7 @@ Rank T1-Total T1-Free T1-Usage
 					Responses: []*control.HostResponse{
 						{
 							Addr:    "host1",
-							Message: withSpaceUsage,
+							Message: withSpaceUsageRolesAll,
 						},
 						{
 							Addr:    "host2",
@@ -372,6 +375,34 @@ Rank T1-Total T1-Free T1-Usage T2-Total T2-Free T2-Usage
 ---- -------- ------- -------- -------- ------- -------- 
 0    2.0 TB   1.0 TB  50 %     2.0 TB   1.5 TB  25 %     
 1    2.0 TB   500 GB  75 %     2.0 TB   1.0 TB  50 %     
+2    1.0 TB   500 GB  50 %     1.0 TB   750 GB  25 %     
+3    1.0 TB   250 GB  75 %     1.0 TB   500 GB  50 %     
+`,
+		},
+		"multiple hosts with space available; separate roles; two-tiers per rank; one nil-rank": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Addr:    "host1",
+							Message: withSpaceUsageRolesSeparate1NilRank,
+						},
+						{
+							Addr:    "host2",
+							Message: withSpaceUsageRolesSeparate2,
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Tier Roles    
+---- -----    
+T1   meta,wal 
+T2   data     
+
+Rank T1-Total T1-Free T1-Usage T2-Total T2-Free T2-Usage 
+---- -------- ------- -------- -------- ------- -------- 
+0    2.0 TB   1.0 TB  50 %     2.0 TB   1.5 TB  25 %     
 2    1.0 TB   500 GB  50 %     1.0 TB   750 GB  25 %     
 3    1.0 TB   250 GB  75 %     1.0 TB   500 GB  50 %     
 `,

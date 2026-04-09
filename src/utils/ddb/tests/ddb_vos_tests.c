@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +13,8 @@
 #include <ddb_parse.h>
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
+
+#include "../../placement/tests/place_obj_common.h"
 
 /*
  * The tests in this file depend on a VOS instance with a bunch of data written. The tests will
@@ -180,14 +184,15 @@ open_pool_test(void **state)
 {
 	daos_handle_t		 poh;
 	struct dt_vos_pool_ctx	*tctx = *state;
+	struct vos_file_parts    path_parts = {0};
 
-	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", &poh, 0));
+	assert_success(parse_vos_file_parts(tctx->dvt_pmem_file, NULL, &path_parts));
 
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &poh, 0, false));
 	assert_success(dv_pool_close(poh));
 
 	/* should be able to open again after closing */
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &poh, 0, false));
 	assert_success(dv_pool_close(poh));
 }
 
@@ -1083,10 +1088,13 @@ static int
 dv_test_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx = *state;
+	struct vos_file_parts   path_parts = {0};
+
+	assert_success(parse_vos_file_parts(tctx->dvt_pmem_file, NULL, &path_parts));
 
 	active_entry_handler_called = 0;
 	committed_entry_handler_called = 0;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &tctx->dvt_poh, 0, true));
 	return 0;
 }
 
@@ -1104,10 +1112,13 @@ pool_flags_tests(void **state)
 {
 	daos_handle_t           poh;
 	struct dt_vos_pool_ctx *tctx = *state;
+	struct vos_file_parts   path_parts = {0};
 	uint64_t                compat_flags;
 	uint64_t                incompat_flags;
 
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh, VOS_POF_FOR_FEATURE_FLAG));
+	assert_success(parse_vos_file_parts(tctx->dvt_pmem_file, NULL, &path_parts));
+	assert_success(
+	    dv_pool_open(tctx->dvt_pmem_file, &path_parts, &poh, VOS_POF_FOR_FEATURE_FLAG, true));
 	assert_success(dv_pool_get_flags(poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == 0);
 	assert(incompat_flags == 0);
@@ -1117,6 +1128,86 @@ pool_flags_tests(void **state)
 	assert(compat_flags == VOS_POOL_COMPAT_FLAG_SUPP);
 	assert(incompat_flags == VOS_POOL_INCOMPAT_FLAG_SUPP);
 	assert_success(dv_pool_close(poh));
+}
+
+#define SHA256_DIGEST_LEN 64
+
+struct file_state {
+	struct stat stat;
+	char        digest[SHA256_DIGEST_LEN];
+};
+
+#define FILE_STATE_PRE  0
+#define FILE_STATE_POST 1
+
+/**
+ * Use sha256sum utility to get the sha256 digest of the file.
+ *
+ * \note sha256sum was used to avoid introducing libcrypto dependency.
+ */
+static void
+sha256sum(const char *file, char digest[SHA256_DIGEST_LEN])
+{
+	char cmd[1024];
+	snprintf(cmd, sizeof(cmd), "sha256sum \"%s\"", file);
+
+	FILE *fp = popen(cmd, "r");
+	assert_non_null(fp);
+
+	/** sha256sum prints: <64 hex chars>  <filename> */
+	assert_int_equal(fscanf(fp, "%" STR(SHA256_DIGEST_LEN) "s", digest), 1);
+
+	pclose(fp);
+}
+
+/**
+ * Simple sequence of operations:
+ * - stat + sha256sum
+ * - open
+ * - update a single value
+ * - close
+ * - stat + sha256sum
+ *
+ * \param[in]	tctx		Test context to get the pool name and access to the pool handle.
+ * \param[out]	fs		[0] state of the pool file at the beginning and [1] at the end.
+ * \param[in]	write_mode	Whether to open the pool in the write mode.
+ */
+static void
+helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_state fs[2],
+				   bool write_mode)
+{
+	const char *path = tctx->dvt_pmem_file;
+	struct vos_file_parts path_parts = {0};
+
+	assert_int_equal(stat(path, &fs[FILE_STATE_PRE].stat), 0);
+	sha256sum(path, fs[FILE_STATE_PRE].digest);
+
+	assert_success(parse_vos_file_parts(path, NULL, &path_parts));
+	assert_success(dv_pool_open(path, &path_parts, &tctx->dvt_poh, 0, write_mode));
+	update_value_to_modify_tests((void **)&tctx);
+	assert_success(dv_pool_close(tctx->dvt_poh));
+
+	assert_int_equal(stat(path, &fs[FILE_STATE_POST].stat), 0);
+	sha256sum(path, fs[FILE_STATE_POST].digest);
+}
+
+static void
+read_only_vs_write_mode_test(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct file_state       fs[2];
+
+	/** In read‑only mode, the pool contents remain unchanged, and its mtime stays the same. */
+	helper_stat_open_modify_close_stat(tctx, fs, false /** read-only */);
+	assert_int_equal(fs[FILE_STATE_PRE].stat.st_mtime, fs[FILE_STATE_POST].stat.st_mtime);
+	assert_memory_equal(fs[FILE_STATE_PRE].digest, fs[FILE_STATE_PRE].digest,
+			    SHA256_DIGEST_LEN);
+
+	/** In write mode, the pool contents will change and its mtime will increase. */
+	helper_stat_open_modify_close_stat(tctx, fs, true /** read-write */);
+	assert_true(fs[FILE_STATE_PRE].stat.st_mtime < fs[FILE_STATE_POST].stat.st_mtime);
+	assert_memory_not_equal(fs[FILE_STATE_PRE].digest, fs[FILE_STATE_POST].digest,
+				SHA256_DIGEST_LEN);
 }
 
 /*
@@ -1148,6 +1239,8 @@ const struct CMUnitTest dv_test_cases[] = {
     TEST(dtx_abort_active_table),
     TEST(path_verify),
     {"pool_flag_update", pool_flags_tests, NULL, NULL},
+    {"read_only_vs_write_mode", read_only_vs_write_mode_test, NULL,
+     NULL}, /* don't want this test to run with setup */
 };
 
 int

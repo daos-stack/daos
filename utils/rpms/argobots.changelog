@@ -1,0 +1,55 @@
+%changelog
+* Wed Nov 19 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 1.2-4
+- Restore the RPM changelog, which has not been available since version 1.2-1
+
+* Fri Sep 12 2025  Jeff Olivier <jeffolivier@google.com> - 1.2-3
+- Fix leap package name
+
+* Mon Aug 11 2025  Jeff Olivier <jeffolivier@google.com> - 1.2-2
+- Switch to fpm build for RPMs
+
+* Wed Oct 02 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> - 1.2-1
+- Update to 1.2
+- Add patch 411e5b3 Fix DAOS-14248: ULTs stacks dump works only once
+- Add patch bb0c908 Restore the libunwind support
+
+* Tue Jun 06 2023 Brian J. Murrell <brian.murrell@intel.com> - 1.1-3
+- Update to build on EL9
+
+* Wed Oct 19 2022 Brian J. Murrell <brian.murrell@intel.com> - 1.1-2
+- Create debuginfo packages for SUSE
+- Fix up some issues found by rpmlint
+
+* Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1-1
+- Update to 1.1
+
+* Wed Mar 17 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.1~rc1-1
+- Update to 1.1rc1
+
+* Tue Feb 23 2021 B.Faccini <bruno.faccini@intel.com> - 1.1~b1-1
+- Update to 1.1b1
+- Build with unwinding enabled
+
+* Mon Aug 17 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0-1
+- Update to 1.0 final
+
+* Mon Jun 22 2020 Brian J. Murrell <brian.murrell@intel.com> - 1.0rc-5
+- Update License:
+
+* Sat Sep 21 2019 Brian J. Murrell <brian.murrell@intel.com> - 1.0rc-4
+- Add BR: pkgconfig
+
+* Sat Sep 21 2019 Brian J. Murrell <brian.murrell@intel.com> - 1.0rc-3
+- Revert libabt0 packaging for EL7; RH just doesn't do that
+
+* Fri Sep 20 2019 Brian J. Murrell <brian.murrell@intel.com> - 1.0rc-2
+- Add patch to bring up to 89507c1f8c
+- Create a libabt0 subpackage
+- Force autogen.sh since we add a patch that modifies a Makefile.am
+
+* Wed Apr 17 2019 Brian J. Murrell <brian.murrell@intel.com> - 1.0rc-1
+- Update to 1.0rc1
+- Add patch to bring up to 9d48af08
+
+* Wed Apr 03 2019 Brian J. Murrell <brian.murrell@intel.com> - 0.99-1
+- Initial package

@@ -562,10 +562,6 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 
 	tx->last_errnum = 0;
 	ASSERT(env == NULL);
-	if (env != NULL)
-		memcpy(txd->env, env, sizeof(jmp_buf));
-	else
-		memset(txd->env, 0, sizeof(jmp_buf));
 
 	txd->failure_behavior = failure_behavior;
 
@@ -689,9 +685,6 @@ obj_tx_abort(int errnum, int user)
 
 	/* ONABORT */
 	obj_tx_callback(tx);
-
-	if (!util_is_zeroed(txd->env, sizeof(jmp_buf)))
-		longjmp(txd->env, errnum);
 }
 
 /*
@@ -1512,6 +1505,8 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
 
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
+		if (!tx_inprogress)
+			lw_tx_end(pop, NULL);
 		DAV_API_END();
 		return 0;
 	}
@@ -1565,9 +1560,26 @@ dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 void
 dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 {
+	int rc, tx_inprogress = 0;
+
 	DAV_DBG("actvcnt=%zu", actvcnt);
+	if (get_tx()->stage != DAV_TX_STAGE_NONE)
+		tx_inprogress = 1;
+
 	DAV_API_START();
+	if (!tx_inprogress) {
+		rc = lw_tx_begin(pop);
+		if (rc) {
+			D_ERROR("Failed to start local tx. %d\n", rc);
+			return;
+		}
+	}
+
 	palloc_cancel(pop->do_heap, actv, actvcnt);
+
+	if (!tx_inprogress)
+		lw_tx_end(pop, NULL);
+
 	DAV_API_END();
 }
 

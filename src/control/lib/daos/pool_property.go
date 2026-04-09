@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,7 +30,9 @@ import (
 #include <daos/pool_map.h>
 #include <daos_srv/control.h>
 
-#cgo LDFLAGS: -ldaos_common -lgurt -lcart
+#cgo LDFLAGS: -lgurt -lcart
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 
@@ -209,6 +211,25 @@ func DataThreshIsValid(size uint64) bool {
 	return bool(C.daos_data_thresh_valid(C.uint32_t(size)))
 }
 
+// DefaultPoolSelfHealStr describes the default self_heal flags.
+const DefaultPoolSelfHealStr = "exclude;rebuild"
+
+// PoolPropertySelfHealUnsetFlags returns disabled flags in the self-heal pool property as a
+// string slice.
+func PoolPropertySelfHealUnsetFlags(value string) []string {
+	offFlags := []string{"exclude", "rebuild", "delay_rebuild"}
+	for _, flag := range strings.Split(value, propValSep) {
+		for i, v := range offFlags {
+			if v == flag {
+				offFlags = append(offFlags[:i], offFlags[i+1:]...)
+				break
+			}
+		}
+	}
+
+	return offFlags
+}
+
 const (
 	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
 	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
@@ -265,6 +286,8 @@ func PoolProperties() PoolPropertyMap {
 						return "not set"
 					}
 					switch n {
+					case 0:
+						return "none"
 					case PoolSelfHealingAutoExclude:
 						return "exclude"
 					case PoolSelfHealingAutoRebuild:
@@ -272,22 +295,23 @@ func PoolProperties() PoolPropertyMap {
 					case PoolSelfHealingDelayRebuild:
 						return "delay_rebuild"
 					case PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild:
-						return "exclude,rebuild"
+						return DefaultPoolSelfHealStr
 					case PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild:
-						return "exclude,delay_rebuild"
+						return "exclude;delay_rebuild"
 					default:
 						return "unknown"
 					}
 				},
 			},
 			values: map[string]uint64{
+				"none":                  0,
 				"exclude":               PoolSelfHealingAutoExclude,
 				"rebuild":               PoolSelfHealingAutoRebuild,
 				"delay_rebuild":         PoolSelfHealingDelayRebuild,
-				"exclude,rebuild":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
-				"rebuild,exclude":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
-				"delay_rebuild,exclude": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
-				"exclude,delay_rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
+				DefaultPoolSelfHealStr:  PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"rebuild;exclude":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"delay_rebuild;exclude": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
+				"exclude;delay_rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
 			},
 		},
 		"space_rb": {

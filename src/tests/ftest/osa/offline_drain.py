@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,18 +23,18 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.ranks = self.params.get("rank_list", '/run/test_ranks/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.ior_test_sequence = self.params.get(
             "ior_test_sequence", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
 
-    def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0):
+    def run_offline_drain_test(self, num_pool, ranks, data=False, oclass=None, pool_fillup=0):
         """Run the offline drain without data.
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
+            ranks (list) : Ranks to drain.
             data (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             oclass (str): DAOS object class (eg: RP_2G1,etc)
@@ -65,7 +65,6 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 # method.
                 if pool_fillup > 0:
                     self.ior_cmd.dfs_oclass.update(oclass)
-                    self.ior_cmd.dfs_dir_oclass.update(oclass)
                     self.ior_default_flags = self.ior_w_flags
                     self.log.info(self.pool.pool_percentage_used())
                     self.start_ior_load(storage='NVMe', operation="Auto_Write", percent=pool_fillup)
@@ -84,7 +83,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         # Drain ranks and targets
         for val in range(0, num_pool):
             # Drain ranks provided in YAML file
-            for index, rank in enumerate(self.ranks):
+            for index, rank in enumerate(ranks):
                 self.pool = pool[val]
                 # If we are testing using multiple pools, reintegrate
                 # the rank back and then drain.
@@ -156,7 +155,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=OSAOfflineDrain,test_osa_offline_drain
         """
         self.log.info("Offline Drain : Basic Drain")
-        self.run_offline_drain_test(1, True)
+        ranks = self.get_random_test_ranks()
+        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks)
 
     def test_osa_offline_drain_without_checksum(self):
         """Test ID: DAOS-7159.
@@ -170,7 +170,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         """
         self.test_with_checksum = self.params.get("test_with_checksum", "/run/checksum/*")
         self.log.info("Offline Drain : Without Checksum")
-        self.run_offline_drain_test(1, data=True)
+        ranks = self.get_random_test_ranks()
+        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks)
 
     def test_osa_offline_drain_during_aggregation(self):
         """Test ID: DAOS-7159.
@@ -185,7 +186,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         self.test_during_aggregation = self.params.get(
             "test_with_aggregation", "/run/aggregation/*")
         self.log.info("Offline Drain : During Aggregation")
-        self.run_offline_drain_test(1, data=True)
+        ranks = self.get_random_test_ranks()
+        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks)
 
     def test_osa_offline_drain_oclass(self):
         """Test ID: DAOS-7159.
@@ -199,8 +201,9 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         """
         self.test_with_checksum = self.params.get("test_with_checksum", "/run/checksum/*")
         self.log.info("Offline Drain : Oclass")
+        ranks = self.get_random_test_ranks()
         for oclass in self.test_oclass:
-            self.run_offline_drain_test(1, data=True, oclass=oclass)
+            self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks, oclass=oclass)
 
     def test_osa_offline_drain_multiple_pools(self):
         """Test ID: DAOS-7159.
@@ -213,7 +216,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=OSAOfflineDrain,test_osa_offline_drain_multiple_pools
         """
         self.log.info("Offline Drain : Multiple Pools")
-        self.run_offline_drain_test(2, data=True)
+        ranks = self.get_random_test_ranks()
+        self.run_offline_drain_test(num_pool=2, data=True, ranks=ranks)
 
     def test_osa_offline_drain_during_rebuild(self):
         """Test ID: DAOS-7159.
@@ -227,7 +231,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         """
         self.test_during_rebuild = self.params.get("test_with_rebuild", "/run/rebuild/*")
         self.log.info("Offline Drain : During Rebuild")
-        self.run_offline_drain_test(1, data=True)
+        ranks = self.get_random_test_ranks()
+        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks)
 
     def test_osa_offline_drain_after_snapshot(self):
         """Test ID: DAOS-8057.
@@ -241,7 +246,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         """
         self.test_with_snapshot = self.params.get("test_with_snapshot", "/run/snapshot/*")
         self.log.info("Offline Drain : After taking snapshot")
-        self.run_offline_drain_test(1, data=True)
+        ranks = self.get_random_test_ranks()
+        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks)
 
     def test_osa_offline_drain_with_less_pool_space(self):
         """Test ID: DAOS-7160.
@@ -256,4 +262,20 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         self.log.info("Offline Drain : Test with less pool space")
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
         pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
-        self.run_offline_drain_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)
+        ranks = self.get_random_test_ranks()
+        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks, oclass=oclass,
+                                    pool_fillup=pool_fillup)
+
+    def test_osa_offline_drain_with_multiple_ranks(self):
+        """Test ID: DAOS-4753.
+
+        Test Description: Drain multiple ranks at the same time.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_drain,offline_drain,offline_drain_full
+        :avocado: tags=OSAOfflineDrain,test_osa_offline_drain_with_multiple_ranks
+        """
+        self.log.info("Offline Drain : Test with multiple ranks")
+        ranks = self.get_random_test_ranks(join_ranks=False)
+        self.run_offline_drain_test(num_pool=1, data=True, ranks=ranks)

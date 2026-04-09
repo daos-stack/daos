@@ -285,8 +285,8 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			key: /etc/daos/certs/server.key
 		provider: ofi+verbs;ofi_rxm
 		control_log_mask: DEBUG
-		control_log_file: /tmp/daos_server.log
-		helper_log_file: /tmp/daos_server_helper.log
+		control_log_file: /var/log/daos/daos_server.log
+		helper_log_file: /var/log/daos/daos_server_helper.log
 		engines:
 		-
 			pinned_numa_node: 0
@@ -295,7 +295,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			fabric_iface: ib0
 			fabric_iface_port: 31316
 			log_mask: INFO
-			log_file: /tmp/daos_engine_0.log
+			log_file: /var/log/daos/daos_engine_0.log
 			env_vars:
 				- CRT_TIMEOUT=30
 			storage:
@@ -315,7 +315,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			fabric_iface: ib1
 			fabric_iface_port: 31416
 			log_mask: INFO
-			log_file: /tmp/daos_engine_1.log
+			log_file: /var/log/daos/daos_engine_1.log
 			env_vars:
 				- CRT_TIMEOUT=30
 			storage:
@@ -346,7 +346,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			ca_cert: /etc/daos/certs/daosCA.crt
 			cert: /etc/daos/certs/agent.crt
 			key: /etc/daos/certs/agent.key
-		log_file: /tmp/daos_agent.log
+		log_file: /var/log/daos/daos_agent.log
 
 5. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node.
    The following is an example of the `daos_control.yml`.
@@ -377,8 +377,8 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		pdsh -S -w $SERVER_NODES "sudo systemctl status daos_server"
 
 		# if you see following format messages (depending on number of servers), proceed to storage format
-		server-1: server-1.test.hpdd.intel.com INFO 2023/04/11 23:14:06 SCM format required on instance 1
-		server-1: server-1.test.hpdd.intel.com INFO 2023/04/11 23:14:06 SCM format required on instance 0
+		server-1: server-1.test.example.com INFO 2023/04/11 23:14:06 SCM format required on instance 1
+		server-1: server-1.test.example.com INFO 2023/04/11 23:14:06 SCM format required on instance 0
 
 		# format storage
 		dmg storage format -l $SERVER_NODES # can use --force if needed
@@ -391,10 +391,10 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		# all the server ranks should show 'Joined' STATE
 		Rank UUID                                 Control Address  Fault Domain                  State  Reason
 		---- ----                                 ---------------  ------------                  -----  ------
-		0    604c4ffa-563a-49dc-b702-3c87293dbcf3 10.8.1.179:10001 /server-1.test.hpdd.intel.com Joined
-		1    f0791f98-4379-4ace-a083-6ca3ffa65756 10.8.1.179:10001 /server-1.test.hpdd.intel.com Joined
-		2    745d2a5b-46dd-42c5-b90a-d2e46e178b3e 10.8.1.189:10001 /server-2.test.hpdd.intel.com Joined
-		3    ba6a7800-3952-46ce-af92-bba9daa35048 10.8.1.189:10001 /server-2.test.hpdd.intel.com Joined
+		0    604c4ffa-563a-49dc-b702-3c87293dbcf3 10.8.1.179:10001 /server-1.test.example.com Joined
+		1    f0791f98-4379-4ace-a083-6ca3ffa65756 10.8.1.179:10001 /server-1.test.example.com Joined
+		2    745d2a5b-46dd-42c5-b90a-d2e46e178b3e 10.8.1.189:10001 /server-2.test.example.com Joined
+		3    ba6a7800-3952-46ce-af92-bba9daa35048 10.8.1.189:10001 /server-2.test.example.com Joined
 
 
 ## Start the DAOS Agents
@@ -408,7 +408,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 2. (Optional) Check daos\_agent status:
 
 		# check status
-		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
+		pdsh -S -w $CLIENT_NODES "cat /var/log/daos/daos_agent.log"
 
 		# Sample output depending on number of client nodes
 		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.6 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock

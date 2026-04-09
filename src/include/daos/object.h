@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2023 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -79,7 +79,7 @@ enum {
 	/* smallest cell size */
 	DAOS_EC_CELL_MIN	= (4 << 10),
 	/* default cell size */
-	DAOS_EC_CELL_DEF	= (64 << 10),
+	DAOS_EC_CELL_DEF	= (128 << 10),
 	/* largest cell size */
 	DAOS_EC_CELL_MAX	= (1024 << 10),
 };
@@ -140,7 +140,7 @@ typedef struct {
 /* Leave a few extra bits for now */
 #define MAX_OBJ_LAYOUT_VERSION		0xFFF0
 
-/** object metadata stored in the global OI table of container */
+/** metadata for object layout computation */
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
 	uint32_t		omd_ver;
@@ -155,6 +155,12 @@ struct daos_obj_md {
 	 * PO_COMP_TP_PERF and with PO_COMP_TP_PERF layer in pool map.
 	 */
 	uint32_t		omd_pdom_lvl;
+	/* extra flags for placement, see pl_layout_gen_bits */
+	unsigned int            omd_flags;
+	/* it should be set when PL_FL_GRP_SPEC is set, it's the group ID that
+	 * layout computation should reach then return(reduce computation time).
+	 */
+	unsigned int            omd_grp_spec;
 };
 
 /** object shard metadata stored in each container shard */
@@ -404,6 +410,17 @@ daos_oclass_is_ec(struct daos_oclass_attr *oca)
 	return oca->ca_resil == DAOS_RES_EC;
 }
 
+static inline bool
+daos_cid_is_ec(daos_oclass_id_t cid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_id2attr(cid, NULL);
+	if (oca == NULL)
+		return false;
+	return daos_oclass_is_ec(oca);
+}
+
 static inline void
 daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 		 enum daos_obj_redun ord, uint32_t nr_grps,
@@ -628,29 +645,33 @@ dc_obj_shard2anchor(daos_anchor_t *anchor, uint32_t shard)
 
 enum daos_io_flags {
 	/* The RPC will be sent to leader replica. */
-	DIOF_TO_LEADER		= 0x1,
+	DIOF_TO_LEADER = 0x1,
 	/* The RPC will be sent to specified replica. */
-	DIOF_TO_SPEC_SHARD	= 0x2,
+	DIOF_TO_SPEC_SHARD = 0x2,
 	/* The operation (enumeration) has specified epoch. */
-	DIOF_WITH_SPEC_EPOCH	= 0x4,
+	DIOF_WITH_SPEC_EPOCH = 0x4,
 	/* The operation is for EC recovering. */
-	DIOF_EC_RECOV		= 0x8,
+	DIOF_EC_RECOV = 0x8,
 	/* The key existence. */
-	DIOF_CHECK_EXISTENCE	= 0x10,
+	DIOF_CHECK_EXISTENCE = 0x10,
 	/* The RPC will be sent to specified redundancy group. */
-	DIOF_TO_SPEC_GROUP	= 0x20,
+	DIOF_TO_SPEC_GROUP = 0x20,
 	/* For data migration. */
-	DIOF_FOR_MIGRATION	= 0x40,
+	DIOF_FOR_MIGRATION = 0x40,
 	/* For EC aggregation. */
-	DIOF_FOR_EC_AGG		= 0x80,
+	DIOF_FOR_EC_AGG = 0x80,
 	/* The operation is for EC snapshot recovering */
-	DIOF_EC_RECOV_SNAP	= 0x100,
+	DIOF_EC_RECOV_SNAP = 0x100,
 	/* Only recover from parity */
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 	/* Force fetch/list to do degraded enumeration/fetch */
 	DIOF_FOR_FORCE_DEGRADE = 0x400,
 	/* reverse enumeration for recx */
 	DIOF_RECX_REVERSE = 0x800,
+	/* Use for rebuild fetch epoch selection */
+	DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY = 0x1000,
+	/* Do not degrade enumeration/fetch if data shard failed */
+	DIOF_EC_NO_DEGRADE = 0x2000,
 };
 
 /**

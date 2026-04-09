@@ -1,10 +1,13 @@
 hosts:
   test_servers: 5
   test_clients: 3
+
 timeout: 900
+
 setup:
   start_agents_once: False
   start_servers_once: False
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -13,33 +16,29 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
       storage: auto
+
 pool:
   size: 93%
+  properties: rd_fac:1
+
 container:
   type: POSIX
-  control_method: daos
+
 ior:
   api: "DFS"
   client_processes:
     np: 48
-  dfs_destroy: False
-  iorflags:
-    flags: "-w -W -r -R -G 1 -vv"
+  flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile
-  repetitions: 1
   transfersize_blocksize: !mux
     1M_128M:
       transfer_size: 1M

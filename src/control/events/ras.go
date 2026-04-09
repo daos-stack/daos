@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -57,6 +58,7 @@ const (
 	RASSystemFabricProvChanged RASID = C.RAS_SYSTEM_FABRIC_PROV_CHANGED // info
 	RASNVMeLinkSpeedChanged    RASID = C.RAS_DEVICE_LINK_SPEED_CHANGED  // warning|notice
 	RASNVMeLinkWidthChanged    RASID = C.RAS_DEVICE_LINK_WIDTH_CHANGED  // warning|notice
+	RASDeviceLEDSet            RASID = C.RAS_DEVICE_LED_SET             // info
 )
 
 func (id RASID) String() string {
@@ -343,6 +345,9 @@ func (evt *RASEvent) PrintRAS() string {
 	}
 	if evt.Rank != C.CRT_NO_RANK {
 		fmt.Fprintf(&b, " rank: [%d]", evt.Rank)
+	}
+	if evt.Incarnation != 0 {
+		fmt.Fprintf(&b, " incarnation: [%d]", evt.Incarnation)
 	}
 	if evt.JobID != "" {
 		fmt.Fprintf(&b, " jobid: [%s]", evt.JobID)

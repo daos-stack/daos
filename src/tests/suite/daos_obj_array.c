@@ -1729,6 +1729,83 @@ array_recx_write_mixed_iov_read_single(void **state)
 	daos_obj_close(oh, NULL);
 }
 
+#define ONE_KB (1024)
+#define TWO_MB (2 * 1024 * 1024)
+
+void
+test_sgl_merge_short_read(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgl;
+	daos_iod_t    iod;
+	daos_recx_t   recx;
+	char         *wbuf, *rbuf;
+	d_iov_t      *sg_iovs     = NULL;
+	int           total_iovs  = TWO_MB / ONE_KB;
+	int           data_offset = 0;
+	int           rc, i;
+
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Buffer allocation with guard pages */
+	wbuf = malloc(ONE_MB);
+	assert_true(wbuf != NULL);
+	dts_buf_render(wbuf, ONE_MB);
+
+	/* Allocate 2MB read buffer with guard pages */
+	rbuf = calloc(1, TWO_MB + FOUR_KB);
+	assert_true(rbuf != NULL);
+
+	/* Build scatter-gather list for 1KB chunks */
+	sg_iovs = calloc(total_iovs, sizeof(d_iov_t));
+	assert_true(sg_iovs != NULL);
+
+	/* 1MB data read in 1KB chunks */
+	for (i = 0; i < total_iovs; i++) {
+		d_iov_set(&sg_iovs[data_offset], rbuf + i * ONE_KB, ONE_KB);
+		data_offset++;
+	}
+
+	/* Configure scatter-gather list */
+	sgl = (d_sg_list_t){.sg_nr = total_iovs, .sg_nr_out = 0, .sg_iovs = sg_iovs};
+
+	/* Prepare I/O descriptor */
+	d_iov_set(&dkey, "short_key", 9);
+	d_iov_set(&iod.iod_name, "big_akey", 8);
+	iod.iod_nr    = 1;
+	iod.iod_size  = 1;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_recxs = &recx;
+	recx.rx_idx   = 0;
+	recx.rx_nr    = ONE_MB - 4;
+
+	/* Write initial data with single IOV */
+	d_sg_list_t write_sgl = {
+	    .sg_nr   = 1,
+	    .sg_iovs = &(d_iov_t){.iov_buf = wbuf, .iov_len = ONE_MB - 4, .iov_buf_len = ONE_MB}};
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &write_sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Read back using 1KB chunks */
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_rc_equal(sgl.sg_nr_out, 1024);
+	assert_rc_equal(sg_iovs[1023].iov_len, 1020);
+
+	/* Verify only 1MB - 4 was read successfully */
+	assert_memory_equal(wbuf, rbuf, ONE_MB - 4);
+
+	free(wbuf);
+	free(rbuf);
+	free(sg_iovs);
+	daos_obj_close(oh, NULL);
+}
+
 static const struct CMUnitTest array_tests[] = {
     {"ARRAY0: small_sgl", small_sgl, NULL, test_case_teardown},
     {"ARRAY1: byte array with buffer on stack", byte_array_simple_stack, NULL, test_case_teardown},
@@ -1759,6 +1836,7 @@ static const struct CMUnitTest array_tests[] = {
     {"ARRAY20: recx read mixed iov", array_recx_read_mixed_iov, NULL, test_case_teardown},
     {"ARRAY21: recx write mixed iov", array_recx_write_mixed_iov_read_single, NULL,
      test_case_teardown},
+    {"ARRAY22: recx short read", test_sgl_merge_short_read, NULL, test_case_teardown},
 };
 
 static int

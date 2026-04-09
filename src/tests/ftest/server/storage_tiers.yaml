@@ -5,22 +5,20 @@ hosts:
 setup:
   start_servers: false
   start_agents: false
-  server_config_namespace: /run/server_configurations/*/server_config/*
+  server_config_namespace: /run/configurations/*/server_config/*
 
-timeout: 1800
+check_server_storage: false
+
+timeout: 30
 
 engine_0: &engine_0_base
   pinned_numa_node: 0
   nr_xs_helpers: 1
-  fabric_iface: ib0
-  fabric_iface_port: 31317
   log_file: daos_server0.log
 
 engine_1: &engine_1_base
   pinned_numa_node: 1
   nr_xs_helpers: 1
-  fabric_iface: ib1
-  fabric_iface_port: 31417
   log_file: daos_server1.log
 
 storage_0: &storage_dcpm
@@ -33,23 +31,23 @@ storage_1: &storage_ram
 
 storage_2: &storage_nvme_all
   class: nvme
-  roles: [wal, index, data]
+  bdev_roles: [wal, index, data]
 
 storage_3: &storage_nvme_wal_index
   class: nvme
-  roles: [wal, index]
+  bdev_roles: [wal, index]
 
 storage_4: &storage_nvme_wal
   class: nvme
-  roles: [wal]
+  bdev_roles: [wal]
 
 storage_5: &storage_nvme_index
   class: nvme
-  roles: [index]
+  bdev_roles: [index]
 
 storage_6: &storage_nvme_data
   class: nvme
-  roles: [data]
+  bdev_roles: [data]
 
 configurations: !mux
   1_tier_dcpm:

@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -25,7 +25,7 @@ class EcodFioRebuild(FioBase):
         Args:
             rebuild_mode (str): On-line or off-line rebuild mode
         """
-        aggregation_timeout = self.params.get("aggr_timeout", "/run/pool/aggregation/*")
+        aggregation_timeout = self.params.get("aggregation_timeout", "/run/pool/*")
         read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
 
         num_ranks = len(self.server_managers[0].ranks)
@@ -42,6 +42,7 @@ class EcodFioRebuild(FioBase):
         container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, pool, container)
+        self.fio_cmd.update_directory(dfuse.mount_dir.value)
 
         # Write the Fio data and kill the last server rank if rebuild_mode is on-line
         if 'on-line' in rebuild_mode:

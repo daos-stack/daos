@@ -8,7 +8,7 @@ updates:
     ignore:
       - dependency-name: "avocado-framework*"
     schedule:
-      interval: daily
+      interval: weekly
     groups:
       python-packages:
         patterns:
@@ -22,7 +22,7 @@ updates:
       gha-versions:
         patterns:
           - "*"
-    assignees:
+    reviewers:
       - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
@@ -36,7 +36,91 @@ updates:
       gha-versions:
         patterns:
           - "*"
-    assignees:
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: github-actions
+    target-branch: release/2.6.4-aurora
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gha-versions:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: github-actions
+    target-branch: release/2.6.4-mfg
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gha-versions:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: gomod
+    target-branch: master
+    directory: /src/control
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: gomod
+    target-branch: release/2.6
+    directory: /src/control
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: gomod
+    target-branch: release/2.6.4-aurora
+    directory: /src/control
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: gomod
+    target-branch: release/2.6.4-mfg
+    directory: /src/control
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+    reviewers:
       - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"

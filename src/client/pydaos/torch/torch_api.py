@@ -1,6 +1,6 @@
 #
 # (C) Copyright 2024-2025 Google LLC
-# (C) Copyright 2024-2025 Enakta Labs Ltd
+# (C) Copyright 2024-2026 Enakta Labs Ltd
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -11,11 +11,14 @@ to access training data on DAOS DFS via POSIX container.
 In addition, it provides Checkpoint class to save and load PyTorch model checkpoints.
 """
 
+import errno
 import io
 import math
 import os
 import stat
+import sys
 from multiprocessing import Process, Queue
+from pathlib import Path
 
 from torch.utils.data import Dataset as TorchDataset
 from torch.utils.data import IterableDataset as TorchIterableDataset
@@ -48,6 +51,9 @@ class Dataset(TorchDataset):
     If this Dataset is planned to be used via multiple workers in different processes,
     before accessing the data, workers needs to call worker_init function to re-initialize
     DAOS internals after fork(s).
+    It's necessary to free resources when the dataset is no longer required,
+    either by calling the close() method manually or by using a with statement.
+
 
     Attributes
     ----------
@@ -94,6 +100,7 @@ class Dataset(TorchDataset):
         self._dfs = _Dfs(pool=pool, cont=cont, dir_cache_size=dir_cache_size)
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
+        self._closed = False
 
         self.objects = self._dfs.parallel_list(path, readdir_batch_size=self._readdir_batch_size)
 
@@ -126,14 +133,39 @@ class Dataset(TorchDataset):
         # to use that global connection and dfs
         self._dfs.worker_init()
 
-    def __del__(self):
-        """ Cleanups the used resources and connection """
-
-        if self._dfs is None:
+    def close(self):
+        """ Cleanups the used resources and connections """
+        if self._closed:
             return
+        self._closed = True
 
         self._dfs.disconnect()
-        self._dfs = None
+        self.objects = None
+
+    def __enter__(self):
+        """Enter the context manager.
+
+        Returns:
+            self: The instance itself to allow method calls within the with block.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager and clean up resources.
+
+        Returns:
+            None: Allows any exceptions to propagate normally.
+        """
+        self.close()
+
+    def __del__(self):
+        """Destructor that ensures resources are cleaned up when object is garbage collected.
+
+        Note:
+            This is a fallback cleanup mechanism. Explicit cleanup via close() or
+            context manager usage is preferred as __del__ is not guaranteed to be called.
+        """
+        self.close()
 
 
 # pylint: disable=abstract-method # iterable dataset should implement only __iter__()
@@ -148,6 +180,8 @@ class IterableDataset(TorchIterableDataset):
     If this Dataset is planned to be used via multiple workers in different processes,
     before accessing the data, workers needs to call worker_init function to re-initialize
     DAOS internals after fork(s) and to split work between them.
+    It's necessary to free resources when the dataset is no longer required,
+    either by calling the close() method manually or by using a with statement.
 
     The typical usage with pytorch.DataLoader would look like the following example:
 
@@ -164,6 +198,7 @@ class IterableDataset(TorchIterableDataset):
     for i, sample in enumerate(dl):
         print(f"Sample {i}: {sample}")
 
+    ds.close()
 
     Attributes
     ----------
@@ -207,6 +242,7 @@ class IterableDataset(TorchIterableDataset):
         self._transform_fn = transform_fn
         self._readdir_batch_size = readdir_batch_size
         self._batch_size = batch_size
+        self._closed = False
 
         self.objects = self._dfs.parallel_list(path, readdir_batch_size=self._readdir_batch_size)
         self.workset = self.objects
@@ -247,16 +283,40 @@ class IterableDataset(TorchIterableDataset):
         # to use that global connection and dfs
         self._dfs.worker_init()
 
-    def __del__(self):
-        """ Cleanups the used resources and connection """
-
-        if self._dfs is None:
+    def close(self):
+        """ Cleanups the used resources and connections """
+        if self._closed:
             return
+        self._closed = True
 
         self._dfs.disconnect()
-        self._dfs = None
-        self.objects = None
         self.workset = None
+        self.objects = None
+
+    def __enter__(self):
+        """Enter the context manager.
+
+        Returns:
+            self: The instance itself to allow method calls within the with block.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager and clean up resources.
+
+        Returns:
+            None: Allows any exceptions to propagate normally.
+        """
+        self.close()
+
+    def __del__(self):
+        """Destructor that ensures resources are cleaned up when object is garbage collected.
+
+        Note:
+            This is a fallback cleanup mechanism. Explicit cleanup via close() or
+            context manager usage is preferred as __del__ is not guaranteed to be called.
+        """
+        self.close()
 
     def __load_batch(self, items):
         """ load items in batch and applies data transformation function """
@@ -315,15 +375,19 @@ class WriteBuffer(io.BufferedIOBase):
                 self._workers.append(worker)
 
     def _worker_fn(self, queue):
-        self._dfs.worker_init()
-        while True:
-            work = queue.get()
-            if work is None:
-                break
+        try:
+            self._dfs.worker_init()
+            while True:
+                work = queue.get()
+                if work is None:
+                    break
 
-            (offset, chunk) = work
-            self._dfs.write(self._path, self._mode, self._oflags,
-                            self._class_name, self._file_chunk_size, offset, chunk)
+                (offset, chunk) = work
+                self._dfs.write(self._path, self._mode, self._oflags,
+                                self._class_name, self._file_chunk_size, offset, chunk)
+        # pylint: disable=broad-exception-caught
+        except Exception as e:
+            sys.exit(getattr(e, 'errno', errno.EIO))
 
     def write(self, data):
         """ Writes data to the buffer."""
@@ -374,6 +438,11 @@ class WriteBuffer(io.BufferedIOBase):
         for worker in self._workers:
             worker.join()
 
+        # lets see if any worker exited abnormally and if so, raise an error
+        for worker in self._workers:
+            if worker.exitcode != 0:
+                raise OSError(worker.exitcode, os.strerror(worker.exitcode))
+
         super().close()
 
     def _flush(self):
@@ -421,6 +490,11 @@ class Checkpoint():
     Class representing checkpoint interface for pytorch to save and load
     model's stave over DAOS DFS.
 
+    As the connection establishes to the container, it's necessary to free resources
+    when the checkpoint operations has been completed, either by calling the close() method
+    manually or by using a with statement.
+
+
     Attributes
     ----------
     pool : string
@@ -440,7 +514,7 @@ class Checkpoint():
     transfer_chunk_size : int (optional)
         Chunk size for data buffering/transfer, default is DEFAULT_CHUNK_SIZE = 64MB.
         To disable chunking set it to 0, then all writes go to in memory buffer
-        and actual flush to storage will happen on close() call.
+        and actual flush to storage will happen on close() call of the writer buffer.
     chunks_limits: int (optional)
         Number of chunks to be used for buffering and transfer.
         Setting it to 0 means no limit.
@@ -462,7 +536,7 @@ class Checkpoint():
 
     # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(self, pool, cont, prefix=os.sep,
-                 mode=stat.S_IFREG | stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH,
+                 mode=stat.S_IFREG | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
                  open_flags=os.O_CREAT | os.O_RDWR,
                  class_name="OC_UNKNOWN",
                  file_chunk_size=0,
@@ -481,14 +555,40 @@ class Checkpoint():
         self._chunks_limit = chunks_limit
         self._workers = workers
         self._dfs = _Dfs(pool=pool, cont=cont, rd_only=False)
+        self._closed = False
+
+    def close(self):
+        """ Cleanups the used resources and connections """
+        if self._closed:
+            return
+        self._closed = True
+
+        self._dfs.disconnect()
+
+    def __enter__(self):
+        """Enter the context manager.
+
+        Returns:
+            self: The instance itself to allow method calls within the with block.
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager and clean up resources.
+
+        Returns:
+            None: Allows any exceptions to propagate normally.
+        """
+        self.close()
 
     def __del__(self):
-        """ Cleanups the used resources and connection """
+        """Destructor that ensures resources are cleaned up when object is garbage collected.
 
-        if self._dfs is None:
-            return
-        self._dfs.disconnect()
-        self._dfs = None
+        Note:
+            This is a fallback cleanup mechanism. Explicit cleanup via close() or
+            context manager usage is preferred as __del__ is not guaranteed to be called.
+        """
+        self.close()
 
     def reader(self, file, stream=None):
         """
@@ -531,13 +631,16 @@ class Checkpoint():
         stream.seek(0)
         return stream
 
-    def writer(self, file):
+    def writer(self, file, ensure_path=True):
         """ Returns write buffer to save the checkpoint file """
 
         if file is None:
             raise ValueError("file is required")
 
         path = os.path.join(self._prefix, file)
+        if ensure_path:
+            self._dfs.mkdirall(os.path.dirname(path))
+
         return WriteBuffer(self._dfs, path, self._mode, self._oflags,
                            self._class_name, self._file_chunk_size, self._transfer_chunk_size,
                            self._chunks_limit, self._workers)
@@ -722,3 +825,18 @@ class _Dfs():
         if ret != 0:
             raise OSError(ret, os.strerror(ret), path)
         return size
+
+    def mkdirall(self, path, mode=0o755):
+        """ Creates directory, making parent directories if needed """
+
+        path = os.path.normpath(path)
+        dirs = list(Path(path).parts)
+        if not dirs:
+            raise ValueError(f"invalid path: {path}")
+
+        parent = dirs.pop(0)
+        for name in dirs:
+            parent = os.path.join(parent, name)
+            ret = torch_shim.torch_mkdir(DAOS_MAGIC, self._dfs, parent, mode)
+            if ret not in (0, errno.EEXIST):
+                raise OSError(ret, os.strerror(ret), parent)

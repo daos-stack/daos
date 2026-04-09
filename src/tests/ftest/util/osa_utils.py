@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -287,8 +288,25 @@ class OSAUtils(MdtestBase, IorTestBase):
                 "Detected container redundancy factor: %s",
                 self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
-            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
             self.container.oclass.update(None)
+
+    def get_random_test_ranks(self, total_ranks=2, join_ranks=True):
+        """Get random list of ranks for OSA tests.
+
+        Args:
+            total_ranks (list): Random rank list for testing. Defaults to 2.
+            join_ranks (bool): Stop ranks individual ranks. Defaults to True.
+
+        Returns:
+            list: a list of random ranks either as individual strings,
+            or one comma-separated string.
+
+        """
+        # Get a random rank(s) based on num_ranks input.
+        ranklist = list(self.server_managers[0].ranks.keys())
+        if join_ranks is True:
+            return list(map(str, self.random.sample(ranklist, k=total_ranks)))
+        return [",".join(map(str, self.random.sample(ranklist, k=total_ranks)))]
 
     def assert_on_exception(self, out_queue=None):
         """Assert on exception while executing an application.
@@ -377,7 +395,6 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.pool, None)
         self.log.info("Redundancy Factor : %s", self.test_with_rf)
         self.ior_cmd.dfs_oclass.update(oclass)
-        self.ior_cmd.dfs_dir_oclass.update(oclass)
         if single_cont_read is True:
             # Prepare the containers created and use in a specific
             # way defined in prepare_cont_ior_write.
@@ -402,7 +419,6 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.log.info(
                 "Detected container redundancy factor: %s", self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
-            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
         # Run run_ior_with_pool without invoking the pool query method for
         # displaying pool space information (display_space=False)
         self.run_ior_with_pool(create_pool=False, create_cont=False,

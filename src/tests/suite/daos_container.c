@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2676,7 +2677,9 @@ co_rf_simple(void **state)
 	daos_prop_val_2_co_status(entry->dpe_val, &stat);
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
 
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS);
+	/* Hang the rebuild */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0) {
 		unsigned int ranks[2];
 
@@ -2698,7 +2701,8 @@ co_rf_simple(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Hang the rebuild */
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
@@ -2716,11 +2720,7 @@ co_rf_simple(void **state)
 	iod.iod_size	= 1;
 	iod.iod_nr	= 1;
 	iod.iod_recxs	= &recx;
-	iod.iod_type	= DAOS_IOD_ARRAY;
-	print_message("obj update should success before RF broken\n");
-	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
-			     NULL);
-	assert_rc_equal(rc, 0);
+	iod.iod_type    = DAOS_IOD_ARRAY;
 
 	if (arg->myrank == 0) {
 		arg->no_rebuild = 1;
@@ -3073,7 +3073,7 @@ co_redun_lvl(void **state)
 		goto out;
 	rc = ranks_on_same_node(poolmap, 7, ranks);
 	assert_rc_equal(rc, 0);
-	for (i = 5; i > 0; i++) {
+	for (i = 5; i > 0; i--) {
 		if (i != ranks[0] && i != ranks[1]) {
 			ranks[2] = i;
 			break;
@@ -3148,14 +3148,10 @@ co_redun_lvl(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
-	print_message("obj update should success before RF broken\n");
+	test_set_engine_fail_loc(arg, CRT_NO_RANK,
+				 DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
-	assert_rc_equal(rc, 0);
-
-	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
-			     NULL);
 	assert_rc_equal(rc, 0);
 
 	/* exclude one more rank on another NODE dom */
@@ -4043,6 +4039,43 @@ co_op_dup_timing(void **state)
 	test_teardown((void **)&arg);
 }
 
+/* Opening a DESTROYING container should fail. */
+static void
+co_open_destroying(void **state)
+{
+	test_arg_t   *arg   = *state;
+	char         *label = "c_open_destroying";
+	uuid_t        uuid;
+	daos_handle_t coh;
+	int           rc;
+
+	par_barrier(PAR_COMM_WORLD);
+
+	if (arg->myrank != 0)
+		goto out;
+
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("created container '%s' (" DF_UUIDF ")\n", label, DP_UUID(uuid));
+
+	print_message("destroying container '%s' with fault injection\n", label);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_DESTROY_FAIL_POST | DAOS_FAIL_ALWAYS);
+	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	assert_rc_equal(rc, -DER_NOMEM);
+
+	print_message("attempting to open DESTROYING container '%s'\n", label);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_CONT_DESTROYING);
+
+	print_message("destroying container '%s'\n", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+
+out:
+	par_barrier(PAR_COMM_WORLD);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -4115,6 +4148,7 @@ static const struct CMUnitTest co_tests[] = {
     {"CONT33: exclusive open", co_exclusive_open, NULL, test_case_teardown},
     {"CONT34: evict handles", co_evict_hdls, NULL, test_case_teardown},
     {"CONT35: container duplicate op detection timing", co_op_dup_timing, NULL, test_case_teardown},
+    {"CONT36: open DESTROYING", co_open_destroying, NULL, test_case_teardown},
 };
 
 int

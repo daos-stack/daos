@@ -1,5 +1,7 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,19 +99,19 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);                               \
 	} while (0)
 
-#define _D_DEBUG(func, flag, ...)					   \
-	do {								   \
-		if (__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0)) {	   \
-			if (DD_FLAG(flag, D_LOGFAC) == (int)DLOG_UNINIT) { \
-				_D_LOG_CHECK(func,			   \
-					     DD_FLAG(flag, D_LOGFAC),	   \
-					     (flag) | D_LOGFAC,		   \
-					     ##__VA_ARGS__);		   \
-				break;					   \
-			}						   \
-			func(DD_FLAG(flag, D_LOGFAC), ##__VA_ARGS__);	   \
-		}							   \
+#define _D_DEBUG_W_SAVED_MASK(func, saved_mask, level, ...)                                        \
+	do {                                                                                       \
+		if (__builtin_expect(saved_mask, 0)) {                                             \
+			if ((saved_mask) == (int)DLOG_UNINIT) {                                    \
+				_D_LOG_CHECK(func, saved_mask, (level) | D_LOGFAC, ##__VA_ARGS__); \
+				break;                                                             \
+			}                                                                          \
+			func(saved_mask, ##__VA_ARGS__);                                           \
+		}                                                                                  \
 	} while (0)
+
+#define _D_DEBUG(func, flag, ...)                                                                  \
+	_D_DEBUG_W_SAVED_MASK(func, DD_FLAG(flag, D_LOGFAC), flag, ##__VA_ARGS__)
 
 #define D_LOG_ENABLED(flag)					\
 	({							\
@@ -321,6 +323,15 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 					     const char*, const int));
 
 /**
+ * \brief D_FATAL the provided memory range in hex.
+ *
+ * \param[in] ptr	Start of the memory range.
+ * \param[in] size	Size of the memory range.
+ */
+void
+d_log_memory(const uint8_t *ptr, size_t size);
+
+/**
  * D_PRINT can be used for output to stdout with or without clog being enabled
  */
 #define D_PRINT(fmt, ...)						\
@@ -339,6 +350,17 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		if (d_alt_assert != NULL)				\
 			d_alt_assert(0, #e, __FILE__, __LINE__);	\
 		assert(0);						\
+	} while (0)
+
+#define D_ASSERTF_MEM(cond, ptr, size, fmt, ...)                                                   \
+	do {                                                                                       \
+		if (likely(cond))                                                                  \
+			break;                                                                     \
+		D_FATAL("Assertion '%s' failed: " fmt, #cond, ##__VA_ARGS__);                      \
+		d_log_memory((uint8_t *)ptr, size);                                                \
+		if (d_alt_assert != NULL)                                                          \
+			d_alt_assert(0, #cond, __FILE__, __LINE__);                                \
+		assert(0);                                                                         \
 	} while (0)
 
 /* Assert cond is true with message to report on failure */

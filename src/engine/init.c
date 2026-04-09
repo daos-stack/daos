@@ -1,8 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +23,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/mgmt.h>
 #include <daos/placement.h>
 #include <daos/tls.h>
 #include "srv_internal.h"
@@ -100,6 +100,25 @@ static bool dss_abt_init;
 /** Start daos_engine under check mode. */
 static bool dss_check_mode;
 
+/**
+ * DAOS Engine Runtime Version Initialization
+ * This version identifier is exclusively used during
+ * engine initialization when joining the system cluster.
+ */
+static daos_version_t   dss_join_version;
+
+void
+dss_set_join_version(daos_version_t version)
+{
+	dss_join_version = version;
+}
+
+daos_version_t
+dss_get_join_version(void)
+{
+	return dss_join_version;
+}
+
 bool
 engine_in_check(void)
 {
@@ -160,65 +179,25 @@ hlc_recovery_end(uint64_t bound)
 	}
 }
 
-/*
- * Register the dbtree classes used by native server-side modules (e.g.,
- * ds_pool, ds_cont, etc.). Unregistering is currently not supported.
- */
 static int
-register_dbtree_classes(void)
+init_tls_support(void)
 {
 	int rc;
 
-	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
-				   &dbtree_kv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_KV: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
+	rc = ds_tls_key_create();
+	if (rc != 0)
+		return daos_errno2der(rc);
 
-	rc = dbtree_class_register(DBTREE_CLASS_IV,
-				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
-				   &dbtree_iv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
+	dss_register_key(&daos_srv_modkey);
 
-	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
-				   &dbtree_ifv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IFV: " DF_RC "\n", DP_RC(rc));
-		return rc;
-	}
+	return 0;
+}
 
-	rc = dbtree_class_register(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY,
-				   &dbtree_nv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
-				   &dbtree_uv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_UV: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	rc = dbtree_class_register(DBTREE_CLASS_EC,
-				   BTR_FEAT_UINT_KEY /* feats */,
-				   &dbtree_ec_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_EC: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	return rc;
+static void
+fini_tls_support(void)
+{
+	dss_unregister_key(&daos_srv_modkey);
+	ds_tls_key_delete();
 }
 
 static int
@@ -691,6 +670,13 @@ server_init(int argc, char *argv[])
 	int			rc;
 	struct engine_metrics	*metrics;
 
+	/**
+	 * The typical umask is 022. The group portion is cleared, which allows the group
+	 * permissions to be set freely. This setting is intended to remain in effect for the entire
+	 * lifetime of the process.
+	 */
+	(void)umask(002);
+
 	/*
 	 * Begin the HLC recovery as early as possible. Do not read the HLC
 	 * before the hlc_recovery_end call below.
@@ -699,10 +685,15 @@ server_init(int argc, char *argv[])
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
+	/* Must initialize TLS support before using server_id_cb. */
+	rc = init_tls_support();
+	if (rc != 0)
+		return rc;
+
 	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_INFO);
 	if (rc != 0)
-		return rc;
+		goto exit_tls_support;
 
 	/** initialize server topology data - this is needed to set up the number of targets */
 	rc = dss_topo_init();
@@ -728,7 +719,7 @@ server_init(int argc, char *argv[])
 		goto exit_metrics_init;
 	}
 
-	rc = register_dbtree_classes();
+	rc = dss_register_dbtree_classes();
 	if (rc != 0)
 		D_GOTO(exit_drpc_fini, rc);
 
@@ -831,7 +822,7 @@ server_init(int argc, char *argv[])
 	if (rc)
 		D_GOTO(exit_init_state, rc);
 
-	dss_xstreams_open_barrier();
+	dss_xstreams_open_barrier(false);
 	D_INFO("Service fully up\n");
 
 	/** Report timestamp when engine was open for business */
@@ -875,6 +866,8 @@ exit_metrics_init:
 	/* dss_topo_fini cleans itself if it fails */
 exit_debug_init:
 	daos_debug_fini();
+exit_tls_support:
+	fini_tls_support();
 	return rc;
 }
 
@@ -935,6 +928,8 @@ server_fini(bool force)
 	D_INFO("dss_top_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
+	fini_tls_support();
+	D_INFO("fini_tls_support() done\n");
 }
 
 static void
@@ -996,7 +991,7 @@ static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
 	return 0;
 }
 
-static int
+static void
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
@@ -1086,9 +1081,6 @@ parse(int argc, char **argv)
 			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size,
 					 "\"-H\"");
 			break;
-		case 'h':
-			usage(argv[0], stdout);
-			break;
 		case 'I':
 			rc = arg_strtoul(optarg, &dss_instance_idx, "\"-I\"");
 			break;
@@ -1110,15 +1102,16 @@ parse(int argc, char **argv)
 			}
 			snprintf(modules, sizeof(modules), "%s", MODS_LIST_CHK);
 			break;
+		case 'h':
+			usage(argv[0], stdout);
+			exit(EXIT_SUCCESS);
 		default:
 			usage(argv[0], stderr);
 			rc = -DER_INVAL;
 		}
-		if (rc < 0)
-			return rc;
+		if (rc)
+			exit(EXIT_FAILURE);
 	}
-
-	return 0;
 }
 
 struct abt_dump_arg {
@@ -1148,13 +1141,12 @@ int
 main(int argc, char **argv)
 {
 	sigset_t        set;
-	int		sig;
-	int		rc;
+	bool	        exit_failure = false;
+	int	        sig;
+	int	        rc;
 
 	/** parse command line arguments */
-	rc = parse(argc, argv);
-	if (rc)
-		exit(EXIT_FAILURE);
+	parse(argc, argv);
 
 	/** block all possible signals but faults */
 	sigfillset(&set);
@@ -1183,6 +1175,7 @@ main(int argc, char **argv)
 
 	/** wait for shutdown signal */
 	sigemptyset(&set);
+	sigaddset(&set, SIGBUS);
 	sigaddset(&set, SIGINT);
 	sigaddset(&set, SIGTERM);
 	sigaddset(&set, SIGUSR1);
@@ -1195,7 +1188,6 @@ main(int argc, char **argv)
 			D_ERROR("failed to wait for signals: %d\n", rc);
 			break;
 		}
-
 		/* open specific file to dump ABT infos and ULTs stacks */
 		if (sig == SIGUSR1 || sig == SIGUSR2) {
 			struct timeval tv;
@@ -1277,12 +1269,18 @@ main(int argc, char **argv)
 			continue;
 		}
 
-		/* SIGINT/SIGTERM cause server shutdown */
+		/* Log error for SIGBUS occurrence */
+		if (sig == SIGBUS) {
+			D_ERROR("SIGBUS signal received; proceeding to shutdown.\n");
+			exit_failure = true;
+		}
+
+		/* SIGINT/SIGTERM/SIGBUS cause server shutdown */
 		break;
 	}
 
 	/** shutdown */
 	server_fini(true);
 
-	exit(EXIT_SUCCESS);
+	exit(exit_failure ? EXIT_FAILURE : EXIT_SUCCESS);
 }

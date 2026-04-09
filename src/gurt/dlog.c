@@ -561,6 +561,9 @@ d_log_disable_logging(void)
  * @param flags returned by d_log_check
  * @param fmt the printf(3) format to use
  * @param ap the stdargs va_list to use for the printf format
+ *
+ * @note Any changes to this function must be reflected in the CaRT log parser.
+ * @see src/tests/ftest/cart/util/cart_logparser.py
  */
 void d_vlog(int flags, const char *fmt, va_list ap)
 {
@@ -644,11 +647,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (mst.oflags & DLOG_FLV_YEAR)
 		hlen = snprintf(b, sizeof(b), "%04d/", tm->tm_year + 1900);
 
-	hlen += snprintf(b + hlen, sizeof(b) - hlen,
-			 "%02d/%02d-%02d:%02d:%02d.%02ld %s ",
-			 tm->tm_mon + 1, tm->tm_mday,
-			 tm->tm_hour, tm->tm_min, tm->tm_sec,
-			 (long int)tv.tv_usec / 10000, mst.uts.nodename);
+	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%02d/%02d %02d:%02d:%02d.%06ld %s ",
+			 tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
+			 (long int)tv.tv_usec, mst.uts.nodename);
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {

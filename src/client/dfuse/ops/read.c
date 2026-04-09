@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,8 +68,20 @@ static void
 readahead_actual_reply(struct active_inode *active, struct read_req *rr)
 {
 	size_t reply_len;
+	size_t readahead_len = active->readahead->dra_ev->de_readahead_len;
 
-	if (rr->position + rr->len >= active->readahead->dra_ev->de_readahead_len) {
+	/* Reads can be requested at/after EOF (e.g. speculative or readahead probes).
+	 * In this case do not dereference beyond the pre-read buffer.
+	 */
+	if (rr->position >= readahead_len) {
+		rr->oh->doh_linear_read_eof = true;
+		DFUSE_TRA_DEBUG(rr->oh, "%#zx-%#zx requested (EOF)", rr->position,
+				rr->position + rr->len - 1);
+		DFUSE_REPLY_BUFQ(rr->oh, rr->req, NULL, 0);
+		return;
+	}
+
+	if (rr->len >= readahead_len - rr->position) {
 		rr->oh->doh_linear_read_eof = true;
 	}
 
@@ -79,13 +91,13 @@ readahead_actual_reply(struct active_inode *active, struct read_req *rr)
 	 * It the attempted read is smaller than the buffer it will be met in full.
 	 */
 
-	if (rr->position + rr->len < active->readahead->dra_ev->de_readahead_len) {
+	if (rr->len < readahead_len - rr->position) {
 		reply_len = rr->len;
 		DFUSE_TRA_DEBUG(rr->oh, "%#zx-%#zx read", rr->position,
 				rr->position + reply_len - 1);
 	} else {
 		/* The read will be truncated */
-		reply_len = active->readahead->dra_ev->de_readahead_len - rr->position;
+		reply_len = readahead_len - rr->position;
 		DFUSE_TRA_DEBUG(rr->oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)",
 				rr->position, rr->position + reply_len - 1,
 				rr->position + reply_len, rr->position + rr->len - 1);
@@ -520,6 +532,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	ev->de_req_position = position;
 
 	if (mock_read) {
+		DFUSE_TRA_DEBUG(
+		    oh,
+		    "handled mock_read synthetic zero reply: pos=%#zx len=%#zx (dfs_read bypassed)",
+		    position, len);
+		memset(ev->de_iov.iov_buf, 0, len);
 		ev->de_len = len;
 		dfuse_cb_read_complete(ev);
 		return;
@@ -549,15 +566,22 @@ static void
 pre_read_mark_done(struct active_inode *active)
 {
 	struct read_req *rr, *rrn;
+	int              rc;
 
 	D_SPIN_LOCK(&active->lock);
 	active->readahead->complete = true;
+	rc                          = active->readahead->dra_rc;
+	if (rc == 0 && active->readahead->dra_ev == NULL)
+		rc = EIO;
 	D_SPIN_UNLOCK(&active->lock);
 
 	/* No lock is held here as after complete is set then nothing further is added */
 	d_list_for_each_entry_safe(rr, rrn, &active->readahead->req_list, list) {
 		d_list_del(&rr->list);
-		readahead_actual_reply(active, rr);
+		if (rc != 0)
+			DFUSE_REPLY_ERR_RAW(rr->oh, rr->req, rc);
+		else
+			readahead_actual_reply(active, rr);
 		D_FREE(rr);
 	}
 }
@@ -572,10 +596,14 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	active->readahead->dra_rc = ev->de_ev.ev_error;
 
 	if (ev->de_ev.ev_error != 0) {
-		active->readahead->dra_rc = ev->de_ev.ev_error;
 		daos_event_fini(&ev->de_ev);
 		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		active->readahead->dra_ev = NULL;
+		pre_read_mark_done(active);
+		/* Drop the extra ref on active, the file could be closed before this read completes
+		 */
+		active_ie_decref(dfuse_info, ie);
+		return;
 	}
 
 	/* If the length is not as expected then the file has been modified since the last stat so
@@ -625,7 +653,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	sem_post(&eqt->de_sem);
 
 	/* Now ensure there are more descriptors for the next request */
-	d_slab_restock(eqt->de_read_slab);
+	d_slab_restock(eqt->de_pre_read_slab);
 
 	return;
 err:

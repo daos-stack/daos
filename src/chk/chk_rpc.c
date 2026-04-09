@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -424,6 +425,24 @@ chk_pool_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+static int
+chk_set_policy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct chk_set_policy_in  *in_source  = crt_req_get(source);
+	struct chk_set_policy_out *out_source = crt_reply_get(source);
+	struct chk_set_policy_out *out_result = crt_reply_get(result);
+
+	if (out_source->cspo_status != 0) {
+		D_ERROR("Failed to set policy with gen " DF_X64 ": " DF_RC "\n",
+			in_source->cspi_gen, DP_RC(out_source->cspo_status));
+
+		if (out_result->cspo_status == 0)
+			out_result->cspo_status = out_source->cspo_status;
+	}
+
+	return 0;
+}
+
 struct crt_corpc_ops chk_start_co_ops = {
 	.co_aggregate	= chk_start_aggregator,
 	.co_pre_forward	= NULL,
@@ -463,36 +482,53 @@ struct crt_corpc_ops chk_pool_start_co_ops = {
 	.co_pre_forward	= NULL,
 };
 
+struct crt_corpc_ops chk_set_policy_co_ops = {
+    .co_aggregate   = chk_set_policy_aggregator,
+    .co_pre_forward = NULL,
+};
+
 static inline int
 chk_co_rpc_prepare(d_rank_list_t *rank_list, crt_opcode_t opc, crt_rpc_t **req, bool failout)
 {
 	uint32_t	flags = CRT_RPC_FLAG_FILTER_INVERT;
+	uint8_t         chk_ver;
+	int             rc;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	if (failout)
 		flags |= CRT_RPC_FLAG_CO_FAILOUT;
 
 	return crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, rank_list,
-				    DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, DAOS_CHK_VERSION),
-				    NULL, NULL, flags, crt_tree_topo(CRT_TREE_KNOMIAL, 32), req);
+				    DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, chk_ver), NULL, NULL,
+				    flags, crt_tree_topo(CRT_TREE_KNOMIAL, 32), req);
 }
 
 static inline int
 chk_sg_rpc_prepare(d_rank_t rank, crt_opcode_t opc, crt_rpc_t **req)
 {
 	crt_endpoint_t	tgt_ep;
+	uint8_t         chk_ver;
+	int             rc;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = rank;
 	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_CHK, 0);
-	opc = DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, DAOS_CHK_VERSION);
+	opc            = DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, chk_ver);
 
 	return crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, req);
 }
 
 int
 chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		 uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader, uint32_t flags,
+		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr, uuid_t pools[],
+		 uint32_t api_flags, uint32_t ns_ver, d_rank_t leader, uint32_t flags,
 		 uuid_t iv_uuid, chk_co_rpc_cb_t start_cb, void *args)
 {
 	struct chk_co_rpc_cb_args	cb_args = { 0 };
@@ -508,12 +544,12 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	if (rc != 0)
 		goto out;
 
-	csi = crt_req_get(req);
-	csi->csi_gen = gen;
-	csi->csi_flags = flags;
-	csi->csi_phase = phase;
+	csi                  = crt_req_get(req);
+	csi->csi_gen         = gen;
+	csi->csi_flags       = flags;
+	csi->csi_ns_ver      = ns_ver;
 	csi->csi_leader_rank = leader;
-	csi->csi_api_flags = api_flags;
+	csi->csi_api_flags   = api_flags;
 	uuid_copy(csi->csi_iv_uuid, iv_uuid);
 	csi->csi_ranks.ca_count = rank_nr;
 	csi->csi_ranks.ca_arrays = ranks;
@@ -569,9 +605,9 @@ out:
 		crt_req_decref(req);
 	}
 
-	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u start checker, gen "DF_X64", flags %x, phase %d, iv "DF_UUIDF":"DF_RC"\n",
-		 leader, gen, flags, phase, DP_UUID(iv_uuid), DP_RC(rc));
+	DL_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO, rc,
+		  "Rank %u start checker, gen " DF_X64 ", flags %x, ns_ver %d, iv " DF_UUIDF,
+		  leader, gen, flags, ns_ver, DP_UUID(iv_uuid));
 
 	return rc;
 }
@@ -727,28 +763,24 @@ out:
 }
 
 int
-chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
-	       uint32_t act, d_rank_t rank, bool for_all)
+chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act,
+	       d_rank_t rank)
 {
 	crt_rpc_t		*req = NULL;
 	struct chk_act_in	*cai;
 	struct chk_act_out	*cao;
 	int			 rc;
 
-	if (for_all)
-		rc = chk_co_rpc_prepare(rank_list, CHK_ACT, &req, false);
-	else
-		rc = chk_sg_rpc_prepare(rank, CHK_ACT, &req);
-
+	rc = chk_sg_rpc_prepare(rank, CHK_ACT, &req);
 	if (rc != 0)
 		goto out;
 
-	cai = crt_req_get(req);
-	cai->cai_gen = gen;
-	cai->cai_seq = seq;
-	cai->cai_cla = cla;
-	cai->cai_act = act;
-	cai->cai_flags = for_all ? CAF_FOR_ALL : 0;
+	cai            = crt_req_get(req);
+	cai->cai_gen   = gen;
+	cai->cai_seq   = seq;
+	cai->cai_cla   = cla;
+	cai->cai_act   = act;
+	cai->cai_flags = 0;
 
 	rc = dss_rpc_send(req);
 	if (rc != 0)
@@ -776,9 +808,14 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 	struct chk_cont_list_in		*ccli = NULL;
 	struct chk_cont_list_out	*cclo = NULL;
 	int				 rc;
+	uint8_t                          chk_ver;
+
+	rc = chk_rpc_protocol(&chk_ver);
+	if (rc)
+		return rc;
 
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx, pool, DAOS_CHK_MODULE,
-				  CHK_CONT_LIST, DAOS_CHK_VERSION, &req, NULL, NULL, NULL);
+				  CHK_CONT_LIST, chk_ver, &req, NULL, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to create RPC for check cont list for "DF_UUIDF": "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -982,7 +1019,7 @@ out:
 
 int
 chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags,
-		  uint32_t *pool_nr, uuid_t **pools)
+		  uint32_t *ns_ver, uint32_t *pool_nr, uuid_t **pools, d_rank_list_t **ranks)
 {
 	crt_rpc_t		*req = NULL;
 	struct chk_rejoin_in	*cri;
@@ -1005,8 +1042,22 @@ chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uuid_t iv_uuid, 
 
 	cro = crt_reply_get(req);
 	rc = cro->cro_status;
-	if (rc == 0 && cro->cro_pools.ca_count > 0) {
-		*flags = cro->cro_flags;
+	if (rc != 0)
+		goto out;
+
+	*flags  = cro->cro_flags;
+	*ns_ver = cro->cro_ns_ver;
+
+	if (cro->cro_ranks.ca_count > 0) {
+		*ranks = d_rank_list_alloc(cro->cro_ranks.ca_count);
+		if (*ranks == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		memcpy((*ranks)->rl_ranks, cro->cro_ranks.ca_arrays,
+		       sizeof(d_rank_t) * cro->cro_ranks.ca_count);
+	}
+
+	if (cro->cro_pools.ca_count > 0) {
 		D_ALLOC(tmp, cro->cro_pools.ca_count);
 		if (tmp == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -1023,6 +1074,41 @@ out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u rejoin DAOS check with leader %u, gen "DF_X64", iv "DF_UUIDF": "DF_RC"\n",
 		 rank, leader, gen, DP_UUID(iv_uuid), DP_RC(rc));
+
+	return rc;
+}
+
+int
+chk_set_policy_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t policy_nr,
+		      struct chk_policy *policies)
+{
+	crt_rpc_t                 *req = NULL;
+	struct chk_set_policy_in  *cspi;
+	struct chk_set_policy_out *cspo;
+	int                        rc;
+
+	rc = chk_co_rpc_prepare(rank_list, CHK_SET_POLICY, &req, false);
+	if (rc != 0)
+		goto out;
+
+	cspi                          = crt_req_get(req);
+	cspi->cspi_gen                = gen;
+	cspi->cspi_policies.ca_count  = policy_nr;
+	cspi->cspi_policies.ca_arrays = policies;
+
+	rc = dss_rpc_send(req);
+	if (rc != 0)
+		goto out;
+
+	cspo = crt_reply_get(req);
+	rc   = cspo->cspo_status;
+
+out:
+	if (req != NULL)
+		crt_req_decref(req);
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "Set policy for DAOS check with gen " DF_X64 ": " DF_RC "\n", gen, DP_RC(rc));
 
 	return rc;
 }
@@ -1361,3 +1447,4 @@ CRT_RPC_DEFINE(chk_pool_start, DAOS_ISEQ_CHK_POOL_START, DAOS_OSEQ_CHK_POOL_STAR
 CRT_RPC_DEFINE(chk_pool_mbs, DAOS_ISEQ_CHK_POOL_MBS, DAOS_OSEQ_CHK_POOL_MBS);
 CRT_RPC_DEFINE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 CRT_RPC_DEFINE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
+CRT_RPC_DEFINE(chk_set_policy, DAOS_ISEQ_CHK_SET_POLICY, DAOS_OSEQ_CHK_SET_POLICY);

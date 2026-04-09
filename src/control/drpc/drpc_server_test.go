@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -59,6 +60,7 @@ func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
 
 	socket := newMockConn()
 	socket.WriteOutputError = errors.New("mock write error")
+	socket.ReadOutputBytes = testChunks(getCallBytes(t, 1, 1, &mockMethod{}))
 	s := NewSession(socket, NewModuleService(log))
 
 	err := s.ProcessIncomingMessage(test.Context(t))
@@ -73,28 +75,28 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	socket := newMockConn()
 	call := &Call{
 		Sequence: 123,
-		Module:   ModuleMgmt.ID(),
-		Method:   MethodPoolCreate.ID(),
+		Module:   1,
+		Method:   2,
 	}
-	callBytes, err := proto.Marshal(call)
-	if err != nil {
-		t.Fatalf("failed to create test call: %v", err)
-	}
-	socket.ReadOutputBytes = callBytes
-	socket.ReadOutputNumBytes = len(callBytes)
+	callBytes := getCallBytes(t, 123, 1, &mockMethod{id: 2})
+	socket.ReadOutputBytes = testChunks(callBytes)
 
-	mod := newTestModule(ModuleID(call.Module))
+	mod := newTestModule(call.Module)
 	svc := NewModuleService(log)
 	svc.RegisterModule(mod)
 
 	s := NewSession(socket, svc)
 
-	if err = s.ProcessIncomingMessage(test.Context(t)); err != nil {
+	if err := s.ProcessIncomingMessage(test.Context(t)); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
+	writeChunk, err := getChunkFromBuf(socket.WriteInputBytes[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp := &Response{}
-	if err := proto.Unmarshal(socket.WriteInputBytes, resp); err != nil {
+	if err := proto.Unmarshal(writeChunk.dataSlice(), resp); err != nil {
 		t.Fatalf("bytes written to socket weren't a Response: %v", err)
 	}
 
@@ -371,6 +373,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 
 	// TEST module as defined in <daos/drpc_modules.h> has id 0
 	mod := newTestModule(0)
+	mod.GetMethodErr = errors.New("mock error")
 	dss.RegisterRPCModule(mod)
 
 	ctx, shutdown := context.WithCancel(test.Context(t))

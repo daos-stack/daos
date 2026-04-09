@@ -405,6 +405,18 @@ forced to healthy via `daos cont set-prop tank mycont1 --properties status:healt
 The redundancy level (rd\_lvl) is another property that was introduced to
 specify the fault domain level to use for placement.
 
+By default (user doesn't supply `--properties rd_fac:N`), pool's `rd_fac` will be used
+for container's `rd_fac`. However, pool's `rd_fac` can be set to any value between 0 and
+4, which means it could be invalid. If the following error appears during container
+create, try creating with valid `rd_fac`.
+
+```bash
+$ daos container create tank mycont1 --type=POSIX
+object ERR  src/object/obj_class.c:829 dc_set_oclass() grp_size 5 > domain_nr 1, DER_INVAL(-1003): 'Invalid parameters'
+dfs  ERR  src/client/dfs/cont.c:254 dfs_cont_create() Failed to generate SB OID DER_INVAL(-1003): 'Invalid parameters'
+ERROR: daos: failed to create container: DER_INVAL(-1003): Invalid parameters
+```
+
 ### Data Integrity
 
 DAOS allows to detect and fix (when data protection is enabled) silent data
@@ -423,17 +435,13 @@ during container create.
 
 - cksum (`DAOS_PROP_CO_CSUM`): the type of checksum algorithm to use.
   Supported values are adler32, crc[16|32|64] or sha[1|256|512]. By default,
-  checksum is disabled for new containers.
+  checksum is enabled for new containers using crc32.
 - cksum\_size (`DAOS_PROP_CO_CSUM_CHUNK_SIZE`): defines the chunk size used for
   creating checksums of array types. (default is 32K).
-- srv\_cksum (`DAOS_PROP_CO_CSUM_SERVER_VERIFY`): Because of the probable decrease to
-  IOPS, in most cases, it is not desired to verify checksums on an object
-  update on the server side. It is sufficient for the client to verify on
-  a fetch because any data corruption, whether on the object update,
-  storage, or fetch, will be caught. However, there is an advantage to
-  knowing if corruption happens on an update. The update would fail
-  right away, indicating to the client to retry the RPC or report an
-  error to upper levels.
+- srv\_cksum (`DAOS_PROP_CO_CSUM_SERVER_VERIFY`): verify the checksum on an
+  object update on the server side. This is enabled by default. Verifying checksums
+  on update allows to pro-actively detect corruption over the wire and retry the RPC
+  from the client, but has an impact on IOPS.
 
 For instance, to create a new container with crc64 checksum enabled and
 checksum verification on the server side, one can use the following command
@@ -459,9 +467,8 @@ The DAOS erasure code implementation uses a fixed cell size that applies to all
 objects in the container.
 The cell size in DAOS is the size of a single data and parity fragment.
 By default, a container's `ec_cell_sz` property is inherited from the pool's
-default `ec_cell_sz`, which was 1MiB in DAOS 2.0 and has been reduced to
-64kiB in DAOS 2.2.  The container cell size can also be set at
-container creation time via the `--property` option:
+default `ec_cell_sz`, which is 128kiB. The container cell size can also be set
+at container creation time via the `--property` option:
 
 ```bash
 $ daos cont create tank mycont5 --type POSIX --properties rd_fac:1,cell_size:131072

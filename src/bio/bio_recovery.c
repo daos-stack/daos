@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,7 +95,7 @@ teardown_xs_bs(void *arg)
 
 		bio_blob_close(ioc, true);
 	}
- 
+
 	if (opened_blobs) {
 		D_DEBUG(DB_MGMT, "blobstore:%p has %d opened blobs\n",
 			bxb->bxb_blobstore, opened_blobs);
@@ -426,6 +426,75 @@ bs_loaded:
 	return rc;
 }
 
+struct led_msg_arg {
+	struct bio_xs_context *xs;
+	uuid_t                 dev_uuid;
+};
+
+static void
+set_led_faulty(void *arg)
+{
+	struct led_msg_arg *led_msg = arg;
+	Ctl__LedState       state   = CTL__LED_STATE__ON;
+	struct bio_bdev    *bdev;
+	int                 rc;
+
+	D_ASSERT(led_msg->xs != NULL);
+	D_ASSERT(is_init_xstream(led_msg->xs));
+
+	bdev = lookup_dev_by_id(led_msg->dev_uuid);
+	if (bdev == NULL) {
+		D_ERROR("Failed to find device:" DF_UUID "\n", DP_UUID(led_msg->dev_uuid));
+		D_FREE(led_msg);
+		return;
+	}
+
+	if (bdev->bb_led_identify_active) {
+		/*
+		 * Device LED is actively blinking for identification.
+		 * Skip setting FAULT LED to allow user-initiated identify to take precedence.
+		 * FAULT LED will be applied when identify completes (timer expires or reset).
+		 */
+		D_DEBUG(DB_MGMT,
+			"Device " DF_UUID " is in IDENTIFY state (LED blinking), "
+			"skipping LED change to FAULT\n",
+			DP_UUID(led_msg->dev_uuid));
+		D_FREE(led_msg);
+		return;
+	}
+
+	rc = bio_led_manage(led_msg->xs, NULL, led_msg->dev_uuid,
+			    (unsigned int)CTL__LED_ACTION__SET, (unsigned int *)&state, 0);
+	if (rc != 0)
+		DL_ERROR(rc, "Failed to set LED to FAULTY state on device:" DF_UUID,
+			 DP_UUID(led_msg->dev_uuid));
+
+	D_FREE(led_msg);
+}
+
+static void
+send_set_led_faulty(struct bio_bdev *bb_dev)
+{
+	struct led_msg_arg    *led_msg;
+	struct bio_xs_context *init_xs;
+
+	/* Set LED init xstream */
+	init_xs = init_xs_context();
+	if (init_xs != NULL) {
+		D_ALLOC_PTR(led_msg);
+		if (led_msg == NULL) {
+			D_ERROR("Failed to allocate LED message for device:" DF_UUID "\n",
+				DP_UUID(bb_dev->bb_uuid));
+			return;
+		}
+
+		uuid_copy(led_msg->dev_uuid, bb_dev->bb_uuid);
+		led_msg->xs = init_xs;
+		D_ASSERT(init_thread() != NULL);
+		spdk_thread_send_msg(init_thread(), set_led_faulty, led_msg);
+	}
+}
+
 int
 bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 {
@@ -494,8 +563,9 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 			D_ASSERT(bbs->bb_dev != NULL);
 			rc = smd_dev_set_state(bbs->bb_dev->bb_uuid, SMD_DEV_FAULTY);
 			if (rc)
-				D_ERROR("Set device state failed. "DF_RC"\n",
-					DP_RC(rc));
+				D_ERROR("Set device state failed. " DF_RC "\n", DP_RC(rc));
+
+			send_set_led_faulty(bbs->bb_dev);
 		}
 	}
 	ABT_mutex_unlock(bbs->bb_mutex);
@@ -513,6 +583,10 @@ bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt, bool log_err, bool updat
 	/* sys xstream in pmem mode doesn't have NVMe context */
 	if (xs_ctxt == NULL)
 		return 0;
+
+	if (DAOS_FAIL_CHECK(DAOS_FAULT_POOL_NVME_HEALTH)) { /** fault injection */
+		return daos_errno2der(daos_fail_value_get());
+	}
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = xs_ctxt->bxc_xs_blobstores[st];
@@ -666,7 +740,7 @@ bio_media_error(void *msg_arg)
 		dev_state->bio_unmap_errs++;
 		d_tm_inc_counter(bdh->bdh_unmap_errs, 1);
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: "DF_UUID" unmap error logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " unmap error logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_WRITE:
@@ -674,7 +748,7 @@ bio_media_error(void *msg_arg)
 		dev_state->bio_write_errs++;
 		d_tm_inc_counter(bdh->bdh_write_errs, 1);
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: "DF_UUID" write error logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " write error logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_READ:
@@ -682,7 +756,7 @@ bio_media_error(void *msg_arg)
 		dev_state->bio_read_errs++;
 		d_tm_inc_counter(bdh->bdh_read_errs, 1);
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: "DF_UUID" read error logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " read error logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_CSUM:
@@ -690,14 +764,23 @@ bio_media_error(void *msg_arg)
 		dev_state->checksum_errs++;
 		d_tm_inc_counter(bdh->bdh_checksum_errs, 1);
 		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: "DF_UUID" csum error logged from tgt_id:%d\n",
+			 "Device: " DF_UUID " csum error logged from tgt_id:%d",
+			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
+		break;
+	case MET_IO_STALLED:
+		/* I/O stalling has been reported for this device */
+		if (bdh->bdh_io_stalled)
+			goto out;
+		bdh->bdh_io_stalled = 1;
+		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
+			 "Device: " DF_UUID " stalled I/O logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	}
 
 	ras_notify_event(RAS_DEVICE_MEDIA_ERROR, err_str, RAS_TYPE_INFO, RAS_SEV_ERROR,
 			 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+out:
 	auto_faulty_detect(mem->mem_bs);
-
 	D_FREE(mem);
 }

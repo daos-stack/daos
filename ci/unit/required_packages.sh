@@ -1,36 +1,51 @@
 #!/bin/bash
+#
+#  (C) Copyright 2025 Google LLC
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+set -eu
 
-set -eux
-
-# No longer used but provided by pipeline-lib
+# Provided by pipeline-lib
 # distro="$1"
 # quick_build="${2:-false}"
 
 OPENMPI_VER=""
 PY_MINOR_VER=""
 
-pkgs="argobots                         \
-      boost-python3$PY_MINOR_VER-devel \
-      capstone                         \
-      fuse3                            \
-      fuse3-libs                       \
-      gotestsum                        \
-      hwloc-devel                      \
-      libasan                          \
-      libipmctl-devel                  \
-      libisa-l-devel                   \
-      libfabric-devel                  \
-      libpmem                          \
-      libpmemobj                       \
-      libyaml-devel                    \
-      numactl                          \
-      numactl-devel                    \
-      openmpi$OPENMPI_VER              \
-      patchelf                         \
-      pciutils-devel                   \
-      pmix                             \
-      protobuf-c                       \
-      spdk-devel                       \
+DISTRO="${1:?ERROR: Missing distro argument. Usage: $0 <distro>}"
+export DISTRO="${DISTRO%%.*}"
+
+pkgs="boost-python3$PY_MINOR_VER-devel                               \
+      capstone                                                       \
+      $(utils/rpms/package_version.sh argobots lib)                  \
+      $(utils/rpms/package_version.sh argobots debug)                \
+      $(utils/rpms/package_version.sh daos_spdk dev)                 \
+      $(utils/rpms/package_version.sh daos_spdk debug)               \
+      $(utils/rpms/package_version.sh isal dev)                      \
+      $(utils/rpms/package_version.sh isal_crypto lib)               \
+      $(utils/rpms/package_version.sh isal_crypto debug)             \
+      $(utils/rpms/package_version.sh libfabric dev)                 \
+      $(utils/rpms/package_version.sh libfabric debug)               \
+      $(utils/rpms/package_version.sh mercury dev)                   \
+      $(utils/rpms/package_version.sh mercury debug)                 \
+      $(utils/rpms/package_version.sh mercury lib mercury_libfabric) \
+      $(utils/rpms/package_version.sh pmdk lib pmemobj)              \
+      $(utils/rpms/package_version.sh pmdk debug pmemobj)            \
+      $(utils/rpms/package_version.sh pmdk debug pmem)               \
+      fuse3                                                          \
+      gotestsum                                                      \
+      hwloc-devel                                                    \
+      libasan                                                        \
+      libipmctl-devel                                                \
+      libyaml-devel                                                  \
+      numactl                                                        \
+      numactl-devel                                                  \
+      openmpi$OPENMPI_VER                                            \
+      patchelf                                                       \
+      pciutils-devel                                                 \
+      protobuf-c                                                     \
       valgrind-devel"
 
 # output with trailing newline suppressed

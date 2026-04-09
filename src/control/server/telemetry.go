@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,8 +42,8 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 		}
 	}
 
-	delFn := func(idx uint32) func(context.Context, uint32, ranklist.Rank, error, int) error {
-		return func(_ context.Context, _ uint32, rank ranklist.Rank, _ error, _ int) error {
+	delFn := func(idx uint32) onInstanceExitFn {
+		return func(_ context.Context, _ uint32, rank ranklist.Rank, _ uint64, _ error, _ int) error {
 			log.Debugf("Tearing down metrics collection for engine %d (rank %s)", idx, rank.String())
 			c.RemoveSource(idx)
 			return nil
@@ -68,10 +69,11 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 	return nil
 }
 
-func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, engines []Engine) (func(), error) {
+func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, bindAddr string, engines []Engine) (func(), error) {
 	expCfg := &promexp.ExporterConfig{
-		Port:  port,
-		Title: "DAOS Engine Telemetry",
+		Port:        port,
+		BindAddress: bindAddr,
+		Title:       "DAOS Engine Telemetry",
 		Register: func(ctx context.Context, log logging.Logger) error {
 			return regPromEngineSources(ctx, log, engines)
 		},

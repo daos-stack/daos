@@ -728,7 +728,7 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	uint16_t num = m->size_idx;
 	uint32_t pos = m->block_off % RUN_BITS_PER_VALUE;
 
-	ASSERT_rt(num > 0 && num <= RUN_BITS_PER_VALUE);
+	D_ASSERT(num > 0 && num <= RUN_BITS_PER_VALUE);
 	bmask = ULOG_ENTRY_TO_VAL(pos, num);
 #endif
 
@@ -1233,8 +1233,8 @@ huge_reinit_chunk(const struct memory_block *m)
 {
 	struct chunk_header *hdr = heap_get_chunk_hdr(m->heap, m);
 
-	if (hdr->type == CHUNK_TYPE_USED)
-		huge_write_footer(hdr, hdr->size_idx);
+	D_ASSERT((hdr->type == CHUNK_TYPE_USED) || (hdr->type == CHUNK_TYPE_FREE));
+	huge_write_footer(hdr, hdr->size_idx);
 }
 
 /*

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -165,7 +165,7 @@ crt_proc_struct_crt_grp_cache(crt_proc_t proc, crt_proc_op_t proc_op,
 	return crt_proc_crt_grp_cache(proc, data);
 }
 
-/* !! All of the following 4 RPC definition should have the same input fields !!
+/* !! All of the following 5 RPC definition should have the same input fields !!
  * All of them are verified in one function:
  * int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
  */
@@ -173,6 +173,7 @@ CRT_RPC_DEFINE(crt_ctl_get_uri_cache, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_URI_CACHE)
 CRT_RPC_DEFINE(crt_ctl_ep_ls,         CRT_ISEQ_CTL, CRT_OSEQ_CTL_EP_LS)
 CRT_RPC_DEFINE(crt_ctl_get_host,      CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
 CRT_RPC_DEFINE(crt_ctl_get_pid,       CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
+CRT_RPC_DEFINE(crt_ctl_dump_counters, CRT_ISEQ_CTL, CRT_OSEQ_CTL_DUMP_COUNTERS)
 
 CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 
@@ -738,7 +739,9 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	rpc_priv->crp_timeout_sec = timeout_sec;
+	rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(timeout_sec);
 
+	RPC_TRACE(DB_NET, rpc_priv, "Caller set explicit timeout to %d\n", timeout_sec);
 out:
 	return rc;
 }
@@ -1434,6 +1437,11 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	rpc_priv->crp_complete_cb = complete_cb;
 	rpc_priv->crp_arg = arg;
 
+	/* Set deadline based on the timeout for collective calls.
+	 * Deadline is updated in crt_req_timeout_track()
+	 */
+	rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+
 	if (rpc_priv->crp_coll) {
 		rc = crt_corpc_req_hdlr(rpc_priv);
 		if (rc != 0)
@@ -1665,7 +1673,7 @@ crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 void
 crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag)
 {
-	crt_opcode_t opc = rpc_priv->crp_opc_info->coi_opc;
+	crt_opcode_t        opc = rpc_priv->crp_opc_info->coi_opc;
 	struct crt_context *ctx = crt_ctx;
 
 	D_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
@@ -1683,7 +1691,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
 	rpc_priv->crp_ul_retry = 0;
-
+	rpc_priv->crp_flags |= CRT_RPC_FLAG_DEADLINES_USED;
 
 	if (srv_flag) {
 		rpc_priv->crp_src_is_primary = ctx->cc_primary;
@@ -1701,11 +1709,12 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	if (srv_flag && rpc_priv->crp_req_hdr.cch_src_timeout != 0)
-		rpc_priv->crp_timeout_sec = rpc_priv->crp_req_hdr.cch_src_timeout;
-	else
+	/* server timeout set based on header unpack info. see crt_hg_process_header() */
+	if (!srv_flag) {
 		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 					     ctx->cc_timeout_sec);
+		rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+	}
 }
 
 void
@@ -1944,7 +1953,7 @@ out:
 int
 crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 {
-	struct crt_rpc_priv	*rpc_priv;
+	struct crt_rpc_priv    *rpc_priv;
 	int			rc = 0;
 
 	if (rpc == NULL || timeout == NULL) {
@@ -1953,7 +1962,7 @@ crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 	}
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	*timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+	*timeout = rpc_priv->crp_timeout_sec;
 out:
 	return rc;
 }
