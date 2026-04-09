@@ -1247,7 +1247,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
+                        expression { params.CI_TEST_LEAP_RPMs && !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
