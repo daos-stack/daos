@@ -1840,12 +1840,12 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		 */
 		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, false, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_SHUTDOWN || (cont_child && cont_child->sc_stopping)) {
+			if (rc == -DER_SHUTDOWN || rc == -DER_NONEXIST) {
 				D_DEBUG(DB_REBUILD,
 					DF_RB ": container " DF_UUID " is being "
 					      "destroyed\n",
 					DP_RB_MPT(tls), DP_UUID(cont_uuid));
-				rc = 0;
+				rc = -DER_CONT_NONEXIST;
 			}
 			if (cont_child)
 				ds_cont_child_put(cont_child);
@@ -1853,13 +1853,13 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		}
 	} else {
 		rc = ds_cont_child_lookup(tls->mpt_pool_uuid, cont_uuid, &cont_child);
-		if (rc != 0 || (cont_child && cont_child->sc_stopping)) {
-			if (rc == -DER_NONEXIST || (cont_child && cont_child->sc_stopping)) {
+		if (rc != 0) {
+			if (rc == -DER_SHUTDOWN || rc == -DER_NONEXIST) {
 				D_DEBUG(DB_REBUILD,
 					DF_RB ": container " DF_UUID " is being "
 					      "destroyed\n",
 					DP_RB_MPT(tls), DP_UUID(cont_uuid));
-				rc = 0;
+				rc = -DER_CONT_NONEXIST;
 			}
 
 			if (cont_child)
@@ -2261,7 +2261,7 @@ migrate_one_ult(void *arg)
 	 *   (nonexistent)
 	 * This is just a workaround...
 	 */
-	if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
+	if (rc != 0 && rc != -DER_CONT_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
 		DL_ERROR(rc, DF_RB ": " DF_UOID " rebuild failed, set mpt_fini for tgt %d.",
 			 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), dss_get_module_info()->dmi_tgt_id);
 		tls->mpt_status = rc;
@@ -3273,9 +3273,9 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 			 * to rebuild the data, see obj_list_common.
 			 */
 			/* If the container is being destroyed, it may return
-			 * -DER_NONEXIST, see obj_ioc_init().
+			 * -DER_CONT_NONEXIST, see obj_ioc_init().
 			 */
-			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
+			if (rc == -DER_DATA_LOSS || rc == -DER_CONT_NONEXIST) {
 				D_WARN(DF_RB ": mo replicas for " DF_UOID " %d\n", DP_RB_MPT(tls),
 				       DP_UOID(arg->oid), rc);
 				num = 0;
@@ -3530,7 +3530,7 @@ free:
 	if (arg->epoch == DAOS_EPOCH_MAX)
 		tls->mpt_obj_count++;
 
-	if (rc == -DER_NONEXIST) {
+	if (rc == -DER_CONT_NONEXIST) {
 		struct ds_cont_child *cont_child = NULL;
 
 		/* check again to see if the container is being destroyed. */
