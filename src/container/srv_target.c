@@ -375,16 +375,16 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
 		hlc, epoch_max, epoch_min, cont->sc_aggregation_max);
 
-	if (cont->sc_snapshots_nr < MAX_SNAPSHOT_LOCAL) {
+	snapshots_nr = cont->sc_snapshots_nr;
+	if (snapshots_nr < MAX_SNAPSHOT_LOCAL) {
 		snapshots = snapshots_local;
 	} else {
-		D_ALLOC(snapshots, cont->sc_snapshots_nr * sizeof(daos_epoch_t));
+		D_ALLOC(snapshots, snapshots_nr * sizeof(daos_epoch_t));
 		if (snapshots == NULL)
 			return -DER_NOMEM;
 	}
 
 	/* Since sc_snapshots might be freed by other ULT, let's always copy here. */
-	snapshots_nr = cont->sc_snapshots_nr;
 	if (snapshots_nr > 0)
 		memcpy(snapshots, cont->sc_snapshots, snapshots_nr * sizeof(daos_epoch_t));
 

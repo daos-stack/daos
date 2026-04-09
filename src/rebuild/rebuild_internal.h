@@ -374,7 +374,8 @@ void
 rebuild_tgt_status_check_ult(void *arg);
 
 int
-rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
+rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
+		    struct rebuild_tgt_pool_tracker **p_rpt);
 
 bool
 rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
