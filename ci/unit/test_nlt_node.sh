@@ -6,7 +6,6 @@
 set -uex
 
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
-sudo mkdir -p /mnt/daos
 # using mmap()'ed ULT stacks requires to bump system default
 if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     sudo sysctl vm.max_map_count=1000000
@@ -45,7 +44,11 @@ pip install /opt/daos/lib/daos/python/
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+mkdir -p nlt_logs
+sudo mount -t tmpfs tmpfs nlt_logs
+sudo chown jenkins:jenkins nlt_logs
+
+TMPDIR="$(pwd)/nlt_logs" \
+    HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
     NO_PROXY="${DAOS_NO_PROXY:-}" \
-    ./utils/node_local_test.py --max-log-size 1950MiB \
-    --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
+    exec ./utils/node_local_test.py "$@"
