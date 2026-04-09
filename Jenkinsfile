@@ -252,7 +252,7 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: 'test_list_containers test_destroy_wrong_group',
+               defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'BuildType',
                defaultValue: '',
