@@ -2219,6 +2219,18 @@ class PosixTests():
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_oclass(self):
         """Test container object class options"""
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test')
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.json['response'].get('dir_object_class') not in (None, 'UNKNOWN')
+        assert rc.json['response'].get('file_object_class') not in (None, 'UNKNOWN')
+        container.destroy()
+
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
         rc = run_daos_cmd(self.conf,
