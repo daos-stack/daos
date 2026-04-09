@@ -1217,7 +1217,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
 	if (rc) {
-		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
+		D_ERROR("Can not find pool " DF_UUID ": %d\n", DP_UUID(rsi->rsi_pool_uuid), rc);
 		D_GOTO(out, rc);
 	}
 	atomic_fetch_add(&pool->sp_rebuilding, 1);
