@@ -1193,6 +1193,7 @@ pipeline {
                                     false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'el9.7',
+                                bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false),
                                 coverage_stash: 'func_vm_bullseye'))
                     }
                     post {
