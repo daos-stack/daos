@@ -3189,10 +3189,9 @@ free:
  * each target get the scan rpc from the master.
  */
 int
-rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
+rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
+		    struct rebuild_tgt_pool_tracker **p_rpt)
 {
-	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
-	struct ds_pool			*pool;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
 	daos_prop_t			prop = { 0 };
@@ -3201,14 +3200,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	int				rc;
 
 	D_DEBUG(DB_REBUILD, DF_RB " prepare rebuild\n", DP_RB_RSI(rsi));
-
-	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
-	if (rc) {
-		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
-		return rc;
-	}
-	/* must set rebuild flag before yield, it's reset in rebuild_tgt_fini */
-	atomic_fetch_add(&pool->sp_rebuilding, 1);
 
 	if (ds_pool_get_version(pool) < rsi->rsi_rebuild_ver) {
 		D_INFO(DF_RB " map %u < rsi_rebuild_ver %u\n", DP_RB_RSI(rsi),
@@ -3287,16 +3278,12 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	*p_rpt = rpt;
 out:
-	if (rc) {
-		if (rpt) {
-			if (!d_list_empty(&rpt->rt_list)) {
-				rpt_delete(rpt);
-				rpt_put(rpt);
-			}
+	if (rc && rpt) {
+		if (!d_list_empty(&rpt->rt_list)) {
+			rpt_delete(rpt);
 			rpt_put(rpt);
 		}
-		atomic_fetch_sub(&pool->sp_rebuilding, 1);
-		ds_pool_put(pool);
+		rpt_put(rpt);
 	}
 	daos_prop_fini(&prop);
 

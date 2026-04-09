@@ -1201,12 +1201,20 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_scan_out		*rout;
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
+	struct ds_pool                  *pool = NULL;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
 	D_INFO(DF_RB "\n", DP_RB_RSI(rsi));
+
+	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
+	if (rc) {
+		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
+		D_GOTO(out, rc);
+	}
+	atomic_fetch_add(&pool->sp_rebuilding, 1);
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous
@@ -1304,7 +1312,7 @@ tls_lookup:
 	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))
 		D_GOTO(out, rc = -DER_INVAL);
 
-	rc = rebuild_tgt_prepare(rpc, &rpt);
+	rc = rebuild_tgt_prepare(pool, rsi, &rpt);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1325,16 +1333,19 @@ tls_lookup:
 	}
 
 out:
-	if (tls && tls->rebuild_pool_status == 0 && rc != 0)
-		tls->rebuild_pool_status = rc;
-
-	if (rpt) {
-		if (rc) {
-			atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
+	if (rc != 0) {
+		if (tls && tls->rebuild_pool_status == 0)
+			tls->rebuild_pool_status = rc;
+		if (pool)
+			atomic_fetch_sub(&pool->sp_rebuilding, 1);
+		if (rpt)
 			rpt_delete(rpt);
-		}
-		rpt_put(rpt);
 	}
+	if (pool)
+		ds_pool_put(pool);
+	if (rpt)
+		rpt_put(rpt);
+
 	rout = crt_reply_get(rpc);
 	rout->rso_status = rc;
 	rout->rso_stable_epoch = d_hlc_get();
