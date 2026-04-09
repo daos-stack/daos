@@ -143,6 +143,18 @@ CRT_RPC_DECLARE(cont_op, DAOS_ISEQ_CONT_OP, DAOS_OSEQ_CONT_OP)
 CRT_RPC_DECLARE(cont_op_v8, DAOS_ISEQ_CONT_OP_V8, DAOS_OSEQ_CONT_OP)
 CRT_RPC_DECLARE(cont_op_v9, DAOS_ISEQ_CONT_OP_V9, DAOS_OSEQ_CONT_OP)
 
+static inline void
+cont_op_in_get_pool_uuid(crt_rpc_t *rpc, uuid_t pool_uuid_out)
+{
+	if (opc_get_rpc_ver(rpc->cr_opc) >= CONT_PROTO_VER_WITH_POOL_UUID) {
+		struct cont_op_v9_in *in9 = crt_req_get(rpc);
+
+		uuid_copy(pool_uuid_out, in9->ci_pool);
+		return;
+	}
+	uuid_clear(pool_uuid_out);
+}
+
 #define DAOS_ISEQ_CONT_CREATE_V8	/* input fields */		 \
 					/* .ci_hdl unused */		 \
 	((struct cont_op_v8_in)		(cci_op)		CRT_VAR) \

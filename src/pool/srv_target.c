@@ -1148,7 +1148,7 @@ eph_report_ult(void *data)
 {
 	struct ds_pool	*pool = data;
 	int              rc, sleep_intvl;
-	bool             conn_hdl_fetched = false, srv_hdl_fetched = false;
+	bool             srv_hdl_fetched = false;
 
 	D_DEBUG(DB_MD, DF_UUID " Enter eph report.\n", DP_UUID(pool->sp_uuid));
 	D_ASSERT(pool->sp_ec_ephs_req != NULL);
@@ -1172,7 +1172,7 @@ eph_report_ult(void *data)
 		sleep_intvl = EPH_REPORT_INTVL;
 
 		/* Fetch pool connection handles */
-		if (!conn_hdl_fetched) {
+		if (!pool->sp_hdl_fetched) {
 			D_INFO(DF_UUID ": Fetching connection handles.\n", DP_UUID(pool->sp_uuid));
 			rc = ds_pool_iv_conn_hdl_fetch(pool);
 			if (rc) {
@@ -1180,7 +1180,7 @@ eph_report_ult(void *data)
 				       DP_UUID(pool->sp_uuid), DP_RC(rc));
 				sleep_intvl = EPH_REPORT_RETRY_INTVL;
 			} else {
-				conn_hdl_fetched = true;
+				pool->sp_hdl_fetched = true;
 			}
 
 			if (eph_report_exiting(pool))
@@ -1550,7 +1550,7 @@ pool_hdl_delete(struct ds_pool_hdl *hdl)
 }
 
 struct ds_pool_hdl *
-ds_pool_hdl_lookup(const uuid_t uuid)
+ds_pool_hdl_lookup_cached(const uuid_t uuid)
 {
 	d_list_t *rlink;
 
@@ -1559,6 +1559,56 @@ ds_pool_hdl_lookup(const uuid_t uuid)
 		return NULL;
 
 	return pool_hdl_obj(rlink);
+}
+
+/**
+ * Look up pool handle \a hdl_uuid.
+ *
+ * \param[in]	pool_uuid	pool UUID (may be NULL or null UUID if the
+ *				caller is an older-version RPC handler, who do
+ *				not have the pool UUID info)
+ * \param[in]	hdl_uuid	pool handle UUID
+ * \param[out]	hdl_out		pool handle
+ *
+ * \return	0		success
+ * 		-DER_NO_HDL	handle not found
+ *		-DER_TIMEDOUT	try again
+ */
+int
+ds_pool_hdl_lookup(const uuid_t pool_uuid, const uuid_t hdl_uuid, struct ds_pool_hdl **hdl_out)
+{
+	*hdl_out = ds_pool_hdl_lookup_cached(hdl_uuid);
+	if (*hdl_out == NULL) {
+		struct ds_pool *pool;
+		const int       retry_rc = -DER_TIMEDOUT;
+		int             rc;
+
+		/*
+		 * Has the handle recovery completed? If not, let the caller
+		 * (usually, the client) retry.
+		 */
+		if (pool_uuid == NULL || uuid_is_null(pool_uuid))
+			return -DER_NO_HDL;
+		rc = ds_pool_lookup(pool_uuid, &pool);
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DB_MD,
+				DF_UUID ": pool stopping for handle " DF_UUID ": " DF_RC "\n",
+				DP_UUID(pool_uuid), DP_UUID(hdl_uuid), DP_RC(rc));
+			return retry_rc;
+		} else if (rc != 0) {
+			D_DEBUG(DB_MD,
+				DF_UUID ": pool not found for handle " DF_UUID ": " DF_RC "\n",
+				DP_UUID(pool_uuid), DP_UUID(hdl_uuid), DP_RC(rc));
+			return -DER_NO_HDL;
+		}
+		if (pool->sp_hdl_fetched)
+			rc = -DER_NO_HDL;
+		else
+			rc = retry_rc;
+		ds_pool_put(pool);
+		return rc;
+	}
+	return 0;
 }
 
 static void
@@ -1762,7 +1812,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	hdl = ds_pool_hdl_lookup(pic->pic_hdl);
+	hdl = ds_pool_hdl_lookup_cached(pic->pic_hdl);
 	if (hdl != NULL) {
 		if (hdl->sph_sec_capas == pic->pic_capas) {
 			D_DEBUG(DB_MD, DF_UUID": found compatible pool "
@@ -1844,7 +1894,7 @@ ds_pool_tgt_disconnect(uuid_t uuid)
 {
 	struct ds_pool_hdl *hdl;
 
-	hdl = ds_pool_hdl_lookup(uuid);
+	hdl = ds_pool_hdl_lookup_cached(uuid);
 	if (hdl == NULL) {
 		D_DEBUG(DB_MD, "handle "DF_UUID" does not exist\n",
 			DP_UUID(uuid));
@@ -2377,11 +2427,10 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	if (daos_rpc_from_client(rpc)) {
 		struct ds_pool_hdl *hdl;
 
-		hdl = ds_pool_hdl_lookup(in->tmi_op.pi_hdl);
-		if (hdl == NULL) {
-			D_ERROR(DF_UUID": cannot find pool handle "DF_UUID"\n",
+		rc = ds_pool_hdl_lookup(in->tmi_op.pi_uuid, in->tmi_op.pi_hdl, &hdl);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": cannot find pool handle " DF_UUID "\n",
 				DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl));
-			rc = -DER_NO_HDL;
 			goto out;
 		}
 		ds_pool_get(hdl->sph_pool);
