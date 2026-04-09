@@ -45,7 +45,15 @@ pip install /opt/daos/lib/daos/python/
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+if [ "$#" -eq 0 ]; then
+    set -- --max-log-size 1950MiB \
+        --system-ram-reserved 4 \
+        --dfuse-dir /localhome/jenkins/ \
+        --log-usage-save nltir.xml \
+        --log-usage-export nltr.json all
+fi
+
+exec env \
+    HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
     NO_PROXY="${DAOS_NO_PROXY:-}" \
-    ./utils/node_local_test.py --max-log-size 1950MiB \
-    --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
+    ./utils/node_local_test.py "$@"

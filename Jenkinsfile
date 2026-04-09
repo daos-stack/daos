@@ -47,42 +47,6 @@ void job_step_update(def value=currentBuild.currentResult) {
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
-Map nlt_test() {
-    // groovylint-disable-next-line NoJavaUtilDate
-    Date startDate = new Date()
-    try {
-        unstash('nltr')
-    } catch (e) {
-        print 'Unstash failed, results from NLT stage will not be included'
-    }
-    sh label: 'Fault injection testing using NLT',
-       script: './ci/docker_nlt.sh --class-name fault-injection fi'
-    List filesList = []
-    filesList.addAll(findFiles(glob: '*.memcheck.xml'))
-    int vgfail = 0
-    int vgerr = 0
-    if (filesList) {
-        String rcs = sh label: 'Check for Valgrind errors',
-               script: "grep -E '<error( |>)' ${filesList.join(' ')} || true",
-               returnStdout: true
-        if (rcs) {
-            vgfail = 1
-        }
-        String suite = sanitizedStageName()
-        junitSimpleReport suite: suite,
-                          file: suite + '_valgrind_results.xml',
-                          fails: vgfail,
-                          errors: vgerr,
-                          name: 'Valgrind_Memcheck',
-                          class: 'Valgrind',
-                          message: 'Valgrind Memcheck error detected',
-                          testdata: rcs
-    }
-    int runTime = durationSeconds(startDate)
-    Map runData = ['nlttest_time': runTime]
-    return runData
-}
-
 // For master, this is just some wildly high number
 String next_version() {
     return '1000'
@@ -351,6 +315,9 @@ pipeline {
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: false,
                      description: 'Run the Functional on Leap 15 test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_sles15_TEST',
+                     defaultValue: false,
+                     description: 'Run the Functional on SLES 15 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 test stage')
@@ -391,8 +358,11 @@ pipeline {
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
-               defaultValue: 'ci_nlt_1',
+               defaultValue: 'ci_nlt_vm1',
                description: 'Label to use for NLT tests')
+        string(name: 'CI_FI_1_LABEL',
+               defaultValue: 'ci_fi_vm1',
+               description: 'Label to use for Fault Injection (FI) tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
@@ -743,7 +713,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 240,
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
@@ -978,63 +948,43 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing') {
+                stage('NLT Fault injection testing') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner_fi'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                                ' --build-arg POINT_RELEASE=.7 '
-                            args '--tmpfs /mnt/daos_0'
-                        }
+                        label params.CI_FI_1_LABEL
                     }
                     steps {
+                        /* job_step_update(nlt_test()) */
                         job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                       build_deps: 'no'))
-                        job_step_update(nlt_test())
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                        //                skipPublishingChecks: true,
-                        //                id: 'fir', name: 'Fault Injection Report')
+                            unitTest(timeout_time: 600,
+                                     inst_repos: daosRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh --memcheck no' +
+                                                  ' --system-ram-reserved 4 --server-debug WARN' +
+                                                  ' --log-usage-import nltr.json' +
+                                                  ' --log-usage-save nltr.xml' +
+                                                  ' --class-name fault-injection fi',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh'
                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
                                                       scm: 'daos-stack/daos',
                                                       requiredResult: hudson.model.Result.UNSTABLE
-                            recordIssues enabledForFailure: true,
-                                         /* ignore warning/errors from PMDK logging system */
-                                         filters: [excludeFile('pmdk/.+')],
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
-                                                        [threshold: 1, type: 'TOTAL_HIGH'],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
-                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
-                                         tools: [issues(pattern: 'nlt-errors.json',
-                                                        name: 'Fault injection issues',
-                                                        id: 'Fault_Injection'),
-                                                 issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'Fault injection leaks',
-                                                        id: 'NLT_client')],
-                                         scm: 'daos-stack/daos'
-                            junit testResults: 'nlt-junit.xml'
-                            stash name: 'fault-inject-valgrind',
-                                  includes: '*.memcheck.xml',
-                                  allowEmpty: true
                             archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
                         }
                     }
-                } // stage('Fault injection testing')
+                } // stage('NLT Fault injection testing')
                 stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
@@ -1255,8 +1205,7 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['nlt-memcheck',
-                                                     'unit-memcheck',
-                                                     'fault-inject-valgrind']
+                                                     'unit-memcheck']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
         }
