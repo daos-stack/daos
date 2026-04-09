@@ -78,6 +78,7 @@ nav:
       - 'Admin/Client Tools': 'QSG/tour.md'
   - Administration Guide:
       - 'Hardware Requirements': 'admin/hardware.md'
+      - 'High-Speed Fabric Support': 'admin/fabrics.md'
       - 'Pre-deployment Checklist': 'admin/predeployment_check.md'
       - 'System Deployment': 'admin/deployment.md'
       - 'System Administration': 'admin/administration.md'
