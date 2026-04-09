@@ -6,7 +6,7 @@
 #
 # Runs lint and auto-fix for utils/build.config for the DAOS project.
 
-"""Githook script to check and fix the format of utils/build.config."""
+"""Git hook script to check and fix the format of utils/build.config."""
 
 import os
 import subprocess  # nosec B404
@@ -15,7 +15,7 @@ import unittest
 
 
 def print_githook_header(name):
-    """Print the standard githook header."""
+    """Print the standard git hook header."""
     print(f"{name + ':':<17} ", end='', flush=True)
 
 
@@ -106,7 +106,7 @@ def run_tests():
             self.assertEqual(process_build_config(lines), expected)
 
         def test_casing(self):
-            """Test that keys are lowercased."""
+            """Test that keys are lowercase."""
             lines = [
                 "[section]\n",
                 "Key=Val\n"
@@ -156,7 +156,7 @@ def run_tests():
 
 
 def main():
-    """Main entry point for the githook."""
+    """Main entry point for the git hook."""
     if len(sys.argv) > 1 and sys.argv[1] == '--test':
         run_tests()
 
