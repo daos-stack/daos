@@ -65,7 +65,7 @@ add_inst_repo() {
     local branch="$2"
     local build_number="$3"
     local bullseye="${4:-false}"
-    local repo_base="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts
+    local repo_base="${ARTIFACTS_URL:-${JENKINS_URL}job/}daos-stack/job/${repo}/job/${branch//\//%252F}/${build_number}/artifact/artifacts"
     local repo_url="${repo_base}/$DISTRO_NAME/"
     if [ "$bullseye" = true ]; then
         repo_url="${repo_base}/${DISTRO_NAME}-bullseye/"

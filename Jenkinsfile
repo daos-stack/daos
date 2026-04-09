@@ -1032,7 +1032,8 @@ pipeline {
                                       'CI_NLT_BULLSEYE': true,
                                       'CI_BUILD_PACKAGES_ONLY': false],
                                      ['Skip-unit-tests': false,
-                                      'Skip-nlt-bullseye': false])
+                                      'Skip-nlt-bullseye': false],
+                                     !docOnlyChange())
                         }
                     }
                     agent {
