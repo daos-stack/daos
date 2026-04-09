@@ -35,53 +35,78 @@ def git_diff_cached_files(file_path):
     return result.stdout.strip()
 
 
-def _handle_config_line(line, current_section, sections, new_content):
-    """Handle a single config line during parsing."""
-    stripped = line.strip()
-    if not stripped or stripped.startswith(('#', ';')):
-        if current_section:
-            sections[-1]['items'].append(line)
-        else:
-            new_content.append(line)
-        return current_section
-
-    if stripped.startswith('[') and stripped.endswith(']'):
-        new_section = stripped[1:-1]
-        sections.append({'name': new_section, 'header': line, 'items': []})
-        return new_section
-
-    if '=' in stripped and current_section:
-        key, val = line.split('=', 1)
-        sections[-1]['items'].append((key.strip().lower(), val.strip()))
-    elif current_section:
-        sections[-1]['items'].append(line)
-    else:
-        new_content.append(line)
-    return current_section
-
-
 def process_build_config(lines):
     """Parse, sort, and normalize the build config lines."""
-    new_content = []
+    global_lines = []
     sections = []
     current_section = None
 
     for line in lines:
-        current_section = _handle_config_line(line, current_section, sections, new_content)
+        stripped = line.strip()
+        if stripped.startswith('[') and stripped.endswith(']'):
+            new_section = stripped[1:-1]
+            current_section = {'name': new_section, 'header': line, 'lines': []}
+            sections.append(current_section)
+        elif current_section is None:
+            global_lines.append(line)
+        else:
+            current_section['lines'].append(line)
 
-    # Process sections
-    for sec in sections:
-        new_content.append(sec['header'])
+    def get_units(lines):
+        units = []
+        current_comments = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(('#', ';')):
+                current_comments.append(line)
+            elif '=' in stripped:
+                key, val = line.split('=', 1)
+                units.append({
+                    'comments': current_comments,
+                    'key': key.strip().lower(),
+                    'val': val.strip()
+                })
+                current_comments = []
+            else:
+                current_comments.append(line)
+        if current_comments:
+            units.append({
+                'comments': current_comments,
+                'key': None,
+                'val': None
+            })
+        return units
 
-        keys_only = [item for item in sec['items'] if isinstance(item, tuple)]
-        others = [item for item in sec['items'] if not isinstance(item, tuple)]
+    def format_unit(unit):
+        res = []
+        res.extend(unit['comments'])
+        if unit['key'] is not None:
+            res.append(f"{unit['key']}={unit['val']}\n")
+        return res
 
-        if sec['name'] != 'component':
-            keys_only.sort(key=lambda x: x[0])
+    def format_section(sec):
+        res = []
+        res.append(sec['header'])
+        units = get_units(sec['lines'])
+        key_units = sorted([u for u in units if u['key'] is not None],
+                           key=lambda x: x['key'])
+        other_units = [u for u in units if u['key'] is None]
+        for u in key_units:
+            res.extend(format_unit(u))
+        for u in other_units:
+            res.extend(format_unit(u))
+        return res
 
-        for key, val in keys_only:
-            new_content.append(f"{key}={val}\n")
-        new_content.extend(others)
+    new_content = []
+    global_filtered = [line for line in global_lines if line.strip()]
+    new_content.extend(global_filtered)
+
+    for i, sec in enumerate(sections):
+        if i > 0:
+            new_content.append("\n")
+        new_content.extend(format_section(sec))
 
     return new_content
 
@@ -92,7 +117,7 @@ def run_tests():
         """Unit tests for build config processing."""
 
         def test_sorting(self):
-            """Test that sections (except component) are sorted."""
+            """Test that sections are sorted."""
             lines = [
                 "[section]\n",
                 "b=2\n",
@@ -117,22 +142,8 @@ def run_tests():
             ]
             self.assertEqual(process_build_config(lines), expected)
 
-        def test_component_not_sorted(self):
-            """Test that [component] section is not sorted."""
-            lines = [
-                "[component]\n",
-                "z=1\n",
-                "a=2\n"
-            ]
-            expected = [
-                "[component]\n",
-                "z=1\n",
-                "a=2\n"
-            ]
-            self.assertEqual(process_build_config(lines), expected)
-
         def test_comments_and_empty_lines(self):
-            """Test that comments and empty lines are preserved at the end of section."""
+            """Test that comments stay with following lines and empty lines are removed."""
             lines = [
                 "[section]\n",
                 "b=2\n",
@@ -140,13 +151,42 @@ def run_tests():
                 "# comment\n",
                 "a=1\n"
             ]
-            # Based on current logic, comments and empty lines go to the bottom of the section
             expected = [
                 "[section]\n",
+                "# comment\n",
                 "a=1\n",
-                "b=2\n",
+                "b=2\n"
+            ]
+            self.assertEqual(process_build_config(lines), expected)
+
+        def test_section_spacing(self):
+            """Test that sections are separated by exactly one empty line."""
+            lines = [
+                "[sec1]\n",
+                "a=1\n",
+                "[sec2]\n",
+                "b=2\n"
+            ]
+            expected = [
+                "[sec1]\n",
+                "a=1\n",
                 "\n",
-                "# comment\n"
+                "[sec2]\n",
+                "b=2\n"
+            ]
+            self.assertEqual(process_build_config(lines), expected)
+
+        def test_no_empty_lines_at_ends(self):
+            """Test that no empty lines are at start or end of file."""
+            lines = [
+                "\n",
+                "[sec1]\n",
+                "a=1\n",
+                "\n"
+            ]
+            expected = [
+                "[sec1]\n",
+                "a=1\n"
             ]
             self.assertEqual(process_build_config(lines), expected)
 
