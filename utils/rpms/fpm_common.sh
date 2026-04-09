@@ -10,6 +10,7 @@ export install_list=()
 export PACKAGE_TYPE="dir"
 export dbg_list=()
 export CONFLICTS=()
+export CONFIG_FILES=()
 export DEPENDS=()
 export EXTERNAL_DEPENDS=()
 export EXTRA_OPTS=()
@@ -167,6 +168,8 @@ build_package() {
   create_opts "--depends" depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
   conflicts=()
   create_opts "--conflicts" conflicts "${CONFLICTS[@]}"
+  config-files=()
+  create_opts "--config-files" config-files "${CONFIG_FILES[@]}"
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
@@ -191,6 +194,7 @@ build_package() {
   install_list=()
 
   CONFLICTS=()
+  CONFIG_FILES=()
   DEPENDS=()
   EXTERNAL_DEPENDS=()
   if [[ ! "${name}" =~ debuginfo ]]; then
