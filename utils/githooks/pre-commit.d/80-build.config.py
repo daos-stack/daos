@@ -9,8 +9,8 @@
 """Githook script to check and fix the format of utils/build.config."""
 
 import os
-import sys
 import subprocess  # nosec B404
+import sys
 import unittest
 
 
