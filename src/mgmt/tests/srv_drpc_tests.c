@@ -981,6 +981,37 @@ test_drpc_pool_set_prop_success(void **state)
 }
 
 /*
+* TODO (DAOS-18783): Add happy-path byteval test with new property.
+*/
+
+static void
+test_drpc_pool_set_prop_byteval_invalid_type(void **state)
+{
+	Drpc__Call           call        = DRPC__CALL__INIT;
+	Drpc__Response       resp        = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq req         = MGMT__POOL_SET_PROP_REQ__INIT;
+	uint8_t              byte_data[] = {0x01, 0x02, 0x03, 0x04};
+
+	req.id                          = TEST_UUID;
+	req.properties                  = alloc_prop_msg_list(1);
+	req.n_properties                = 1;
+	
+	req.properties[0]->number       = DAOS_PROP_PO_MAX;
+	req.properties[0]->byteval.data = byte_data;
+	req.properties[0]->byteval.len  = sizeof(byte_data);
+	req.properties[0]->value_case   = MGMT__POOL_PROPERTY__VALUE_BYTEVAL;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
  * dRPC Pool GetProp setup/teardown
  */
 
@@ -3450,6 +3481,7 @@ main(void)
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_invalid_value_type),
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
+	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_byteval_invalid_type),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_bad_uuid),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_num_success),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_str_success),
