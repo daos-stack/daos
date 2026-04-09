@@ -168,8 +168,8 @@ build_package() {
   create_opts "--depends" depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
   conflicts=()
   create_opts "--conflicts" conflicts "${CONFLICTS[@]}"
-  config-files=()
-  create_opts "--config-files" config-files "${CONFIG_FILES[@]}"
+  config_files=()
+  create_opts "--config-files" config_files "${CONFIG_FILES[@]}"
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
