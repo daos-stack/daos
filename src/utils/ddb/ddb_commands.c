@@ -1080,15 +1080,11 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (feature_write_action(opt) && !ctx->dc_write_mode)
 		return -DER_NO_PERM;
 
-	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
-		opt->path = ctx->dc_pool_path;
-
-	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
-		opt->db_path = ctx->dc_db_path;
-
 	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
-	if (rc)
+	if (rc) {
+		ddb_errorf(ctx, "Unable to open VOS pool '%s'\n", opt->path);
 		return rc;
+	}
 	close = true;
 
 skip:
@@ -1120,11 +1116,11 @@ skip:
 		ddb_printf(ctx, "Incompat Flags: %lu\n", new_incompat_flags);
 	}
 out:
-	if (close)
+	if (close) {
 		rc = dv_pool_close(ctx->dc_poh);
-	ctx->dc_poh        = DAOS_HDL_INVAL;
-	ctx->dc_write_mode = false;
-
+		ctx->dc_poh        = DAOS_HDL_INVAL;
+		ctx->dc_write_mode = false;
+	}
 	return rc;
 }
 
@@ -1618,7 +1614,7 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cont_cb,
 				 &args, NULL);
 	} while (rc > 0);
-	ddb_printf(ctx, "DTX entries statistics of the pool %s\n", ctx->dc_pool_path);
+	ddb_print(ctx, "DTX entries statistics of the pool:\n");
 	if (opt->details)
 		rc = dtx_stat_print(ctx, args.cmt_cnt, &args.time_stat, args.aggr_epoch);
 	else

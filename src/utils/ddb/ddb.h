@@ -66,11 +66,9 @@ struct ddb_io_ft {
 };
 
 struct ddb_ctx {
-	struct ddb_io_ft	 dc_io_ft;
-	daos_handle_t            dc_poh;
-	bool			 dc_write_mode;
-	const char              *dc_pool_path;
-	const char              *dc_db_path;
+	struct ddb_io_ft dc_io_ft;
+	daos_handle_t    dc_poh;
+	bool             dc_write_mode;
 };
 
 void ddb_ctx_init(struct ddb_ctx *ctx);
