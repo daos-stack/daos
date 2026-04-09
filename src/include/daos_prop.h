@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -144,6 +144,14 @@ enum daos_pool_props {
 };
 
 #define DAOS_PROP_PO_NUM                (DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)
+
+/** Opaque byte-array value for properties. */
+struct daos_prop_byteval {
+	/** Property data */
+	void  *dpb_data;
+	/** Length of data */
+	size_t dpb_len;
+};
 
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
@@ -800,6 +808,56 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
 			struct daos_prop_entry *entry_src, size_t len);
 
 /**
+ * Set the byte-array value of a named property in a property list. The
+ * property type must expect a byteval value (see daos_prop_has_byteval()).
+ * The buffer is duplicated internally and freed by daos_prop_free(); the
+ * caller does not need to retain \a data. If the entry already has a value
+ * set, it is freed before the new value is stored.
+ *
+ * \param[in,out]	prop		Property list
+ * \param[in]		type		Type of property to look for
+ * \param[in]		data		Bytes to copy into the entry. May be
+ *					NULL when \a len is 0.
+ * \param[in]		len		Length of \a data in bytes.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Type does not expect a byteval
+ *			-DER_NONEXIST	No entry of \a type in \a prop
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_set_byteval(daos_prop_t *prop, uint32_t type, const void *data, size_t len);
+
+/**
+ * Set the byte-array value of a property entry. Convenience function.
+ *
+ * \param[in,out]	entry		Entry whose value to set.
+ * \param[in]		data		Bytes to copy into the entry. May be
+ *					NULL when \a len is 0.
+ * \param[in]		len		Length of \a data in bytes.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Type does not expect a byteval
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_entry_set_byteval(struct daos_prop_entry *entry, const void *data, size_t len);
+
+/**
+ * Duplicate a byte-array value from one DAOS prop entry to another.
+ * Convenience function.
+ *
+ * \param[in,out]	entry_dst	Destination entry
+ * \param[in]		entry_src	Source entry whose dpe_val_ptr owns
+ *					a struct daos_prop_byteval.
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_entry_dup_byteval(struct daos_prop_entry *entry_dst, struct daos_prop_entry *entry_src);
+
+/**
  * Compare a pair of daos_prop_entry that contain ACLs.
  *
  * \param	entry1	DAOS prop entry for ACL
@@ -847,6 +905,19 @@ daos_prop_has_str(struct daos_prop_entry *entry);
  */
 bool
 daos_prop_has_ptr(struct daos_prop_entry *entry);
+
+/**
+ * Check a DAOS prop entry for an opaque byte-array value. When true,
+ * dpe_val_ptr is expected to point at a struct daos_prop_byteval owned
+ * by the daos_prop_t.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Has a byte-array value.
+ *			false		Does not have a byte-array value.
+ */
+bool
+daos_prop_has_byteval(struct daos_prop_entry *entry);
 
 /**
  * Check if a DAOS prop entry is set or not.
