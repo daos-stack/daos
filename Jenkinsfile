@@ -529,7 +529,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'fox-119_docker_1'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: false,
                                                                 parallel_build: true) +
@@ -582,7 +582,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
+                            label 'fox-119_docker_1'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: false,
                                                                 parallel_build: true) +
@@ -635,7 +635,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
+                            label 'fox-119_docker_1'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: false) +
@@ -962,7 +962,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner_fi'
+                            label 'fox-119_docker_1'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
