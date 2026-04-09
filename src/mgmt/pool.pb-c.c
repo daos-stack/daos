@@ -3806,7 +3806,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_property__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_property__field_descriptors[4] =
 {
   {
     "number",
@@ -3844,8 +3844,21 @@ static const ProtobufCFieldDescriptor mgmt__pool_property__field_descriptors[3] 
     0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "byteval",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    offsetof(Mgmt__PoolProperty, value_case),
+    offsetof(Mgmt__PoolProperty, byteval),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_property__field_indices_by_name[] = {
+  3,   /* field[3] = byteval */
   0,   /* field[0] = number */
   2,   /* field[2] = numval */
   1,   /* field[1] = strval */
@@ -3853,7 +3866,7 @@ static const unsigned mgmt__pool_property__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_property__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_property__descriptor =
 {
@@ -3863,7 +3876,7 @@ const ProtobufCMessageDescriptor mgmt__pool_property__descriptor =
   "Mgmt__PoolProperty",
   "mgmt",
   sizeof(Mgmt__PoolProperty),
-  3,
+  4,
   mgmt__pool_property__field_descriptors,
   mgmt__pool_property__field_indices_by_name,
   1,  mgmt__pool_property__number_ranges,
