@@ -1,4 +1,4 @@
-FROM fedora:38
+FROM fedora:latest
 
 RUN dnf -y install clang-tools-extra git-clang-format
 
