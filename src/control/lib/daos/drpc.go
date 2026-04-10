@@ -290,6 +290,7 @@ func (m securityMethod) ID() int32 {
 func (m securityMethod) String() string {
 	if s, ok := map[securityMethod]string{
 		MethodValidateCredentials: "validate credentials",
+		MethodValidateNodeCert:    "validate node cert",
 	}[m]; ok {
 		return s
 	}
@@ -300,4 +301,6 @@ func (m securityMethod) String() string {
 const (
 	// MethodValidateCredentials is a ModuleSecurity method
 	MethodValidateCredentials securityMethod = C.DRPC_METHOD_SEC_VALIDATE_CREDS
+	// MethodValidateNodeCert is a ModuleSecurity method for per-pool node cert validation
+	MethodValidateNodeCert securityMethod = C.DRPC_METHOD_SEC_VALIDATE_NODE_CERT
 )

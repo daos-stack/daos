@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"time"
 
@@ -27,6 +28,10 @@ const (
 	defaultConfigFile = "daos_agent.yml"
 	defaultRuntimeDir = "/var/run/daos_agent"
 )
+
+func defaultNodeCertDir(systemName string) string {
+	return filepath.Join("/etc/daos/certs", systemName, "node_certs")
+}
 
 type refreshMinutes time.Duration
 
@@ -137,6 +142,7 @@ type Config struct {
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
 	Telemetry           TelemetryConfig            `yaml:",inline"`
+	NodeCertDir         string                     `yaml:"node_cert_dir,omitempty"`
 }
 
 // Validate performs basic validation of the configuration.
@@ -155,6 +161,10 @@ func (c *Config) Validate() error {
 
 	if err := c.Telemetry.Validate(); err != nil {
 		return err
+	}
+
+	if c.NodeCertDir == "" {
+		c.NodeCertDir = defaultNodeCertDir(c.SystemName)
 	}
 
 	return nil

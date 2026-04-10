@@ -110,6 +110,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	secCfg := &securityConfig{
 		transport:   cmd.cfg.TransportConfig,
 		credentials: cmd.cfg.CredentialConfig,
+		nodeCertDir: cmd.cfg.NodeCertDir,
 	}
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
 	mgmtMod := &mgmtModule{

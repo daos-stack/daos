@@ -85,6 +85,9 @@
 #  cert: /etc/daos/certs/server.crt
 #  # Key portion of Server Certificate
 #  key: /etc/daos/certs/server.key
+#  # Maximum allowed clock skew for pool node certificate PoP timestamps.
+#  # Default: 5m
+#  pool_cert_max_clock_skew: 5m
 #
 #
 ## Fault domain path

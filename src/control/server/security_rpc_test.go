@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,9 +9,15 @@ package server
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha512"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/binary"
+	"encoding/json"
 	"encoding/pem"
 	"math/big"
 	"os"
@@ -20,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
@@ -362,4 +369,385 @@ func TestSrvSecurityModule_ValidateCred_Secure_BadVerifier(t *testing.T) {
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
 		Status: int32(daos.NoPermission),
 	})
+}
+
+// --- Node cert validation tests ---
+
+type testCertChain struct {
+	caCert     *x509.Certificate
+	caKey      *ecdsa.PrivateKey
+	poolCACert *x509.Certificate
+	poolCAKey  *ecdsa.PrivateKey
+	nodeCert   *x509.Certificate
+	nodeKey    *ecdsa.PrivateKey
+	caCertPEM  []byte
+	poolCAPEM  []byte
+	nodePEM    []byte
+}
+
+func generateTestCertChain(t *testing.T) *testCertChain {
+	t.Helper()
+	tc := &testCertChain{}
+
+	// DAOS CA (root)
+	tc.caKey, _ = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	caTemplate := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "Test DAOS CA"},
+		NotBefore:             time.Now().Add(-time.Minute),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	caDER, _ := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &tc.caKey.PublicKey, tc.caKey)
+	tc.caCert, _ = x509.ParseCertificate(caDER)
+	tc.caCertPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
+
+	// Pool CA (intermediate)
+	tc.poolCAKey, _ = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	serial, _ = rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	poolCATemplate := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "Test Pool CA"},
+		NotBefore:             time.Now().Add(-time.Minute),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            0,
+		MaxPathLenZero:        true,
+	}
+	poolCADER, _ := x509.CreateCertificate(rand.Reader, poolCATemplate, tc.caCert, &tc.poolCAKey.PublicKey, tc.caKey)
+	tc.poolCACert, _ = x509.ParseCertificate(poolCADER)
+	tc.poolCAPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: poolCADER})
+
+	// Node cert
+	tc.nodeKey, _ = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	serial, _ = rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	nodeTemplate := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: security.CertCNPrefixNode + "testnode"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+	nodeDER, _ := x509.CreateCertificate(rand.Reader, nodeTemplate, tc.poolCACert, &tc.nodeKey.PublicKey, tc.poolCAKey)
+	tc.nodeCert, _ = x509.ParseCertificate(nodeDER)
+	tc.nodePEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: nodeDER})
+
+	return tc
+}
+
+func makePoP(t *testing.T, key *ecdsa.PrivateKey, poolUUID, handleUUID []byte) (payload, sig []byte) {
+	t.Helper()
+	payload = make([]byte, popPayloadLen)
+	copy(payload[0:16], poolUUID)
+	copy(payload[16:32], handleUUID)
+	binary.BigEndian.PutUint64(payload[32:40], uint64(time.Now().Unix()))
+
+	h := sha512.Sum384(payload)
+	var err error
+	sig, err = ecdsa.SignASN1(rand.Reader, key, h[:])
+	if err != nil {
+		t.Fatalf("sign PoP: %v", err)
+	}
+	return payload, sig
+}
+
+func writeCAToDir(t *testing.T, dir string, caPEM []byte) string {
+	t.Helper()
+	path := filepath.Join(dir, "daosCA.crt")
+	if err := os.WriteFile(path, caPEM, 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestSrvSecurityModule_ValidateNodeCert(t *testing.T) {
+	chain := generateTestCertChain(t)
+
+	poolUUID := make([]byte, 16)
+	handleUUID := make([]byte, 16)
+	rand.Read(poolUUID)
+	rand.Read(handleUUID)
+
+	validPayload, validSig := makePoP(t, chain.nodeKey, poolUUID, handleUUID)
+
+	stalePayload := make([]byte, popPayloadLen)
+	copy(stalePayload[0:16], poolUUID)
+	copy(stalePayload[16:32], handleUUID)
+	binary.BigEndian.PutUint64(stalePayload[32:40], uint64(time.Now().Add(-10*time.Minute).Unix()))
+	staleHash := sha512.Sum384(stalePayload)
+	staleSig, _ := ecdsa.SignASN1(rand.Reader, chain.nodeKey, staleHash[:])
+
+	rogueKey, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	rogueSerial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	rogueTmpl := &x509.Certificate{
+		SerialNumber: rogueSerial,
+		Subject:      pkix.Name{CommonName: "rogue"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+	rogueDER, _ := x509.CreateCertificate(rand.Reader, rogueTmpl, rogueTmpl, &rogueKey.PublicKey, rogueKey)
+	roguePEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rogueDER})
+
+	for name, tc := range map[string]struct {
+		nodePEM   []byte
+		poolCAPEM []byte
+		payload   []byte
+		pop       []byte
+		expStatus daos.Status
+	}{
+		"valid chain and PoP": {
+			nodePEM:   chain.nodePEM,
+			poolCAPEM: chain.poolCAPEM,
+			payload:   validPayload,
+			pop:       validSig,
+			expStatus: 0,
+		},
+		"self-signed node cert": {
+			nodePEM:   roguePEM,
+			poolCAPEM: chain.poolCAPEM,
+			payload:   make([]byte, popPayloadLen),
+			pop:       []byte{1, 2, 3},
+			expStatus: daos.BadCert,
+		},
+		"bad PoP signature": {
+			nodePEM:   chain.nodePEM,
+			poolCAPEM: chain.poolCAPEM,
+			payload:   validPayload,
+			pop:       []byte{0xDE, 0xAD},
+			expStatus: daos.NoPermission,
+		},
+		"expired timestamp": {
+			nodePEM:   chain.nodePEM,
+			poolCAPEM: chain.poolCAPEM,
+			payload:   stalePayload,
+			pop:       staleSig,
+			expStatus: daos.NoPermission,
+		},
+		"bad payload length": {
+			nodePEM:   chain.nodePEM,
+			poolCAPEM: chain.poolCAPEM,
+			payload:   []byte{1, 2, 3},
+			pop:       []byte{4, 5, 6},
+			expStatus: daos.InvalidInput,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			parent := test.MustLogContext(t)
+			log := logging.FromContext(parent)
+
+			tmpDir, cleanup := test.CreateTestDir(t)
+			defer cleanup()
+
+			caPath := writeCAToDir(t, tmpDir, chain.caCertPEM)
+
+			mod := NewSecurityModule(log, &security.TransportConfig{
+				CertificateConfig: security.CertificateConfig{
+					CARootPath: caPath,
+				},
+			})
+
+			req := &auth.ValidateNodeCertReq{
+				PoolCa:          tc.poolCAPEM,
+				NodeCert:        tc.nodePEM,
+				NodeCertPop:     tc.pop,
+				NodeCertPayload: tc.payload,
+				PoolId:          uuid.Must(uuid.FromBytes(poolUUID)).String(),
+			}
+			reqBytes := marshal(t, req)
+
+			respBytes, err := mod.HandleCall(test.Context(t), nil, daos.MethodValidateNodeCert, reqBytes)
+			if err != nil {
+				t.Fatalf("HandleCall error: %v", err)
+			}
+
+			resp := &auth.ValidateNodeCertResp{}
+			if err := proto.Unmarshal(respBytes, resp); err != nil {
+				t.Fatalf("unmarshal response: %v", err)
+			}
+
+			if daos.Status(resp.Status) != tc.expStatus {
+				t.Errorf("expected status %v, got %v", tc.expStatus, daos.Status(resp.Status))
+			}
+		})
+	}
+}
+
+func TestSrvSecurityModule_ValidateNodeCert_Watermarks(t *testing.T) {
+	chain := generateTestCertChain(t)
+
+	poolUUID := make([]byte, 16)
+	rand.Read(poolUUID)
+
+	// The test chain's node cert was issued with NotBefore = now - 1m.
+	nodeNotBefore := chain.nodeCert.NotBefore
+	nodeCN := chain.nodeCert.Subject.CommonName
+
+	for name, tc := range map[string]struct {
+		watermarks map[string]string // CN → RFC3339 (key "__raw__" stuffs a raw blob)
+		expStatus  daos.Status
+	}{
+		"no watermarks set": {
+			watermarks: nil,
+			expStatus:  0,
+		},
+		"watermark for unrelated CN is ignored": {
+			watermarks: map[string]string{
+				"node:other-node": nodeNotBefore.Add(time.Hour).UTC().Format(time.RFC3339),
+			},
+			expStatus: 0,
+		},
+		"watermark earlier than cert NotBefore allows cert": {
+			watermarks: map[string]string{
+				nodeCN: nodeNotBefore.Add(-time.Hour).UTC().Format(time.RFC3339),
+			},
+			expStatus: 0,
+		},
+		"watermark equal to cert NotBefore allows cert": {
+			// Comparison is strictly less-than: equal is valid.
+			watermarks: map[string]string{
+				nodeCN: nodeNotBefore.UTC().Format(time.RFC3339),
+			},
+			expStatus: 0,
+		},
+		"watermark after cert NotBefore revokes cert": {
+			watermarks: map[string]string{
+				nodeCN: nodeNotBefore.Add(time.Hour).UTC().Format(time.RFC3339),
+			},
+			expStatus: daos.BadCert,
+		},
+		"malformed watermarks blob rejects cert": {
+			watermarks: map[string]string{"__raw__": "not-json"},
+			expStatus:  daos.BadCert,
+		},
+		"bad timestamp in blob rejects cert": {
+			watermarks: map[string]string{nodeCN: "not-a-date"},
+			expStatus:  daos.BadCert,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			parent := test.MustLogContext(t)
+			log := logging.FromContext(parent)
+
+			tmpDir, cleanup := test.CreateTestDir(t)
+			defer cleanup()
+
+			caPath := writeCAToDir(t, tmpDir, chain.caCertPEM)
+
+			mod := NewSecurityModule(log, &security.TransportConfig{
+				CertificateConfig: security.CertificateConfig{
+					CARootPath: caPath,
+				},
+			})
+
+			var watermarksBlob []byte
+			if raw, ok := tc.watermarks["__raw__"]; ok {
+				watermarksBlob = []byte(raw)
+			} else if len(tc.watermarks) > 0 {
+				blob, err := json.Marshal(tc.watermarks)
+				if err != nil {
+					t.Fatal(err)
+				}
+				watermarksBlob = blob
+			}
+
+			// Use a fresh handle UUID per sub-test to avoid the
+			// replay cache used by the replay test.
+			perCaseHandle := make([]byte, 16)
+			rand.Read(perCaseHandle)
+			perCasePayload, perCaseSig := makePoP(t, chain.nodeKey, poolUUID, perCaseHandle)
+
+			req := &auth.ValidateNodeCertReq{
+				PoolCa:          chain.poolCAPEM,
+				NodeCert:        chain.nodePEM,
+				NodeCertPop:     perCaseSig,
+				NodeCertPayload: perCasePayload,
+				PoolId:          uuid.Must(uuid.FromBytes(poolUUID)).String(),
+				CertWatermarks:  watermarksBlob,
+			}
+			reqBytes := marshal(t, req)
+
+			respBytes, err := mod.HandleCall(test.Context(t), nil, daos.MethodValidateNodeCert, reqBytes)
+			if err != nil {
+				t.Fatalf("HandleCall error: %v", err)
+			}
+
+			resp := &auth.ValidateNodeCertResp{}
+			if err := proto.Unmarshal(respBytes, resp); err != nil {
+				t.Fatalf("unmarshal response: %v", err)
+			}
+
+			if daos.Status(resp.Status) != tc.expStatus {
+				t.Errorf("expected status %v, got %v (detail=%q)",
+					tc.expStatus, daos.Status(resp.Status), resp.Detail)
+			}
+		})
+	}
+}
+
+func TestSrvSecurityModule_ValidateNodeCert_Replay(t *testing.T) {
+	chain := generateTestCertChain(t)
+
+	poolUUID := make([]byte, 16)
+	handleUUID := make([]byte, 16)
+	rand.Read(poolUUID)
+	rand.Read(handleUUID)
+
+	payload, sig := makePoP(t, chain.nodeKey, poolUUID, handleUUID)
+
+	parent := test.MustLogContext(t)
+	log := logging.FromContext(parent)
+
+	tmpDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	caPath := writeCAToDir(t, tmpDir, chain.caCertPEM)
+
+	mod := NewSecurityModule(log, &security.TransportConfig{
+		CertificateConfig: security.CertificateConfig{
+			CARootPath: caPath,
+		},
+	})
+
+	req := &auth.ValidateNodeCertReq{
+		PoolCa:          chain.poolCAPEM,
+		NodeCert:        chain.nodePEM,
+		NodeCertPop:     sig,
+		NodeCertPayload: payload,
+		PoolId:          uuid.Must(uuid.FromBytes(poolUUID)).String(),
+	}
+	reqBytes := marshal(t, req)
+
+	// First call should succeed
+	respBytes, err := mod.HandleCall(test.Context(t), nil, daos.MethodValidateNodeCert, reqBytes)
+	if err != nil {
+		t.Fatalf("first call error: %v", err)
+	}
+	resp := &auth.ValidateNodeCertResp{}
+	if err := proto.Unmarshal(respBytes, resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Status != 0 {
+		t.Fatalf("first call: expected success, got status %d", resp.Status)
+	}
+
+	// Replay with same handle UUID should be rejected
+	respBytes, err = mod.HandleCall(test.Context(t), nil, daos.MethodValidateNodeCert, reqBytes)
+	if err != nil {
+		t.Fatalf("replay call error: %v", err)
+	}
+	resp = &auth.ValidateNodeCertResp{}
+	if err := proto.Unmarshal(respBytes, resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if daos.Status(resp.Status) != daos.NoPermission {
+		t.Errorf("replay: expected NoPermission, got %v", daos.Status(resp.Status))
+	}
 }

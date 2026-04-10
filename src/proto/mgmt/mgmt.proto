@@ -57,6 +57,12 @@ service MgmtSvc {
 	rpc PoolSetProp(PoolSetPropReq) returns (PoolSetPropResp) {}
 	// Get a DAOS pool property list.
 	rpc PoolGetProp(PoolGetPropReq) returns (PoolGetPropResp) {}
+	// Append a CA certificate to the pool's CA bundle.
+	rpc PoolAddCA(PoolAddCAReq) returns (PoolAddCAResp) {}
+	// Remove one or all CA certificates from the pool's CA bundle.
+	rpc PoolRemoveCA(PoolRemoveCAReq) returns (PoolRemoveCAResp) {}
+	// Advance the cert revocation watermark for a given CN.
+	rpc PoolRevokeClient(PoolRevokeClientReq) returns (PoolRevokeClientResp) {}
 	// Fetch the Access Control List for a DAOS pool.
 	rpc PoolGetACL(GetACLReq) returns (ACLResp) {}
 	// Overwrite the Access Control List for a DAOS pool with a new one.

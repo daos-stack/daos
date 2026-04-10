@@ -246,15 +246,15 @@ dc_pool_init(void)
 		daos_register_key(&dc_pool_module_key);
 
 	dc_pool_proto_version = 0;
-	rc = daos_rpc_proto_query(pool_proto_fmt_v6.cpf_base, ver_array, 2, &dc_pool_proto_version);
+	rc = daos_rpc_proto_query(pool_proto_fmt_v7.cpf_base, ver_array, 2, &dc_pool_proto_version);
 	if (rc)
 		return rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v7, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
-		rc = daos_rpc_register(&pool_proto_fmt_v7, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v8, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else {
 		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
@@ -277,9 +277,9 @@ dc_pool_fini(void)
 	int rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_unregister(&pool_proto_fmt_v6);
-	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
 		rc = daos_rpc_unregister(&pool_proto_fmt_v7);
+	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
+		rc = daos_rpc_unregister(&pool_proto_fmt_v8);
 	} else {
 		rc = -DER_PROTO;
 		DL_ERROR(rc, "%d version pool RPC not supported", dc_pool_proto_version);
@@ -1064,12 +1064,33 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 	/** for con_args */
 	crt_req_addref(rpc);
 
-	/** request credentials */
-	pool_connect_in_get_cred(rpc, &credp);
-	rc = dc_sec_request_creds(credp);
-	if (rc != 0) {
-		DL_ERROR(rc, "failed to obtain security credential");
-		D_GOTO(out_req, rc);
+	/** request credentials (with per-pool node cert if available) */
+	{
+		d_iov_t node_cert = {0};
+		d_iov_t node_cert_pop = {0};
+		d_iov_t node_cert_payload = {0};
+
+		pool_connect_in_get_cred(rpc, &credp);
+		rc = dc_sec_request_pool_creds(credp, pool->dp_pool,
+					       pool->dp_pool_hdl,
+					       &node_cert, &node_cert_pop,
+					       &node_cert_payload);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to obtain security credential");
+			D_GOTO(out_req, rc);
+		}
+
+		/* Populate node cert fields if we got them and the RPC supports it */
+		if (node_cert.iov_len > 0 &&
+		    rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_NODE_CERT)) {
+			pool_connect_in_set_node_cert(rpc, &node_cert,
+						      &node_cert_pop,
+						      &node_cert_payload);
+		} else {
+			daos_iov_free(&node_cert);
+			daos_iov_free(&node_cert_pop);
+			daos_iov_free(&node_cert_payload);
+		}
 	}
 
 	rc = map_bulk_create(daos_task2ctx(task), &bulk, &map_buf, pool_buf_nr(pool->dp_map_sz));

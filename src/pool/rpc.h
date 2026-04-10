@@ -35,10 +35,12 @@
  */
 
 #define POOL_PROTO_VER_WITH_SVC_OP_KEY 6
+#define POOL_PROTO_VER_WITH_NODE_CERT  8
 
 #define POOL_PROTO_CLI_RPC_LIST(ver)                                                               \
 	X(POOL_CREATE, 0, &CQF_pool_create, ds_pool_create_handler, NULL)                          \
-	X(POOL_CONNECT, 0, &CQF_pool_connect, ds_pool_connect_handler, NULL)                       \
+	X(POOL_CONNECT, 0, ver >= 8 ? &CQF_pool_connect : &CQF_pool_connect_v7,                   \
+	  ds_pool_connect_handler, NULL)                                                           \
 	X(POOL_DISCONNECT, 0, &CQF_pool_disconnect, ds_pool_disconnect_handler, NULL)              \
 	X(POOL_QUERY, 0, ver >= 7 ? &CQF_pool_query : &CQF_pool_query_v6,                          \
 	  ver >= 7 ? ds_pool_query_handler : ds_pool_query_handler_v6, NULL)                       \
@@ -103,6 +105,7 @@ char *dc_pool_op_str(enum pool_operation op);
 
 extern struct crt_proto_format pool_proto_fmt_v6;
 extern struct crt_proto_format pool_proto_fmt_v7;
+extern struct crt_proto_format pool_proto_fmt_v8;
 extern int dc_pool_proto_version;
 
 /* clang-format off */
@@ -238,7 +241,7 @@ pool_create_in_set_data(crt_rpc_t *rpc, d_rank_list_t *pri_tgt_ranks, daos_prop_
 	/* only set on -DER_TRUNC */					 \
 	((uint32_t)			(pco_map_buf_size)	CRT_VAR)
 
-#define DAOS_ISEQ_POOL_CONNECT		/* input fields */		 \
+#define DAOS_ISEQ_POOL_CONNECT_V7	/* input fields (v7) */		 \
 	((struct pool_op_in)		(pci_op)		CRT_VAR) \
 	((d_iov_t)			(pci_cred)		CRT_VAR) \
 	((uint64_t)			(pci_flags)		CRT_VAR) \
@@ -246,6 +249,19 @@ pool_create_in_set_data(crt_rpc_t *rpc, d_rank_list_t *pri_tgt_ranks, daos_prop_
 	((crt_bulk_t)			(pci_map_bulk)		CRT_VAR) \
 	((uint32_t)			(pci_pool_version)	CRT_VAR)
 
+#define DAOS_ISEQ_POOL_CONNECT		/* input fields (v8+) */	 \
+	((struct pool_op_in)		(pci_op)		CRT_VAR) \
+	((d_iov_t)			(pci_cred)		CRT_VAR) \
+	((uint64_t)			(pci_flags)		CRT_VAR) \
+	((uint64_t)			(pci_query_bits)	CRT_VAR) \
+	((crt_bulk_t)			(pci_map_bulk)		CRT_VAR) \
+	((uint32_t)			(pci_pool_version)	CRT_VAR) \
+	((uint32_t)			(pci_padding)		CRT_VAR) \
+	((d_iov_t)			(pci_node_cert)		CRT_VAR) \
+	((d_iov_t)			(pci_node_cert_pop)	CRT_VAR) \
+	((d_iov_t)			(pci_node_cert_payload)	CRT_VAR)
+
+CRT_RPC_DECLARE(pool_connect_v7, DAOS_ISEQ_POOL_CONNECT_V7, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 
 /* clang-format on */
@@ -293,6 +309,38 @@ pool_connect_in_set_data(crt_rpc_t *rpc, uint64_t pci_flags, uint64_t pci_query_
 	in->pci_query_bits   = pci_query_bits;
 	in->pci_map_bulk     = pci_map_bulk;
 	in->pci_pool_version = pci_pool_version;
+}
+
+static inline void
+pool_connect_in_get_node_cert(crt_rpc_t *rpc, d_iov_t **certp, d_iov_t **popp,
+			      d_iov_t **payloadp)
+{
+	struct pool_connect_in *in = crt_req_get(rpc);
+
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_NODE_CERT)) {
+		*certp = &in->pci_node_cert;
+		*popp = &in->pci_node_cert_pop;
+		*payloadp = &in->pci_node_cert_payload;
+	} else {
+		*certp = NULL;
+		*popp = NULL;
+		*payloadp = NULL;
+	}
+}
+
+static inline void
+pool_connect_in_set_node_cert(crt_rpc_t *rpc, d_iov_t *cert, d_iov_t *pop,
+			      d_iov_t *payload)
+{
+	struct pool_connect_in *in = crt_req_get(rpc);
+
+	D_ASSERT(rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_NODE_CERT));
+	if (cert)
+		in->pci_node_cert = *cert;
+	if (pop)
+		in->pci_node_cert_pop = *pop;
+	if (payload)
+		in->pci_node_cert_payload = *payload;
 }
 
 /* clang-format off */

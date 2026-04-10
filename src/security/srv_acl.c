@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -276,6 +277,126 @@ ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token)
 	rc = process_validation_response(response, token);
 
 	drpc_response_free(response);
+	return rc;
+}
+
+int
+ds_sec_validate_node_cert(uuid_t pool_uuid, d_iov_t *pool_ca, const char *machine,
+			  d_iov_t *cert_watermarks, d_iov_t *node_cert, d_iov_t *node_cert_pop,
+			  d_iov_t *node_cert_payload)
+{
+	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Auth__ValidateNodeCertReq	req = AUTH__VALIDATE_NODE_CERT_REQ__INIT;
+	Auth__ValidateNodeCertResp	*resp = NULL;
+	struct drpc			*server_socket;
+	Drpc__Call			*request;
+	Drpc__Response			*response = NULL;
+	char                             pool_id_str[DAOS_UUID_STR_SIZE];
+	uint8_t				*body;
+	size_t				 len;
+	int				 rc;
+
+	/* Quick presence check — avoid dRPC for the common rejection case */
+	if (node_cert == NULL || node_cert->iov_len == 0)
+		return -DER_NO_CERT;
+
+	rc = drpc_connect(ds_sec_server_socket_path, &server_socket);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Couldn't connect to daos_server socket: "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+
+	rc = drpc_call_create(server_socket,
+			      DRPC_MODULE_SEC,
+			      DRPC_METHOD_SEC_VALIDATE_NODE_CERT,
+			      &request);
+	if (rc != DER_SUCCESS) {
+		drpc_close(server_socket);
+		return rc;
+	}
+
+	/* Build the validation request */
+	uuid_unparse_lower(pool_uuid, pool_id_str);
+	req.pool_id = pool_id_str;
+	req.pool_ca.data = pool_ca->iov_buf;
+	req.pool_ca.len = pool_ca->iov_len;
+	req.node_cert.data = node_cert->iov_buf;
+	req.node_cert.len = node_cert->iov_len;
+	req.node_cert_pop.data = node_cert_pop->iov_buf;
+	req.node_cert_pop.len = node_cert_pop->iov_len;
+
+	if (node_cert_payload != NULL && node_cert_payload->iov_len > 0) {
+		req.node_cert_payload.data = node_cert_payload->iov_buf;
+		req.node_cert_payload.len = node_cert_payload->iov_len;
+	}
+	if (machine != NULL)
+		req.machine_name = (char *)machine;
+
+	/*
+	 * Cert watermarks are an opaque JSON blob. The engine hands the
+	 * bytes to the control plane verbatim; parsing and comparison
+	 * happen on the Go side.
+	 */
+	if (cert_watermarks != NULL && cert_watermarks->iov_len > 0) {
+		req.cert_watermarks.data = cert_watermarks->iov_buf;
+		req.cert_watermarks.len  = cert_watermarks->iov_len;
+	}
+
+	len = auth__validate_node_cert_req__get_packed_size(&req);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		rc = -DER_NOMEM;
+		goto out_request;
+	}
+	auth__validate_node_cert_req__pack(&req, body);
+	request->body.len = len;
+	request->body.data = body;
+
+	rc = drpc_call(server_socket, R_SYNC, request, &response);
+
+	drpc_close(server_socket);
+	drpc_call_free(request);
+
+	if (rc != DER_SUCCESS)
+		return rc;
+
+	if (response == NULL) {
+		D_ERROR("Node cert validation response was NULL\n");
+		return -DER_NOREPLY;
+	}
+
+	if (response->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Node cert validation dRPC error: %d\n",
+			response->status);
+		drpc_response_free(response);
+		return -DER_MISC;
+	}
+
+	resp = auth__validate_node_cert_resp__unpack(&alloc.alloc,
+						     response->body.len,
+						     response->body.data);
+	if (alloc.oom || resp == NULL) {
+		drpc_response_free(response);
+		return -DER_NOMEM;
+	}
+
+	if (resp->status != 0) {
+		rc = resp->status;
+		if (resp->detail != NULL && resp->detail[0] != '\0')
+			D_ERROR("Node cert validation failed: status=%d (%s)\n",
+				rc, resp->detail);
+		else
+			D_ERROR("Node cert validation failed: status=%d\n", rc);
+	}
+
+	auth__validate_node_cert_resp__free_unpacked(resp, &alloc.alloc);
+	drpc_response_free(response);
+	return rc;
+
+out_request:
+	drpc_call_free(request);
+	drpc_close(server_socket);
 	return rc;
 }
 

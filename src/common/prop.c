@@ -72,6 +72,8 @@ daos_prop_has_ptr(struct daos_prop_entry *entry)
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
+	case DAOS_PROP_PO_POOL_CA:
+	case DAOS_PROP_PO_CERT_WATERMARKS:
 		return true;
 	}
 	return false;
@@ -95,6 +97,17 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST) {
 		if (entry->dpe_val_ptr)
 			d_rank_list_free((d_rank_list_t *)entry->dpe_val_ptr);
+		return;
+	}
+
+	if (entry->dpe_type == DAOS_PROP_PO_POOL_CA ||
+	    entry->dpe_type == DAOS_PROP_PO_CERT_WATERMARKS) {
+		if (entry->dpe_val_ptr) {
+			struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+			D_FREE(bv->dpb_data);
+			D_FREE(entry->dpe_val_ptr);
+		}
 		return;
 	}
 
@@ -455,6 +468,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_POOL_CA:
+			/* Optional string property, NULL or valid PEM */
+			break;
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			/* Opaque JSON blob; validation lives in the control plane */
+			break;
 		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
@@ -662,6 +681,27 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		if (rc) {
 			D_ERROR("failed to dup roots: "DF_RC"\n", DP_RC(rc));
 			return rc;
+		}
+		break;
+	case DAOS_PROP_PO_POOL_CA:
+	case DAOS_PROP_PO_CERT_WATERMARKS:
+		if (entry->dpe_val_ptr != NULL) {
+			struct daos_prop_byteval *src = entry->dpe_val_ptr;
+			struct daos_prop_byteval *dst;
+
+			D_ALLOC_PTR(dst);
+			if (dst == NULL)
+				return -DER_NOMEM;
+			if (src->dpb_len > 0) {
+				D_ALLOC(dst->dpb_data, src->dpb_len);
+				if (dst->dpb_data == NULL) {
+					D_FREE(dst);
+					return -DER_NOMEM;
+				}
+				memcpy(dst->dpb_data, src->dpb_data, src->dpb_len);
+				dst->dpb_len = src->dpb_len;
+			}
+			entry_dup->dpe_val_ptr = dst;
 		}
 		break;
 	default:
@@ -970,6 +1010,10 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 
 			roots_alloc = true;
+		} else if (type == DAOS_PROP_PO_POOL_CA || type == DAOS_PROP_PO_CERT_WATERMARKS) {
+			rc = daos_prop_entry_copy(entry_reply, entry_req);
+			if (rc)
+				D_GOTO(out, rc);
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}

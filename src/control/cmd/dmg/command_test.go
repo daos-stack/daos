@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"gopkg.in/yaml.v2"
@@ -176,6 +177,14 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
+	case *control.PoolAddCAReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolAddCAResp{})
+	case *control.PoolRemoveCAReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRemoveCAResp{})
+	case *control.PoolRevokeClientReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRevokeClientResp{
+			WatermarkRfc3339: time.Now().UTC().Format(time.RFC3339),
+		})
 	case *control.PoolRanksReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRanksResp{})
 	case *control.PoolExtendReq:

@@ -101,6 +101,7 @@ enum drpc_srv_method {
 
 enum drpc_sec_method {
 	DRPC_METHOD_SEC_VALIDATE_CREDS		= 401,
+	DRPC_METHOD_SEC_VALIDATE_NODE_CERT	= 402,
 
 	NUM_DRPC_SEC_METHODS			/* Must be last */
 };

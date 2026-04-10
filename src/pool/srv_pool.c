@@ -429,6 +429,12 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			if (entry_def->dpe_str == NULL)
 				return -DER_NOMEM;
 			break;
+		case DAOS_PROP_PO_POOL_CA:
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			rc = daos_prop_entry_copy(entry, entry_def);
+			if (rc)
+				return rc;
+			break;
 		case DAOS_PROP_PO_SPACE_RB:
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_RECLAIM:
@@ -749,6 +755,39 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			if (rc)
 				return rc;
 			break;
+		case DAOS_PROP_PO_POOL_CA: {
+			struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+			if (bv != NULL && bv->dpb_len > 0) {
+				d_iov_set(&value, bv->dpb_data, bv->dpb_len);
+				rc = rdb_tx_update(tx, kvs,
+						   &ds_pool_prop_pool_ca,
+						   &value);
+			} else {
+				rc = rdb_tx_delete(tx, kvs,
+						   &ds_pool_prop_pool_ca);
+				if (rc == -DER_NONEXIST)
+					rc = 0;
+			}
+			if (rc)
+				return rc;
+			break;
+		}
+		case DAOS_PROP_PO_CERT_WATERMARKS: {
+			struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+			if (bv != NULL && bv->dpb_len > 0) {
+				d_iov_set(&value, bv->dpb_data, bv->dpb_len);
+				rc = rdb_tx_update(tx, kvs, &ds_pool_prop_cert_watermarks, &value);
+			} else {
+				rc = rdb_tx_delete(tx, kvs, &ds_pool_prop_cert_watermarks);
+				if (rc == -DER_NONEXIST)
+					rc = 0;
+			}
+			if (rc)
+				return rc;
+			break;
+		}
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
 			return -DER_INVAL;
@@ -3636,6 +3675,61 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val  = val32;
 		idx++;
 	}
+	if (bits & DAOS_PO_QUERY_PROP_POOL_CA) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_pool_ca,
+				   &value);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POOL_CA;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_val_ptr = NULL;
+			rc = 0;
+		} else if (rc != 0) {
+			D_GOTO(out_prop, rc);
+		} else {
+			struct daos_prop_byteval *bv;
+
+			D_ALLOC_PTR(bv);
+			if (bv == NULL)
+				D_GOTO(out_prop, rc = -DER_NOMEM);
+			D_ALLOC(bv->dpb_data, value.iov_len);
+			if (bv->dpb_data == NULL) {
+				D_FREE(bv);
+				D_GOTO(out_prop, rc = -DER_NOMEM);
+			}
+			memcpy(bv->dpb_data, value.iov_buf, value.iov_len);
+			bv->dpb_len                        = value.iov_len;
+			prop->dpp_entries[idx].dpe_val_ptr = bv;
+		}
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_CERT_WATERMARKS) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_cert_watermarks, &value);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_CERT_WATERMARKS;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_val_ptr = NULL;
+			rc = 0;
+		} else if (rc != 0) {
+			D_GOTO(out_prop, rc);
+		} else {
+			struct daos_prop_byteval *bv;
+
+			D_ALLOC_PTR(bv);
+			if (bv == NULL)
+				D_GOTO(out_prop, rc = -DER_NOMEM);
+			D_ALLOC(bv->dpb_data, value.iov_len);
+			if (bv->dpb_data == NULL) {
+				D_FREE(bv);
+				D_GOTO(out_prop, rc = -DER_NOMEM);
+			}
+			memcpy(bv->dpb_data, value.iov_buf, value.iov_len);
+			bv->dpb_len                        = value.iov_len;
+			prop->dpp_entries[idx].dpe_val_ptr = bv;
+		}
+		idx++;
+	}
 
 	*prop_out = prop;
 	return 0;
@@ -4403,6 +4497,71 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	D_ASSERT(obj_ver_entry != NULL);
 	obj_layout_ver = obj_ver_entry->dpe_val;
 
+	rc = ds_sec_cred_get_origin(credp, &machine);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": unable to retrieve origin", DP_UUID(in->pci_op.pi_uuid));
+		D_GOTO(out_map_version, rc);
+	}
+
+	/*
+	 * Node certificate validation: only runs when the pool has a CA
+	 * configured. The watermarks prop is read here alongside the CA and
+	 * shipped to the control plane as an opaque byte blob; all parsing
+	 * and comparison logic lives on the Go side of the drpc boundary.
+	 */
+	{
+		struct daos_prop_entry *ca_entry;
+		struct daos_prop_entry *wm_entry;
+
+		ca_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_POOL_CA);
+		if (ca_entry != NULL && ca_entry->dpe_val_ptr != NULL) {
+			struct daos_prop_byteval *ca_bv = ca_entry->dpe_val_ptr;
+			d_iov_t                   ca_iov;
+			d_iov_t                   wm_iov;
+			d_iov_t                  *wm_iov_p            = NULL;
+			d_iov_t                  *node_cert_p         = NULL;
+			d_iov_t                  *node_cert_pop_p     = NULL;
+			d_iov_t                  *node_cert_payload_p = NULL;
+
+			if (!rpc_ver_atleast(rpc,
+					    POOL_PROTO_VER_WITH_NODE_CERT)) {
+				rc = -DER_NO_CERT;
+				D_ERROR(DF_UUID ": pool requires node "
+					"certificate but client protocol "
+					"version %d does not support it "
+					"(need >= %d)\n",
+					DP_UUID(in->pci_op.pi_uuid),
+					opc_get_rpc_ver(rpc->cr_opc),
+					POOL_PROTO_VER_WITH_NODE_CERT);
+				D_GOTO(out_map_version, rc);
+			}
+
+			d_iov_set(&ca_iov, ca_bv->dpb_data, ca_bv->dpb_len);
+
+			pool_connect_in_get_node_cert(rpc, &node_cert_p,
+						      &node_cert_pop_p,
+						      &node_cert_payload_p);
+
+			wm_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_CERT_WATERMARKS);
+			if (wm_entry != NULL && wm_entry->dpe_val_ptr != NULL) {
+				struct daos_prop_byteval *wm_bv = wm_entry->dpe_val_ptr;
+
+				d_iov_set(&wm_iov, wm_bv->dpb_data, wm_bv->dpb_len);
+				wm_iov_p = &wm_iov;
+			}
+
+			rc = ds_sec_validate_node_cert(in->pci_op.pi_uuid, &ca_iov, machine,
+						       wm_iov_p, node_cert_p, node_cert_pop_p,
+						       node_cert_payload_p);
+			if (rc != 0) {
+				DL_ERROR(rc, DF_UUID
+					 ": node certificate validation failed",
+					 DP_UUID(in->pci_op.pi_uuid));
+				D_GOTO(out_map_version, rc);
+			}
+		}
+	}
+
 	/*
 	 * Security capabilities determine the access control policy on this
 	 * pool handle.
@@ -4411,13 +4570,6 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": refusing connect attempt for " DF_X64,
 			 DP_UUID(in->pci_op.pi_uuid), flags);
-		D_GOTO(out_map_version, rc);
-	}
-
-	rc = ds_sec_cred_get_origin(credp, &machine);
-
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": unable to retrieve origin", DP_UUID(in->pci_op.pi_uuid));
 		D_GOTO(out_map_version, rc);
 	}
 
@@ -5482,6 +5634,8 @@ pool_query_handler(crt_rpc_t *rpc, int handler_version)
 					rc = -DER_IO;
 				break;
 			case DAOS_PROP_PO_SVC_LIST:
+			case DAOS_PROP_PO_POOL_CA:
+			case DAOS_PROP_PO_CERT_WATERMARKS:
 				break;
 			default:
 				D_ASSERTF(0, "bad dpe_type %d\n",
