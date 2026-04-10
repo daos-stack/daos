@@ -23,6 +23,8 @@ typedef struct _Mgmt__SystemStartReq Mgmt__SystemStartReq;
 typedef struct _Mgmt__SystemStartResp Mgmt__SystemStartResp;
 typedef struct _Mgmt__SystemExcludeReq Mgmt__SystemExcludeReq;
 typedef struct _Mgmt__SystemExcludeResp Mgmt__SystemExcludeResp;
+typedef struct _Mgmt__SystemRemoveRanksReq Mgmt__SystemRemoveRanksReq;
+typedef struct _Mgmt__SystemRemoveRanksResp Mgmt__SystemRemoveRanksResp;
 typedef struct _Mgmt__SystemDrainReq Mgmt__SystemDrainReq;
 typedef struct _Mgmt__PoolRanksResp Mgmt__PoolRanksResp;
 typedef struct _Mgmt__SystemDrainResp Mgmt__SystemDrainResp;
@@ -236,6 +238,44 @@ struct  _Mgmt__SystemExcludeResp
 };
 #define MGMT__SYSTEM_EXCLUDE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_exclude_resp__descriptor) \
+    , 0,NULL }
+
+
+/*
+ * SystemRemoveRanksReq supplies system remove-ranks parameters.
+ */
+struct  _Mgmt__SystemRemoveRanksReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system name
+   */
+  char *sys;
+  /*
+   * rankset to remove
+   */
+  char *ranks;
+  /*
+   * hostset to remove
+   */
+  char *hosts;
+};
+#define MGMT__SYSTEM_REMOVE_RANKS_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_remove_ranks_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
+
+/*
+ * SystemRemoveRanksResp returns status of remove-ranks request.
+ */
+struct  _Mgmt__SystemRemoveRanksResp
+{
+  ProtobufCMessage base;
+  size_t n_results;
+  Shared__RankResult **results;
+};
+#define MGMT__SYSTEM_REMOVE_RANKS_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_remove_ranks_resp__descriptor) \
     , 0,NULL }
 
 
@@ -804,6 +844,44 @@ Mgmt__SystemExcludeResp *
 void   mgmt__system_exclude_resp__free_unpacked
                      (Mgmt__SystemExcludeResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__SystemRemoveRanksReq methods */
+void   mgmt__system_remove_ranks_req__init
+                     (Mgmt__SystemRemoveRanksReq         *message);
+size_t mgmt__system_remove_ranks_req__get_packed_size
+                     (const Mgmt__SystemRemoveRanksReq   *message);
+size_t mgmt__system_remove_ranks_req__pack
+                     (const Mgmt__SystemRemoveRanksReq   *message,
+                      uint8_t             *out);
+size_t mgmt__system_remove_ranks_req__pack_to_buffer
+                     (const Mgmt__SystemRemoveRanksReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__SystemRemoveRanksReq *
+       mgmt__system_remove_ranks_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__system_remove_ranks_req__free_unpacked
+                     (Mgmt__SystemRemoveRanksReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__SystemRemoveRanksResp methods */
+void   mgmt__system_remove_ranks_resp__init
+                     (Mgmt__SystemRemoveRanksResp         *message);
+size_t mgmt__system_remove_ranks_resp__get_packed_size
+                     (const Mgmt__SystemRemoveRanksResp   *message);
+size_t mgmt__system_remove_ranks_resp__pack
+                     (const Mgmt__SystemRemoveRanksResp   *message,
+                      uint8_t             *out);
+size_t mgmt__system_remove_ranks_resp__pack_to_buffer
+                     (const Mgmt__SystemRemoveRanksResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__SystemRemoveRanksResp *
+       mgmt__system_remove_ranks_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__system_remove_ranks_resp__free_unpacked
+                     (Mgmt__SystemRemoveRanksResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__SystemDrainReq methods */
 void   mgmt__system_drain_req__init
                      (Mgmt__SystemDrainReq         *message);
@@ -1203,6 +1281,12 @@ typedef void (*Mgmt__SystemExcludeReq_Closure)
 typedef void (*Mgmt__SystemExcludeResp_Closure)
                  (const Mgmt__SystemExcludeResp *message,
                   void *closure_data);
+typedef void (*Mgmt__SystemRemoveRanksReq_Closure)
+                 (const Mgmt__SystemRemoveRanksReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__SystemRemoveRanksResp_Closure)
+                 (const Mgmt__SystemRemoveRanksResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__SystemDrainReq_Closure)
                  (const Mgmt__SystemDrainReq *message,
                   void *closure_data);
@@ -1288,6 +1372,8 @@ extern const ProtobufCMessageDescriptor mgmt__system_start_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_start_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_exclude_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_exclude_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__system_remove_ranks_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__system_remove_ranks_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_drain_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_ranks_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_drain_resp__descriptor;
