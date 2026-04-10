@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Vdura Inc.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
+ * Copyright 2022-2024 Intel Corporation.
+ * Copyright 2025 Vdura Inc.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,23 +27,31 @@
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 #define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
 
-/* clang-format off */
-#define DDB_POOL_SHOULD_OPEN(ctx)                                                                \
-	do {                                                                                     \
-		if (daos_handle_is_inval((ctx)->dc_poh)) {                                       \
-			ddb_error(ctx, "Cannot operate on a closed pool. Open it firstly.\n");   \
-			return -DER_NO_HDL;                                                      \
-		}                                                                                \
+#define DDB_POOL_SHOULD_OPEN(ctx)                                                                  \
+	do {                                                                                       \
+		if (daos_handle_is_inval((ctx)->dc_poh)) {                                         \
+			ddb_error(ctx, "Cannot operate on a closed pool. Open it first.\n");       \
+			return -DER_NO_HDL;                                                        \
+		}                                                                                  \
 	} while (0)
 
-#define DDB_POOL_SHOULD_CLOSE(ctx)                                                               \
-	do {                                                                                     \
-		if (daos_handle_is_valid((ctx)->dc_poh)) {                                       \
-			ddb_error(ctx, "Cannot operate on an opened pool. Close it firstly.\n"); \
-			return -DER_BUSY;                                                        \
-		}                                                                                \
+#define DDB_POOL_SHOULD_CLOSE(ctx)                                                                 \
+	do {                                                                                       \
+		if (daos_handle_is_valid((ctx)->dc_poh)) {                                         \
+			ddb_error(ctx, "Cannot operate on an opened pool. Close it first.\n");     \
+			return -DER_BUSY;                                                          \
+		}                                                                                  \
 	} while (0)
-/* clang-format on */
+
+bool
+vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
+
+#define DDB_CAN_PROCEED(ctx, db_path)                                                              \
+	do {                                                                                       \
+		if (!vmd_wa_can_proceed(ctx, db_path)) {                                           \
+			return -DER_NO_SERVICE;                                                    \
+		}                                                                                  \
+	} while (0)
 
 int
 ddb_run_version(struct ddb_ctx *ctx)
@@ -80,10 +88,20 @@ ddb_pool_is_open(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
+	struct vos_file_parts path_parts = {0};
+	int                   rc;
+
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
+	if (!SUCCESS(rc))
+		return rc;
+
+	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
+
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0, ctx->dc_write_mode);
+
+	return dv_pool_open(opt->path, &path_parts, &ctx->dc_poh, 0, ctx->dc_write_mode);
 }
 
 int
@@ -807,6 +825,8 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
 
+	DDB_CAN_PROCEED(ctx, db_path);
+
 	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
 	rc = dv_sync_smd(nvme_conf, db_path, sync_smd_cb, ctx);
 	ddb_printf(ctx, "Done: "DF_RC"\n", DP_RC(rc));
@@ -1077,6 +1097,7 @@ feature_write_action(struct feature_options *opt)
 int
 ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 {
+	struct vos_file_parts path_parts = {0};
 	int      rc;
 	uint64_t new_compat_flags;
 	uint64_t new_incompat_flags;
@@ -1101,7 +1122,13 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
 		opt->db_path = ctx->dc_db_path;
 
-	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
+	if (!SUCCESS(rc))
+		return rc;
+
+	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
+
+	rc = dv_pool_open(opt->path, &path_parts, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
 			  ctx->dc_write_mode);
 	if (rc)
 		return rc;
@@ -1147,9 +1174,18 @@ out:
 int
 ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
 {
+	struct vos_file_parts path_parts = {0};
+	int                   rc;
+
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
-	return dv_pool_destroy(opt->path, opt->db_path);
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
+	if (!SUCCESS(rc))
+		return rc;
+
+	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
+
+	return dv_pool_destroy(opt->path, &path_parts);
 }
 
 #define DTI_ALL "all"
@@ -1238,6 +1274,8 @@ ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
 
+	DDB_CAN_PROCEED(ctx, db_path);
+
 	ddb_printf(ctx, "List devices, db_path='%s'\n", db_path);
 	D_INIT_LIST_HEAD(&dev_list);
 	rc = dv_dev_list(db_path, &dev_list, &dev_cnt);
@@ -1277,6 +1315,8 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		}
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
+
+	DDB_CAN_PROCEED(ctx, db_path);
 
 	if (opt->old_devid == NULL || opt->new_devid == NULL) {
 		ddb_error(ctx, "Must specify both old and new device ID\n");
@@ -1799,6 +1839,8 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 			   opt->db_path, DDB_PATH_MAX);
 		return -DER_INVAL;
 	}
+
+	DDB_CAN_PROCEED(ctx, opt->db_path);
 
 	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 ||
 	    strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
