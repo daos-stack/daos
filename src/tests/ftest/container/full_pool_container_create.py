@@ -1,6 +1,6 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2018-2023 Intel Corporation.
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -47,6 +47,7 @@ class FullPoolContainerCreate(TestWithServers):
         threshold_percent = self.params.get("threshold_percent", "/run/pool/*")
 
         # create pool and connect
+        self.log_step("Create a pool and container")
         self.add_pool()
 
         # query the pool
@@ -59,6 +60,7 @@ class FullPoolContainerCreate(TestWithServers):
         self.container.open()
 
         # get free space before write
+        self.log_step("Populate the pool with data until no free space is left")
         free_space_before = self.pool.get_pool_free_space()
         self.log.info("Pool free space before write: %s", free_space_before)
 
@@ -81,22 +83,24 @@ class FullPoolContainerCreate(TestWithServers):
                     if err not in repr(excep):
                         self.log.error("caught exception while writing object: %s", repr(excep))
                         self.container.close()
-                        self.fail("caught exception while writing object: {}".format(repr(excep)))
+                        self.fail(f"caught exception while writing object: {repr(excep)}")
                     else:
                         self.log.info("pool is too full for %s byte objects", obj_sz)
                         break
 
         # query the pool
-        self.log.info("Pool Query after filling")
+        self.log_step("Query the pool after no free space is left")
         self.pool.set_query_data()
         self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
-        # destroy container
+        # destroy container\
+        self.log_step("Destroy the container to free up space in the pool")
         self.container.destroy()
 
         # check for free space to be returned back once aggregation is complete
         # checking for a closer returned space value instead of exact value
         # as the test is using scm only
+        self.log_step("Confirm container destroy returns free space via aggregation")
         counter = 1
         threshold_value = free_space_before - (free_space_before * threshold_percent)
         free_space = self.pool.get_pool_free_space()
@@ -110,3 +114,5 @@ class FullPoolContainerCreate(TestWithServers):
             time.sleep(30)
             free_space = self.pool.get_pool_free_space()
             counter += 1
+
+        self.log.info("Test passed")
