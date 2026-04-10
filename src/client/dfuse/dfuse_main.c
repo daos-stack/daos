@@ -13,6 +13,7 @@
 #include <fused/fuse.h>
 #include <fused/fuse_lowlevel.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <sys/types.h>
 #include <hwloc.h>
@@ -25,6 +26,7 @@
 #include <daos_fs.h>
 #include <daos_api.h>
 #include <daos_uns.h>
+#include <daos/common.h>
 
 #include <gurt/common.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
