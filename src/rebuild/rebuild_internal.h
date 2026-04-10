@@ -167,7 +167,8 @@ struct rebuild_global_pool_tracker {
 
 	uint32_t	rgt_opc;
 	unsigned int                    rgt_abort : 1, /* abort: kill rebuild */
-	    rgt_init_scan : 1, rgt_stop_admin : 1;     /* stop: admin has asked to kill rebuild */
+	    rgt_init_scan : 1, rgt_stop_admin : 1,     /* stop: admin has asked to kill rebuild */
+	    rgt_abort_by_newrb : 1;
 
 	uint32_t rgt_num_op_rb;            /* count of op:Rebuild attempts */
 	uint32_t rgt_num_op_freclaim;      /* count of op:Fail_reclaim attempts */
