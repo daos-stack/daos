@@ -2705,6 +2705,7 @@ rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
+	ds_pool_get(pool);
 	rpt->rt_pool = pool; /* pin it */
 	ABT_mutex_unlock(rpt->rt_lock);
 
