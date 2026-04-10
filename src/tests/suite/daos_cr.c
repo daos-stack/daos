@@ -4071,7 +4071,7 @@ cr_scan_cont_parallel(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	print_message("CR30: scan multiple containers in parallel\n");
+	print_message("CR32: scan multiple containers in parallel\n");
 
 	for (i = 0; i < 2; i++) {
 		rc = cr_pool_create(state, &pools[i], true, TCC_NONE);
@@ -4097,7 +4097,7 @@ cr_scan_cont_parallel(void **state)
 		actions[i] = TCA_INTERACT;
 	}
 
-	for (i = 0; i < 2; i++, once = false) {
+	for (i = 0, once = false; i < 2; i++) {
 again:
 		cr_pool_wait(1, &pools[i].pool_uuid, &dcis[i]);
 
