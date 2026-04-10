@@ -9,6 +9,10 @@
 !utils/build.config
 !utils/certs
 !utils/ci
+!ci/parse_ci_envs.sh
+!ci/rpm/install_deps.sh
+!ci/rpm/build_deps.sh
+!ci/rpm/build.sh
 !utils/completion
 !utils/config
 !utils/node_local_test.py

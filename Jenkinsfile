@@ -590,7 +590,9 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.7 '
+                                                ' --build-arg POINT_RELEASE=.7 ' +
+                                                ' --build-arg DAOS_DEPS_INSTALL=' + env.DAOS_RELVAL
+
                         }
                     }
                     steps {
