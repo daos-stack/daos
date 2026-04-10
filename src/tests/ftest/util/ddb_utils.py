@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
+import os
 from run_utils import run_remote
 
 
@@ -34,14 +34,17 @@ class DdbCommandBase(CommandWithParameters):
         # Write mode that's necessary for the commands that alters the data such as load.
         self.write_mode = FormattedParameter("-w", default=False, position=1)
 
+        # Used to place rm_pool before --db_path.
+        self.single_command_1 = BasicParameter(None, position=2)
+
         # Path to the system database. Used for MD-on-SSD.
-        self.db_path = BasicParameter(None, position=2)
+        self.db_path = FormattedParameter("--db_path {}", position=3)
 
         # VOS file path.
-        self.vos_path = FormattedParameter("--vos_path {}", position=3)
+        self.vos_path = FormattedParameter("--vos_path {}", position=4)
 
         # Command to run on the VOS file that contains container, object info, etc.
-        self.single_command = BasicParameter(None, position=4)
+        self.single_command_2 = BasicParameter(None, position=5)
 
         # Members needed for run().
         self.verbose = verbose
@@ -113,7 +116,7 @@ class DdbCommand(DdbCommandBase):
         if component_path:
             cmd.append(component_path)
         self.write_mode.value = False
-        self.single_command.value = " ".join(cmd)
+        self.single_command_2.value = " ".join(cmd)
 
         return self.run()
 
@@ -135,8 +138,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(
-            ["value_dump", component_path, out_file_path])
+        self.single_command_2.value = " ".join(["value_dump", component_path, out_file_path])
 
         return self.run()
 
@@ -157,8 +159,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.single_command.value = " ".join(
-            ["value_load", load_file_path, component_path])
+        self.single_command_2.value = " ".join(["value_load", load_file_path, component_path])
 
         return self.run()
 
@@ -174,7 +175,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.single_command.value = " ".join(["rm", component_path])
+        self.single_command_2.value = " ".join(["rm", component_path])
 
         return self.run()
 
@@ -190,7 +191,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["ilog_dump", component_path])
+        self.single_command_2.value = " ".join(["ilog_dump", component_path])
 
         return self.run()
 
@@ -206,7 +207,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["ilog_commit", component_path])
+        self.single_command_2.value = " ".join(["ilog_commit", component_path])
 
         return self.run()
 
@@ -222,7 +223,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["ilog_clear", component_path])
+        self.single_command_2.value = " ".join(["ilog_clear", component_path])
 
         return self.run()
 
@@ -238,7 +239,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["superblock_dump", component_path])
+        self.single_command_2.value = " ".join(["superblock_dump", component_path])
 
         return self.run()
 
@@ -266,7 +267,7 @@ class DdbCommand(DdbCommandBase):
             commands.append("-a")
         commands.append(component_path)
 
-        self.single_command.value = " ".join(commands)
+        self.single_command_2.value = " ".join(commands)
 
         return self.run()
 
@@ -282,7 +283,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.single_command.value = " ".join(["dtx_cmt_clear", component_path])
+        self.single_command_2.value = " ".join(["dtx_cmt_clear", component_path])
 
         return self.run()
 
@@ -299,7 +300,33 @@ class DdbCommand(DdbCommandBase):
             CommandResult: groups of command results from the same hosts with the same return status
         """
         self.vos_path.value = '""'
+        # "ddb prov_mem" takes db_path, but it doesn't use --db_path indicator, so set the member's
+        # value to None and set it to the cmd list. (db_path is a correct terminology according to
+        # the help doc.)
+        self.db_path.value = None
         cmd = ["prov_mem", db_path, tmpfs_mount]
-        self.single_command.value = " ".join(cmd)
+        self.single_command_2.value = " ".join(cmd)
+
+        return self.run()
+
+    def rm_pool(self, db_path, removing_path):
+        """Call ddb rm_pool --db_path <db_path> <removing_path>
+
+        Example:
+        ddb rm_pool --db_path /var/tmp/daos_testing/control_metadata/daos_control/engine1
+        /mnt/daos3/$POOL/rdb-pool
+
+        Args:
+            db_path (str): Path to the system database. e.g.,
+                /var/tmp/daos_testing/control_metadata/daos_control/engine0
+            removing_path (str): File path to remove.
+
+        Returns:
+            CommandResult: groups of command results from the same hosts with the same return status
+        """
+        self.vos_path.value = None
+        self.single_command_1.value = "rm_pool"
+        self.db_path.value = db_path
+        self.single_command_2.value = removing_path
 
         return self.run()
