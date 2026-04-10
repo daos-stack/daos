@@ -32,24 +32,30 @@ import (
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
-	Create       poolCreateCmd       `command:"create" description:"Create a DAOS pool"`
-	Destroy      poolDestroyCmd      `command:"destroy" description:"Destroy a DAOS pool"`
-	Evict        poolEvictCmd        `command:"evict" description:"Evict all pool connections to a DAOS pool"`
-	List         poolListCmd         `command:"list" alias:"ls" description:"List DAOS pools"`
-	Extend       poolExtendCmd       `command:"extend" description:"Extend a DAOS pool to include new ranks"`
-	Exclude      poolExcludeCmd      `command:"exclude" description:"Exclude targets from a set of ranks"`
-	Drain        poolDrainCmd        `command:"drain" description:"Drain targets from a set of ranks"`
-	Reintegrate  poolReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a set of rank"`
-	Query        poolQueryCmd        `command:"query" description:"Query a DAOS pool"`
-	QueryTargets poolQueryTargetsCmd `command:"query-targets" description:"Query pool target info"`
-	GetACL       poolGetACLCmd       `command:"get-acl" description:"Get a DAOS pool's Access Control List"`
-	OverwriteACL poolOverwriteACLCmd `command:"overwrite-acl" description:"Overwrite a DAOS pool's Access Control List"`
-	UpdateACL    poolUpdateACLCmd    `command:"update-acl" description:"Update entries in a DAOS pool's Access Control List"`
-	DeleteACL    poolDeleteACLCmd    `command:"delete-acl" description:"Delete an entry from a DAOS pool's Access Control List"`
-	SetProp      poolSetPropCmd      `command:"set-prop" description:"Set pool property"`
-	GetProp      poolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
-	Upgrade      poolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
-	Rebuild      poolRebuildCmd      `command:"rebuild" description:"Manage interactive rebuild process for pools"`
+	Create          poolCreateCmd          `command:"create" description:"Create a DAOS pool"`
+	Destroy         poolDestroyCmd         `command:"destroy" description:"Destroy a DAOS pool"`
+	Evict           poolEvictCmd           `command:"evict" description:"Evict all pool connections to a DAOS pool"`
+	List            poolListCmd            `command:"list" alias:"ls" description:"List DAOS pools"`
+	Extend          poolExtendCmd          `command:"extend" description:"Extend a DAOS pool to include new ranks"`
+	Exclude         poolExcludeCmd         `command:"exclude" description:"Exclude targets from a set of ranks"`
+	Drain           poolDrainCmd           `command:"drain" description:"Drain targets from a set of ranks"`
+	Reintegrate     poolReintegrateCmd     `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a set of rank"`
+	Query           poolQueryCmd           `command:"query" description:"Query a DAOS pool"`
+	QueryTargets    poolQueryTargetsCmd    `command:"query-targets" description:"Query pool target info"`
+	GetACL          poolGetACLCmd          `command:"get-acl" description:"Get a DAOS pool's Access Control List"`
+	OverwriteACL    poolOverwriteACLCmd    `command:"overwrite-acl" description:"Overwrite a DAOS pool's Access Control List"`
+	UpdateACL       poolUpdateACLCmd       `command:"update-acl" description:"Update entries in a DAOS pool's Access Control List"`
+	DeleteACL       poolDeleteACLCmd       `command:"delete-acl" description:"Delete an entry from a DAOS pool's Access Control List"`
+	SetProp         poolSetPropCmd         `command:"set-prop" description:"Set pool property"`
+	GetProp         poolGetPropCmd         `command:"get-prop" description:"Get pool properties"`
+	Upgrade         poolUpgradeCmd         `command:"upgrade" description:"Upgrade pool to latest format"`
+	Rebuild         poolRebuildCmd         `command:"rebuild" description:"Manage interactive rebuild process for pools"`
+	SetCert         poolSetCertCmd         `command:"set-cert" description:"Set pool node certificate CA"`
+	GetCert         poolGetCertCmd         `command:"get-cert" description:"Get pool node certificate CA info"`
+	DeleteCert      poolDeleteCertCmd      `command:"delete-cert" description:"Remove pool node certificate requirement"`
+	AddClient       poolAddClientCmd       `command:"add-client" description:"Generate client certificate for pool access"`
+	RevokeClient    poolRevokeClientCmd    `command:"revoke-client" description:"Revoke a node or tenant and issue a replacement certificate"`
+	ListRevocations poolListRevocationsCmd `command:"list-revocations" description:"List per-CN revocation watermarks on the pool"`
 }
 
 var (

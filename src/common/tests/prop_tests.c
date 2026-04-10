@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2020-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -491,6 +491,119 @@ test_daos_prop_valid_cont_success_no_val_check(void **state)
 	daos_prop_free(prop);
 }
 
+static void
+test_daos_prop_has_byteval_types(void **state)
+{
+	struct daos_prop_entry entry = {0};
+
+	entry.dpe_type = DAOS_PROP_PO_POOL_CA;
+	assert_true(daos_prop_has_byteval(&entry));
+
+	entry.dpe_type = DAOS_PROP_PO_CERT_WATERMARKS;
+	assert_true(daos_prop_has_byteval(&entry));
+
+	/* Non-byteval types must remain non-byteval. */
+	entry.dpe_type = DAOS_PROP_PO_LABEL;
+	assert_false(daos_prop_has_byteval(&entry));
+	entry.dpe_type = DAOS_PROP_PO_ACL;
+	assert_false(daos_prop_has_byteval(&entry));
+
+	/* And they must NOT also be advertised as ptr-typed: byteval has
+	 * its own copy/free path that owns the daos_prop_byteval wrapper. */
+	entry.dpe_type = DAOS_PROP_PO_POOL_CA;
+	assert_false(daos_prop_has_ptr(&entry));
+	entry.dpe_type = DAOS_PROP_PO_CERT_WATERMARKS;
+	assert_false(daos_prop_has_ptr(&entry));
+}
+
+/*
+ * The byteval tests below exercise byteval semantics, not any particular
+ * property's payload format. They use whichever prop types currently
+ * report has_byteval=true as fixtures; payloads are opaque bytes.
+ */
+
+static void
+test_daos_prop_byteval_set_round_trip(void **state)
+{
+	const uint8_t             payload[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03};
+	daos_prop_t              *prop;
+	struct daos_prop_entry   *entry;
+	struct daos_prop_byteval *bv;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_POOL_CA;
+
+	assert_rc_equal(daos_prop_set_byteval(prop, DAOS_PROP_PO_POOL_CA, payload, sizeof(payload)),
+			0);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_POOL_CA);
+	assert_non_null(entry);
+	bv = entry->dpe_val_ptr;
+	assert_non_null(bv);
+	assert_int_equal(bv->dpb_len, sizeof(payload));
+	assert_memory_equal(bv->dpb_data, payload, sizeof(payload));
+
+	daos_prop_free(prop);
+}
+
+static void
+test_daos_prop_byteval_oversize_rejected(void **state)
+{
+	struct daos_prop_entry entry = {0};
+	uint8_t               *blob;
+	size_t                 oversize;
+	int                    rc;
+
+	entry.dpe_type = DAOS_PROP_PO_POOL_CA;
+
+	oversize = (size_t)DAOS_PROP_BYTEVAL_MAX_LEN + 1;
+	D_ALLOC(blob, 16);
+	assert_non_null(blob);
+
+	rc = daos_prop_entry_set_byteval(&entry, blob, oversize);
+	assert_rc_equal(rc, -DER_INVAL);
+	assert_null(entry.dpe_val_ptr);
+
+	D_FREE(blob);
+}
+
+static void
+test_daos_prop_byteval_dup_preserves_value(void **state)
+{
+	const uint8_t             payload[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
+	daos_prop_t              *src;
+	daos_prop_t              *dst;
+	struct daos_prop_entry   *src_entry;
+	struct daos_prop_entry   *dst_entry;
+	struct daos_prop_byteval *src_bv;
+	struct daos_prop_byteval *dst_bv;
+
+	src = daos_prop_alloc(1);
+	assert_non_null(src);
+	src->dpp_entries[0].dpe_type = DAOS_PROP_PO_CERT_WATERMARKS;
+	assert_rc_equal(
+	    daos_prop_set_byteval(src, DAOS_PROP_PO_CERT_WATERMARKS, payload, sizeof(payload)), 0);
+
+	dst = daos_prop_dup(src, true /* pool */, false /* input */);
+	assert_non_null(dst);
+
+	src_entry = daos_prop_entry_get(src, DAOS_PROP_PO_CERT_WATERMARKS);
+	dst_entry = daos_prop_entry_get(dst, DAOS_PROP_PO_CERT_WATERMARKS);
+	assert_non_null(src_entry);
+	assert_non_null(dst_entry);
+
+	src_bv = src_entry->dpe_val_ptr;
+	dst_bv = dst_entry->dpe_val_ptr;
+	assert_non_null(dst_bv);
+	assert_ptr_not_equal(src_bv, dst_bv);
+	assert_int_equal(dst_bv->dpb_len, sizeof(payload));
+	assert_memory_equal(dst_bv->dpb_data, payload, sizeof(payload));
+
+	daos_prop_free(src);
+	daos_prop_free(dst);
+}
+
 static int
 suite_setup(void **state)
 {
@@ -521,6 +634,10 @@ main(void)
 	    cmocka_unit_test(test_daos_prop_valid_duplicate_types),
 	    cmocka_unit_test(test_daos_prop_valid_pool_success_no_val_check),
 	    cmocka_unit_test(test_daos_prop_valid_cont_success_no_val_check),
+	    cmocka_unit_test(test_daos_prop_has_byteval_types),
+	    cmocka_unit_test(test_daos_prop_byteval_set_round_trip),
+	    cmocka_unit_test(test_daos_prop_byteval_oversize_rejected),
+	    cmocka_unit_test(test_daos_prop_byteval_dup_preserves_value),
 	};
 
 	return cmocka_run_group_tests_name("common_prop", tests, suite_setup, suite_teardown);

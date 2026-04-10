@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,11 +38,27 @@ message Credential {
 	string origin = 3; // the agent that created this credential
 }
 
+// GetCredReq represents a request to fetch authentication credentials.
+//
+// Valid call shapes:
+//   - legacy: both fields empty (AUTH_SYS credential only, no PoP).
+//   - pool-scoped with PoP: pool_id set to the target pool UUID string
+//     and handle_uuid set to the 16-byte pool handle UUID the caller is
+//     about to open; the agent returns a PoP-signed bundle in the
+//     response.
+message GetCredReq {
+	string pool_id = 1;    // Pool UUID string (RFC-4122; empty for legacy/non-pool ops)
+	bytes handle_uuid = 2; // Pool handle UUID (16 bytes, for PoP binding)
+}
+
 // GetCredResp represents the result of a request to fetch authentication
 // credentials.
 message GetCredResp {
 	int32 status = 1; // Status of the request
 	Credential cred = 2; // Caller's authentication credential
+	bytes node_cert = 3;         // PEM-encoded node certificate (empty if none)
+	bytes node_cert_pop = 4;     // PoP signature bytes (empty if none)
+	bytes node_cert_payload = 5; // Signed PoP payload; see ValidateNodeCertReq for layout
 }
 
 // ValidateCredReq represents a request to verify a set of authentication
@@ -55,4 +72,26 @@ message ValidateCredReq {
 message ValidateCredResp {
 	int32 status = 1; // Status of the request
 	Token token = 2; // Validated authentication token from the credential
+}
+
+// ValidateNodeCertReq represents a request to validate a node certificate
+// and proof-of-possession for per-pool node authentication.
+message ValidateNodeCertReq {
+	bytes  pool_ca   = 1; // Concatenated PEM bundle of one or more pool intermediate CA certs
+	bytes  node_cert = 2; // PEM node certificate
+	bytes  node_cert_pop     = 3; // PoP signature
+	bytes  node_cert_payload = 4; // Signed PoP payload, 40 bytes: pool_uuid(16) ||
+				      // handle_uuid(16) || timestamp(8, big-endian seconds)
+	string pool_id      = 5;      // Pool UUID string (RFC-4122)
+	string machine_name = 6;      // Credential machine name for CN cross-validation
+	bytes  cert_watermarks =
+	    7; // Per-CN revocation watermarks, JSON blob: {"<cn>": "<rfc3339>"}. A cert whose
+	       // NotBefore is strictly less than the watermark for its CN is rejected.
+}
+
+// ValidateNodeCertResp represents the result of a node certificate
+// validation request.
+message ValidateNodeCertResp {
+	int32 status = 1;  // Status of the validation
+	string detail = 2; // Human-readable failure detail (empty on success)
 }

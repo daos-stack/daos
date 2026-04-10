@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -1118,6 +1119,20 @@ func (svc *mgmtSvc) PoolSetProp(parent context.Context, req *mgmtpb.PoolSetPropR
 		return nil, errors.New("PoolSetProp() request with 0 properties")
 	}
 
+	// DAOS_PROP_PO_POOL_CA and DAOS_PROP_PO_CERT_WATERMARKS are managed
+	// exclusively through PoolAddCA/PoolRemoveCA/PoolRevokeClient so that
+	// invariants (CA cert validity, watermark monotonicity) are enforced
+	// at this gRPC trust boundary rather than by client-side convention.
+	// Reject them here regardless of what prop name the client supplied.
+	for _, prop := range req.GetProperties() {
+		switch prop.GetNumber() {
+		case daos.PoolPropertyPoolCA:
+			return nil, errors.New("pool_ca must be set via PoolAddCA/PoolRemoveCA")
+		case daos.PoolPropertyCertWatermarks:
+			return nil, errors.New("cert_watermarks must be set via PoolRevokeClient")
+		}
+	}
+
 	miscProps := make([]*mgmtpb.PoolProperty, 0, len(req.GetProperties()))
 	for _, prop := range req.GetProperties() {
 		// Label is a special case, in that we need to ensure that it's unique
@@ -1181,6 +1196,242 @@ func (svc *mgmtSvc) PoolGetProp(ctx context.Context, req *mgmtpb.PoolGetPropReq)
 	}
 
 	return resp, nil
+}
+
+// readPoolProperty reads a single byte-array pool property through the
+// existing PoolGetProp dRPC path. Returns nil with no error when the
+// property is present but unset.
+func (svc *mgmtSvc) readPoolProperty(ctx context.Context, sys, id string, propNum uint32) ([]byte, error) {
+	getReq := &mgmtpb.PoolGetPropReq{
+		Sys: sys,
+		Id:  id,
+		Properties: []*mgmtpb.PoolProperty{
+			{Number: propNum},
+		},
+	}
+	dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolGetProp, getReq)
+	if err != nil {
+		return nil, err
+	}
+	getResp := new(mgmtpb.PoolGetPropResp)
+	if err := svc.unmarshalPB(dResp.Body, getResp); err != nil {
+		return nil, err
+	}
+	if getResp.GetStatus() != 0 {
+		return nil, errors.Errorf("PoolGetProp returned status %d", getResp.GetStatus())
+	}
+	for _, prop := range getResp.GetProperties() {
+		if prop.GetNumber() != propNum {
+			continue
+		}
+		return prop.GetByteval(), nil
+	}
+	return nil, nil
+}
+
+// writePoolByteProperty writes a single byte-array pool property through
+// the existing PoolSetProp dRPC path. The engine treats the payload as
+// opaque bytes; semantic invariants are enforced in the Go handler that
+// calls this helper.
+func (svc *mgmtSvc) writePoolByteProperty(ctx context.Context, sys, id string, propNum uint32, value []byte) error {
+	setReq := &mgmtpb.PoolSetPropReq{
+		Sys: sys,
+		Id:  id,
+		Properties: []*mgmtpb.PoolProperty{
+			{
+				Number: propNum,
+				Value:  &mgmtpb.PoolProperty_Byteval{Byteval: value},
+			},
+		},
+	}
+	dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolSetProp, setReq)
+	if err != nil {
+		return err
+	}
+	setResp := new(mgmtpb.PoolSetPropResp)
+	if err := svc.unmarshalPB(dResp.Body, setResp); err != nil {
+		return err
+	}
+	if setResp.GetStatus() != 0 {
+		return errors.Errorf("PoolSetProp returned status %d", setResp.GetStatus())
+	}
+	return nil
+}
+
+// poolCABundleMaxCerts is the maximum number of CA certificates a single
+// pool CA bundle may contain. Sized to comfortably cover a primary plus
+// one or two crossover CAs during rotation. The bundle is parsed
+// server-side on every POOL_CONNECT to validate the client node cert,
+// so unbounded growth turns into per-connect CPU cost. The per-write
+// wire-level byte cap is enforced by the engine
+// (DAOS_PROP_BYTEVAL_MAX_LEN); we deliberately do not redefine a byte
+// cap here to avoid two sources of truth that can drift apart.
+const poolCABundleMaxCerts = 8
+
+// PoolAddCA appends a CA certificate to the pool's CA bundle under the
+// pool lock, so that callers cannot bypass the CA-parseability check by
+// sending a raw PoolSetProp for DAOS_PROP_PO_POOL_CA.
+func (svc *mgmtSvc) PoolAddCA(parent context.Context, req *mgmtpb.PoolAddCAReq) (*mgmtpb.PoolAddCAResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	if len(req.GetCertPem()) == 0 {
+		return nil, errors.New("PoolAddCA: cert_pem is empty")
+	}
+
+	poolUUID, err := svc.resolvePoolID(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	cert, err := security.ParsePoolCACert(req.GetCertPem())
+	if err != nil {
+		return nil, errors.Wrap(err, "validating CA certificate")
+	}
+	if err := security.VerifyPoolCAChain(cert, svc.daosCARootPath); err != nil {
+		return nil, err
+	}
+
+	existing, err := svc.readPoolProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyPoolCA)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading current pool CA bundle")
+	}
+
+	if existingCount := security.CountPEMCerts(existing); existingCount+1 > poolCABundleMaxCerts {
+		return nil, errors.Errorf("pool CA bundle would exceed max cert count (%d > %d)",
+			existingCount+1, poolCABundleMaxCerts)
+	}
+
+	combined := make([]byte, 0, len(existing)+len(req.GetCertPem()))
+	combined = append(combined, existing...)
+	combined = append(combined, req.GetCertPem()...)
+
+	if err := svc.writePoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyPoolCA, combined); err != nil {
+		return nil, errors.Wrap(err, "writing pool CA bundle")
+	}
+
+	return &mgmtpb.PoolAddCAResp{}, nil
+}
+
+// PoolRemoveCA removes one or all CA certificates from the pool's CA
+// bundle. Called under the pool lock so add and remove cannot race.
+func (svc *mgmtSvc) PoolRemoveCA(parent context.Context, req *mgmtpb.PoolRemoveCAReq) (*mgmtpb.PoolRemoveCAResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	if req.GetAll() && req.GetFingerprint() != "" {
+		return nil, errors.New("PoolRemoveCA: specify all or fingerprint, not both")
+	}
+	if !req.GetAll() && req.GetFingerprint() == "" {
+		return nil, errors.New("PoolRemoveCA: specify fingerprint or all")
+	}
+
+	poolUUID, err := svc.resolvePoolID(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	if req.GetAll() {
+		if err := svc.writePoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyPoolCA, nil); err != nil {
+			return nil, errors.Wrap(err, "clearing pool CA bundle")
+		}
+		return &mgmtpb.PoolRemoveCAResp{}, nil
+	}
+
+	existing, err := svc.readPoolProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyPoolCA)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading current pool CA bundle")
+	}
+	if len(existing) == 0 {
+		return nil, errors.New("no pool CA configured")
+	}
+
+	remaining, removed, err := security.RemoveCertByFingerprint(existing, req.GetFingerprint())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := svc.writePoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyPoolCA, remaining); err != nil {
+		return nil, errors.Wrap(err, "writing updated pool CA bundle")
+	}
+
+	return &mgmtpb.PoolRemoveCAResp{CertsRemoved: int32(removed)}, nil
+}
+
+// PoolRevokeClient advances the per-CN cert revocation watermark under
+// the pool lock and returns the committed timestamp. The caller binds
+// the returned value into the replacement cert's NotBefore. The
+// monotonicity invariant ("a revocation never lowers any existing CN's
+// watermark") is enforced here — not in the control library — so a
+// hand-crafted gRPC request cannot silently un-revoke a cert.
+func (svc *mgmtSvc) PoolRevokeClient(parent context.Context, req *mgmtpb.PoolRevokeClientReq) (*mgmtpb.PoolRevokeClientResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	cn := req.GetCn()
+	if _, _, err := security.ValidatePoolCertCN(cn); err != nil {
+		return nil, errors.Wrap(err, "PoolRevokeClient")
+	}
+
+	poolUUID, err := svc.resolvePoolID(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	caBundle, err := svc.readPoolProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyPoolCA)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading pool CA bundle")
+	}
+	if len(caBundle) == 0 {
+		return nil, errors.New("pool has no CA configured; cannot revoke a client cert")
+	}
+
+	existingBytes, err := svc.readPoolProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCertWatermarks)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading current watermarks")
+	}
+
+	wm := make(security.CertWatermarks)
+	if len(existingBytes) > 0 {
+		wm, err = security.DecodeCertWatermarks(existingBytes)
+		if err != nil {
+			return nil, errors.Wrap(err, "decoding current watermarks")
+		}
+	}
+
+	committed := security.AdvanceCertWatermark(wm, cn, time.Now())
+	wm[cn] = committed
+
+	encoded, err := security.EncodeCertWatermarks(wm)
+	if err != nil {
+		return nil, errors.Wrap(err, "encoding updated watermarks")
+	}
+
+	if err := svc.writePoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCertWatermarks, encoded); err != nil {
+		return nil, errors.Wrap(err, "writing updated watermarks")
+	}
+
+	return &mgmtpb.PoolRevokeClientResp{
+		WatermarkRfc3339: committed.UTC().Format(time.RFC3339),
+	}, nil
 }
 
 // PoolGetACL forwards a request to the I/O Engine to fetch a pool's Access Control List

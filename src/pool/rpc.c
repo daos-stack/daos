@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,6 +82,7 @@ crt_proc_struct_pool_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
+CRT_RPC_DEFINE(pool_connect_v7, DAOS_ISEQ_POOL_CONNECT_V7, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT, DAOS_OSEQ_POOL_DISCONNECT)
 CRT_RPC_DEFINE(pool_query_v6, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V6)
@@ -220,6 +221,8 @@ static struct crt_proto_rpc_format pool_proto_rpc_fmt_v6[] = {POOL_PROTO_CLI_RPC
 								  POOL_PROTO_SRV_RPC_LIST(6)};
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v7[] = {POOL_PROTO_CLI_RPC_LIST(7)
 								  POOL_PROTO_SRV_RPC_LIST(7)};
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v8[] = {POOL_PROTO_CLI_RPC_LIST(8)
+								  POOL_PROTO_SRV_RPC_LIST(8)};
 
 #undef X
 
@@ -233,6 +236,12 @@ struct crt_proto_format pool_proto_fmt_v7 = {.cpf_name  = "pool",
 					     .cpf_ver   = 7,
 					     .cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v7),
 					     .cpf_prf   = pool_proto_rpc_fmt_v7,
+					     .cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)};
+
+struct crt_proto_format pool_proto_fmt_v8 = {.cpf_name  = "pool",
+					     .cpf_ver   = 8,
+					     .cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v8),
+					     .cpf_prf   = pool_proto_rpc_fmt_v8,
 					     .cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)};
 
 uint64_t
@@ -338,6 +347,12 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
 			bits |= DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE;
+			break;
+		case DAOS_PROP_PO_POOL_CA:
+			bits |= DAOS_PO_QUERY_PROP_POOL_CA;
+			break;
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			bits |= DAOS_PO_QUERY_PROP_CERT_WATERMARKS;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

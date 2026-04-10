@@ -494,6 +494,23 @@
    fun:racecall
 }
 {
+   go-tsan-metamap-getsync-releasestore-racecall
+   Memcheck:Value8
+   ...
+   fun:_ZN6__tsan7MetaMap7GetSyncEPNS_11ThreadStateEmmbb
+   fun:GetSyncOrCreate
+   fun:_ZN6__tsan12ReleaseStoreEPNS_11ThreadStateEmm
+   fun:racecall
+}
+{
+   go-tsan-getsyncifexists-acquire-racecall
+   Memcheck:Value8
+   fun:GetSync
+   fun:GetSyncIfExists
+   fun:_ZN6__tsan7AcquireEPNS_11ThreadStateEmm
+   fun:racecall
+}
+{
    FI leak 8
    Memcheck:Leak
    match-leak-kinds: reachable

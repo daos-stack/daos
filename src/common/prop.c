@@ -81,12 +81,11 @@ bool
 daos_prop_has_byteval(struct daos_prop_entry *entry)
 {
 	switch (entry->dpe_type) {
-	/*
-	 * e.g. DAOS_PROP_PO_POOL_CA (DAOS-18783)
-	 */
-	default:
-		return false;
+	case DAOS_PROP_PO_POOL_CA:
+	case DAOS_PROP_PO_CERT_WATERMARKS:
+		return true;
 	}
+	return false;
 }
 
 static void
@@ -455,6 +454,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_POOL_CA:
+			/* Optional string property, NULL or valid PEM */
+			break;
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			/* Opaque JSON blob; validation lives in the control plane */
+			break;
 		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
@@ -800,6 +805,11 @@ daos_prop_entry_set_byteval(struct daos_prop_entry *entry, const void *data, siz
 		D_ERROR("Entry type %d does not expect a byteval\n", entry->dpe_type);
 		return -DER_INVAL;
 	}
+	if (len > DAOS_PROP_BYTEVAL_MAX_LEN) {
+		D_ERROR("byteval prop %d len %zu exceeds max %u\n", entry->dpe_type, len,
+			DAOS_PROP_BYTEVAL_MAX_LEN);
+		return -DER_INVAL;
+	}
 
 	if (entry->dpe_val_ptr != NULL) {
 		bv = entry->dpe_val_ptr;
@@ -970,6 +980,10 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 
 			roots_alloc = true;
+		} else if (daos_prop_has_byteval(entry_reply)) {
+			rc = daos_prop_entry_copy(entry_reply, entry_req);
+			if (rc)
+				D_GOTO(out, rc);
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}

@@ -142,6 +142,51 @@ void   auth__credential__free_unpacked
   assert(message->base.descriptor == &auth__credential__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   auth__get_cred_req__init
+                     (Auth__GetCredReq         *message)
+{
+  static const Auth__GetCredReq init_value = AUTH__GET_CRED_REQ__INIT;
+  *message = init_value;
+}
+size_t auth__get_cred_req__get_packed_size
+                     (const Auth__GetCredReq *message)
+{
+  assert(message->base.descriptor == &auth__get_cred_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t auth__get_cred_req__pack
+                     (const Auth__GetCredReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &auth__get_cred_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t auth__get_cred_req__pack_to_buffer
+                     (const Auth__GetCredReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &auth__get_cred_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Auth__GetCredReq *
+       auth__get_cred_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Auth__GetCredReq *)
+     protobuf_c_message_unpack (&auth__get_cred_req__descriptor,
+                                allocator, len, data);
+}
+void   auth__get_cred_req__free_unpacked
+                     (Auth__GetCredReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &auth__get_cred_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   auth__get_cred_resp__init
                      (Auth__GetCredResp         *message)
 {
@@ -275,6 +320,96 @@ void   auth__validate_cred_resp__free_unpacked
   if(!message)
     return;
   assert(message->base.descriptor == &auth__validate_cred_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   auth__validate_node_cert_req__init
+                     (Auth__ValidateNodeCertReq         *message)
+{
+  static const Auth__ValidateNodeCertReq init_value = AUTH__VALIDATE_NODE_CERT_REQ__INIT;
+  *message = init_value;
+}
+size_t auth__validate_node_cert_req__get_packed_size
+                     (const Auth__ValidateNodeCertReq *message)
+{
+  assert(message->base.descriptor == &auth__validate_node_cert_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t auth__validate_node_cert_req__pack
+                     (const Auth__ValidateNodeCertReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &auth__validate_node_cert_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t auth__validate_node_cert_req__pack_to_buffer
+                     (const Auth__ValidateNodeCertReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &auth__validate_node_cert_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Auth__ValidateNodeCertReq *
+       auth__validate_node_cert_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Auth__ValidateNodeCertReq *)
+     protobuf_c_message_unpack (&auth__validate_node_cert_req__descriptor,
+                                allocator, len, data);
+}
+void   auth__validate_node_cert_req__free_unpacked
+                     (Auth__ValidateNodeCertReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &auth__validate_node_cert_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   auth__validate_node_cert_resp__init
+                     (Auth__ValidateNodeCertResp         *message)
+{
+  static const Auth__ValidateNodeCertResp init_value = AUTH__VALIDATE_NODE_CERT_RESP__INIT;
+  *message = init_value;
+}
+size_t auth__validate_node_cert_resp__get_packed_size
+                     (const Auth__ValidateNodeCertResp *message)
+{
+  assert(message->base.descriptor == &auth__validate_node_cert_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t auth__validate_node_cert_resp__pack
+                     (const Auth__ValidateNodeCertResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &auth__validate_node_cert_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t auth__validate_node_cert_resp__pack_to_buffer
+                     (const Auth__ValidateNodeCertResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &auth__validate_node_cert_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Auth__ValidateNodeCertResp *
+       auth__validate_node_cert_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Auth__ValidateNodeCertResp *)
+     protobuf_c_message_unpack (&auth__validate_node_cert_resp__descriptor,
+                                allocator, len, data);
+}
+void   auth__validate_node_cert_resp__free_unpacked
+                     (Auth__ValidateNodeCertResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &auth__validate_node_cert_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 static const ProtobufCFieldDescriptor auth__token__field_descriptors[2] =
@@ -495,7 +630,58 @@ const ProtobufCMessageDescriptor auth__credential__descriptor =
   (ProtobufCMessageInit) auth__credential__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor auth__get_cred_resp__field_descriptors[2] =
+static const ProtobufCFieldDescriptor auth__get_cred_req__field_descriptors[2] =
+{
+  {
+    "pool_id",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Auth__GetCredReq, pool_id),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "handle_uuid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__GetCredReq, handle_uuid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned auth__get_cred_req__field_indices_by_name[] = {
+  1,   /* field[1] = handle_uuid */
+  0,   /* field[0] = pool_id */
+};
+static const ProtobufCIntRange auth__get_cred_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor auth__get_cred_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "auth.GetCredReq",
+  "GetCredReq",
+  "Auth__GetCredReq",
+  "auth",
+  sizeof(Auth__GetCredReq),
+  2,
+  auth__get_cred_req__field_descriptors,
+  auth__get_cred_req__field_indices_by_name,
+  1,  auth__get_cred_req__number_ranges,
+  (ProtobufCMessageInit) auth__get_cred_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor auth__get_cred_resp__field_descriptors[5] =
 {
   {
     "status",
@@ -521,15 +707,54 @@ static const ProtobufCFieldDescriptor auth__get_cred_resp__field_descriptors[2] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "node_cert",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__GetCredResp, node_cert),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "node_cert_pop",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__GetCredResp, node_cert_pop),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "node_cert_payload",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__GetCredResp, node_cert_payload),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned auth__get_cred_resp__field_indices_by_name[] = {
   1,   /* field[1] = cred */
+  2,   /* field[2] = node_cert */
+  4,   /* field[4] = node_cert_payload */
+  3,   /* field[3] = node_cert_pop */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange auth__get_cred_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor auth__get_cred_resp__descriptor =
 {
@@ -539,7 +764,7 @@ const ProtobufCMessageDescriptor auth__get_cred_resp__descriptor =
   "Auth__GetCredResp",
   "auth",
   sizeof(Auth__GetCredResp),
-  2,
+  5,
   auth__get_cred_resp__field_descriptors,
   auth__get_cred_resp__field_indices_by_name,
   1,  auth__get_cred_resp__number_ranges,
@@ -633,6 +858,173 @@ const ProtobufCMessageDescriptor auth__validate_cred_resp__descriptor =
   auth__validate_cred_resp__field_indices_by_name,
   1,  auth__validate_cred_resp__number_ranges,
   (ProtobufCMessageInit) auth__validate_cred_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor auth__validate_node_cert_req__field_descriptors[7] =
+{
+  {
+    "pool_ca",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertReq, pool_ca),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "node_cert",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertReq, node_cert),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "node_cert_pop",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertReq, node_cert_pop),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "node_cert_payload",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertReq, node_cert_payload),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "pool_id",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertReq, pool_id),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "machine_name",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertReq, machine_name),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "cert_watermarks",
+    7,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertReq, cert_watermarks),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned auth__validate_node_cert_req__field_indices_by_name[] = {
+  6,   /* field[6] = cert_watermarks */
+  5,   /* field[5] = machine_name */
+  1,   /* field[1] = node_cert */
+  3,   /* field[3] = node_cert_payload */
+  2,   /* field[2] = node_cert_pop */
+  0,   /* field[0] = pool_ca */
+  4,   /* field[4] = pool_id */
+};
+static const ProtobufCIntRange auth__validate_node_cert_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 7 }
+};
+const ProtobufCMessageDescriptor auth__validate_node_cert_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "auth.ValidateNodeCertReq",
+  "ValidateNodeCertReq",
+  "Auth__ValidateNodeCertReq",
+  "auth",
+  sizeof(Auth__ValidateNodeCertReq),
+  7,
+  auth__validate_node_cert_req__field_descriptors,
+  auth__validate_node_cert_req__field_indices_by_name,
+  1,  auth__validate_node_cert_req__number_ranges,
+  (ProtobufCMessageInit) auth__validate_node_cert_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor auth__validate_node_cert_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "detail",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Auth__ValidateNodeCertResp, detail),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned auth__validate_node_cert_resp__field_indices_by_name[] = {
+  1,   /* field[1] = detail */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange auth__validate_node_cert_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor auth__validate_node_cert_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "auth.ValidateNodeCertResp",
+  "ValidateNodeCertResp",
+  "Auth__ValidateNodeCertResp",
+  "auth",
+  sizeof(Auth__ValidateNodeCertResp),
+  2,
+  auth__validate_node_cert_resp__field_descriptors,
+  auth__validate_node_cert_resp__field_indices_by_name,
+  1,  auth__validate_node_cert_resp__number_ranges,
+  (ProtobufCMessageInit) auth__validate_node_cert_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCEnumValue auth__flavor__enum_values_by_number[2] =

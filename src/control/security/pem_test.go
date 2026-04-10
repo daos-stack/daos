@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -204,6 +205,51 @@ func TestSecurity_Pem_ValidateCertDirectory(t *testing.T) {
 			err := ValidateCertDirectory(path)
 
 			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestSecurity_ValidatePoolCertCN(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cn         string
+		wantPrefix string
+		wantSuffix string
+		wantErr    string
+	}{
+		"node ok":             {cn: "node:host1", wantPrefix: "node:", wantSuffix: "host1"},
+		"tenant ok":           {cn: "tenant:teamA", wantPrefix: "tenant:", wantSuffix: "teamA"},
+		"fqdn ok":             {cn: "node:host1.example.com", wantPrefix: "node:", wantSuffix: "host1.example.com"},
+		"underscore ok":       {cn: "tenant:team_A", wantPrefix: "tenant:", wantSuffix: "team_A"},
+		"no prefix":           {cn: "host1", wantErr: "must start with"},
+		"empty suffix node":   {cn: "node:", wantErr: "empty suffix"},
+		"empty suffix tenant": {cn: "tenant:", wantErr: "empty suffix"},
+		"embedded null byte":  {cn: "node:host\x00evil", wantErr: "disallowed character"},
+		"embedded newline":    {cn: "node:host\nhostile", wantErr: "disallowed character"},
+		"embedded colon":      {cn: "node:admin:bypass", wantErr: "disallowed character"},
+		"space rejected":      {cn: "node:host one", wantErr: "disallowed character"},
+		"too long": {
+			cn:      "node:" + strings.Repeat("a", CertCNSuffixMaxLen+1),
+			wantErr: "exceeds max length",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			prefix, suffix, err := ValidatePoolCertCN(tc.cn)
+			if tc.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+				}
+				if !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("expected error containing %q, got %q", tc.wantErr, err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if prefix != tc.wantPrefix || suffix != tc.wantSuffix {
+				t.Fatalf("got (%q, %q), want (%q, %q)",
+					prefix, suffix, tc.wantPrefix, tc.wantSuffix)
+			}
 		})
 	}
 }

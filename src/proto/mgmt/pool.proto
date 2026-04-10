@@ -380,3 +380,62 @@ message PoolSelfHealEvalReq
 }
 
 // PoolSelfHealEval uses DaosResp
+
+// PoolAddCAReq appends a PEM-encoded intermediate CA certificate to the
+// pool's CA bundle (DAOS_PROP_PO_POOL_CA). The server performs the
+// read-modify-write under the pool lock so the bundle cannot be set
+// directly via the generic PoolSetProp RPC.
+message PoolAddCAReq
+{
+	string          sys       = 1; // DAOS system identifier
+	string          id        = 2; // pool UUID or label
+	bytes           cert_pem  = 3; // PEM-encoded CA cert to append to the bundle
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
+}
+
+// PoolAddCAResp is the result of a PoolAddCA operation.
+message PoolAddCAResp
+{
+	int32 status = 1; // DAOS error code
+}
+
+// PoolRemoveCAReq removes CA certificates from the pool's CA bundle.
+// If 'all' is true, the bundle is cleared (disabling cert auth); otherwise
+// fingerprint must name a SHA-256 hex digest matching exactly one CA.
+message PoolRemoveCAReq
+{
+	string          sys         = 1; // DAOS system identifier
+	string          id          = 2; // pool UUID or label
+	string          fingerprint = 3; // hex-encoded SHA-256 of CA cert to remove
+	bool            all         = 4; // if true, remove every CA in the bundle
+	repeated uint32 svc_ranks   = 5; // List of pool service ranks
+}
+
+// PoolRemoveCAResp is the result of a PoolRemoveCA operation.
+message PoolRemoveCAResp
+{
+	int32 status        = 1; // DAOS error code
+	int32 certs_removed = 2; // number of CAs removed from the bundle
+}
+
+// PoolRevokeClientReq atomically advances the per-CN revocation
+// watermark for the given pool and returns the committed watermark.
+// The caller binds the returned timestamp into the NotBefore of the
+// replacement cert it issues. Monotonicity of DAOS_PROP_PO_CERT_WATERMARKS
+// is enforced in the server-side handler, not the client library.
+message PoolRevokeClientReq
+{
+	string          sys       = 1; // DAOS system identifier
+	string          id        = 2; // pool UUID or label
+	string          cn        = 3; // full CN including the node: or tenant: prefix
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
+}
+
+// PoolRevokeClientResp carries the committed watermark for the target CN.
+message PoolRevokeClientResp
+{
+	int32  status = 1; // DAOS error code
+	// RFC3339 UTC watermark now in effect for the revoked CN. Certs whose
+	// NotBefore is strictly less than this timestamp are refused.
+	string watermark_rfc3339 = 2;
+}

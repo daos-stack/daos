@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -110,6 +111,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	secCfg := &securityConfig{
 		transport:   cmd.cfg.TransportConfig,
 		credentials: cmd.cfg.CredentialConfig,
+		nodeCertDir: cmd.cfg.NodeCertDir,
 	}
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
 	mgmtMod := &mgmtModule{

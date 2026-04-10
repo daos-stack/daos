@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,8 +21,10 @@ import (
 )
 
 const (
-	certDir              = "/etc/daos/certs/"
-	defaultCACert        = certDir + "daosCA.crt"
+	certDir = "/etc/daos/certs/"
+	// DefaultCACertPath is the default path to the DAOS CA certificate.
+	DefaultCACertPath    = certDir + "daosCA.crt"
+	defaultCACert        = DefaultCACertPath
 	defaultServerCert    = certDir + "server.crt"
 	defaultServerKey     = certDir + "server.key"
 	defaultAdminCert     = certDir + "admin.crt"
@@ -101,8 +104,9 @@ type CredentialConfig struct {
 // TransportConfig contains all the information on whether or not to use
 // certificates and their location if their use is specified.
 type TransportConfig struct {
-	AllowInsecure     bool `yaml:"allow_insecure"`
-	CertificateConfig `yaml:",inline"`
+	AllowInsecure        bool          `yaml:"allow_insecure"`
+	PoolCertMaxClockSkew time.Duration `yaml:"pool_cert_max_clock_skew,omitempty"`
+	CertificateConfig    `yaml:",inline"`
 }
 
 func (tc *TransportConfig) String() string {

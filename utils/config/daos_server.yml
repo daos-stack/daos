@@ -1,3 +1,7 @@
+## (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+##
+## SPDX-License-Identifier: BSD-2-Clause-Patent
+##
 ## DAOS server configuration file.
 #
 ## Location of this configuration file is determined by first checking for the
@@ -85,6 +89,9 @@
 #  cert: /etc/daos/certs/server.crt
 #  # Key portion of Server Certificate
 #  key: /etc/daos/certs/server.key
+#  # Maximum allowed clock skew for pool node certificate PoP timestamps.
+#  # Default: 5m
+#  pool_cert_max_clock_skew: 5m
 #
 #
 ## Fault domain path

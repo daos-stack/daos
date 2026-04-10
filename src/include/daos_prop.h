@@ -140,6 +140,23 @@ enum daos_pool_props {
 	DAOS_PROP_PO_SVC_OPS_ENABLED,
 	/** Metadata duplicate operations SVC_OPS KVS max entry age (seconds), default 300 */
 	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
+	/**
+	 * Pool node certificate CA.
+	 * PEM-encoded intermediate CA certificate for per-pool node authentication.
+	 * When set, only nodes with a certificate signed by this CA can connect.
+	 * default = empty (no node certificate required)
+	 */
+	DAOS_PROP_PO_POOL_CA,
+	/**
+	 * Per-CN certificate revocation watermarks.
+	 * Opaque JSON blob of the form {"<cn>": "<rfc3339>"} managed by the
+	 * control plane. Consulted during node certificate validation: a cert
+	 * whose NotBefore is strictly less than the watermark for its CN is
+	 * rejected. The engine stores and ships the blob verbatim; all parsing
+	 * and comparisons happen in the control plane.
+	 * default = empty (no revocations)
+	 */
+	DAOS_PROP_PO_CERT_WATERMARKS,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -152,6 +169,14 @@ struct daos_prop_byteval {
 	/** Length of data */
 	size_t dpb_len;
 };
+
+/**
+ * Hard cap on a single byteval property value's length on the wire and
+ * in memory. Bounds memory allocation during decode so the value cannot
+ * be used as a DoS vector; individual properties may impose tighter,
+ * use-case-specific limits at the trust boundary above.
+ */
+#define DAOS_PROP_BYTEVAL_MAX_LEN       (1U << 20)
 
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
