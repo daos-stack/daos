@@ -142,6 +142,9 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+        # Option to format storage when starting the servers. Defaults to True.
+        self._format_storage_on_start = True
+
     @property
     def engines(self):
         """Get the total number of engines.
@@ -181,6 +184,20 @@ class DaosServerManager(SubprocessManager):
 
         """
         return self.get_host_ranks(self.management_service_hosts)
+
+    @property
+    def format_storage_on_start(self):
+        """Whether or not to format storage when starting the servers."""
+        return self._format_storage_on_start
+
+    @format_storage_on_start.setter
+    def format_storage_on_start(self, value):
+        """Set whether or not to format storage when starting the servers.
+
+        Args:
+            value (bool): whether or not to format storage when starting the servers
+        """
+        self._format_storage_on_start = value
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -490,6 +507,23 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Failed to start servers before format: {}".format(error)) from error
 
+    def detect_no_format_start(self):
+        """Detect when all the daos_servers have started without formatting storage.
+
+        Raises:
+            ServerFailed: if there was an error starting the servers.
+
+        """
+        self.log.info("<SERVER> Waiting for servers to start w/o storage format")
+        self.manager.job.update_pattern("normal", len(self._hosts))
+        try:
+            self.manager.run()
+        except CommandFailure as error:
+            self.manager.kill()
+            raise ServerFailed(
+                "Failed to start servers w/o storage format: {}".format(error)) from error
+        return True
+
     def detect_engine_start(self, hosts_qty=None):
         """Detect when all the engines have started.
 
@@ -659,6 +693,10 @@ class DaosServerManager(SubprocessManager):
         """Start the server through the job manager."""
         # Prepare the servers
         self.prepare()
+
+        if not self.format_storage_on_start:
+            self.detect_no_format_start()
+            return True
 
         # Start the servers and wait for them to be ready for storage format
         self.detect_format_ready()
