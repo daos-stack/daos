@@ -620,7 +620,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	crt_setup_log_fac();
 
-	D_INFO("libcart (%s) v%s initializing\n", server ? "server" : "client", CART_VERSION);
+	D_INFO("custom libcart (%s) v%s initializing\n", server ? "server" : "client",
+	       CART_VERSION);
 	crt_env_init();
 
 	if (opt != NULL)
