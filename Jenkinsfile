@@ -93,7 +93,7 @@ pipeline {
                defaultValue: 'ofi+tcp',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
         string(name: 'TestProviderUCX',
-               defaultValue: 'ucx+ud_x',
+               defaultValue: 'ucx+dc_x',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
