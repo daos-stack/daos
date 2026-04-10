@@ -3030,12 +3030,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	D_DEBUG(DB_IO,
-		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_X64", pmv %u/%u dti "DF_DTI" layout %u.\n",
-		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
-		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti), ioc.ioc_layout_ver);
+		DF_CONT "rpc %p opc %d oid " DF_UOID " dkey " DF_KEY " tag/xs %d/%d epc " DF_X64
+			", pmv %u/%u dti " DF_DTI " layout %u.\n",
+		DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid), rpc, opc, DP_UOID(orw->orw_oid),
+		DP_KEY(&orw->orw_dkey), dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id, orw->orw_epoch, orw->orw_map_ver, ioc.ioc_map_ver,
+		DP_DTI(&orw->orw_dti), ioc.ioc_layout_ver);
 
 	if (obj_rpc_is_fetch(rpc) && !(orw->orw_flags & ORF_EC_RECOV) &&
 	    (orw->orw_epoch != 0 && orw->orw_epoch != DAOS_EPOCH_MAX))
