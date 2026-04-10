@@ -175,7 +175,6 @@ struct ds_pool_child {
 	d_list_t		spc_cont_list;
 	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
-	uint64_t                 spc_rebuild_start;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
