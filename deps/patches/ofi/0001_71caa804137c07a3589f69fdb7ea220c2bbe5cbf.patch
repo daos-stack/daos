@@ -1,0 +1,54 @@
+diff --git a/prov/opx/include/fi_opx_tid_cache.h b/prov/opx/include/fi_opx_tid_cache.h
+index de2e30043..0b9d2a90b 100644
+--- a/prov/opx/include/fi_opx_tid_cache.h
++++ b/prov/opx/include/fi_opx_tid_cache.h
+@@ -49,8 +49,8 @@
+ int opx_tid_cache_setup(struct ofi_mr_cache **cache,
+ 			struct opx_tid_domain *domain);
+ 
+-int opx_tid_cache_add_abort();
+-void opx_tid_cache_delete_abort();
++int opx_tid_cache_add_abort(struct ofi_mr_cache *cache, struct ofi_mr_entry *entry);
++void opx_tid_cache_delete_abort(struct ofi_mr_cache *cache, struct ofi_mr_entry *entry);
+ 
+ enum opx_tid_cache_entry_status {
+ 	OPX_TID_CACHE_ENTRY_NOT_FOUND = 0,
+diff --git a/prov/opx/include/rdma/opx/fi_opx.h b/prov/opx/include/rdma/opx/fi_opx.h
+index 1b344d23a..5a634f773 100644
+--- a/prov/opx/include/rdma/opx/fi_opx.h
++++ b/prov/opx/include/rdma/opx/fi_opx.h
+@@ -271,7 +271,7 @@ static inline void always_assert (bool val, char *msg)
+ // Useful for checking that structures are the correct size and other
+ // compile-time tests. static_assert has existed since C11 so this
+ // should be safe, but we have an else clause just in case.
+-#if defined(static_assert)
++#if __STDC_VERSION__ >= 201112L
+ #define OPX_COMPILE_TIME_ASSERT(cond, msg) static_assert(cond,msg)
+ #else
+ #define OPX_COMPILE_TIME_ASSERT(cond, msg) if(0){switch(0){case 0:case cond:;}}
+diff --git a/prov/opx/src/fi_opx_tid_cache.c b/prov/opx/src/fi_opx_tid_cache.c
+index 660607114..7892fb0d5 100644
+--- a/prov/opx/src/fi_opx_tid_cache.c
++++ b/prov/opx/src/fi_opx_tid_cache.c
+@@ -2059,13 +2059,19 @@ void opx_tid_cache_cleanup(struct ofi_mr_cache *cache)
+ 	assert(cache->uncached_size == 0);
+ }
+ 
+-int opx_tid_cache_add_abort(){
++int opx_tid_cache_add_abort(struct ofi_mr_cache *cache, struct ofi_mr_entry *entry)
++{
++	OFI_UNUSED(cache);
++	OFI_UNUSED(entry);
+ 	fprintf(stderr, "%s unexpected function call\n", __func__);
+ 	abort();
+ 	return 0;
+ }
+ 
+-void opx_tid_cache_delete_abort(){
++void opx_tid_cache_delete_abort(struct ofi_mr_cache *cache, struct ofi_mr_entry *entry)
++{
++	OFI_UNUSED(cache);
++	OFI_UNUSED(entry);
+ 	fprintf(stderr, "%s unexpected function call\n", __func__);
+ 	abort();
+ }
