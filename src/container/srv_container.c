@@ -6138,6 +6138,11 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
+	if (prop == NULL || prop->dpp_nr == 0) {
+		D_ERROR(DF_CONT ": ds_cont_get_prop returned empty prop ptr=%p\n",
+			DP_CONT(pool_uuid, cont_uuid), prop);
+	}
+
 	D_ASSERT(prop != NULL);
 	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
 
