@@ -204,4 +204,31 @@ if ! OFI_INTERFACE=eth0 timeout -k 30 300 daos_test -m; then
     timeout -k 30 120 cat <&"${SERVER[0]}"
     exit "$rc"
 fi
+
+sudo $YUM -y remove daos-client daos-server
+if rpm -q daos-client; then
+  echo "Failed to remove daos-client RPM"
+  exit 1
+fi
+if rpm -q daos-server; then
+  echo "Failed to remove daos-server RPM"
+  exit 1
+fi
+if [ ! -f /etc/daos/daos_agent.yml ]; then
+    echo "Modified daos_agent.yml config file should have been removed with RPM removal"
+    exit 1
+fi
+if [ ! -f /etc/daos/daos_control.yml ]; then
+    echo "Modified daos_control.yml config file should have been removed with RPM removal"
+    exit 1
+fi
+if [ ! -f /etc/daos/daos_server.yml ]; then
+  echo "Modified daos_server.yml config file should have been removed with RPM removal"
+  exit 1
+fi
+if [ -f /etc/daos/vos_size_input.yaml ]; then
+  echo "Unmodified vos_size_input.yaml config file should have been removed with RPM removal"
+  exit 1
+fi
+
 exit 0
