@@ -370,11 +370,14 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
+        booleanParam(name: 'CI_medium_ucx_provider_md_on_ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium UCX Provider MD on SSD test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: false,
                      description: 'Run the Functional Hardware Large test stage')
@@ -1188,6 +1191,19 @@ pipeline {
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                            run_if_pr: false,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium UCX Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX Provider MD on SSD',
+                            pragma_suffix: '-hw-medium-ucx-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            next_version: next_version(),
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto_md_on_ssd',
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
                             run_if_landing: false,
