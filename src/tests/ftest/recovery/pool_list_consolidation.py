@@ -22,6 +22,11 @@ class PoolListConsolidationTest(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a DdbTest object."""
+        super().__init__(*args, **kwargs)
+        self.tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
+
     def chk_dist_checker(self, inconsistency, policies=None):
         """Run DAOS checker with kinds of options.
 
@@ -100,6 +105,17 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.check_disable()
 
         return errors
+
+    def run_cmd_check_result(self, command):
+        """Run given command as root and check its result.
+
+        Args:
+            command (str): Command to execute.
+        """
+        command_root = command_as_user(command=command, user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+        if not result.passed:
+            self.fail(f"{command} failed on {result.failed_hosts}!")
 
     def test_dangling_pool(self):
         """Test dangling pool.
@@ -317,17 +333,16 @@ class PoolListConsolidationTest(TestWithServers):
 
             # Create the map of original mount points to the new mount points where the pool will be
             # loaded.
-            tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
             orig_load_mount = {}
             for i, engine_params in enumerate(
                     self.server_managers[0].manager.job.yaml.engine_params):
                 scm_mount = engine_params.get_value('scm_mount')
-                orig_load_mount[scm_mount] = tmpfs_mounts[i]
+                orig_load_mount[scm_mount] = self.tmpfs_mounts[i]
             self.log.info("orig_load_mount = %s", orig_load_mount)
 
             # When we call rm_pool, we need to know the right --db_path value for a given rdb-pool
             # path to remove, so prepare an intermediate dictionary.
-            mount_to_db_path = {tmpfs_mounts[0]: db_path_0, tmpfs_mounts[1]: db_path_1}
+            mount_to_db_path = {self.tmpfs_mounts[0]: db_path_0, self.tmpfs_mounts[1]: db_path_1}
             self.log.info("mount_to_db_path = %s", mount_to_db_path)
 
             # This is where we store the new rdb-pool paths in the loaded dir. e.g.,
@@ -376,8 +391,8 @@ class PoolListConsolidationTest(TestWithServers):
                 # We need to call ddb prov_mem for all servers, so use new DdbCommand object with
                 # each host.
                 ddb_command = DdbCommand(server_host=host, path=self.bin, vos_path='""')
-                ddb_command.prov_mem(db_path=db_path_0, tmpfs_mount=tmpfs_mounts[0])
-                ddb_command.prov_mem(db_path=db_path_1, tmpfs_mount=tmpfs_mounts[1])
+                ddb_command.prov_mem(db_path=db_path_0, tmpfs_mount=self.tmpfs_mounts[0])
+                ddb_command.prov_mem(db_path=db_path_1, tmpfs_mount=self.tmpfs_mounts[1])
 
             self.log_step("Remove rdb-pool from 2 out of 3 ranks from /mnt/daos2 and /mnt/daos3")
             count = 0
@@ -462,6 +477,12 @@ class PoolListConsolidationTest(TestWithServers):
         self.log.info("rdb-pool count = %d", count)
         if count != 3:
             errors.append(f"Unexpected number of rdb-pool after repair! - {count} ranks")
+
+        if md_on_ssd:
+            self.log_step(f"MD-on-SSD: Clean {self.tmpfs_mounts} on {self.hostlist_servers}")
+            for tmpfs_mount in self.tmpfs_mounts:
+                self.run_cmd_check_result(command=f"umount {tmpfs_mount}")
+                self.run_cmd_check_result(command=f"rm -rf {tmpfs_mount}")
 
         report_errors(test=self, errors=errors)
 
