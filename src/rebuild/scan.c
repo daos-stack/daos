@@ -1336,10 +1336,10 @@ out:
 	if (rc != 0) {
 		if (tls && tls->rebuild_pool_status == 0)
 			tls->rebuild_pool_status = rc;
-		if (pool)
-			atomic_fetch_sub(&pool->sp_rebuilding, 1);
 		if (rpt)
 			rpt_delete(rpt);
+		else if (pool) /* otherwise rpt_put() will decrease this for me */
+			atomic_fetch_sub(&pool->sp_rebuilding, 1);
 	}
 	if (pool)
 		ds_pool_put(pool);
