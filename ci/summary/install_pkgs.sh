@@ -53,11 +53,11 @@ distro="${1:-el8}"
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 files=("$mydir/../parse_ci_envs.sh")
-files+=("$mydir/../provision/post_provision_config_common_functions.sh")
+files+=("$mydir/../provisioning/post_provision_config_common_functions.sh")
 
 ls -al ${mydir} || true
 ls -al ${mydir}/../ || true
-ls -al ${mydir}/../provision/ || true
+ls -al ${mydir}/../provisioning/ || true
 
 for src_file in "${files[@]}"; do
     if [ -e "${src_file}" ]; then
