@@ -28,7 +28,7 @@ class AggregationPunching(MdtestBase):
             Enable the aggregation run and verify the space is reclaimed.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=aggregation,mdtest,mdtest
         :avocado: tags=AggregationPunching,aggregatepunching,test_aggregation_punching
         """

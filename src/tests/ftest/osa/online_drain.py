@@ -182,7 +182,7 @@ class OSAOnlineDrain(OSAUtils):
         running during the testing.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_mdtest
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain_mdtest

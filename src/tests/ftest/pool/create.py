@@ -72,7 +72,7 @@ class PoolCreateTests(TestWithServers):
             any subtle/low capacity space being lost with each failed create.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateTests,test_create_no_space_loop
         """

@@ -44,7 +44,7 @@ class SnapshotAggregation(IorTestBase):
             capacity by half.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=container,snap
         :avocado: tags=SnapshotAggregation,test_snapshot_aggregation
         """
