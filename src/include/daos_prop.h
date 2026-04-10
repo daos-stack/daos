@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,7 +38,7 @@ enum daos_pool_props {
 	DAOS_PROP_PO_ACL,
 	/**
 	 * Reserve space ratio: amount of space to be reserved on each target
-	 * for rebuild purpose. default = 0%.
+	 * for rebuild purpose. default = 5%.
 	 */
 	DAOS_PROP_PO_SPACE_RB,
 	/**
