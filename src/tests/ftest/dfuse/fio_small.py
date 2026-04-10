@@ -40,16 +40,19 @@ class FioSmall(FioBase):
             start_dfuse(self, dfuse, pool, container)
             self.fio_cmd.update_directory(dfuse.mount_dir.value)
 
-            # Run with various fio parameters
-            for variant in self.params.get("variants", '/run/fio/global/*'):
-                self.log_step(
-                    f'Run fio with direct={variant[0]}, blocksize={variant[1]}, '
-                    f'size={variant[2]}, rw={variant[3]}')
-                self.fio_cmd.update('global', 'direct', variant[0], 'global.direct')
-                self.fio_cmd.update('global', 'blocksize', variant[1], 'global.blocksize')
-                self.fio_cmd.update('global', 'size', variant[2], 'global.size')
-                self.fio_cmd.update('global', 'rw', variant[3], 'global.rw')
-                self.execute_fio()
+            # # Run with various fio parameters
+            # for variant in self.params.get("variants", '/run/fio/global/*'):
+            #     self.log_step(
+            #         f'Run fio with direct={variant[0]}, blocksize={variant[1]}, '
+            #         f'size={variant[2]}, rw={variant[3]}')
+            #     self.fio_cmd.update('global', 'direct', variant[0], 'global.direct')
+            #     self.fio_cmd.update('global', 'blocksize', variant[1], 'global.blocksize')
+            #     self.fio_cmd.update('global', 'size', variant[2], 'global.size')
+            #     self.fio_cmd.update('global', 'rw', variant[3], 'global.rw')
+            #     self.execute_fio()
+
+            self.log_step('Run fio')
+            self.execute_fio()
 
             self.log_step('Stop dfuse and destroy container')
             dfuse.stop()

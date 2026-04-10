@@ -33,7 +33,14 @@ container:
 fio:
   names:
     - global
-    - test
+    - variant1
+    - variant2
+    - variant3
+    - variant4
+    - variant5
+    - variant6
+    - variant7
+    - variant8
   global:
     ioengine: 'libaio'
     thread: 1
@@ -50,8 +57,54 @@ fio:
       - [1, 256B, 1M, randrw]
       - [1, 1M,   2G, rw]
       - [1, 1M,   2G, randrw]
-  test:
+  variant1:
     numjobs: 1
+    direct: 0
+    blocksize: 256B
+    size: 1M
+    rq: rw
+  variant2:
+    numjobs: 1
+    direct: 0
+    blocksize: 256B
+    size: 1M
+    rq: randrw
+  variant3:
+    numjobs: 1
+    direct: 0
+    blocksize: 1M
+    size: 2G
+    rq: rw
+  variant4:
+    numjobs: 1
+    direct: 0
+    blocksize: 1M
+    size: 2G
+    rq: randrw
+  variant5:
+    numjobs: 1
+    direct: 1
+    blocksize: 256B
+    size: 1M
+    rq: rw
+  variant6:
+    numjobs: 1
+    direct: 1
+    blocksize: 256B
+    size: 1M
+    rq: randrw
+  variant7:
+    numjobs: 1
+    direct: 1
+    blocksize: 1M
+    size: 2G
+    rq: rw
+  variant8:
+    numjobs: 1
+    direct: 1
+    blocksize: 1M
+    size: 2G
+    rq: randrw
 
 dfuse:
   thread_count: 8
