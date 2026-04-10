@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -46,6 +47,10 @@ const (
 
 	// maxLineChars is the maximum number of chars per line in a formatted byte string.
 	maxLineChars = 32
+
+	// defaultEngineAutoRestartMinDelay is the minimum number of seconds between automatic engine
+	// restarts that are triggered when engine_self_terminated RAS events are received.
+	defaultEngineAutoRestartMinDelay = 300 // 5 minutes
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -769,14 +774,126 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 	})
 }
 
-// registerFollowerSubscriptions stops handling received forwarded (in addition
-// to local) events and starts forwarding events to the new MS leader.
-// Log events on the host that they were raised (and first published) on.
-// This is the initial behavior before leadership has been determined.
-func registerFollowerSubscriptions(srv *server) {
+// Handle local engine self termination and restart engine to rejoin system.
+func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RASEvent) error {
+
+	srv.log.Tracef("handling engine self termination")
+
+	// Check if automatic restart is disabled
+	if srv.cfg.DisableEngineAutoRestart {
+		srv.log.Debugf("automatic engine restart disabled by configuration")
+		return nil
+	}
+
+	ts, err := evt.GetTimestamp()
+	if err != nil {
+		return errors.Wrapf(err, "bad event timestamp %q", evt.Timestamp)
+	}
+
+	// Find the engine instance by rank
+	instances, err := srv.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", evt.Rank))
+	if err != nil {
+		return errors.Wrapf(err, "failed to find instance for rank %d", evt.Rank)
+	}
+
+	if len(instances) == 0 {
+		return errors.Errorf("no instance found for rank %d", evt.Rank)
+	}
+	if len(instances) > 1 {
+		return errors.Errorf("multiple instances found for rank %d", evt.Rank)
+	}
+	engine := instances[0]
+
+	srv.log.Noticef("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts, evt.Hostname,
+		evt.Rank, evt.Incarnation, engine.Index())
+
+	// Check if rank can be restarted based on rate limiting
+	minDelay := defaultEngineAutoRestartMinDelay
+	if srv.cfg.EngineAutoRestartMinDelay > 0 {
+		minDelay = srv.cfg.EngineAutoRestartMinDelay
+	}
+	minDelayDuration := time.Duration(minDelay) * time.Second
+
+	srv.rankRestartMu.Lock()
+	lastRestart, hasRestarted := srv.rankRestartTimes[evt.Rank]
+	now := time.Now()
+
+	if hasRestarted {
+		elapsed := now.Sub(lastRestart)
+		if elapsed < minDelayDuration {
+			remaining := minDelayDuration - elapsed
+
+			// Cancel any existing pending restart timer for this rank
+			if existingTimer, exists := srv.rankRestartPending[evt.Rank]; exists {
+				existingTimer.Stop()
+			}
+
+			// Schedule deferred restart after remaining delay
+			srv.rankRestartPending[evt.Rank] = time.AfterFunc(remaining, func() {
+				srv.log.Noticef("deferred restart triggered for rank %d (instance %d) after rate-limit delay",
+					evt.Rank, engine.Index())
+
+				// Wait until engine is stopped
+				pollFn := func(e Engine) bool { return !e.IsStarted() }
+				if err := pollInstanceState(ctx, instances, pollFn); err != nil {
+					srv.log.Errorf("rank %d (instance %d) did not stop before deferred restart",
+						evt.Rank, engine.Index())
+					srv.rankRestartMu.Lock()
+					delete(srv.rankRestartPending, evt.Rank)
+					srv.rankRestartMu.Unlock()
+					return
+				}
+
+				srv.log.Noticef("restarting rank %d (instance %d) after rate-limit delay", evt.Rank, engine.Index())
+				engine.requestStart(ctx)
+
+				// Update restart time and clear pending flag
+				srv.rankRestartMu.Lock()
+				srv.rankRestartTimes[evt.Rank] = time.Now()
+				delete(srv.rankRestartPending, evt.Rank)
+				srv.rankRestartMu.Unlock()
+			})
+
+			srv.rankRestartMu.Unlock()
+			srv.log.Noticef("rank %d restart deferred: will restart in %s (min delay: %s)",
+				evt.Rank, remaining.Round(time.Second), minDelayDuration)
+			return nil
+		}
+	}
+
+	srv.rankRestartTimes[evt.Rank] = now
+	srv.rankRestartMu.Unlock()
+
+	// Wait until engine is stopped.
+	pollFn := func(e Engine) bool { return !e.IsStarted() }
+	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
+		return errors.Errorf("rank %d (instance %d) did not stop", evt.Rank, engine.Index())
+	}
+
+	srv.log.Noticef("restarting rank %d (instance %d) after self-termination", evt.Rank, engine.Index())
+	engine.requestStart(ctx)
+
+	return nil
+}
+
+// registerSubscriptions doesn't handle received forwarded events but forwardable events are sent to
+// the MS leader. Received events are logged on the host that they were raised (and first published)
+// on. This is the initial behavior for all servers and only changes when leadership has been
+// determined (when we change subscribers via registerLeaderSubscriptions). A handler is subscribed
+// for local engine self-termination events.
+func registerSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			switch evt.ID {
+			case events.RASEngineSelfTerminated:
+				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
+				}
+			}
+		}))
 }
 
 func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
@@ -840,8 +957,11 @@ func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
 	}
 }
 
-// registerLeaderSubscriptions stops forwarding events to MS and instead starts
-// handling received forwarded (and local) events.
+// registerLeaderSubscriptions doesn't forward events to MS but instead handles received events by
+// subscribing the management service membership and system-DB to StateChange event-type. Received
+// events are logged on the host that they were raised (and first published) on. This behavior is
+// triggered when a new leader steps-up. A handler is subscribed for local engine self-termination
+// events and another for handling forwarded rank-dead events.
 func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
@@ -852,6 +972,15 @@ func registerLeaderSubscriptions(srv *server) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
 				handleRankDead(ctx, srv, evt)
+			}
+		}))
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			switch evt.ID {
+			case events.RASEngineSelfTerminated:
+				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
+				}
 			}
 		}))
 

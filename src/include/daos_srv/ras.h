@@ -43,6 +43,7 @@
 	X(RAS_ENGINE_DIED, "engine_died")                                                          \
 	X(RAS_ENGINE_ASSERTED, "engine_asserted")                                                  \
 	X(RAS_ENGINE_CLOCK_DRIFT, "engine_clock_drift")                                            \
+	X(RAS_ENGINE_SELF_TERMINATED, "engine_self_terminated")                                    \
 	X(RAS_POOL_CORRUPTION_DETECTED, "pool_corruption_detected")                                \
 	X(RAS_POOL_REBUILD_START, "pool_rebuild_started")                                          \
 	X(RAS_POOL_REBUILD_END, "pool_rebuild_finished")                                           \
@@ -237,6 +238,17 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl, uint64_t version);
  */
 int
 ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation);
+
+/**
+ * Notify control plane that an excluded engine has self terminated.
+ *
+ * \param[in] rank		Rank that self terminated.
+ * \param[in] incarnation	Incarnation of rank that self terminated.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_notify_rank_self_terminated(d_rank_t rank, uint64_t incarnation);
 
 /**
  * List all the known pools from control plane (MS).

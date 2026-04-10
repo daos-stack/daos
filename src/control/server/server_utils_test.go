@@ -8,12 +8,16 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"os/user"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -21,7 +25,10 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -1979,5 +1986,683 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 	if diff := cmp.Diff(expOut, sb.String()); diff != "" {
 		t.Fatalf("unexpected output format (-want, +got):\n%s\n", diff)
+	}
+}
+
+const (
+	testContextTimeout     = 1 * time.Second
+	testHandlerTimeout     = 1 * time.Second
+	testRestartRequestWait = 3 * time.Second
+	testSubscriptionDelay  = 50 * time.Millisecond
+	testProcessingDelay    = 100 * time.Millisecond
+)
+
+func setupTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRunning bool, ranks ...uint32) {
+	t.Helper()
+
+	rank := uint32(1)
+	if len(ranks) != 0 {
+		rank = ranks[0]
+	}
+
+	e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+	e._superblock.Rank = ranklist.NewRankPtr(rank)
+	rCfg := &engine.TestRunnerConfig{}
+	rCfg.Running.Store(isRunning)
+	e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
+	e.ready.Store(isRunning)
+	if err := h.AddInstance(e); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestServer_handleEngineSelfTerminated(t *testing.T) {
+	testRank := ranklist.Rank(1)
+	testIncarnation := uint64(42)
+	testHostname := "test-host-1"
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	for name, tc := range map[string]struct {
+		evt                      *events.RASEvent
+		setupEngines             func(*testing.T, logging.Logger, *EngineHarness)
+		disableEngineAutoRestart bool
+		expErr                   error
+		expEngineRestarted       bool
+		expLogContains           []string
+	}{
+		"auto restart disabled by config": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupTestEngine(t, log, h, false)
+			},
+			disableEngineAutoRestart: true,
+			expEngineRestarted:       false,
+			expLogContains: []string{
+				"automatic engine restart disabled",
+			},
+		},
+		"nil event timestamp": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   "",
+			},
+			expErr:             errors.New("bad event timestamp"),
+			expEngineRestarted: false,
+		},
+		"invalid event timestamp": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   "not-a-valid-timestamp",
+			},
+			expErr:             errors.New("bad event timestamp"),
+			expEngineRestarted: false,
+		},
+		"rank not found in harness": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        99, // Non-existent rank
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+				e._superblock.Rank = ranklist.NewRankPtr(1)
+				if err := h.AddInstance(e); err != nil {
+					t.Fatal(err)
+				}
+			},
+			expErr:             errors.New("no instance found for rank 99"),
+			expEngineRestarted: false,
+		},
+		"filter instances error - nil superblock": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+				e._superblock = nil
+				if err := h.AddInstance(e); err != nil {
+					t.Fatal(err)
+				}
+			},
+			expErr:             errors.New("no instance found for rank"),
+			expEngineRestarted: false,
+		},
+		"successful restart - engine already stopped": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupTestEngine(t, log, h, false)
+			},
+			expEngineRestarted: true,
+			expLogContains: []string{
+				fmt.Sprintf("rank %d:%d (instance 0) self terminated", testRank, testIncarnation),
+				testHostname,
+			},
+		},
+		"timeout waiting for engine to stop": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupTestEngine(t, log, h, true)
+			},
+			expErr:             errors.New("did not stop"),
+			expEngineRestarted: false,
+		},
+		"multiple engines - restart correct one": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        2,
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				for i := 0; i < 3; i++ {
+					setupTestEngine(t, log, h, false, uint32(i))
+				}
+			},
+			expEngineRestarted: true,
+			expLogContains: []string{
+				"rank 2:42 (instance 2) self terminated",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx, cancel := context.WithTimeout(test.Context(t), testContextTimeout)
+			defer cancel()
+
+			harness := NewEngineHarness(log)
+
+			if tc.setupEngines != nil {
+				tc.setupEngines(t, log, harness)
+			}
+
+			srv := &server{
+				log:     log,
+				harness: harness,
+				cfg: &config.Server{
+					DisableEngineAutoRestart: tc.disableEngineAutoRestart,
+				},
+				rankRestartTimes:   make(map[uint32]time.Time),
+				rankRestartPending: make(map[uint32]*time.Timer),
+			}
+
+			var wg sync.WaitGroup
+			var restartRequested atomic.Bool
+
+			if len(harness.instances) > 0 {
+				targetRank := ranklist.Rank(tc.evt.Rank)
+				for i, inst := range harness.instances {
+					rank, err := inst.GetRank()
+					if err != nil || rank != targetRank {
+						continue
+					}
+
+					ei, ok := inst.(*EngineInstance)
+					if !ok {
+						continue
+					}
+
+					wg.Add(1)
+
+					go func(e *EngineInstance, idx int) {
+						defer wg.Done()
+						select {
+						case <-ctx.Done():
+						case <-e.startRequested:
+							restartRequested.Store(true)
+						case <-time.After(testRestartRequestWait):
+						}
+					}(ei, i)
+				}
+			}
+
+			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
+			wg.Wait()
+
+			test.CmpErr(t, tc.expErr, err)
+
+			if tc.expEngineRestarted != restartRequested.Load() {
+				t.Errorf("expected engine restarted=%v, got=%v",
+					tc.expEngineRestarted, restartRequested.Load())
+			}
+
+			logOutput := buf.String()
+			for _, expStr := range tc.expLogContains {
+				if !strings.Contains(logOutput, expStr) {
+					t.Errorf("expected log to contain %q, but it didn't\nLog:\n%s",
+						expStr, logOutput)
+				}
+			}
+		})
+	}
+}
+
+func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
+	testRank := ranklist.Rank(1)
+	testIncarnation := uint64(42)
+	testHostname := "test-host-1"
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+	harness := NewEngineHarness(log)
+	setupTestEngine(t, log, harness, false)
+
+	srv := &server{
+		log:     log,
+		harness: harness,
+		cfg: &config.Server{
+			DisableEngineAutoRestart:  false,
+			EngineAutoRestartMinDelay: 2, // 2 seconds for testing
+		},
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
+	}
+
+	// Get reference to the engine instance for monitoring startRequested
+	instances, err := harness.FilterInstancesByRankSet("1")
+	if err != nil || len(instances) == 0 {
+		t.Fatalf("failed to get engine instance: %v", err)
+	}
+	e, ok := instances[0].(*EngineInstance)
+	if !ok {
+		t.Fatal("failed to cast to EngineInstance")
+	}
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation,
+		Hostname:    testHostname,
+		Timestamp:   validTimestamp,
+	}
+
+	// Setup goroutine to consume startRequested channel to prevent blocking
+	restartCount := atomic.Uint32{}
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-e.startRequested:
+				restartCount.Add(1)
+			case <-time.After(5 * time.Second):
+				return
+			}
+		}
+	}()
+
+	// First restart should succeed immediately
+	err = handleEngineSelfTerminated(ctx, srv, evt)
+	if err != nil {
+		t.Fatalf("first restart failed: %v", err)
+	}
+
+	// Wait for restart to be requested
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 1 {
+		t.Fatalf("expected 1 restart request, got %d", restartCount.Load())
+	}
+
+	// Second restart immediately after should be deferred (not rejected)
+	evt2 := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation + 1,
+		Hostname:    testHostname,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	err = handleEngineSelfTerminated(ctx, srv, evt2)
+	if err != nil {
+		t.Fatalf("second restart call failed: %v", err)
+	}
+
+	// Verify no immediate restart (deferred)
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 1 {
+		t.Fatalf("expected restart to be deferred, got %d restarts", restartCount.Load())
+	}
+
+	// Verify deferred restart log message
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "restart deferred") {
+		t.Errorf("expected log to contain 'restart deferred', got: %s", logOutput)
+	}
+
+	// Verify pending timer exists
+	srv.rankRestartMu.Lock()
+	if _, exists := srv.rankRestartPending[evt.Rank]; !exists {
+		srv.rankRestartMu.Unlock()
+		t.Fatal("expected pending restart timer to exist")
+	}
+	srv.rankRestartMu.Unlock()
+
+	// Wait for the deferred restart to trigger
+	time.Sleep(time.Duration(srv.cfg.EngineAutoRestartMinDelay) * time.Second)
+
+	// Verify deferred restart was executed
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 2 {
+		t.Fatalf("expected 2 total restarts after deferred delay, got %d", restartCount.Load())
+	}
+
+	// Verify pending timer was cleaned up
+	srv.rankRestartMu.Lock()
+	if _, exists := srv.rankRestartPending[evt.Rank]; exists {
+		srv.rankRestartMu.Unlock()
+		t.Fatal("expected pending restart timer to be cleaned up")
+	}
+	srv.rankRestartMu.Unlock()
+
+	// Third event immediately after deferred restart should again be deferred
+	evt3 := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation + 2,
+		Hostname:    testHostname,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	err = handleEngineSelfTerminated(ctx, srv, evt3)
+	if err != nil {
+		t.Fatalf("third restart call failed: %v", err)
+	}
+
+	// Should still be 2 restarts (third is deferred)
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 2 {
+		t.Fatalf("expected third restart to be deferred, got %d restarts", restartCount.Load())
+	}
+
+	// Cleanup
+	srv.rankRestartMu.Lock()
+	for rank, timer := range srv.rankRestartPending {
+		timer.Stop()
+		delete(srv.rankRestartPending, rank)
+	}
+	srv.rankRestartMu.Unlock()
+	<-doneCh
+}
+
+func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	// Channel to signal when handler completes
+	handlerDone := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:       log,
+		harness:   harness,
+		pubSub:    pubSub,
+		evtLogger: control.MockEventLogger(log),
+		cfg: &config.Server{
+			DisableEngineAutoRestart: false,
+		},
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
+	}
+
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			log.Debugf("ErrorHandling test handler called for event: ID=%v, Type=%v", evt.ID, evt.Type)
+			switch evt.ID {
+			case events.RASEngineSelfTerminated:
+				log.Debugf("ErrorHandling test handling engine self termination event")
+				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
+				}
+				once.Do(func() { close(handlerDone) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for handler to complete or timeout
+	select {
+	case <-handlerDone:
+		// Handler completed
+	case <-time.After(testHandlerTimeout):
+		t.Fatal("timeout waiting for handler to complete")
+	}
+
+	t.Log(buf.String())
+	if !strings.Contains(buf.String(), "handleEngineSelfTerminated") {
+		t.Error("expected error to be logged by handler")
+	}
+	if !strings.Contains(buf.String(), "no instance found") {
+		t.Errorf("expected 'no instance found' in log, got:\n%s", buf.String())
+	}
+}
+
+func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	for name, tc := range map[string]struct {
+		evt            *events.RASEvent
+		expErrContains string
+	}{
+		"zero incarnation": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        1,
+				Incarnation: 0,
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found",
+		},
+		"very high rank number": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        999999,
+				Incarnation: 1,
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found for rank",
+		},
+		"max incarnation value": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        1,
+				Incarnation: ^uint64(0),
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx, cancel := context.WithTimeout(test.Context(t), testContextTimeout)
+			defer cancel()
+
+			harness := NewEngineHarness(log)
+			srv := &server{
+				log:     log,
+				harness: harness,
+				cfg: &config.Server{
+					DisableEngineAutoRestart: false,
+				},
+				rankRestartTimes:   make(map[uint32]time.Time),
+				rankRestartPending: make(map[uint32]*time.Timer),
+			}
+
+			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
+
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+
+			if !strings.Contains(err.Error(), tc.expErrContains) {
+				t.Errorf("expected error containing %q, got: %s",
+					tc.expErrContains, err)
+			}
+		})
+	}
+}
+
+func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	// Channel to signal when ANY handler processes the event
+	eventProcessed := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:       log,
+		harness:   harness,
+		pubSub:    pubSub,
+		evtLogger: control.MockEventLogger(log),
+		cfg: &config.Server{
+			DisableEngineAutoRestart: false,
+		},
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
+	}
+
+	registerSubscriptions(srv)
+
+	// Add a secondary subscriber to detect when event is processed
+	// This ensures the event has gone through the pubsub system
+	pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			if evt.ID == events.RASEngineSelfTerminated {
+				once.Do(func() { close(eventProcessed) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for event to be processed or timeout
+	select {
+	case <-eventProcessed:
+		// Event was processed
+	case <-time.After(testHandlerTimeout):
+		t.Fatal("timeout waiting for engine self terminated event to be processed")
+	}
+
+	time.Sleep(testProcessingDelay)
+
+	logOutput := buf.String()
+	hasHandler := strings.Contains(logOutput, "handleEngineSelfTerminated") ||
+		strings.Contains(logOutput, "no instance found") ||
+		strings.Contains(logOutput, "handling engine self termination")
+
+	if !hasHandler {
+		t.Errorf("engine self termination handler does not appear to be registered\nLog:\n%s", logOutput)
+	}
+}
+
+func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T) {
+	const testProcessingTimeout = 2 * time.Second
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx := test.Context(t)
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	svc := newTestMgmtSvc(t, log)
+
+	// Channel to signal when ANY handler processes the event
+	eventProcessed := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:        log,
+		harness:    harness,
+		pubSub:     pubSub,
+		evtLogger:  control.MockEventLogger(log),
+		membership: svc.membership,
+		sysdb:      svc.sysdb,
+		mgmtSvc:    svc,
+		cfg: &config.Server{
+			DisableEngineAutoRestart: false,
+		},
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
+	}
+
+	registerLeaderSubscriptions(srv)
+
+	// Add a secondary subscriber to detect when event is processed
+	// This ensures the event has gone through the pubsub system
+	pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			if evt.ID == events.RASEngineSelfTerminated {
+				once.Do(func() { close(eventProcessed) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for event to be processed or timeout
+	select {
+	case <-eventProcessed:
+		// Event was processed
+	case <-time.After(testProcessingTimeout):
+		t.Fatal("timeout waiting for engine self terminated event to be processed")
+	}
+
+	time.Sleep(testProcessingDelay)
+
+	logOutput := buf.String()
+	hasHandler := strings.Contains(logOutput, "handleEngineSelfTerminated") ||
+		strings.Contains(logOutput, "no instance found") ||
+		strings.Contains(logOutput, "handling engine self termination")
+
+	if !hasHandler {
+		t.Errorf("engine self termination handler does not appear to be registered\nLog:\n%s", logOutput)
 	}
 }

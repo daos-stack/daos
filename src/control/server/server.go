@@ -167,6 +167,10 @@ type server struct {
 	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
 	onShutdown       []func()
+
+	rankRestartMu      sync.Mutex
+	rankRestartTimes   map[uint32]time.Time
+	rankRestartPending map[uint32]*time.Timer
 }
 
 func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -183,12 +187,14 @@ func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.Fault
 	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	return &server{
-		log:         log,
-		cfg:         cfg,
-		hostname:    hostname,
-		runningUser: cu,
-		faultDomain: faultDomain,
-		harness:     harness,
+		log:                log,
+		cfg:                cfg,
+		hostname:           hostname,
+		runningUser:        cu,
+		faultDomain:        faultDomain,
+		harness:            harness,
+		rankRestartTimes:   make(map[uint32]time.Time),
+		rankRestartPending: make(map[uint32]*time.Timer),
 	}, nil
 }
 
@@ -466,7 +472,7 @@ func (srv *server) setupGrpc() error {
 }
 
 func (srv *server) registerEvents() {
-	registerFollowerSubscriptions(srv)
+	registerSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
@@ -507,7 +513,7 @@ func (srv *server) registerEvents() {
 	)
 	srv.sysdb.OnLeadershipLost(func() error {
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
-		registerFollowerSubscriptions(srv)
+		registerSubscriptions(srv)
 		return nil
 	})
 }

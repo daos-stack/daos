@@ -597,17 +597,21 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		if (rank == dss_self_rank()) {
 			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
 			       self_rank);
-			/*
-			 * For now, we just raise a SIGKILL to ourselves; we could
-			 * inform daos_server, who would initiate a termination and
-			 * decide whether to restart us.
+
+			/**
+			 * Send RAS event to inform local server of intentional self termination
+			 * before raising a SIGKILL to ourselves. Local daos_server can then decide
+			 * whether to restart rank.
 			 */
+			rc = ds_notify_rank_self_terminated(rank, incarnation);
+			if (rc)
+				D_ERROR("failed to handle %u/%u event: " DF_RC "\n", src, type,
+					DP_RC(rc));
+
 			rc = kill(getpid(), SIGKILL);
 			if (rc != 0)
 				D_ERROR("failed to raise SIGKILL: %d\n", errno);
-			return;
 		}
-
 	}
 }
 
