@@ -138,8 +138,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shar
 		d_list_t *remap_list);
 
 int
-determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
-		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
+determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, d_list_t *remap_list,
+		       uint32_t allow_version, enum layout_gen_mode gen_mode,
 		       struct failed_shard *f_shard, struct pl_obj_layout *layout);
 
 int
