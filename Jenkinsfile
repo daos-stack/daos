@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/speed_of_ci') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -1217,6 +1217,45 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
+                        'Functional Cluster Box Medium MD on SSD - Aggregation': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD - Aggregation',
+                            pragma_suffix: '-cb-medium-md-on-ssd',
+                            label: 'cluster_box',
+                            next_version: next_version(),
+                            stage_tags: 'cb,medium,aggregatepunching,SnapshotAggregation,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium MD on SSD - Telemetry': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD - Telemetry',
+                            pragma_suffix: '-cb-medium-md-on-ssd',
+                            label: 'cluster_box',
+                            next_version: next_version(),
+                            stage_tags: 'cb,medium,TestWithTelemetryIOBasic,TestWithTelemetryNvme,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium MD on SSD - Rest': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD - Rest',
+                            pragma_suffix: '-cb-medium-md-on-ssd',
+                            label: 'cluster_box',
+                            next_version: next_version(),
+                            stage_tags: 'cb,medium,-aggregatepunching,-SnapshotAggregation,-TestWithTelemetryIOBasic,-TestWithTelemetryNvme,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        )
                     )
                 }
             }
