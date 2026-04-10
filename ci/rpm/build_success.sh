@@ -43,11 +43,12 @@ elif [ -d /var/cache/pbuilder/ ]; then
 fi
 
 if [ -d /home/daos/rpms/ ]; then
-  if [ -d /home/daos/rpms/deps ]; then
-    mkdir -p "$artdir/deps"
-    cp /home/daos/rpms/deps/*.rpm "${artdir}/deps"
-  fi
-  cp /home/daos/rpms/daos/*.rpm "${artdir}/daos"
+  for dir in $(find /home/daos/rpms/ -maxdepth 1 -mindepth 1 -type d -exec basename {} \;); do
+    if [ -d "/home/daos/rpms/${dir}" ]; then
+      mkdir -p "${artdir}/${dir}"
+      cp "/home/daos/rpms/${dir}"/*.rpm "${artdir}/${dir}"
+    fi
+  done
 else
   mockroot="/var/lib/mock/${CHROOT_NAME}"
   cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
