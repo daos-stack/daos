@@ -2305,17 +2305,8 @@ rebuild_fini_one(void *arg)
 	if (dpc == NULL)
 		return 0;
 
-	D_ASSERT(rpt->rt_rebuild_start != 0);
-	if (rpt->rt_rebuild_start == dpc->spc_rebuild_start) {
-		dpc->spc_rebuild_start = 0;
-		D_DEBUG(DB_REBUILD, DF_RB ": Reset rebuild start epoch\n", DP_RB_RPT(rpt));
-	} else {
-		D_DEBUG(DB_REBUILD,
-			DF_RB ": pool is still being rebuilt rt_rebuild_start " DF_U64
-			      " spc_rebuild_start " DF_U64 "\n",
-			DP_RB_RPT(rpt), rpt->rt_rebuild_start, dpc->spc_rebuild_start);
-	}
-
+	D_DEBUG(DB_REBUILD, DF_RB ": rebuild fini for stable epoch " DF_U64 "\n", DP_RB_RPT(rpt),
+		rpt->rt_stable_epoch);
 	ds_pool_child_put(dpc);
 	return 0;
 }
@@ -2565,10 +2556,8 @@ rebuild_prepare_one(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	D_ASSERT(rpt->rt_rebuild_start != 0);
-	dpc->spc_rebuild_start = rpt->rt_rebuild_start;
-	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " rebuild eph " DF_X64 "\n",
-		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_start);
+	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " stable eph " DF_X64 "\n",
+		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_stable_epoch);
 
 put:
 	ds_pool_child_put(dpc);
@@ -2707,12 +2696,10 @@ rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rpt->rt_rebuild_start = d_hlc_get();
-	rc                    = ds_pool_task_collective(rpt->rt_pool_uuid,
-							PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-							rebuild_prepare_one, rpt, 0);
+	rc = ds_pool_task_collective(rpt->rt_pool_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     rebuild_prepare_one, rpt, 0);
 	if (rc) {
-		rpt->rt_rebuild_start = 0;
 		rebuild_pool_tls_destroy(pool_tls);
 		D_GOTO(out, rc);
 	}

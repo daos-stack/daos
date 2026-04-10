@@ -171,7 +171,6 @@ struct ds_pool_child {
 	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
 
-	uint64_t                 spc_rebuild_start;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
