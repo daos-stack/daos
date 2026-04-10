@@ -7,6 +7,7 @@
 import os
 
 from apricot import TestWithServers
+from command_utils_base import EnvironmentVariables
 from dfuse_utils import get_dfuse, start_dfuse
 from host_utils import get_local_host
 from run_utils import run_remote
@@ -47,16 +48,18 @@ class DfuseBashCmd(TestWithServers):
         dd_count = 512
         dd_blocksize = 512
 
+        env = EnvironmentVariables()
         if il_lib is not None:
             lib_path = os.path.join(self.prefix, "lib64", il_lib)
             if compatible_mode:
-                env_str = f"export LD_PRELOAD={lib_path}; export D_IL_COMPATIBLE=1; "
+                env["LD_PRELOAD"] = lib_path
+                env["D_IL_COMPATIBLE"] = "1"
             else:
-                env_str = f"export LD_PRELOAD={lib_path}; "
+                env["LD_PRELOAD"] = lib_path
             if nobypass:
-                env_str = env_str + "export D_IL_NO_BYPASS=1; "
-        else:
-            env_str = ""
+                env["D_IL_NO_BYPASS"] = "1"
+        self.test_env.add_to_env(env, 'bullseye_file')
+        env_str = env.get_export_str()
 
         # Create a pool if one does not already exist.
         self.log_step('Creating a single pool and container')

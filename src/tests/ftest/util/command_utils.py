@@ -61,7 +61,9 @@ class ExecutableCommand(CommandWithParameters):
         self.output_check = "both"
         self.verbose = True
         self.env = EnvironmentVariables()
-        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
+        _cov_file = os.path.join(os.sep, "tmp", "test.cov")
+        if os.path.exists(_cov_file):
+            self.env["COVFILE"] = _cov_file
 
         # User to run the command as. "root" is equivalent to sudo
         self.run_user = run_user
@@ -103,7 +105,7 @@ class ExecutableCommand(CommandWithParameters):
             str: the command with all the defined parameters
 
         """
-        return self.with_sudo
+        return self.with_exports
 
     @property
     def sudo(self):
