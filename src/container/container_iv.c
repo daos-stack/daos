@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,6 +29,34 @@ static struct cont_iv_key *
 key2priv(struct ds_iv_key *iv_key)
 {
 	return (struct cont_iv_key *)iv_key->key_buf;
+}
+
+static uint32_t
+cont_iv_prop_set_nr(daos_prop_t *prop)
+{
+	uint32_t i;
+	uint32_t nr = 0;
+
+	if (prop == NULL || prop->dpp_entries == NULL)
+		return 0;
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		if (daos_prop_is_set(&prop->dpp_entries[i]))
+			nr++;
+	}
+
+	return nr;
+}
+
+static void
+cont_iv_prop_log_invalid(const char *tag, uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t src_rank,
+			 d_rank_t master_rank, uint64_t bits, d_sg_list_t *src, daos_prop_t *prop)
+{
+	D_ERROR(DF_CONT ": %s src_rank=%u master_rank=%u bits=" DF_X64 " sgl_nr=%u len=" DF_U64
+			" prop=%p dpp_nr=%u set_nr=%u\n",
+		DP_CONT(pool_uuid, cont_uuid), tag, src_rank, master_rank, bits,
+		src ? src->sg_nr : 0, (src && src->sg_nr > 0) ? src->sg_iovs[0].iov_len : 0, prop,
+		prop ? prop->dpp_nr : 0, cont_iv_prop_set_nr(prop));
 }
 
 static uint32_t
@@ -419,6 +447,11 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (prop == NULL || prop->dpp_nr == 0 || cont_iv_prop_set_nr(prop) == 0)
+		cont_iv_prop_log_invalid("miss-create got suspicious prop", entry->ns->iv_pool_uuid,
+					 civ_key->cont_uuid, key->rank, entry->ns->iv_master_rank,
+					 0, NULL, prop);
+
 	entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
 	D_ALLOC(iv_entry, entry_size);
 	if (iv_entry == NULL)
@@ -428,6 +461,11 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 
 	uuid_copy(iv_entry->cont_uuid, civ_key->cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
+	if (iv_entry->iv_prop.cip_valid_bits == 0)
+		cont_iv_prop_log_invalid("miss-create encoded zero-bit IV_CONT_PROP",
+					 entry->ns->iv_pool_uuid, civ_key->cont_uuid, key->rank,
+					 entry->ns->iv_master_rank,
+					 iv_entry->iv_prop.cip_valid_bits, NULL, prop);
 	d_iov_set(&val_iov, iv_entry, entry_size);
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 
@@ -582,6 +620,11 @@ failed:
 	}
 
 	src_iv = val_iov.iov_buf;
+	if (entry->iv_class->iv_class_id == IV_CONT_PROP && src_iv->iv_prop.cip_valid_bits == 0)
+		cont_iv_prop_log_invalid("fetch hit zero-bit IV_CONT_PROP in local tree",
+					 entry->ns->iv_pool_uuid, civ_key->cont_uuid, key->rank,
+					 entry->ns->iv_master_rank, src_iv->iv_prop.cip_valid_bits,
+					 NULL, NULL);
 	rc = cont_iv_ent_copy(entry, civ_key, dst, src_iv);
 out:
 	return rc;
@@ -654,12 +697,35 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		} else if (entry->iv_class->iv_class_id == IV_CONT_PROP) {
 			daos_prop_t		*prop = NULL;
 
+			if (src->sg_nr == 0 || src->sg_iovs == NULL ||
+			    src->sg_iovs[0].iov_buf == NULL ||
+			    src->sg_iovs[0].iov_len <
+				offsetof(struct cont_iv_entry, iv_prop.cip_valid_bits) +
+				    sizeof(civ_ent->iv_prop.cip_valid_bits)) {
+				cont_iv_prop_log_invalid(
+				    "ent_update got short/empty IV_CONT_PROP payload",
+				    entry->ns->iv_pool_uuid, civ_key->cont_uuid, key->rank,
+				    entry->ns->iv_master_rank, 0, src, NULL);
+			}
+
+			if (civ_ent->iv_prop.cip_valid_bits == 0)
+				cont_iv_prop_log_invalid(
+				    "ent_update got zero-bit IV_CONT_PROP payload",
+				    entry->ns->iv_pool_uuid, civ_key->cont_uuid, key->rank,
+				    entry->ns->iv_master_rank, civ_ent->iv_prop.cip_valid_bits, src,
+				    NULL);
+
 			rc = cont_iv_prop_g2l(&civ_ent->iv_prop, &prop);
 			if (rc) {
 				D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n",
 					DP_RC(rc));
 				D_GOTO(out, rc);
 			}
+			if (prop == NULL || prop->dpp_nr == 0)
+				cont_iv_prop_log_invalid(
+				    "ent_update g2l produced empty prop", entry->ns->iv_pool_uuid,
+				    civ_key->cont_uuid, key->rank, entry->ns->iv_master_rank,
+				    civ_ent->iv_prop.cip_valid_bits, src, prop);
 
 			rc = ds_cont_tgt_prop_update(entry->ns->iv_pool_uuid,
 						     civ_ent->cont_uuid, prop);
@@ -746,6 +812,34 @@ cont_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		DL_WARN(ref_rc, DF_UUID "bypass refresh, IV class id %d.",
 			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
 		return ref_rc;
+	}
+
+	if (entry->iv_class->iv_class_id == IV_CONT_PROP) {
+		struct cont_iv_key *civ_key = key2priv(key);
+
+		if (src == NULL || src->sg_nr == 0 || src->sg_iovs == NULL ||
+		    src->sg_iovs[0].iov_buf == NULL) {
+			cont_iv_prop_log_invalid(
+			    "refresh got empty IV_CONT_PROP src", entry->ns->iv_pool_uuid,
+			    civ_key->cont_uuid, key->rank, entry->ns->iv_master_rank, 0, src, NULL);
+		} else {
+			struct cont_iv_entry *civ_ent = src->sg_iovs[0].iov_buf;
+
+			if (src->sg_iovs[0].iov_len <
+			    offsetof(struct cont_iv_entry, iv_prop.cip_valid_bits) +
+				sizeof(civ_ent->iv_prop.cip_valid_bits)) {
+				cont_iv_prop_log_invalid("refresh got short IV_CONT_PROP payload",
+							 entry->ns->iv_pool_uuid,
+							 civ_key->cont_uuid, key->rank,
+							 entry->ns->iv_master_rank, 0, src, NULL);
+			} else if (civ_ent->iv_prop.cip_valid_bits == 0) {
+				cont_iv_prop_log_invalid(
+				    "refresh got zero-bit IV_CONT_PROP payload",
+				    entry->ns->iv_pool_uuid, civ_key->cont_uuid, key->rank,
+				    entry->ns->iv_master_rank, civ_ent->iv_prop.cip_valid_bits, src,
+				    NULL);
+			}
+		}
 	}
 
 	return cont_iv_ent_update(entry, key, src, priv);
@@ -1592,12 +1686,22 @@ cont_iv_prop_fetch_ult(void *data)
 		D_GOTO(out, rc);
 	}
 
+	if (iv_entry->iv_prop.cip_valid_bits == 0)
+		cont_iv_prop_log_invalid("cont_iv_fetch returned zero-bit IV_CONT_PROP",
+					 pool->sp_uuid, arg->cont_uuid, 0,
+					 pool->sp_iv_ns->iv_master_rank,
+					 iv_entry->iv_prop.cip_valid_bits, NULL, NULL);
+
 	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, &prop_fetch);
 	if (rc) {
 		DL_ERROR(rc, DF_CONT ": cont_iv_prop_g2l failed",
 			 DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
+	if (prop_fetch == NULL || prop_fetch->dpp_nr == 0)
+		cont_iv_prop_log_invalid("fetch g2l produced empty prop", pool->sp_uuid,
+					 arg->cont_uuid, 0, pool->sp_iv_ns->iv_master_rank,
+					 iv_entry->iv_prop.cip_valid_bits, NULL, prop_fetch);
 
 	rc = daos_prop_copy(prop, prop_fetch);
 	if (rc) {
