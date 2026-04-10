@@ -386,8 +386,8 @@ class PoolListConsolidationTest(TestWithServers):
             self.log.info("new_rdb_pool_paths = %s", new_rdb_pool_paths)
             self.log.info("rdb_to_db_path = %s", new_rdb_to_db_path)
 
-            msg = "MD-on-SSD: Create a directory to load pool data under /mnt in all servers."
-            self.log_step(msg)
+            self.log_step(
+                "MD-on-SSD: Create a directory to load pool data under /mnt in all servers.")
             command = "mkdir -p /mnt/daos2 /mnt/daos3"
             result = run_remote(
                 log=self.log, hosts=self.hostlist_servers,
@@ -442,9 +442,8 @@ class PoolListConsolidationTest(TestWithServers):
                     check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
                     if check_out[0]:
                         command = f"rm {rdb_pool_path}"
-                        if not run_remote(
-                            log=self.log, hosts=node,
-                            command=command_as_user(command=command, user="root")).passed:
+                        command_root = command_as_user(command=command, user="root")
+                        if not run_remote(log=self.log, hosts=node, command=command_root).passed:
                             self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                         self.log.info("Remove %s from %s", rdb_pool_path, str(node))
                         count += 1
@@ -466,15 +465,13 @@ class PoolListConsolidationTest(TestWithServers):
                 cont_create_success = True
                 break
             except TestFail as error:
-                msg = f"Container create failed after running checker! error = {error}"
-                self.log.debug(msg)
+                self.log.debug(f"Container create failed after running checker! error = {error}")
 
         if not cont_create_success:
             errors.append("Container create failed after running checker!")
 
-        msg = ("Show that rdb-pool are recovered. i.e., three out of four ranks should "
-               "have rdb-pool.")
-        self.log_step(msg)
+        self.log_step(
+            "Show that rdb-pool are recovered. i.e., three out of four ranks should have rdb-pool.")
         count = 0
         for host in hosts:
             for rdb_pool_path in orig_rdb_pool_paths:
