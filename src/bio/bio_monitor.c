@@ -709,8 +709,8 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 		}
 	}
 
-	/* Auto-faulty for stalled I/O stalled is always enabled */
-	if (bdh->bdh_io_stalled) {
+	/* Auto-faulty for stalled I/O stalled */
+	if (bdh->bdh_io_stalled && bio_faulty_on_timeout) {
 		D_ERROR("I/O stalled on NVMe device " DF_UUID "\n", DP_UUID(bbs->bb_dev->bb_uuid));
 		return true;
 	}
