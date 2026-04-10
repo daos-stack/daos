@@ -7,10 +7,9 @@
 import os
 import time
 
+from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
-
-from apricot import TestWithServers
 from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
 from recovery_utils import wait_for_check_complete
