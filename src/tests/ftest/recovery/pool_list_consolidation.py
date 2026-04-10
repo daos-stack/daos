@@ -7,9 +7,10 @@
 import os
 import time
 
-from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
+
+from apricot import TestWithServers
 from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
 from recovery_utils import wait_for_check_complete
@@ -324,8 +325,7 @@ class PoolListConsolidationTest(TestWithServers):
         orig_rdb_pool_paths = []
 
         self.log_step("Stop servers")
-        dmg_command = self.get_dmg_command()
-        dmg_command.system_stop()
+        self.get_dmg_command().system_stop()
 
         if md_on_ssd:
             # MD-on-SSD case is more complex that PMEM case because we need to first load the pool
@@ -389,8 +389,9 @@ class PoolListConsolidationTest(TestWithServers):
             msg = "MD-on-SSD: Create a directory to load pool data under /mnt in all servers."
             self.log_step(msg)
             command = "mkdir -p /mnt/daos2 /mnt/daos3"
-            command_root = command_as_user(command=command, user="root")
-            result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+            result = run_remote(
+                log=self.log, hosts=self.hostlist_servers,
+                command=command_as_user(command=command, user="root"))
             if not result.passed:
                 self.fail(f"{command} failed on {result.failed_hosts}!")
 
@@ -441,8 +442,9 @@ class PoolListConsolidationTest(TestWithServers):
                     check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
                     if check_out[0]:
                         command = f"rm {rdb_pool_path}"
-                        command_root = command_as_user(command=command, user="root")
-                        if not run_remote(log=self.log, hosts=node, command=command_root).passed:
+                        if not run_remote(
+                            log=self.log, hosts=node,
+                            command=command_as_user(command=command, user="root")).passed:
                             self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                         self.log.info("Remove %s from %s", rdb_pool_path, str(node))
                         count += 1
