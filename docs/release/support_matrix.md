@@ -1,11 +1,11 @@
-# DAOS Version 2.8 Support
+# DAOS Version 2.8 Support Matrix
 
 DAOS 2.8 is under active development and has not been released yet.
 In the meantime, please refer to the support document for the
 [latest](https://docs.daos.io/latest/release/support_matrix/)
 stable DAOS release.
 
-# **DRAFT** DAOS Version 2.8 Support
+# **DRAFT** DAOS Version 2.8 Support Matrix
 
 ## Community Support and Commercial Support
 
@@ -61,7 +61,7 @@ For maximum performance, it is strongly recommended that all memory channels
 of a DAOS server are populated with one DRAM module and one Optane PMem module.
 
 [PMDK](https://github.com/pmem/pmdk) is used as the programming interface
-when using Optane Persistent Memory.
+for SCM when using Optane Persistent Memory.
 
 ### DAOS Servers without Persistent Memory
 
@@ -116,7 +116,7 @@ Each DAOS engine needs one high-speed network port for communication in the
 DAOS data plane. DAOS Version 2.8 does not support more than one
 high-speed network port per DAOS engine. If multiple high-speed network ports
 per CPU sockets are deployed, it is recommended to run multiple engines per
-CPU socket.
+CPU socket (one per high-speed network port).
 
 !!! note It is possible that two DAOS engines on a 2-socket server share a
          single high-speed network port for development and testing purposes,
@@ -140,7 +140,7 @@ Multiple high-speed network ports per DAOS client are supported.
 Note that a single task/process on a DAOS client will always use a single
 network port. But when multiple tasks/processes are used on a DAOS client,
 then the DAOS agent will distribute the load by allocating different network
-ports to different tasks.
+ports to different tasks/processes.
 
 ## Operating Systems supported for DAOS Servers
 
@@ -253,7 +253,7 @@ to vendor-specific information for the supported networking hardware.
 
 ### OFI libfabric
 
-With the exception of UCX for InfiniBand networks,
+With the exception of UCX for NVIDIA InfiniBand and RoCE networks,
 OFI libfabric is the recommended networking stack for DAOS.
 DAOS Version 2.8.0 ships with libfabric version 1.22.0.
 It is strongly recommended to use the libfabric version that is included in the
@@ -380,13 +380,15 @@ DAOS Version 2.8 has **not** been tested and is not supported with
 heterogeneous Slingshot adapter configurations on the DAOS servers.
 
 
-### Omni-Path with libfabric TCP
+### Omni-Path with libfabric TCP or VERBS
 
 DAOS Version 2.8 should work over
 [Cornelis Omni-Path](https://www.cornelis.com/products/cn5000/family)
 fabrics with the libfabric `ofi+tcp` or `ofi+verbs` provider.
 For optimal verbs performance, it is recommended to enable
 CN5000 bulk service optimization in the HFI1 driver (use\_bulksvc=Y).
+For optimal TCP performance, it is recommended to configure
+the Omni-Path fabric manager with an MTU of 10240 byte.
 
 The recommended CN5000 Software level is:
 
