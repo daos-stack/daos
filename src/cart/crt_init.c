@@ -606,7 +606,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	char *save_provider_str = NULL, *save_interface_str = NULL, *save_domain_str = NULL,
 	     *save_port_str = NULL, *save_auth_key_str = NULL;
 	bool port_auto_adjust = false, thread_mode_single = false, progress_busy = false,
-	     mem_device = false;
+	     mem_device = false, progress_legacy = false;
 	int i;
 
 	d_signal_register();
@@ -689,6 +689,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	CRT_ENV_OPT_GET(opt, mem_device, D_MEM_DEVICE);
 	crt_gdata.cg_mem_device = mem_device;
+
+	CRT_ENV_OPT_GET(opt, progress_legacy, D_PROGRESS_LEGACY);
+	crt_gdata.cg_progress_legacy = progress_legacy;
 
 	if (provider == NULL) {
 		D_ERROR("No provider specified\n");
