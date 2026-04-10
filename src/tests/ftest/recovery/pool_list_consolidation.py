@@ -465,7 +465,7 @@ class PoolListConsolidationTest(TestWithServers):
                 cont_create_success = True
                 break
             except TestFail as error:
-                self.log.debug(f"Container create failed after running checker! error = {error}")
+                self.log.info("Container create failed after running checker! error = %s", error)
 
         if not cont_create_success:
             errors.append("Container create failed after running checker!")
