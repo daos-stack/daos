@@ -117,6 +117,14 @@ class PoolListConsolidationTest(TestWithServers):
         if not result.passed:
             self.fail(f"{command} failed on {result.failed_hosts}!")
 
+    def clean_mounts(self):
+        """Unmount and remove the tmpfs directory used for MD-on-SSD testing.
+        """
+        self.log_step(f"MD-on-SSD: Clean {self.tmpfs_mounts} on {self.hostlist_servers}")
+        for tmpfs_mount in self.tmpfs_mounts:
+            self.run_cmd_check_result(command=f"umount {tmpfs_mount}")
+            self.run_cmd_check_result(command=f"rm -rf {tmpfs_mount}")
+
     def test_dangling_pool(self):
         """Test dangling pool.
 
@@ -478,12 +486,7 @@ class PoolListConsolidationTest(TestWithServers):
         if count != 3:
             errors.append(f"Unexpected number of rdb-pool after repair! - {count} ranks")
 
-        if md_on_ssd:
-            self.log_step(f"MD-on-SSD: Clean {self.tmpfs_mounts} on {self.hostlist_servers}")
-            for tmpfs_mount in self.tmpfs_mounts:
-                self.run_cmd_check_result(command=f"umount {tmpfs_mount}")
-                self.run_cmd_check_result(command=f"rm -rf {tmpfs_mount}")
-
+        self.clean_mounts()
         report_errors(test=self, errors=errors)
 
     def test_lost_all_rdb(self):
