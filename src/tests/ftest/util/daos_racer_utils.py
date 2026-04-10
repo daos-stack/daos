@@ -64,32 +64,32 @@ class DaosRacerCommand(ExecutableCommand):
         """
         return self.get_attribute_names(FormattedParameter)
 
-    def get_params(self, test):
-        """Get values for all of the command params from the yaml file.
+    # def get_params(self, test):
+    #     """Get values for all of the command params from the yaml file.
 
-        Also sets default daos_racer environment.
+    #     Also sets default daos_racer environment.
 
-        Args:
-            test (Test): avocado Test object
+    #     Args:
+    #         test (Test): avocado Test object
 
-        """
-        super().get_params(test)
-        default_env = {
-            "D_LOG_FILE": get_log_file("{}_daos.log".format(self.command)),
-            "OMPI_MCA_btl_openib_warn_default_gid_prefix": "0",
-            "OMPI_MCA_btl": "tcp,self",
-            "OMPI_MCA_oob": "tcp",
-            "OMPI_MCA_pml": "ob1",
-            "D_LOG_MASK": "ERR"
-        }
-        for key, val in default_env.items():
-            if key not in self.env:
-                self.env[key] = val
+    #     """
+    #     super().get_params(test)
+    #     default_env = {
+    #         "D_LOG_FILE": get_log_file("{}_daos.log".format(self.command)),
+    #         "OMPI_MCA_btl_openib_warn_default_gid_prefix": "0",
+    #         "OMPI_MCA_btl": "tcp,self",
+    #         "OMPI_MCA_oob": "tcp",
+    #         "OMPI_MCA_pml": "ob1",
+    #         "D_LOG_MASK": "ERR"
+    #     }
+    #     for key, val in default_env.items():
+    #         if key not in self.env:
+    #             self.env[key] = val
 
-        if not load_mpi("openmpi"):
-            raise MPILoadError("openmpi")
+    #     if not load_mpi("openmpi"):
+    #         raise MPILoadError("openmpi")
 
-        self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
+    #     self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
 
     def run(self, raise_exception=None):
         """Run the daos_racer command remotely.
