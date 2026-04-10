@@ -320,7 +320,7 @@ class PoolListConsolidationTest(TestWithServers):
             tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
             orig_load_mount = {}
             for i, engine_params in enumerate(
-                self.server_managers[0].manager.job.yaml.engine_params):
+                    self.server_managers[0].manager.job.yaml.engine_params):
                 scm_mount = engine_params.get_value('scm_mount')
                 orig_load_mount[scm_mount] = tmpfs_mounts[i]
             self.log.info("orig_load_mount = %s", orig_load_mount)

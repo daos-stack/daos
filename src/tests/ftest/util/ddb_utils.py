@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
-import os
 from run_utils import run_remote
 
 
