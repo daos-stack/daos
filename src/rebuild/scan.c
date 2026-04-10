@@ -580,6 +580,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	daos_epoch_range_t	discard_epr;
 	bool			still_needed;
 	int			rc;
+	int                      blocked = 0;
 
 	/*
 	 * Compute placement for the object, then check if the layout
@@ -637,8 +638,10 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, DF_RB " retry by " DF_RC "/" DF_UOID "\n", DP_RB_RPT(rpt),
-			DP_RC(rc), DP_UOID(oid));
+		if ((++blocked) % 500 == 1)
+			D_WARN("Discard for object " DF_UOID " is blocked for %d times (%d)\n",
+			       DP_UOID(oid), blocked, rc);
+
 		/* Busy - inform iterator and yield */
 		*acts |= VOS_ITER_CB_YIELD;
 		dss_sleep(0);
