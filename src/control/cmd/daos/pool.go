@@ -73,7 +73,7 @@ type poolBaseCmd struct {
 	cPoolHandle C.daos_handle_t
 
 	Args struct {
-		Pool PoolID `positional-arg-name:"pool label or UUID" description:"required if --path is not used"`
+		Pool PoolID `positional-arg-name:"<pool label or UUID>" description:"required"`
 	} `positional-args:"yes"`
 }
 
