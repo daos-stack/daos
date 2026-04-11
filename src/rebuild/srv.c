@@ -127,6 +127,7 @@ rebuild_pool_tls_create(uuid_t pool_uuid, uuid_t poh_uuid, uuid_t coh_uuid,
 	rebuild_pool_tls->rebuild_pool_scanning = 1;
 	rebuild_pool_tls->rebuild_pool_scan_done = 0;
 	rebuild_pool_tls->rebuild_pool_obj_count = 0;
+	rebuild_pool_tls->rebuild_pool_obj_send_pending  = 0;
 	rebuild_pool_tls->rebuild_pool_reclaim_obj_count = 0;
 	rebuild_pool_tls->rebuild_tree_hdl = DAOS_HDL_INVAL;
 	/* Only 1 thread will access the list, no need lock */
