@@ -3057,7 +3057,7 @@ out:
 }
 
 #define KDS_NUM		96
-#define ITER_BUF_SIZE	2048
+#define ITER_BUF_SIZE   4096
 
 /**
  * Iterate akeys/dkeys of the object
