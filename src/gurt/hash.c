@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1283,7 +1284,7 @@ d_hhash_link_lookup(struct d_hhash *hhash, uint64_t key)
 			return NULL;
 		}
 
-		d_hash_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+		ch_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 		return hlink;
 	} else {
 		return d_hlink_find(&hhash->ch_htable, (void *)&key,
