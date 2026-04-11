@@ -661,7 +661,7 @@ func (svc *mgmtSvc) SystemCheckEngineReport(ctx context.Context, req *sharedpb.C
 	}
 
 	if req.Report.PoolLabel == "" && req.Report.PoolUuid != "" {
-		svc.log.Debug("looking up pool UUID")
+		svc.log.Tracef("looking up pool label for UUID %s, check report 0x%x", req.Report.PoolUuid, req.Report.Seq)
 		poolUUID, err := uuid.Parse(req.Report.PoolUuid)
 		if err != nil {
 			svc.log.Errorf("unable to parse pool UUID %q: %s", req.Report.PoolUuid, err)
