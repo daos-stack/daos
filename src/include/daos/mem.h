@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -751,6 +751,8 @@ typedef struct {
 	int		 (*mo_tx_commit)(struct umem_instance *umm, void *data);
 
 #ifdef DAOS_PMEM_BUILD
+	/** Set emergency buffer for transaction snapshot */
+	int (*mo_tx_set_snapbuf)(struct umem_instance *umm, umem_off_t snap_buf, size_t size);
 	/** get TX stage */
 	int		 (*mo_tx_stage)(void);
 
@@ -1079,6 +1081,13 @@ bool umem_tx_inprogress(struct umem_instance *umm);
 bool umem_tx_none(struct umem_instance *umm);
 
 int umem_tx_errno(int err);
+
+static inline void
+umem_tx_set_snapbuf(struct umem_instance *umm, umem_off_t snap_buf, size_t size)
+{
+	if (umm->umm_ops->mo_tx_set_snapbuf)
+		umm->umm_ops->mo_tx_set_snapbuf(umm, snap_buf, size);
+}
 
 static inline int
 umem_tx_stage(struct umem_instance *umm)

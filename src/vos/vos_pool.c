@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2025 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2025 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1444,6 +1444,13 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	/* pd_ext is newly allocated, no need to call tx_add_ptr() */
 	pd_ext_df             = umem_off2ptr(&umem, pool_df->pd_ext);
 	pd_ext_df->ped_mem_sz = scm_sz;
+	pd_ext_df->ped_gc_emerg = umem_zalloc(&umem, VOS_GC_SNAPBUF_EMERG);
+	if (UMOFF_IS_NULL(pd_ext_df->ped_gc_emerg)) {
+		D_ERROR("Failed to allocate pool GC emergency buffer.\n");
+		rc = -DER_NOSPACE;
+		goto end;
+	}
+
 end:
 	/**
 	 * The transaction can in reality be aborted
