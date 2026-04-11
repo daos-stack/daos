@@ -93,10 +93,10 @@ struct ds_pool {
 	 * rebuild job.
 	 */
 	uint32_t                 sp_rebuild_gen;
-	ATOMIC int               sp_rebuilding;
 	ATOMIC int               sp_discarding;
-	/* someone has already messaged this pool to for rebuild scan */
-	ATOMIC int               sp_rebuild_scanning;
+	ATOMIC int               sp_rebuilding;
+	/* someone has already messaged this pool to for rebuild object/key enumeration */
+	ATOMIC int               sp_rebuild_enum;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -202,8 +202,7 @@ struct ds_pool_svc_op_val {
 static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
-	return (atomic_load(&pool->sp_rebuilding) > 0 ||
-		atomic_load(&pool->sp_rebuild_scanning) > 0);
+	return (atomic_load(&pool->sp_rebuilding) > 0 || atomic_load(&pool->sp_rebuild_enum) > 0);
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.

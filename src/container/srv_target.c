@@ -184,7 +184,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
 		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			atomic_load(&pool->sp_rebuilding), atomic_load(&pool->sp_rebuild_scanning));
+			atomic_load(&pool->sp_rebuilding), atomic_load(&pool->sp_rebuild_enum));
 		return false;
 	}
 

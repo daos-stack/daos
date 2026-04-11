@@ -2323,8 +2323,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuilding) > 0);
 	atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
 
-	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuild_scanning) > 0);
-	atomic_store(&rpt->rt_pool->sp_rebuild_scanning, 0);
+	atomic_store(&rpt->rt_pool->sp_rebuild_enum, 0);
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
