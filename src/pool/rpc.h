@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1071,14 +1071,10 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 {
 	int                    rc;
 	crt_opcode_t           opcode;
-	static __thread uuid_t cli_id;
 	int                    proto_ver;
 	struct pool_op_in     *in;
 
 	proto_ver = dc_pool_proto_version ? dc_pool_proto_version : DAOS_POOL_VERSION;
-
-	if (uuid_is_null(cli_id))
-		uuid_generate(cli_id);
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE, proto_ver);
 	/* call daos_rpc_tag to get the target tag/context idx */
@@ -1101,7 +1097,7 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	if (req_timep && (proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		struct pool_op_v6_in *in6 = crt_req_get(*req);
 
-		uuid_copy(in6->pi_cli_id, cli_id);
+		daos_get_client_uuid(&in6->pi_cli_id);
 		in6->pi_time = *req_timep;
 	}
 	return 0;
