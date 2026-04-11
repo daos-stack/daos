@@ -1713,8 +1713,8 @@ out:
 	if (rc != 0)
 		D_FREE(hdl);
 
-	D_DEBUG(DB_MD, DF_UUID": connect "DF_RC"\n",
-		DP_UUID(pool->sp_uuid), DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": connect " DF_UUID " " DF_RC "\n", DP_UUID(pool->sp_uuid),
+		DP_UUID(pic->pic_hdl), DP_RC(rc));
 	return rc;
 }
 
