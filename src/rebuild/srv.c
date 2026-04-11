@@ -85,6 +85,38 @@ rpt_stale(struct rebuild_tgt_pool_tracker *rpt)
 	return !found;
 }
 
+enum {
+	RPT_ABORT_NONE = 0,
+	RPT_ABORT_ORPHANED_RECLAIM,
+	RPT_ABORT_GENERAL_STALE,
+};
+
+static int
+rpt_should_abort(struct rebuild_tgt_pool_tracker *rpt, struct ds_iv_ns *ns, struct rebuild_iv *iv)
+{
+	/* Abort orphaned rpt whose leader is gone. After PS leader switch,
+	 * reclaim tasks are not regenerated (UPIN not in DOWN/UP/DRAIN),
+	 * so this rpt has no matching rgt on the new leader and IV updates
+	 * are silently dropped.
+	 */
+	if (rpt->rt_leader_term < ns->iv_master_term && rpt->rt_scan_done &&
+	    (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM || rpt->rt_rebuild_op == RB_OP_RECLAIM)) {
+		D_ERROR(DF_UUID " ver %d gen %u op %s: stale term " DF_U64 " < " DF_U64
+				", abort orphaned rpt\n",
+			DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_rebuild_gen,
+			RB_OP_STR(rpt->rt_rebuild_op), rpt->rt_leader_term, ns->iv_master_term);
+
+		return RPT_ABORT_ORPHANED_RECLAIM;
+	}
+
+	if (iv->riv_pull_done && rpt_stale(rpt)) {
+		D_ERROR(DF_RB " is stale, exit the ULT.\n", DP_RB_RPT(rpt));
+		return RPT_ABORT_GENERAL_STALE;
+	}
+
+	return RPT_ABORT_NONE;
+}
+
 struct rebuild_pool_tls *
 rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen)
 {
@@ -795,6 +827,18 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		}
 		ABT_rwlock_unlock(pool->sp_lock);
 		map_ranks_fini(&rank_list);
+
+		/* Abort orphaned rgt if the node is no longer the leader.
+		 * After PS leader switch, this rgt becomes orphaned and should be aborted.
+		 */
+		if (rgt->rgt_leader_term < pool->sp_iv_ns->iv_master_term &&
+		    (rgt->rgt_opc == RB_OP_FAIL_RECLAIM || rgt->rgt_opc == RB_OP_RECLAIM)) {
+			D_INFO(DF_RB " op %s: stale term " DF_U64 " < " DF_U64
+				     ", abort orphaned rgt\n",
+			       DP_RB_RGT(rgt), RB_OP_STR(rgt->rgt_opc), rgt->rgt_leader_term,
+			       pool->sp_iv_ns->iv_master_term);
+			rebuild_abort = true;
+		}
 
 		if (rebuild_abort) {
 			rgt->rgt_abort = 1;
@@ -2523,10 +2567,8 @@ rebuild_tgt_status_check_ult(void *arg)
 			break;
 
 		sched_req_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
-		if (iv.riv_pull_done && rpt_stale(rpt)) {
-			D_ERROR(DF_RB " is stale, exit the ULT.\n", DP_RB_RPT(rpt));
+		if (rpt_should_abort(rpt, rpt->rt_pool->sp_iv_ns, &iv) != RPT_ABORT_NONE)
 			break;
-		}
 	}
 
 	sched_req_put(rpt->rt_ult);
