@@ -282,6 +282,17 @@ conv_req_props(daos_prop_t **out_prop, bool set_props,
 		case MGMT__POOL_PROPERTY__VALUE_NUMVAL:
 			entry->dpe_val = req_props[i]->numval;
 			break;
+		case MGMT__POOL_PROPERTY__VALUE_BYTEVAL:
+			if (req_props[i]->byteval.data == NULL || req_props[i]->byteval.len == 0) {
+				D_ERROR("byte value is NULL or empty\n");
+				D_GOTO(out, rc = -DER_PROTO);
+			}
+			D_ALLOC(entry->dpe_val_ptr, req_props[i]->byteval.len);
+			if (entry->dpe_val_ptr == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			memcpy(entry->dpe_val_ptr, req_props[i]->byteval.data,
+			       req_props[i]->byteval.len);
+			break;
 		default:
 			D_ERROR("Pool property request with no value (%d)\n",
 				req_props[i]->value_case);
@@ -1149,6 +1160,8 @@ free_response_props(Mgmt__PoolProperty **props, size_t n_props)
 	for (i = 0; i < n_props; i++) {
 		if (props[i]->value_case == MGMT__POOL_PROPERTY__VALUE_STRVAL)
 			D_FREE(props[i]->strval);
+		else if (props[i]->value_case == MGMT__POOL_PROPERTY__VALUE_BYTEVAL)
+			D_FREE(props[i]->byteval.data);
 		D_FREE(props[i]);
 	}
 

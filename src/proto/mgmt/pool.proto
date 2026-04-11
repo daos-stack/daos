@@ -262,6 +262,7 @@ message PoolProperty {
 	oneof value {
 		string strval = 2; // pool property string value
 		uint64 numval = 3; // pool property numeric value
+		bytes  byteval = 4; // pool property byte array value
 	}
 }
 

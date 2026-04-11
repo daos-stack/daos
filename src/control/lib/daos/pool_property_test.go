@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,11 +49,13 @@ func TestDaos_PoolPropertyValue(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		val    *daos.PoolPropertyValue
-		strVal *string
-		numVal *uint64
-		expErr error
-		expStr string
+		val      *daos.PoolPropertyValue
+		strVal   *string
+		numVal   *uint64
+		byteVal  []byte
+		expErr   error
+		expStr   string
+		expBytes []byte
 	}{
 		"nil": {
 			expErr: errors.New("not set"),
@@ -75,11 +77,20 @@ func TestDaos_PoolPropertyValue(t *testing.T) {
 			numVal: numPtr(42),
 			expStr: "42",
 		},
+		"byte value": {
+			val:      &daos.PoolPropertyValue{},
+			byteVal:  []byte("test-cert-data"),
+			expErr:   errors.New("not uint64"),
+			expStr:   "dGVzdC1jZXJ0LWRhdGE=",
+			expBytes: []byte("test-cert-data"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			v := tc.val
 
-			if tc.strVal != nil {
+			if tc.byteVal != nil {
+				v.SetBytes(tc.byteVal)
+			} else if tc.strVal != nil {
 				v.SetString(*tc.strVal)
 			} else if tc.numVal != nil {
 				v.SetNumber(*tc.numVal)
@@ -88,6 +99,16 @@ func TestDaos_PoolPropertyValue(t *testing.T) {
 			gotStr := v.String()
 			if diff := cmp.Diff(tc.expStr, gotStr); diff != "" {
 				t.Fatalf("unexpected String() result (-want, +got):\n%s\n", diff)
+			}
+
+			if tc.expBytes != nil {
+				gotBytes, err := v.GetBytes()
+				if err != nil {
+					t.Fatalf("unexpected GetBytes() error: %s", err)
+				}
+				if diff := cmp.Diff(tc.expBytes, gotBytes); diff != "" {
+					t.Fatalf("unexpected GetBytes() result (-want, +got):\n%s\n", diff)
+				}
 			}
 
 			gotNum, gotErr := v.GetNumber()
