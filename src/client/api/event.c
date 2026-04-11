@@ -49,8 +49,6 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 {
 	int rc;
 
-	/* We may change the func name in the future since it initializes too much than eq_lib. */
-
 	dc_tls_reset();
 	daos_dti_reset();
 
