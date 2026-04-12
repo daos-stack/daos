@@ -1205,6 +1205,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct ds_pool                  *pool = NULL;
+	bool                             checker = false;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
@@ -1340,6 +1341,7 @@ tls_lookup:
 		rpt_put(rpt);
 		D_GOTO(out, rc);
 	}
+	checker = true;
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
@@ -1350,18 +1352,20 @@ tls_lookup:
 	}
 
 out:
-	if (rc != 0) {
-		if (tls && tls->rebuild_pool_status == 0)
-			tls->rebuild_pool_status = rc;
-		if (rpt)
-			rpt_delete(rpt);
-		else if (pool) /* otherwise rpt_put() will decrease this for me */
+	if (rc != 0 && tls && tls->rebuild_pool_status == 0)
+		tls->rebuild_pool_status = rc;
+
+	if (pool) {
+		if (!checker)
 			atomic_fetch_sub(&pool->sp_rebuilding, 1);
-	}
-	if (pool)
 		ds_pool_put(pool);
-	if (rpt)
+	}
+
+	if (rpt) {
+		if (!checker)
+			rpt_delete(rpt);
 		rpt_put(rpt);
+	}
 
 	rso                   = crt_reply_get(rpc);
 	rso->rso_status       = rc;

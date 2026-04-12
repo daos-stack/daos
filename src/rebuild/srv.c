@@ -259,6 +259,8 @@ static void
 rpt_insert(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	rpt_get(rpt);
 	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
 	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
@@ -267,10 +269,17 @@ rpt_insert(struct rebuild_tgt_pool_tracker *rpt)
 void
 rpt_delete(struct rebuild_tgt_pool_tracker *rpt)
 {
+	bool decref = false;
+
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
-	d_list_del_init(&rpt->rt_list);
+	if (!d_list_empty(&rpt->rt_list)) {
+		d_list_del_init(&rpt->rt_list);
+		decref = true;
+	}
 	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
+	if (decref)
+		rpt_put(rpt);
 }
 
 struct rebuild_tgt_pool_tracker *
@@ -2358,7 +2367,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_INFO("Finalized rebuild for "DF_UUID", map_ver=%u.\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 	rpt_delete(rpt);
-	rpt_put(rpt);
 }
 
 void
@@ -2518,8 +2526,8 @@ rebuild_tgt_status_check_ult(void *arg)
 	sched_req_put(rpt->rt_ult);
 	rpt->rt_ult = NULL;
 out:
-	rpt_put(rpt);
 	rebuild_tgt_fini(rpt);
+	rpt_put(rpt);
 }
 
 /**
@@ -2666,7 +2674,6 @@ rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
 	/* Let's add the rpt to the tracker list before IV fetch, which might yield,
 	 * to make sure the new coming request can find the rpt in the list.
 	 */
-	rpt_get(rpt);
 	rpt_insert(rpt);
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
 				      &rpt->rt_coh_uuid);
@@ -2711,10 +2718,7 @@ rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
 	*p_rpt = rpt;
 out:
 	if (rc && rpt) {
-		if (!d_list_empty(&rpt->rt_list)) {
-			rpt_delete(rpt);
-			rpt_put(rpt);
-		}
+		rpt_delete(rpt);
 		rpt_put(rpt);
 	}
 	daos_prop_fini(&prop);
