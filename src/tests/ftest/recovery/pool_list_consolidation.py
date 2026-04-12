@@ -407,6 +407,8 @@ class PoolListConsolidationTest(TestWithServers):
             # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
             for host in hosts:
                 for rdb_pool_path in new_rdb_pool_paths:
+                    if count == 2:
+                        break
                     node = NodeSet(host)
                     # rdb_pool_path is something like "/mnt/daos2/$POOL/rdb-pool". Check if it
                     # exists in this host.
@@ -420,10 +422,6 @@ class PoolListConsolidationTest(TestWithServers):
                         self.log.info("Remove %s from %s", rdb_pool_path, str(node))
                         ddb_command.rm_pool(db_path=db_path, removing_path=rdb_pool_path)
                         count += 1
-                        if count == 2:
-                            break
-                if count == 2:
-                    break
 
         else:
             # PMEM case.
@@ -437,6 +435,8 @@ class PoolListConsolidationTest(TestWithServers):
             # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
             for host in hosts:
                 for rdb_pool_path in orig_rdb_pool_paths:
+                    if count == 2:
+                        break
                     node = NodeSet(host)
                     check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
                     if check_out[0]:
@@ -446,10 +446,6 @@ class PoolListConsolidationTest(TestWithServers):
                             self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                         self.log.info("Remove %s from %s", rdb_pool_path, str(node))
                         count += 1
-                        if count == 2:
-                            break
-                if count == 2:
-                    break
 
         self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
