@@ -484,7 +484,9 @@ class PoolListConsolidationTest(TestWithServers):
         if count != 3:
             errors.append(f"Unexpected number of rdb-pool after repair! - {count} ranks")
 
-        self.clean_mounts()
+        if md_on_ssd:
+            self.clean_mounts()
+
         report_errors(test=self, errors=errors)
 
     def test_lost_all_rdb(self):
