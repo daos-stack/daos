@@ -76,20 +76,21 @@ class DaosRacerCommand(ExecutableCommand):
         super().get_params(test)
         default_env = {
             "D_LOG_FILE": get_log_file("{}_daos.log".format(self.command)),
-            "OMPI_MCA_btl_openib_warn_default_gid_prefix": "0",
-            "OMPI_MCA_btl": "tcp,self",
-            "OMPI_MCA_oob": "tcp",
-            "OMPI_MCA_pml": "ob1",
-            "D_LOG_MASK": "ERR"
+            # "OMPI_MCA_btl_openib_warn_default_gid_prefix": "0",
+            # "OMPI_MCA_btl": "tcp,self",
+            # "OMPI_MCA_oob": "tcp",
+            # "OMPI_MCA_pml": "ob1",
+            # "D_LOG_MASK": "ERR"
         }
         for key, val in default_env.items():
             if key not in self.env:
                 self.env[key] = val
 
-        if not load_mpi("openmpi"):
-            raise MPILoadError("openmpi")
+        # if not load_mpi("openmpi"):
+        #     raise MPILoadError("openmpi")
 
-        self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
+        if "LD_LIBRARY_PATH" in os.environ:
+            self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
 
     def run(self, raise_exception=None):
         """Run the daos_racer command remotely.
