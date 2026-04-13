@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -827,8 +826,6 @@ child_hdlr(void)
 
 	/** Reset event queue */
 	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
-
-	saved_errno = 0;
 
 	if (ioil_iog.iog_eq_count_max) {
 		rc = daos_eq_create(&ioil_eqh);
