@@ -11,6 +11,8 @@ FROM fedora:$FVERSION
 # Needed for later use of FVERSION
 ARG FVERSION
 LABEL maintainer="daos@daos.groups.io"
+ARG DAOS_NO_PROXY
+ENV NO_PROXY=${DAOS_NO_PROXY}
 
 # Use local repo server if present
 ARG REPO_FILE_URL
@@ -38,8 +40,8 @@ RUN dnf -y install mock make                                        \
 ARG UID=1000
 
 # Add build user (to keep rpmbuild happy)
-ENV USER build
-ENV PASSWD build
+ENV USER=build
+ENV PASSWD=build
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 # add the user to the mock group so it can run mock
