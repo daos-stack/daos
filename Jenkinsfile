@@ -553,7 +553,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.6') {
+                stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -630,7 +630,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 8.8') {
+                stage('Build on EL 8') {
                     when {
                         beforeAgent true
                         expression { !params.CI_el8_NOBUILD && !skipStage() }
@@ -706,7 +706,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.6') {
+                stage('Build on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !params.CI_leap15_NOBUILD && !skipStage() }
