@@ -1,6 +1,6 @@
 #
 # Copyright 2018-2024 Intel Corporation
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # 'recipe' for Docker to build an RPM
 #
@@ -38,8 +38,8 @@ RUN dnf -y install mock make                                        \
 ARG UID=1000
 
 # Add build user (to keep rpmbuild happy)
-ENV USER build
-ENV PASSWD build
+ENV USER=build
+ENV PASSWD=build
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 # add the user to the mock group so it can run mock
