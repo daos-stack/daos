@@ -623,7 +623,7 @@ class DaosServer():
             os.unlink(server_file)
         for log in self.server_logs:
             if os.path.exists(log.name):
-                log_test(self.conf, log.name)
+                log_test(self.conf, log.name, skip_fi=self._fi)
         try:
             os.unlink(join(self.agent_dir, 'nlt_agent.yaml'))
             os.rmdir(self.agent_dir)
@@ -4896,6 +4896,14 @@ def log_test(conf,
 
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
+
+    if skip_fi:
+        lto.skip_substrings.extend([
+            'sluggish ec boundary report from rank',
+            'sluggish stable epoch reporting',
+            'progress callback was not called for too long',
+            'rpc failed; rc:',
+        ])
 
     try:
         lto.check_log_file(abort_on_warning=True,
