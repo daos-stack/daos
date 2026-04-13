@@ -663,7 +663,6 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 				struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj;
 
 				desc.id_bkt = p2->p2_bkt_ids[0];
-				D_ASSERT(!is_sysdb);
 			}
 
 			feats = dbtree_feats_get(&obj->vo_tree);
