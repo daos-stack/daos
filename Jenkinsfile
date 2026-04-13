@@ -47,7 +47,7 @@ void job_step_update(def value=currentBuild.currentResult) {
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
-Map nlt_test() {
+Map nlt_test(String scriptArgs = '--class-name fault-injection fi') {
     // groovylint-disable-next-line NoJavaUtilDate
     Date startDate = new Date()
     try {
@@ -56,7 +56,7 @@ Map nlt_test() {
         print 'Unstash failed, results from NLT stage will not be included'
     }
     sh label: 'Fault injection testing using NLT',
-       script: './ci/docker_nlt.sh --class-name fault-injection fi'
+       script: './ci/docker_nlt.sh ' + scriptArgs
     List filesList = []
     filesList.addAll(findFiles(glob: '*.memcheck.xml'))
     int vgfail = 0
@@ -975,17 +975,10 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 60,
-                                     inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
-                                     unstash_opt: true,
-                                     unstash_tests: false,
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
-                        //                 skipPublishingChecks: true,
-                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
-                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
+                            sconsBuild(parallel_build: true,
+                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
+                                       build_deps: 'no'))
+                        job_step_update(nlt_test(""))
                     }
                     post {
                         always {
