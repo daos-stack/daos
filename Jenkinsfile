@@ -956,6 +956,56 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
+                stage('NLT on docker') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.el.9'
+                            label 'fox-119_docker_1'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
+                                                                deps_build: true) +
+                                                                ' --build-arg POINT_RELEASE=.7 ' +
+                                                                ' --build-arg DAOS_DEPS_INSTALL=' + env.DAOS_RELVAL
+                            args '--tmpfs /mnt/daos_0'
+                        }
+                    }
+                    steps {
+                        job_step_update(
+                            unitTest(timeout_time: 60,
+                                     inst_repos: daosRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7'))
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+                        //                 skipPublishingChecks: true,
+                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
+                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         valgrind_stash: 'nlt-memcheck'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         name: 'NLT server leaks',
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+                                         tool: issues(pattern: 'nlt-server-leaks.json',
+                                           name: 'NLT server results',
+                                           id: 'NLT_server'),
+                                         scm: 'daos-stack/daos'
+                            job_status_update()
+                        }
+                    }
+                }
                 stage('Fault injection testing') {
                     when {
                         beforeAgent true
@@ -968,7 +1018,8 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                                ' --build-arg POINT_RELEASE=.7 '
+                                                                ' --build-arg POINT_RELEASE=.7 ' +
+                                                                ' --build-arg DAOS_DEPS_INSTALL=' + env.DAOS_RELVAL
                             args '--tmpfs /mnt/daos_0'
                         }
                     }
