@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -551,6 +551,10 @@ d_log_disable_logging(void)
 	mst.log_old_fd = -1;
 }
 
+static __thread uint32_t dlog_tid = -1;
+static __thread uint32_t dlog_pid = -1;
+static __thread bool     dlog_id_inited;
+
 /**
  * d_vlog: core log function, front-ended by d_log
  * we vsnprintf the message into a holding buffer to format it.  then we
@@ -569,8 +573,6 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
 	static __thread char b[DLOG_TBSIZ];
-	static __thread uint32_t tid = -1;
-	static __thread uint32_t pid = -1;
 	static uint64_t	last_flush;
 
 	uint64_t uid = 0;
@@ -608,14 +610,15 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	if ((mst.oflags & DLOG_FLV_TAG) && (mst.oflags & DLOG_FLV_LOGPID)) {
 		/* Init static members in ahead of lock */
-		if (pid == (uint32_t)(-1))
-			pid = (uint32_t)getpid();
+		if (unlikely(!dlog_id_inited)) {
+			dlog_pid = (uint32_t)getpid();
 
-		if (tid == (uint32_t)(-1)) {
 			if (mst.log_id_cb)
-				mst.log_id_cb(&tid, NULL);
+				mst.log_id_cb(&dlog_tid, NULL);
 			else
-				tid = (uint32_t)syscall(SYS_gettid);
+				dlog_tid = (uint32_t)syscall(SYS_gettid);
+
+			dlog_id_inited = true;
 		}
 
 		if (mst.log_id_cb)
@@ -653,9 +656,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%s%d/%d/"DF_U64"] ", d_log_xst.tag,
-					 pid, tid, uid);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s%d/%d/" DF_U64 "] ",
+					 d_log_xst.tag, dlog_pid, dlog_tid, uid);
 		} else {
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
 					 d_log_xst.tag);
@@ -1404,4 +1406,13 @@ int d_log_getmasks(char *buf, int discard, int len, int unterm)
 		clog_bput(&bp, &skipcnt, &resid, &total, NULL);
 	/* buf == NULL means probe for length ... */
 	return ((buf == NULL) ? total : len - resid);
+}
+
+void
+d_log_reset(void)
+{
+	dlog_id_inited = false;
+	pre_err        = 0;
+	pre_err_line   = 0;
+	pre_err_time   = 0;
 }
