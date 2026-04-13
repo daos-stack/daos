@@ -235,6 +235,8 @@ class LogTest():
         self.log_levels = Counter()
         self.log_count = 0
         self._common_shown = False
+        self.skip_substring_total = 0
+        self.skip_substring_hits = Counter()
 
     def __del__(self):
         if not self.quiet and not self._common_shown:
@@ -446,8 +448,14 @@ class LogTest():
                         show = False
                     if show:
                         line_msg = line.get_msg().casefold()
-                        if any(sub in line_msg for sub in self.skip_substrings):
+                        sub = next((entry for entry in self.skip_substrings if entry in line_msg),
+                                   None)
+                        if sub:
                             show = False
+                            self.skip_substring_total += 1
+                            self.skip_substring_hits[sub] += 1
+                            print('NLT_FI_SKIP_DEBUG: matched skip_substring '
+                                  f"'{sub}' in '{line.get_msg()}'")
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher like assert should
                         # trigger a failure.

@@ -5030,12 +5030,23 @@ def log_test(conf,
             'rpc failed; rc:',
         ])
 
+        print(f'NLT_FI_SKIP_DEBUG: parser={nlt_lt.__file__}')
+        print('NLT_FI_SKIP_DEBUG: active skip_substrings: '
+              + ', '.join(lto.skip_substrings))
+
     try:
         lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks,
                            leak_wf=leak_wf)
     except nlt_lt.LogCheckError:
         pass
+
+    if skip_fi:
+        print('NLT_FI_SKIP_DEBUG: skip_substring matches='
+              + str(getattr(lto, 'skip_substring_total', 0)))
+        if hasattr(lto, 'skip_substring_hits'):
+            print('NLT_FI_SKIP_DEBUG: skip_substring hit breakdown='
+                  + str(dict(lto.skip_substring_hits)))
 
     if skip_fi:
         if not lto.fi_triggered:
