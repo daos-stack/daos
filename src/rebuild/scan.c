@@ -1201,7 +1201,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_scan_out		*rout;
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
-	struct ds_pool                  *pool = NULL;
+	struct ds_pool                  *pool    = NULL;
 	bool                             checker = false;
 	int				 rc;
 
