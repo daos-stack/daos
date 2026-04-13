@@ -5555,14 +5555,29 @@ out_lock:
 				"%d.\n", DP_UUID(in->psi_op.pi_uuid), rc);
 		daos_prop_free(prop);
 	}
-	/* If self_heal.exclude is set, resume event handling. */
+	/* self_heal evaluation:
+	 * If self_heal.exclude is set, resume event handling.
+	 * If self_heal.rebuild is set, regenerate rebuild tasks.
+	 */
 	if (rc == 0 && !dup_op) {
 		struct daos_prop_entry *entry;
 
 		entry = daos_prop_entry_get(prop_in, DAOS_PROP_PO_SELF_HEAL);
-		if (entry != NULL && daos_prop_is_set(entry) &&
-		    entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)
-			resume_event_handling(svc);
+		if (entry != NULL && daos_prop_is_set(entry)) {
+			if (entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)
+				resume_event_handling(svc);
+
+			/* future: consider verifying that rebuild is being re-enabled in this
+			 * set-prop as a condition of regenerating rebuild tasks.
+			 */
+			if (entry->dpe_val &
+			    (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) {
+				D_INFO(DF_UUID
+				       ": regenerating rebuild tasks due to self_heal change\n",
+				       DP_UUID(svc->ps_pool->sp_uuid));
+				ds_rebuild_regenerate_task(svc->ps_pool, prop_in, 0);
+			}
+		}
 	}
 out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
@@ -7395,6 +7410,13 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	char				*env;
 	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
+	bool                             auto_recovery;
+
+	/*
+	 * The pool self-heal policies only apply to automatic pool exclude
+	 * and rebuild operations.
+	 */
+	auto_recovery = (opc == MAP_EXCLUDE && src == MUS_SWIM);
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
@@ -7422,7 +7444,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
 	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD))) {
+	if (auto_recovery &&
+	    !(entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD))) {
 		D_DEBUG(DB_MD, "self healing is disabled\n");
 		D_GOTO(out, rc);
 	}
