@@ -366,7 +366,10 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	for (i = 0; i < snapshots_nr && snapshots[i] < epoch_min; ++i)
 		;
 
-	epoch_range.epr_lo = epoch_min != 0 ? epoch_min + 1 : 0;
+	if (i == 0)
+		epoch_range.epr_lo = 0;
+	else
+		epoch_range.epr_lo = snapshots[i - 1] + 1;
 
 	if (epoch_range.epr_lo >= epoch_max)
 		D_GOTO(free, rc = 0);
