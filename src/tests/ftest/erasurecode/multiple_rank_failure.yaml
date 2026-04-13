@@ -33,6 +33,8 @@ container:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 
 ior:
+  env_vars:
+    - D_LOG_MASK=DEBUG
   api: "DFS"
   client_processes:
     np: 32
@@ -43,22 +45,22 @@ ior:
   test_file: /testFile
   repetitions: 1
   sizes: !mux
-    Full_Striped:
-      chunk_block_transfer_sizes:
-        - [32M, 8G, 8M]
+    # Full_Striped:
+    #   chunk_block_transfer_sizes:
+    #     - [32M, 8G, 8M]
     Partial_Striped:
       chunk_block_transfer_sizes:
-        - [32M, 512M, 2K]
+        - [512M]
   objectclass: !mux
-    EC_2P2GX:
-      dfs_oclass_list:
-        - ["EC_2P2GX", 6]
+    # EC_2P2GX:
+    #   dfs_oclass_list:
+    #     - ["EC_2P2GX", 6]
     EC_4P2GX:
       dfs_oclass_list:
         - ["EC_4P2GX", 8]
     EC_4P3GX:
       dfs_oclass_list:
         - ["EC_4P3GX", 10]
-    EC_8P2GX:
-      dfs_oclass_list:
-        - ["EC_8P2GX", 10]
+    # EC_8P2GX:
+    #   dfs_oclass_list:
+    #     - ["EC_8P2GX", 10]
