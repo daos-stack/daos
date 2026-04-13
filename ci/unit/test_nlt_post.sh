@@ -22,5 +22,13 @@ rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
       --filter="include nlt*.json" --filter="include dnt*.xml" \
       --filter="include nltir.xml" --filter="include nltr.json" \
       --filter="include nlt-junit.xml" --filter="exclude *" ./
+
+# Copy per-test valgrind memcheck XMLs into a dedicated directory so
+# they are archived as a logical group. The originals stay at the
+# workspace root so unitTestPost's valgrind_stash still picks them up
+# for the pipeline-end valgrindReportPublish panel.
+mkdir -p nlt_memcheck_logs
+cp dnt*.memcheck.xml nlt_memcheck_logs/ 2>/dev/null || true
+
 mkdir -p vm_test
 mv nlt-errors.json vm_test/

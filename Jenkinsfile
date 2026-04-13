@@ -762,7 +762,10 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_logs/', 'nlt_memcheck_logs/',
+                                                     'nlt-server-leaks.json',
+                                                     'nlt-junit.xml',
+                                                     'vm_test/nlt-errors.json'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'nlt-memcheck'
@@ -1035,7 +1038,7 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
+                            archiveArtifacts artifacts: 'nlt_logs/fault-injection/,nlt-errors.json,nlt-client-leaks.json,nlt-junit.xml',
                                              allowEmptyArchive: true
                             job_status_update()
                         }
