@@ -22,6 +22,7 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
+unsigned int	agg_max_ults = 8; /* Max concurrent per-object aggregation ULTs per pool */
 uint32_t        pw_rf = -1; /* pool wise redundancy factor */
 uint32_t        ps_cache_intvl = 2;  /* pool space cache expiration time, in seconds */
 #define PW_RF_DEFAULT (2)
@@ -72,6 +73,11 @@ init(void)
 	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
+
+	d_getenv_uint("DAOS_AGG_MAX_ULTS", &agg_max_ults);
+	if (agg_max_ults == 0)
+		agg_max_ults = 1;
+	D_INFO("Max concurrent aggregation ULTs per pool: %u\n", agg_max_ults);
 
 	pw_rf = -1;
 	if (!check_pool_redundancy_factor("DAOS_POOL_RF"))

@@ -175,6 +175,8 @@ struct ds_pool_child {
 	struct sched_request	*spc_flush_req;	/* Dedicated VEA flush ULT */
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
 	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
+	/* Global aggregation scanner ULT (replaces per-container agg ULTs) */
+	struct sched_request	*spc_agg_req;
 	d_list_t		spc_cont_list;
 	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
@@ -425,6 +427,7 @@ int
 	    ds_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, struct rsvc_hint *hint);
 
 extern bool ec_agg_disabled;
+extern unsigned int agg_max_ults;
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,

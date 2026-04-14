@@ -609,10 +609,19 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	if (rc)
 		goto out_cont;
 
+	/* Start global aggregation scanner after containers are started */
+	if (!ds_pool_restricted(child->spc_pool, false)) {
+		rc = ds_start_agg_ult(child);
+		if (rc != 0)
+			goto out_agg;
+	}
+
 done:
 	*child->spc_state = POOL_CHILD_STARTED;
 	return 0;
 
+out_agg:
+	ds_stop_agg_ult(child);
 out_cont:
 	ds_cont_child_stop_all(child);
 	ds_stop_chkpt_ult(child);
@@ -686,7 +695,9 @@ pool_child_stop(struct ds_pool_child *child)
 	if (unlikely(child->spc_no_storage))
 		goto wait;
 
-	/* First stop all the ULTs who might need to hold ds_pool_child (or ds_cont_child) */
+	/* First stop the global aggregation scanner (iterates containers) */
+	ds_stop_agg_ult(child);
+	/* Then stop all the ULTs who might need to hold ds_pool_child (or ds_cont_child) */
 	ds_cont_child_stop_all(child);
 	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	ds_cont_srv_close(child);

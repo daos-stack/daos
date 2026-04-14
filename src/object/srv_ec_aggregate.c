@@ -2752,9 +2752,16 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	 * Avoid calling into vos_aggregate() when aborting aggregation
 	 * on ds_cont_child purging.
 	 */
-	D_ASSERT(cont->sc_ec_agg_req != NULL);
-	if (dss_ult_exiting(cont->sc_ec_agg_req))
-		return 1;
+	if (agg_param->ap_req != NULL) {
+		/* Global scanner path - use scanner's req */
+		if (dss_ult_exiting(agg_param->ap_req))
+			return 1;
+	} else {
+		/* Legacy per-container ULT path */
+		D_ASSERT(cont->sc_ec_agg_req != NULL);
+		if (dss_ult_exiting(cont->sc_ec_agg_req))
+			return 1;
+	}
 
 	if (!ec_agg_param->ap_initialized) {
 		rc = ec_agg_param_init(cont, agg_param);
