@@ -22,15 +22,6 @@ ENV NO_PROXY=${DAOS_NO_PROXY}
 RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
-# Accept DAOS_HTTPS_PROXY at build time
-ARG DAOS_HTTPS_PROXY
-# Propagate into the build environment
-ENV https_proxy=${DAOS_HTTPS_PROXY}
-ENV HTTPS_PROXY=${DAOS_HTTPS_PROXY}
-# Persist into /etc/environment for use by shells and services
-RUN echo "https_proxy=${DAOS_HTTPS_PROXY}" >> /etc/environment && \
-    echo "HTTPS_PROXY=${DAOS_HTTPS_PROXY}" >> /etc/environment
-
 # Use local repo server if present
 ARG REPO_FILE_URL
 ARG DAOS_LAB_CA_FILE_URL
@@ -44,12 +35,7 @@ RUN chmod +x /tmp/repo-helper.sh &&                 \
     rm -f /tmp/repo-helper.sh
 
 # Install Python Bandit scanner.
-# The unset commands are currently needed for the combination of running
-# with a local repository, yet needing a proxy to reach outside repositories.
-# This needs to be moved to a shell script like above in the future to
-# properly only remove the proxy variables only when they need to be removed
-RUN unset HTTPS_PROXY && unset https_proxy && \
-    dnf -y upgrade && dnf -y install bandit && dnf clean all
+RUN dnf -y upgrade && dnf -y install bandit && dnf clean all
 
 ARG CB1
-RUN unset HTTPS_PROXY && unset https_proxy && dnf -y upgrade && dnf clean all
+RUN dnf -y upgrade && dnf clean all
