@@ -187,6 +187,7 @@ build_package() {
   --prefix "" \
   "${depends[@]}" \
   "${conflicts[@]}" \
+  "${config_files[@]}" \
   "${EXTRA_OPTS[@]}" \
   "${install_list[@]}"
 
