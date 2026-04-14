@@ -811,22 +811,36 @@ btr_node_is_full(struct btr_context *tcx, umem_off_t nd_off)
 	return nd->tn_keyn == tcx->tc_order - 1;
 }
 
-static inline void
-btr_node_set(struct btr_context *tcx, umem_off_t nd_off,
-	     unsigned int bits)
+static inline int
+btr_node_set(struct btr_context *tcx, umem_off_t nd_off, unsigned int bits, bool tx_add)
 {
 	struct btr_node *nd = btr_off2ptr(tcx, nd_off);
+	int              rc;
 
+	if (tx_add) {
+		rc = umem_tx_add(btr_umm(tcx), nd_off, btr_node_size(tcx));
+		if (rc)
+			return rc;
+	}
 	nd->tn_flags |= bits;
+
+	return 0;
 }
 
-static inline void
-btr_node_unset(struct btr_context *tcx, umem_off_t nd_off,
-	       unsigned int bits)
+static inline int
+btr_node_unset(struct btr_context *tcx, umem_off_t nd_off, unsigned int bits, bool tx_add)
 {
 	struct btr_node *nd = btr_off2ptr(tcx, nd_off);
+	int              rc;
 
+	if (tx_add) {
+		rc = umem_tx_add(btr_umm(tcx), nd_off, btr_node_size(tcx));
+		if (rc)
+			return rc;
+	}
 	nd->tn_flags &= ~bits;
+
+	return 0;
 }
 
 static inline bool
@@ -1032,7 +1046,10 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec, d_iov_t *key, bo
 	}
 
 	/* root is also leaf, records are stored in root */
-	btr_node_set(tcx, nd_off, BTR_NODE_ROOT | BTR_NODE_LEAF);
+	rc = btr_node_set(tcx, nd_off, BTR_NODE_ROOT | BTR_NODE_LEAF, false);
+	if (rc)
+		return rc;
+
 	nd = btr_off2ptr(tcx, nd_off);
 
 	/** If we have an embedded entry, we need to insert 2 entries here */
@@ -1135,9 +1152,14 @@ btr_root_grow(struct btr_context *tcx, umem_off_t off_left,
 
 	/* the left child is the old root */
 	D_ASSERT(btr_node_is_root(tcx, off_left));
-	btr_node_unset(tcx, off_left, BTR_NODE_ROOT);
+	rc = btr_node_unset(tcx, off_left, BTR_NODE_ROOT, btr_has_tx(tcx));
+	if (rc)
+		return rc;
 
-	btr_node_set(tcx, nd_off, BTR_NODE_ROOT);
+	rc = btr_node_set(tcx, nd_off, BTR_NODE_ROOT, false);
+	if (rc)
+		return rc;
+
 	rec_dst = btr_node_rec_at(tcx, nd_off, 0);
 	btr_rec_copy(tcx, rec_dst, rec, 1);
 
@@ -1358,8 +1380,11 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 		return rc;
 
 	leaf = btr_node_is_leaf(tcx, off_left);
-	if (leaf)
-		btr_node_set(tcx, off_right, BTR_NODE_LEAF);
+	if (leaf) {
+		rc = btr_node_set(tcx, off_right, BTR_NODE_LEAF, false);
+		if (rc)
+			return rc;
+	}
 
 	split_at = btr_split_at(tcx, level, off_left, off_right);
 
@@ -1370,6 +1395,13 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	nd_right = btr_off2ptr(tcx, off_right);
 
 	nd_right->tn_keyn = nd_left->tn_keyn - split_at;
+
+	if (btr_has_tx(tcx)) {
+		rc = btr_node_tx_add(tcx, off_left);
+		if (rc)
+			return rc;
+	}
+
 	nd_left->tn_keyn  = split_at;
 
 	if (leaf) {
@@ -1495,6 +1527,7 @@ btr_root_resize(struct btr_context *tcx, struct btr_trace *trace,
 		D_DEBUG(DB_TRACE, "Failed to allocate new root\n");
 		return rc;
 	}
+	D_ASSERT(nd_off != UMOFF_NULL);
 	trace->tr_node = root->tr_node = nd_off;
 	memcpy(btr_off2ptr(tcx, nd_off), nd, old_size);
 	/* NB: Both of the following routines can fail but neither presently
@@ -1946,27 +1979,61 @@ btr_probe_key(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	return btr_probe(tcx, probe_opc, intent, key, hkey);
 }
 
+static void
+dump_trace(struct btr_context *tcx, struct btr_trace *trace, int cur_level)
+{
+	int level;
+
+	D_ERROR("Tree depth=%u/%u, feats=" DF_X64 "/" DF_X64 ", cur_level:%d\n",
+		tcx->tc_tins.ti_root->tr_depth, tcx->tc_depth, tcx->tc_tins.ti_root->tr_feats,
+		tcx->tc_feats, cur_level);
+
+	while (trace > tcx->tc_trace.ti_trace) {
+		level = (int)(trace - (tcx)->tc_trace.ti_trace);
+
+		D_ERROR("level=%d, at=%u, tr_node=" DF_U64 "\n", level, trace->tr_at,
+			trace->tr_node);
+		trace--;
+	}
+
+	D_ASSERT(0);
+}
+
 static bool
 btr_probe_next(struct btr_context *tcx)
 {
-	struct btr_trace	*trace;
+	struct btr_trace        *trace, *orig_trace;
 	struct btr_node		*nd;
 	umem_off_t	 nd_off;
+	int                      cur_level;
 
 	if (btr_root_empty(tcx)) /* empty tree */
 		return false;
 
 	trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
+	orig_trace = trace;
+	cur_level  = tcx->tc_depth - 1;
 
 	btr_trace_debug(tcx, trace, "Probe the next\n");
 
 	if (btr_has_embedded_value(tcx)) /* For embedded value, there is no next entry */
 		return false;
 
+	if (trace->tr_node == UMOFF_NULL) {
+		D_ERROR("Invalid trace!\n");
+		dump_trace(tcx, orig_trace, cur_level);
+	}
+
 	while (1) {
 		bool leaf;
 
 		nd_off = trace->tr_node;
+
+		if (nd_off == UMOFF_NULL) {
+			D_ERROR("Invalid node!\n");
+			dump_trace(tcx, orig_trace, cur_level);
+		}
+
 		leaf = btr_node_is_leaf(tcx, nd_off);
 
 		nd = btr_off2ptr(tcx, nd_off);
@@ -1983,7 +2050,12 @@ btr_probe_next(struct btr_context *tcx)
 
 		if (trace->tr_at >= nd->tn_keyn - leaf) {
 			/* finish current level */
+			if (trace <= tcx->tc_trace.ti_trace) {
+				D_ERROR("Invalid level, keyn:%u, leaf:%d\n", nd->tn_keyn, leaf);
+				dump_trace(tcx, orig_trace, cur_level);
+			}
 			trace--;
+			cur_level--;
 			continue;
 		}
 
@@ -2036,6 +2108,7 @@ btr_probe_prev(struct btr_context *tcx)
 
 		if (trace->tr_at == 0) {
 			/* finish current level */
+			D_ASSERT(trace > tcx->tc_trace.ti_trace);
 			trace--;
 			continue;
 		}
@@ -2578,6 +2651,7 @@ btr_node_del_embed(struct btr_context *tcx, struct btr_trace *trace, struct btr_
 			return rc;
 	}
 
+	D_ASSERT(rec->rec_off != UMOFF_NULL);
 	root->tr_node = rec->rec_off;
 	root->tr_feats |= BTR_FEAT_EMBEDDED;
 	tcx->tc_feats = root->tr_feats;
@@ -3320,7 +3394,10 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			root->tr_node = node->tn_child;
 
 			btr_context_set_depth(tcx, root->tr_depth);
-			btr_node_set(tcx, node->tn_child, BTR_NODE_ROOT);
+			rc = btr_node_set(tcx, node->tn_child, BTR_NODE_ROOT, btr_has_tx(tcx));
+			if (rc)
+				return rc;
+
 			rc = btr_node_free(tcx, trace->tr_node);
 
 			D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
