@@ -426,8 +426,9 @@ int
 
 extern bool ec_agg_disabled;
 extern unsigned int agg_max_ults;
+extern unsigned int agg_num_scanners;
 
-/* Global per-xstream aggregation scanner (one ULT for all pools/containers) */
+/* Global per-xstream aggregation scanners */
 void ds_start_agg_scanner(void);
 void ds_stop_agg_scanner(void);
 

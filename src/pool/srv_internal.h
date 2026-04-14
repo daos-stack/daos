@@ -42,11 +42,15 @@ struct pool_metrics {
 	struct d_tm_node_t      *degraded_ranks;
 };
 
+/* Maximum number of aggregation scanner ULTs per xstream */
+#define AGG_SCANNER_MAX		16
+
 /* Pool thread-local storage */
 struct pool_tls {
 	struct d_list_head	dt_pool_list;	/* of ds_pool_child objects */
-	/* Global aggregation scanner ULT (one per xstream, iterates all pools) */
-	struct sched_request	*dt_agg_req;
+	/* Aggregation scanner ULTs (up to AGG_SCANNER_MAX per xstream) */
+	struct sched_request	*dt_agg_reqs[AGG_SCANNER_MAX];
+	unsigned int		 dt_num_scanners; /* currently running count */
 };
 
 extern struct dss_module_key pool_module_key;
