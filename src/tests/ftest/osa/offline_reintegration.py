@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -64,7 +65,6 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 # method.
                 if pool_fillup > 0:
                     self.ior_cmd.dfs_oclass.update(oclass)
-                    self.ior_cmd.dfs_dir_oclass.update(oclass)
                     self.ior_default_flags = self.ior_w_flags
                     self.ior_cmd.repetitions.update(self.ior_test_repetitions)
                     self.log.info(self.pool.pool_percentage_used())
