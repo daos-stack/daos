@@ -215,11 +215,11 @@ if rpm -q daos-server; then
   exit 1
 fi
 if [ ! -f /etc/daos/daos_agent.yml ]; then
-    echo "Modified daos_agent.yml config file should have been removed with RPM removal"
+    echo "Modified daos_agent.yml config file should not have been removed with RPM removal"
     exit 1
 fi
 if [ ! -f /etc/daos/daos_control.yml ]; then
-    echo "Modified daos_control.yml config file should have been removed with RPM removal"
+    echo "Modified daos_control.yml config file should not have been removed with RPM removal"
     exit 1
 fi
 if [ ! -f /etc/daos/daos_server.yml ]; then
