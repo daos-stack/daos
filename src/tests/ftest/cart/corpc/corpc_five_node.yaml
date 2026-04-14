@@ -4,7 +4,7 @@
 ENV:
   default:
     # !filter-only : /run/tests/corpc_prefwd
-    - D_LOG_MASK: "WARN,CORPC=DEBUG"
+    - D_LOG_MASK: "INFO,CORPC=DEBUG"
     - D_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "0"
 env_D_PROVIDER: !mux
