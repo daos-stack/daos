@@ -1,6 +1,6 @@
 /**
- * Copyright 2016-2023 Intel Corporation.
- * Copyright 2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -107,16 +107,6 @@ struct pl_map_attr {
 	int		pa_domain_nr;
 	int		pa_target_nr;
 };
-
-enum pl_layout_gen_bits {
-	/* setting this flag allows placement algorithm to finish layout computation
-	 * after reaching the specified shard.
-	 */
-	PL_FL_GRP_SPEC = (1 << 0),
-};
-
-/* don't overflow integer */
-#define PL_GRP_MAX (1 << 30)
 
 int pl_init(void);
 void pl_fini(void);

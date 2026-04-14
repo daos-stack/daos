@@ -1,7 +1,7 @@
 /**
  *
- * Copyright 2016-2024 Intel Corporation.
- * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -166,32 +166,21 @@ jm_obj_shard_pd(struct jm_obj_placement *jmop, uint32_t shard)
  *				recent pool map changes, like reintegration.
  * \param[in]	new_lo		The new layout that contains changes in layout
  *				that occurred due to pool status changes.
+ * \param[in]	rebuilding	diff calls to extract the rebuilding shards for scanner.
  * \param[out]	diff		The d_list that contains the differences that
  *				were calculated.
- * \param[in]	rebuilding	diff calls to extract the rebuilding shards for scanner.
- * \param[in]	grp_spec	only get diff for the specified group, PL_GRP_MAX
- * 				means comparing full layout.
  */
 static inline int
 layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *old_lo,
-		 struct pl_obj_layout *new_lo, d_list_t *diff, bool rebuilding, int grp_spec)
+		 struct pl_obj_layout *new_lo, d_list_t *diff, bool rebuilding)
 {
 	int index;
-	int end;
 	int rc;
 
 	/* We assume they are the same size */
 	D_ASSERT(old_lo->ol_nr == new_lo->ol_nr);
 
-	if (grp_spec == PL_GRP_MAX) {
-		index = 0;
-		end   = old_lo->ol_nr;
-	} else {
-		index = grp_spec * old_lo->ol_grp_size;
-		end   = index + old_lo->ol_grp_size;
-	}
-
-	for (; index < end; ++index) {
+	for (index = 0; index < old_lo->ol_nr; ++index) {
 		uint32_t            old_tgt = old_lo->ol_shards[index].po_target;
 		uint32_t            new_tgt = new_lo->ol_shards[index].po_target;
 		bool                remap   = false;
@@ -581,7 +570,6 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 	bool			spec_oid = false;
 	bool			realloc_grp_used = false;
 	d_list_t		remap_list;
-	int                      grp_spec;
 	int			fdom_lvl;
 	int			i, j, k;
 	int			rc = 0;
@@ -630,8 +618,6 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 
 	if (daos_obj_is_srank(oid))
 		spec_oid = true;
-
-	grp_spec = md->omd_grp_spec;
 
 	fdom_lvl = pool_map_failure_domain_level(jmap->jmp_map.pl_poolmap, jmop->jmop_fdom_lvl);
 	D_ASSERT(fdom_lvl > 0);
@@ -717,24 +703,12 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 					D_GOTO(out, rc = -DER_NOMEM);
 
 				remap_add_one(&remap_list, shard);
-				/* remapping requires full layout */
-				if (i == grp_spec)
-					grp_spec = PL_GRP_MAX;
 			} else {
 				layout_set_shard_flags(layout, k, remap_flags);
 				if (domain != NULL)
 					setbit(dom_cur_grp_real, domain - root);
 			}
 		}
-
-		if (i >= grp_spec)
-			break; /* caller doesn't require the full layout */
-	}
-
-	if (md->omd_grp_spec != PL_GRP_MAX) {
-		/* may have generated the full layout, but ignore other parts */
-		layout->ol_grp_nr = md->omd_grp_spec + 1;
-		layout->ol_nr     = (layout->ol_grp_nr * layout->ol_grp_size);
 	}
 
 	if (fail_tgt_cnt > 0)
@@ -803,16 +777,13 @@ obj_layout_alloc_and_get(struct pl_jump_map *jmap, uint32_t layout_ver,
 		return rc;
 	}
 
-	/* CURRENT mode always require full layout */
-	if (gen_mode == CURRENT || !(md->omd_flags & PL_FL_GRP_SPEC))
-		md->omd_grp_spec = PL_GRP_MAX;
-
 	rc = get_object_layout(jmap, layout_ver, *layout_p, jmop, allow_version, gen_mode, md);
 	if (rc) {
 		D_ERROR("get object layout failed, rc "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
 out:
 	if (rc != 0) {
 		if (*layout_p != NULL)
@@ -960,7 +931,7 @@ jump_map_obj_extend_layout(struct pl_jump_map *jmap, struct jm_obj_placement *jm
 
 	obj_layout_dump(md->omd_id, new_layout);
 
-	rc = layout_find_diff(jmap, layout, new_layout, &extend_list, false, PL_GRP_MAX);
+	rc = layout_find_diff(jmap, layout, new_layout, &extend_list, false);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1131,8 +1102,7 @@ jump_map_obj_find_diff(struct pl_map *map, uint32_t layout_ver, struct daos_obj_
 		D_GOTO(out, rc);
 
 	obj_layout_dump(md->omd_id, reint_layout);
-	rc = layout_find_diff(jmap, layout, reint_layout, &reint_list, true,
-			      (md->omd_flags & PL_FL_GRP_SPEC) ? md->omd_grp_spec : PL_GRP_MAX);
+	rc = layout_find_diff(jmap, layout, reint_layout, &reint_list, true);
 	if (rc)
 		D_GOTO(out, rc);
 
