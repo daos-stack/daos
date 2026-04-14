@@ -2860,7 +2860,7 @@ vos_aggregate_obj(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *ep
 	int			 blocks  = 0;
 	int			 rc;
 
-	D_DEBUG(DB_EPC, "Per-object aggregate " DF_UOID " epr: " DF_U64 " -> " DF_U64 "\n",
+	D_DEBUG(DB_EPC, "Per-object aggregation " DF_UOID " epr: " DF_U64 " -> " DF_U64 "\n",
 		DP_UOID(oid), epr->epr_lo, epr->epr_hi);
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,

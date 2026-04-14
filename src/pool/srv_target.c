@@ -111,8 +111,8 @@ agg_scanner_ult(void *arg)
 
 			/*
 			 * Re-read the live scanner count each iteration so that
-			 * the pool→scanner assignment adapts when scanners are
-			 * added or removed (e.g. pool start/stop).
+			 * the pool-to-scanner assignment adapts when scanners
+			 * are added or removed (e.g. pool start/stop).
 			 */
 			num_scanners = tls->dt_num_scanners;
 			if (num_scanners == 0)
@@ -243,7 +243,7 @@ ds_start_agg_scanner(void)
 	if (tls->dt_num_scanners >= target)
 		return;
 
-	D_DEBUG(DB_EPC, "[%d]: Starting aggregation scanners (%u → %u, pools=%u)\n",
+	D_DEBUG(DB_EPC, "[%d]: Starting aggregation scanners (%u -> %u, pools=%u)\n",
 		dmi->dmi_tgt_id, tls->dt_num_scanners, target, npools);
 
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
