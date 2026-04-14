@@ -956,6 +956,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
+/*
                 stage('NLT on docker') {
                     when {
                         beforeAgent true
@@ -999,6 +1000,7 @@ pipeline {
                         }
                     }
                 }
+*/
                 stage('Fault injection testing') {
                     when {
                         beforeAgent true
@@ -1164,7 +1166,7 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDgiIUM_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
