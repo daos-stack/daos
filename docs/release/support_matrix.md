@@ -94,7 +94,7 @@ for all DAOS engines in a DAOS system.
          by files in a filesystem on non-NVMe storage.
          This is not a supported configuration in a production environment.
 
-For DAOS servers _with_ persistent memory, 
+For DAOS servers _with_ persistent memory,
 all NVMe disks managed by a single DAOS engine must have identical capacity
 (and it is strongly recommended to use identical drive models).
 
@@ -152,7 +152,7 @@ DAOS Version 2.8 has been validated on
 [Rocky Linux 9.7](https://docs.rockylinux.org/release_notes/9.7/),
 [openSUSE Leap 15.6](https://en.opensuse.org/openSUSE:Roadmap),
 and [SLES 15 SP7](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP7/).
-(Note that an 
+(Note that an
 [openSUSE Leap 15.7](https://en.opensuse.org/openSUSE:Roadmap)
 release does not exist.)
 The following subsections provide details on the Linux distributions
@@ -258,7 +258,7 @@ OFI libfabric is the recommended networking stack for DAOS.
 DAOS Version 2.8.0 ships with libfabric version 1.22.0.
 It is strongly recommended to use the libfabric version that is included in the
 [DAOS Version 2.8 RPM repository](https://packages.daos.io/v2.8/)
-on all DAOS servers and all DAOS clients. 
+on all DAOS servers and all DAOS clients.
 The only exception is Slingshot, which provides its own libfabric version
 as part of the Slingshot Host Stack (SHS).
 
@@ -274,13 +274,13 @@ are supported by DAOS. The following providers are supported:
   It does not use RDMA, and on an RDMA-capable network this provider typically
   does not achieve the maximum performance of the fabric.
 
-* The `ofi+verbs` provider is supported for RDMA communication over InfiniBand
-  fabrics or RoCE networks, but it has known scalability limitations.
-  As an alternative to libfabric, the UCX networking stack
-  is recommended on InfiniBand fabrics and NVIDIA-based RoCE networks
-  (as described in the next subsection).
+* The `ofi+cxi` provider is supported for RDMA communication over HPE Slingshot.
 
-* The `ofi+cxi` provider is supported for RDMA communication over Slingshot.
+* For NVIDIA based InfiniBand and RoCE fabrics, UCX is the recommended
+  networking stack (as described in the next subsection).
+
+* The `ofi+verbs` provider can be used on fabrics that support the verbs API.
+  However, its RC resource consumption will be limiting scalability.
 
 !!! note
     Starting with libfabric 1.18.0, libfabric has support for TCP without
@@ -366,7 +366,7 @@ Slingshot Host Stack (SHS) releases:
 The recommended Slingshot Host Stack (SHS) level for DAOS 2.8 is SHS 13.1.
 
 !!! note The Slingshot Host Software (SHS) stack includes its own libfabric
-         version, which gets installed into `/opt/cray/libfabric/<version>/lib64`. 
+         version, which gets installed into `/opt/cray/libfabric/<version>/lib64`.
          For DAOS engines and DAOS clients to use the SHS version of libfabric,
          `LD_LIBRARY_PATH` needs to be set to point to the correct SHS path.
 
@@ -386,7 +386,7 @@ DAOS Version 2.8 should work over
 [Cornelis Omni-Path](https://www.cornelis.com/products/cn5000/family)
 fabrics with the libfabric `ofi+tcp` or `ofi+verbs` provider.
 For optimal verbs performance, it is recommended to enable
-CN5000 bulk service optimization in the HFI1 driver (use\_bulksvc=Y).
+CN5000 bulk service optimization in the HFI1 driver (`use_bulksvc=Y`).
 For optimal TCP performance, it is recommended to configure
 the Omni-Path fabric manager with an MTU of 10240 byte.
 
@@ -394,7 +394,7 @@ The recommended CN5000 Software level is:
 
 * [https://customercenter.cornelis.com/?product=cn5000&release=12-1%2C12-1-1](CN5000 OPX Software Version 12.1.1)
 
-Customers interested in running DAOS in an Omni-Path environment 
+Customers interested in running DAOS in an Omni-Path environment
 should contact their Cornelis representative regarding DAOS support.
 
 !!! note
@@ -410,7 +410,8 @@ limits, and the current testing limits of DAOS Version 2.8.
 Note: Scaling characteristics depend on the properties of the high-performance
 interconnect, and the libfaric provider that is used. The DAOS scaling targets
 below assume a non-blocking, RDMA-capable fabric. Most scaling tests so far
-have been performed on InfiniBand fabrics with the libfabric `verbs` provider.
+have been performed on Slingshot fabrics with the libfabric `cxi` provider,
+and on InfiniBand fabrics with the UCX `ucx+dc_x` provider.
 
 DAOS scaling targets
 (these are order of magnitude figures that indicate what the DAOS architecture
