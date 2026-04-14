@@ -42,7 +42,6 @@ ior:
   repetitions: 10
   dfs_destroy: False
   dfs_oclass: RP_2GX
-  dfs_dir_oclass: RP_2GX
   iorflags:
     write_flags: "-w -F -k -G 1"
     read_flags: "-F -r -R -k -G 1"
