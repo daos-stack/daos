@@ -613,16 +613,15 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = ds_start_agg_ult(child);
 		if (rc != 0)
-			goto out_agg;
+			goto out_cont;
 	}
 
 done:
 	*child->spc_state = POOL_CHILD_STARTED;
 	return 0;
 
-out_agg:
-	ds_stop_agg_ult(child);
 out_cont:
+	ds_stop_agg_ult(child);
 	ds_cont_child_stop_all(child);
 	ds_stop_chkpt_ult(child);
 out_scrub:

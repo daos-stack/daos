@@ -637,7 +637,6 @@ cont_vos_agg_per_obj(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	daos_handle_t		 ih;
 	int			 rc;
 	int			 obj_count = 0;
-	int			 fail_count = 0;
 
 	/* Set up object iterator */
 	iter_param.ip_hdl = cont->sc_hdl;
@@ -753,8 +752,8 @@ cont_vos_agg_per_obj(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	ABT_mutex_unlock(mutex);
 
 	if (obj_count > 0)
-		D_DEBUG(DB_EPC, DF_CONT ": VOS per-object agg done, %d objects, %d failures\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), obj_count, fail_count);
+		D_DEBUG(DB_EPC, DF_CONT ": VOS per-object agg done, %d objects\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), obj_count);
 
 	return rc;
 }
