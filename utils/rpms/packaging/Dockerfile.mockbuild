@@ -1,6 +1,6 @@
 #
 # Copyright 2018-2024 Intel Corporation
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # 'recipe' for Docker to build an RPM
 #
@@ -11,6 +11,15 @@ FROM fedora:$FVERSION
 # Needed for later use of FVERSION
 ARG FVERSION
 LABEL maintainer="daos@daos.groups.io"
+
+# Accept DAOS_NO_PROXY at build time
+ARG DAOS_NO_PROXY
+# Propagate into the build environment
+ENV no_proxy=${DAOS_NO_PROXY}
+ENV NO_PROXY=${DAOS_NO_PROXY}
+# Persist into /etc/environment for use by shells and services
+RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
+    echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
 # Use local repo server if present
 ARG REPO_FILE_URL
@@ -38,8 +47,8 @@ RUN dnf -y install mock make                                        \
 ARG UID=1000
 
 # Add build user (to keep rpmbuild happy)
-ENV USER build
-ENV PASSWD build
+ENV USER=build
+ENV PASSWD=build
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 # add the user to the mock group so it can run mock
