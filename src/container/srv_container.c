@@ -2151,6 +2151,7 @@ out_lock:
 static void
 cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 {
+	static int                       forced_stable_warns = 10;
 	d_rank_list_t                    fail_ranks = {0};
 	struct cont_track_eph_leader	*eph_ldr;
 	struct cont_track_eph_leader	*tmp;
@@ -2252,6 +2253,22 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
 			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
 			       new_eph - cur_eph);
+
+		/*
+		 * Test hook: force a deterministic number of stable-epoch warnings so
+		 * parser filtering can be validated without relying on timing behavior.
+		 */
+		if (forced_stable_warns > 0) {
+			uint64_t fake_cur = 1;
+			uint64_t fake_new = 601 + (10 - forced_stable_warns);
+			uint64_t fake_gap = fake_new - fake_cur;
+
+			D_WARN(DF_CONT ": Sluggish stable epoch reporting. "
+				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
+			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), fake_cur,
+			       fake_new, fake_gap);
+			forced_stable_warns--;
+		}
 
 		if (min_ec_agg_eph > eph_ldr->cte_rdb_ec_agg_eph) {
 			rc = cont_agg_eph_store(svc, eph_ldr->cte_cont_uuid, min_ec_agg_eph,

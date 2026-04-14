@@ -852,6 +852,7 @@ swim_ping_delay(uint64_t state_delay)
 int
 swim_progress(struct swim_context *ctx, int64_t timeout_us)
 {
+	static int               forced_progress_warns = 10;
 	enum swim_context_state	 ctx_state = SCS_TIMEDOUT;
 	struct swim_member_state target_state;
 	struct swim_item	*item;
@@ -880,6 +881,17 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 		net_glitch_delay = now - ctx->sc_expect_progress_time;
 		SWIM_ERROR("The progress callback was not called for too long: "
 			   "%lu ms after expected.\n", net_glitch_delay);
+	}
+
+	/*
+	 * Test hook: force a small, deterministic number of progress-delay
+	 * warnings so parser filtering can be validated without timing flakiness.
+	 */
+	if (forced_progress_warns > 0) {
+		SWIM_ERROR("The progress callback was not called for too long: "
+			   "%d ms after expected.\n",
+			   forced_progress_warns);
+		forced_progress_warns--;
 	}
 
 	for (; now <= end || ctx_state == SCS_TIMEDOUT; now = swim_now_ms()) {
