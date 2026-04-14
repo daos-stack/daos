@@ -67,7 +67,6 @@ ior:
   transfer_size: 1M
   block_size: 2G
   dfs_oclass: RP_2GX
-  dfs_dir_oclass: RP_2GX
 
 faults:
   fault_list:
