@@ -50,7 +50,7 @@ ior:
     #     - [32M, 8G, 8M]
     Partial_Striped:
       chunk_block_transfer_sizes:
-        - [512M]
+        - [32M, 512M, 2K]
   objectclass: !mux
     # EC_2P2GX:
     #   dfs_oclass_list:
