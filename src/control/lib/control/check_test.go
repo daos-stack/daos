@@ -9,6 +9,7 @@ package control
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -184,6 +185,119 @@ func TestControl_SystemCheckReport_IsStale(t *testing.T) {
 			}
 
 			test.AssertEqual(t, action == expStaleAction, report.IsStale(), "")
+		})
+	}
+}
+
+func TestControl_SystemCheckQuery(t *testing.T) {
+	testTime := time.Now()
+
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *SystemCheckQueryReq
+		expErr  error
+		expResp *SystemCheckQueryResp
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"gRPC failed": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("foobar"),
+			},
+			req:    &SystemCheckQueryReq{},
+			expErr: errors.New("foobar"),
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("", nil, &mgmtpb.CheckQueryResp{
+					ReqStatus: daos.MiscError.Int32(),
+					InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
+					InsPhase:  chkpb.CheckScanPhase_CSP_CONT_CLEANUP,
+					Inconsistency: &mgmtpb.CheckQueryInconsist{
+						Total:    5,
+						Repaired: 3,
+						Ignored:  1,
+						Failed:   1,
+					},
+					Time: &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+					Pools: []*mgmtpb.CheckQueryPool{
+						{
+							Uuid:          "12345678-1234-1234-1234-123456789abc",
+							Status:        chkpb.CheckPoolStatus_CPS_CHECKED,
+							Phase:         chkpb.CheckScanPhase_CSP_DONE,
+							Inconsistency: &mgmtpb.CheckQueryInconsist{},
+							Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+							Targets: []*mgmtpb.CheckQueryTarget{
+								{
+									Rank:          3,
+									Status:        chkpb.CheckInstStatus_CIS_COMPLETED,
+									Inconsistency: &mgmtpb.CheckQueryInconsist{},
+									Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+								},
+							},
+						},
+					},
+					Reports: []*chkpb.CheckReport{
+						{Seq: 1, Class: chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL},
+						{Seq: 3, Class: chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL},
+					},
+					Leader: 5,
+				}),
+			},
+			req: &SystemCheckQueryReq{},
+			expResp: &SystemCheckQueryResp{
+				Status:    SystemCheckStatusRunning,
+				ScanPhase: SystemCheckScanPhaseContainerCleanup,
+				StartTime: time.Unix(testTime.Unix(), 0),
+				Leader:    5,
+				Pools: map[string]*SystemCheckPoolInfo{
+					"12345678-1234-1234-1234-123456789abc": {
+						RawRankInfo: rawRankMap{
+							3: {
+								Uuid:          "12345678-1234-1234-1234-123456789abc",
+								Status:        chkpb.CheckPoolStatus_CPS_CHECKED,
+								Phase:         chkpb.CheckScanPhase_CSP_DONE,
+								Inconsistency: &mgmtpb.CheckQueryInconsist{},
+								Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+								Targets: []*mgmtpb.CheckQueryTarget{
+									{
+										Rank:          3,
+										Status:        chkpb.CheckInstStatus_CIS_COMPLETED,
+										Inconsistency: &mgmtpb.CheckQueryInconsist{},
+										Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+									},
+								},
+							},
+						},
+						UUID:      "12345678-1234-1234-1234-123456789abc",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: time.Unix(testTime.Unix(), 0),
+					},
+				},
+				Reports: []*SystemCheckReport{
+					{CheckReport: chkpb.CheckReport{Seq: 1, Class: chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL}},
+					{CheckReport: chkpb.CheckReport{Seq: 3, Class: chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL}},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			mi := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+
+			resp, err := SystemCheckQuery(ctx, mi, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "SystemCheckQueryResp", tc.expResp, resp, cmpopts.IgnoreUnexported(
+				chkpb.CheckReport{},
+				mgmtpb.CheckQueryPool{},
+				mgmtpb.CheckQueryInconsist{},
+				mgmtpb.CheckQueryTarget{},
+				mgmtpb.CheckQueryTime{},
+			))
 		})
 	}
 }

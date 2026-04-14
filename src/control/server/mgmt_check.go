@@ -91,6 +91,35 @@ func (svc *mgmtSvc) unwrapCheckerReq(req proto.Message) (proto.Message, error) {
 	return req, nil
 }
 
+// getCheckLeader gets the rank number of the check leader.
+//
+// NB: For now, this is the first usable rank on the MS leader.
+func (svc *mgmtSvc) getCheckLeader() (ranklist.Rank, error) {
+	for i, ei := range svc.harness.instances {
+		r, err := ei.GetRank()
+		if err != nil {
+			svc.log.Debugf("unable to use rank at index %d: %s", i, err)
+			continue
+		}
+
+		m, err := svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			svc.log.Debugf("unable to get member for rank %d (index %d): %s", r, i, err)
+			continue
+		}
+
+		if m.State != system.MemberStateCheckerStarted {
+			svc.log.Tracef("unable use rank %d as check leader (state: %s)", r, m.State)
+			continue
+		}
+
+		svc.log.Tracef("selected rank %d as check leader", r)
+		return r, nil
+	}
+
+	return ranklist.NilRank, errors.New("no ranks are usable as the check leader")
+}
+
 func (svc *mgmtSvc) makeCheckerCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -408,6 +437,14 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 				reports = append(reports, r)
 			}
 		}
+	}
+
+	leader, err := svc.getCheckLeader()
+	if err != nil {
+		svc.log.Errorf("can't get the check leader rank: %s", err)
+		resp.Leader = uint32(ranklist.NilRank)
+	} else {
+		resp.Leader = leader.Uint32()
 	}
 
 	// Collect saved older reports

@@ -557,6 +557,7 @@ type SystemCheckQueryResp struct {
 	Status    SystemCheckStatus    `json:"status"`
 	ScanPhase SystemCheckScanPhase `json:"scan_phase"`
 	StartTime time.Time            `json:"start_time"`
+	Leader    ranklist.Rank        `json:"leader"`
 
 	Pools   map[string]*SystemCheckPoolInfo `json:"pools"`
 	Reports []*SystemCheckReport            `json:"reports"`
@@ -599,6 +600,7 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		ScanPhase: SystemCheckScanPhase(pbResp.GetInsPhase()),
 		StartTime: time.Unix(int64(pbResp.GetTime().GetStartTime()), 0),
 		Pools:     getPoolCheckInfo(pbResp.GetPools()),
+		Leader:    ranklist.Rank(pbResp.Leader),
 	}
 	for _, pbReport := range pbResp.GetReports() {
 		rpt := new(SystemCheckReport)
