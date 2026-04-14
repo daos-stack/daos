@@ -6,6 +6,7 @@
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 set -eEuo pipefail
+set -x
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
