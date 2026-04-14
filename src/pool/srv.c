@@ -211,6 +211,9 @@ pool_tls_fini(int tags, void *data)
 
 	D_ASSERT(tls != NULL);
 
+	/* Stop the global aggregation scanner before tearing down */
+	ds_stop_agg_scanner();
+
 	/* pool child cache should be empty now */
 	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
 		D_ERROR(DF_UUID": ref: %d\n",

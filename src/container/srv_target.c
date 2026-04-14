@@ -59,6 +59,27 @@ agg_param2req(struct agg_param *param)
 	return cont2req(param->ap_cont, param->ap_vos_agg);
 }
 
+/**
+ * Safe space pressure check for aggregation.
+ * The global scanner's sched request is ANONYM and has no pool_info,
+ * so we use the pool child's GC request (which always has pool_info)
+ * to check space pressure.
+ */
+static inline int
+agg_space_check(struct ds_cont_child *cont, struct sched_request *req)
+{
+	struct sched_request	*pool_req;
+
+	/*
+	 * If the req has pool_info (non-ANONYM), use it directly.
+	 * Otherwise, fall back to the pool child's GC req.
+	 */
+	pool_req = cont->sc_pool->spc_gc_req;
+	if (pool_req != NULL)
+		return sched_req_space_check(pool_req);
+	return SCHED_SPACE_PRESS_NONE;
+}
+
 int
 agg_rate_ctl(void *arg)
 {
@@ -66,7 +87,9 @@ agg_rate_ctl(void *arg)
 	struct ds_cont_child	*cont = param->ap_cont;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = agg_param2req(param);
+	struct sched_request	*pool_req;
 	uint32_t		 msecs;
+	int			 space_press;
 
 	/* Abort current round of aggregation */
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
@@ -79,8 +102,16 @@ agg_rate_ctl(void *arg)
 	if (ds_pool_is_rebuilding(pool) && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
 
+	/*
+	 * Check space pressure: use pool child's GC req (which always has pool_info)
+	 * since the global scanner's req is ANONYM and lacks pool_info.
+	 */
+	pool_req = cont->sc_pool->spc_gc_req;
+	space_press = (pool_req != NULL) ?
+		      sched_req_space_check(pool_req) : SCHED_SPACE_PRESS_NONE;
+
 	/* When system is idle or under space pressure, let aggregation run in tight mode */
-	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
+	if (!dss_xstream_is_busy() || space_press != SCHED_SPACE_PRESS_NONE) {
 		sched_req_yield(req);
 		return 0;
 	}
@@ -200,7 +231,7 @@ done:
 	return rc;
 }
 
-static bool
+bool
 cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 			bool vos_agg)
 {
@@ -272,7 +303,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return true;
 
 	if (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy() &&
-	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
+	    agg_space_check(cont, req) == SCHED_SPACE_PRESS_NONE) {
 		D_DEBUG(DB_EPC, "Pool reclaim strategy is lazy, service is busy and no space"
 				" pressure\n");
 		return false;
@@ -322,13 +353,13 @@ adjust_upper_bound(struct ds_cont_child *cont, bool vos_agg, uint64_t *upper_bou
 }
 
 #define MAX_SNAPSHOT_LOCAL	16
-static int
+int
 cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		     struct agg_param *param)
 {
 	daos_epoch_t		epoch_max, epoch_min;
 	daos_epoch_range_t	epoch_range;
-	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
+	struct sched_request	*req = agg_param2req(param);
 	uint64_t		hlc = d_hlc_get();
 	uint64_t		change_hlc;
 	uint64_t		interval;
@@ -375,7 +406,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	 * be changed by new update very soon.
 	 */
 	if (epoch_min > epoch_max - interval &&
-	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
+	    agg_space_check(cont, req) == SCHED_SPACE_PRESS_NONE)
 		return 0;
 
 	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
@@ -530,7 +561,7 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 				  DF_CONT ": %s aggregate failed",
 				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				  param->ap_vos_agg ? "VOS" : "EC");
-		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
+		} else if (agg_space_check(cont, req) != SCHED_SPACE_PRESS_NONE) {
 			/*
 			 * Introduce a small sleep interval between each round to yield CPU time
 			 * for the flush & GC ULTs, irrespective of space pressure. DAOS-18012.
@@ -599,6 +630,7 @@ agg_obj_ult(void *arg)
 
 	param.ap_cont = oarg->ao_cont;
 	param.ap_vos_agg = true;
+	param.ap_req = oarg->ao_scanner_req;
 
 	rc = vos_aggregate_obj(oarg->ao_cont->sc_hdl, oarg->ao_oid,
 			       &oarg->ao_epr, agg_rate_ctl, &param, oarg->ao_flags);
@@ -628,7 +660,7 @@ agg_obj_ult(void *arg)
  *
  * Returns 0 on success, negative on error.
  */
-static int
+int
 cont_vos_agg_per_obj(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		     uint32_t flags, uint32_t *inflight, ABT_mutex mutex,
 		     ABT_cond cond, struct sched_request *scanner_req)
@@ -713,6 +745,7 @@ cont_vos_agg_per_obj(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		oarg->ao_inflight = inflight;
 		oarg->ao_mutex = mutex;
 		oarg->ao_cond = cond;
+		oarg->ao_scanner_req = scanner_req;
 
 		/* Spawn per-object aggregation ULT */
 		rc = dss_ult_create(agg_obj_ult, oarg, DSS_XS_SELF, 0,
@@ -762,7 +795,7 @@ cont_vos_agg_per_obj(struct ds_cont_child *cont, daos_epoch_range_t *epr,
  * VOS aggregation callback that uses per-object ULTs.
  * Replaces cont_vos_aggregate_cb for the new global scanner path.
  */
-static int
+int
 cont_vos_agg_per_obj_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			uint32_t flags, struct agg_param *param)
 {
@@ -771,150 +804,6 @@ cont_vos_agg_per_obj_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	return cont_vos_agg_per_obj(cont, epr, flags, ctx->ao_inflight,
 				    ctx->ao_mutex, ctx->ao_cond,
 				    param->ap_req);
-}
-
-/**
- * Global aggregation scanner ULT body.
- * One per pool_child, replaces per-container VOS and EC aggregation ULTs.
- * Iterates all containers in the pool and performs:
- * - VOS aggregation using per-object ULTs
- * - EC aggregation per-container
- */
-static void
-agg_scanner_ult(void *arg)
-{
-	struct ds_pool_child	*pool_child = arg;
-	struct sched_request	*req = pool_child->spc_agg_req;
-	struct dss_module_info	*dmi = dss_get_module_info();
-	ABT_mutex		 agg_mutex = ABT_MUTEX_NULL;
-	ABT_cond		 agg_cond = ABT_COND_NULL;
-	uint32_t		 inflight = 0;
-	int			 rc;
-
-	D_DEBUG(DB_EPC, DF_UUID "[%d]: Global aggregation scanner started\n",
-		DP_UUID(pool_child->spc_uuid), dmi->dmi_tgt_id);
-
-	if (req == NULL)
-		goto out;
-
-	rc = ABT_mutex_create(&agg_mutex);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to create agg mutex\n");
-		goto out;
-	}
-
-	rc = ABT_cond_create(&agg_cond);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to create agg cond\n");
-		ABT_mutex_free(&agg_mutex);
-		goto out;
-	}
-
-	while (!dss_ult_exiting(req)) {
-		struct ds_cont_child	*cont;
-		uint64_t		 msecs = 2000;
-
-		/* Iterate all containers in this pool for VOS aggregation */
-		d_list_for_each_entry(cont, &pool_child->spc_cont_list, sc_link) {
-			if (dss_ult_exiting(req))
-				break;
-
-			/* === VOS Aggregation (per-object) === */
-
-			/* Query stable epoch periodically */
-			if (cont->sc_query_stable_eph != NULL)
-				*cont->sc_query_stable_eph =
-					vos_cont_get_local_stable_epoch(cont->sc_hdl);
-
-			if (cont_aggregate_runnable(cont, req, true)) {
-				struct agg_obj_ult_arg	ctx = { 0 };
-				struct agg_param	vos_param = { 0 };
-
-				ctx.ao_inflight = &inflight;
-				ctx.ao_mutex = agg_mutex;
-				ctx.ao_cond = agg_cond;
-
-				vos_param.ap_cont = cont;
-				vos_param.ap_vos_agg = true;
-				vos_param.ap_req = req;
-				vos_param.ap_data = &ctx;
-
-				cont->sc_vos_agg_active = 1;
-
-				rc = cont_child_aggregate(cont, cont_vos_agg_per_obj_cb,
-							  &vos_param);
-				if (rc == -DER_SHUTDOWN)
-					break;
-				if (rc < 0)
-					DL_CDEBUG(rc == -DER_BUSY || rc == -DER_INPROGRESS,
-						  DB_EPC, DLOG_ERR, rc,
-						  DF_CONT ": VOS per-object aggregate failed",
-						  DP_CONT(pool_child->spc_uuid, cont->sc_uuid));
-				else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE)
-					msecs = 200;
-
-				cont->sc_vos_agg_active = 0;
-			}
-		}
-
-		if (dss_ult_exiting(req))
-			break;
-
-		if (msecs != 0)
-			sched_req_sleep(req, msecs);
-		else
-			sched_req_yield(req);
-	}
-
-	/* Wait for all inflight ULTs to drain */
-	ABT_mutex_lock(agg_mutex);
-	while (inflight > 0)
-		sched_cond_wait(agg_cond, agg_mutex);
-	ABT_mutex_unlock(agg_mutex);
-
-	ABT_cond_free(&agg_cond);
-	ABT_mutex_free(&agg_mutex);
-out:
-	D_DEBUG(DB_EPC, DF_UUID "[%d]: Global aggregation scanner stopped\n",
-		DP_UUID(pool_child->spc_uuid), dmi->dmi_tgt_id);
-}
-
-int
-ds_start_agg_ult(struct ds_pool_child *child)
-{
-	struct dss_module_info	*dmi = dss_get_module_info();
-	struct sched_req_attr	 attr;
-
-	D_ASSERT(child != NULL);
-	D_ASSERT(child->spc_agg_req == NULL);
-
-	D_DEBUG(DB_EPC, DF_UUID "[%d]: Starting global aggregation scanner\n",
-		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
-	child->spc_agg_req = sched_create_ult(&attr, agg_scanner_ult, child,
-					       DSS_DEEP_STACK_SZ);
-	if (child->spc_agg_req == NULL) {
-		D_ERROR(DF_UUID "[%d]: Failed to create aggregation scanner ULT.\n",
-			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		return -DER_NOMEM;
-	}
-
-	return 0;
-}
-
-void
-ds_stop_agg_ult(struct ds_pool_child *child)
-{
-	if (child->spc_agg_req != NULL) {
-		D_DEBUG(DB_EPC, DF_UUID "[%d]: Stopping global aggregation scanner\n",
-			DP_UUID(child->spc_uuid),
-			dss_get_module_info()->dmi_tgt_id);
-
-		sched_req_wait(child->spc_agg_req, true);
-		sched_req_put(child->spc_agg_req);
-		child->spc_agg_req = NULL;
-	}
 }
 
 /* Legacy per-container aggregation ULT functions (kept for EC backward compat) */

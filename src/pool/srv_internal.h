@@ -45,6 +45,8 @@ struct pool_metrics {
 /* Pool thread-local storage */
 struct pool_tls {
 	struct d_list_head	dt_pool_list;	/* of ds_pool_child objects */
+	/* Global aggregation scanner ULT (one per xstream, iterates all pools) */
+	struct sched_request	*dt_agg_req;
 };
 
 extern struct dss_module_key pool_module_key;

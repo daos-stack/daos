@@ -43,6 +43,169 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
+/* Global per-xstream aggregation scanner ************************************/
+
+/**
+ * Global aggregation scanner ULT body.
+ * One per xstream, iterates ALL pools → ALL containers → spawns per-object ULTs.
+ * Replaces per-container and per-pool VOS aggregation ULTs.
+ */
+static void
+agg_scanner_ult(void *arg)
+{
+	struct pool_tls		*tls = arg;
+	struct sched_request	*req = tls->dt_agg_req;
+	struct dss_module_info	*dmi = dss_get_module_info();
+	ABT_mutex		 agg_mutex = ABT_MUTEX_NULL;
+	ABT_cond		 agg_cond = ABT_COND_NULL;
+	uint32_t		 inflight = 0;
+	int			 rc;
+
+	D_DEBUG(DB_EPC, "[%d]: Global aggregation scanner started\n", dmi->dmi_tgt_id);
+
+	if (req == NULL)
+		goto out;
+
+	rc = ABT_mutex_create(&agg_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("Failed to create agg mutex\n");
+		goto out;
+	}
+
+	rc = ABT_cond_create(&agg_cond);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("Failed to create agg cond\n");
+		ABT_mutex_free(&agg_mutex);
+		goto out;
+	}
+
+	while (!dss_ult_exiting(req)) {
+		struct ds_pool_child	*pool_child;
+		uint64_t		 msecs = 2000;
+
+		/* Iterate all pools on this xstream */
+		d_list_for_each_entry(pool_child, &tls->dt_pool_list, spc_list) {
+			struct ds_cont_child	*cont;
+
+			if (dss_ult_exiting(req))
+				break;
+
+			if (ds_pool_restricted(pool_child->spc_pool, false))
+				continue;
+
+			/* Iterate all containers in this pool */
+			d_list_for_each_entry(cont, &pool_child->spc_cont_list, sc_link) {
+				if (dss_ult_exiting(req))
+					break;
+
+				/* Query stable epoch periodically */
+				if (cont->sc_query_stable_eph != NULL)
+					*cont->sc_query_stable_eph =
+						vos_cont_get_local_stable_epoch(cont->sc_hdl);
+
+				if (cont_aggregate_runnable(cont, req, true)) {
+					struct agg_obj_ult_arg	ctx = { 0 };
+					struct agg_param	vos_param = { 0 };
+
+					ctx.ao_inflight = &inflight;
+					ctx.ao_mutex = agg_mutex;
+					ctx.ao_cond = agg_cond;
+
+					vos_param.ap_cont = cont;
+					vos_param.ap_vos_agg = true;
+					vos_param.ap_req = req;
+					vos_param.ap_data = &ctx;
+
+					cont->sc_vos_agg_active = 1;
+
+					rc = cont_child_aggregate(cont,
+								  cont_vos_agg_per_obj_cb,
+								  &vos_param);
+					if (rc == -DER_SHUTDOWN)
+						break;
+					if (rc < 0)
+						DL_CDEBUG(rc == -DER_BUSY ||
+							  rc == -DER_INPROGRESS,
+							  DB_EPC, DLOG_ERR, rc,
+							  DF_CONT ": VOS per-object "
+							  "aggregate failed",
+							  DP_CONT(pool_child->spc_uuid,
+								  cont->sc_uuid));
+					else if (pool_child->spc_gc_req != NULL &&
+						 sched_req_space_check(
+							pool_child->spc_gc_req) !=
+						 SCHED_SPACE_PRESS_NONE)
+						msecs = 200;
+
+					cont->sc_vos_agg_active = 0;
+				}
+			}
+		}
+
+		if (dss_ult_exiting(req))
+			break;
+
+		if (msecs != 0)
+			sched_req_sleep(req, msecs);
+		else
+			sched_req_yield(req);
+	}
+
+	/* Wait for all inflight per-object ULTs to drain */
+	ABT_mutex_lock(agg_mutex);
+	while (inflight > 0)
+		sched_cond_wait(agg_cond, agg_mutex);
+	ABT_mutex_unlock(agg_mutex);
+
+	ABT_cond_free(&agg_cond);
+	ABT_mutex_free(&agg_mutex);
+out:
+	D_DEBUG(DB_EPC, "[%d]: Global aggregation scanner stopped\n", dmi->dmi_tgt_id);
+}
+
+/**
+ * Start the global aggregation scanner on the current xstream if not already
+ * running. Safe to call multiple times; only the first call creates the ULT.
+ */
+void
+ds_start_agg_scanner(void)
+{
+	struct pool_tls		*tls = pool_tls_get();
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+	static uuid_t		 anonym_uuid;
+
+	if (tls->dt_agg_req != NULL)
+		return; /* Already running */
+
+	D_DEBUG(DB_EPC, "[%d]: Starting global aggregation scanner\n", dmi->dmi_tgt_id);
+
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+	tls->dt_agg_req = sched_create_ult(&attr, agg_scanner_ult, tls,
+					    DSS_DEEP_STACK_SZ);
+	if (tls->dt_agg_req == NULL)
+		D_ERROR("[%d]: Failed to create global aggregation scanner ULT.\n",
+			dmi->dmi_tgt_id);
+}
+
+/**
+ * Stop the global aggregation scanner on the current xstream.
+ */
+void
+ds_stop_agg_scanner(void)
+{
+	struct pool_tls	*tls = pool_tls_get();
+
+	if (tls->dt_agg_req != NULL) {
+		D_DEBUG(DB_EPC, "[%d]: Stopping global aggregation scanner\n",
+			dss_get_module_info()->dmi_tgt_id);
+
+		sched_req_wait(tls->dt_agg_req, true);
+		sched_req_put(tls->dt_agg_req);
+		tls->dt_agg_req = NULL;
+	}
+}
+
 /* ds_pool_child **************************************************************/
 
 static void
@@ -609,19 +772,15 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	if (rc)
 		goto out_cont;
 
-	/* Start global aggregation scanner after containers are started */
-	if (!ds_pool_restricted(child->spc_pool, false)) {
-		rc = ds_start_agg_ult(child);
-		if (rc != 0)
-			goto out_cont;
-	}
+	/* Start global aggregation scanner if not already running on this xstream */
+	if (!ds_pool_restricted(child->spc_pool, false))
+		ds_start_agg_scanner();
 
 done:
 	*child->spc_state = POOL_CHILD_STARTED;
 	return 0;
 
 out_cont:
-	ds_stop_agg_ult(child);
 	ds_cont_child_stop_all(child);
 	ds_stop_chkpt_ult(child);
 out_scrub:
@@ -694,9 +853,15 @@ pool_child_stop(struct ds_pool_child *child)
 	if (unlikely(child->spc_no_storage))
 		goto wait;
 
-	/* First stop the global aggregation scanner (iterates containers) */
-	ds_stop_agg_ult(child);
-	/* Then stop all the ULTs who might need to hold ds_pool_child (or ds_cont_child) */
+	/*
+	 * Stop the global aggregation scanner before modifying container lists.
+	 * The scanner iterates pool/container lists and yields, so it must be
+	 * stopped to avoid stale list pointers.  It will be restarted by the
+	 * next pool_child_start if other pools remain.
+	 */
+	ds_stop_agg_scanner();
+
+	/* First stop all the ULTs who might need to hold ds_pool_child (or ds_cont_child) */
 	ds_cont_child_stop_all(child);
 	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	ds_cont_srv_close(child);
