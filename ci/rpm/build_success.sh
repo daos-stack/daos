@@ -43,6 +43,7 @@ elif [ -d /var/cache/pbuilder/ ]; then
 fi
 
 if [ -d /home/daos/rpms/ ]; then
+  # shellcheck disable=SC2044
   for dir in $(find /home/daos/rpms/ -maxdepth 1 -mindepth 1 -type d -exec basename {} \;); do
     if [ -d "/home/daos/rpms/${dir}" ]; then
       mkdir -p "${artdir}/${dir}"
