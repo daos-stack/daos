@@ -1,5 +1,8 @@
 hosts:
   test_servers: 1
+
+timeout: 300
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -20,6 +23,6 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos1
+
 pool:
   size: 2G
-timeout: 300

@@ -29,6 +29,14 @@ class EngineAutoRestartTest(ControlTestBase):
         return list(self.server_managers[0].ranks.keys())
 
     def get_rank_state(self, rank):
+        """Get the current state of a rank from dmg system query.
+
+        Args:
+            rank (int): Rank to query
+
+        Returns:
+            str: State of the rank
+        """
         data = self.dmg.system_query(ranks=f"{rank}")
         if data["status"] != 0:
             self.fail("Cmd dmg system query failed")
@@ -38,6 +46,7 @@ class EngineAutoRestartTest(ControlTestBase):
             for member in data["response"]["members"]:
                 return member["state"].lower()
         self.fail("No member state returned from dmg system query")
+        return None  # to appease pylint
 
     def exclude_rank_and_wait_restart(self, rank, expect_restart=True, timeout=30):
         """Exclude a rank and wait for it to self-terminate and potentially restart.
@@ -81,10 +90,10 @@ class EngineAutoRestartTest(ControlTestBase):
             if restarted:
                 self.log.info(f"Rank {rank} automatically restarted and rejoined")
                 return (True, "joined")
-            else:
-                state = self.get_rank_state(rank)
-                self.log.error(f"Rank {rank} ({state}) did not restart within {timeout}s")
-                return (False, state)
+            
+            state = self.get_rank_state(rank)
+            self.log.error("Rank %s (%s) did not restart within %ss", rank, state, timeout)
+            return (False, state)
         else:
             # Verify rank stays excluded (no automatic restart)
             self.log_step(f"Verifying rank {rank} does not automatically restart")
@@ -94,10 +103,10 @@ class EngineAutoRestartTest(ControlTestBase):
                 ranks=[rank], valid_states=["excluded"], max_checks=1)
             if failed_ranks:
                 state = self.get_rank_state(rank)
-                self.log.error(f"Rank {rank} ({state}) unexpectedly restarted")
+                self.log.error("Rank %s (%s) unexpectedly restarted", rank, state)
                 return (True, state)
-            else:
-                return (False, "excluded")
+
+            return (False, "excluded")
 
     def test_auto_restart_basic(self):
         """Test basic automatic engine restart after self-termination.
@@ -125,7 +134,7 @@ class EngineAutoRestartTest(ControlTestBase):
         if not restarted:
             self.fail(f"Rank {test_rank} did not automatically restart. Final state: {final_state}")
 
-        self.log.info(f"SUCCESS: Rank {test_rank} automatically restarted after self-termination")
+        self.log.info("SUCCESS: Rank %s automatically restarted after self-termination", test_rank)
 
     def test_auto_restart_multiple_ranks(self):
         """Test automatic restart of multiple ranks.
@@ -165,7 +174,7 @@ class EngineAutoRestartTest(ControlTestBase):
         self.log.info("=== Multiple Rank Restart Results ===")
         for rank, (restarted, state) in results.items():
             status = "PASS" if restarted else "FAIL"
-            self.log.info(f"Rank {rank}: {status} (final state: {state})")
+            self.log.info("Rank %s: %s (final state: %s)", rank, status, state)
 
         report_errors(test=self, errors=errors)
 
@@ -192,7 +201,7 @@ class EngineAutoRestartTest(ControlTestBase):
 
         # Get pool service ranks to avoid excluding them
         pool_svc_ranks = self.pool.svc_ranks
-        self.log.info(f"Pool service ranks: {pool_svc_ranks}")
+        self.log.info("Pool service ranks: {%s", pool_svc_ranks)
 
         # Find a rank not in pool service
         non_svc_ranks = [r for r in all_ranks if r not in pool_svc_ranks]
@@ -201,7 +210,7 @@ class EngineAutoRestartTest(ControlTestBase):
 
         test_rank = self.random.choice(non_svc_ranks)
 
-        self.log_step(f"Excluding non-service rank {test_rank} while pool is active")
+        self.log_step("Excluding non-service rank %s while pool is active", test_rank)
 
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
 
