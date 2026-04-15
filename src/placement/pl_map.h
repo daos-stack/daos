@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -72,8 +71,8 @@ struct failed_shard {
 	uint32_t        fs_tgt_id;
 	uint16_t	fs_rank;
 	uint8_t		fs_index;
-	uint8_t          fs_status;
-	unsigned int     fs_remap_flags;
+	uint8_t         fs_status;
+	uint32_t	fs_down2up:1;
 };
 
 #define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"
@@ -112,10 +111,12 @@ crc(uint64_t data, uint32_t init_val)
 
 void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
+void
+reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
-struct failed_shard *
-remap_alloc_one(unsigned int shard_idx, struct pool_target *tgt, int tgt_id,
-		unsigned int remap_flags, void *data);
+int
+remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
+		struct pool_target *tgt, bool for_reint, void *data);
 
 int
 remap_insert_copy_one(d_list_t *remap_list, struct failed_shard *original);
@@ -132,15 +133,18 @@ op_get_grp_size(unsigned int domain_nr, unsigned int *grp_size,
 		daos_obj_id_t oid);
 
 int
-remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shard_md *shard_md,
-		uint32_t rebuild_ver, uint32_t *tgt_id, uint32_t *shard_idx,
-		unsigned int array_size, int *idx, struct pl_obj_layout *layout,
-		d_list_t *remap_list);
+remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
+		struct daos_obj_shard_md *shard_md, uint32_t rebuild_ver,
+		uint32_t *tgt_id, uint32_t *shard_idx,
+		unsigned int array_size, int *idx,
+		struct pl_obj_layout *layout, d_list_t *remap_list,
+		bool fill_addition);
 
 int
-determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
-		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
-		       struct failed_shard *f_shard, struct pl_obj_layout *layout);
+determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
+		       bool spare_avail, d_list_t *remap_list, uint32_t allow_version,
+		       enum layout_gen_mode gen_mode, struct failed_shard *f_shard,
+		       struct pl_obj_shard *l_shard, bool *is_extending);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
@@ -150,29 +154,10 @@ int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 bool
-comp_need_remap(struct pool_component *comp, uint32_t allow_status, enum layout_gen_mode gen_mode,
-		unsigned int *remap_flags);
-
-enum {
-	/* rebuilding this shard */
-	PL_IS_REBUILDING = (1 << 0),
-	/* integrating this shard */
-	PL_IS_REINTEGRATING = (1 << 1),
-	/* has peer shard for rebuild (writes land to both of shards) */
-	PL_HAS_PEER = (1 << 2),
-};
-
-static inline void
-layout_set_shard_flags(struct pl_obj_layout *layout, int shard_idx, unsigned int remap_flags)
-{
-	if (remap_flags & PL_IS_REBUILDING)
-		layout->ol_shards[shard_idx].po_rebuilding = 1;
-
-	if (remap_flags & PL_IS_REINTEGRATING)
-		layout->ol_shards[shard_idx].po_reintegrating = 1;
-
-	if (remap_flags & PL_HAS_PEER)
-		layout->ol_shard_peers++;
-}
+is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
+		enum layout_gen_mode gen_mode);
+bool
+need_remap_comp(struct pool_component *comp, uint32_t allow_status,
+		enum layout_gen_mode gen_mode);
 
 #endif /* __PL_MAP_H__ */

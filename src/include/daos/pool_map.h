@@ -396,9 +396,9 @@ pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
 }
 
 static inline bool
-pool_target_is_drain(struct pool_target *tgt)
+pool_target_is_up_or_drain(struct pool_target *tgt)
 {
-	return (tgt->ta_comp.co_status & PO_COMP_ST_DRAIN);
+	return tgt->ta_comp.co_status & (PO_COMP_ST_UP | PO_COMP_ST_DRAIN);
 }
 
 static inline bool
@@ -416,7 +416,7 @@ pool_target_is_down2up(struct pool_target *tgt)
 
 /** Check if the target is in PO_COMP_ST_DOWN status */
 static inline bool
-pool_target_is_down(struct pool_target *tgt)
+pool_target_down(struct pool_target *tgt)
 {
 	struct pool_component	*comp = &tgt->ta_comp;
 	uint8_t			 status = comp->co_status;
