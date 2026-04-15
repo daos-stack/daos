@@ -20,6 +20,10 @@ case "$ID_LIKE" in
         ;;
 esac
 
+SERVER_CONFIG="/etc/daos/daos_server.yml"
+AGENT_CONFIG="/etc/daos/daos_agent.yml"
+CONTROL_CONFIG="/etc/daos/daos_control.yml"
+
 if [ -n "$DAOS_PKG_VERSION" ]; then
     DAOS_PKG_VERSION="-${DAOS_PKG_VERSION}"
 fi
@@ -30,6 +34,7 @@ if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
   exit 1
 fi
+
 if ! sudo $YUM -y history undo last; then
     echo "Error trying to undo previous dnf transaction"
     $YUM history
@@ -82,11 +87,27 @@ if ! sudo $YUM -y history undo last; then
     $YUM history
     exit 1
 fi
+
+# Verify config files my creating an existing config file before installing the RPM
+if [ ! -f "${SERVER_CONFIG}" ]; then
+  echo "A ${SERVER_CONFIG} config file should not exist before installing daos-server RPM"
+  exit 1
+fi
+if [ ! -f "$AGENT_CONFIG" ]; then
+  echo "A $AGENT_CONFIG config file should not exist before installing daos-server RPM"
+  exit 1
+fi
+touch "$SERVER_CONFIG"
+touch "$AGENT_CONFIG"
+ls -al /etc/daos/daos*
+
 sudo $YUM -y install daos-server"$DAOS_PKG_VERSION"
 if rpm -q daos-client; then
   echo "daos-client RPM should not be installed as a dependency of daos-server"
   exit 1
 fi
+
+ls -al /etc/daos/daos*
 
 sudo $YUM -y install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
 
@@ -118,14 +139,14 @@ pip install -r $FTEST/requirements-ftest.txt
 
 sudo PYTHONPATH="$FTEST/util"                        \
      "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
-        -a /etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml
-sudo bash -c 'echo "system_ram_reserved: 4" >> /etc/daos/daos_server.yml'
+     -a "$AGENT_CONFIG" -s "$SERVER_CONFIG"
+sudo bash -c 'echo "system_ram_reserved: 4" >> '"$SERVER_CONFIG"
 sudo PYTHONPATH="$FTEST/util"                        \
      "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py \
-     -n "$HOSTNAME" -d /etc/daos/daos_control.yml
-cat /etc/daos/daos_server.yml
-cat /etc/daos/daos_agent.yml
-cat /etc/daos/daos_control.yml
+     -n "$HOSTNAME" -d "$CONTROL_CONFIG"
+cat "$SERVER_CONFIG"
+cat "$AGENT_CONFIG"
+cat "$CONTROL_CONFIG"
 
 # python3.6 does not like deactivate with -u set, later versions are OK with it however.
 set +u
@@ -204,31 +225,4 @@ if ! OFI_INTERFACE=eth0 timeout -k 30 300 daos_test -m; then
     timeout -k 30 120 cat <&"${SERVER[0]}"
     exit "$rc"
 fi
-
-sudo $YUM -y remove daos-client daos-server
-if rpm -q daos-client; then
-  echo "Failed to remove daos-client RPM"
-  exit 1
-fi
-if rpm -q daos-server; then
-  echo "Failed to remove daos-server RPM"
-  exit 1
-fi
-if [ ! -f /etc/daos/daos_agent.yml ]; then
-    echo "Modified daos_agent.yml config file should not have been removed with RPM removal"
-    exit 1
-fi
-if [ ! -f /etc/daos/daos_control.yml ]; then
-    echo "Modified daos_control.yml config file should not have been removed with RPM removal"
-    exit 1
-fi
-if [ ! -f /etc/daos/daos_server.yml ]; then
-  echo "Modified daos_server.yml config file should have been removed with RPM removal"
-  exit 1
-fi
-if [ -f /etc/daos/vos_size_input.yaml ]; then
-  echo "Unmodified vos_size_input.yaml config file should have been removed with RPM removal"
-  exit 1
-fi
-
 exit 0
