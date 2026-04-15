@@ -28,19 +28,26 @@ ARG DAOS_HTTP_PROXY
 ARG DAOS_HTTPS_PROXY
 ARG DAOS_NO_PROXY
 # Propagate into the build environment
-ENV http_proxy=${DAOS_HTTP_PROXY}
-ENV HTTP_PROXY=${DAOS_HTTP_PROXY}
-ENV https_proxy=${DAOS_HTTPS_PROXY}
-ENV HTTPS_PROXY=${DAOS_HTTPS_PROXY}
-ENV no_proxy=${DAOS_NO_PROXY}
-ENV NO_PROXY=${DAOS_NO_PROXY}
+ENV http_proxy=${DAOS_HTTP_PROXY} \
+    HTTP_PROXY=${DAOS_HTTP_PROXY} \
+    https_proxy=${DAOS_HTTPS_PROXY} \
+    HTTPS_PROXY=${DAOS_HTTPS_PROXY} \
+    no_proxy=${DAOS_NO_PROXY} \
+    NO_PROXY=${DAOS_NO_PROXY}
 # Persist into /etc/environment for use by shells and services
-RUN echo "http_proxy=${DAOS_HTTP_PROXY}" >> /etc/environment && \
-    echo "HTTP_PROXY=${DAOS_HTTP_PROXY}" >> /etc/environment && \
-    echo "https_proxy=${DAOS_HTTPS_PROXY}" >> /etc/environment && \
-    echo "HTTPS_PROXY=${DAOS_HTTPS_PROXY}" >> /etc/environment && \
-    echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
-    echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
+RUN set -e; \
+    if [ -n "$DAOS_HTTP_PROXY" ]; then \
+        echo "http_proxy=$DAOS_HTTP_PROXY" >> /etc/environment; \
+        echo "HTTP_PROXY=$DAOS_HTTP_PROXY" >> /etc/environment; \
+    fi; \
+    if [ -n "$DAOS_HTTPS_PROXY" ]; then \
+        echo "https_proxy=$DAOS_HTTPS_PROXY" >> /etc/environment; \
+        echo "HTTPS_PROXY=$DAOS_HTTPS_PROXY" >> /etc/environment; \
+    fi; \
+    if [ -n "$DAOS_NO_PROXY" ]; then \
+        echo "no_proxy=$DAOS_NO_PROXY" >> /etc/environment; \
+        echo "NO_PROXY=$DAOS_NO_PROXY" >> /etc/environment; \
+    fi
 
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
