@@ -89,16 +89,16 @@ if ! sudo $YUM -y history undo last; then
 fi
 
 # Verify config files my creating an existing config file before installing the RPM
-if [ ! -f "${SERVER_CONFIG}" ]; then
+if [ -f "${SERVER_CONFIG}" ]; then
   echo "A ${SERVER_CONFIG} config file should not exist before installing daos-server RPM"
   exit 1
 fi
-if [ ! -f "$AGENT_CONFIG" ]; then
-  echo "A $AGENT_CONFIG config file should not exist before installing daos-server RPM"
+if [ -f "${AGENT_CONFIG}" ]; then
+  echo "A ${AGENT_CONFIG} config file should not exist before installing daos-server RPM"
   exit 1
 fi
-touch "$SERVER_CONFIG"
-touch "$AGENT_CONFIG"
+touch "${SERVER_CONFIG}"
+touch "${AGENT_CONFIG}"
 ls -al /etc/daos/daos*
 
 sudo $YUM -y install daos-server"$DAOS_PKG_VERSION"
@@ -107,9 +107,9 @@ if rpm -q daos-client; then
   exit 1
 fi
 
-ls -al /etc/daos/daos*
-
 sudo $YUM -y install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
+
+ls -al /etc/daos/daos*
 
 me=$(whoami)
 for dir in server agent; do
