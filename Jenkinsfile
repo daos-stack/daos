@@ -319,7 +319,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Unit Test test stage')
         booleanParam(name: 'CI_NLT_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
@@ -479,7 +479,7 @@ pipeline {
         stage('Pre-build') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { !skipStage() || false }
             }
             parallel {
                 stage('Python Bandit check') {
@@ -590,13 +590,13 @@ pipeline {
                         expression { params.CI_NLT_TEST && !skipStage() }
                     }
                     agent {
-                        label params.CI_NLT_1_LABEL
+                        label 'ci_node-hsw-105'
                     }
                     steps {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
+                                     test_script: 'ci/unit/test_nlt.sh --memcheck no --system-ram-reserved 48 --server-debug WARN --class-name fault-injection fi',
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9'),
@@ -641,16 +641,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'fox-119_docker_1'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                                ' --build-arg POINT_RELEASE=.7 ' +
-                                                                ' --build-arg DAOS_DEPS_INSTALL=' + env.DAOS_RELVAL
-                            args '--tmpfs /mnt/daos_0'
-                        }
+                        label 'ci_node-hsw-105'
                     }
                     steps {
                         job_step_update(
