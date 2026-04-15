@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -360,8 +361,10 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		obj = container_of(lret, struct vos_object, obj_llink);
 	}
 
-	if (obj->obj_zombie)
+	if (obj->obj_zombie) {
+		D_WARN("Hit zombie obj " DF_UOID ", need to retry\n", DP_UOID(oid));
 		D_GOTO(failed, rc = -DER_AGAIN);
+	}
 
 	if (intent == DAOS_INTENT_KILL && !(flags & VOS_OBJ_KILL_DKEY)) {
 		if (obj != &obj_local) {

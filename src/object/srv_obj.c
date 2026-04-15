@@ -2877,14 +2877,18 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	 * Pre-allocate DTX entry for handling resend under such case.
 	 */
 	rc = obj_local_rw(rpc, &ioc, dth);
-	if (rc != 0)
+	if (rc != 0) {
 		DL_CDEBUG(
 		    rc == -DER_INPROGRESS || rc == -DER_TX_RESTART || rc == -DER_ALREADY ||
 			(rc == -DER_EXIST &&
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
 			(rc == -DER_NONEXIST &&
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
-		    DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(orw->orw_oid));
+		    DB_IO, DLOG_ERR, rc, "tgt_update " DF_UOID " with TX " DF_DTI,
+		    DP_UOID(orw->orw_oid), DP_DTI(&orw->orw_dti));
+		if (unlikely(rc == -DER_AGAIN))
+			crt_rpc_dump(rpc, "tgt_update");
+	}
 
 out:
 	if (dth != NULL)

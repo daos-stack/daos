@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -1523,8 +1523,10 @@ out:
 	/* The DTX has been ever aborted. Return -DER_AGAIN to make related client to retry sometime
 	 * later without triggering dtx_abort().
 	 */
-	if (dth->dth_aborted || rc == DTX_ST_ABORTED || rc == DTX_ST_ABORTING)
+	if (dth->dth_aborted || rc == DTX_ST_ABORTED || rc == DTX_ST_ABORTING) {
+		D_WARN("Current DTX " DF_DTI " is aborted: %d\n", DP_DTI(&dth->dth_xid), rc);
 		return -DER_AGAIN;
+	}
 
 	return rc > 0 ? 0 : rc;
 }
