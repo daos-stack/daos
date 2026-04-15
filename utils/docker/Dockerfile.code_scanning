@@ -1,5 +1,6 @@
 #
-# Copyright 2018-2022, Intel Corporation
+# Copyright 2018-2022 Intel Corporation.
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 #
 # 'recipe' for Docker for code scanning.
 #
@@ -17,13 +18,10 @@ ARG CB0
 ARG REPO_FILE_URL
 ARG DAOS_LAB_CA_FILE_URL
 # script to install OS updates basic tools and daos dependencies
-# COPY ./utils/scripts/install-fedora.sh /tmp/install.sh
 # script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-fedora.sh /tmp/repo-helper.sh
-
-RUN chmod +x /tmp/repo-helper.sh &&                 \
-    /tmp/repo-helper.sh &&                          \
-    rm -f /tmp/repo-helper.sh
+RUN --mount=type=bind,source=utils/scripts/helpers/repo-helper-fedora.sh,target=/tmp/repo-helper.sh \
+    chmod +x /tmp/repo-helper.sh && \
+    /tmp/repo-helper.sh
 
 # Install Python Bandit scanner.
 # The unset commands are currently needed for the combination of running

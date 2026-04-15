@@ -1,6 +1,6 @@
 # Copyright 2018-2024 Intel Corporation
 # Copyright 2025 Google LLC
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Ubuntu-based environment for building the DAOS project.
@@ -33,12 +33,10 @@ RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
 # script to setup local repo if available and install packages
-COPY ./utils/scripts/helpers/repo-helper-ubuntu.sh /tmp/repo-helper.sh
-COPY ./utils/scripts/install-ubuntu.sh /tmp/install.sh
-
-RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-    /tmp/repo-helper.sh &&                          \
-    rm -f /tmp/repo-helper.sh /tmp/install.sh
+RUN --mount=type=bind,source=utils/scripts/helpers/repo-helper-ubuntu.sh,target=/tmp/repo-helper.sh \
+    --mount=type=bind,source=utils/scripts/install-ubuntu.sh,target=/tmp/install.sh \
+    chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
+    /tmp/repo-helper.sh
 
 RUN locale-gen en_US.UTF-8
 
@@ -48,10 +46,7 @@ RUN update-alternatives --set \
 
 # Add DAOS users
 ARG UID=5000
-COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
-     /tmp/daos-server-user-setup.sh
-RUN set -e;                                    \
-    chmod +x /tmp/daos-server-user-setup.sh && \
+RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos-server-user-setup.sh \
     /tmp/daos-server-user-setup.sh
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
@@ -69,9 +64,10 @@ ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
-COPY requirements-build.txt requirements-utest.txt ./
-RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/requirements-build.txt \
+    --mount=type=bind,source=requirements-utest.txt,target=/tmp/requirements-utest.txt \
+    python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install -r /tmp/requirements-build.txt -r /tmp/requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
