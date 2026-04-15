@@ -50,12 +50,9 @@ RUN set -e; \
         echo "NO_PROXY=$DAOS_NO_PROXY" >> /etc/environment; \
     fi
 
-# Script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-el9.sh /tmp/repo-helper.sh
-
-RUN chmod +x /tmp/repo-helper.sh && \
-    /tmp/repo-helper.sh &&          \
-    rm -f /tmp/repo-helper.sh
+# Setup local repo if available
+RUN --mount=type=bind,src=./utils/scripts/helpers/repo-helper-el9.sh,target=/tmp/repo-helper.sh \
+    /tmp/repo-helper.sh
 
 # Install OS updates.
 RUN dnf upgrade && \
@@ -63,23 +60,15 @@ RUN dnf upgrade && \
 
 # Setup docker image for gcc build only
 FROM basic AS build-ci
-# Script to install basic tools and DAOS dependencies
-COPY ./utils/scripts/install-el9.sh /tmp/install.sh
-
-# Install basic tools and DAOS dependencies
-RUN dnf upgrade &&                                  \
-    chmod +x /tmp/install.sh &&                     \
+RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/install.sh \
+    dnf upgrade &&                                  \
     INSTALL_BUILD_CI_ONLY="true" /tmp/install.sh && \
     dnf clean all
 
 # Add DAOS user
 ARG UID=1000
-COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
-     /tmp/daos-server-user-setup.sh
-RUN set -e;                                    \
-    chmod +x /tmp/daos-server-user-setup.sh && \
-    /tmp/daos-server-user-setup.sh &&          \
-    rm -f /tmp/daos-server-user-setup.sh
+RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos-server-user-setup.sh \
+    /tmp/daos-server-user-setup.sh
 
 # Create directory for DAOS build backend storage
 RUN mkdir -p /home/daos /opt/daos && \
@@ -94,11 +83,10 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 WORKDIR /home/daos
-COPY requirements-build.txt ./
-RUN . /home/daos/venv/bin/activate &&                       \
-    pip --no-cache-dir install --upgrade pip &&             \
-    pip --no-cache-dir install -r requirements-build.txt && \
-    rm -r requirements-build.txt
+RUN --mount=type=bind,source=requirements-build.txt,target=/home/daos/requirements-build.txt \
+    . /home/daos/venv/bin/activate &&                              \
+    pip --no-cache-dir install --upgrade pip &&                    \
+    pip --no-cache-dir install -r /home/daos/requirements-build.txt
 
 # Install DAOS dependencies if available
 ARG DAOS_DEPS_INSTALL=yes
@@ -116,9 +104,9 @@ FROM build-ci AS build-local
 # Install remaining tools and dependencies needed for internal build.
 # This is done in a separate stage to allow for a smaller image for CI building only.
 USER root:root
-RUN /tmp/install.sh && \
-    dnf clean all &&   \
-    rm -f /tmp/install.sh
+RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/install.sh \
+    /tmp/install.sh && \
+    dnf clean all
 
 # Create directory for DAOS dependencies build storage
 USER daos_server:daos_server
@@ -199,9 +187,6 @@ COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct \
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server src src
 COPY --chown=daos_server:daos_server utils/build.config utils/
-COPY --chown=daos_server:daos_server utils/config utils/config
-COPY --chown=daos_server:daos_server utils/certs utils/certs
-COPY --chown=daos_server:daos_server utils/completion utils/completion
 
 # select compiler to use
 ARG COMPILER=gcc
