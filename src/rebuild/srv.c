@@ -384,17 +384,14 @@ rpt_insert(struct rebuild_tgt_pool_tracker *rpt)
 void
 rpt_delete(struct rebuild_tgt_pool_tracker *rpt)
 {
-	bool decref = false;
-
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	D_ASSERT(!d_list_empty(&rpt->rt_list));
+
 	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
-	if (!d_list_empty(&rpt->rt_list)) {
-		d_list_del_init(&rpt->rt_list);
-		decref = true;
-	}
+	d_list_del_init(&rpt->rt_list);
 	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
-	if (decref)
-		rpt_put(rpt);
+
+	rpt_put(rpt);
 }
 
 struct rebuild_tgt_pool_tracker *
@@ -2903,14 +2900,13 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_ASSERT(rpt->rt_refcount > 0);
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
-	 * NB: Because rebuild_tgt_fini will be only called in
-	 * rebuild_tgt_status_check_ult, which will make sure when
-	 * rt_refcount reaches to 1, either all rebuild is done or
-	 * all ult/task has been aborted by rt_abort, i.e. no new
-	 * ULT/task will be created after this check. So it is safe
-	 * to destroy the rpt after this.
+	 * NB: Because rebuild_tgt_fini will be only called in rebuild_tgt_status_check_ult,
+	 * which will make sure when rt_refcount reaches to 2 (one by check ULT, the other by
+	 * track list), either all rebuild is done or all ult/task has been aborted by rt_abort,
+	 * i.e. no new ULT/task will be created after this check. So it is safe to destroy
+	 * the rpt after this.
 	 */
-	if (rpt->rt_refcount > 1)
+	if (rpt->rt_refcount > 2)
 		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_lock);
 	ABT_mutex_unlock(rpt->rt_lock);
 
