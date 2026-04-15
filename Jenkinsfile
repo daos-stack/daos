@@ -319,7 +319,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Unit Test test stage')
         booleanParam(name: 'CI_NLT_TEST',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the NLT test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
@@ -610,10 +610,12 @@ pipeline {
                         label 'ci_node-hsw-105'
                     }
                     steps {
+/*
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
+*/
                         job_step_update(nlt_test())
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
                         //                skipPublishingChecks: true,
