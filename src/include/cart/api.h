@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2285,6 +2285,14 @@ int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs
 int crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 			d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
 			uint32_t version);
+
+/**
+ * Dump CaRT RPC information.
+ *
+ * \param[in] req                The rpc structure.
+ * \param[in] fmt                The message to be logged.
+ */
+void crt_rpc_dump(crt_rpc_t *req, const char *msg);
 
 /**
  * Initialize swim on the specified context index.

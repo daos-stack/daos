@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1991,4 +1991,13 @@ int
 crt_req_get_proto_ver(crt_rpc_t *req)
 {
 	return (req->cr_opc & CRT_PROTO_VER_MASK) >> 16;
+}
+
+void
+crt_rpc_dump(crt_rpc_t *req, const char *msg)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	RPC_INFO(rpc_priv, "%s\n", msg);
 }

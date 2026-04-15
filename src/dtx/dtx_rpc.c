@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -743,7 +743,7 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 			dca->dca_steps = length;
 
 		/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
-		if (dss_has_enough_helper()) {
+		if (0 && dss_has_enough_helper()) {
 			rc = ABT_eventual_create(0, &dca->dca_chore_eventual);
 			if (rc != ABT_SUCCESS) {
 				D_ERROR("failed to create eventual: %d\n", rc);
