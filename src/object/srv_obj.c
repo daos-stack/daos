@@ -2212,13 +2212,6 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
 	if (rc) {
-		if (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
-			D_DEBUG(DB_IO,
-				"migration IO skip missing container " DF_UUID "/" DF_UUID "\n",
-				DP_UUID(pool_uuid), DP_UUID(cont_uuid));
-			rc = -DER_CONT_NONEXIST;
-			D_GOTO(failed, rc);
-		}
 		D_ERROR("Can not find the container "DF_UUID"/"DF_UUID"\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid));
 		D_GOTO(failed, rc);

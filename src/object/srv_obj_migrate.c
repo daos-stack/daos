@@ -4376,7 +4376,7 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(daos_handle_is_valid(cont_toh));
 
 	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, entry->ie_couuid, &cont_child);
-	if (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
+	if (ds_cont_rc_is_ignorable_for_rebuild(rc)) {
 		D_DEBUG(DB_REBUILD, DF_RB" co_uuid "DF_UUID" already destroyed or destroying, "
 			DF_RC"\n", DP_RB_MPT(tls), DP_UUID(entry->ie_couuid), DP_RC(rc));
 		rc = 0;

@@ -175,6 +175,24 @@ ds_cont_child_ec_aggregating(struct ds_cont_child *cont)
 	return cont->sc_ec_agg_updates || cont->sc_ec_agg_active;
 }
 
+static inline bool
+ds_cont_rc_is_nonexist(int rc)
+{
+	return rc == -DER_CONT_NONEXIST;
+}
+
+static inline bool
+ds_cont_rc_is_destroying(int rc)
+{
+	return rc == -DER_CONT_DESTROYING;
+}
+
+static inline bool
+ds_cont_rc_is_ignorable_for_rebuild(int rc)
+{
+	return ds_cont_rc_is_nonexist(rc) || ds_cont_rc_is_destroying(rc);
+}
+
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param);

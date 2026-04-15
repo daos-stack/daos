@@ -1060,14 +1060,18 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 	}
 
 	/*
-	 * The container is in stopping because:
-	 * 1. Container is going to be destroyed, or;
-	 * 2. Pool is going to be destroyed, or;
-	 * 3. Pool service is going to be stopped;
+	 * The container can be unavailable because:
+	 * 1. Container is going to be destroyed; or
+	 * 2. Pool is going to be destroyed; or
+	 * 3. Pool service is going to be stopped.
 	 */
-	if (cont_child->sc_stopping || cont_child->sc_destroying) {
-		D_DEBUG(DB_MD,
-			DF_CONT "[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
+	if (cont_child->sc_destroying) {
+		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being destroying (s=%d, d=%d)\n",
+			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
+			cont_child->sc_destroying);
+		rc = -DER_CONT_DESTROYING;
+	} else if (cont_child->sc_stopping) {
+		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being stopped (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
 			cont_child->sc_destroying);
 		rc = -DER_SHUTDOWN;
@@ -1517,10 +1521,19 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid, false /* create */,
 			       ds_cont);
+	if (rc == -DER_NONEXIST)
+		return -DER_CONT_NONEXIST;
+
 	if (rc != 0)
 		return rc;
 
-	if ((*ds_cont)->sc_stopping || (*ds_cont)->sc_destroying) {
+	if ((*ds_cont)->sc_destroying) {
+		cont_child_put(tls->dt_cont_cache, *ds_cont);
+		*ds_cont = NULL;
+		return -DER_CONT_DESTROYING;
+	}
+
+	if ((*ds_cont)->sc_stopping) {
 		cont_child_put(tls->dt_cont_cache, *ds_cont);
 		*ds_cont = NULL;
 		return -DER_SHUTDOWN;
