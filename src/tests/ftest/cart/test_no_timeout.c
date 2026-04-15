@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,7 +14,6 @@
 
 #include "crt_utils.h"
 #include "test_group_np_common.h"
-#include "test_group_np_common_cli.h"
 
 #define NUM_ATTACH_RETRIES	10
 #define TEST_NO_TIMEOUT_BASE    0x010000000
@@ -141,9 +140,7 @@ test_run(void)
 			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
 				  rc);
 
-			crtu_sem_timedwait(&test_g.t_token_to_proceed, 61,
-					   __LINE__);
-			send_rpc_shutdown(server_ep, rpc_req);
+			crtu_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
 		}
 	}
 
