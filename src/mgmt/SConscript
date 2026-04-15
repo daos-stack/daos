@@ -4,9 +4,15 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'libdaos_tgts', 'chk_pb')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs', 'libdaos_tgts', 'chk_pb')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.d_add_build_rpath()
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.d_add_build_rpath()
+    if base_env_mpi is not None:
+        base_env_mpi.AppendUnique(LIBPATH=[Dir('.')])
+        base_env_mpi.d_add_build_rpath()
 
     denv = env.Clone()
 
@@ -18,10 +24,13 @@ def scons():
                                  'cont.pb-c.c', 'server.pb-c.c',
                                  'check.pb-c.c', 'shared/ranks.pb-c.c',
                                  'system.pb-c.c']) + chk_pb
-    common = denv.SharedObject(['rpc.c']) + pb_objs
 
-    # Management client library
-    libdaos_tgts.extend(common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c', 'cli_debug.c']))
+    mgmt_crtproto_lib = denv.d_library('daos_mgmt_crtproto',
+                                       denv.SharedObject(['rpc.c']),
+                                       LIBS=['daos_common', 'cart', 'gurt'])
+    denv.Install('$PREFIX/lib64/', mgmt_crtproto_lib)
+
+    libdaos_tgts.extend(pb_objs + denv.SharedObject(['cli_mgmt.c', 'cli_query.c', 'cli_debug.c']))
 
     if not prereqs.server_requested():
         return
@@ -43,7 +52,9 @@ def scons():
         'srv_util.c',
         'srv.c',
     ]
-    mgmt_srv = senv.d_library('mgmt', [common, srcs], install_off='../..')
+    mgmt_srv = senv.d_library('mgmt', [pb_objs, srcs],
+                              LIBS=['daos_mgmt_crtproto', 'daos_common_pmem', 'cart', 'gurt'],
+                              install_off='../..')
     senv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
     denv = senv
