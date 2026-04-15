@@ -547,13 +547,13 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { true }
             }
             parallel {
                 stage('NLT') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
+                        expression { true }
                     }
                     agent {
                         label 'ci_node-hsw-105'
