@@ -596,23 +596,6 @@ out:
 		param->ap_vos_agg ? "VOS" : "EC");
 }
 
-static int
-cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		      uint32_t flags, struct agg_param *param)
-{
-	int rc;
-
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
-
-	/* Suppress csum error and continue on other epoch ranges */
-	if (rc == -DER_CSUM)
-		rc = 0;
-
-	/* Wake up GC ULT */
-	sched_req_wakeup(cont->sc_pool->spc_gc_req);
-	return rc;
-}
-
 /**
  * Per-object VOS aggregation ULT body.
  * Spawned by the global aggregation scanner for each object.
@@ -806,46 +789,9 @@ cont_vos_agg_per_obj_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 				    param->ap_req);
 }
 
-/* Legacy per-container aggregation ULT functions (kept for EC backward compat) */
-
-static void
-cont_agg_ult(void *arg)
-{
-	struct ds_cont_child	*cont = arg;
-	struct agg_param	param = { 0 };
-
-	D_DEBUG(DB_EPC, "start VOS aggregation "DF_UUID"\n",
-		DP_UUID(cont->sc_uuid));
-	param.ap_cont = cont;
-	param.ap_vos_agg = true;
-
-	cont_aggregate_interval(cont, cont_vos_aggregate_cb, &param);
-}
-
-static void
-cont_ec_agg_ult(void *arg)
-{
-	struct ds_cont_child	*cont = arg;
-
-	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
-		DP_UUID(cont->sc_uuid));
-
-	ds_obj_ec_aggregate(arg);
-}
-
 static void
 cont_stop_agg(struct ds_cont_child *cont)
 {
-	if (cont->sc_ec_agg_req != NULL) {
-		D_DEBUG(DB_EPC, DF_CONT"[%d]: Stopping EC aggregation ULT\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			dss_get_module_info()->dmi_tgt_id);
-
-		sched_req_wait(cont->sc_ec_agg_req, true);
-		sched_req_put(cont->sc_ec_agg_req);
-		cont->sc_ec_agg_req = NULL;
-	}
-
 	if (cont->sc_agg_req != NULL) {
 		D_DEBUG(DB_EPC, DF_CONT"[%d]: Stopping VOS aggregation ULT\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
@@ -860,27 +806,12 @@ cont_stop_agg(struct ds_cont_child *cont)
 static int
 cont_start_agg(struct ds_cont_child *cont)
 {
-	struct dss_module_info	*dmi = dss_get_module_info();
-	struct sched_req_attr	 attr;
-
 	/*
-	 * VOS aggregation is now handled by the global aggregation scanner
-	 * (per pool_child) which spawns per-object ULTs. Only EC aggregation
-	 * still uses per-container ULTs.
+	 * Both VOS and EC aggregation are now handled by global aggregation
+	 * scanners (per pool_child).  VOS scanners spawn per-object ULTs,
+	 * EC scanners call ds_obj_ec_agg_cont() per container.
+	 * No per-container aggregation ULTs are needed.
 	 */
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &cont->sc_pool->spc_uuid);
-
-	if (likely(!ec_agg_disabled)) {
-		D_ASSERT(cont->sc_ec_agg_req == NULL);
-		cont->sc_ec_agg_req = sched_create_ult(&attr, cont_ec_agg_ult, cont,
-						       DSS_DEEP_STACK_SZ);
-		if (cont->sc_ec_agg_req == NULL) {
-			D_ERROR(DF_CONT"[%d]: Failed to create EC aggregation ULT.\n",
-				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id);
-			return -DER_NOMEM;
-		}
-	}
-
 	return 0;
 }
 

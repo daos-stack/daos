@@ -48,9 +48,12 @@ struct pool_metrics {
 /* Pool thread-local storage */
 struct pool_tls {
 	struct d_list_head	dt_pool_list;	/* of ds_pool_child objects */
-	/* Aggregation scanner ULTs (up to AGG_SCANNER_MAX per xstream) */
+	/* VOS aggregation scanner ULTs (up to AGG_SCANNER_MAX per xstream) */
 	struct sched_request	*dt_agg_reqs[AGG_SCANNER_MAX];
-	unsigned int		 dt_num_scanners; /* currently running count */
+	unsigned int		 dt_num_scanners; /* currently running VOS scanner count */
+	/* EC aggregation scanner ULTs (up to AGG_SCANNER_MAX per xstream) */
+	struct sched_request	*dt_ec_agg_reqs[AGG_SCANNER_MAX];
+	unsigned int		 dt_num_ec_scanners; /* currently running EC scanner count */
 };
 
 extern struct dss_module_key pool_module_key;

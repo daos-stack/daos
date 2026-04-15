@@ -40,6 +40,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/srv_csum.h>
+#include <daos_srv/srv_obj_ec.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -295,6 +296,215 @@ ds_stop_agg_scanner(void)
 		}
 	}
 	tls->dt_num_scanners = 0;
+}
+
+/* Per-xstream EC aggregation scanners ****************************************/
+
+/**
+ * Argument for each EC aggregation scanner ULT.
+ */
+struct ec_agg_scanner_arg {
+	struct pool_tls	*sa_tls;
+	unsigned int	 sa_idx;	/* scanner index [0 .. N-1] */
+};
+
+/**
+ * Global EC aggregation scanner ULT body.
+ * Multiple EC scanners may run per xstream (default 16, tunable).
+ * Each scanner iterates all pools but only processes those assigned to it
+ * based on (pool_ordinal % num_ec_scanners == scanner_index).
+ * For each assigned pool/container, it runs one round of EC aggregation.
+ */
+static void
+ec_agg_scanner_ult(void *arg)
+{
+	struct ec_agg_scanner_arg	*sarg = arg;
+	struct pool_tls			*tls = sarg->sa_tls;
+	unsigned int			 my_idx = sarg->sa_idx;
+	struct sched_request		*req = tls->dt_ec_agg_reqs[my_idx];
+	struct dss_module_info		*dmi = dss_get_module_info();
+
+	D_DEBUG(DB_EPC, "[%d]: EC aggregation scanner %u/%u started\n",
+		dmi->dmi_tgt_id, my_idx, tls->dt_num_ec_scanners);
+
+	D_FREE(sarg); /* allocated by ds_start_ec_agg_scanner */
+
+	if (req == NULL)
+		goto out;
+
+	while (!dss_ult_exiting(req)) {
+		struct ds_pool_child	*pool_child;
+		uint64_t		 msecs = 2000;
+		unsigned int		 pool_ordinal = 0;
+		bool			 any_rebuilding = false;
+
+		/* Iterate all pools; only process those assigned to this scanner */
+		d_list_for_each_entry(pool_child, &tls->dt_pool_list, spc_list) {
+			struct ds_cont_child	*cont;
+			unsigned int		 num_scanners;
+
+			if (dss_ult_exiting(req))
+				break;
+
+			num_scanners = tls->dt_num_ec_scanners;
+			if (num_scanners == 0)
+				break;
+
+			if (pool_ordinal % num_scanners != my_idx) {
+				pool_ordinal++;
+				continue;
+			}
+			pool_ordinal++;
+
+			if (ds_pool_restricted(pool_child->spc_pool, false))
+				continue;
+
+			if (ds_pool_is_rebuilding(pool_child->spc_pool))
+				any_rebuilding = true;
+
+			/* Iterate all containers in this pool */
+			d_list_for_each_entry(cont, &pool_child->spc_cont_list,
+					      sc_link) {
+				int rc;
+
+				if (dss_ult_exiting(req))
+					break;
+
+				if (!cont_aggregate_runnable(cont, req, false))
+					continue;
+
+				cont->sc_ec_agg_active = 1;
+
+				rc = ds_obj_ec_agg_cont(cont, req);
+				if (rc == -DER_SHUTDOWN)
+					break;
+				if (rc < 0)
+					DL_CDEBUG(rc == -DER_BUSY ||
+						  rc == -DER_INPROGRESS,
+						  DB_EPC, DLOG_ERR, rc,
+						  DF_CONT ": EC aggregate "
+						  "failed",
+						  DP_CONT(pool_child->spc_uuid,
+							  cont->sc_uuid));
+				else if (pool_child->spc_gc_req != NULL &&
+					 sched_req_space_check(
+						pool_child->spc_gc_req) !=
+					 SCHED_SPACE_PRESS_NONE)
+					msecs = 200;
+
+				/* Clear the flag after processing; the callback
+				 * may also clear it during rebuild.
+				 */
+				cont->sc_ec_agg_active = 0;
+			}
+		}
+
+		if (dss_ult_exiting(req))
+			break;
+
+		/*
+		 * Sleep 18 seconds if any pool is rebuilding and no space
+		 * pressure, to reduce contention with rebuild.
+		 */
+		if (any_rebuilding && msecs != 200)
+			msecs = 18000;
+
+		if (msecs != 0)
+			sched_req_sleep(req, msecs);
+		else
+			sched_req_yield(req);
+	}
+out:
+	D_DEBUG(DB_EPC, "[%d]: EC aggregation scanner %u stopped\n",
+		dmi->dmi_tgt_id, my_idx);
+}
+
+/**
+ * Start EC aggregation scanner ULTs on the current xstream.
+ *
+ * The number of scanners is min(ec_agg_num_scanners, pool_count) so that we
+ * never create more scanners than pools.  Safe to call multiple times;
+ * additional scanners are created as needed when new pools appear.
+ */
+void
+ds_start_ec_agg_scanner(void)
+{
+	struct pool_tls		*tls = pool_tls_get();
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+	static uuid_t		 anonym_uuid;
+	unsigned int		 target, npools, i;
+
+	if (unlikely(ec_agg_disabled))
+		return;
+
+	npools = pool_count(tls);
+	if (npools == 0)
+		return;
+
+	/* Desired scanner count: min(tunable, npools, AGG_SCANNER_MAX) */
+	target = min(ec_agg_num_scanners, npools);
+	if (target > AGG_SCANNER_MAX)
+		target = AGG_SCANNER_MAX;
+
+	/* Already have enough scanners? */
+	if (tls->dt_num_ec_scanners >= target)
+		return;
+
+	D_DEBUG(DB_EPC, "[%d]: Starting EC aggregation scanners (%u -> %u, pools=%u)\n",
+		dmi->dmi_tgt_id, tls->dt_num_ec_scanners, target, npools);
+
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+
+	for (i = tls->dt_num_ec_scanners; i < target; i++) {
+		struct ec_agg_scanner_arg	*sarg;
+
+		D_ALLOC_PTR(sarg);
+		if (sarg == NULL) {
+			D_ERROR("[%d]: Failed to alloc EC scanner arg %u\n",
+				dmi->dmi_tgt_id, i);
+			break;
+		}
+		sarg->sa_tls = tls;
+		sarg->sa_idx = i;
+
+		tls->dt_ec_agg_reqs[i] = sched_create_ult(&attr,
+							   ec_agg_scanner_ult,
+							   sarg,
+							   DSS_DEEP_STACK_SZ);
+		if (tls->dt_ec_agg_reqs[i] == NULL) {
+			D_ERROR("[%d]: Failed to create EC aggregation scanner ULT %u.\n",
+				dmi->dmi_tgt_id, i);
+			D_FREE(sarg);
+			break;
+		}
+		tls->dt_num_ec_scanners++;
+	}
+}
+
+/**
+ * Stop all EC aggregation scanner ULTs on the current xstream.
+ */
+void
+ds_stop_ec_agg_scanner(void)
+{
+	struct pool_tls	*tls = pool_tls_get();
+	unsigned int	 i;
+
+	if (tls->dt_num_ec_scanners == 0)
+		return;
+
+	D_DEBUG(DB_EPC, "[%d]: Stopping %u EC aggregation scanners\n",
+		dss_get_module_info()->dmi_tgt_id, tls->dt_num_ec_scanners);
+
+	for (i = 0; i < tls->dt_num_ec_scanners; i++) {
+		if (tls->dt_ec_agg_reqs[i] != NULL) {
+			sched_req_wait(tls->dt_ec_agg_reqs[i], true);
+			sched_req_put(tls->dt_ec_agg_reqs[i]);
+			tls->dt_ec_agg_reqs[i] = NULL;
+		}
+	}
+	tls->dt_num_ec_scanners = 0;
 }
 
 /* ds_pool_child **************************************************************/
@@ -864,8 +1074,10 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto out_cont;
 
 	/* Start aggregation scanners if not already running on this xstream */
-	if (!ds_pool_restricted(child->spc_pool, false))
+	if (!ds_pool_restricted(child->spc_pool, false)) {
 		ds_start_agg_scanner();
+		ds_start_ec_agg_scanner();
+	}
 
 done:
 	*child->spc_state = POOL_CHILD_STARTED;
@@ -951,6 +1163,7 @@ pool_child_stop(struct ds_pool_child *child)
 	 * next pool_child_start if other pools remain.
 	 */
 	ds_stop_agg_scanner();
+	ds_stop_ec_agg_scanner();
 
 	/* First stop all the ULTs who might need to hold ds_pool_child (or ds_cont_child) */
 	ds_cont_child_stop_all(child);

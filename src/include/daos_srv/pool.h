@@ -427,10 +427,15 @@ int
 extern bool ec_agg_disabled;
 extern unsigned int agg_max_ults;
 extern unsigned int agg_num_scanners;
+extern unsigned int ec_agg_num_scanners;
 
-/* Global per-xstream aggregation scanners */
+/* Global per-xstream aggregation scanners (VOS) */
 void ds_start_agg_scanner(void);
 void ds_stop_agg_scanner(void);
+
+/* Global per-xstream EC aggregation scanners */
+void ds_start_ec_agg_scanner(void);
+void ds_stop_ec_agg_scanner(void);
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,
