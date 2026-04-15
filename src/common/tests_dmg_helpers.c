@@ -2007,12 +2007,24 @@ parse_check_query_pool(struct json_object *obj, uuid_t uuid, struct daos_check_i
 	return rc;
 }
 
+#define CHK_LEADER_RANK         (uint32_t)(-1)
+#define CHK_REPORT_SEQ_BIT      40
+#define CHK_REPORT_SEQ_MASK     ((1ULL << CHK_REPORT_SEQ_BIT) - 1)
+
 static int
-parse_check_query_report(struct json_object *obj, struct daos_check_report_info *dcri)
+parse_check_query_report(struct json_object *parent, struct daos_check_info *dci, uint32_t idx)
 {
-	struct json_object	*tmp;
-	int			 rc;
-	int			 i;
+	struct daos_check_report_info *dcri = &dci->dci_reports[idx];
+	struct json_object            *obj;
+	struct json_object            *tmp;
+	int                            rc;
+	int                            i;
+
+	obj = json_object_array_get_idx(parent, idx);
+	if (unlikely(obj == NULL)) {
+		D_ERROR("Unable to extract report from check query result\n");
+		return -DER_INVAL;
+	}
 
 	rc = parse_dmg_uuid(obj, "pool_uuid", dcri->dcri_uuid);
 	if (rc != 0)
@@ -2041,6 +2053,17 @@ parse_check_query_report(struct json_object *obj, struct daos_check_report_info 
 	}
 
 	dcri->dcri_act = json_object_get_int(tmp);
+
+	if (!json_object_object_get_ex(obj, "rank", &tmp)) {
+		/* If JSON output does not contain "rank", then unparse it from dcri_seq. */
+		if ((dcri->dcri_seq & ~CHK_REPORT_SEQ_MASK) ==
+		    (((uint64_t)CHK_LEADER_RANK << CHK_REPORT_SEQ_BIT) & ~(1ULL << 63)))
+			dcri->dcri_rank = dci->dci_leader;
+		else
+			dcri->dcri_rank = dcri->dcri_seq >> CHK_REPORT_SEQ_BIT;
+	} else {
+		dcri->dcri_rank = json_object_get_int(tmp);
+	}
 
 	if (!json_object_object_get_ex(obj, "result", &tmp))
 		dcri->dcri_result = 0;
@@ -2078,6 +2101,12 @@ parse_check_query_info(struct json_object *query_output, uint32_t pool_nr, uuid_
 	if (rc != 0)
 		return rc;
 
+	if (!json_object_object_get_ex(query_output, "leader", &obj)) {
+		D_ERROR("Unable to extract leader from check query result\n");
+		return -DER_INVAL;
+	}
+
+	dci->dci_leader  = json_object_get_int(obj);
 	dci->dci_pool_nr = 0;
 
 	if (pool_nr <= 0)
@@ -2126,8 +2155,7 @@ reports:
 	}
 
 	for (i = 0; i < dci->dci_report_nr; i++) {
-		rc = parse_check_query_report(json_object_array_get_idx(obj, i),
-					      &dci->dci_reports[i]);
+		rc = parse_check_query_report(obj, dci, i);
 		if (rc != 0)
 			return rc;
 	}

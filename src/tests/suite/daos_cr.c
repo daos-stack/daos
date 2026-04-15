@@ -269,38 +269,43 @@ cr_rank_reint(uint32_t rank, bool start)
 	return rc;
 }
 
+static struct daos_check_report_info *
+cr_locate_dcri(struct daos_check_info *dci, struct daos_check_report_info *base, uuid_t uuid);
+
 static inline int
-cr_rank_exclude(test_arg_t *arg, struct test_pool *pool, int *rank, bool wait)
+cr_rank_exclude(test_arg_t *arg, struct daos_check_info *dci, struct test_pool *pool, int *rank,
+		bool wait)
 {
-	int	count;
-	int	rc;
-	int	i;
-	int	j;
+	struct daos_check_report_info *dcri;
+	int                            rc;
+	int                            i;
+	int                            j;
 
 	D_ASSERT(pool->svc != NULL);
 
 	/*
-	 * The check leader (elected by control plane, usually on rank 0) and
-	 * PS leader maybe on different ranks, do not exclude such two ranks.
+	 * Do not exclude PS leader. Since we do not know which one is the leader, then the one to
+	 * be excluded will be not any pool service replica. On the other hand, do not exclude the
+	 * rank that needs to interact with user, this rank maybe (or maybe not) one of above pool
+	 * service replicas.
 	 */
-	count = pool->svc->rl_nr + 2;
-	if (!test_runable(arg, count)) {
-		print_message("Need enough targets (%u/%u vs %d) for test, skip\n",
-			      arg->srv_nnodes, arg->srv_ntgts, count);
-		return 1;
-	}
 
-	for (i = 1, *rank = -1; i < count && *rank < 0; i++) {
+	dcri = cr_locate_dcri(dci, NULL, pool->pool_uuid);
+
+	for (i = 0, *rank = -1; i < arg->srv_nnodes && *rank < 0; i++) {
 		for (j = 0; j < pool->svc->rl_nr; j++) {
 			if (pool->svc->rl_ranks[j] == i)
 				break;
 		}
 
-		if (j >= pool->svc->rl_nr)
+		if (j >= pool->svc->rl_nr && i != dci->dci_leader && i != dcri->dcri_rank)
 			*rank = i;
 	}
 
-	D_ASSERT(*rank >= 0);
+	if (unlikely(*rank < 0)) {
+		print_message("Not enough ranks (%u) for test, skip\n", arg->srv_nnodes);
+		return 1;
+	}
 
 	rc = cr_debug_set_params(arg, DAOS_CHK_ENGINE_DEATH | DAOS_FAIL_ALWAYS);
 	if (rc != 0)
@@ -2896,7 +2901,7 @@ cr_engine_death(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(arg, &pool, &rank, true);
+	rc = cr_rank_exclude(arg, &dci, &pool, &rank, true);
 	if (rc > 0)
 		goto cleanup;
 	assert_rc_equal(rc, 0);
@@ -3000,7 +3005,7 @@ cr_engine_rejoin_succ(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(arg, &pool, &rank, false);
+	rc = cr_rank_exclude(arg, &dci, &pool, &rank, false);
 	if (rc > 0)
 		goto cleanup;
 	assert_rc_equal(rc, 0);
@@ -3116,7 +3121,7 @@ cr_engine_rejoin_fail(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(arg, &pool, &rank, true);
+	rc = cr_rank_exclude(arg, &dci, &pool, &rank, true);
 	if (rc > 0)
 		goto cleanup;
 	assert_rc_equal(rc, 0);
@@ -4071,7 +4076,7 @@ cr_scan_cont_parallel(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	print_message("CR30: scan multiple containers in parallel\n");
+	print_message("CR32: scan multiple containers in parallel\n");
 
 	for (i = 0; i < 2; i++) {
 		rc = cr_pool_create(state, &pools[i], true, TCC_NONE);
@@ -4097,7 +4102,7 @@ cr_scan_cont_parallel(void **state)
 		actions[i] = TCA_INTERACT;
 	}
 
-	for (i = 0; i < 2; i++, once = false) {
+	for (i = 0, once = false; i < 2; i++) {
 again:
 		cr_pool_wait(1, &pools[i].pool_uuid, &dcis[i]);
 
