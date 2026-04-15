@@ -97,8 +97,8 @@ if [ -f "${AGENT_CONFIG}" ]; then
   echo "A ${AGENT_CONFIG} config file should not exist before installing daos-server RPM"
   exit 1
 fi
-touch "${SERVER_CONFIG}"
-touch "${AGENT_CONFIG}"
+sudo touch "${SERVER_CONFIG}"
+sudo touch "${AGENT_CONFIG}"
 ls -al /etc/daos/daos*
 
 sudo $YUM -y install daos-server"$DAOS_PKG_VERSION"
