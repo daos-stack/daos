@@ -90,26 +90,35 @@ fi
 
 # Verify config files my creating an existing config file before installing the RPM
 if [ -f "${SERVER_CONFIG}" ]; then
-  echo "A ${SERVER_CONFIG} config file should not exist before installing daos-server RPM"
+  echo "A ${SERVER_CONFIG} config file should not exist before the daos-server install"
+  ls -al /etc/daos/daos*
   exit 1
 fi
 if [ -f "${AGENT_CONFIG}" ]; then
-  echo "A ${AGENT_CONFIG} config file should not exist before installing daos-server RPM"
+  echo "A ${AGENT_CONFIG} config file should not exist before the daos-client-tests-openmpi install"
+  ls -al /etc/daos/daos*
   exit 1
 fi
 sudo touch "${SERVER_CONFIG}"
 sudo touch "${AGENT_CONFIG}"
-ls -al /etc/daos/daos*
 
 sudo $YUM -y install daos-server"$DAOS_PKG_VERSION"
 if rpm -q daos-client; then
   echo "daos-client RPM should not be installed as a dependency of daos-server"
   exit 1
 fi
+if [ ! -f "${SERVER_CONFIG}.rpmnew" ]; then
+  echo "A ${SERVER_CONFIG}.rpmnew file should exist after the daos-server install"
+  ls -al /etc/daos/daos*
+  exit 1
+fi
 
 sudo $YUM -y install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
-
-ls -al /etc/daos/daos*
+if [ ! -f "${AGENT_CONFIG}.rpmnew" ]; then
+  echo "A ${AGENT_CONFIG}.rpmnew file should exist after the daos-client-tests-openmpi install"
+  ls -al /etc/daos/daos*
+  exit 1
+fi
 
 me=$(whoami)
 for dir in server agent; do
