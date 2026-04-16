@@ -15,7 +15,6 @@ engines:
       - DAOS_STRICT_SHUTDOWN=1
       - DAOS_TARGET_OVERSUBSCRIBE=1
       - ABT_STACK_OVERFLOW_CHECK=mprotect
-      - SWIM_PROTOCOL_PERIOD_LEN=2000
     storage:
       -
         class: ram
