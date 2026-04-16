@@ -114,7 +114,8 @@ across the different subnets.
 #### Interface Settings
 
 Some special configuration is required for the `verbs` provider to use librdmacm
-with multiple interfaces, and the same configuration is required for the `tcp` provider.
+with multiple interfaces. The same configuration is required for the `tcp` provider
+and for all of the `ucx` provider options.
 
 First, the accept_local feature must be enabled on the network interfaces
 to be used by DAOS. This can be done using the following command:
