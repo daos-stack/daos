@@ -105,7 +105,7 @@ pipeline {
         // test stage launch.py --nvme argument is hard-coded in each stage definition to avoid the
         // stages from duplicating testing.
         string(name: 'TestProvider',
-               defaultValue: '',
+               defaultValue: 'ucx+dc_x',
                description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
@@ -279,6 +279,7 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: true,
                             job_status: job_status_internal
@@ -294,6 +295,7 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -310,6 +312,7 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -325,6 +328,7 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -367,6 +371,7 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
