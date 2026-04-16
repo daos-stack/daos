@@ -1266,7 +1266,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
 	if (rc) {
 		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
-		D_GOTO(out, rc);
+		D_GOTO(out_put, rc);
 	}
 	atomic_fetch_add(&pool->sp_rebuilding, 1);
 
@@ -1299,7 +1299,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
 		if (rpt->rt_global_done) {
 			D_WARN("previous not cleaned up yet " DF_RBF "\n", DP_RBF_RPT(rpt));
-			D_GOTO(out, rc = -DER_BUSY);
+			D_GOTO(out_put, rc = -DER_BUSY);
 		}
 
 		/* Rebuild should never skip the version */
@@ -1332,7 +1332,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		 * an old or same leader.
 		 */
 		if (rsi->rsi_leader_term <= rpt->rt_leader_term)
-			D_GOTO(out, rc = 0);
+			D_GOTO(out_put, rc = 0);
 
 		if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
 			D_DEBUG(DB_REBUILD, "new leader existing " DF_RBF "-> req " DF_RBF "\n",
@@ -1349,7 +1349,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;
 
-		D_GOTO(out, rc = 0);
+		D_GOTO(out_put, rc = 0);
 	} else if (rpt != NULL) {
 		rpt_put(rpt);
 		rpt = NULL;
@@ -1360,22 +1360,22 @@ tls_lookup:
 				      rsi->rsi_rebuild_gen);
 	if (tls != NULL) {
 		D_WARN("previous not cleaned up yet " DF_RBF, DP_RBF_RSI(rsi));
-		D_GOTO(out, rc = -DER_BUSY);
+		D_GOTO(out_delete, rc = -DER_BUSY);
 	}
 
 	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_delete, rc = -DER_INVAL);
 
 	rc = rebuild_tgt_prepare(pool, rsi, &rpt);
 	if (rc)
-		D_GOTO(out, rc);
+		D_GOTO(out_delete, rc);
 
 	rpt_get(rpt);
 	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_XS_SELF,
 			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc) {
 		rpt_put(rpt);
-		D_GOTO(out, rc);
+		D_GOTO(out_delete, rc);
 	}
 	checker = true;
 
@@ -1384,24 +1384,23 @@ tls_lookup:
 	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
-		D_GOTO(out, rc);
+		D_GOTO(out_delete, rc);
 	}
 
-out:
-	if (rc != 0 && tls && tls->rebuild_pool_status == 0)
-		tls->rebuild_pool_status = rc;
+out_delete:
+	if (rpt && !checker)
+		rpt_delete(rpt);
+out_put:
+	if (rpt)
+		rpt_put(rpt);
 
 	if (pool) {
 		if (!checker)
 			atomic_fetch_sub(&pool->sp_rebuilding, 1);
 		ds_pool_put(pool);
 	}
-
-	if (rpt) {
-		if (!checker)
-			rpt_delete(rpt);
-		rpt_put(rpt);
-	}
+	if (rc != 0 && tls && tls->rebuild_pool_status == 0)
+		tls->rebuild_pool_status = rc;
 
 	rout = crt_reply_get(rpc);
 	rout->rso_status = rc;
