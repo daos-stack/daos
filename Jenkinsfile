@@ -544,7 +544,7 @@ pipeline {
                 }
             }
         }
-        stage('Unit Tests') {
+        stage('Tests') {
             when {
                 beforeAgent true
                 expression { true }
@@ -556,13 +556,14 @@ pipeline {
                         expression { true }
                     }
                     agent {
-                        label 'ci_node-hsw-105'
+                        label 'runner_fi_new'
                     }
                     steps {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh --memcheck no --system-ram-reserved 48 --server-debug WARN --class-name fault-injection fi',
+//                                     test_script: 'ci/unit/test_nlt.sh --memcheck no --system-ram-reserved 48 --server-debug WARN --class-name fault-injection fi',
+                                     test_script: 'ci/unit/test_nlt.sh --memcheck no --server-debug WARN --class-name fault-injection fi',
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9'),
@@ -591,23 +592,14 @@ pipeline {
                         }
                     }
                 }
-            }
-        }
-        stage('Test') {
-            when {
-                beforeAgent true
-                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
-                // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
-            }
-            parallel {
+
                 stage('Fault injection testing') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        label 'ci_node-hsw-105'
+                        label 'runner_fi_new'
                     }
                     steps {
 /*
