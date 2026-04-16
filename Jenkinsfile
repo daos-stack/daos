@@ -371,6 +371,7 @@ pipeline {
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
