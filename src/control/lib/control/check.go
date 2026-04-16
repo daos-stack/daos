@@ -403,6 +403,17 @@ type SystemCheckReport struct {
 	chkpb.CheckReport
 }
 
+func (r *SystemCheckReport) MarshalJSON() ([]byte, error) {
+	type toJSON SystemCheckReport
+	return json.Marshal(struct {
+		Rank uint32 `json:"rank"`
+		*toJSON
+	}{
+		Rank:   r.Rank,
+		toJSON: (*toJSON)(r),
+	})
+}
+
 // RepairChoices lists all possible repair options for this particular report.
 func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 	if r == nil {
