@@ -16,22 +16,17 @@ import unittest
 
 def print_githook_header(name):
     """Print the standard git hook header."""
-    print(f"{name + ':':<17} ", end='', flush=True)
+    subprocess.run(
+        f'_print_githook_header "{name}"',
+        shell=True, check=True, executable='/bin/bash')  # nosec B602
 
 
 def git_diff_cached_files(file_path):
     """Check if the file has staged changes."""
-    target = os.environ.get('TARGET')
-    if not target:
-        # If TARGET is not set, we can't easily determine what to diff against
-        # in the same way hook_base.sh does. For now, we'll return True to
-        # force a check if we're not sure, or try to find a base.
-        return True
-
-    cmd = ['git', 'diff', target, '--cached', '--name-only', '--diff-filter=d', '--', file_path]
     result = subprocess.run(
-        cmd, capture_output=True, text=True, check=False,
-        shell=False)  # nosec B603
+        f'_git_diff_cached_files "{file_path}"',
+        capture_output=True, text=True, check=False,
+        shell=True, executable='/bin/bash')  # nosec B602
     return result.stdout.strip()
 
 
