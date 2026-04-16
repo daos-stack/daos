@@ -80,6 +80,89 @@ refers roughly to the amount of time for:
 * Plus some margin of error.
 
 
+## Pool Query Data Redundancy Status
+
+**Available in:** DAOS 2.6+
+
+The `dmg pool query` command displays the pool's data redundancy status as part
+of the health information output. This field provides a clear indication of
+whether the pool has sufficient target availability to maintain data redundancy.
+
+### Output Field
+
+The `Data redundancy` field appears in the pool health information section:
+
+```
+Pool health info:
+- Rebuild idle
+- Data redundancy: normal
+```
+
+or when targets are excluded:
+
+```
+Pool health info:
+- Rebuild busy, 42 objs, 21 recs
+- Data redundancy: degraded
+```
+
+### Field Values
+
+| Value | Meaning |
+|-------|---------|
+| `normal` | All targets are UP and accessible; data redundancy is intact |
+| `degraded` | One or more targets are DOWN; data redundancy is compromised |
+
+### When to Check This Field
+
+1. **After automatic or manual exclusion** — Confirm that exclusion has completed
+2. **When self-heal is configured without automatic rebuild** — Verify exclusion
+   occurred even when rebuild doesn't start automatically (e.g., when using
+   `exclude` without `rebuild` flags)
+3. **Before manually triggering rebuild** — Confirm that exclusion is complete
+   and degraded state exists
+4. **After rebuild completion** — Verify that redundancy has been restored to
+   `normal` status
+5. **During troubleshooting** — Quick health check without parsing complex output
+
+### Example: Verifying Exclusion with Exclude-Only Policy
+
+When the self-heal policy has `exclude` but not `rebuild` (either at system or
+pool level), the `Data redundancy` field confirms that exclusion occurred:
+
+```bash
+$ dmg pool query my_pool
+Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=1, state=TargetsExcluded
+Pool health info:
+- Disabled ranks: 3
+- Rebuild idle
+- Data redundancy: degraded  ← Confirms exclusion completed
+```
+
+The combination of:
+- `Disabled ranks: 3` — Shows which rank was excluded
+- `Rebuild idle` — No automatic rebuild triggered (expected with exclude-only policy)
+- `Data redundancy: degraded` — Confirms data redundancy is impaired and manual
+  intervention is needed
+
+To restore redundancy, manually trigger rebuild:
+
+```bash
+$ dmg pool rebuild start my_pool
+```
+
+Monitor until `Data redundancy` changes from `degraded` to `normal`:
+
+```bash
+$ dmg pool query my_pool
+Pool 6f450a68-8c7d-4da9-8900-02691650f6a2, ntarget=8, disabled=1, state=Ready
+Pool health info:
+- Disabled ranks: 3
+- Rebuild done, 1042 objs, 2184 recs
+- Data redundancy: normal  ← Redundancy restored
+```
+
+
 ## System / Pool Creation and Disabling / Enabling Self-Heal
 
 The following are example steps for managing `self_heal` policies. This
@@ -208,6 +291,7 @@ $ dmg pool query first_pool
 Pool 1c8f6a4e-a4eb-418d-bedc-0c7751e41af1, ntarget=16, disabled=0, leader=0, version=1, state=Ready
 Pool health info:
 - Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
 - Target count:16
 - Storage tier 0 (SCM):
@@ -248,6 +332,7 @@ $ dmg pool query first_pool
 Pool 1c8f6a4e-a4eb-418d-bedc-0c7751e41af1, ntarget=16, disabled=0, leader=0, version=1, state=Ready
 Pool health info:
 - Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
 - Target count:16
 - Storage tier 0 (SCM):
@@ -263,6 +348,7 @@ $ dmg pool query second_pool
 Pool ce3a6a74-8a19-4c6e-a3ef-1ee85d8e06f1, ntarget=16, disabled=0, leader=1, version=1, state=Ready
 Pool health info:
 - Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
 - Target count:16
 - Storage tier 0 (SCM):
@@ -284,6 +370,7 @@ $ dmg pool query first_pool
 Pool 1c8f6a4e-a4eb-418d-bedc-0c7751e41af1, ntarget=16, disabled=0, leader=0, version=1, state=Ready
 Pool health info:
 - Rebuild idle, 0 objs, 0 recs
+- Data redundancy: normal
 Pool space info:
 - Target count:16
 - Storage tier 0 (SCM):
@@ -513,3 +600,47 @@ $ dmg system stop --ranks=X
 
 * Rank X is excluded from the system and from pools P and Q.
 * Rank X is rebuilding in pool Q only. Pool P will remain in degraded mode.
+
+**3.** Verify exclusion status using `dmg pool query`:
+
+For pool P (rebuild disabled):
+```bash
+$ dmg pool query P
+Pool health info:
+- Disabled ranks: X
+- Rebuild idle
+- Data redundancy: degraded  ← Pool remains degraded (rebuild disabled)
+```
+
+For pool Q (rebuild enabled):
+```bash
+$ dmg pool query Q
+Pool health info:
+- Disabled ranks: X
+- Rebuild busy, 42 objs, 21 recs
+- Data redundancy: degraded  ← Rebuilding in progress
+```
+
+After pool Q rebuild completes:
+```bash
+$ dmg pool query Q
+Pool health info:
+- Disabled ranks: X
+- Rebuild done, 1042 objs, 2184 recs
+- Data redundancy: normal  ← Redundancy restored
+```
+
+**4.** To restore pool P's redundancy later, manually trigger rebuild:
+
+```bash
+$ dmg pool rebuild start P
+```
+
+Monitor until `Data redundancy` changes to `normal`:
+```bash
+$ dmg pool query P
+Pool health info:
+- Disabled ranks: X
+- Rebuild done, 1042 objs, 2184 recs
+- Data redundancy: normal  ← Now restored
+```
