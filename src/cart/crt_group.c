@@ -1,6 +1,6 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1277,7 +1277,7 @@ crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 	*rank = grp_priv->gp_self;
 
 	if (*rank == CRT_NO_RANK) {
-		D_ERROR("Self rank was not set yet\n");
+		D_INFO("Self rank was not set yet\n");
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
