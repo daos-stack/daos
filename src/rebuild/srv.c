@@ -1208,7 +1208,7 @@ rpt_put(struct rebuild_tgt_pool_tracker *rpt)
 	rpt->rt_refcount--;
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, "rpt %p ref %d\n", rpt, rpt->rt_refcount);
-	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
+	if (rpt->rt_refcount == 2 && rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
 	zombie = (rpt->rt_refcount == 0);
 	ABT_mutex_unlock(rpt->rt_lock);
