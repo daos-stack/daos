@@ -216,6 +216,7 @@ message PoolRebuildStatus {
 	uint64 objects = 3;
 	uint64 records = 4;
 	State  derived_state = 5;
+	bool degraded = 6; // data redundancy degraded
 }
 
 enum PoolServiceState {

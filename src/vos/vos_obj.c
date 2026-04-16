@@ -490,7 +490,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	hold_flags = (flags & VOS_OF_COND_PUNCH) ? 0 : VOS_OBJ_CREATE;
 	hold_flags |= VOS_OBJ_VISIBLE;
 
-	rc = vos_obj_hold(cont, oid, &epr, bound, hold_flags, DAOS_INTENT_PUNCH, &obj, ts_set);
+	rc = vos_obj_acquire(cont, oid, true, &obj);
 	if (rc != 0)
 		goto reset;
 
@@ -842,8 +842,7 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
 	}
 
 restart:
-	rc = vos_obj_hold(cont, oid, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE,
-			  DAOS_INTENT_MARK, &obj, NULL);
+	rc = vos_obj_acquire(cont, oid, true, &obj);
 	if (rc != 0)
 		goto log;
 
@@ -1753,10 +1752,17 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_minor_epc	 = entry.en_minor_epc;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
+	D_ASSERTF(it_entry->ie_recx.rx_nr != 0, "sel_ext_lo:" DF_U64 ", epoch:" DF_U64 "/%u\n",
+		  ext->ex_lo, entry.en_epoch, entry.en_minor_epc);
+
 	ext = &entry.en_ext;
 	/* Also export the original extent and the visibility flags */
 	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
+	D_ASSERTF(it_entry->ie_orig_recx.rx_nr != 0,
+		  "orig_ext_lo:" DF_U64 ", epoch:" DF_U64 "/%u\n", ext->ex_lo, entry.en_epoch,
+		  entry.en_minor_epc);
+
 	it_entry->ie_vis_flags = entry.en_visibility;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1136,7 +1136,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	struct crt_iv_fetch_in		*input;
 	crt_bulk_t			local_bulk = CRT_BULK_NULL;
 	crt_endpoint_t			ep = {0};
-	crt_rpc_t			*rpc;
+	crt_rpc_t                       *rpc;
 	struct ivf_key_in_progress	*entry;
 	int				rc = 0;
 	struct crt_iv_ops		*iv_ops;
@@ -1236,6 +1236,7 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	} else {
 		D_DEBUG(DB_ALL, "Group Version Changed: From %d: To %d\n",
 			grp_ver, local_grp_ver);
+		RPC_PUB_DECREF(rpc);
 		D_GOTO(exit, rc = -DER_GRPVER);
 	}
 
@@ -2611,7 +2612,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 	struct crt_iv_update_in		*input;
 	crt_bulk_t			local_bulk = CRT_BULK_NULL;
 	crt_endpoint_t			ep = {0};
-	crt_rpc_t			*rpc;
+	crt_rpc_t                       *rpc;
 	int				rc = 0;
 	uint32_t			local_grp_ver;
 
@@ -2642,6 +2643,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 		}
 		if (rc != 0) {
 			D_ERROR("crt_bulk_create(): "DF_RC"\n", DP_RC(rc));
+			RPC_PUB_DECREF(rpc);
 			D_GOTO(exit, rc);
 		}
 	} else {
@@ -2677,6 +2679,7 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 			"On entry: %d: Changed to :%d\n",
 			ivns_internal->cii_gns.gn_ivns_id.ii_group_name,
 			grp_ver, local_grp_ver);
+		RPC_PUB_DECREF(rpc);
 		D_GOTO(exit, rc = -DER_GRPVER);
 	}
 	input->ivu_grp_ver = grp_ver;

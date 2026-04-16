@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +8,7 @@ from functools import partial
 
 from apricot import TestWithServers
 from data_utils import assert_val_in_list
+from exception_utils import CommandFailure
 from ior_utils import get_ior
 from job_manager_utils import get_job_manager
 
@@ -56,6 +57,12 @@ class RbldInteractive(TestWithServers):
             exclude_method='dmg pool exclude',
             reint_method='dmg pool reintegrate')
 
+        self.__run_rebuild_interactive(
+            pool, cont_ior, ior,
+            num_ranks_to_exclude=1,
+            exclude_method='dmg system exclude',
+            reint_method='dmg system reintegrate')
+
         self.log_step('Test Passed')
 
     def __run_rebuild_interactive(self, pool, cont_ior, ior,
@@ -74,10 +81,6 @@ class RbldInteractive(TestWithServers):
                 - 'dmg pool reintegrate'
                 - 'dmg system reintegrate'
         """
-        # Time to wait between rebuild start and manual stop.
-        # If we stop too early rebuild might not have started yet.
-        # Ideally, if we could poll the "actual" rebuild status this would not be necessary.
-        secs_between_rebuild_start_and_manual_stop = 4
 
         ior_flags_read = self.params.get('flags_read', '/run/ior/*')
         ior_ppn = self.params.get('ppn', '/run/ior/*')
@@ -100,8 +103,15 @@ class RbldInteractive(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{exclude_method} - Manually stop rebuild')
-        time.sleep(secs_between_rebuild_start_and_manual_stop)
-        pool.rebuild_stop()
+        for i in range(3):
+            try:
+                pool.rebuild_stop()
+                break
+            except CommandFailure as error:
+                if i == 2 or 'DER_NONEXIST' not in str(error):
+                    raise
+                self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
+                time.sleep(3)
 
         self.log_step(f'{exclude_method} - Wait for rebuild to stop')
         pool.wait_for_rebuild_to_stop(interval=3)
@@ -133,6 +143,12 @@ class RbldInteractive(TestWithServers):
         ior.manager.job.update_params(flags=ior_flags_read)
         ior.run(cont_ior.pool, cont_ior, None, ior_ppn, display_space=False)
 
+        if exclude_method == 'dmg system exclude':
+            self.log_step(f'{exclude_method} - Clear exclusion of ranks')
+            pool.dmg.system_clear_exclude(ranks_to_exclude)
+            self.log_step(f'{exclude_method} - Start previously admin-excluded ranks')
+            pool.dmg.system_start(ranks_to_exclude)
+
         self.log_step('Reintegrate excluded ranks')
         if reint_method == 'dmg pool reintegrate':
             pool.reintegrate(ranks_to_exclude)
@@ -145,8 +161,15 @@ class RbldInteractive(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{reint_method} - Manually stop rebuild')
-        time.sleep(secs_between_rebuild_start_and_manual_stop)
-        pool.rebuild_stop()
+        for i in range(3):
+            try:
+                pool.rebuild_stop()
+                break
+            except CommandFailure as error:
+                if i == 2 or 'DER_NONEXIST' not in str(error):
+                    raise
+                self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
+                time.sleep(3)
 
         self.log_step(f'{reint_method} - Wait for rebuild to stop')
         pool.wait_for_rebuild_to_stop(interval=3)

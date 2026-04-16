@@ -1,8 +1,10 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 
 from apricot import TestWithServers
 from server_utils import ServerFailed
@@ -44,7 +46,15 @@ class DaosServerConfigTest(TestWithServers):
             self.hostfile_servers_slots)
 
         # Get the input to verify
-        c_val = self.params.get("config_val", "/run/server_config_val/*/")
+        c_val = list(self.params.get("config_val", "/run/server_config_val/*/"))
+
+        # Handle "auto" value for control_iface - use DAOS_TEST_CONTROL_IFACE
+        if c_val[0] == "control_iface" and c_val[1] == "auto":
+            control_iface = os.environ.get("DAOS_TEST_CONTROL_IFACE")
+            if not control_iface:
+                self.skipTest("DAOS_TEST_CONTROL_IFACE not set; cannot test control_iface")
+            c_val[1] = control_iface
+            self.log.info("Resolved control_iface 'auto' to '%s'", control_iface)
 
         if c_val[0] == "name":
             # Set the dmg system name to match the server in order to avoid

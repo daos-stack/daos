@@ -4,6 +4,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
 #include <ftw.h>
 #include <unistd.h>
@@ -13,7 +14,6 @@
 #include <sys/sysinfo.h>
 #include <linux/magic.h>
 
-#include <gurt/debug.h>
 #include <daos_srv/control.h>
 #include <daos_srv/smd.h>
 #include <daos_srv/mgmt_tgt_common.h>
@@ -229,11 +229,11 @@ ddb_dirs_prepare(const char *path)
 	if (unlikely(rc >= sizeof(zombies_path)))
 		return -DER_EXCEEDS_PATH_LEN;
 
-	rc = ddb_mkdir(newborns_path, S_IRWXU);
+	rc = ddb_mkdir(newborns_path, DEFAULT_DIR_PERM);
 	if (rc)
 		return rc;
 
-	rc = ddb_mkdir(zombies_path, S_IRWXU);
+	rc = ddb_mkdir(zombies_path, DEFAULT_DIR_PERM);
 	if (rc)
 		return rc;
 

@@ -88,13 +88,14 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_need_discard : 1,
-	    sp_disable_rebuild : 1, sp_disable_dtx_resync : 1, sp_incr_reint : 1;
+	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_disable_rebuild : 1,
+	    sp_disable_dtx_resync : 1, sp_incr_reint : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
 	uint32_t                 sp_rebuild_gen;
 	ATOMIC int               sp_rebuilding;
+	ATOMIC int               sp_discarding;
 	/**
 	 * someone has already messaged this pool to for rebuild scan,
 	 * NB: all xstreams can do lockless-write on it but it's OK
@@ -191,8 +192,7 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1,
-			spc_no_storage:1; /* The pool shard has no storage. */
+	uint64_t                 spc_no_storage : 1; /* The pool shard has no storage. */
 
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
@@ -567,18 +567,19 @@ int
 ds_pool_prop_recov_cont_reset(struct rdb_tx *tx, struct ds_rsvc *rsvc);
 
 static inline bool
-is_pool_rebuild_allowed(struct ds_pool *pool, bool check_delayed_rebuild)
+is_pool_rebuild_allowed(struct ds_pool *pool, uint64_t self_heal, bool auto_recovery)
 {
-	uint64_t flags = DAOS_SELF_HEAL_AUTO_REBUILD;
-
-	if (check_delayed_rebuild)
-		flags |= DAOS_SELF_HEAL_DELAY_REBUILD;
+	bool auto_rebuild_enabled  = self_heal & DAOS_SELF_HEAL_AUTO_REBUILD;
+	bool delay_rebuild_enabled = self_heal & DAOS_SELF_HEAL_DELAY_REBUILD;
 
 	if (pool->sp_disable_rebuild)
 		return false;
-	if (!(pool->sp_self_heal & flags))
+
+	/* If auto recovery is requested, only allow if self_heal enables auto or delay_rebuild */
+	if (auto_recovery && !(auto_rebuild_enabled || delay_rebuild_enabled))
 		return false;
 
+	/* Otherwise, rebuild is allowed */
 	return true;
 }
 

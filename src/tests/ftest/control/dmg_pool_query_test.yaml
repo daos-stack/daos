@@ -46,6 +46,7 @@ exp_vals:
     objects: 0
     records: 0
     total_objects: 0
+    degraded: False
 
 pool_uuids:
   uuids:

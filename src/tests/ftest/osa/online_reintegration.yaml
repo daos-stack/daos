@@ -7,9 +7,6 @@ timeout: 1110
 job_manager:
   manager_timeout: 300
 
-setup:
-  start_servers_once: false
-
 skip_add_log_msg: true
 
 server_config:
@@ -39,7 +36,7 @@ pool:
   svcn: 4
   rebuild_timeout: 120
   pool_query_timeout: 30
-  properties: scrub:timed
+  properties: rd_fac:0,space_rb:0,scrub:timed
 
 container:
   type: POSIX
@@ -58,7 +55,6 @@ ior:
     read_flags: "-F -r -R -k -G 1"
     api: DFS
     dfs_oclass: RP_2G1
-    dfs_dir_oclass: RP_2G1
   ior_test_sequence:
     # - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
     #   The values are set to be in the multiples of 10.

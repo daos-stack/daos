@@ -2,7 +2,7 @@
 #
 #  Copyright 2022-2023 Intel Corporation.
 #  Copyright 2025 Google LLC
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -100,7 +100,9 @@ retry_dnf() {
                 if command -v dnf4; then
                     dnfx="dnf4"
                 fi
-                "$dnfx" config-manager --disable 'epel*' || true
+                if "$dnfx" repolist | grep -q '^epel'; then
+                    "$dnfx" config-manager --disable 'epel*'
+                fi
             fi
             return 0
         fi
@@ -323,7 +325,7 @@ post_provision_config_nodes() {
         rm -f "$REPOS_DIR"/*_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload          \
                      argobots cart daos daos-client daos-spdk dpdk \
-                     libisa-l libpmemobj mercury mpich   \
+                     libisa-l libpmemobj libpmemobj1 mercury mpich \
                      pmix protobuf-c spdk libfabric libpmem        \
                      munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd
@@ -437,4 +439,33 @@ post_provision_config_nodes() {
     fi
 
     return 0
+}
+
+install_mofed() {
+    if [ -z "$MLNX_VER_NUM" ]; then
+        echo "MLNX_VER_NUM is not set"
+        env
+        exit 1
+    fi
+
+    : "${ARTIFACTORY_URL:=}"
+    if [ -z "$ARTIFACTORY_URL" ]; then
+        return
+    fi
+
+    # Install Mellanox OFED or DOCA RPMS
+    install_mellanox="install_mellanox.sh"
+    script_url="${ARTIFACTORY_URL}/raw-internal/sre_tools/$install_mellanox"
+    install_target="/usr/local/sbin/$install_mellanox"
+
+    if [ ! -e "$install_target" ]; then
+        if ! curl --silent --show-error --fail \
+            -o "/usr/local/sbin/$install_mellanox" "$script_url"; then
+            echo "Failed to fetch $script_url"
+            return 1
+        fi
+        chmod 0755 "$install_target"
+    fi
+
+    MELLANOX_VERSION="$MLNX_VER_NUM" "$install_mellanox"
 }

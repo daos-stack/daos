@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -86,7 +86,6 @@ struct crt_prov_gdata {
 	bool                 cpg_primary;
 	bool                 cpg_contig_ports;
 	bool                 cpg_inited;
-	bool                 cpg_progress_busy;
 
 	/** Mutext to protect fields above */
 	pthread_mutex_t      cpg_mutex;
@@ -153,6 +152,12 @@ struct crt_gdata {
 	/** use single thread to access context */
 	bool                     cg_thread_mode_single;
 
+	/** use busy polling for progress */
+	bool                     cg_progress_busy;
+
+	/** use memory device */
+	bool                     cg_mem_device;
+
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
 	/* protects crt_gdata (see the lock order comment on crp_mutex) */
@@ -190,10 +195,12 @@ struct crt_event_cb_priv {
 #define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
 #endif
 
+#define CRT_ENV_STR_MAX_SIZE 1024
+
 /*
  * List of environment variables to read at CaRT library load time.
  * for integer envs use ENV()
- * for string ones ENV_STR() or ENV_STR_NO_PRINT()
+ * for string ones ENV_STR()
  **/
 #define CRT_ENV_LIST                                                                               \
 	ENV_STR(CRT_ATTACH_INFO_PATH)                                                              \
@@ -230,12 +237,14 @@ struct crt_event_cb_priv {
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
 	ENV(D_THREAD_MODE_SINGLE)                                                                  \
 	ENV(D_PROGRESS_BUSY)                                                                       \
+	ENV(D_MEM_DEVICE)                                                                          \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
 	ENV(D_MRECV_BUF_COPY)                                                                      \
 	ENV_STR(D_PROVIDER)                                                                        \
-	ENV_STR_NO_PRINT(D_PROVIDER_AUTH_KEY)                                                      \
+	ENV_STR(D_PROVIDER_AUTH_KEY)                                                               \
+	ENV_STR(SLINGSHOT_VNIS)                                                                    \
 	ENV(D_QUOTA_RPCS)                                                                          \
 	ENV(D_QUOTA_BULKS)                                                                         \
 	ENV(FI_OFI_RXM_USE_SRX)                                                                    \
@@ -250,16 +259,12 @@ struct crt_event_cb_priv {
 /* uint env */
 #define ENV(x)                                                                                     \
 	unsigned int _##x;                                                                         \
-	int          _rc_##x;                                                                      \
-	int          _no_print_##x;
+	int          _rc_##x;
 
 /* char* env */
 #define ENV_STR(x)                                                                                 \
 	char *_##x;                                                                                \
-	int   _rc_##x;                                                                             \
-	int   _no_print_##x;
-
-#define ENV_STR_NO_PRINT(x) ENV_STR(x)
+	int   _rc_##x;
 
 struct crt_envs {
 	CRT_ENV_LIST;
@@ -268,13 +273,13 @@ struct crt_envs {
 
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 
 extern struct crt_envs crt_genvs;
 
 static inline void
 crt_env_fini(void);
 
+/* init cart env structure */
 static inline void
 crt_env_init(void)
 {
@@ -284,47 +289,37 @@ crt_env_init(void)
 
 #define ENV(x)                                                                                     \
 	do {                                                                                       \
-		crt_genvs._rc_##x       = d_getenv_uint(#x, &crt_genvs._##x);                      \
-		crt_genvs._no_print_##x = 0;                                                       \
+		crt_genvs._rc_##x = d_getenv_uint(#x, &crt_genvs._##x);                            \
 	} while (0);
 
 #define ENV_STR(x)                                                                                 \
 	do {                                                                                       \
-		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
-		crt_genvs._no_print_##x = 0;                                                       \
-	} while (0);
-
-#define ENV_STR_NO_PRINT(x)                                                                        \
-	do {                                                                                       \
-		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
-		crt_genvs._no_print_##x = 1;                                                       \
+		crt_genvs._rc_##x = d_agetenv_str(&crt_genvs._##x, #x);                            \
 	} while (0);
 
 	CRT_ENV_LIST;
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 
 	crt_genvs.inited = true;
 }
 
+/* fini cart envs */
 static inline void
 crt_env_fini(void)
 {
 #define ENV(x)           (void)
 #define ENV_STR(x)       d_freeenv_str(&crt_genvs._##x);
-#define ENV_STR_NO_PRINT ENV_STR
 
 	CRT_ENV_LIST
 
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 
 	crt_genvs.inited = false;
 }
 
-/* Returns value if env was present at load time */
+/* Returns value if env was present at load time and is part of CRT_ENV_LIST */
 #define crt_env_get(name, val)                                                                     \
 	do {                                                                                       \
 		D_ASSERT(crt_genvs.inited);                                                        \
@@ -332,6 +327,33 @@ crt_env_fini(void)
 			*val = crt_genvs._##name;                                                  \
 	} while (0)
 
+/* Check if the env is set */
+#define crt_env_is_set(name) (crt_genvs._rc_##name == 0)
+
+/* Check envs that contain strings to not exceed CRT_ENV_STR_MAX_SIZE */
+static inline bool
+crt_env_list_valid(void)
+{
+/* Ignore non-string envs in this check */
+#define ENV(x)
+
+/* if string env exceeds CRT_ENV_STR_MAX_SIZE - return false */
+#define ENV_STR(x)                                                                                 \
+	if (crt_genvs._rc_##x == 0 && strlen(crt_genvs._##x) + 1 > CRT_ENV_STR_MAX_SIZE) {         \
+		D_ERROR("env '%s' (value='%s') exceeded max size %d\n", #x, crt_genvs._##x,        \
+			CRT_ENV_STR_MAX_SIZE);                                                     \
+		return false;                                                                      \
+	}
+
+	/* expand env list using the above ENV_* definitions */
+	CRT_ENV_LIST;
+	return true;
+
+#undef ENV
+#undef ENV_STR
+}
+
+/* dump environment variables from the CRT_ENV_LIST */
 static inline void
 crt_env_dump(void)
 {
@@ -339,20 +361,17 @@ crt_env_dump(void)
 
 	/* Only dump envariables that were set */
 #define ENV(x)                                                                                     \
-	if (!crt_genvs._rc_##x && crt_genvs._no_print_##x == 0)                                    \
+	if (!crt_genvs._rc_##x)                                                                    \
 		D_INFO("%s = %d\n", #x, crt_genvs._##x);
 
 #define ENV_STR(x)                                                                                 \
 	if (!crt_genvs._rc_##x)                                                                    \
-		D_INFO("%s = %s\n", #x, crt_genvs._no_print_##x ? "****" : crt_genvs._##x);
-
-#define ENV_STR_NO_PRINT ENV_STR
+		D_INFO("%s = %s\n", #x, crt_genvs._##x);
 
 	CRT_ENV_LIST;
 
 #undef ENV
 #undef ENV_STR
-#undef ENV_STR_NO_PRINT
 }
 
 /* structure of global fault tolerance data */

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -237,12 +238,14 @@ static int
 ddb_main_suit_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx;
+	struct vos_file_parts   path_parts = {0};
 
 	assert_success(ddb_test_setup_vos(state));
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0));
+	assert_success(parse_vos_file_parts(tctx->dvt_pmem_file, NULL, &path_parts));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &tctx->dvt_poh, 0, true));
 
 	return 0;
 }

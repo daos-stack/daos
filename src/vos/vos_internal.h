@@ -263,7 +263,8 @@ struct vos_cache_metrics {
 	struct d_tm_node_t	*vcm_obj_hit;
 };
 
-void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrcis, const char *path, int tgt_id);
+void
+vos_cache_metrics_init(struct vos_cache_metrics *vc_metrics, const char *path, int tgt_id);
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
@@ -299,7 +300,8 @@ struct vos_pool {
 	uint32_t                vp_dying:1,
 				vp_opening:1,
 	/** exclusive handle (see VOS_POF_EXCL) */
-				vp_excl:1;
+				vp_excl:1,
+				vp_gc_nospc:1;
 	ABT_mutex		vp_mutex;
 	ABT_cond		vp_cond;
 	/* this pool is for sysdb */
@@ -315,9 +317,7 @@ struct vos_pool {
 	/** memory attribute of the @vp_umm */
 	struct umem_attr	vp_uma;
 	/** memory class instance of the pool */
-	struct umem_instance	vp_umm;
-	/** Size of pool file */
-	uint64_t		vp_size;
+	struct umem_instance     vp_umm;
 	/** Features enabled for this pool */
 	uint64_t		vp_feats;
 	/** btr handle for the container table */

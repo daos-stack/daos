@@ -28,20 +28,17 @@ server_config:
 
 pool:
   size: 93%
+  properties: rd_fac:1
 
 container:
   type: POSIX
-  control_method: daos
 
 ior:
   api: "DFS"
   client_processes:
     np: 48
-  dfs_destroy: False
-  iorflags:
-    flags: "-w -W -r -R -G 1 -vv"
+  flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile
-  repetitions: 1
   transfersize_blocksize: !mux
     1M_128M:
       transfer_size: 1M

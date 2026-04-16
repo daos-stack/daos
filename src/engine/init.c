@@ -1,8 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +23,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/mgmt.h>
 #include <daos/placement.h>
 #include <daos/tls.h>
 #include "srv_internal.h"
@@ -669,6 +669,13 @@ server_init(int argc, char *argv[])
 	unsigned int		ctx_nr;
 	int			rc;
 	struct engine_metrics	*metrics;
+
+	/**
+	 * The typical umask is 022. The group portion is cleared, which allows the group
+	 * permissions to be set freely. This setting is intended to remain in effect for the entire
+	 * lifetime of the process.
+	 */
+	(void)umask(002);
 
 	/*
 	 * Begin the HLC recovery as early as possible. Do not read the HLC
