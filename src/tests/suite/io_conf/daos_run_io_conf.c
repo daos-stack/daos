@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +20,67 @@ void print_usage(void)
 {
 	fprintf(stdout, "-n|--dmg_config\n");
 	fprintf(stdout, "daos_run_io_conf <io_conf_file>\n");
+}
+
+static int
+io_conf_run(test_arg_t *arg, const char *io_conf)
+{
+	struct test_op_record *op = NULL;
+	FILE                  *fp;
+	char                   cmd_line[CMD_LINE_LEN_MAX - 1] = {};
+	int                    rc                             = 0;
+	/*Array for snapshot epoch*/
+	daos_epoch_t           sn_epoch[DTS_MAX_EPOCH_TIMES] = {};
+
+	if (io_conf == NULL || strlen(io_conf) == 0) {
+		print_message("invalid io_conf.\n");
+		return -DER_INVAL;
+	}
+
+	fp = fopen(io_conf, "r");
+	if (fp == NULL) {
+		print_message("failed to open io_conf %s, %d(%s).\n", io_conf, errno,
+			      strerror(errno));
+		return daos_errno2der(errno);
+	}
+
+	int line_nr = 0;
+
+	do {
+		size_t cmd_size;
+
+		memset(cmd_line, 0, CMD_LINE_LEN_MAX - 1);
+		if (cmd_line_get(fp, cmd_line) != 0)
+			break;
+
+		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX - 1);
+		if (cmd_size == 0)
+			continue;
+		if (cmd_size >= CMD_LINE_LEN_MAX - 1) {
+			print_message("bad cmd_line, exit.\n");
+			break;
+		}
+		rc = cmd_line_parse(arg, cmd_line, &op);
+		if (rc != 0) {
+			print_message("bad cmd_line %s, exit.\n", cmd_line);
+			break;
+		}
+
+		if (op != NULL) {
+			op->snap_epoch = &sn_epoch[op->tx];
+			print_message("will run cmd_line %s, line_nr %d\n", cmd_line, ++line_nr);
+			rc = cmd_line_run(arg, op);
+			if (rc) {
+				print_message("run cmd_line %s failed, "
+					      "rc %d.\n",
+					      cmd_line, rc);
+				break;
+			}
+		}
+	} while (1);
+
+	fclose(fp);
+	return rc;
 }
 
 #define POOL_SIZE	(10ULL << 30)

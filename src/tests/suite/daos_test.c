@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,7 +54,6 @@ print_usage(int rank)
 	print_message("daos_test -T|--dist_dtx\n");
 	print_message("daos_test -i|--io\n");
 	print_message("daos_test -I|--ec_io\n");
-	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--obj_array\n");
 	print_message("daos_test -D|--array\n");
 	print_message("daos_test -K|--daos_kv\n");
@@ -182,13 +181,6 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "DAOS dedup tests..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_dedup_test(rank, size,
-						sub_tests, sub_tests_size);
-			break;
-		case 'x':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS Epoch IO test..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_epoch_io_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
 		case 'A':

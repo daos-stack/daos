@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -147,8 +148,6 @@ obj_setup(void **state);
 
 int
 obj_teardown(void **state);
-
-int io_conf_run(test_arg_t *arg, const char *io_conf);
 
 int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo);
 
