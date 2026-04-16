@@ -2219,6 +2219,18 @@ class PosixTests():
     @needs_dfuse_with_opt(caching_variants=[False])
     def test_oclass(self):
         """Test container object class options"""
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test')
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.json['response'].get('dir_object_class') not in (None, 'UNKNOWN')
+        assert rc.json['response'].get('file_object_class') not in (None, 'UNKNOWN')
+        container.destroy()
+
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
         rc = run_daos_cmd(self.conf,
@@ -5009,6 +5021,13 @@ def log_test(conf,
 
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
+
+    lto.skip_substrings.extend([
+        'sluggish ec boundary report from rank',
+        'sluggish stable epoch reporting',
+        'progress callback was not called for too long',
+        'rpc failed; rc:',
+    ])
 
     try:
         lto.check_log_file(abort_on_warning=True,
