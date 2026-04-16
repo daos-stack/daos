@@ -20,8 +20,6 @@ def scons():
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
     # These two are exported below but that isn't detected by pylint so disable the warning here.
     # pylint: disable-next=unused-variable
-    daos_epoch_io = denv.SharedObject(['daos_epoch_io.c'])
-    # pylint: disable-next=unused-variable
     daos_test_rebuild = denv.SharedObject(['daos_rebuild_common.c'])
     # pylint: disable-next=unused-variable
     daos_test_obj = denv.SharedObject(['daos_obj.c'])
@@ -36,7 +34,7 @@ def scons():
     c_files = Split("""daos_aggregate_ec.c daos_array.c daos_base_tx.c daos_capa.c daos_checksum.c
                     daos_container.c daos_cr.c daos_dedup.c daos_degraded.c daos_degrade_ec.c
                     daos_dist_tx.c daos_drain_common.c daos_drain_simple.c daos_epoch.c
-                    daos_epoch_io.c daos_epoch_recovery.c daos_extend_common.c
+                    daos_epoch_recovery.c daos_extend_common.c
                     daos_extend_simple.c daos_inc_reint.c daos_kv.c daos_md_replication.c
                     daos_mgmt.c daos_nvme_recovery.c daos_obj.c daos_obj_array.c daos_obj_ec.c
                     daos_oid_alloc.c daos_pipeline.c daos_pool.c daos_rebuild.c
@@ -59,7 +57,7 @@ def scons():
     denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_4')
     denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_5')
     SConscript('io_conf/SConscript',
-               exports=['denv', 'daos_epoch_io', 'daos_test_tgt', 'daos_test_rebuild',
+               exports=['denv', 'daos_test_tgt', 'daos_test_rebuild',
                         'daos_test_obj'])
 
 

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,7 +28,7 @@ class DaosRunIoConf(IoConfTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=io
+        :avocado: tags=io,daos_run_io_conf
         :avocado: tags=DaosRunIoConf,test_unaligned_io
         """
         self.unaligned_io()

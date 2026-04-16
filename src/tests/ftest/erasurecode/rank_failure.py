@@ -1,5 +1,6 @@
 """
   (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,7 +28,7 @@ class EcodRunIoConf(IoConfTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=ec,ec_array,ec_fault
+        :avocado: tags=ec,ec_array,ec_fault,daos_run_io_conf
         :avocado: tags=EcodRunIoConf,test_daos_run_io_conf
         """
         self.execute_io_conf_run_test()
