@@ -25,17 +25,14 @@ distro_custom() {
     fi
 
     # Fix for no_pmix_multi_ctx tests on SLES/Leap 15.x
-    if [[ "${VERSION_ID:-}" == 15.* ]]; then
-        zypper rm -y -u mercury mercury-debuginfo || true
-        zypper rm -y -u libfabric libfabric1 libfabric-debuginfo || true
-        zypper clean --all
+    if [[ "${ID:-}" == "sles" ]]; then
+        dnf remove -y mercury mercury-debuginfo || true
+        dnf remove -y libfabric libfabric1 libfabric-debuginfo || true
+        dnf autoremove -y
+        dnf clean all
         ldconfig
         
-        if [[ "${ID:-}" == "sles" ]]; then
-            dnf install -y daos-server daos-client daos-client-tests \
-                            daos-tests-internal openmpi3 openmpi3-devel
-        else
-            dnf install -y libfabric1 mercury-libfabric mercury
-        fi
+        dnf install -y daos-server daos-client daos-client-tests \
+                        daos-tests-internal openmpi3 openmpi3-devel
     fi
 }
