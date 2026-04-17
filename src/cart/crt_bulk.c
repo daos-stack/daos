@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -129,6 +129,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
 		ret_hdl->crt_ctx     = crt_ctx;
 		ret_hdl->deferred    = true;
+
 		D_GOTO(out, rc = DER_SUCCESS);
 	}
 
@@ -137,6 +138,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
 	if (rc != 0) {
+		CRT_METRIC_INC(ctx, CM_BULK_CREATE_FAILED);
 		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
 		if (ret_hdl->iovs != NULL)
 			D_FREE(ret_hdl->iovs);
@@ -144,6 +146,8 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		D_FREE(ret_hdl);
 		D_GOTO(out, rc);
 	}
+
+	CRT_METRIC_INC(ctx, CM_BULK_CREATE);
 
 out:
 	if (rc == 0 && bulk_hdl)
@@ -175,6 +179,8 @@ crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 	}
 
 out:
+	if (rc == 0)
+		CRT_METRIC_INC(ctx, CM_BULK_BOUND);
 	return rc;
 }
 
@@ -203,6 +209,7 @@ out:
 int
 crt_bulk_free(crt_bulk_t crt_bulk)
 {
+	struct crt_context *ctx;
 	struct crt_bulk *bulk = crt_bulk;
 	int              rc   = -DER_SUCCESS;
 	hg_return_t      hg_ret;
@@ -221,6 +228,9 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 			D_ASSERTF(0, "Bulk handle should not be NULL\n");
 		}
 	}
+
+	ctx = bulk->crt_ctx;
+	CRT_METRIC_INC(ctx, CM_BULK_FREE);
 
 	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {

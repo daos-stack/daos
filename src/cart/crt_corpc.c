@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -348,12 +348,16 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	bool			 filter_invert;
 	d_rank_t		 grp_root, pri_root;
 	uint32_t		 grp_ver;
+	struct crt_context      *ctx;
 	int			 rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	ctx = crt_ctx;
+
 	if (!crt_initialized()) {
 		D_ERROR("CaRT not initialized yet.\n");
 		D_GOTO(out, rc = -DER_UNINIT);
@@ -437,6 +441,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 			  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	CRT_METRIC_INC(ctx, CM_CORPCS_CREATED);
 
 	*req = &rpc_priv->crp_pub;
 out:
@@ -540,7 +546,17 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	myrank = co_info->co_grp_priv->gp_self;
 	am_root = (myrank == co_info->co_root);
 	if (am_root) {
+		struct crt_context *ctx;
+
 		crt_rpc_lock(rpc_priv);
+
+		ctx = rpc_priv->crp_pub.cr_ctx;
+
+		if (co_info->co_rc == 0)
+			CRT_METRIC_INC(ctx, CM_CORPCS_COMPLETED);
+		else
+			CRT_METRIC_INC(ctx, CM_CORPCS_COMPLETED_ERR);
+
 		crt_rpc_complete_and_unlock(rpc_priv, co_info->co_rc);
 	} else {
 		if (co_info->co_rc != 0)
