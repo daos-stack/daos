@@ -95,7 +95,7 @@ type (
 		raftTransport      raft.Transport
 		raft               syncRaft
 		raftLeaderNotifyCh chan bool
-		cbMutex            sync.Mutex
+		cbMutex            sync.RWMutex
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
 		onRaftShutdown     []onRaftShutdownFn
@@ -444,20 +444,20 @@ func (db *Database) OnRaftShutdown(fns ...onRaftShutdownFn) {
 // Return copies of the registered callbacks under a lock, so that they
 // can be safely retrieved and executed without holding the lock.
 func (db *Database) onLeadershipGainedCbs() []onLeadershipGainedFn {
-	db.cbMutex.Lock()
-	defer db.cbMutex.Unlock()
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
 	return append([]onLeadershipGainedFn(nil), db.onLeadershipGained...)
 }
 
 func (db *Database) onLeadershipLostCbs() []onLeadershipLostFn {
-	db.cbMutex.Lock()
-	defer db.cbMutex.Unlock()
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
 	return append([]onLeadershipLostFn(nil), db.onLeadershipLost...)
 }
 
 func (db *Database) onRaftShutdownCbs() []onRaftShutdownFn {
-	db.cbMutex.Lock()
-	defer db.cbMutex.Unlock()
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
 	return append([]onRaftShutdownFn(nil), db.onRaftShutdown...)
 }
 
