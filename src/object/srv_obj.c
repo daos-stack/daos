@@ -2486,20 +2486,6 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		D_ERROR("reintegrating " DF_UUID " retry.\n", DP_UUID(pool->sp_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
-
-	/* All I/O during rebuilding, needs to wait for the rebuild fence to
-	 * be generated (see rebuild_prepare_one()), which will create a boundary
-	 * for rebuild, so the data after boundary(epoch) should not be rebuilt,
-	 * which otherwise might be written duplicately, which might cause
-	 * the failure in VOS.
-	 */
-	if ((flags & ORF_REBUILDING_IO) &&
-	    (!child->sc_pool->spc_pool->sp_disable_rebuild &&
-	      child->sc_pool->spc_rebuild_fence == 0)) {
-		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
-		return -DER_UPDATE_AGAIN;
-	}
-
 	return 0;
 }
 
@@ -3447,9 +3433,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_FOR_MIGRATION) {
 		/* just in case ds_pool::sp_rebuilding is not set, pause my local EC aggregation
 		 * by setting this flag.
-		 * NB: it's a lockess write to shared data structure and it's harmless.
 		 */
-		ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_scan = 1;
+		atomic_store(&ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_enum, 1);
 		flags = DTX_FOR_MIGRATION;
 	}
 
