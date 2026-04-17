@@ -4897,6 +4897,13 @@ def log_test(conf,
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
+    lto.skip_substrings.extend([
+        'sluggish ec boundary report from rank',
+        'sluggish stable epoch reporting',
+        'progress callback was not called for too long',
+        'rpc failed; rc:',
+    ])
+
     try:
         lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks,

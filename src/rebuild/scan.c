@@ -1204,6 +1204,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_scan_out         *rso;
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
+	struct ds_pool                  *pool    = NULL;
+	bool                             checker = false;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
@@ -1213,6 +1215,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	       dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
 	       rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen, rsi->rsi_master_rank,
 	       rsi->rsi_leader_term, RB_OP_STR(rsi->rsi_rebuild_op));
+
+	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
+	if (rc) {
+		D_ERROR("Can not find pool " DF_UUID ": %d\n", DP_UUID(rsi->rsi_pool_uuid), rc);
+		D_GOTO(out_put, rc);
+	}
+	atomic_fetch_add(&pool->sp_rebuilding, 1);
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous
@@ -1249,7 +1258,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			D_WARN("the previous rebuild "DF_UUID"/%d/"DF_U64"/%p is not cleanup yet\n",
 			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
 			       rsi->rsi_leader_term, rpt);
-			D_GOTO(out, rc = -DER_BUSY);
+			D_GOTO(out_put, rc = -DER_BUSY);
 		}
 
 		/* Rebuild should never skip the version */
@@ -1283,7 +1292,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		 * an old or same leader.
 		 */
 		if (rsi->rsi_leader_term <= rpt->rt_leader_term)
-			D_GOTO(out, rc = 0);
+			D_GOTO(out_put, rc = 0);
 
 		if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
 			D_DEBUG(DB_REBUILD, DF_UUID" master rank"
@@ -1303,7 +1312,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;
 
-		D_GOTO(out, rc = 0);
+		D_GOTO(out_put, rc = 0);
 	} else if (rpt != NULL) {
 		rpt_put(rpt);
 		rpt = NULL;
@@ -1315,43 +1324,49 @@ tls_lookup:
 	if (tls != NULL) {
 		D_WARN("the previous rebuild "DF_UUID"/%d is not cleanup yet\n",
 		       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
-		D_GOTO(out, rc = -DER_BUSY);
+		D_GOTO(out_delete, rc = -DER_BUSY);
 	}
 
 	if (daos_fail_check(DAOS_REBUILD_TGT_START_FAIL))
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_delete, rc = -DER_INVAL);
 
-	rc = rebuild_tgt_prepare(rpc, &rpt);
+	rc = rebuild_tgt_prepare(pool, rsi, &rpt);
 	if (rc)
-		D_GOTO(out, rc);
+		D_GOTO(out_delete, rc);
 
 	rpt_get(rpt);
 	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_XS_SELF,
 			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc) {
 		rpt_put(rpt);
-		D_GOTO(out, rc);
+		D_GOTO(out_delete, rc);
 	}
-
-	atomic_fetch_add(&rpt->rt_pool->sp_rebuilding, 1); /* reset in rebuild_tgt_fini */
+	checker = true;
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
 	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		rpt_put(rpt);
-		D_GOTO(out, rc);
+		D_GOTO(out_delete, rc);
 	}
 
-out:
-	if (tls && tls->rebuild_pool_status == 0 && rc != 0)
+out_delete:
+	if (rpt && !checker)
+		rpt_delete(rpt);
+out_put:
+	if (rpt)
+		rpt_put(rpt);
+
+	if (pool) {
+		if (!checker)
+			atomic_fetch_sub(&pool->sp_rebuilding, 1);
+		ds_pool_put(pool);
+	}
+
+	if (rc != 0 && tls && tls->rebuild_pool_status == 0)
 		tls->rebuild_pool_status = rc;
 
-	if (rpt) {
-		if (rc)
-			rpt_delete(rpt);
-		rpt_put(rpt);
-	}
 	rso                   = crt_reply_get(rpc);
 	rso->rso_status       = rc;
 	rso->rso_stable_epoch = d_hlc_get();

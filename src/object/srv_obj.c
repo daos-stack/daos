@@ -2486,20 +2486,6 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		D_ERROR("reintegrating " DF_UUID " retry.\n", DP_UUID(pool->sp_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
-
-	/* All I/O during rebuilding, needs to wait for the rebuild fence to
-	 * be generated (see rebuild_prepare_one()), which will create a boundary
-	 * for rebuild, so the data after boundary(epoch) should not be rebuilt,
-	 * which otherwise might be written duplicately, which might cause
-	 * the failure in VOS.
-	 */
-	if ((flags & ORF_REBUILDING_IO) &&
-	    (!child->sc_pool->spc_pool->sp_disable_rebuild &&
-	      child->sc_pool->spc_rebuild_fence == 0)) {
-		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
-		return -DER_UPDATE_AGAIN;
-	}
-
 	return 0;
 }
 
@@ -2718,6 +2704,11 @@ out:
 	obj_ioc_end(&ioc, rc);
 }
 
+enum obj_resend_status {
+	ORS_PREPARED = 1,
+	ORS_DONE     = 2,
+};
+
 static int
 obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
 		  uint32_t *flags, struct dtx_memberships *mbs, bool leader, bool dist)
@@ -2735,7 +2726,7 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 	switch (rc) {
 	case -DER_ALREADY:
 		/* Do nothing if 'committed' or 'committable'. */
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc = ORS_DONE);
 	case 0:
 		/* For 'prepared' DTX, if pool map has been changed, then DTX membership maybe
 		 * changed also. Let's refresh it if necessary.
@@ -2757,6 +2748,7 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 			*epoch = e;
 		}
 
+		rc = ORS_PREPARED;
 		break;
 	case -DER_MISMATCH:
 		if (dist)
@@ -2907,6 +2899,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 out:
 	if (dth != NULL)
 		rc = dtx_end(dth, ioc.ioc_coc, rc);
+	if (!(orw->orw_flags & ORF_RESEND) && DAOS_FAIL_CHECK(DAOS_DTX_RESEND_NONLEADER))
+		ioc.ioc_lost_reply = 1;
 	obj_rw_reply(rpc, rc, 0, true, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
@@ -3163,8 +3157,10 @@ again:
 		version = orw->orw_map_ver;
 		rc = obj_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &orw->orw_epoch, &version,
 				       &flags, mbs, true, false);
-		if (rc != 0)
-			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+		if (rc < 0)
+			goto out;
+		if (rc == ORS_DONE)
+			D_GOTO(out, rc = 0);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		ioc.ioc_lost_reply = 1;
 		D_GOTO(out, rc);
@@ -3451,9 +3447,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_FOR_MIGRATION) {
 		/* just in case ds_pool::sp_rebuilding is not set, pause my local EC aggregation
 		 * by setting this flag.
-		 * NB: it's a lockess write to shared data structure and it's harmless.
 		 */
-		ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_scan = 1;
+		atomic_store(&ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_enum, 1);
 		flags = DTX_FOR_MIGRATION;
 	}
 
@@ -4066,8 +4061,10 @@ again:
 		version = opi->opi_map_ver;
 		rc = obj_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &opi->opi_epoch, &version,
 				       &flags, mbs, true, false);
-		if (rc != 0)
-			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+		if (rc < 0)
+			goto out;
+		if (rc == ORS_DONE)
+			D_GOTO(out, rc = 0);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST) ||
 		   DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 		goto cleanup;
@@ -5212,8 +5209,10 @@ again:
 		rc = obj_handle_resend(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
 				       &dcsh->dcsh_epoch.oe_value, &oci->oci_map_ver, &flags,
 				       dcsh->dcsh_mbs, true, true);
-		if (rc != 0)
-			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+		if (rc < 0)
+			goto out;
+		if (rc == ORS_DONE)
+			D_GOTO(out, rc = 0);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		D_GOTO(out, rc = 0);
 	}
@@ -5806,8 +5805,10 @@ again:
 		version = ocpi->ocpi_map_ver;
 		rc      = obj_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &ocpi->ocpi_epoch,
 					    &version, &flags, odm->odm_mbs, leader, false);
-		if (rc != 0)
-			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+		if (rc < 0)
+			goto out;
+		if (rc == ORS_DONE)
+			D_GOTO(out, rc = 0);
 
 		dce->dce_ver = version;
 	}
