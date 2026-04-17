@@ -1450,6 +1450,9 @@ abort:
 	 * The leader will trigger retry globally without abort 'prepared' ones.
 	 */
 	if (result < 0 && result != -DER_AGAIN && !dth->dth_solo) {
+		if (DAOS_FAIL_CHECK(DAOS_DTX_RESEND_NONLEADER))
+			goto out;
+
 		/* 1. Drop partial modification for distributed transaction.
 		 * 2. Remove the pinned DTX entry.
 		 */
