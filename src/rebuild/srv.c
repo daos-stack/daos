@@ -1552,7 +1552,7 @@ rpt_put(struct rebuild_tgt_pool_tracker *rpt)
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, DF_RB ": rpt %p ref %d finishing %d\n", DP_RB_RPT(rpt), rpt,
 		rpt->rt_refcount, rpt->rt_finishing);
-	if (rpt->rt_refcount == 2 && rpt->rt_finishing)
+	if (rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
 	zombie = (rpt->rt_refcount == 0);
 	ABT_mutex_unlock(rpt->rt_lock);
@@ -2907,7 +2907,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	 * i.e. no new ULT/task will be created after this check. So it is safe to destroy
 	 * the rpt after this.
 	 */
-	if (rpt->rt_refcount > 2)
+	while (rpt->rt_refcount > 2)
 		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_lock);
 	ABT_mutex_unlock(rpt->rt_lock);
 
