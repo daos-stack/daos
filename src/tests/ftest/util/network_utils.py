@@ -281,8 +281,16 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
             class_protocol_device = re.findall(
                 r'(\S+) +([\S]+) +([\S]+)$', without_header, re.MULTILINE)
             for _class, protocol, device in class_protocol_device:
+                if ":" in device:
+                    # e.g. convert mlx5_0:1 => mlx5_0
+                    device = device.split(":")[0]
                 if filter_device and device not in filter_device:
                     continue
+                if "_" in protocol:
+                    _protocol = protocol.split("_")
+                    if _protocol[0] in ("dc", "rc", "ud"):
+                        # e.g. convert ud_mlx5, ud_verbs => ud_x
+                        protocol = f"{_protocol[0]}_x"
                 provider = f"{_class}+{protocol}"
                 if filter_provider and provider not in filter_provider:
                     continue
