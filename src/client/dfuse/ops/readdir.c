@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -502,6 +503,7 @@ restart:
 				}
 
 				set_entry_params(&entry, ie);
+				dfuse_mcache_set_time(ie);
 
 				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
 					       drc->drc_name, &entry, drc->drc_next_offset);
@@ -733,6 +735,7 @@ restart:
 				}
 
 				set_entry_params(&entry, ie);
+				dfuse_mcache_set_time(ie);
 
 				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
 					       dre->dre_name, &entry, dre->dre_next_offset);
