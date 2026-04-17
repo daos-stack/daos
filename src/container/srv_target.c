@@ -1056,6 +1056,8 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
 			  DF_CONT "[%d]: Load container error",
 			  DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
+		if (rc == -DER_NONEXIST)
+			return -DER_CONT_NONEXIST;
 		return rc;
 	}
 
@@ -1564,7 +1566,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 	}
 
 	rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
-	if (rc != -DER_NONEXIST) {
+	if (rc != -DER_CONT_NONEXIST) {
 		if (rc == 0) {
 			if (cont_out != NULL) {
 				D_ASSERT(*cont_out != NULL);

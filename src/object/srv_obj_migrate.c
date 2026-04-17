@@ -1840,30 +1840,21 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		 */
 		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, false, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_SHUTDOWN || rc == -DER_NONEXIST) {
+			if (rc == -DER_CONT_NONEXIST || -DER_CONT_DESTROYING)
 				D_DEBUG(DB_REBUILD,
-					DF_RB ": container " DF_UUID " is being "
-					      "destroyed\n",
+					DF_RB ": container " DF_UUID
+					      "already destroyed or destroying\n",
 					DP_RB_MPT(tls), DP_UUID(cont_uuid));
-				rc = -DER_CONT_NONEXIST;
-			}
-			if (cont_child)
-				ds_cont_child_put(cont_child);
 			return rc;
 		}
 	} else {
 		rc = ds_cont_child_lookup(tls->mpt_pool_uuid, cont_uuid, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_SHUTDOWN || rc == -DER_NONEXIST) {
+			if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING)
 				D_DEBUG(DB_REBUILD,
-					DF_RB ": container " DF_UUID " is being "
-					      "destroyed\n",
+					DF_RB ": container " DF_UUID
+					      "already destroyed or destroying\n",
 					DP_RB_MPT(tls), DP_UUID(cont_uuid));
-				rc = -DER_CONT_NONEXIST;
-			}
-
-			if (cont_child)
-				ds_cont_child_put(cont_child);
 			return rc;
 		}
 	}
@@ -4376,7 +4367,7 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(daos_handle_is_valid(cont_toh));
 
 	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, entry->ie_couuid, &cont_child);
-	if (ds_cont_rc_is_ignorable_for_rebuild(rc)) {
+	if (rc == -DER_CONT_DESTROYING || rc == -DER_CONT_NONEXIST) {
 		D_DEBUG(DB_REBUILD, DF_RB" co_uuid "DF_UUID" already destroyed or destroying, "
 			DF_RC"\n", DP_RB_MPT(tls), DP_UUID(entry->ie_couuid), DP_RC(rc));
 		rc = 0;
