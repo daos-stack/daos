@@ -53,7 +53,7 @@ class DaosAggregationBasic(IorTestBase):
             reclaimed the overwritten capacity.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium
+        :avocado: tags=hw,medium
         :avocado: tags=aggregation,daosio,ior
         :avocado: tags=DaosAggregationBasic,test_basic_aggregation
         """

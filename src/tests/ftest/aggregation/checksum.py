@@ -36,7 +36,7 @@ class AggregationChecksum(IorTestBase):
             Run IOR again this time to read back the data with read verify
             option enabled.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,checksum,ior
         :avocado: tags=AggregationChecksum,test_aggregationchecksum
         """
