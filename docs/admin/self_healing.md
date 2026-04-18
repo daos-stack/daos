@@ -98,7 +98,7 @@ Pool health info:
 - Data redundancy: normal
 ```
 
-or when targets are excluded:
+or when targets are excluded and a corresponding rebuild has not yet completed:
 
 ```
 Pool health info:
@@ -110,7 +110,7 @@ Pool health info:
 
 | Value | Meaning |
 |-------|---------|
-| `normal` | All targets are UP and accessible; data redundancy is intact |
+| `normal` | No targets are DOWN; data redundancy is intact |
 | `degraded` | One or more targets are DOWN; data redundancy is compromised |
 
 ### When to Check This Field
@@ -141,11 +141,11 @@ Pool health info:
 
 The combination of:
 - `Disabled ranks: 3` — Shows which rank was excluded
-- `Rebuild idle` — No automatic rebuild triggered (expected with exclude-only policy)
+- `Rebuild idle` or `Rebuild done`— idle if pool has not been rebuilt since system start, done if it has been rebuild for a prior change. No new automatic rebuild triggered for this exclusion (expected with exclude-only policy)
 - `Data redundancy: degraded` — Confirms data redundancy is impaired and manual
   intervention is needed
 
-To restore redundancy, manually trigger rebuild:
+To restore redundancy for the excluded targets, manually trigger rebuild. Refer to [Detailed Pool Operations: Interactive Rebuild Controls](rebuild_controls.md) for more information about rebuild start commands.
 
 ```bash
 $ dmg pool rebuild start my_pool
