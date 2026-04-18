@@ -997,6 +997,56 @@ pmem_defer_free(struct umem_instance *umm, umem_off_t off, void *act)
 	pmemobj_defer_free(pop, id, (struct pobj_action *)act);
 }
 
+static void
+pmem_tx_set_failure_behavior(enum umem_tx_failure_behavior behavior)
+{
+	switch (behavior) {
+	case TX_FAILURE_ABORT:
+		pmemobj_tx_set_failure_behavior(POBJ_TX_FAILURE_ABORT);
+		break;
+	case TX_FAILURE_RETURN:
+		pmemobj_tx_set_failure_behavior(POBJ_TX_FAILURE_RETURN);
+		break;
+	default:
+		D_ASSERTF(0, "Unknown TX failure behavior %d\n", behavior);
+	}
+}
+
+static int
+pmem_tx_get_failure_behavior(void)
+{
+	enum pobj_tx_failure_behavior behavior;
+
+	behavior = pmemobj_tx_get_failure_behavior();
+
+	switch (behavior) {
+	case POBJ_TX_FAILURE_ABORT:
+		return TX_FAILURE_ABORT;
+	case POBJ_TX_FAILURE_RETURN:
+		return TX_FAILURE_RETURN;
+	default:
+		D_ERROR("Unknown TX failure behavior %d\n", behavior);
+		return -DER_INVAL;
+	}
+}
+
+static int
+pmem_tx_set_snapbuf(struct umem_instance *umm, umem_off_t snapbuf, size_t size)
+{
+	void *buf = umem_off2ptr(umm, snapbuf);
+	int   rc;
+
+	rc = pmemobj_tx_log_append_buffer(TX_LOG_TYPE_SNAPSHOT, buf, size);
+	if (rc != 0)
+		return rc;
+
+	rc = pmemobj_tx_log_auto_alloc(TX_LOG_TYPE_SNAPSHOT, 0);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
+
 static int
 pmem_tx_stage(void)
 {
@@ -1135,27 +1185,29 @@ umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	return 0;
 }
 
-static umem_ops_t	pmem_ops = {
-	.mo_tx_free		= pmem_tx_free,
-	.mo_tx_alloc		= pmem_tx_alloc,
-	.mo_tx_add		= pmem_tx_add,
-	.mo_tx_xadd		= pmem_tx_xadd,
-	.mo_tx_add_ptr		= pmem_tx_add_ptr,
-	.mo_tx_abort		= pmem_tx_abort,
-	.mo_tx_begin		= pmem_tx_begin,
-	.mo_tx_commit		= pmem_tx_commit,
-	.mo_tx_stage		= pmem_tx_stage,
-	.mo_reserve		= pmem_reserve,
-	.mo_defer_free		= pmem_defer_free,
-	.mo_cancel		= pmem_cancel,
-	.mo_tx_publish		= pmem_tx_publish,
-	.mo_atomic_copy		= pmem_atomic_copy,
-	.mo_atomic_alloc	= pmem_atomic_alloc,
-	.mo_atomic_free		= pmem_atomic_free,
-	.mo_atomic_flush	= pmem_atomic_flush,
-	.mo_tx_add_callback	= umem_tx_add_cb,
+static umem_ops_t pmem_ops = {
+    .mo_tx_free                 = pmem_tx_free,
+    .mo_tx_alloc                = pmem_tx_alloc,
+    .mo_tx_add                  = pmem_tx_add,
+    .mo_tx_xadd                 = pmem_tx_xadd,
+    .mo_tx_add_ptr              = pmem_tx_add_ptr,
+    .mo_tx_abort                = pmem_tx_abort,
+    .mo_tx_begin                = pmem_tx_begin,
+    .mo_tx_commit               = pmem_tx_commit,
+    .mo_tx_set_failure_behavior = pmem_tx_set_failure_behavior,
+    .mo_tx_get_failure_behavior = pmem_tx_get_failure_behavior,
+    .mo_tx_set_snapbuf          = pmem_tx_set_snapbuf,
+    .mo_tx_stage                = pmem_tx_stage,
+    .mo_reserve                 = pmem_reserve,
+    .mo_defer_free              = pmem_defer_free,
+    .mo_cancel                  = pmem_cancel,
+    .mo_tx_publish              = pmem_tx_publish,
+    .mo_atomic_copy             = pmem_atomic_copy,
+    .mo_atomic_alloc            = pmem_atomic_alloc,
+    .mo_atomic_free             = pmem_atomic_free,
+    .mo_atomic_flush            = pmem_atomic_flush,
+    .mo_tx_add_callback         = umem_tx_add_cb,
 };
-
 
 /** BMEM operations (depends on dav) */
 

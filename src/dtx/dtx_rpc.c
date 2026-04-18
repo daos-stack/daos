@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -879,7 +879,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 		 * the DTX entries (in the dtis) as "PARTIAL_COMMITTED" and re-commit them later.
 		 * It is harmless to re-commit the DTX that has ever been committed.
 		 */
-		rc1 = vos_dtx_commit(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
+		rc1 = dtx_commit_large(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
 		if (rc1 > 0) {
 			dra->dra_committed += rc1;
 			rc1 = 0;
