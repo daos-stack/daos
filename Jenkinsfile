@@ -1230,12 +1230,25 @@ pipeline {
 //                             run_if_landing: false,
 //                             job_status: job_status_internal
 //                         ),
-                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
+                        'Functional Cluster Box Medium MD on SSD 2': getFunctionalTestStage(
                             name: 'Functional Cluster Box Medium MD on SSD',
+                            pragma_suffix: '-cb-medium-md-on-ssd',
+                            label: 'cluster_box',
+                            next_version: next_version(),
+                            stage_tags: 'cb,medium',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium MD on SSD 3': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD 3',
                             pragma_suffix: '-cb-medium-md-on-ssd',
                             label: 'cluster_box_3',
                             next_version: next_version(),
-                            stage_tags: 'cb,medium',
+                            stage_tags: 'cb3,medium',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
