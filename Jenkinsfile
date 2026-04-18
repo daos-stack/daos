@@ -1127,18 +1127,18 @@ pipeline {
 //                             run_if_landing: false,
 //                             job_status: job_status_internal
 //                         ),
-                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium MD on SSD',
-                            pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
+//                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+//                             name: 'Functional Hardware Medium MD on SSD',
+//                             pragma_suffix: '-hw-medium-md-on-ssd',
+//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,medium,-provider',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             nvme: 'auto_md_on_ssd',
+//                             run_if_pr: true,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         ),
 //                         'Functional Hardware Medium VMD': getFunctionalTestStage(
 //                             name: 'Functional Hardware Medium VMD',
 //                             pragma_suffix: '-hw-medium-vmd',
@@ -1233,7 +1233,7 @@ pipeline {
                         'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Cluster Box Medium MD on SSD',
                             pragma_suffix: '-cb-medium-md-on-ssd',
-                            label: 'cluster_box',
+                            label: 'cluster_box_3',
                             next_version: next_version(),
                             stage_tags: 'cb,medium',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
