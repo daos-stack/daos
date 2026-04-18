@@ -1114,7 +1114,7 @@ pipeline {
             }
             steps {
                 script {
-                    parallel(
+                    Map hwStages = [
 //                         'Functional Hardware Medium': getFunctionalTestStage(
 //                             name: 'Functional Hardware Medium',
 //                             pragma_suffix: '-hw-medium',
@@ -1138,7 +1138,7 @@ pipeline {
 //                             run_if_pr: true,
 //                             run_if_landing: false,
 //                             job_status: job_status_internal
-//                         ),
+//                         )
 //                         'Functional Hardware Medium VMD': getFunctionalTestStage(
 //                             name: 'Functional Hardware Medium VMD',
 //                             pragma_suffix: '-hw-medium-vmd',
@@ -1230,25 +1230,25 @@ pipeline {
 //                             run_if_landing: false,
 //                             job_status: job_status_internal
 //                         ),
-                        'Functional Cluster Box Medium MD on SSD 2': getFunctionalTestStage(
-                            name: 'Functional Cluster Box Medium MD on SSD',
+                    ]
+
+                    List<Map> clusterBoxStageConfigs = [
+                        [stage_tag: 'DaosCoreTestRebuild', label: 'cluster_box'],
+                        [stage_tag: 'DaosCoreTest', label: 'cluster_box'],
+                        [stage_tag: 'PoolCreateTests', label: 'cluster_box'],
+                        [stage_tag: 'TestWithTelemetryNvme', label: 'cluster_box'],
+                        [stage_tag: 'SnapshotAggregation', label: 'cluster_box_3']
+                    ]
+
+                    clusterBoxStageConfigs.each { cfg ->
+                        String stageTag = cfg.stage_tag
+                        String stageKey = "Functional Cluster Box Medium MD on SSD ${stageTag}"
+                        hwStages[stageKey] = getFunctionalTestStage(
+                            name: "Functional Cluster Box Medium MD on SSD ${stageTag}",
                             pragma_suffix: '-cb-medium-md-on-ssd',
-                            label: 'cluster_box',
+                            label: cfg.label,
                             next_version: next_version(),
-                            stage_tags: 'cb,medium',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto_md_on_ssd',
-                            node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Cluster Box Medium MD on SSD 3': getFunctionalTestStage(
-                            name: 'Functional Cluster Box Medium MD on SSD 3',
-                            pragma_suffix: '-cb-medium-md-on-ssd',
-                            label: 'cluster_box_3',
-                            next_version: next_version(),
-                            stage_tags: 'cb3,medium',
+                            stage_tags: "cb,medium,${stageTag}",
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
@@ -1256,7 +1256,25 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         )
+                    }
+
+                    String excludedStageTags = clusterBoxStageConfigs.collect { cfg -> "-${cfg.stage_tag}" }.join(',')
+                    String restStageTags = excludedStageTags ? "cb,medium,${excludedStageTags}" : 'cb,medium'
+                    hwStages['Functional Cluster Box Medium MD on SSD rest'] = getFunctionalTestStage(
+                        name: 'Functional Cluster Box Medium MD on SSD rest',
+                        pragma_suffix: '-cb-medium-md-on-ssd',
+                        label: 'cluster_box',
+                        next_version: next_version(),
+                        stage_tags: restStageTags,
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        nvme: 'auto_md_on_ssd',
+                        node_count: 5,
+                        run_if_pr: true,
+                        run_if_landing: false,
+                        job_status: job_status_internal
                     )
+
+                    parallel(hwStages)
                 }
             }
         } // stage('Test Hardware')
