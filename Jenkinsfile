@@ -1114,7 +1114,7 @@ pipeline {
             }
             steps {
                 script {
-                    Map hwStages = [
+//                     Map hwStages = [
 //                         'Functional Hardware Medium': getFunctionalTestStage(
 //                             name: 'Functional Hardware Medium',
 //                             pragma_suffix: '-hw-medium',
@@ -1230,7 +1230,10 @@ pipeline {
 //                             run_if_landing: false,
 //                             job_status: job_status_internal
 //                         ),
-                    ]
+//                     ]
+                    Map hwStages = [:]
+                    // Populate hwStages via dynamic generation below
+                    // Static/commented stages can be added here if needed
 
                     List<Map> clusterBoxStageConfigs = [
                         [stage_tag: 'DaosCoreTestRebuild', label: 'cluster_box'],
