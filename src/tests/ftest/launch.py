@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,6 +34,8 @@ from util.yaml_utils import YamlException
 
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 MAX_CI_REPETITIONS = 10
+FIND_PACKAGES = ("daos", "libfabric", "mercury", "ior", "openmpi", "mpich", "mpifileutils",
+                 "mlnx-ofed-basic", "doca-ofed", "bullseye")
 
 
 class LaunchError(Exception):
@@ -273,8 +275,7 @@ class Launch():
         # pylint: disable=unsupported-binary-operation
         all_hosts = args.test_servers | args.test_clients | self.local_host
         self.details["installed packages"] = find_packages(
-            logger, all_hosts,
-            "'^(daos|libfabric|mercury|ior|openmpi|mpich|mpifileutils|mlnx-ofed-basic)-'")
+            logger, all_hosts, f"'^({'|'.join(FIND_PACKAGES)})-'")
 
         # Setup the test environment
         test_env = TestEnvironment()

@@ -26,18 +26,12 @@ sudo mount --bind build "${SL_SRC_DIR}"
 
 log_prefix="unit_test"
 
-: "${BULLSEYE:=}"
-if [ -n "$BULLSEYE" ]; then
-    pushd "${SL_SRC_DIR}/bullseye"
-    set +x
-    echo + sudo ./install --quiet --key "**********" --prefix /opt/BullseyeCoverage
-    sudo ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage
-    set -x
-    popd
-    rm -rf bullseye
+: "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
+if [[ -d "${BULLSEYE_DIR}" ]]; then
     export COVFILE="${SL_SRC_DIR}/test.cov"
-    export PATH="/opt/BullseyeCoverage/bin:$PATH"
-    log_prefix="covc_test"
+    export PATH="${BULLSEYE_DIR}/bin:$PATH"
+    cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
+    ls -al "${COVFILE}"
 fi
 
 cd "${SL_SRC_DIR}"
@@ -97,5 +91,19 @@ pip install --upgrade pip
 pip install --requirement requirements-utest.txt
 pip install /opt/daos/lib/daos/python/
 
+if [[ -n "${COVFILE:-}" ]]; then
+    echo "Code coverage before running unit tests:"
+    /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+fi
+
 HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
+
+if [[ -n "${COVFILE:-}" ]]; then
+    echo "Code coverage after running unit tests:"
+    /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+
+    # Copy bullseye file to expected location for stashing
+    cp "${COVFILE}" /tmp/test.cov
+    ls -al /tmp/test.cov || true
+fi
