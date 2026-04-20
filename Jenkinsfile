@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/speed_of_ci') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -467,49 +467,49 @@ pipeline {
                 }
             }
         }
-        stage('Cancel Previous Builds') {
-            when {
-                beforeAgent true
-                expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
-            }
-            steps {
-                cancelPreviousBuilds()
-            }
-        }
-        stage('Pre-build') {
-            when {
-                beforeAgent true
-                expression { !skipStage() }
-            }
-            parallel {
-                stage('Python Bandit check') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.code_scanning'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false) +
-                                                ' --build-arg FVERSION=37'
-                        }
-                    }
-                    steps {
-                        job_step_update(pythonBanditCheck())
-                    }
-                    post {
-                        always {
-                            // Bandit will have empty results if it does not
-                            // find any issues.
-                            junit testResults: 'bandit.xml',
-                                  allowEmptyResults: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Python Bandit check')
-            }
-        }
+//         stage('Cancel Previous Builds') {
+//             when {
+//                 beforeAgent true
+//                 expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
+//             }
+//             steps {
+//                 cancelPreviousBuilds()
+//             }
+//         }
+//         stage('Pre-build') {
+//             when {
+//                 beforeAgent true
+//                 expression { !skipStage() }
+//             }
+//             parallel {
+//                 stage('Python Bandit check') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         dockerfile {
+//                             filename 'utils/docker/Dockerfile.code_scanning'
+//                             label 'docker_runner'
+//                             additionalBuildArgs dockerBuildArgs(add_repos: false) +
+//                                                 ' --build-arg FVERSION=37'
+//                         }
+//                     }
+//                     steps {
+//                         job_step_update(pythonBanditCheck())
+//                     }
+//                     post {
+//                         always {
+//                             // Bandit will have empty results if it does not
+//                             // find any issues.
+//                             junit testResults: 'bandit.xml',
+//                                   allowEmptyResults: true
+//                             job_status_update()
+//                         }
+//                     }
+//                 } // stage('Python Bandit check')
+//             }
+//         }
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
@@ -627,486 +627,486 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('leap15') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: false) +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg POINT_RELEASE=.6 '
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                scons_args: sconsFaultsArgs() +
-                                ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                build_deps: 'yes'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('leap15', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('leap15', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
+//                 stage('Build on Leap 15') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skip_build_stage('leap15') }
+//                     }
+//                     agent {
+//                         dockerfile {
+//                             filename 'utils/docker/Dockerfile.leap.15'
+//                             label 'docker_runner'
+//                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+//                                                                 parallel_build: true,
+//                                                                 deps_build: false) +
+//                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
+//                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
+//                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
+//                                                 ' --build-arg POINT_RELEASE=.6 '
+//                         }
+//                     }
+//                     steps {
+//                         script {
+//                             sh label: 'Install RPMs',
+//                                 script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+//                             sh label: 'Build deps',
+//                                 script: './ci/rpm/build_deps.sh'
+//                             job_step_update(
+//                                 sconsBuild(parallel_build: true,
+//                                 scons_args: sconsFaultsArgs() +
+//                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
+//                                 build_deps: 'yes'))
+//                             sh label: 'Generate RPMs',
+//                                 script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+//                         }
+//                     }
+//                     post {
+//                         success {
+//                             uploadNewRPMs('leap15', 'success')
+//                         }
+//                         unsuccessful {
+//                             sh '''if [ -f config.log ]; then
+//                                       mv config.log config.log-leap15-gcc
+//                                   fi'''
+//                             archiveArtifacts artifacts: 'config.log-leap15-gcc',
+//                                              allowEmptyArchive: true
+//                         }
+//                         cleanup {
+//                             uploadNewRPMs('leap15', 'cleanup')
+//                             job_status_update()
+//                         }
+//                     }
+//                 }
             }
         }
-        stage('Unit Tests') {
-            when {
-                beforeAgent true
-                expression { !skipStage() }
-            }
-            parallel {
-                stage('Unit Test') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                            job_step_update(
-                                unitTest(timeout_time: 60,
-                                        unstash_opt: true,
-                                        inst_repos: daosRepos(),
-                                        inst_rpms: unitPackages(target: 'el9'),
-                                        image_version: 'el9.7',
-                                        )
-                            )
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_logs/']
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Unit Test bdev') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_NVME_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_bdev_logs/']
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('NLT') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
-                    }
-                    agent {
-                        label params.CI_NLT_1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
-                                     unstash_opt: true,
-                                     unstash_tests: false,
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
-                        //                 skipPublishingChecks: true,
-                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
-                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['nlt_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'nlt-memcheck'
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         name: 'NLT server leaks',
-                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: 'nlt-server-leaks.json',
-                                           name: 'NLT server results',
-                                           id: 'NLT_server'),
-                                         scm: 'daos-stack/daos'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Unit Test with memcheck') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 160,
-                                     unstash_opt: true,
-                                     ignore_failure: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'unit-memcheck'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test with memcheck')
-                stage('Unit Test bdev with memcheck') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_NVME_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 180,
-                                     unstash_opt: true,
-                                     ignore_failure: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
-                                                     'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'unit-bdev-memcheck'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test bdev with memcheck')
-            }
-        }
-        stage('Test') {
-            when {
-                beforeAgent true
-                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
-                // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
-            }
-            parallel {
-                stage('Functional on EL 8.8 with Valgrind') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8.8 with Valgrind')
-                stage('Functional on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'el8.10'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8')
-                stage('Functional on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL9')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 9')
-                stage('Functional on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('Leap15')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'leap15.6'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('Ubuntu')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner_fi'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                                ' --build-arg POINT_RELEASE=.7 '
-                            args '--tmpfs /mnt/daos_0'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                       build_deps: 'no'))
-                        job_step_update(nlt_test())
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                        //                skipPublishingChecks: true,
-                        //                id: 'fir', name: 'Fault Injection Report')
-                    }
-                    post {
-                        always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
-                            recordIssues enabledForFailure: true,
-                                         /* ignore warning/errors from PMDK logging system */
-                                         filters: [excludeFile('pmdk/.+')],
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
-                                                        [threshold: 1, type: 'TOTAL_HIGH'],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
-                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
-                                         tools: [issues(pattern: 'nlt-errors.json',
-                                                        name: 'Fault injection issues',
-                                                        id: 'Fault_Injection'),
-                                                 issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'Fault injection leaks',
-                                                        id: 'NLT_client')],
-                                         scm: 'daos-stack/daos'
-                            junit testResults: 'nlt-junit.xml'
-                            stash name: 'fault-inject-valgrind',
-                                  includes: '*.memcheck.xml',
-                                  allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
-                                             allowEmptyArchive: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Fault injection testing')
-                stage('Test RPMs on EL 9.6') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_TEST_EL_RPMs && !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
-                        )
-                    }
-                    post {
-                        always {
-                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                        }
-                    }
-                } // stage('Test RPMs on EL 9.6')
-                stage('Test RPMs on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_TEST_LEAP_RPMs && !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        /* neither of these work as FTest strips the first node
-                           out of the pool requiring 2 node clusters at minimum
-                         * additionally for this use-case, can't override
-                           ftest_arg with this :-(
-                        script {
-                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.5',
-                                pragma_suffix: '',
-                                label: params.CI_UNIT_VM1_LABEL,
-                                next_version: next_version(),
-                                stage_tags: '',
-                                default_tags: 'test_daos_management',
-                                nvme: 'auto',
-                                run_if_pr: true,
-                                run_if_landing: true,
-                                job_status: job_status_internal
-                            )
-                        }
-                           job_step_update(
-                            functionalTest(
-                                test_tag: 'test_daos_management',
-                                ftest_arg: '--yaml_extension single_host',
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } */
-                        job_step_update(
-                            testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
-                        )
-                    }
-                    post {
-                        always {
-                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                        }
-                    }
-                } // stage('Test RPMs on Leap 15.5')
-            } // parallel
-        } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
-            when {
-                beforeAgent true
-                expression { params.CI_STORAGE_PREP_LABEL != '' }
-            }
-            agent {
-                label params.CI_STORAGE_PREP_LABEL
-            }
-            steps {
-                job_step_update(
-                    storagePrepTest(
-                        inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version(), 'tests-internal')))
-            }
-            post {
-                cleanup {
-                    job_status_update()
-                }
-            }
-        } // stage('Test Storage Prep')
+//         stage('Unit Tests') {
+//             when {
+//                 beforeAgent true
+//                 expression { !skipStage() }
+//             }
+//             parallel {
+//                 stage('Unit Test') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+//                     }
+//                     steps {
+//                             job_step_update(
+//                                 unitTest(timeout_time: 60,
+//                                         unstash_opt: true,
+//                                         inst_repos: daosRepos(),
+//                                         inst_rpms: unitPackages(target: 'el9'),
+//                                         image_version: 'el9.7',
+//                                         )
+//                             )
+//                     }
+//                     post {
+//                         always {
+//                             unitTestPost artifacts: ['unit_test_logs/']
+//                             job_status_update()
+//                         }
+//                     }
+//                 }
+//                 stage('Unit Test bdev') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label params.CI_UNIT_VM1_NVME_LABEL
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             unitTest(timeout_time: 60,
+//                                      unstash_opt: true,
+//                                      inst_repos: daosRepos(),
+//                                      inst_rpms: unitPackages(target: 'el9'),
+//                                      image_version: 'el9.7'))
+//                     }
+//                     post {
+//                         always {
+//                             unitTestPost artifacts: ['unit_test_bdev_logs/']
+//                             job_status_update()
+//                         }
+//                     }
+//                 }
+//                 stage('NLT') {
+//                     when {
+//                         beforeAgent true
+//                         expression { params.CI_NLT_TEST && !skipStage() }
+//                     }
+//                     agent {
+//                         label params.CI_NLT_1_LABEL
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             unitTest(timeout_time: 60,
+//                                      inst_repos: daosRepos(),
+//                                      test_script: 'ci/unit/test_nlt.sh',
+//                                      unstash_opt: true,
+//                                      unstash_tests: false,
+//                                      inst_rpms: unitPackages(target: 'el9'),
+//                                      image_version: 'el9.7'))
+//                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+//                         //                 skipPublishingChecks: true,
+//                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
+//                         stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
+//                     }
+//                     post {
+//                         always {
+//                             unitTestPost artifacts: ['nlt_logs/'],
+//                                          testResults: 'nlt-junit.xml',
+//                                          always_script: 'ci/unit/test_nlt_post.sh',
+//                                          valgrind_stash: 'nlt-memcheck'
+//                             recordIssues enabledForFailure: true,
+//                                          failOnError: false,
+//                                          ignoreQualityGate: true,
+//                                          name: 'NLT server leaks',
+//                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+//                                          tool: issues(pattern: 'nlt-server-leaks.json',
+//                                            name: 'NLT server results',
+//                                            id: 'NLT_server'),
+//                                          scm: 'daos-stack/daos'
+//                             job_status_update()
+//                         }
+//                     }
+//                 }
+//                 stage('Unit Test with memcheck') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             unitTest(timeout_time: 160,
+//                                      unstash_opt: true,
+//                                      ignore_failure: true,
+//                                      inst_repos: daosRepos(),
+//                                      inst_rpms: unitPackages(target: 'el9'),
+//                                      image_version: 'el9.7'))
+//                     }
+//                     post {
+//                         always {
+//                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
+//                                                      'unit_test_memcheck_logs/**/*.log'],
+//                                          valgrind_stash: 'unit-memcheck'
+//                             job_status_update()
+//                         }
+//                     }
+//                 } // stage('Unit Test with memcheck')
+//                 stage('Unit Test bdev with memcheck') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label params.CI_UNIT_VM1_NVME_LABEL
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             unitTest(timeout_time: 180,
+//                                      unstash_opt: true,
+//                                      ignore_failure: true,
+//                                      inst_repos: daosRepos(),
+//                                      inst_rpms: unitPackages(target: 'el9'),
+//                                      image_version: 'el9.7'))
+//                     }
+//                     post {
+//                         always {
+//                             unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+//                                                      'unit_test_memcheck_bdev_logs/**/*.log'],
+//                                          valgrind_stash: 'unit-bdev-memcheck'
+//                             job_status_update()
+//                         }
+//                     }
+//                 } // stage('Unit Test bdev with memcheck')
+//             }
+//         }
+//         stage('Test') {
+//             when {
+//                 beforeAgent true
+//                 //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
+//                 // Above not working, always skipping functional VM tests.
+//                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
+//             }
+//             parallel {
+//                 stage('Functional on EL 8.8 with Valgrind') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label vm9_label('EL8')
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             functionalTest(
+//                                 inst_repos: daosRepos(),
+//                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+//                                            ' mercury-libfabric',
+//                                 test_function: 'runTestFunctionalV2'))
+//                     }
+//                     post {
+//                         always {
+//                             functionalTestPostV2()
+//                             job_status_update()
+//                         }
+//                     }
+//                 } // stage('Functional on EL 8.8 with Valgrind')
+//                 stage('Functional on EL 8') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label vm9_label('EL8')
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             functionalTest(
+//                                 inst_repos: daosRepos(),
+//                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+//                                            ' mercury-libfabric',
+//                                 test_function: 'runTestFunctionalV2',
+//                                 image_version: 'el8.10'))
+//                     }
+//                     post {
+//                         always {
+//                             functionalTestPostV2()
+//                             job_status_update()
+//                         }
+//                     }
+//                 } // stage('Functional on EL 8')
+//                 stage('Functional on EL 9') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label vm9_label('EL9')
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             functionalTest(
+//                                 inst_repos: daosRepos(),
+//                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+//                                            ' mercury-libfabric',
+//                                 test_function: 'runTestFunctionalV2',
+//                                 image_version: 'el9.7'))
+//                     }
+//                     post {
+//                         always {
+//                             functionalTestPostV2()
+//                             job_status_update()
+//                         }
+//                     }
+//                 } // stage('Functional on EL 9')
+//                 stage('Functional on Leap 15') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label vm9_label('Leap15')
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             functionalTest(
+//                                 inst_repos: daosRepos(),
+//                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+//                                            ' mercury-libfabric',
+//                                 test_function: 'runTestFunctionalV2',
+//                                 image_version: 'leap15.6'))
+//                     }
+//                     post {
+//                         always {
+//                             functionalTestPostV2()
+//                             job_status_update()
+//                         }
+//                     } // post
+//                 } // stage('Functional on Leap 15')
+//                 stage('Functional on Ubuntu 20.04') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         label vm9_label('Ubuntu')
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             functionalTest(
+//                                 inst_repos: daosRepos(),
+//                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+//                                            ' mercury-libfabric',
+//                                 test_function: 'runTestFunctionalV2'))
+//                     }
+//                     post {
+//                         always {
+//                             functionalTestPostV2()
+//                             job_status_update()
+//                         }
+//                     } // post
+//                 } // stage('Functional on Ubuntu 20.04')
+//                 stage('Fault injection testing') {
+//                     when {
+//                         beforeAgent true
+//                         expression { !skipStage() }
+//                     }
+//                     agent {
+//                         dockerfile {
+//                             filename 'utils/docker/Dockerfile.el.9'
+//                             label 'docker_runner_fi'
+//                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+//                                                                 parallel_build: true,
+//                                                                 deps_build: true) +
+//                                                                 ' --build-arg POINT_RELEASE=.7 '
+//                             args '--tmpfs /mnt/daos_0'
+//                         }
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             sconsBuild(parallel_build: true,
+//                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
+//                                        build_deps: 'no'))
+//                         job_step_update(nlt_test())
+//                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
+//                         //                skipPublishingChecks: true,
+//                         //                id: 'fir', name: 'Fault Injection Report')
+//                     }
+//                     post {
+//                         always {
+//                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+//                                                       scm: 'daos-stack/daos',
+//                                                       requiredResult: hudson.model.Result.UNSTABLE
+//                             recordIssues enabledForFailure: true,
+//                                          /* ignore warning/errors from PMDK logging system */
+//                                          filters: [excludeFile('pmdk/.+')],
+//                                          failOnError: false,
+//                                          ignoreQualityGate: true,
+//                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
+//                                                         [threshold: 1, type: 'TOTAL_HIGH'],
+//                                                         [threshold: 1, type: 'NEW_NORMAL', unstable: true],
+//                                                         [threshold: 1, type: 'NEW_LOW', unstable: true]],
+//                                          tools: [issues(pattern: 'nlt-errors.json',
+//                                                         name: 'Fault injection issues',
+//                                                         id: 'Fault_Injection'),
+//                                                  issues(pattern: 'nlt-client-leaks.json',
+//                                                         name: 'Fault injection leaks',
+//                                                         id: 'NLT_client')],
+//                                          scm: 'daos-stack/daos'
+//                             junit testResults: 'nlt-junit.xml'
+//                             stash name: 'fault-inject-valgrind',
+//                                   includes: '*.memcheck.xml',
+//                                   allowEmpty: true
+//                             archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
+//                                              allowEmptyArchive: true
+//                             job_status_update()
+//                         }
+//                     }
+//                 } // stage('Fault injection testing')
+//                 stage('Test RPMs on EL 9.6') {
+//                     when {
+//                         beforeAgent true
+//                         expression { params.CI_TEST_EL_RPMs && !skipStage() }
+//                     }
+//                     agent {
+//                         label params.CI_UNIT_VM1_LABEL
+//                     }
+//                     steps {
+//                         job_step_update(
+//                             testRpm(inst_repos: daosRepos(),
+//                                     daos_pkg_version: daosPackagesVersion(next_version()),
+//                                     inst_rpms: 'mercury-libfabric')
+//                         )
+//                     }
+//                     post {
+//                         always {
+//                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
+//                         }
+//                     }
+//                 } // stage('Test RPMs on EL 9.6')
+//                 stage('Test RPMs on Leap 15.5') {
+//                     when {
+//                         beforeAgent true
+//                         expression { params.CI_TEST_LEAP_RPMs && !skipStage() }
+//                     }
+//                     agent {
+//                         label params.CI_UNIT_VM1_LABEL
+//                     }
+//                     steps {
+//                         /* neither of these work as FTest strips the first node
+//                            out of the pool requiring 2 node clusters at minimum
+//                          * additionally for this use-case, can't override
+//                            ftest_arg with this :-(
+//                         script {
+//                             'Test RPMs on Leap 15.5': getFunctionalTestStage(
+//                                 name: 'Test RPMs on Leap 15.5',
+//                                 pragma_suffix: '',
+//                                 label: params.CI_UNIT_VM1_LABEL,
+//                                 next_version: next_version(),
+//                                 stage_tags: '',
+//                                 default_tags: 'test_daos_management',
+//                                 nvme: 'auto',
+//                                 run_if_pr: true,
+//                                 run_if_landing: true,
+//                                 job_status: job_status_internal
+//                             )
+//                         }
+//                            job_step_update(
+//                             functionalTest(
+//                                 test_tag: 'test_daos_management',
+//                                 ftest_arg: '--yaml_extension single_host',
+//                                 inst_repos: daosRepos(),
+//                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+//                                 test_function: 'runTestFunctionalV2'))
+//                     }
+//                     post {
+//                         always {
+//                             functionalTestPostV2()
+//                             job_status_update()
+//                         }
+//                     } */
+//                         job_step_update(
+//                             testRpm(inst_repos: daosRepos(),
+//                                     daos_pkg_version: daosPackagesVersion(next_version()),
+//                                     inst_rpms: 'mercury-libfabric')
+//                         )
+//                     }
+//                     post {
+//                         always {
+//                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
+//                         }
+//                     }
+//                 } // stage('Test RPMs on Leap 15.5')
+//             } // parallel
+//         } // stage('Test')
+//         stage('Test Storage Prep on EL 8.8') {
+//             when {
+//                 beforeAgent true
+//                 expression { params.CI_STORAGE_PREP_LABEL != '' }
+//             }
+//             agent {
+//                 label params.CI_STORAGE_PREP_LABEL
+//             }
+//             steps {
+//                 job_step_update(
+//                     storagePrepTest(
+//                         inst_repos: daosRepos(),
+//                         inst_rpms: functionalPackages(1, next_version(), 'tests-internal')))
+//             }
+//             post {
+//                 cleanup {
+//                     job_status_update()
+//                 }
+//             }
+//         } // stage('Test Storage Prep')
         stage('Test Hardware') {
             when {
                 beforeAgent true
@@ -1114,110 +1114,170 @@ pipeline {
             }
             steps {
                 script {
-                    parallel(
-                        'Functional Hardware Medium': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium',
-                            pragma_suffix: '-hw-medium',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+//                     Map hwStages = [
+//                         'Functional Hardware Medium': getFunctionalTestStage(
+//                             name: 'Functional Hardware Medium',
+//                             pragma_suffix: '-hw-medium',
+//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,medium,-provider',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             nvme: 'auto',
+//                             run_if_pr: false,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         ),
+//                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+//                             name: 'Functional Hardware Medium MD on SSD',
+//                             pragma_suffix: '-hw-medium-md-on-ssd',
+//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,medium,-provider',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             nvme: 'auto_md_on_ssd',
+//                             run_if_pr: true,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         )
+//                         'Functional Hardware Medium VMD': getFunctionalTestStage(
+//                             name: 'Functional Hardware Medium VMD',
+//                             pragma_suffix: '-hw-medium-vmd',
+//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw_vmd,medium',
+//                             /* groovylint-disable-next-line UnnecessaryGetter */
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             nvme: 'auto',
+//                             run_if_pr: false,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         ),
+//                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
+//                             name: 'Functional Hardware Medium Verbs Provider',
+//                             pragma_suffix: '-hw-medium-verbs-provider',
+//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,medium,provider',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             default_nvme: 'auto',
+//                             provider: 'ofi+verbs;ofi_rxm',
+//                             run_if_pr: false,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal,
+//                             image_version: 'el9.7'
+//                         ),
+//                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+//                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+//                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,medium,provider',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             default_nvme: 'auto_md_on_ssd',
+//                             provider: 'ofi+verbs;ofi_rxm',
+//                             run_if_pr: true,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal,
+//                             image_version: 'el9.7'
+//                         ),
+//                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
+//                             name: 'Functional Hardware Medium UCX Provider',
+//                             pragma_suffix: '-hw-medium-ucx-provider',
+//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,medium,provider',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             default_nvme: 'auto',
+//                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+//                             run_if_pr: false,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         ),
+//                         'Functional Hardware Large': getFunctionalTestStage(
+//                             name: 'Functional Hardware Large',
+//                             pragma_suffix: '-hw-large',
+//                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,large',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             default_nvme: 'auto',
+//                             run_if_pr: false,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         ),
+//                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
+//                             name: 'Functional Hardware Large MD on SSD',
+//                             pragma_suffix: '-hw-large-md-on-ssd',
+//                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,large',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             default_nvme: 'auto_md_on_ssd',
+//                             run_if_pr: true,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         ),
+//                         'Functional CB Medium MD on SSD': getFunctionalTestStage(
+//                             name: 'Functional CB Medium MD on SSD',
+//                             pragma_suffix: '-cb-medium-md-on-ssd',
+//                             label: 'cluster_box',
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,medium',
+//                             default_tags: 'pr',
+//                             nvme: 'auto_md_on_ssd',
+//                             node_count: 5,
+//                             run_if_pr: true,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         ),
+//                     ]
+                    Map hwStages = [:]
+                    // Populate hwStages via dynamic generation below
+                    // Static/commented stages can be added here if needed
+
+                    List<Map> clusterBoxStageConfigs = [
+                        [stage_tag: 'DaosCoreTestRebuild', label: 'cluster_box'],
+                        [stage_tag: 'DaosCoreTest', label: 'cluster_box'],
+                        [stage_tag: 'PoolCreateTests', label: 'cluster_box'],
+                        [stage_tag: 'TestWithTelemetryNvme', label: 'cluster_box'],
+                        [stage_tag: 'SnapshotAggregation', label: 'cluster_box_3']
+                    ]
+
+                    clusterBoxStageConfigs.each { cfg ->
+                        String stageTag = cfg.stage_tag
+                        String stageKey = "Functional Cluster Box Medium MD on SSD ${stageTag}"
+                        hwStages[stageKey] = getFunctionalTestStage(
+                            name: "Functional Cluster Box Medium MD on SSD ${stageTag}",
+                            pragma_suffix: '-cb-medium-md-on-ssd',
+                            label: cfg.label,
                             next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium MD on SSD',
-                            pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: "cb,medium,${stageTag}",
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
+                            node_count: 5,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium VMD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium VMD',
-                            pragma_suffix: '-hw-medium-vmd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw_vmd,medium',
-                            /* groovylint-disable-next-line UnnecessaryGetter */
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            pragma_suffix: '-hw-medium-ucx-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Large': getFunctionalTestStage(
-                            name: 'Functional Hardware Large',
-                            pragma_suffix: '-hw-large',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Large MD on SSD',
-                            pragma_suffix: '-hw-large-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
+                        )
+                    }
+
+                    String excludedStageTags = clusterBoxStageConfigs.collect { cfg -> "-${cfg.stage_tag}" }.join(',')
+                    String restStageTags = excludedStageTags ? "cb,medium,${excludedStageTags}" : 'cb,medium'
+                    hwStages['Functional Cluster Box Medium MD on SSD rest'] = getFunctionalTestStage(
+                        name: 'Functional Cluster Box Medium MD on SSD rest',
+                        pragma_suffix: '-cb-medium-md-on-ssd',
+                        label: 'cluster_box',
+                        next_version: next_version(),
+                        stage_tags: restStageTags,
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        nvme: 'auto_md_on_ssd',
+                        node_count: 5,
+                        run_if_pr: true,
+                        run_if_landing: false,
+                        job_status: job_status_internal
                     )
+
+                    parallel(hwStages)
                 }
             }
         } // stage('Test Hardware')

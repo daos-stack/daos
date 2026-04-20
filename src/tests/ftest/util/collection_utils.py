@@ -750,6 +750,7 @@ def update_jenkins_xml(logger, test, logs_dir, test_result):
         bool: True if all the xml updates were successful; False if there was error
     """
     logger.info("Updating the xml test result files for use in Jenkins")
+    stage_name = get_junit_stage_name()
 
     # Read the test xml file
     xml_file = os.path.join(logs_dir, 'results.xml')
@@ -759,7 +760,8 @@ def update_jenkins_xml(logger, test, logs_dir, test_result):
 
     # Include the functional test directory in the class name of the avocado test xml file
     launchable_xml = os.path.join(logs_dir, 'xunit1_results.xml')
-    if not update_test_xml(logger, test, xml_file, xml_data, launchable_xml, test_result):
+    if not update_test_xml(
+            logger, test, xml_file, xml_data, launchable_xml, test_result, stage_name):
         return False
 
     # Determine if this test produced any cmocka xml files
@@ -782,12 +784,48 @@ def update_jenkins_xml(logger, test, logs_dir, test_result):
 
             # Include the functional test directory in the class name of the cmocka xml file
             if not update_cmocka_xml(
-                    logger, test, cmocka_xml, cmocka_data, test_class, test_result):
+                    logger, test, cmocka_xml, cmocka_data, test_class, test_result,
+                    stage_name):
                 return False
     return True
 
 
-def update_test_xml(logger, test, xml_file, xml_data, launchable_xml, test_result):
+def get_junit_stage_name():
+    """Get a Jenkins stage name that is safe to use in JUnit class names.
+
+    Returns:
+        str | None: sanitized stage name or None if no stage name is defined
+    """
+    stage_name = os.environ.get("STAGE_NAME", "")
+    if not stage_name:
+        return None
+    stage_name = stage_name.strip()
+    if not stage_name:
+        return None
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", stage_name)
+
+
+def get_junit_class_prefix(test, stage_name=None, test_class=None):
+    """Build the JUnit classname prefix for functional tests.
+
+    Args:
+        test (TestInfo): the test information
+        stage_name (str, optional): sanitized Jenkins stage name
+        test_class (str, optional): avocado test class name
+
+    Returns:
+        str: classname prefix to use when updating test xml
+    """
+    class_prefix = "FTEST_"
+    if stage_name:
+        class_prefix = f"{stage_name}/{class_prefix}."
+    class_prefix = f"{class_prefix}{test.directory}"
+    if test_class:
+        class_prefix = f"{class_prefix}.{test_class}"
+    return class_prefix
+
+
+def update_test_xml(logger, test, xml_file, xml_data, launchable_xml, test_result, stage_name=None):
     """Update the class name the avocado test results xml file.
 
     Also create a launchable xml file from the original avocado test results.xml file data where
@@ -801,6 +839,7 @@ def update_test_xml(logger, test, xml_file, xml_data, launchable_xml, test_resul
         xml_data (str): the data to modify and write to the xml file
         launchable_xml (str) the launchable test results xml file
         test_result (TestResult): the test result used to update the status of the test
+        stage_name (str, optional): sanitized Jenkins stage name
 
     Returns:
         bool: False if there problems updating the test results xml file; True otherwise
@@ -809,8 +848,9 @@ def update_test_xml(logger, test, xml_file, xml_data, launchable_xml, test_resul
 
     # Update the class name to include the functional test directory
     pattern = 'classname="'
-    replacement = f'classname="FTEST_{test.directory}.'
-    if not update_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
+    replacement = f'classname="{get_junit_class_prefix(test, stage_name)}.'
+    xml_data = replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result)
+    if not xml_data:
         return False
 
     # Create an copy of the test xml for Launchable processing
@@ -820,7 +860,8 @@ def update_test_xml(logger, test, xml_file, xml_data, launchable_xml, test_resul
     return update_xml(logger, launchable_xml, pattern, replacement, xml_data, test_result)
 
 
-def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_result):
+def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_result,
+                      stage_name=None):
     """Update the class name in the cmocka test result xml file.
 
     Args:
@@ -830,6 +871,7 @@ def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_re
         cmocka_data (str): the data to modify and write to the cmocka xml file
         test_class (str): avocado test class name
         test_result (TestResult): the test result used to update the status of the test
+        stage_name (str, optional): sanitized Jenkins stage name
 
     Returns:
         bool: False if there problems updating the cmocka results xml file; True otherwise
@@ -855,12 +897,14 @@ def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_re
             test_result.fail_test(logger, "Process", message, sys.exc_info())
             return False
         pattern = '<testcase name='
-        replacement = f'<testcase classname="FTEST_{test.directory}.{test_class}-{name}" name='
+        replacement = (
+            f'<testcase classname="{get_junit_class_prefix(test, stage_name, test_class)}'
+            f'-{name}" name=')
         return update_xml(logger, cmocka_xml, pattern, replacement, cmocka_data, test_result)
 
     # Update the class name to include the functional test directory
     pattern = 'classname="'
-    replacement = f'classname="FTEST_{test.directory}.{test_class}.'
+    replacement = f'classname="{get_junit_class_prefix(test, stage_name, test_class)}.'
     return update_xml(logger, cmocka_xml, pattern, replacement, cmocka_data, test_result)
 
 

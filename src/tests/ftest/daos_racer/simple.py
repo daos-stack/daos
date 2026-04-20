@@ -29,7 +29,7 @@ class DaosRacerSimpleTest(TestWithServers):
             Running simultaneous, conflicting I/O requests.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=io,daos_racer
         :avocado: tags=DaosRacerSimpleTest,test_daos_racer_simple
         """

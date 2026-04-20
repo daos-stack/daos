@@ -123,7 +123,7 @@ class ReplayTests(TestWithServers):
             9) Verify more data can be written
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_posix
         """

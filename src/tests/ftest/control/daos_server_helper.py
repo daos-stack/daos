@@ -30,7 +30,7 @@ class DaosPrivHelperTest(TestWithServers):
             operations while daos_server is run as normal user.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=control,basic,daos_server_helper
         :avocado: tags=DaosPrivHelperTest,test_daos_server_helper_format
         """
