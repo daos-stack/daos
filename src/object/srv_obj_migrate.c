@@ -1840,7 +1840,7 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		 */
 		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, false, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_CONT_NONEXIST || -DER_CONT_DESTROYING)
+			if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING)
 				D_DEBUG(DB_REBUILD,
 					DF_RB ": container " DF_UUID
 					      "already destroyed or destroying\n",
