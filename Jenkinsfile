@@ -745,7 +745,9 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh --class-name fault-injection fi',
+                                     test_script: 'ci/unit/test_nlt.sh --no-root --memcheck no ' +
+                                                  ' --system-ram-reserved 48 --server-debug WARN ' +
+                                                  ' --class-name fault-injection fi',
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
