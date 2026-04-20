@@ -2026,6 +2026,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 		evt                      *events.RASEvent
 		setupEngines             func(*testing.T, logging.Logger, *EngineHarness)
 		disableEngineAutoRestart bool
+		engineAutoRestartDelay   int
 		serverHostname           string
 		expErr                   error
 		expEngineRestarted       bool
@@ -2199,13 +2200,17 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				tc.setupEngines(t, log, harness)
 			}
 
+			cfg := &config.Server{
+				DisableEngineAutoRestart:  tc.disableEngineAutoRestart,
+				EngineAutoRestartMinDelay: tc.engineAutoRestartDelay,
+			}
+
 			srv := &server{
-				log:      log,
-				hostname: tc.serverHostname,
-				harness:  harness,
-				cfg: &config.Server{
-					DisableEngineAutoRestart: tc.disableEngineAutoRestart,
-				},
+				log:                log,
+				hostname:           tc.serverHostname,
+				harness:            harness,
+				cfg:                cfg,
+				restartMgr:         newEngineRestartManager(log, cfg),
 				rankRestartTimes:   make(map[ranklist.Rank]time.Time),
 				rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 			}

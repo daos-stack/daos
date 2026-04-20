@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -47,10 +46,6 @@ const (
 
 	// maxLineChars is the maximum number of chars per line in a formatted byte string.
 	maxLineChars = 32
-
-	// defaultEngineAutoRestartMinDelay is the minimum number of seconds between automatic engine
-	// restarts that are triggered when engine_self_terminated RAS events are received.
-	defaultEngineAutoRestartMinDelay = 300 // 5 minutes
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -776,7 +771,6 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 
 // Handle local engine self termination and restart engine to rejoin system.
 func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RASEvent) error {
-
 	srv.log.Tracef("handling engine self termination")
 
 	if evt.IsForwarded() {
@@ -813,74 +807,18 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 	}
 	ei := instances[0]
 
-	srv.log.Noticef("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts, evt.Hostname,
-		evt.Rank, evt.Incarnation, ei.Index())
+	srv.log.Noticef("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts,
+		evt.Hostname, evt.Rank, evt.Incarnation, ei.Index())
 
 	rank := ranklist.Rank(evt.Rank)
 
-	// Check if rank can be restarted based on rate limiting
-	minDelay := defaultEngineAutoRestartMinDelay
-	if srv.cfg.EngineAutoRestartMinDelay > 0 {
-		minDelay = srv.cfg.EngineAutoRestartMinDelay
-	}
-	minDelayDuration := time.Duration(minDelay) * time.Second
-
-	srv.rankRestartMu.Lock()
-	defer srv.rankRestartMu.Unlock()
-	lastRestart, hasRestarted := srv.rankRestartTimes[rank]
-	now := time.Now()
-
-	if hasRestarted {
-		elapsed := now.Sub(lastRestart)
-		if elapsed < minDelayDuration {
-			remaining := minDelayDuration - elapsed
-
-			// Cancel any existing pending restart timer for this rank
-			if existingTimer, exists := srv.rankRestartPending[rank]; exists {
-				existingTimer.Stop()
-			}
-
-			// Schedule deferred restart after remaining delay
-			srv.rankRestartPending[rank] = time.AfterFunc(remaining, func() {
-				srv.rankRestartMu.Lock()
-				defer srv.rankRestartMu.Unlock()
-
-				srv.log.Noticef("deferred restart triggered for rank %d (instance %d) after rate-limit delay",
-					evt.Rank, ei.Index())
-
-				// Wait until engine is stopped
-				pollFn := func(e Engine) bool { return !e.IsStarted() }
-				if err := pollInstanceState(ctx, instances, pollFn); err != nil {
-					srv.log.Errorf("rank %d (instance %d) did not stop before deferred restart",
-						evt.Rank, ei.Index())
-					delete(srv.rankRestartPending, rank)
-					return
-				}
-
-				srv.log.Noticef("restarting rank %d (instance %d) after rate-limit delay", evt.Rank, ei.Index())
-				ei.requestStart(ctx)
-
-				// Update restart time and clear pending flag
-				srv.rankRestartTimes[rank] = time.Now()
-				delete(srv.rankRestartPending, rank)
-			})
-
-			srv.log.Noticef("rank %d restart deferred: will restart in %s (min delay: %s)",
-				evt.Rank, remaining.Round(time.Second), minDelayDuration)
-			return nil
-		}
+	if srv.restartMgr == nil {
+		return errors.Errorf("restart manager not initialized, cannot restart rank %d",
+			rank)
 	}
 
-	srv.rankRestartTimes[rank] = now
-
-	// Wait until engine is stopped.
-	pollFn := func(e Engine) bool { return !e.IsStarted() }
-	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
-		return errors.Errorf("rank %d (instance %d) did not stop", evt.Rank, ei.Index())
-	}
-
-	srv.log.Noticef("restarting rank %d (instance %d) after self-termination", evt.Rank, ei.Index())
-	ei.requestStart(ctx)
+	// Submit restart request to the restart manager
+	srv.restartMgr.requestRestart(rank, ei, ts)
 
 	return nil
 }

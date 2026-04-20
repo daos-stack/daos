@@ -169,6 +169,9 @@ type server struct {
 	onEnginesStarted []func(context.Context) error
 	onShutdown       []func()
 
+	restartMgr *engineRestartManager
+
+	// Deprecated: use restartMgr instead
 	rankRestartMu      sync.Mutex
 	rankRestartTimes   map[ranklist.Rank]time.Time
 	rankRestartPending map[ranklist.Rank]*time.Timer
@@ -194,6 +197,7 @@ func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.Fault
 		runningUser:        cu,
 		faultDomain:        faultDomain,
 		harness:            harness,
+		restartMgr:         newEngineRestartManager(log, cfg),
 		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
 		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 	}, nil
@@ -290,6 +294,11 @@ func (srv *server) OnShutdown(fns ...func()) {
 }
 
 func (srv *server) shutdown() {
+	// Stop the restart manager first
+	if srv.restartMgr != nil {
+		srv.restartMgr.stop()
+	}
+
 	srv.cbLock.Lock()
 	onShutdownCbs := srv.onShutdown
 	srv.cbLock.Unlock()
@@ -412,6 +421,11 @@ func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error
 		srv.log.Debug("waiting for engines to start...")
 		allStarted.Wait()
 		srv.log.Debug("engines have started")
+
+		// Start the restart manager
+		if srv.restartMgr != nil {
+			srv.restartMgr.start(ctx)
+		}
 
 		srv.cbLock.Lock()
 		onEnginesStartedCbs := srv.onEnginesStarted
