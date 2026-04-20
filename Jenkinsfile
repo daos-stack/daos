@@ -748,7 +748,7 @@ pipeline {
                                      test_script: 'ci/unit/test_nlt.sh --class-name fault-injection fi',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages(target: 'el9'),
+                                     inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
                                      image_version: 'el9.7'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
@@ -774,7 +774,7 @@ pipeline {
                         }
                     }
                 }
-                                stage('Fault injection testing') {
+                stage('Fault injection testing') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
