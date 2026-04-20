@@ -146,7 +146,6 @@ class DdbTest(TestWithServers):
 
         Returns:
             DdbCommand: DdbCommand object created based on the environment.
-
         """
         if md_on_ssd:
             vos_path = '""'
