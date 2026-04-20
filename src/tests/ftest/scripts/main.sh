@@ -2,7 +2,7 @@
 # shellcheck disable=SC1113
 # /*
 #  * (C) Copyright 2016-2024 Intel Corporation.
-#  * Copyright 2025 Hewlett Packard Enterprise Development LP
+#  * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -93,6 +93,10 @@ export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test
 if [ -n "$DAOS_HTTPS_PROXY" ]; then
     # shellcheck disable=SC2154
     export HTTPS_PROXY="${DAOS_HTTPS_PROXY:-""}"
+fi
+if [ -n "${DAOS_NO_PROXY:-}" ]; then
+    export NO_PROXY="${DAOS_NO_PROXY}"
+    export no_proxy="${DAOS_NO_PROXY}"
 fi
 
 launch_node_args="-ts ${TEST_NODES}"

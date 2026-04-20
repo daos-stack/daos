@@ -40,5 +40,9 @@ pip install /opt/daos/lib/daos/python/
 # set high open file limit in the shell to avoid extra warning
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py --max-log-size 1700MiB \
+
+HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+    NO_PROXY="${DAOS_NO_PROXY:-}" \
+    no_proxy="${DAOS_NO_PROXY:-}" \
+    ./utils/node_local_test.py --max-log-size 1700MiB \
     --dfuse-dir /localhome/jenkins/ --log-usage-save nltir.xml --log-usage-export nltr.json all
