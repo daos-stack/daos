@@ -844,6 +844,11 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigSysRsvdZero
 	}
 
+	if cfg.EngineAutoRestartMinDelay < 0 {
+		return errors.Errorf("engine_auto_restart_min_delay must be >= 0 (got %d)",
+			cfg.EngineAutoRestartMinDelay)
+	}
+
 	// A config without engines is valid when initially discovering hardware prior to adding
 	// per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {

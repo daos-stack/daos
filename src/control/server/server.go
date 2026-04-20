@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
 	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -169,8 +170,8 @@ type server struct {
 	onShutdown       []func()
 
 	rankRestartMu      sync.Mutex
-	rankRestartTimes   map[uint32]time.Time
-	rankRestartPending map[uint32]*time.Timer
+	rankRestartTimes   map[ranklist.Rank]time.Time
+	rankRestartPending map[ranklist.Rank]*time.Timer
 }
 
 func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -193,8 +194,8 @@ func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.Fault
 		runningUser:        cu,
 		faultDomain:        faultDomain,
 		harness:            harness,
-		rankRestartTimes:   make(map[uint32]time.Time),
-		rankRestartPending: make(map[uint32]*time.Timer),
+		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
+		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 	}, nil
 }
 

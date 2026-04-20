@@ -2026,10 +2026,41 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 		evt                      *events.RASEvent
 		setupEngines             func(*testing.T, logging.Logger, *EngineHarness)
 		disableEngineAutoRestart bool
+		serverHostname           string
 		expErr                   error
 		expEngineRestarted       bool
 		expLogContains           []string
 	}{
+		"forwarded event refused": {
+			evt: (&events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			}).WithForwarded(true),
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupTestEngine(t, log, h, false)
+			},
+			serverHostname:     testHostname,
+			expEngineRestarted: false,
+			expErr:             errors.New("forwarded engine_self_terminated event"),
+		},
+		"non-local event refused": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    "other-host",
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupTestEngine(t, log, h, false)
+			},
+			serverHostname:     testHostname,
+			expEngineRestarted: false,
+			expErr:             errors.New("non-local engine_self_terminated event"),
+		},
 		"auto restart disabled by config": {
 			evt: &events.RASEvent{
 				ID:          events.RASEngineSelfTerminated,
@@ -2169,13 +2200,14 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			}
 
 			srv := &server{
-				log:     log,
-				harness: harness,
+				log:      log,
+				hostname: tc.serverHostname,
+				harness:  harness,
 				cfg: &config.Server{
 					DisableEngineAutoRestart: tc.disableEngineAutoRestart,
 				},
-				rankRestartTimes:   make(map[uint32]time.Time),
-				rankRestartPending: make(map[uint32]*time.Timer),
+				rankRestartTimes:   make(map[ranklist.Rank]time.Time),
+				rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 			}
 
 			var wg sync.WaitGroup
@@ -2249,8 +2281,8 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 			DisableEngineAutoRestart:  false,
 			EngineAutoRestartMinDelay: 2, // 2 seconds for testing
 		},
-		rankRestartTimes:   make(map[uint32]time.Time),
-		rankRestartPending: make(map[uint32]*time.Timer),
+		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
+		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 	}
 
 	// Get reference to the engine instance for monitoring startRequested
@@ -2326,13 +2358,20 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 		t.Errorf("expected log to contain 'restart deferred', got: %s", logOutput)
 	}
 
-	// Verify pending timer exists
-	srv.rankRestartMu.Lock()
-	if _, exists := srv.rankRestartPending[evt.Rank]; !exists {
-		srv.rankRestartMu.Unlock()
-		t.Fatal("expected pending restart timer to exist")
+	checkPending := func(t *testing.T, shouldExist bool) {
+		t.Helper()
+		srv.rankRestartMu.Lock()
+		defer srv.rankRestartMu.Unlock()
+		_, exists := srv.rankRestartPending[testRank]
+		if exists && !shouldExist {
+			t.Fatal("expected pending restart timer to have been cleaned up")
+		} else if !exists && shouldExist {
+			t.Fatal("expected pending restart timer to exist")
+		}
 	}
-	srv.rankRestartMu.Unlock()
+
+	// Verify pending timer exists
+	checkPending(t, true)
 
 	// Wait for the deferred restart to trigger
 	time.Sleep(time.Duration(srv.cfg.EngineAutoRestartMinDelay) * time.Second)
@@ -2344,12 +2383,7 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 	}
 
 	// Verify pending timer was cleaned up
-	srv.rankRestartMu.Lock()
-	if _, exists := srv.rankRestartPending[evt.Rank]; exists {
-		srv.rankRestartMu.Unlock()
-		t.Fatal("expected pending restart timer to be cleaned up")
-	}
-	srv.rankRestartMu.Unlock()
+	checkPending(t, false)
 
 	// Third event immediately after deferred restart should again be deferred
 	evt3 := &events.RASEvent{
@@ -2373,11 +2407,11 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 
 	// Cleanup
 	srv.rankRestartMu.Lock()
+	defer srv.rankRestartMu.Unlock()
 	for rank, timer := range srv.rankRestartPending {
 		timer.Stop()
 		delete(srv.rankRestartPending, rank)
 	}
-	srv.rankRestartMu.Unlock()
 	<-doneCh
 }
 
@@ -2402,8 +2436,8 @@ func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 		cfg: &config.Server{
 			DisableEngineAutoRestart: false,
 		},
-		rankRestartTimes:   make(map[uint32]time.Time),
-		rankRestartPending: make(map[uint32]*time.Timer),
+		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
+		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 	}
 
 	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
@@ -2502,8 +2536,8 @@ func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
 				cfg: &config.Server{
 					DisableEngineAutoRestart: false,
 				},
-				rankRestartTimes:   make(map[uint32]time.Time),
-				rankRestartPending: make(map[uint32]*time.Timer),
+				rankRestartTimes:   make(map[ranklist.Rank]time.Time),
+				rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 			}
 
 			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
@@ -2541,8 +2575,8 @@ func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 		cfg: &config.Server{
 			DisableEngineAutoRestart: false,
 		},
-		rankRestartTimes:   make(map[uint32]time.Time),
-		rankRestartPending: make(map[uint32]*time.Timer),
+		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
+		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 	}
 
 	registerSubscriptions(srv)
@@ -2618,8 +2652,8 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 		cfg: &config.Server{
 			DisableEngineAutoRestart: false,
 		},
-		rankRestartTimes:   make(map[uint32]time.Time),
-		rankRestartPending: make(map[uint32]*time.Timer),
+		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
+		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 	}
 
 	registerLeaderSubscriptions(srv)

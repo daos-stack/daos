@@ -779,6 +779,15 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 
 	srv.log.Tracef("handling engine self termination")
 
+	if evt.IsForwarded() {
+		return errors.Errorf("unexpected forwarded engine_self_terminated event from %q",
+			evt.Hostname)
+	}
+	if srv.hostname != "" && evt.Hostname != "" && evt.Hostname != srv.hostname {
+		return errors.Errorf("unexpected non-local engine_self_terminated event from %q",
+			evt.Hostname)
+	}
+
 	// Check if automatic restart is disabled
 	if srv.cfg.DisableEngineAutoRestart {
 		srv.log.Debugf("automatic engine restart disabled by configuration")
@@ -802,10 +811,12 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 	if len(instances) > 1 {
 		return errors.Errorf("multiple instances found for rank %d", evt.Rank)
 	}
-	engine := instances[0]
+	ei := instances[0]
 
 	srv.log.Noticef("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts, evt.Hostname,
-		evt.Rank, evt.Incarnation, engine.Index())
+		evt.Rank, evt.Incarnation, ei.Index())
+
+	rank := ranklist.Rank(evt.Rank)
 
 	// Check if rank can be restarted based on rate limiting
 	minDelay := defaultEngineAutoRestartMinDelay
@@ -815,7 +826,8 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 	minDelayDuration := time.Duration(minDelay) * time.Second
 
 	srv.rankRestartMu.Lock()
-	lastRestart, hasRestarted := srv.rankRestartTimes[evt.Rank]
+	defer srv.rankRestartMu.Unlock()
+	lastRestart, hasRestarted := srv.rankRestartTimes[rank]
 	now := time.Now()
 
 	if hasRestarted {
@@ -824,56 +836,65 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 			remaining := minDelayDuration - elapsed
 
 			// Cancel any existing pending restart timer for this rank
-			if existingTimer, exists := srv.rankRestartPending[evt.Rank]; exists {
+			if existingTimer, exists := srv.rankRestartPending[rank]; exists {
 				existingTimer.Stop()
 			}
 
 			// Schedule deferred restart after remaining delay
-			srv.rankRestartPending[evt.Rank] = time.AfterFunc(remaining, func() {
+			srv.rankRestartPending[rank] = time.AfterFunc(remaining, func() {
+				srv.rankRestartMu.Lock()
+				defer srv.rankRestartMu.Unlock()
+
 				srv.log.Noticef("deferred restart triggered for rank %d (instance %d) after rate-limit delay",
-					evt.Rank, engine.Index())
+					evt.Rank, ei.Index())
 
 				// Wait until engine is stopped
 				pollFn := func(e Engine) bool { return !e.IsStarted() }
 				if err := pollInstanceState(ctx, instances, pollFn); err != nil {
 					srv.log.Errorf("rank %d (instance %d) did not stop before deferred restart",
-						evt.Rank, engine.Index())
-					srv.rankRestartMu.Lock()
-					delete(srv.rankRestartPending, evt.Rank)
-					srv.rankRestartMu.Unlock()
+						evt.Rank, ei.Index())
+					delete(srv.rankRestartPending, rank)
 					return
 				}
 
-				srv.log.Noticef("restarting rank %d (instance %d) after rate-limit delay", evt.Rank, engine.Index())
-				engine.requestStart(ctx)
+				srv.log.Noticef("restarting rank %d (instance %d) after rate-limit delay", evt.Rank, ei.Index())
+				ei.requestStart(ctx)
 
 				// Update restart time and clear pending flag
-				srv.rankRestartMu.Lock()
-				srv.rankRestartTimes[evt.Rank] = time.Now()
-				delete(srv.rankRestartPending, evt.Rank)
-				srv.rankRestartMu.Unlock()
+				srv.rankRestartTimes[rank] = time.Now()
+				delete(srv.rankRestartPending, rank)
 			})
 
-			srv.rankRestartMu.Unlock()
 			srv.log.Noticef("rank %d restart deferred: will restart in %s (min delay: %s)",
 				evt.Rank, remaining.Round(time.Second), minDelayDuration)
 			return nil
 		}
 	}
 
-	srv.rankRestartTimes[evt.Rank] = now
-	srv.rankRestartMu.Unlock()
+	srv.rankRestartTimes[rank] = now
 
 	// Wait until engine is stopped.
 	pollFn := func(e Engine) bool { return !e.IsStarted() }
 	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
-		return errors.Errorf("rank %d (instance %d) did not stop", evt.Rank, engine.Index())
+		return errors.Errorf("rank %d (instance %d) did not stop", evt.Rank, ei.Index())
 	}
 
-	srv.log.Noticef("restarting rank %d (instance %d) after self-termination", evt.Rank, engine.Index())
-	engine.requestStart(ctx)
+	srv.log.Noticef("restarting rank %d (instance %d) after self-termination", evt.Rank, ei.Index())
+	ei.requestStart(ctx)
 
 	return nil
+}
+
+// subscribeEngineSelfTerminated creates a handler for engine self-termination events.
+func subscribeEngineSelfTerminated(srv *server) events.Handler {
+	return events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+		switch evt.ID {
+		case events.RASEngineSelfTerminated:
+			if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+				srv.log.Errorf("handleEngineSelfTerminated: %s", err)
+			}
+		}
+	})
 }
 
 // registerSubscriptions doesn't handle received forwarded events but forwardable events are sent to
@@ -885,15 +906,7 @@ func registerSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
-	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
-		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
-			switch evt.ID {
-			case events.RASEngineSelfTerminated:
-				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
-					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
-				}
-			}
-		}))
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly, subscribeEngineSelfTerminated(srv))
 }
 
 func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
@@ -974,15 +987,7 @@ func registerLeaderSubscriptions(srv *server) {
 				handleRankDead(ctx, srv, evt)
 			}
 		}))
-	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
-		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
-			switch evt.ID {
-			case events.RASEngineSelfTerminated:
-				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
-					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
-				}
-			}
-		}))
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly, subscribeEngineSelfTerminated(srv))
 
 	// Add a debounce to throttle multiple SWIM Rank Dead events for the same rank/incarnation.
 	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {
