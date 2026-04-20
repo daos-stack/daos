@@ -1,5 +1,5 @@
 # Copyright 2018-2024 Intel Corporation
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of EL 8 based
@@ -16,6 +16,17 @@ ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
+
+# Accept DAOS_NO_PROXY at build time
+ARG DAOS_NO_PROXY
+# Propagate into the build environment
+ENV no_proxy=${DAOS_NO_PROXY}
+ENV NO_PROXY=${DAOS_NO_PROXY}
+# Persist into /etc/environment for use by shells and services
+RUN cat <<EOF >> /etc/environment
+"no_proxy=${DAOS_NO_PROXY}"
+"NO_PROXY=${DAOS_NO_PROXY}"
+EOF
 
 ARG REPO_FILE_URL
 ARG JENKINS_URL
