@@ -47,5 +47,5 @@ prlimit -n
 
 echo $*
 
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py --max-log-size 1950MiB \
-    --dfuse-dir /localhome/jenkins/ --log-usage-save nltr.xml --log-usage-export nltr.json ${*:-all}
+HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py ${*:---max-log-size 1950MiB \
+    --dfuse-dir /localhome/jenkins/ --log-usage-save nltr.xml --log-usage-export nltr.json all}

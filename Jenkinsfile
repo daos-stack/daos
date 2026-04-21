@@ -736,21 +736,19 @@ pipeline {
                 stage('NLT') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
+                        expression { params.CI_NLT_TEST }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 600,
+                            unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh --no-root --memcheck no ' +
-                                                  ' --system-ram-reserved 48 --server-debug WARN ' +
-                                                  ' --class-name fault-injection fi',
+                                     test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
+                                     inst_rpms: unitPackages(target: 'el9'),
                                      image_version: 'el9.7'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
@@ -779,7 +777,7 @@ pipeline {
                 stage('Fault injection testing') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() && false /* disable until we fix FI tests*/ }
+                        expression { params.CI_NLT_TEST }
                     }
                     agent {
                         dockerfile {
@@ -787,14 +785,25 @@ pipeline {
                         }
                     }
                     steps {
+/*
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
-                        job_step_update(nlt_test())
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                        //                skipPublishingChecks: true,
-                        //                id: 'fir', name: 'Fault Injection Report')
+*/
+                        /* job_step_update(nlt_test()) */
+                        job_step_update(
+                            unitTest(timeout_time: 600,
+                                     inst_repos: daosRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh --no-root --memcheck no' +
+                                                  ' --system-ram-reserved 48 --server-debug WARN' +
+                                                  ' --log-usage-import nltr.json' +
+                                                  ' --log-usage-save nltr.xml' +
+                                                  ' --class-name fault-injection fi',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
