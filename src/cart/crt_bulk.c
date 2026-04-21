@@ -16,7 +16,7 @@
 static inline bool
 crt_sgl_valid(d_sg_list_t *sgl)
 {
-	d_iov_t	*iov;
+	d_iov_t		*iov;
 	int		i;
 
 	if (sgl == NULL || sgl->sg_nr == 0) {
@@ -209,10 +209,10 @@ out:
 int
 crt_bulk_free(crt_bulk_t crt_bulk)
 {
-	struct crt_context *ctx;
-	struct crt_bulk *bulk = crt_bulk;
-	int              rc   = -DER_SUCCESS;
-	hg_return_t      hg_ret;
+	struct crt_context 	*ctx;
+	struct crt_bulk 	*bulk = crt_bulk;
+	int              	rc   = -DER_SUCCESS;
+	hg_return_t      	hg_ret;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
@@ -230,7 +230,10 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 	}
 
 	ctx = bulk->crt_ctx;
-	CRT_METRIC_INC(ctx, CM_BULK_FREE);
+
+	/* bulks that are decoded don't have a cart context associated with them */
+	if (ctx)
+		CRT_METRIC_INC(ctx, CM_BULK_FREE);
 
 	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {
@@ -239,8 +242,8 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 	}
 
 	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
-	if (bulk->crt_ctx)
-		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
+	if (ctx)
+		put_quota_resource(ctx, CRT_QUOTA_BULKS);
 out:
 	if (bulk != NULL) {
 		if (bulk->iovs)
