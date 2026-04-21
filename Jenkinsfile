@@ -627,7 +627,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5') {
+                stage('Build on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('leap15') }
@@ -642,13 +642,13 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg POINT_RELEASE=.5 '
+                                                ' --build-arg POINT_RELEASE=.6 '
                         }
                     }
                     steps {
                         script {
                             sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -657,7 +657,7 @@ pipeline {
                                 ' PREFIX=/opt/daos TARGET_TYPE=release',
                                 build_deps: 'yes'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp155 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
@@ -962,7 +962,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
+                            label 'docker_runner_fi'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
@@ -1032,7 +1032,7 @@ pipeline {
                         }
                     }
                 } // stage('Test RPMs on EL 9.6')
-                stage('Test RPMs on Leap 15.6') {
+                stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { params.CI_TEST_LEAP_RPMs && !skipStage() }
@@ -1046,8 +1046,8 @@ pipeline {
                          * additionally for this use-case, can't override
                            ftest_arg with this :-(
                         script {
-                            'Test RPMs on Leap 15.6': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.6',
+                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.5',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
                                 next_version: next_version(),
@@ -1084,7 +1084,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on Leap 15.6')
+                } // stage('Test RPMs on Leap 15.5')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {

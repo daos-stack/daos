@@ -31,7 +31,7 @@ distro_custom() {
         dnf autoremove -y
         dnf clean all
         ldconfig
-        
+
         dnf install -y daos-server daos-client daos-client-tests \
                         daos-tests-internal openmpi3 openmpi3-devel
     fi
