@@ -1992,7 +1992,7 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 const (
 	testContextTimeout     = 1 * time.Second
 	testHandlerTimeout     = 1 * time.Second
-	testRestartRequestWait = 3 * time.Second
+	testRestartRequestWait = 5 * time.Second
 	testSubscriptionDelay  = 50 * time.Millisecond
 	testProcessingDelay    = 100 * time.Millisecond
 )
@@ -2029,7 +2029,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 		engineAutoRestartDelay   int
 		serverHostname           string
 		expErr                   error
-		expEngineRestarted       bool
+		expRestartRequested      bool
 		expLogContains           []string
 	}{
 		"forwarded event refused": {
@@ -2043,9 +2043,9 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
 				setupTestEngine(t, log, h, false)
 			},
-			serverHostname:     testHostname,
-			expEngineRestarted: false,
-			expErr:             errors.New("forwarded engine_self_terminated event"),
+			serverHostname:      testHostname,
+			expRestartRequested: false,
+			expErr:              errors.New("forwarded engine_self_terminated event"),
 		},
 		"non-local event refused": {
 			evt: &events.RASEvent{
@@ -2058,9 +2058,9 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
 				setupTestEngine(t, log, h, false)
 			},
-			serverHostname:     testHostname,
-			expEngineRestarted: false,
-			expErr:             errors.New("non-local engine_self_terminated event"),
+			serverHostname:      testHostname,
+			expRestartRequested: false,
+			expErr:              errors.New("non-local engine_self_terminated event"),
 		},
 		"auto restart disabled by config": {
 			evt: &events.RASEvent{
@@ -2074,7 +2074,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				setupTestEngine(t, log, h, false)
 			},
 			disableEngineAutoRestart: true,
-			expEngineRestarted:       false,
+			expRestartRequested:      false,
 			expLogContains: []string{
 				"automatic engine restart disabled",
 			},
@@ -2087,8 +2087,8 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Hostname:    testHostname,
 				Timestamp:   "",
 			},
-			expErr:             errors.New("bad event timestamp"),
-			expEngineRestarted: false,
+			expErr:              errors.New("bad event timestamp"),
+			expRestartRequested: false,
 		},
 		"invalid event timestamp": {
 			evt: &events.RASEvent{
@@ -2098,8 +2098,8 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Hostname:    testHostname,
 				Timestamp:   "not-a-valid-timestamp",
 			},
-			expErr:             errors.New("bad event timestamp"),
-			expEngineRestarted: false,
+			expErr:              errors.New("bad event timestamp"),
+			expRestartRequested: false,
 		},
 		"rank not found in harness": {
 			evt: &events.RASEvent{
@@ -2116,8 +2116,8 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			expErr:             errors.New("no instance found for rank 99"),
-			expEngineRestarted: false,
+			expErr:              errors.New("no instance found for rank 99"),
+			expRestartRequested: false,
 		},
 		"filter instances error - nil superblock": {
 			evt: &events.RASEvent{
@@ -2134,10 +2134,10 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			expErr:             errors.New("no instance found for rank"),
-			expEngineRestarted: false,
+			expErr:              errors.New("no instance found for rank"),
+			expRestartRequested: false,
 		},
-		"successful restart - engine already stopped": {
+		"successful restart request - engine already stopped": {
 			evt: &events.RASEvent{
 				ID:          events.RASEngineSelfTerminated,
 				Rank:        uint32(testRank),
@@ -2148,13 +2148,13 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
 				setupTestEngine(t, log, h, false)
 			},
-			expEngineRestarted: true,
+			expRestartRequested: true,
 			expLogContains: []string{
 				fmt.Sprintf("rank %d:%d (instance 0) self terminated", testRank, testIncarnation),
 				testHostname,
 			},
 		},
-		"timeout waiting for engine to stop": {
+		"successful restart request - engine still running": {
 			evt: &events.RASEvent{
 				ID:          events.RASEngineSelfTerminated,
 				Rank:        uint32(testRank),
@@ -2165,8 +2165,10 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
 				setupTestEngine(t, log, h, true)
 			},
-			expErr:             errors.New("did not stop"),
-			expEngineRestarted: false,
+			expRestartRequested: false,
+			expLogContains: []string{
+				fmt.Sprintf("rank %d:%d (instance 0) self terminated", testRank, testIncarnation),
+			},
 		},
 		"multiple engines - restart correct one": {
 			evt: &events.RASEvent{
@@ -2181,7 +2183,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 					setupTestEngine(t, log, h, false, uint32(i))
 				}
 			},
-			expEngineRestarted: true,
+			expRestartRequested: true,
 			expLogContains: []string{
 				"rank 2:42 (instance 2) self terminated",
 			},
@@ -2205,14 +2207,16 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				EngineAutoRestartMinDelay: tc.engineAutoRestartDelay,
 			}
 
+			restartMgr := newEngineRestartManager(log, cfg)
+			restartMgr.start(ctx)
+			defer restartMgr.stop()
+
 			srv := &server{
-				log:                log,
-				hostname:           tc.serverHostname,
-				harness:            harness,
-				cfg:                cfg,
-				restartMgr:         newEngineRestartManager(log, cfg),
-				rankRestartTimes:   make(map[ranklist.Rank]time.Time),
-				rankRestartPending: make(map[ranklist.Rank]*time.Timer),
+				log:        log,
+				hostname:   tc.serverHostname,
+				harness:    harness,
+				cfg:        cfg,
+				restartMgr: restartMgr,
 			}
 
 			var wg sync.WaitGroup
@@ -2220,7 +2224,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 
 			if len(harness.instances) > 0 {
 				targetRank := ranklist.Rank(tc.evt.Rank)
-				for i, inst := range harness.instances {
+				for _, inst := range harness.instances {
 					rank, err := inst.GetRank()
 					if err != nil || rank != targetRank {
 						continue
@@ -2232,27 +2236,29 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 					}
 
 					wg.Add(1)
-
-					go func(e *EngineInstance, idx int) {
+					go func(e *EngineInstance) {
 						defer wg.Done()
 						select {
 						case <-ctx.Done():
 						case <-e.startRequested:
 							restartRequested.Store(true)
-						case <-time.After(testRestartRequestWait):
 						}
-					}(ei, i)
+					}(ei)
 				}
 			}
 
 			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
 			wg.Wait()
 
+			if tc.expRestartRequested {
+				time.Sleep(testProcessingDelay)
+			}
+
 			test.CmpErr(t, tc.expErr, err)
 
-			if tc.expEngineRestarted != restartRequested.Load() {
-				t.Errorf("expected engine restarted=%v, got=%v",
-					tc.expEngineRestarted, restartRequested.Load())
+			if tc.expRestartRequested != restartRequested.Load() {
+				t.Errorf("expected restart requested=%v, got=%v",
+					tc.expRestartRequested, restartRequested.Load())
 			}
 
 			logOutput := buf.String()
@@ -2275,19 +2281,26 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx := test.Context(t)
+	ctx, cancel := context.WithTimeout(test.Context(t), 10*time.Second)
+	defer cancel()
+
 	harness := NewEngineHarness(log)
 	setupTestEngine(t, log, harness, false)
 
+	cfg := &config.Server{
+		DisableEngineAutoRestart:  false,
+		EngineAutoRestartMinDelay: 2, // 2 seconds for testing
+	}
+
+	restartMgr := newEngineRestartManager(log, cfg)
+	restartMgr.start(ctx)
+	defer restartMgr.stop()
+
 	srv := &server{
-		log:     log,
-		harness: harness,
-		cfg: &config.Server{
-			DisableEngineAutoRestart:  false,
-			EngineAutoRestartMinDelay: 2, // 2 seconds for testing
-		},
-		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
-		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
+		log:        log,
+		harness:    harness,
+		cfg:        cfg,
+		restartMgr: restartMgr,
 	}
 
 	// Get reference to the engine instance for monitoring startRequested
@@ -2308,7 +2321,7 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 		Timestamp:   validTimestamp,
 	}
 
-	// Setup goroutine to consume startRequested channel to prevent blocking
+	// Setup goroutine to consume startRequested channel
 	restartCount := atomic.Uint32{}
 	doneCh := make(chan struct{})
 	go func() {
@@ -2319,7 +2332,7 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 				return
 			case <-e.startRequested:
 				restartCount.Add(1)
-			case <-time.After(5 * time.Second):
+			case <-time.After(testRestartRequestWait):
 				return
 			}
 		}
@@ -2357,17 +2370,17 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 		t.Fatalf("expected restart to be deferred, got %d restarts", restartCount.Load())
 	}
 
-	// Verify deferred restart log message
+	// Verify rate limiting log message
 	logOutput := buf.String()
-	if !strings.Contains(logOutput, "restart deferred") {
-		t.Errorf("expected log to contain 'restart deferred', got: %s", logOutput)
+	if !strings.Contains(logOutput, "rate limited") {
+		t.Errorf("expected log to contain 'rate limited', got: %s", logOutput)
 	}
 
 	checkPending := func(t *testing.T, shouldExist bool) {
 		t.Helper()
-		srv.rankRestartMu.Lock()
-		defer srv.rankRestartMu.Unlock()
-		_, exists := srv.rankRestartPending[testRank]
+		restartMgr.mu.Lock()
+		defer restartMgr.mu.Unlock()
+		_, exists := restartMgr.pendingRestart[testRank]
 		if exists && !shouldExist {
 			t.Fatal("expected pending restart timer to have been cleaned up")
 		} else if !exists && shouldExist {
@@ -2410,13 +2423,6 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 		t.Fatalf("expected third restart to be deferred, got %d restarts", restartCount.Load())
 	}
 
-	// Cleanup
-	srv.rankRestartMu.Lock()
-	defer srv.rankRestartMu.Unlock()
-	for rank, timer := range srv.rankRestartPending {
-		timer.Stop()
-		delete(srv.rankRestartPending, rank)
-	}
 	<-doneCh
 }
 
@@ -2424,33 +2430,40 @@ func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx := test.Context(t)
+	ctx, cancel := context.WithTimeout(test.Context(t), 2*time.Second)
+	defer cancel()
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+
+	cfg := &config.Server{
+		DisableEngineAutoRestart: false,
+	}
+
+	restartMgr := newEngineRestartManager(log, cfg)
+	restartMgr.start(ctx)
+	defer restartMgr.stop()
 
 	// Channel to signal when handler completes
 	handlerDone := make(chan struct{})
 	var once sync.Once
 
 	srv := &server{
-		log:       log,
-		harness:   harness,
-		pubSub:    pubSub,
-		evtLogger: control.MockEventLogger(log),
-		cfg: &config.Server{
-			DisableEngineAutoRestart: false,
-		},
-		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
-		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
+		log:        log,
+		harness:    harness,
+		pubSub:     pubSub,
+		evtLogger:  control.MockEventLogger(log),
+		cfg:        cfg,
+		restartMgr: restartMgr,
 	}
 
 	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
-			log.Debugf("ErrorHandling test handler called for event: ID=%v, Type=%v", evt.ID, evt.Type)
+			log.Debugf("ErrorHandling: handler called for event: ID=%v, Type=%v",
+				evt.ID, evt.Type)
 			switch evt.ID {
 			case events.RASEngineSelfTerminated:
-				log.Debugf("ErrorHandling test handling engine self termination event")
+				log.Debugf("ErrorHandling: handling engine self termination event")
 				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
 					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
 				}
@@ -2535,14 +2548,20 @@ func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
 			defer cancel()
 
 			harness := NewEngineHarness(log)
+
+			cfg := &config.Server{
+				DisableEngineAutoRestart: false,
+			}
+
+			restartMgr := newEngineRestartManager(log, cfg)
+			restartMgr.start(ctx)
+			defer restartMgr.stop()
+
 			srv := &server{
-				log:     log,
-				harness: harness,
-				cfg: &config.Server{
-					DisableEngineAutoRestart: false,
-				},
-				rankRestartTimes:   make(map[ranklist.Rank]time.Time),
-				rankRestartPending: make(map[ranklist.Rank]*time.Timer),
+				log:        log,
+				harness:    harness,
+				cfg:        cfg,
+				restartMgr: restartMgr,
 			}
 
 			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
@@ -2563,25 +2582,31 @@ func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx := test.Context(t)
+	ctx, cancel := context.WithTimeout(test.Context(t), 2*time.Second)
+	defer cancel()
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+
+	cfg := &config.Server{
+		DisableEngineAutoRestart: false,
+	}
+
+	restartMgr := newEngineRestartManager(log, cfg)
+	restartMgr.start(ctx)
+	defer restartMgr.stop()
 
 	// Channel to signal when ANY handler processes the event
 	eventProcessed := make(chan struct{})
 	var once sync.Once
 
 	srv := &server{
-		log:       log,
-		harness:   harness,
-		pubSub:    pubSub,
-		evtLogger: control.MockEventLogger(log),
-		cfg: &config.Server{
-			DisableEngineAutoRestart: false,
-		},
-		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
-		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
+		log:        log,
+		harness:    harness,
+		pubSub:     pubSub,
+		evtLogger:  control.MockEventLogger(log),
+		cfg:        cfg,
+		restartMgr: restartMgr,
 	}
 
 	registerSubscriptions(srv)
@@ -2635,12 +2660,21 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx := test.Context(t)
+	ctx, cancel := context.WithTimeout(test.Context(t), testProcessingTimeout+time.Second)
+	defer cancel()
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
 
 	svc := newTestMgmtSvc(t, log)
+
+	cfg := &config.Server{
+		DisableEngineAutoRestart: false,
+	}
+
+	restartMgr := newEngineRestartManager(log, cfg)
+	restartMgr.start(ctx)
+	defer restartMgr.stop()
 
 	// Channel to signal when ANY handler processes the event
 	eventProcessed := make(chan struct{})
@@ -2654,11 +2688,8 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 		membership: svc.membership,
 		sysdb:      svc.sysdb,
 		mgmtSvc:    svc,
-		cfg: &config.Server{
-			DisableEngineAutoRestart: false,
-		},
-		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
-		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
+		cfg:        cfg,
+		restartMgr: restartMgr,
 	}
 
 	registerLeaderSubscriptions(srv)

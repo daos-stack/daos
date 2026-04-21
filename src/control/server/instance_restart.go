@@ -127,6 +127,7 @@ func (mgr *engineRestartManager) performRestart(ctx context.Context, rank rankli
 
 	// Record restart time and clear pending state on exit (deferred)
 	mgr.recordRestartTime(rank)
+	mgr.log.Noticef("recording rank %d", rank)
 }
 
 // processRestartRequest handles a single restart request with rate limiting.
