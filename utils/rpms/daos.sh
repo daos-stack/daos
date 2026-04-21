@@ -73,6 +73,8 @@ EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
 DEPENDS=( "mercury >= ${mercury_version}" )
 DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
+# Needed for debugging tasks (ASAN builds)
+EXTERNAL_DEPENDS=("${libasan_lib}")
 build_package "daos"
 
 # Only build server RPMs if we built the server
