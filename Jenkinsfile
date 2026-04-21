@@ -780,9 +780,7 @@ pipeline {
                         expression { params.CI_NLT_TEST }
                     }
                     agent {
-                        dockerfile {
-                            label params.CI_NLT_1_LABEL
-                        }
+                        label params.CI_NLT_1_LABEL
                     }
                     steps {
 /*
