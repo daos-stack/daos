@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -57,13 +57,14 @@ typedef void (*bind_cpu_fn_t)(int tgt_id);
  * \param[in] pool_uuid		Pool uuid
  * \param[in] scm_size		Per vos file size
  * \param[in] tgt_nr		Vos files number
+ * \param[in] tgts		Target ID array
  * \param[in] rdb_blob_sz	rdb file size (rdb file will not be recreated if size is zero)
  * \param[in] storage_path	Base path to store vos and rdb files
  * \param[in] bind_cpu_fn	Bind a separate cpu to each vos file allocation
  */
 int
-ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb_blob_sz,
-		     const char *storage_path, bind_cpu_fn_t bind_cpu_fn);
+ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, int *tgts,
+		     daos_size_t rdb_blob_sz, const char *storage_path, bind_cpu_fn_t bind_cpu_fn);
 
 /**
  * Parallel recreate vos files.
@@ -74,11 +75,12 @@ ds_mgmt_tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_si
  * \param[in] cancel_pending	If true, preallocate will abort
  * \param[in] newborns_path	Base path for store vos/rdb files
  * \param[in] bind_cpu_fn	e.g. `dss_bind_to_xstream_cpuset`
+ * \param[in] tgts		Target ID array
  */
 int
 ds_mgmt_tgt_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr,
 				 bool *cancel_pending, const char *newborns_path,
-				 bind_cpu_fn_t bind_cpu_fn);
+				 bind_cpu_fn_t bind_cpu_fn, int *tgts);
 
 /**
  * Sequential recreate vos files.

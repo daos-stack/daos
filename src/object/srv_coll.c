@@ -70,7 +70,7 @@ obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, struct dtx_coll_e
 	coll_args.ca_tgt_bitmap = dce->dce_bitmap;
 	coll_args.ca_tgt_bitmap_sz = dce->dce_bitmap_sz;
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_USE_CURRENT_ULT);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
 
 out:
 	if (octa.octa_versions != NULL) {

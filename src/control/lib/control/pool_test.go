@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1461,6 +1461,92 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestControl_PoolQueryResp_UpdateSelfHealPolicy(t *testing.T) {
+	type prop struct {
+		number uint32
+		value  interface{}
+	}
+	makePropResp := func(props ...prop) *mgmtpb.PoolGetPropResp {
+		pbProps := make([]*mgmtpb.PoolProperty, 0, len(props))
+		for _, p := range props {
+			switch v := p.value.(type) {
+			case string:
+				pbProps = append(pbProps, &mgmtpb.PoolProperty{
+					Number: p.number,
+					Value:  &mgmtpb.PoolProperty_Strval{Strval: v},
+				})
+			case int:
+				pbProps = append(pbProps, &mgmtpb.PoolProperty{
+					Number: p.number,
+					Value:  &mgmtpb.PoolProperty_Numval{Numval: uint64(v)},
+				})
+			}
+		}
+		return &mgmtpb.PoolGetPropResp{
+			Properties: pbProps,
+		}
+	}
+	selfHealPropNum := propWithVal("self_heal", "").Number
+
+	for name, tc := range map[string]struct {
+		getPropResp *mgmtpb.PoolGetPropResp
+		getPropErr  error
+		expValue    string
+		expErr      string
+	}{
+		"no properties returned": {
+			getPropResp: makePropResp(), // no properties
+			expValue:    "exclude;rebuild",
+		},
+		"single string value; not set value ignored": {
+			getPropResp: makePropResp(prop{selfHealPropNum, "rebuild"}),
+			expValue:    "exclude;rebuild",
+		},
+		"single num value": {
+			getPropResp: makePropResp(prop{selfHealPropNum, daos.PoolSelfHealingAutoRebuild}),
+			expValue:    "rebuild",
+		},
+		"multiple properties returned": {
+			getPropResp: makePropResp(
+				prop{selfHealPropNum, daos.PoolSelfHealingAutoRebuild},
+				prop{selfHealPropNum, daos.PoolSelfHealingAutoExclude},
+			),
+			expErr: "> 1 occurrences of prop 4",
+		},
+		"get-prop returns error": {
+			getPropErr: errors.New("something bad"),
+			expErr:     "something bad",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", tc.getPropErr, tc.getPropResp),
+				},
+			}
+			resp := &PoolQueryResp{}
+			gotErr := resp.UpdateSelfHealPolicy(context.Background(),
+				NewMockInvoker(log, mic))
+
+			var expErr error
+			if tc.expErr != "" {
+				expErr = errors.New(tc.expErr)
+			}
+			test.CmpErr(t, expErr, gotErr)
+			if expErr != nil {
+				return
+			}
+
+			if resp.SelfHealPolicy != tc.expValue {
+				t.Errorf("expected SelfHealPolicy %q, got %q", tc.expValue, resp.SelfHealPolicy)
+			}
+		})
+	}
+}
+
 func TestControl_PoolQuery(t *testing.T) {
 	poolUUID := test.MockPoolUUID()
 
@@ -1776,10 +1862,6 @@ func TestControl_PoolQuery(t *testing.T) {
 				},
 			},
 		},
-		// TODO DAOS-18128: Add more test cases
-		//	sys-prop but no pool-prop
-		//	pool-prop but no sys-prop
-		//	neither pool or sys props
 		"query succeeds self_heal policies provided; missing pool self_heal property": {
 			req: &PoolQueryReq{
 				ID:        poolUUID.String(),
@@ -1800,9 +1882,10 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateIdle,
-						Objects: 1,
-						Records: 2,
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
+						Objects:      1,
+						Records:      2,
 					},
 					TierStats: []*daos.StorageUsageStats{
 						{
@@ -1860,9 +1943,10 @@ func TestControl_PoolQuery(t *testing.T) {
 					ActiveTargets: 42,
 					State:         daos.PoolServiceStateReady,
 					Rebuild: &daos.PoolRebuildStatus{
-						State:   daos.PoolRebuildStateIdle,
-						Objects: 1,
-						Records: 2,
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
+						Objects:      1,
+						Records:      2,
 					},
 					TierStats: []*daos.StorageUsageStats{
 						{
@@ -1887,6 +1971,229 @@ func TestControl_PoolQuery(t *testing.T) {
 					SelfHealPolicy: "exclude;delay_rebuild",
 				},
 				SysSelfHealPolicy: "exclude;pool_exclude;pool_rebuild",
+			},
+		},
+		"pool get-prop returns error": {
+			req: &PoolQueryReq{
+				ID:        poolUUID.String(),
+				QueryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", errors.New("get-prop failure"), nil),
+				},
+			},
+			expErr: errors.New("pool get-prop self_heal failed"),
+		},
+		"pool get-prop returns multiple properties": {
+			req: &PoolQueryReq{
+				ID:        poolUUID.String(),
+				QueryMask: daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+						Properties: []*mgmtpb.PoolProperty{
+							{
+								Number: propWithVal("self_heal", "").Number,
+								Value:  &mgmtpb.PoolProperty_Strval{Strval: "exclude"},
+							},
+							{
+								Number: propWithVal("self_heal", "").Number,
+								Value:  &mgmtpb.PoolProperty_Strval{Strval: "rebuild"},
+							},
+						},
+					}),
+				},
+			},
+			expErr: errors.New("> 1 occurrences of prop 4 in resp"),
+		},
+		"query with rebuild state busy with DER_OP_CANCELED (stopping)": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							Status:  int32(daos.OpCanceled),
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
+							Objects: 100,
+							Records: 500,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						Status:       int32(daos.OpCanceled),
+						State:        daos.PoolRebuildStateBusy,
+						DerivedState: daos.PoolRebuildStateStopping,
+						Objects:      100,
+						Records:      500,
+					},
+				},
+			},
+		},
+		"query with rebuild state idle with DER_OP_CANCELED (stopped)": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							Status:  int32(daos.OpCanceled),
+							State:   mgmtpb.PoolRebuildStatus_IDLE,
+							Objects: 0,
+							Records: 0,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						Status:       int32(daos.OpCanceled),
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateStopped,
+						Objects:      0,
+						Records:      0,
+					},
+				},
+			},
+		},
+		"query with rebuild state busy with error (failing)": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
+							Status:  -1,
+							Objects: 75,
+							Records: 300,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:        daos.PoolRebuildStateBusy,
+						DerivedState: daos.PoolRebuildStateFailing,
+						Status:       -1,
+						Objects:      75,
+						Records:      300,
+					},
+				},
+			},
+		},
+		"query with rebuild state idle with error (failed)": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:  mgmtpb.PoolRebuildStatus_IDLE,
+							Status: -5,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateFailed,
+						Status:       -5,
+					},
+				},
+			},
+		},
+		"query with rebuild state done": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_DONE,
+							Objects: 200,
+							Records: 1000,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:        daos.PoolRebuildStateDone,
+						DerivedState: daos.PoolRebuildStateDone,
+						Objects:      200,
+						Records:      1000,
+					},
+				},
+			},
+		},
+		"query with rebuild state idle": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:          poolUUID.String(),
+						TotalTargets:  42,
+						ActiveTargets: 42,
+						State:         mgmtpb.PoolServiceState_Ready,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State: mgmtpb.PoolRebuildStatus_IDLE,
+						},
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				PoolInfo: daos.PoolInfo{
+					UUID:          poolUUID,
+					TotalTargets:  42,
+					ActiveTargets: 42,
+					State:         daos.PoolServiceStateReady,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:        daos.PoolRebuildStateIdle,
+						DerivedState: daos.PoolRebuildStateIdle,
+					},
+				},
 			},
 		},
 	} {
@@ -2453,9 +2760,10 @@ func TestControl_ListPools(t *testing.T) {
 			rebuildState = daos.PoolRebuildStateBusy
 		}
 		return &daos.PoolRebuildStatus{
-			State:   rebuildState,
-			Objects: 1,
-			Records: 2,
+			State:        rebuildState,
+			DerivedState: rebuildState,
+			Objects:      1,
+			Records:      2,
 		}
 	}
 	expTierStats := []*daos.StorageUsageStats{
@@ -2806,19 +3114,39 @@ func newNvmeCfg(rank int, roles storage.OptionBits, size ...uint64) MockNvmeConf
 	}
 }
 
+// Helper to add joined members in SystemQueryResp for all ranks in hostsConfigArray.
+func getSysQueryRespMembers(cfg []MockHostStorageConfig, resp *mgmtpb.SystemQueryResp) {
+	rankSet := make(map[ranklist.Rank]bool)
+	for _, hostCfg := range cfg {
+		for _, scmCfg := range hostCfg.ScmConfig {
+			rankSet[scmCfg.Rank] = true
+		}
+	}
+	for rank := range rankSet {
+		resp.Members = append(resp.Members, &mgmtpb.SystemMember{
+			Rank:  uint32(rank),
+			Uuid:  test.MockUUID(int32(rank)),
+			State: system.MemberStateJoined.String(),
+			Addr:  fmt.Sprintf("10.0.0.%d:10001", rank),
+		})
+	}
+}
+
 func TestControl_getMaxPoolSize(t *testing.T) {
 	devStateFaulty := storage.NvmeStateFaulty
 	devStateNew := storage.NvmeStateNew
 
 	for name, tc := range map[string]struct {
-		hostsConfigArray []MockHostStorageConfig
-		tgtRanks         []ranklist.Rank
-		memRatio         float32
-		queryError       error
-		expScmBytes      uint64
-		expNvmeBytes     uint64
-		expError         error
-		expDebug         string
+		hostsConfigArray  []MockHostStorageConfig
+		tgtRanks          []ranklist.Rank
+		memberStates      map[ranklist.Rank]system.MemberState
+		memRatio          float32
+		queryError        error
+		expCreateReqRanks []ranklist.Rank
+		expScmBytes       uint64
+		expNvmeBytes      uint64
+		expError          error
+		expDebug          string
 	}{
 		"single server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2828,8 +3156,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: humanize.TByte,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"single MD-on-SSD server; no mem-ratio specified; defaults to 1.0": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2844,8 +3173,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: humanize.TByte,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"single MD-on-SSD server; invalid mem-ratio; high": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2892,9 +3222,10 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			memRatio:     1,
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: humanize.TByte,
+			memRatio:          1,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"single MD-on-SSD server; phase-2 mode (mem-file-sz < meta-blob-sz)": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2909,9 +3240,10 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			memRatio:     0.5,
-			expScmBytes:  200 * humanize.GByte, // Double meta-blob-sz due to mem-ratio.
-			expNvmeBytes: humanize.TByte,
+			memRatio:          0.5,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       200 * humanize.GByte, // Double meta-blob-sz due to mem-ratio.
+			expNvmeBytes:      humanize.TByte,
 		},
 		"single ephemeral server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2921,8 +3253,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: humanize.TByte,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"double server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -2978,8 +3311,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			expScmBytes:  50 * humanize.GByte,
-			expNvmeBytes: 700 * humanize.GByte,
+			expCreateReqRanks: ranklist.RankList{0, 1, 2, 3},
+			expScmBytes:       50 * humanize.GByte,
+			expNvmeBytes:      700 * humanize.GByte,
 		},
 		"double server; rank filter": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3059,8 +3393,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: uint64(0),
+			expCreateReqRanks: []ranklist.Rank{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      uint64(0),
 		},
 		"No NVMe; double server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3141,8 +3476,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: 100 * humanize.TByte,
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      100 * humanize.TByte,
 		},
 		"invalid response message": {
 			hostsConfigArray: []MockHostStorageConfig{{}},
@@ -3220,8 +3556,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					},
 				},
 			},
-			expScmBytes:  100 * humanize.GByte,
-			expNvmeBytes: uint64(0),
+			expCreateReqRanks: ranklist.RankList{0},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      uint64(0),
 		},
 		"unmounted SCM device": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3291,6 +3628,11 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0)},
 				},
 			},
+			tgtRanks: []ranklist.Rank{0, 1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateJoined,
+			},
 			expError: errors.New("without SCM device and at least one SMD device"),
 		},
 		"no SCM": {
@@ -3302,12 +3644,119 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				},
 			},
 			tgtRanks: []ranklist.Rank{1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				1: system.MemberStateJoined,
+			},
 			expError: errors.New("No SCM storage space available"),
+		},
+		"requested rank not joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateStopped,
+			},
+			expError: errors.New("specified rank 0 is not joined"),
+		},
+		"multiple requested ranks not joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName:   "bar",
+					ScmConfig:  []MockScmConfig{newScmCfg(1), newScmCfg(2)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0), newNvmeCfg(2, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0, 1, 2},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateStopped,
+				2: system.MemberStateExcluded,
+			},
+			expError: errors.New("specified rank 1 is not joined"),
+		},
+		"all requested ranks joined": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName:   "bar",
+					ScmConfig:  []MockScmConfig{newScmCfg(1), newScmCfg(2)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0), newNvmeCfg(2, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0, 1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateJoined,
+				2: system.MemberStateStopped,
+			},
+			expScmBytes:  100 * humanize.GByte,
+			expNvmeBytes: humanize.TByte,
+		},
+		"no requested ranks; filters to joined ranks only": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName: "bar",
+					ScmConfig: []MockScmConfig{
+						newScmCfg(1, humanize.TByte),
+						newScmCfg(2),
+						newScmCfg(3, 50*humanize.GByte),
+					},
+					NvmeConfig: []MockNvmeConfig{
+						newNvmeCfg(1, 0),
+						newNvmeCfg(2, 0),
+						newNvmeCfg(3, 0, 500*humanize.GByte),
+					},
+				},
+			},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateJoined,
+				2: system.MemberStateStopped,
+				3: system.MemberStateExcluded,
+			},
+			expCreateReqRanks: ranklist.RankList{0, 1},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
+
+			// Build SystemQueryResp with members based on memberStates
+			systemQueryResp := &mgmtpb.SystemQueryResp{}
+			if tc.memberStates != nil {
+				for rank, state := range tc.memberStates {
+					systemQueryResp.Members = append(systemQueryResp.Members, &mgmtpb.SystemMember{
+						Rank:  uint32(rank),
+						Uuid:  test.MockUUID(int32(rank)),
+						State: state.String(),
+						Addr:  fmt.Sprintf("10.0.0.%d:10001", rank),
+					})
+				}
+			} else {
+				// If memberStates not specified, create joined members for all ranks in hostsConfigArray
+				getSysQueryRespMembers(tc.hostsConfigArray, systemQueryResp)
+			}
 
 			mockInvokerConfig := &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -3315,7 +3764,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 						Responses: []*HostResponse{
 							{
 								Addr:    "foo",
-								Message: &mgmtpb.SystemQueryResp{},
+								Message: systemQueryResp,
 								Error:   tc.queryError,
 							},
 						},
@@ -3353,6 +3802,13 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				return
 			}
 
+			if tc.expCreateReqRanks == nil {
+				tc.expCreateReqRanks = tc.tgtRanks
+			}
+			if diff := cmp.Diff(tc.expCreateReqRanks, createReq.Ranks); diff != "" {
+				t.Fatalf("Unexpected ranks in create request (-want, +got):\n%s\n", diff)
+			}
+
 			test.AssertEqual(t, tc.expScmBytes, scmBytes,
 				fmt.Sprintf("Invalid SCM pool size, want %s got %s",
 					humanize.Bytes(tc.expScmBytes), humanize.Bytes(scmBytes)))
@@ -3381,12 +3837,13 @@ func (invoker *MockRequestsRecorderInvoker) InvokeUnaryRPC(context context.Conte
 
 func TestControl_PoolCreateAllCmd(t *testing.T) {
 	for name, tc := range map[string]struct {
-		hostsConfigArray []MockHostStorageConfig
-		storageRatio     float64
-		tgtRanks         string
-		expPoolConfig    MockPoolRespConfig
-		expError         error
-		expWarning       string
+		hostsConfigArray  []MockHostStorageConfig
+		storageRatio      float64
+		tgtRanks          string
+		expPoolConfig     MockPoolRespConfig
+		expCreateReqRanks []ranklist.Rank
+		expError          error
+		expWarning        string
 	}{
 		"single server": {
 			storageRatio: 1,
@@ -3621,13 +4078,17 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			// Add joined members for ranks referenced in MockHostStorageConfig.
+			systemQueryResp := new(mgmtpb.SystemQueryResp)
+			getSysQueryRespMembers(tc.hostsConfigArray, systemQueryResp)
+
 			mockInvokerConfig := &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					{
 						Responses: []*HostResponse{
 							{
 								Addr:    "foo",
-								Message: &mgmtpb.SystemQueryResp{},
+								Message: systemQueryResp,
 							},
 						},
 					},
@@ -3704,20 +4165,14 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 				poolCreateRequest.TotalBytes,
 				uint64(0),
 				"Invalid size of TotalBytes attribute: disabled with manual allocation")
-			if tc.tgtRanks != "" {
-				test.AssertEqual(t,
-					ranklist.RankList(poolCreateRequest.Ranks).String(),
-					tc.expPoolConfig.Ranks,
-					"Invalid list of Ranks")
-			} else {
-				test.AssertEqual(t,
-					ranklist.RankList(poolCreateRequest.Ranks).String(),
-					"",
-					"Invalid list of Ranks")
-			}
 			test.AssertTrue(t,
 				poolCreateRequest.TierRatio == nil,
 				"Invalid size of TierRatio attribute: disabled with manual allocation")
+
+			test.AssertEqual(t,
+				poolCreateRequest.Ranks,
+				ranklist.MustCreateRankSet(tc.expPoolConfig.Ranks).Ranks(),
+				"Invalid list of Ranks")
 		})
 	}
 }

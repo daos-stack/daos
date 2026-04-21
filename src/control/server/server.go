@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -109,10 +109,12 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		if err := ec.UpdateABTEnvarsUCX(); err != nil {
 			return err
 		}
-	}
 
-	for _, ec := range cfg.Engines {
 		if err := ec.UpdatePMDKEnvars(); err != nil {
+			return err
+		}
+
+		if err := ec.UpdateABTEnvarsMdOnSsd(); err != nil {
 			return err
 		}
 	}
@@ -308,21 +310,37 @@ func (srv *server) setCoreDumpFilter() error {
 func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
-	ctlAddr, err := getControlAddr(ctlAddrParams{
+	params := ctlAddrParams{
 		port:           srv.cfg.ControlPort,
 		replicaAddrSrc: srv.sysdb,
 		lookupHost:     net.LookupIP,
-	})
+	}
+
+	// If a control interface is configured, look it up and pass it to getControlAddr.
+	// Also track whether we should bind to a specific IP (only when control_iface is set).
+	bindToCtlAddr := false
+	if srv.cfg.ControlInterface != "" {
+		iface, err := net.InterfaceByName(srv.cfg.ControlInterface)
+		if err != nil {
+			return config.FaultConfigBadControlInterface(srv.cfg.ControlInterface, err)
+		}
+		params.ctlIface = iface
+		bindToCtlAddr = true
+		srv.log.Debugf("using control interface %s for listener", srv.cfg.ControlInterface)
+	}
+
+	ctlAddr, err := getControlAddr(params)
 	if err != nil {
 		return err
 	}
 
-	listener, err := createListener(ctlAddr, net.Listen)
+	listener, err := createListener(ctlAddr, net.Listen, bindToCtlAddr)
 	if err != nil {
 		return err
 	}
 	srv.ctlAddr = ctlAddr
 	srv.listener = listener
+	srv.log.Debugf("control plane listener bound to %s", ctlAddr)
 
 	return nil
 }
@@ -356,13 +374,11 @@ func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	iommuEnabled, err := topology.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
-	if err != nil {
-		return err
-	}
+	iommuChecker := topology.DefaultIOMMUDetector(srv.log)
+	thpChecker := topology.DefaultTHPDetector(srv.log)
 
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuEnabled, smi); err != nil {
+	if err := prepBdevStorage(srv, smi, iommuChecker, thpChecker); err != nil {
 		return err
 	}
 

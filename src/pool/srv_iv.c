@@ -774,10 +774,11 @@ pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	if (dss_self_rank() == entry->ns->iv_master_rank) {
 		if (!entry->iv_valid) {
-			D_INFO(DF_UUID" master %u is still stepping up: %d.\n",
-			       DP_UUID(entry->ns->iv_pool_uuid), entry->ns->iv_master_rank,
-			       -DER_NOTLEADER);
-			return -DER_NOTLEADER;
+			rc = -DER_NOTLEADER;
+			DL_INFO(rc, DF_UUID " iv class id %d, master %u is still stepping up.",
+				DP_UUID(entry->ns->iv_pool_uuid), key->class_id,
+				entry->ns->iv_master_rank);
+			return rc;
 		}
 	}
 
@@ -960,6 +961,13 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct pool_iv_entry	*src_iv;
 	struct ds_pool		*pool = 0;
 	int			rc;
+
+	if (ref_rc != 0) {
+		rc = ref_rc;
+		DL_WARN(rc, DF_UUID "bypass refresh, IV class id %d.",
+			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		goto out_put;
+	}
 
 	if (src == NULL)
 		rc = ds_pool_lookup_internal(entry->ns->iv_pool_uuid, &pool);

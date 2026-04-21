@@ -1,20 +1,15 @@
-* Thu Nov 6 2025 Cedric Koch-Hofer <cedric.koch-hofer@hpe.copm> - 2.4.0-9
-- Restore the RPM changelog
-- Allows to set OUTPUT_NAME_DEBUG to LIB_RELEASE_NAME
+%changelog
+* Mon Mar 09 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.4.1-2
+- Require mercury-libfabric or mercury-ucx
 
-* Tue Nov 04 2025 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.4.0-8
-- Current dependency was too limiting for use with SHS provided libfabric rpms.
-- Prevents "unbound variable" errors while keeping the check meaningful
-
-* Mon Sep 15 2025 Jeff Olivier <jeffolivier@google.com> - 2.4.0-7
-- Fix leap package name
-
-* Fri Sep 12 2025 Jeff Olivier <jeffolivier@google.com> - 2.4.0-6
-- Enable new packaging builds with FPM
-- Add distro to package names
+* Mon Jan 26 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.4.1-1
+- Update to 2.4.1
+- Separate libfabric plugin from main build to align with ucx plugin
+- Add patches for runtime version checks and libfabric plugin counters
+- Add patch for libfabric auth key
 
 * Wed Jun 25 2025 Joseph Moore <joseph.moore@hpe.com> - 2.4.0-5
-- Update release number to differentiate from test RPMs for prior issue..
+- Update release number to differentiate from test RPMs for prior issue.
 
 * Tue Mar 11 2025 Joseph Moore <joseph.moore@hpe.com> - 2.4.0-4
 - Change to addr_release for handling of "already present" warning.
@@ -71,7 +66,11 @@
 * Thu Jun 22 2023 Brian J. Murrell <brian.murrell@intel> - 2.3.0-2
 - Rebuild for EL9
 
+<<<<<<< HEAD
 * Wed Jun 07 2023 Jerome Soumagne <jerome.soumagne@intel.com> - 2.3.0-1
+=======
+* Wed Jun  7 2023 Jerome Soumagne <jerome.soumagne@intel.com> - 2.3.0-1
+>>>>>>> origin/master
 - Update to 2.3.0
 - Add hg_info tool
 - Fix pie flags on CentOS7
@@ -98,10 +97,17 @@
 * Fri Sep 09 2022 Joseph Moore <joseph.moore@intel.com> - 2.2.0-2
 - Add na_ucx.c patch to change ep creation for single IB device.
 
+<<<<<<< HEAD
 * Fri Aug 05 2022 Jerome Soumagne <jerome.soumagne@intel.com> - 2.2.0-1
 - Update to 2.2.0
 
 * Mon Aug 01 2022 Jerome Soumagne <jerome.soumagne@intel.com> - 2.2.0~rc6-2
+=======
+* Fri Aug  5 2022 Jerome Soumagne <jerome.soumagne@intel.com> - 2.2.0-1
+- Update to 2.2.0
+
+* Mon Aug  1 2022 Jerome Soumagne <jerome.soumagne@intel.com> - 2.2.0~rc6-2
+>>>>>>> origin/master
 - Rebuild after libfabric rpm dropped CXI compat patch
 - Drop CXI compat patch
 
@@ -113,7 +119,11 @@
 * Fri Apr 22 2022 Joseph Moore <joseph.moore@intel.com> - 2.1.0~rc4-9
 - Change ucx unified mode to off (updated UCX patch file).
 
+<<<<<<< HEAD
 * Fri Apr 01 2022 Brian J. Murrell <brian.murrell@intel> - 2.1.0~rc4-8
+=======
+* Fri Apr  1 2022 Brian J. Murrell <brian.murrell@intel> - 2.1.0~rc4-8
+>>>>>>> origin/master
 - Build with ucx subpackage on supported platforms
 - Removed invalid build options:
   * MERCURY_ENABLE_VERBOSE_ERROR
@@ -129,15 +139,24 @@
 - Apply doas-9561 workaround
 
 * Thu Feb 17 2022 Brian J. Murrell <brian.murrell@intel> - 2.1.0~rc4-4
+<<<<<<< HEAD
 - Fix issues with %post* ldconfig
   - No lines are allowed after %post -p
+=======
+- Fix issues with %%post* ldconfig
+  - No lines are allowed after %%post -p
+>>>>>>> origin/master
   - These are not needed on EL8 as it's glibc does the work
 
 * Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> - 2.1.0~rc4-3
 - Remove daos-9173 workaround
 - Apply cpu usage fix to mercury
 
+<<<<<<< HEAD
 * Tue Dec 07 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> - 2.1.0~rc4-2
+=======
+* Tue Dec 7 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> - 2.1.0~rc4-2
+>>>>>>> origin/master
 - Apply DAOS-9173 workaround patch to na_ofi.c
 
 * Tue Nov 30 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> - 2.1.0~rc4-1
@@ -167,18 +186,30 @@
 * Tue Aug 18 2020 Brian J. Murryyell <brian.murrell@intel> - 2.0.0~rc1-2
 - Use release tarball and not individual submodule tarballs
 
+<<<<<<< HEAD
 * Mon Jul 06 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 2.0.0~rc1-1
+=======
+* Mon Jul 6 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 2.0.0~rc1-1
+>>>>>>> origin/master
 - Update to release v2.0.0rc1
 
 * Mon Jun 22 2020 Brian J. Murryyell <brian.murrell@intel> - 2.0.0~a1-2
 - Fix License:
+<<<<<<< HEAD
 - Add %license
+=======
+- Add %%license
+>>>>>>> origin/master
 
 * Thu May 07 2020 Brian J. Murrell <brian.murrell@intel> - 2.0.0~a1-1
 - Fix pre-release tag in Version:
 - Add Requires: libfabric-devel to devel package
 
+<<<<<<< HEAD
 * Thu Apr 09 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 2.0.0a1-0.8
+=======
+* Thu Apr 9 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 2.0.0a1-0.8
+>>>>>>> origin/master
 - Update to 4871023058887444d47ead4d089c99db979f3d93
 
 * Tue Mar 17 2020 Alexander A Oganezov <alexander.a.oganezov@intel.com> - 2.0.0a1-0.7
@@ -206,7 +237,11 @@
 - Update to c2c2628
 - Apply patch to enable ip:port URI format for psm2
 
+<<<<<<< HEAD
 * Mon Dec 02 2019 Alexander Oganezov <alexander.a.oganezov@intel> - 1.0.1-21
+=======
+* Mon Dec 2 2019 Alexander Oganezov <alexander.a.oganezov@intel> - 1.0.1-21
+>>>>>>> origin/master
 - Removed sl_patch on top of 7b529b
 - Updated to 9889a0
 
@@ -280,4 +315,7 @@
 
 * Mon Aug 20 2018 Brian J. Murrell <brian.murrell@intel> - 0.9.0-1.git.f7f6955
 - Initial package
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/master

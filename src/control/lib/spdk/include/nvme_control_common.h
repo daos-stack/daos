@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -170,8 +171,10 @@ typedef struct spdk_pci_device *
 typedef int
 (*socket_id_getter)(struct spdk_pci_device *);
 
+typedef const char *(*pci_type_getter)(const struct spdk_pci_device *);
+
 void
-_collect(struct ret_t *, data_copier, pci_getter, socket_id_getter);
+_collect(struct ret_t *, data_copier, pci_getter, socket_id_getter, pci_type_getter);
 
 /**
  * Collect controller and namespace information of the NVMe devices.

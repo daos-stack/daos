@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +22,8 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/bbolt"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -86,7 +89,7 @@ func RecoverLocalReplica(log logging.Logger, cfg *DatabaseConfig) error {
 }
 
 func createRaftDir(dbPath string) error {
-	if err := os.Mkdir(dbPath, 0700); err != nil && !os.IsExist(err) {
+	if err := common.MkdirForcePerm(dbPath, daos.DefaultDirPerm); err != nil && !os.IsExist(err) {
 		return errors.Wrap(err, "failed to create raft directory")
 	}
 	return nil

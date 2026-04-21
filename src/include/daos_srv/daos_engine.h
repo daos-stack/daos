@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -453,11 +453,9 @@ int dss_parameters_set(unsigned int key_id, uint64_t value);
 
 enum dss_ult_flags {
 	/* Periodically created ULTs */
-	DSS_ULT_FL_PERIODIC	= (1 << 0),
+	DSS_ULT_FL_PERIODIC = (1 << 0),
 	/* Use DSS_DEEP_STACK_SZ as the stack size */
-	DSS_ULT_DEEP_STACK	= (1 << 1),
-	/* Use current ULT (instead of creating new one) for the task. */
-	DSS_USE_CURRENT_ULT	= (1 << 2),
+	DSS_ULT_DEEP_STACK = (1 << 1),
 };
 
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
@@ -739,10 +737,11 @@ enum dss_init_state {
 };
 
 enum dss_media_error_type {
-	MET_WRITE = 0,	/* write error */
-	MET_READ,	/* read error */
-	MET_UNMAP,	/* unmap error */
-	MET_CSUM	/* checksum error */
+	MET_WRITE = 0,  /* NVME write error */
+	MET_READ,       /* NVME read error */
+	MET_UNMAP,      /* NVME unmap error */
+	MET_CSUM,       /* Checksum error */
+	MET_IO_STALLED, /* NVMe I/O stalled */
 };
 
 void dss_init_state_set(enum dss_init_state state);
@@ -846,5 +845,12 @@ dss_select_module_version(int module_id, uint8_t *module_ver)
 	{                                                                                          \
 		return dss_select_module_version(module_id, version);                              \
 	}
+
+int
+dss_vos_pool_create(const char *path, unsigned char *uuid, daos_size_t scm_size,
+		    daos_size_t data_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,
+		    daos_handle_t *pool);
+int
+dss_vos_pool_open(const char *path, unsigned char *uuid, unsigned int flags, daos_handle_t *pool);
 
 #endif /* __DSS_API_H__ */

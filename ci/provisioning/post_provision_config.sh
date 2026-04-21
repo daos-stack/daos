@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -29,7 +29,7 @@ source ci/junit.sh
 # Before running the script, environment variables may be needed for
 # the specific site.
 
-: "${MLNX_VER_NUM:=3.0.0}"
+: "${MLNX_VER_NUM:=3.2.1}"
 
 # This is tangled and needs a better fix as it has DISTRO being passed
 # as EL_8 for EL_9, yet other places expect DISTRO to really be EL_8 and

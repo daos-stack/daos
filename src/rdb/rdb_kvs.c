@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +19,14 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
+/*
+ * Special static entry for RDB_LC_ATTRS
+ *
+ * Because rdb_path_attrs is a special, empty path, we can't store it in the
+ * LRU cache. Thankfully, it always maps to RDB_LC_ATTRS, which always exists.
+ */
+static struct rdb_kvs rdb_kvs_attrs = {.de_object = RDB_LC_ATTRS};
+
 struct rdb_kvs_open_arg {
 	struct rdb     *deo_db;
 	rdb_oid_t	deo_parent;
@@ -28,9 +37,9 @@ struct rdb_kvs_open_arg {
 static int
 rdb_kvs_open_path_cb(d_iov_t *key, void *varg)
 {
-	struct rdb_kvs_open_arg	       *arg = varg;
-	rdb_oid_t			parent = arg->deo_parent;
-	d_iov_t			value;
+	struct rdb_kvs_open_arg *arg    = varg;
+	rdb_oid_t                parent = arg->deo_parent;
+	d_iov_t                  value;
 
 	if (key->iov_len == 0) {
 		D_ASSERTF(parent == RDB_LC_ATTRS, DF_X64"\n", parent);
@@ -202,6 +211,11 @@ rdb_kvs_lookup(struct rdb *db, const rdb_path_t *path, uint64_t index,
 	D_DEBUG(DB_TRACE, DF_DB": looking up "DF_IOV": alloc=%d\n", DP_DB(db),
 		DP_IOV(path), alloc);
 
+	if (rdb_path_is_attrs(path)) {
+		*kvs = &rdb_kvs_attrs;
+		return 0;
+	}
+
 	arg.dea_db = db;
 	arg.dea_index = index;
 	arg.dea_alloc = alloc;
@@ -217,11 +231,13 @@ rdb_kvs_lookup(struct rdb *db, const rdb_path_t *path, uint64_t index,
 void
 rdb_kvs_put(struct rdb *db, struct rdb_kvs *kvs)
 {
-	daos_lru_ref_release(db->d_kvss, &kvs->de_entry);
+	if (kvs != &rdb_kvs_attrs)
+		daos_lru_ref_release(db->d_kvss, &kvs->de_entry);
 }
 
 void
 rdb_kvs_evict(struct rdb *db, struct rdb_kvs *kvs)
 {
-	daos_lru_ref_evict(db->d_kvss, &kvs->de_entry);
+	if (kvs != &rdb_kvs_attrs)
+		daos_lru_ref_evict(db->d_kvss, &kvs->de_entry);
 }

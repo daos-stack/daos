@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -144,6 +144,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		daos_pool_info_t	pool_info;
 
 		/* refresh the pool information */
+		pool_info.pi_bits = DPI_REBUILD_STATUS;
 		rc = test_pool_get_info(args[i], &pool_info, NULL /* engine_ranks */);
 		if (rc) {
 			print_message("get pool "DF_UUIDF" info failed: %d\n",
@@ -151,6 +152,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			return;
 		}
 		args[i]->rebuild_pre_pool_ver = pool_info.pi_map_ver;
+		memcpy(&args[i]->pool.pool_info, &pool_info, sizeof(pool_info));
 		if (op_type == RB_OP_TYPE_FAIL)
 			print_message("before exclude, got pool " DF_UUIDF "info, map_ver=%d\n",
 				      DP_UUID(args[i]->pool.pool_uuid), pool_info.pi_map_ver);
@@ -167,6 +169,13 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			for (i = 0; i < rank_nr; i++)
 				rebuild_exclude_tgt(args, args_cnt, ranks[i],
 						    tgts ? tgts[i] : -1, kill);
+			if (args[0]->no_rebuild == 0) {
+				print_message(
+				    "wait for %u rank excludes/rebuilds to start before invoking "
+				    "rebuild_cb\n",
+				    rank_nr);
+				test_rebuild_wait_to_start_next(args, args_cnt);
+			}
 		}
 		par_barrier(PAR_COMM_WORLD);
 
@@ -231,6 +240,12 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			default:
 				op_type_str = "UNKNOWN";
 				break;
+			}
+			if (args[0]->no_rebuild == 0) {
+				print_message("wait for 1 rank (%u) rebuilds to start before "
+					      "invoking rebuild_cb\n",
+					      ranks[i]);
+				test_rebuild_wait_to_start_next(args, args_cnt);
 			}
 		}
 		par_barrier(PAR_COMM_WORLD);
@@ -975,8 +990,10 @@ reintegrate_inflight_io(void *data)
 	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
 	char		single_data[LARGE_SINGLE_VALUE_SIZE];
 	struct ioreq	req;
+	bool             interactive_rebuild = arg->interactive_rebuild && !arg->no_rebuild;
 	int		i;
 
+	print_message("%s(): begin\n", __FUNCTION__);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < 5; i++) {
 		char	key[64];
@@ -996,6 +1013,14 @@ reintegrate_inflight_io(void *data)
 		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
 			     buf, DATA_SIZE, &req);
 
+		/* Stop the rebuild */
+		if (i == 3 && interactive_rebuild) {
+			print_message("%s(): stop rebuild in middle of inflight IO\n",
+				      __FUNCTION__);
+			rebuild_stop_with_dmg(arg);
+			test_rebuild_wait(&arg, 1); /* rebuild is stopped here */
+		}
+
 		req.iod_type = DAOS_IOD_SINGLE;
 		memset(single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
 		sprintf(key, "d_inflight_single_small_%d", i);
@@ -1007,7 +1032,16 @@ reintegrate_inflight_io(void *data)
 			      &req);
 	}
 	ioreq_fini(&req);
-	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
+
+	/* Resume the rebuild */
+	if (interactive_rebuild) {
+		print_message("%s(): restart rebuild after remaining inflight IO done\n",
+			      __FUNCTION__);
+		rebuild_resume_wait_to_start(arg);
+	}
+
+	print_message("%s() sleep 12 seconds to wait for the stable epoch update and return.\n",
+		      __FUNCTION__);
 	sleep(12);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
@@ -1227,8 +1261,7 @@ rebuild_stop_with_dmg_internal(const char *cfg, const uuid_t uuid, const char *g
 	rc = dmg_pool_rebuild_stop(cfg, uuid, grp, force);
 	print_message("dmg pool rebuild stop " DF_UUID ", force=%d, rc=%d\n", DP_UUID(uuid), force,
 		      rc);
-	assert_rc_equal(rc, 0);
-	return 0;
+	return rc;
 }
 
 /* stop an in-progress rebuild with dmg pool rebuild stop command */
@@ -1236,14 +1269,18 @@ int
 rebuild_stop_with_dmg(void *data)
 {
 	test_arg_t *arg = data;
+	int         rc;
 
-	print_message("wait for rebuild to start for pool " DF_UUID "\n",
-		      DP_UUID(arg->pool.pool_uuid));
-	test_rebuild_wait_to_start(&arg, 1);
-	sleep(5);
-
-	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					      false);
+	/* Rebuild might be only queued (not yet launched) */
+	while (true) {
+		rc = rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid,
+						    arg->group, false);
+		if (rc != -DER_NONEXIST)
+			break;
+		print_message("waiting for stop command to run during active rebuild ...\n");
+		sleep(1);
+	}
+	return rc;
 }
 
 /* stop an in-progress rebuild with dmg pool rebuild stop command (force stop option) */
@@ -1251,14 +1288,18 @@ int
 rebuild_force_stop_with_dmg(void *data)
 {
 	test_arg_t *arg = data;
+	int         rc;
 
-	print_message("wait for rebuild to start for pool " DF_UUID "\n",
-		      DP_UUID(arg->pool.pool_uuid));
-	test_rebuild_wait_to_start(&arg, 1);
-	sleep(5);
-
-	return rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					      true);
+	/* Rebuild might be only queued (not yet launched) */
+	while (true) {
+		rc = rebuild_stop_with_dmg_internal(arg->dmg_config, arg->pool.pool_uuid,
+						    arg->group, true);
+		if (rc != -DER_NONEXIST)
+			break;
+		print_message("waiting for force-stop command to run during active rebuild ...\n");
+		sleep(1);
+	}
+	return rc;
 }
 
 /* start/reesume a stopped rebuild with dmg pool rebuild start command */
@@ -1275,12 +1316,51 @@ rebuild_start_with_dmg(void *data)
 	return 0;
 }
 
+/* wait for previously-issued dmg pool rebuild stop to finish;
+ * invoke rebuild start, and make sure it got started before returning.
+ */
+int
+rebuild_resume_wait_to_start(void *data)
+{
+	test_arg_t                 *arg = data;
+	struct daos_rebuild_status *rst = &arg->pool.pool_info.pi_rebuild_st;
+	bool                        state_match;
+	int                         rc;
+
+	/* Verify that the stop resulted in the correct rebuild status.
+	 * NB: you have to be sure the rebuild stop was issued while rebuild was running
+	 * (e.g., when a fault was injected to hang the rebuild, or with carefully-timed sleeps).
+	 */
+	print_message(
+	    "(before starting) wait for stopped rebuild and check: rs_errno=%d (expect %d), "
+	    "rs_state=%d (expect %d)\n",
+	    rst->rs_errno, -DER_OP_CANCELED, rst->rs_state, DRS_NOT_STARTED);
+	test_rebuild_wait(&arg, 1);
+	state_match = (rst->rs_errno == -DER_OP_CANCELED && rst->rs_state == DRS_NOT_STARTED);
+	print_message("%sMATCHED check: rs_errno=%d, rs_state=%d\n", state_match ? "" : "NOT-",
+		      rst->rs_errno, rst->rs_state);
+	assert_int_equal(rst->rs_errno, -DER_OP_CANCELED);
+	assert_int_equal(rst->rs_state, DRS_NOT_STARTED);
+
+	rc = rebuild_start_with_dmg(data);
+	assert_rc_equal(rc, 0);
+
+	/* Verify that the current rebuild is no longer stopped (has been restarted). */
+	test_rebuild_wait_to_start(&arg, 1);
+
+	return 0;
+}
+
+/* Check rebuild state from previously-stopped rebuild;
+ * invoke rebuild start and wait for it to completely finish before returning.
+ */
 int
 rebuild_resume_wait(void *data)
 {
 	test_arg_t                 *arg = data;
 	struct daos_rebuild_status *rst          = &arg->pool.pool_info.pi_rebuild_st;
 	bool                        skip_restart = false;
+	bool                        state_match;
 	int                         rc;
 
 	if (arg->rebuild_cb == rebuild_resume_wait && arg->rebuild_cb_arg)
@@ -1288,12 +1368,19 @@ rebuild_resume_wait(void *data)
 	if (arg->rebuild_post_cb == rebuild_resume_wait && arg->rebuild_post_cb_arg)
 		skip_restart = *((bool *)arg->rebuild_post_cb_arg);
 
-	/* Verify that the stop resulted in the correct rebuild status */
-	print_message("check: stopped rebuild rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
+	/* Check whether the stop resulted in the expected rebuild status.
+	 * NB: the stop is already done; the "wait" is just for the pool query rebuild state.
+	 * NB: if the rebuild stop occurred after rebuild completed, we will not see the
+	 *     -DER_OP_CANCELED rebuild state. Warn in these instances, since it's all up
+	 *     to some variable test timing conditions.
+	 */
+	print_message("(before starting) check: stopped rebuild rs_errno=%d (want %d), rs_state=%d "
+		      "(want %d)\n",
 		      rst->rs_errno, -DER_OP_CANCELED, rst->rs_state, DRS_NOT_STARTED);
-	assert_int_equal(rst->rs_errno, -DER_OP_CANCELED);
-	assert_int_equal(rst->rs_state, DRS_NOT_STARTED);
-	print_message("check passed\n");
+	test_rebuild_wait(&arg, 1);
+	state_match = (rst->rs_errno == -DER_OP_CANCELED && rst->rs_state == DRS_NOT_STARTED);
+	print_message("%sMATCHED check: rs_errno=%d, rs_state=%d\n",
+		      state_match ? "" : "WARN: NOT-", rst->rs_errno, rst->rs_state);
 
 	if (skip_restart)
 		return 0;
@@ -1308,15 +1395,15 @@ rebuild_resume_wait(void *data)
 		sleep(2);
 		test_rebuild_wait(&arg, 1);
 		print_message(
-		    "current rebuild state: rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
+		    "waiting rebuild state: rs_errno=%d (wait for %d), rs_state=%d (wait for %d)\n",
 		    rst->rs_errno, 0, rst->rs_state, DRS_COMPLETED);
 	} while (rst->rs_errno == -DER_OP_CANCELED);
+	state_match = (rst->rs_errno == 0 && rst->rs_state == DRS_COMPLETED);
 	print_message(
-	    "check: resumed rebuild done: rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
-	    rst->rs_errno, 0, rst->rs_state, DRS_COMPLETED);
+	    "check %s: resumed rebuild rs_errno=%d (expect %d), rs_state=%d (expect %d)\n",
+	    state_match ? "passed" : "FAILED", rst->rs_errno, 0, rst->rs_state, DRS_COMPLETED);
 	assert_int_equal(rst->rs_errno, 0);
 	assert_int_equal(rst->rs_state, DRS_COMPLETED);
-	print_message("check passed\n");
 
 	return 0;
 }

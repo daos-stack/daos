@@ -1,5 +1,10 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
+#
+#  (C) Copyright 2025 Google LLC
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
@@ -37,14 +42,23 @@ list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so.*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
+ARCH="${isa}"
+if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
+	DEPENDS=("(mercury-libfabric or mercury-ucx)")
+else
+	DEPENDS=("mercury-libfabric | mercury-ucx")
+fi
+build_package "mercury"
+DEPENDS=()
+
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ofi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("${libfabric_lib} >= ${libfabric_version}")
-build_package "mercury"
+DEPENDS=("${libfabric_lib} >= ${libfabric_min_version}")
+build_package "mercury-libfabric"
 DEPENDS=()
 
 TARGET_PATH="${libdir}/mercury"

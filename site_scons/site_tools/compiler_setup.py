@@ -92,7 +92,8 @@ def _base_setup(env):
 
     if build_type == 'debug':
         if compiler == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
+            env['CCFLAGS'].remove('-g')
+            env.AppendUnique(CCFLAGS=['-g3', '-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:
@@ -106,15 +107,12 @@ def _base_setup(env):
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
         env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
-    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
+    if env['CMOCKA_FILTER_SUPPORTED']:
+        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '1'})
+    else:
+        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
-
-    if compiler == 'icx' and not GetOption('no_rpath'):
-        # Hack to add rpaths
-        for path in env['ENV']['LD_LIBRARY_PATH'].split(':'):
-            if 'oneapi' in path:
-                env.AppendUnique(RPATH_FULL=[path])
 
     if GetOption('preprocess'):
         # Could refine this but for now, just assume these warnings are ok
@@ -125,11 +123,7 @@ def _base_setup(env):
 
 def _check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
-    if compiler in ["icc", "icpc"]:
-        flags = ["-diag-error=10006", "-diag-error=10148", "-Werror-all", flag]
-        # bug in older scons, need CFLAGS to exist, -O2 is default.
-        context.env.Replace(CFLAGS=['-O2'])
-    elif compiler in ["gcc", "g++"]:
+    if compiler in ["gcc", "g++"]:
         # pylint: disable=wrong-spelling-in-comment
         # remove -no- for test
         # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-

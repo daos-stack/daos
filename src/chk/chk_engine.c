@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -225,8 +225,7 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 		iv.ci_to_leader = 1;
 
 		/* Notify the leader that check instance exit on the engine. */
-		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
-				   CRT_IV_SYNC_NONE, true);
+		rc = chk_iv_update(ins, &iv, CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE);
 		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 			 DF_ENGINE" on rank %u notify leader for its exit, status %u: rc = %d\n",
 			 DP_ENGINE(ins), dss_self_rank(), ins_status, rc);
@@ -247,6 +246,7 @@ chk_engine_post_repair(struct chk_pool_rec *cpr, int *result, bool update)
 		*result = 0;
 
 	if (*result != 0) {
+		chk_ins_set_fail(cpr->cpr_ins, cbk->cb_phase);
 		if (cpr->cpr_ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT) {
 			cbk->cb_time.ct_stop_time = time(NULL);
 			cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
@@ -263,28 +263,41 @@ chk_engine_post_repair(struct chk_pool_rec *cpr, int *result, bool update)
 	return *result != 0 ? *result : rc;
 }
 
-static int
-chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index, uint32_t status)
+struct chk_pm_orphan_args {
+	struct chk_pool_rec *cpoa_pool;
+	d_rank_t             cpoa_rank;
+	int                  cpoa_index;
+	uint32_t             cpoa_status;
+};
+
+static void
+chk_engine_pm_orphan_ult(void *args)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	d_rank_list_t			 ranks = { 0 };
-	struct chk_report_unit		 cru = { 0 };
-	char				*strs[2];
-	d_iov_t				 iovs[2];
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*details = NULL;
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	uint32_t			 options[2];
-	uint32_t			 option_nr = 0;
-	uint32_t			 detail_nr = 0;
-	int				 decision = -1;
-	int				 result = 0;
-	int				 rc = 0;
+	struct chk_engine_ult     *ult;
+	struct chk_pm_orphan_args *cpoa  = args;
+	struct chk_pool_rec       *cpr   = cpoa->cpoa_pool;
+	struct chk_instance       *ins   = cpr->cpr_ins;
+	struct chk_property       *prop  = &ins->ci_prop;
+	struct chk_bookmark       *cbk   = &cpr->cpr_bk;
+	d_rank_list_t              ranks = {0};
+	struct chk_report_unit     cru   = {0};
+	char                      *strs[2];
+	d_iov_t                    iovs[2];
+	d_sg_list_t                sgl;
+	d_sg_list_t               *details = NULL;
+	Chk__CheckInconsistClass   cla;
+	Chk__CheckInconsistAction  act;
+	char                       msg[CHK_MSG_BUFLEN] = {0};
+	uint64_t                   seq                 = 0;
+	uint32_t                   options[2];
+	uint32_t                   option_nr = 0;
+	uint32_t                   detail_nr = 0;
+	uint32_t                   status    = cpoa->cpoa_status;
+	d_rank_t                   rank      = cpoa->cpoa_rank;
+	int                        index     = cpoa->cpoa_index;
+	int                        decision  = -1;
+	int                        result    = 0;
+	int                        rc        = 0;
 
 	/*
 	 * NOTE: The subsequent check after handling orphan pm entry will not access the
@@ -454,32 +467,78 @@ report:
 	goto report;
 
 out:
-	return chk_engine_post_repair(cpr, &result, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
-chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct pool_component *comp,
-		       uint32_t status)
+chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index, uint32_t status)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	struct chk_report_unit		 cru = { 0 };
-	char				*strs[2];
-	d_iov_t				 iovs[2];
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*details = NULL;
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 suggested[CHK_MSG_BUFLEN] = { 0 };
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	uint32_t			 options[2];
-	uint32_t			 option_nr = 0;
-	uint32_t			 detail_nr = 0;
-	int				 decision = -1;
-	int				 result = 0;
-	int				 rc = 0;
+	struct chk_engine_ult     *ult;
+	struct chk_pm_orphan_args *args;
+	int                        rc;
+
+	D_ALLOC(ult, sizeof(*ult) + sizeof(*args));
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	args              = (struct chk_pm_orphan_args *)&ult->ceu_data[0];
+	args->cpoa_pool   = cpr;
+	args->cpoa_rank   = rank;
+	args->cpoa_index  = index;
+	args->cpoa_status = status;
+
+	ult->ceu_ult = ABT_THREAD_NULL;
+	d_list_add_tail(&ult->ceu_link, &cpr->cpr_ult_list);
+
+	rc = dss_ult_create(chk_engine_pm_orphan_ult, args, DSS_XS_SYS, 0, 0, &ult->ceu_ult);
+	if (rc != 0) {
+		d_list_del(&ult->ceu_link);
+		D_FREE(ult);
+		D_ERROR(DF_ENGINE " failed to create ULT to handle PM orphan for pool " DF_UUID
+				  ", rank %u, index %d, status %s: " DF_RC "\n",
+			DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid), rank, index,
+			pool_map_status2name(status), DP_RC(rc));
+	}
+
+	return rc;
+}
+
+struct chk_pm_dangling_args {
+	struct chk_pool_rec   *cpda_pool;
+	struct pool_map       *cpda_map;
+	struct pool_component *cpda_comp;
+	uint32_t               cpda_status;
+};
+
+static void
+chk_engine_pm_dangling_ult(void *args)
+{
+	struct chk_engine_ult       *ult;
+	struct chk_pm_dangling_args *cpda = args;
+	struct pool_map             *map  = cpda->cpda_map;
+	struct pool_component       *comp = cpda->cpda_comp;
+	struct chk_pool_rec         *cpr  = cpda->cpda_pool;
+	struct chk_instance         *ins  = cpr->cpr_ins;
+	struct chk_property         *prop = &ins->ci_prop;
+	struct chk_bookmark         *cbk  = &cpr->cpr_bk;
+	struct chk_report_unit       cru  = {0};
+	char                        *strs[2];
+	d_iov_t                      iovs[2];
+	d_sg_list_t                  sgl;
+	d_sg_list_t                 *details = NULL;
+	Chk__CheckInconsistClass     cla;
+	Chk__CheckInconsistAction    act;
+	char                         suggested[CHK_MSG_BUFLEN] = {0};
+	char                         msg[CHK_MSG_BUFLEN]       = {0};
+	uint64_t                     seq                       = 0;
+	uint32_t                     options[2];
+	uint32_t                     option_nr = 0;
+	uint32_t                     detail_nr = 0;
+	uint32_t                     status    = cpda->cpda_status;
+	int                          decision  = -1;
+	int                          result    = 0;
+	int                          rc        = 0;
 
 	D_ASSERTF(status == PO_COMP_ST_DOWNOUT || status == PO_COMP_ST_DOWN,
 		  "Unexpected pool map status %u\n", status);
@@ -636,20 +695,67 @@ report:
 	goto report;
 
 out:
-	return chk_engine_post_repair(cpr, &result, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
-chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *comp)
+chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct pool_component *comp,
+		       uint32_t status)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	struct chk_report_unit		 cru = { 0 };
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	int				 rc;
+	struct chk_engine_ult       *ult;
+	struct chk_pm_dangling_args *args;
+	int                          rc;
+
+	D_ALLOC(ult, sizeof(*ult) + sizeof(*args));
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	args              = (struct chk_pm_dangling_args *)&ult->ceu_data[0];
+	args->cpda_pool   = cpr;
+	args->cpda_map    = map;
+	args->cpda_comp   = comp;
+	args->cpda_status = status;
+
+	ult->ceu_ult = ABT_THREAD_NULL;
+	d_list_add_tail(&ult->ceu_link, &cpr->cpr_ult_list);
+
+	rc = dss_ult_create(chk_engine_pm_dangling_ult, args, DSS_XS_SYS, 0, 0, &ult->ceu_ult);
+	if (rc != 0) {
+		d_list_del(&ult->ceu_link);
+		D_FREE(ult);
+		D_ERROR(DF_ENGINE " failed to create ULT to handle PM dangling for pool " DF_UUID
+				  ", type %x, index %d, id %u, status %s: " DF_RC "\n",
+			DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid), comp->co_type,
+			comp->co_index, comp->co_id, pool_map_status2name(status), DP_RC(rc));
+	}
+
+	return rc;
+}
+
+struct chk_engine_unknown_args {
+	struct chk_pool_rec   *ceua_pool;
+	struct chk_cont_rec   *ceua_cont;
+	struct pool_component *ceua_comp;
+	uint32_t               ceua_exp_tgt_nr;
+};
+
+static void
+chk_engine_handle_unknown_ult(void *args)
+{
+	struct chk_engine_ult          *ult;
+	struct chk_engine_unknown_args *ceua = args;
+	struct chk_pool_rec            *cpr  = ceua->ceua_pool;
+	struct chk_cont_rec            *ccr  = ceua->ceua_cont;
+	struct pool_component          *comp = ceua->ceua_comp;
+	struct chk_instance            *ins  = cpr->cpr_ins;
+	struct chk_bookmark            *cbk  = &cpr->cpr_bk;
+	struct chk_report_unit          cru  = {0};
+	Chk__CheckInconsistClass        cla;
+	Chk__CheckInconsistAction       act;
+	char                            msg[CHK_MSG_BUFLEN] = {0};
+	uint64_t                        seq                 = 0;
+	int                             rc;
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
 	act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -664,22 +770,89 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	cru.cru_rank = dss_self_rank();
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_pool_label = cpr->cpr_label;
-	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects unknown target entry in pool map for pool "
-		 DF_UUIDF", rank %u, index %u, status %u, skip it. You can change "
-		 "its status via DAOS debug tool if it is not for downgraded case.\n",
-		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, comp->co_status);
+
+	if (ccr != NULL) {
+		cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
+		if (ccr->ccr_label_prop != NULL && ccr->ccr_label_prop->dpp_entries != NULL)
+			cru.cru_cont_label = ccr->ccr_label_prop->dpp_entries[0].dpe_str;
+		snprintf(msg, CHK_MSG_BUFLEN - 1,
+			 "The container " DF_UUID " in the pool " DF_UUID
+			 " lost some shards: %u vs %u\n",
+			 DP_UUID(ccr->ccr_uuid), DP_UUID(cpr->cpr_uuid), ccr->ccr_tgt_nr,
+			 ceua->ceua_exp_tgt_nr);
+	} else {
+		D_ASSERT(comp != NULL);
+
+		snprintf(
+		    msg, CHK_MSG_BUFLEN - 1,
+		    "Check engine detects unknown target entry in pool map for pool " DF_UUIDF
+		    ", rank %u, index %u, status %u, skip it. You can change its status via DAOS "
+		    "debug tool if it is not for downgraded case.\n",
+		    DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, comp->co_status);
+	}
+
 	cru.cru_msg = msg;
 	cru.cru_result = 0;
 
 	rc = chk_engine_report(&cru, &seq, NULL);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" detects unknown target entry in pool map for pool "DF_UUIDF", rank %u, "
-		 "target %u, action %u (no interact), handle_rc 0, report_rc %d, decision 0\n",
-		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, act, rc);
+	if (ccr != NULL)
+		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+			 DF_ENGINE " detects incomplete container " DF_UUIDF "/" DF_UUID "shards "
+				   "%u vs %u, ignore it.\n",
+			 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid),
+			 ccr->ccr_tgt_nr, ceua->ceua_exp_tgt_nr);
+	else
+		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+			 DF_ENGINE " detects unknown target entry in pool map for pool " DF_UUIDF
+				   ", rank %u, target %u, ignore it, report_rc %d\n",
+			 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, rc);
 
-	return chk_engine_post_repair(cpr, &rc, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &rc, rc <= 0);
+}
+
+static int
+chk_engine_handle_unknown(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
+			  struct pool_component *comp, uint32_t exp_tgt_nr)
+{
+	struct chk_engine_ult          *ult;
+	struct chk_engine_unknown_args *args;
+	int                             rc;
+
+	D_ALLOC(ult, sizeof(*ult) + sizeof(*args));
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	args                  = (struct chk_engine_unknown_args *)&ult->ceu_data[0];
+	args->ceua_pool       = cpr;
+	args->ceua_cont       = ccr;
+	args->ceua_comp       = comp;
+	args->ceua_exp_tgt_nr = exp_tgt_nr;
+
+	ult->ceu_ult = ABT_THREAD_NULL;
+	d_list_add_tail(&ult->ceu_link, &cpr->cpr_ult_list);
+
+	rc = dss_ult_create(chk_engine_handle_unknown_ult, args, DSS_XS_SYS, 0, 0, &ult->ceu_ult);
+	if (rc != 0) {
+		d_list_del(&ult->ceu_link);
+		D_FREE(ult);
+		if (ccr != NULL)
+			D_ERROR(DF_ENGINE
+				" failed to create ULT to handle incomplete container " DF_UUID
+				"/" DF_UUID ", shards %d/%d: " DF_RC "\n",
+				DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid),
+				DP_UUID(ccr->ccr_uuid), ccr->ccr_tgt_nr, exp_tgt_nr, DP_RC(rc));
+		else
+			D_ERROR(DF_ENGINE
+				" failed to create ULT to handle PM unknown for pool " DF_UUID
+				", type %x, index %d, id %u, status %s: " DF_RC "\n",
+				DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid), comp->co_type,
+				comp->co_index, comp->co_id, pool_map_status2name(comp->co_status),
+				DP_RC(rc));
+	}
+
+	return rc;
 }
 
 static int
@@ -751,7 +924,7 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 				 *	 layout? It is better to keep it there with reporting it
 				 *	 to admin who can adjust the status via DAOS debug tool.
 				 */
-				rc = chk_engine_pm_unknown_target(cpr, comp);
+				rc = chk_engine_handle_unknown(cpr, NULL, comp, 0);
 			break;
 		}
 
@@ -948,6 +1121,45 @@ report:
 	return chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
+struct chk_cont_cleanup_args {
+	struct chk_pool_rec *ccca_pool;
+	struct chk_cont_rec *ccca_cont;
+	struct cont_svc     *ccca_svc;
+};
+
+static int
+chk_engine_cont_cleanup_one(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
+			    struct cont_svc *svc, void (*func)(void *))
+{
+	struct chk_engine_ult        *ult;
+	struct chk_cont_cleanup_args *args;
+	int                           rc;
+
+	D_ALLOC(ult, sizeof(*ult) + sizeof(*args));
+	if (ult == NULL)
+		return -DER_NOMEM;
+
+	args            = (struct chk_cont_cleanup_args *)&ult->ceu_data[0];
+	args->ccca_pool = cpr;
+	args->ccca_cont = ccr;
+	args->ccca_svc  = svc;
+
+	ult->ceu_ult = ABT_THREAD_NULL;
+	d_list_add_tail(&ult->ceu_link, &cpr->cpr_ult_list);
+
+	rc = dss_ult_create(func, args, DSS_XS_SYS, 0, 0, &ult->ceu_ult);
+	if (rc != 0) {
+		d_list_del(&ult->ceu_link);
+		D_FREE(ult);
+		D_ERROR(DF_ENGINE " failed to create ULT to cleanup container " DF_UUID "/" DF_UUID
+				  ": " DF_RC "\n",
+			DP_ENGINE(cpr->cpr_ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid),
+			DP_RC(rc));
+	}
+
+	return rc;
+}
+
 static int
 chk_engine_cont_list_init(uuid_t pool, struct chk_cont_list_aggregator *aggregator)
 {
@@ -1005,27 +1217,32 @@ chk_engine_cont_list_remote_cb(struct chk_co_rpc_cb_args *cb_args)
 						    cb_args->cb_nr);
 }
 
-static int
-chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struct cont_svc *svc)
+static void
+chk_engine_cont_orphan_ult(void *args)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	struct chk_report_unit		 cru = { 0 };
-	char				*strs[2];
-	d_iov_t				 iovs[2];
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*details = NULL;
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	uint32_t			 options[2];
-	uint32_t			 option_nr = 0;
-	uint32_t			 detail_nr = 0;
-	int				 decision = -1;
-	int				 result = 0;
-	int				 rc = 0;
+	struct chk_engine_ult        *ult;
+	struct chk_cont_cleanup_args *ccca = args;
+	struct chk_pool_rec          *cpr  = ccca->ccca_pool;
+	struct chk_cont_rec          *ccr  = ccca->ccca_cont;
+	struct cont_svc              *svc  = ccca->ccca_svc;
+	struct chk_instance          *ins  = cpr->cpr_ins;
+	struct chk_property          *prop = &ins->ci_prop;
+	struct chk_bookmark          *cbk  = &cpr->cpr_bk;
+	struct chk_report_unit        cru  = {0};
+	char                         *strs[2];
+	d_iov_t                       iovs[2];
+	d_sg_list_t                   sgl;
+	d_sg_list_t                  *details = NULL;
+	Chk__CheckInconsistClass      cla;
+	Chk__CheckInconsistAction     act;
+	char                          msg[CHK_MSG_BUFLEN] = {0};
+	uint64_t                      seq                 = 0;
+	uint32_t                      options[2];
+	uint32_t                      option_nr = 0;
+	uint32_t                      detail_nr = 0;
+	int                           decision  = -1;
+	int                           result    = 0;
+	int                           rc        = 0;
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_CONT_NONEXIST_ON_PS;
 	act = prop->cp_policies[cla];
@@ -1168,7 +1385,8 @@ out:
 	/* NOTE: For orphan container, mark it as 'skip' since we do not support to add it back. */
 	ccr->ccr_skip = 1;
 
-	return chk_engine_post_repair(cpr, &result, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static daos_prop_t *
@@ -1205,10 +1423,13 @@ chk_engine_cont_target_label_empty(struct chk_cont_rec *ccr)
 static inline bool
 chk_engine_cont_cs_label_empty(struct chk_cont_rec *ccr)
 {
-	if (daos_iov_empty(&ccr->ccr_label_cs))
+	d_iov_t *label = &ccr->ccr_label_cs;
+
+	if (daos_iov_empty(label))
 		return true;
 
-	if (strncmp(DAOS_PROP_NO_CO_LABEL, ccr->ccr_label_cs.iov_buf, DAOS_PROP_LABEL_MAX_LEN) == 0)
+	if (strlen(DAOS_PROP_NO_CO_LABEL) == label->iov_len &&
+	    strncmp(DAOS_PROP_NO_CO_LABEL, label->iov_buf, label->iov_len) == 0)
 		return true;
 
 	return false;
@@ -1268,29 +1489,34 @@ chk_engine_ccr2label(struct chk_cont_rec *ccr, bool prefer_target)
 	return NULL;
 }
 
-static int
-chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struct cont_svc *svc)
+static void
+chk_engine_cont_set_label_ult(void *args)
 {
-	struct chk_instance		*ins = cpr->cpr_ins;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	daos_prop_t			*prop_tmp = NULL;
-	struct chk_report_unit		 cru = { 0 };
-	char				 strs[3][CHK_MSG_BUFLEN];
-	d_iov_t				 iovs[3];
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*details = NULL;
-	char				*label = NULL;
-	Chk__CheckInconsistClass	 cla;
-	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint64_t			 seq = 0;
-	uint32_t			 options[3];
-	uint32_t			 option_nr = 0;
-	uint32_t			 detail_nr = 0;
-	int				 decision = -1;
-	int				 result = 0;
-	int				 rc = 0;
+	struct chk_engine_ult        *ult;
+	struct chk_cont_cleanup_args *ccca     = args;
+	struct chk_pool_rec          *cpr      = ccca->ccca_pool;
+	struct chk_cont_rec          *ccr      = ccca->ccca_cont;
+	struct cont_svc              *svc      = ccca->ccca_svc;
+	struct chk_instance          *ins      = cpr->cpr_ins;
+	struct chk_property          *prop     = &ins->ci_prop;
+	struct chk_bookmark          *cbk      = &cpr->cpr_bk;
+	daos_prop_t                  *prop_tmp = NULL;
+	struct chk_report_unit        cru      = {0};
+	char                          strs[3][CHK_MSG_BUFLEN];
+	d_iov_t                       iovs[3];
+	d_sg_list_t                   sgl;
+	d_sg_list_t                  *details = NULL;
+	char                         *label   = NULL;
+	Chk__CheckInconsistClass      cla;
+	Chk__CheckInconsistAction     act;
+	char                          msg[CHK_MSG_BUFLEN] = {0};
+	uint64_t                      seq                 = 0;
+	uint32_t                      options[3];
+	uint32_t                      option_nr = 0;
+	uint32_t                      detail_nr = 0;
+	int                           decision  = -1;
+	int                           result    = 0;
+	int                           rc        = 0;
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_CONT_BAD_LABEL;
 	act = prop->cp_policies[cla];
@@ -1551,7 +1777,8 @@ out:
 
 	daos_prop_free(prop_tmp);
 
-	return chk_engine_post_repair(cpr, &result, rc <= 0);
+	ult             = container_of(args, struct chk_engine_ult, ceu_data);
+	ult->ceu_result = chk_engine_post_repair(cpr, &result, rc <= 0);
 }
 
 static int
@@ -1580,8 +1807,8 @@ chk_engine_cont_label_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg
 
 	ccr = riov.iov_buf;
 	if (ccr->ccr_label_prop == NULL ||
-	    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str,
-		    DAOS_PROP_LABEL_MAX_LEN) != 0)
+	    key->iov_len != strlen(ccr->ccr_label_prop->dpp_entries[0].dpe_str) ||
+	    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str, key->iov_len) != 0)
 		rc = daos_iov_copy(&ccr->ccr_label_cs, key);
 	else
 		ccr->ccr_label_checked = 1;
@@ -1600,10 +1827,7 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 	struct chk_instance          *ins = cpr->cpr_ins;
 	struct cont_svc              *svc;
 	struct chk_cont_rec          *ccr;
-	char                          msg[CHK_MSG_BUFLEN];
-	struct chk_cont_label_cb_args cclca = {0};
-	struct chk_report_unit        cru   = {0};
-	uint64_t                      seq;
+	struct chk_cont_label_cb_args cclca      = {0};
 	uint32_t                      exp_tgt_nr = 0;
 	int                           rc         = 0;
 	bool                          failout;
@@ -1636,7 +1860,7 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 			continue;
 		}
 
-		rc = chk_engine_cont_orphan(cpr, ccr, svc);
+		rc = chk_engine_cont_cleanup_one(cpr, ccr, svc, chk_engine_cont_orphan_ult);
 		if (rc != 0)
 			goto out;
 	}
@@ -1653,7 +1877,8 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 			continue;
 
 		if (!ccr->ccr_label_checked) {
-			rc = chk_engine_cont_set_label(cpr, ccr, svc);
+			rc = chk_engine_cont_cleanup_one(cpr, ccr, svc,
+							 chk_engine_cont_set_label_ult);
 			if (rc != 0)
 				goto out;
 		}
@@ -1661,24 +1886,9 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 		if (likely(ccr->ccr_tgt_nr >= exp_tgt_nr))
 			continue;
 
-		snprintf(
-		    msg, CHK_MSG_BUFLEN - 1,
-		    "The container " DF_UUID " in the pool " DF_UUID " lost some shards: %u/%u\n",
-		    DP_UUID(ccr->ccr_uuid), DP_UUID(cpr->cpr_uuid), ccr->ccr_tgt_nr, exp_tgt_nr);
-
-		cru.cru_msg        = msg;
-		cru.cru_gen        = cpr->cpr_bk.cb_gen;
-		cru.cru_cla        = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
-		cru.cru_act        = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		cru.cru_rank       = dss_self_rank();
-		cru.cru_pool       = (uuid_t *)&cpr->cpr_uuid;
-		cru.cru_pool_label = cpr->cpr_label;
-		cru.cru_cont       = (uuid_t *)&ccr->ccr_uuid;
-		if (ccr->ccr_label_prop != NULL && ccr->ccr_label_prop->dpp_entries != NULL)
-			cru.cru_cont_label = ccr->ccr_label_prop->dpp_entries[0].dpe_str;
-
-		seq = 0;
-		chk_engine_report(&cru, &seq, NULL);
+		rc = chk_engine_handle_unknown(cpr, ccr, NULL, exp_tgt_nr);
+		if (rc != 0)
+			goto out;
 	}
 
 out:
@@ -1708,8 +1918,7 @@ chk_engine_pool_notify(struct chk_pool_rec *cpr)
 		 * to all engines. Otherwise, the engine out of the pool map cannot get
 		 * the notification.
 		 */
-		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER,
-				   true);
+		rc = chk_iv_update(ins, &iv, CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
 		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 			 DF_ENGINE" on rank %u notify pool shards for "DF_UUIDF", phase %u, "
 			 "ins_status %u, pool_status %u: rc = %d\n",
@@ -1721,14 +1930,33 @@ chk_engine_pool_notify(struct chk_pool_rec *cpr)
 		iv.ci_from_psl = 0;
 		iv.ci_to_leader = 1;
 		/* Synchronously notify the check leader with the new check status/phase. */
-		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
-				   CRT_IV_SYNC_NONE, true);
+		rc = chk_iv_update(ins, &iv, CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE);
 		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 			 DF_ENGINE" on rank %u notify check leader for "DF_UUIDF", phase %u, "
 			 "ins_status %u, pool_status %u: rc = %d\n",
 			 DP_ENGINE(ins), dss_self_rank(), DP_UUID(cpr->cpr_uuid),
 			 iv.ci_phase, iv.ci_ins_status, iv.ci_pool_status, rc);
 	}
+}
+
+static int
+chk_engine_wait_ults(struct chk_pool_rec *cpr)
+{
+	struct chk_engine_ult *ult;
+	int                    rc = 0;
+
+	while ((ult = d_list_pop_entry(&cpr->cpr_ult_list, struct chk_engine_ult, ceu_link)) !=
+	       NULL) {
+		if (ult->ceu_ult != ABT_THREAD_NULL)
+			ABT_thread_free(&ult->ceu_ult);
+
+		if (rc == 0)
+			rc = ult->ceu_result;
+
+		D_FREE(ult);
+	}
+
+	return rc;
 }
 
 static void
@@ -1789,6 +2017,11 @@ chk_engine_pool_ult(void *args)
 	/* Lookup for dangling entry in the pool map. */
 	rc = chk_engine_find_dangling_pm(cpr, map);
 	if (rc != 0 || cpr->cpr_skip || cpr->cpr_stop)
+		goto out;
+
+	/* Wait for the ULTs that handle orphan, dangling and unknown pool map components. */
+	rc = chk_engine_wait_ults(cpr);
+	if (rc != 0)
 		goto out;
 
 	if (cpr->cpr_map_refreshed) {
@@ -1870,6 +2103,10 @@ cont:
 		rc = ds_pool_svc_schedule_reconf(svc);
 
 out:
+	rc1 = chk_engine_wait_ults(cpr);
+	if (rc == 0)
+		rc = rc1;
+
 	chk_engine_cont_list_fini(&aggregator);
 	if (map != NULL)
 		pool_map_decref(map);
@@ -1981,7 +2218,7 @@ chk_engine_sched(void *args)
 			D_GOTO(out, rc);
 		}
 
-		if (ins_phase > cbk->cb_phase) {
+		if (ins_phase != CHK_INVAL_PHASE && ins_phase > cbk->cb_phase) {
 			D_INFO(DF_ENGINE" on rank %u moves from phase %u to phase %u\n",
 			       DP_ENGINE(ins), myrank, cbk->cb_phase, ins_phase);
 
@@ -2045,9 +2282,8 @@ out:
 
 static int
 chk_engine_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *ranks,
-		      uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		      uuid_t pools[], uint64_t gen, int phase, uint32_t api_flags,
-		      d_rank_t leader, uint32_t flags)
+		      uint32_t policy_nr, struct chk_policy *policies, int pool_nr, uuid_t pools[],
+		      uint64_t gen, uint32_t api_flags, d_rank_t leader, uint32_t flags)
 {
 	struct chk_traverse_pools_args	 ctpa = { 0 };
 	struct chk_bookmark		*cbk = &ins->ci_bk;
@@ -2134,8 +2370,7 @@ reset:
 
 init:
 	if (!chk_is_on_leader(gen, leader, true)) {
-		rc = chk_prop_prepare(leader, api_flags, phase, policy_nr, policies, rank_list,
-				      prop);
+		rc = chk_prop_prepare(leader, api_flags, policy_nr, policies, rank_list, prop);
 		if (rc != 0)
 			goto out;
 
@@ -2263,16 +2498,15 @@ chk_engine_pool_filter(uuid_t uuid, void *arg, int *phase)
 int
 chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		 struct chk_policy *policies, int pool_nr, uuid_t pools[], uint32_t api_flags,
-		 int phase, d_rank_t leader, uint32_t flags, uuid_t iv_uuid,
+		 uint32_t ns_ver, d_rank_t leader, uint32_t flags, uuid_t iv_uuid,
 		 struct ds_pool_clues *clues)
 {
-	struct chk_instance		*ins = chk_engine;
-	struct chk_bookmark		*cbk = &ins->ci_bk;
-	struct umem_attr		 uma = { 0 };
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
-	d_rank_t			 myrank = dss_self_rank();
-	int				 rc;
-	int				 rc1;
+	struct chk_instance *ins    = chk_engine;
+	struct chk_bookmark *cbk    = &ins->ci_bk;
+	struct umem_attr     uma    = {0};
+	d_rank_t             myrank = dss_self_rank();
+	int                  rc;
+	int                  rc1;
 
 	rc = chk_ins_can_start(ins);
 	if (rc != 0)
@@ -2294,12 +2528,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);
 
-	chk_iv_ns_cleanup(&ins->ci_iv_ns);
-
-	if (ins->ci_iv_group != NULL) {
-		crt_group_secondary_destroy(ins->ci_iv_group);
-		ins->ci_iv_group = NULL;
-	}
+	chk_iv_ns_destroy(ins);
 
 	uma.uma_id = UMEM_CLASS_VMEM;
 
@@ -2313,27 +2542,20 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	if (rc != 0)
 		goto out_tree;
 
-	rc = chk_engine_start_prep(ins, rank_nr, ranks, policy_nr, policies,
-				   pool_nr, pools, gen, phase, api_flags, leader, flags);
+	rc = chk_engine_start_prep(ins, rank_nr, ranks, policy_nr, policies, pool_nr, pools, gen,
+				   api_flags, leader, flags);
 	if (rc != 0)
 		goto out_tree;
 
 	if (chk_is_on_leader(gen, leader, true)) {
 		ins->ci_iv_ns = chk_leader_get_iv_ns();
-		if (unlikely(ins->ci_iv_ns == NULL))
-			goto out_tree;
+		D_ASSERT(ins->ci_iv_ns != NULL);
+
+		ins->ci_ns_ver = ns_ver;
 	} else {
-		uuid_unparse_lower(iv_uuid, uuid_str);
-		rc = crt_group_secondary_create(uuid_str, NULL, ins->ci_ranks, &ins->ci_iv_group);
+		rc = chk_iv_ns_create(ins, iv_uuid, leader, ns_ver);
 		if (rc != 0)
 			goto out_tree;
-
-		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, iv_uuid, ins->ci_iv_group,
-				     &ins->ci_iv_id, &ins->ci_iv_ns);
-		if (rc != 0)
-			goto out_group;
-
-		ds_iv_ns_update(ins->ci_iv_ns, leader, ins->ci_iv_ns->iv_master_term + 1);
 	}
 
 	uuid_copy(cbk->cb_iv_uuid, iv_uuid);
@@ -2345,6 +2567,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	if (rc != 0)
 		goto out_stop;
 
+	ins->ci_pause         = 0;
 	ins->ci_sched_running = 1;
 
 	rc = dss_ult_create(chk_engine_sched, ins, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ,
@@ -2366,12 +2589,7 @@ out_stop:
 			D_WARN(DF_ENGINE" failed to update engine bookmark: "DF_RC"\n",
 			       DP_ENGINE(ins), DP_RC(rc1));
 	}
-	chk_iv_ns_cleanup(&ins->ci_iv_ns);
-out_group:
-	if (ins->ci_iv_group != NULL) {
-		crt_group_secondary_destroy(ins->ci_iv_group);
-		ins->ci_iv_group = NULL;
-	}
+	chk_iv_ns_destroy(ins);
 out_tree:
 	chk_destroy_pending_tree(ins);
 	chk_destroy_pool_tree(ins);
@@ -2379,17 +2597,18 @@ out_done:
 	ins->ci_starting = 0;
 out_log:
 	if (rc >= 0) {
-		D_INFO(DF_ENGINE " %s on rank %u with api_flags %x, phase %d, leader %u, "
-		       "flags %x, iv "DF_UUIDF": rc %d\n",
+		D_INFO(DF_ENGINE " %s on rank %u with api_flags %x, ns_ver %d, leader %u, "
+				 "flags %x, iv " DF_UUIDF ": rc %d\n",
 		       DP_ENGINE(ins), chk_is_ins_reset(ins, api_flags) ? "start" : "resume",
-		       myrank, api_flags, phase, leader, flags, DP_UUID(iv_uuid), rc);
+		       myrank, api_flags, ns_ver, leader, flags, DP_UUID(iv_uuid), rc);
 
 		chk_ranks_dump(ins->ci_ranks->rl_nr, ins->ci_ranks->rl_ranks);
 		chk_pools_dump(&ins->ci_pool_list, pool_nr, pools);
 	} else {
-		D_ERROR(DF_ENGINE" failed to start on rank %u with %d pools, api_flags %x, "
-			"phase %d, leader %u, flags %x, gen "DF_X64", iv "DF_UUIDF": "DF_RC"\n",
-			DP_ENGINE(ins), myrank, pool_nr, api_flags, phase, leader, flags, gen,
+		D_ERROR(DF_ENGINE " failed to start on rank %u with %d pools, api_flags %x, "
+				  "ns_ver %d, leader %u, flags %x, gen " DF_X64 ", iv " DF_UUIDF
+				  ": " DF_RC "\n",
+			DP_ENGINE(ins), myrank, pool_nr, api_flags, ns_ver, leader, flags, gen,
 			DP_UUID(iv_uuid), DP_RC(rc));
 	}
 
@@ -2407,13 +2626,15 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 	int			 i;
 	int			 active = false;
 
+	CHK_IS_READY(ins);
+
 	if (gen != 0 && gen != cbk->cb_gen)
 		D_GOTO(log, rc = -DER_NOTAPPLICABLE);
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE)
 		D_GOTO(log, rc = -DER_NOTAPPLICABLE);
 
-	if (ins->ci_starting)
+	if (ins->ci_starting || ins->ci_rejoining)
 		D_GOTO(log, rc = -DER_BUSY);
 
 	if (ins->ci_stopping || ins->ci_sched_exiting)
@@ -2577,7 +2798,7 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	coll_ops.co_func = chk_engine_query_one;
 	coll_args.ca_func_args = shard;
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
@@ -2595,6 +2816,8 @@ chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *ins_status
 	struct chk_query_pool_args	 cqpa = { 0 };
 	int				 rc = 0;
 	int				 i;
+
+	CHK_IS_READY(ins);
 
 	/*
 	 * We will support to check query from new check leader under the case of old leader
@@ -2642,32 +2865,46 @@ log:
 int
 chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version)
 {
-	struct chk_instance	*ins = chk_engine;
-	struct chk_property	*prop = &ins->ci_prop;
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	d_rank_list_t		*rank_list = NULL;
-	int			 rc = 0;
+	struct chk_instance *ins  = chk_engine;
+	struct chk_property *prop = &ins->ci_prop;
+	struct chk_bookmark *cbk  = &ins->ci_bk;
+	int                  rc   = 0;
+
+	CHK_IS_READY(ins);
 
 	if (cbk->cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
-	rc = chk_prop_fetch(prop, &rank_list);
-	if (rc != 0)
-		goto out;
+	/* For check engine on the leader, reload rank list that has been refreshed by leader. */
+	if (chk_is_on_leader(cbk->cb_gen, prop->cp_leader, true)) {
+		d_rank_list_free(ins->ci_ranks);
+		ins->ci_ranks = NULL;
+	}
 
-	D_ASSERT(rank_list != NULL);
+	if (ins->ci_ranks == NULL) {
+		rc = chk_prop_fetch(prop, &ins->ci_ranks);
+		if (rc != 0)
+			goto out;
 
-	/* For check engine on the leader, related rank has already been marked as "dead". */
-	if (chk_is_on_leader(cbk->cb_gen, prop->cp_leader, true))
-		goto group;
+		/* For check engine on the leader, it's done. */
+		if (chk_is_on_leader(cbk->cb_gen, prop->cp_leader, true)) {
+			ins->ci_ns_ver = version;
+			goto out;
+		}
+	}
 
-	if (!chk_remove_rank_from_list(rank_list, rank))
+	if (unlikely(ins->ci_ranks == NULL))
+		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
+
+	if (!chk_remove_rank_from_list(ins->ci_ranks, rank))
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
 	prop->cp_rank_nr--;
-	rc = chk_prop_update(prop, rank_list);
+	rc = chk_prop_update(prop, ins->ci_ranks);
 	if (rc != 0)
-		goto out;
+		ins->ci_skip_oog = 1;
+	else
+		rc = chk_iv_ns_update(ins, version);
 
 	/*
 	 * NOTE: If the rank dead before DAOS check start, then subsequent check start will
@@ -2688,19 +2925,7 @@ chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version)
 	 *	 sometime later as the DAOS check going.
 	 */
 
-group:
-	if (ins->ci_iv_group != NULL)
-		rc = crt_group_secondary_modify(ins->ci_iv_group, rank_list, rank_list,
-						CRT_GROUP_MOD_OP_REPLACE, version);
-
 out:
-	if (rc == 0) {
-		d_rank_list_free(ins->ci_ranks);
-		ins->ci_ranks = rank_list;
-		rank_list = NULL;
-	}
-
-	d_rank_list_free(rank_list);
 	if (rc != -DER_NOTAPPLICABLE)
 		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 			 DF_ENGINE" on rank %u mark rank %u as dead with gen "
@@ -2744,6 +2969,8 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t act)
 {
 	struct chk_instance *ins = chk_engine;
 	int                  rc;
+
+	CHK_IS_READY(ins);
 
 	if (ins->ci_bk.cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
@@ -2874,6 +3101,8 @@ chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *c
 	int				 i = 0;
 	int				 rc = 0;
 
+	CHK_IS_READY(ins);
+
 	if (cbk->cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
@@ -2928,6 +3157,8 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 	d_iov_t			 riov;
 	d_iov_t			 kiov;
 	int			 rc;
+
+	CHK_IS_READY(ins);
 
 	if (ins->ci_bk.cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
@@ -3047,6 +3278,8 @@ chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label
 	int				 rc;
 	int				 i;
 
+	CHK_IS_READY(ins);
+
 	if (ins->ci_bk.cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 
@@ -3158,6 +3391,8 @@ chk_engine_set_policy(uint64_t gen, uint32_t policy_nr, struct chk_policy *polic
 	struct chk_property *prop = &ins->ci_prop;
 	int                  rc   = 0;
 
+	CHK_IS_READY(ins);
+
 	/* Do nothing if no (engine) check instance is running. */
 	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE || cbk->cb_gen != gen ||
 	    cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
@@ -3182,13 +3417,12 @@ out:
 static int
 chk_engine_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 {
-	struct chk_instance	*ins = chk_engine;
-	struct chk_pending_rec	*cpr = NULL;
-	struct chk_pending_rec	*tmp = NULL;
-	struct chk_pool_rec	*pool = NULL;
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
-	int			 rc;
+	struct chk_instance    *ins  = chk_engine;
+	struct chk_pending_rec *cpr  = NULL;
+	struct chk_pool_rec    *pool = NULL;
+	d_iov_t                 kiov;
+	d_iov_t                 riov;
+	int                     rc;
 
 	D_ASSERT(cru->cru_pool != NULL);
 
@@ -3225,14 +3459,9 @@ new_seq:
 			       cru->cru_detail_nr, cru->cru_details, *seq);
 	if (unlikely(rc == -DER_AGAIN)) {
 		D_ASSERT(cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT);
+		D_ASSERT(cpr != NULL);
 
-		rc = chk_pending_del(ins, *seq, &tmp);
-		if (rc == 0)
-			D_ASSERT(tmp == NULL);
-		else if (rc != -DER_NONEXIST)
-			goto log;
-
-		chk_pending_destroy(cpr);
+		chk_pending_destroy(ins, cpr);
 		cpr = NULL;
 
 		goto new_seq;
@@ -3278,11 +3507,12 @@ again:
 	goto again;
 
 out:
-	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING)
-		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-
 	if (cpr != NULL)
-		chk_pending_destroy(cpr);
+		chk_pending_destroy(ins, cpr);
+
+	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+	    d_list_empty(&pool->cpr_pending_list))
+		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
 
 	return rc;
 }
@@ -3294,6 +3524,8 @@ chk_engine_notify(struct chk_iv *iv)
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	struct chk_pool_rec	*cpr;
 	int			 rc = 0;
+
+	CHK_IS_READY(ins);
 
 	if (cbk->cb_gen != iv->ci_gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
@@ -3364,19 +3596,19 @@ out:
 void
 chk_engine_rejoin(void *args)
 {
-	struct chk_instance		*ins = chk_engine;
-	struct chk_property		*prop = &ins->ci_prop;
-	struct chk_bookmark		*cbk = &ins->ci_bk;
-	uuid_t				*pools = NULL;
-	struct chk_iv			 iv = { 0 };
-	struct umem_attr		 uma = { 0 };
-	char				 uuid_str[DAOS_UUID_STR_SIZE];
-	d_rank_t			 myrank = dss_self_rank();
-	uint32_t			 pool_nr = 0;
-	uint32_t			 flags = 0;
-	int				 rc = 0;
-	int				 rc1;
-	bool				 need_join = false;
+	struct chk_instance *ins     = chk_engine;
+	struct chk_property *prop    = &ins->ci_prop;
+	struct chk_bookmark *cbk     = &ins->ci_bk;
+	d_rank_list_t       *ranks   = NULL;
+	uuid_t              *pools   = NULL;
+	struct chk_iv        iv      = {0};
+	struct umem_attr     uma     = {0};
+	d_rank_t             myrank  = dss_self_rank();
+	uint32_t             pool_nr = 0;
+	uint32_t             flags   = 0;
+	int                  rc      = 0;
+	int                  rc1;
+	bool                 need_join = false;
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE)
 		goto out_log;
@@ -3385,7 +3617,7 @@ chk_engine_rejoin(void *args)
 	    cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_PAUSED)
 		goto out_log;
 
-	/* We do NOT support leader (and its associated engine ) to rejoin former check instance. */
+	/* We do NOT support leader (and its associated engine) to rejoin former check instance. */
 	if (chk_is_on_leader(cbk->cb_gen, prop->cp_leader, true))
 		goto out_log;
 
@@ -3420,22 +3652,10 @@ chk_engine_rejoin(void *args)
 	if (rc != 0)
 		goto out_tree;
 
-	uuid_unparse_lower(cbk->cb_iv_uuid, uuid_str);
-	rc = crt_group_secondary_create(uuid_str, NULL, ins->ci_ranks, &ins->ci_iv_group);
-	if (rc != 0)
-		goto out_tree;
-
-	rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, cbk->cb_iv_uuid, ins->ci_iv_group,
-			     &ins->ci_iv_id, &ins->ci_iv_ns);
-	if (rc != 0)
-		goto out_group;
-
-	ds_iv_ns_update(ins->ci_iv_ns, prop->cp_leader, ins->ci_iv_ns->iv_master_term + 1);
-
 again:
 	/* Ask leader whether this engine can rejoin or not. */
 	rc = chk_rejoin_remote(prop->cp_leader, cbk->cb_gen, myrank, cbk->cb_iv_uuid, &flags,
-			       &pool_nr, &pools);
+			       &ins->ci_ns_ver, &pool_nr, &pools, &ranks);
 	if (rc != 0) {
 		if ((rc == -DER_OOG || rc == -DER_GRPVER) && !ins->ci_pause) {
 			D_INFO(DF_ENGINE" Someone is not ready %d, let's rejoin after 1 sec\n",
@@ -3445,13 +3665,21 @@ again:
 				goto again;
 		}
 
-		goto out_iv;
+		goto out_tree;
 	}
 
-	if (pool_nr == 0) {
+	if (ranks == NULL || pool_nr == 0) {
 		need_join = false;
-		D_GOTO(out_iv, rc = 1);
+		D_GOTO(out_tree, rc = 1);
 	}
+
+	d_rank_list_free(ins->ci_ranks);
+	ins->ci_ranks = ranks;
+	ranks         = NULL;
+
+	rc = chk_iv_ns_create(ins, cbk->cb_iv_uuid, prop->cp_leader, ins->ci_ns_ver);
+	if (rc != 0)
+		goto out_tree;
 
 	rc = chk_pools_load_list(ins, cbk->cb_gen, 0, pool_nr, pools, NULL);
 	if (rc != 0)
@@ -3492,51 +3720,32 @@ out_notify:
 	iv.ci_to_leader = 1;
 
 	/* Notify the leader that check instance exit on the engine. */
-	rc1 = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE, true);
+	rc1 = chk_iv_update(ins, &iv, CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE);
 	D_CDEBUG(rc1 != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" on rank %u notify leader for its exit, status %u: rc1 = %d\n",
 		 DP_ENGINE(ins), myrank, cbk->cb_ins_status, rc1);
-out_iv:
-	chk_iv_ns_cleanup(&ins->ci_iv_ns);
-out_group:
-	if (ins->ci_iv_group != NULL) {
-		crt_group_secondary_destroy(ins->ci_iv_group);
-		ins->ci_iv_group = NULL;
-	}
+	chk_iv_ns_destroy(ins);
 out_tree:
 	chk_destroy_pending_tree(ins);
 	chk_destroy_pool_tree(ins);
 out_log:
+	d_rank_list_free(ranks);
+	D_FREE(pools);
 	if (need_join)
 		D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
 			 DF_ENGINE" rejoin on rank %u with iv "DF_UUIDF": "DF_RC"\n",
 			 DP_ENGINE(ins), myrank, DP_UUID(cbk->cb_iv_uuid), DP_RC(rc));
 	ins->ci_rejoining = 0;
-	ins->ci_starting = 0;
-	ins->ci_inited = 1;
-}
-
-void
-chk_engine_pause(void)
-{
-	struct chk_instance	*ins = chk_engine;
-
-	chk_stop_sched(ins);
-	D_ASSERT(d_list_empty(&ins->ci_pool_list));
+	ins->ci_starting  = 0;
 }
 
 int
-chk_engine_init(void)
+chk_engine_setup(void)
 {
-	struct chk_traverse_pools_args	 ctpa = { 0 };
-	struct chk_bookmark		*cbk;
-	int				 rc;
-
-	rc = chk_ins_init(&chk_engine);
-	if (rc != 0)
-		goto fini;
-
-	chk_report_seq_init(chk_engine);
+	struct chk_instance           *ins  = chk_engine;
+	struct chk_bookmark           *cbk  = &ins->ci_bk;
+	struct chk_traverse_pools_args ctpa = {0};
+	int                            rc;
 
 	/*
 	 * DAOS global consistency check depends on all related engines' local
@@ -3545,7 +3754,8 @@ chk_engine_init(void)
 	 * related local inconsistency firstly.
 	 */
 
-	cbk = &chk_engine->ci_bk;
+	chk_report_seq_init(ins);
+
 	rc = chk_bk_fetch_engine(cbk);
 	if (rc == -DER_NONEXIST)
 		goto prop;
@@ -3569,37 +3779,45 @@ chk_engine_init(void)
 		cbk->cb_time.ct_stop_time = time(NULL);
 		rc = chk_bk_update_engine(cbk);
 		if (rc != 0) {
-			D_ERROR(DF_ENGINE" failed to reset status as 'PAUSED': "DF_RC"\n",
-				DP_ENGINE(chk_engine), DP_RC(rc));
+			D_ERROR(DF_ENGINE " failed to reset status as 'PAUSED': " DF_RC "\n",
+				DP_ENGINE(ins), DP_RC(rc));
 			goto fini;
 		}
 
 		ctpa.ctpa_gen = cbk->cb_gen;
-		ctpa.ctpa_ins = chk_engine;
+		ctpa.ctpa_ins = ins;
 		rc            = chk_traverse_pools(chk_pools_pause_cb, &ctpa);
 		/*
 		 * Failed to reset pool status will not affect next check start, so it is not fatal,
 		 * but related check query result may be confused for user.
 		 */
 		if (rc != 0)
-			D_WARN(DF_ENGINE" failed to reset pools status as 'PAUSED': "DF_RC"\n",
-			       DP_ENGINE(chk_engine), DP_RC(rc));
+			D_WARN(DF_ENGINE " failed to reset pools status as 'PAUSED': " DF_RC "\n",
+			       DP_ENGINE(ins), DP_RC(rc));
 	}
 
 prop:
-	rc = chk_prop_fetch(&chk_engine->ci_prop, &chk_engine->ci_ranks);
+	rc = chk_prop_fetch(&ins->ci_prop, &ins->ci_ranks);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
+	if (rc == 0) {
+		ins->ci_inited = 1;
+		ins->ci_pause  = 0;
+	}
+
 fini:
 	if (rc != 0)
-		chk_ins_fini(&chk_engine);
+		chk_engine_cleanup();
 	return rc;
 }
 
 void
-chk_engine_fini(void)
+chk_engine_cleanup(void)
 {
-	chk_ins_fini(&chk_engine);
+	struct chk_instance *ins = chk_engine;
+
+	chk_ins_cleanup(ins);
+	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 }
 
 int
@@ -3608,6 +3826,8 @@ chk_engine_pool_stop(uuid_t pool_uuid, bool destroy)
 	uint32_t	status;
 	uint32_t	phase;
 	int		rc = 0;
+
+	CHK_IS_READY(chk_engine);
 
 	if (destroy) {
 		status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
@@ -3623,4 +3843,16 @@ chk_engine_pool_stop(uuid_t pool_uuid, bool destroy)
 	       DP_UUID(pool_uuid), destroy ? "destroy" : "non-destroy", DP_RC(rc));
 
 	return rc;
+}
+
+int
+chk_engine_init(void)
+{
+	return chk_ins_init(&chk_engine);
+}
+
+void
+chk_engine_fini(void)
+{
+	chk_ins_fini(&chk_engine);
 }

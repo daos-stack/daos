@@ -851,6 +851,7 @@ class TestWithServers(TestWithoutServers):
         if self.server_managers and self.agent_managers:
             # Compose and run cart_ctl command
             cart_ctl = CartCtl()
+            cart_ctl.get_params(self)
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
             cart_ctl.log_message.value = message

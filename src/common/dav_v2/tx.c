@@ -1733,6 +1733,8 @@ dav_reserve_v2(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t typ
 
 	if (palloc_reserve(pop->do_heap, size, constructor_alloc, &carg, type_num, 0,
 			   CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), act) != 0) {
+		if (!tx_inprogress)
+			lw_tx_end(pop, NULL);
 		DAV_API_END();
 		return 0;
 	}
@@ -1786,9 +1788,26 @@ dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 DAV_FUNC_EXPORT void
 dav_cancel_v2(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 {
+	int rc, tx_inprogress = 0;
+
 	DAV_DBG("actvcnt=%zu", actvcnt);
+	if (get_tx()->stage != DAV_TX_STAGE_NONE)
+		tx_inprogress = 1;
+
 	DAV_API_START();
+	if (!tx_inprogress) {
+		rc = lw_tx_begin(pop);
+		if (rc) {
+			D_ERROR("Failed to start local tx. %d\n", rc);
+			return;
+		}
+	}
+
 	palloc_cancel(pop->do_heap, actv, actvcnt);
+
+	if (!tx_inprogress)
+		lw_tx_end(pop, NULL);
+
 	DAV_API_END();
 }
 

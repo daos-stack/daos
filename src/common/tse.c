@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -383,8 +384,8 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 }
 
 static int
-register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
-	    void *arg, daos_size_t arg_size)
+register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb, void *arg, daos_size_t arg_size,
+	    struct tse_task_cb **dtcp)
 {
 	struct tse_task_private *dtp = tse_task2priv(task);
 	struct tse_task_cb *dtc;
@@ -410,9 +411,10 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 		d_list_add(&dtc->dtc_list, &dtp->dtp_comp_cb_list);
 	else /** MSC - don't see a need for more than 1 prep cb */
 		d_list_add_tail(&dtc->dtc_list, &dtp->dtp_prep_cb_list);
-
 	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
 
+	if (dtcp != NULL)
+		*dtcp = dtc;
 	return 0;
 }
 
@@ -421,7 +423,41 @@ tse_task_register_comp_cb(tse_task_t *task, tse_task_cb_t comp_cb,
 			  void *arg, daos_size_t arg_size)
 {
 	D_ASSERT(comp_cb != NULL);
-	return register_cb(task, true, comp_cb, arg, arg_size);
+	return register_cb(task, true, comp_cb, arg, arg_size, NULL);
+}
+
+static void
+unregister_cb(tse_task_t *task, struct tse_task_cb *dtc)
+{
+	struct tse_task_private *dtp;
+
+	if (dtc == NULL)
+		return;
+
+	dtp = tse_task2priv(task);
+	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
+	d_list_del(&dtc->dtc_list);
+	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
+	D_FREE(dtc);
+}
+
+int
+tse_task_register_comp_cb_and_reinit(tse_task_t *task, tse_task_cb_t comp_cb, void *arg,
+				     daos_size_t arg_size, uint64_t delay)
+{
+	struct tse_task_cb *dtc = NULL;
+	int                 rc;
+
+	D_ASSERT(comp_cb != NULL);
+	rc = register_cb(task, true, comp_cb, arg, arg_size, &dtc);
+	if (rc != 0)
+		return rc;
+
+	rc = tse_task_reinit_with_delay(task, delay);
+	if (rc != 0)
+		unregister_cb(task, dtc);
+
+	return rc;
 }
 
 int
@@ -430,15 +466,20 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
 		      tse_task_cb_t comp_cb, void *comp_data,
 		      daos_size_t comp_data_size)
 {
-	int	rc = 0;
+	int                 rc  = 0;
+	struct tse_task_cb *dtc = NULL;
 
 	D_ASSERT(prep_cb != NULL || comp_cb != NULL);
-	if (prep_cb)
-		rc = register_cb(task, false, prep_cb, prep_data,
-				 prep_data_size);
-	if (comp_cb && !rc)
-		rc = register_cb(task, true, comp_cb, comp_data,
-				 comp_data_size);
+	if (prep_cb) {
+		rc = register_cb(task, false, prep_cb, prep_data, prep_data_size, &dtc);
+		if (rc != 0)
+			return rc;
+	}
+	if (comp_cb) {
+		rc = register_cb(task, true, comp_cb, comp_data, comp_data_size, NULL);
+		if (rc != 0)
+			unregister_cb(task, dtc);
+	}
 	return rc;
 }
 
@@ -907,7 +948,12 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep, task);
 
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
-	D_ASSERT(dtp->dtp_dep_cnt < UINT16_MAX);
+	if (dtp->dtp_dep_cnt >= UINT16_MAX || dtp->dtp_refcnt >= UINT16_MAX) {
+		D_ERROR("Max dependent tasks reached: %" PRIu16 "\n", dtp->dtp_dep_cnt);
+		D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
+		D_FREE(tlink);
+		return -DER_NOMEM;
+	}
 	tse_task_addref_locked(dtp);
 	tlink->tl_task = task;
 	dtp->dtp_dep_cnt++;

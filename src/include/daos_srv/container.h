@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2015-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,7 +39,9 @@ int
 			 daos_prop_t *prop);
 int
     ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid);
-int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
+int
+    ds_cont_list(uuid_t pool_uuid, bool include_destroying, struct daos_pool_cont_info **conts,
+		 uint64_t *ncont);
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
 int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
@@ -76,9 +78,11 @@ struct ds_cont_child {
 	ABT_cond		 sc_scrub_cond;
 	ABT_cond		 sc_rebuild_cond;
 	ABT_cond		 sc_fini_cond;
+	ABT_cond                 sc_init_cond;
 	uint32_t                 sc_dtx_resyncing : 1, sc_dtx_reindex : 1, sc_dtx_reindex_abort : 1,
-	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_props_fetched : 1, sc_stopping : 1,
-	    sc_destroying : 1, sc_vos_agg_active : 1, sc_ec_agg_active : 1,
+	    sc_dtx_delay_reset : 1, sc_dtx_registered : 1, sc_csummer_inited : 1,
+	    sc_csummer_initing : 1, sc_stopping : 1, sc_destroying : 1, sc_vos_agg_active : 1,
+	    sc_ec_agg_active : 1,
 	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
 	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1,
 	    /* flag of sc_ec_agg_eph_boundary valid */

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,16 +50,6 @@ fake_write_file(const char *path, d_iov_t *contents)
  * Test Functions
  * -----------------------------------------------
  */
-
-static void
-quit_cmd_tests(void **state)
-{
-	/* Quit is really simple and should just indicate to the program context that it's
-	 * time to quit
-	 */
-	assert_success(ddb_run_quit(&g_ctx));
-	assert_true(g_ctx.dc_should_quit);
-}
 
 static void
 ls_cmd_tests(void **state)
@@ -181,11 +171,21 @@ dump_ilog_cmd_tests(void **state)
 	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 	assert_true(dvt_fake_print_called);
 
+	/* Dump dkey ilog - invalid */
+	dvt_fake_print_called = 0;
+	opt.path              = "[0]/[0]//";
+	assert_rc_equal(ddb_run_ilog_dump(&ctx, &opt), -DER_INVAL);
+	assert_true(dvt_fake_print_called);
+
 	/* Dump dkey ilog */
 	dvt_fake_print_called = 0;
 	opt.path = "[0]/[0]/[0]";
 	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 	assert_true(dvt_fake_print_called);
+
+	/* Dump akey ilog - invalid */
+	opt.path = "[0]/[0]/[0]//";
+	assert_rc_equal(ddb_run_ilog_dump(&ctx, &opt), -DER_INVAL);
 
 	/* Dump akey ilog */
 	opt.path = "[0]/[0]/[0]/[0]";
@@ -568,12 +568,14 @@ static int
 dcv_suit_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx;
+	struct vos_file_parts   path_parts = {0};
 
 	assert_success(ddb_test_setup_vos(state));
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0));
+	assert_success(parse_vos_file_parts(tctx->dvt_pmem_file, NULL, &path_parts));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &tctx->dvt_poh, 0, true));
 
 	g_ctx.dc_poh = tctx->dvt_poh;
 
@@ -602,7 +604,6 @@ int
 ddb_commands_tests_run()
 {
 	const struct CMUnitTest tests[] = {
-	    TEST(quit_cmd_tests),
 	    TEST(ls_cmd_tests),
 	    TEST(dump_value_cmd_tests),
 	    TEST(dump_ilog_cmd_tests),

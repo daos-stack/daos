@@ -1,6 +1,6 @@
 # Copyright 2016-2024 Intel Corporation
 # Copyright 2025 Google LLC
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -32,9 +32,7 @@ from SCons.Script import Dir, GetOption
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
 ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
-ARM_PLATFORM = False
-if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
-    ARM_PLATFORM = True
+ARM_PLATFORM = PROCESSOR.lower() in [x.lower() for x in ARM_LIST]
 
 
 class InstalledComps():
@@ -95,10 +93,12 @@ def check(reqs, name, built_str, installed_str=""):
 def ofi_config(config):
     """Check ofi version"""
     if not GetOption('silent'):
-        print('Checking for libfabric > 1.11...', end=' ')
+        print('Checking for libfabric >= 1.20...', end=' ')
     code = """#include <rdma/fabric.h>
-_Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
-               "libfabric must be >= 1.11");"""
+_Static_assert(FI_VERSION_GE(
+               FI_VERSION(FI_MAJOR_VERSION, FI_MINOR_VERSION),
+               FI_VERSION(1, 20)),
+               "libfabric must be >= 1.20");"""
     rc = config.TryCompile(code, ".c")
     if not GetOption('silent'):
         print('yes' if rc else 'no')
@@ -201,6 +201,7 @@ def define_mercury(reqs):
                      '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
+                     '-DMERCURY_ENABLE_DEBUG:BOOL=ON',
                      '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
@@ -221,11 +222,6 @@ def define_mercury(reqs):
     mercury_build.append(f'-DCMAKE_BUILD_TYPE:STRING={build_type}')
     if build_type != "RelWithDebInfo":
         mercury_build.append('-DMERCURY_LIB_DEBUG_NAME_IS_RELEASE:BOOL=ON')
-
-    if reqs.target_type == 'debug':
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
-    else:
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever(True),
@@ -287,14 +283,15 @@ def define_components(reqs):
     reqs.define('isal',
                 retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib64'],
+                          ['./configure', '--disable-static', '--prefix=$ISAL_PREFIX',
+                           '--libdir=$ISAL_PREFIX/lib64'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'])
     reqs.define('isal_crypto',
                 retriever=GitRepoRetriever(),
-                commands=[['./autogen.sh'],
-                          ['./configure',
+                commands=[['./autogen.sh', '--no-oshmem'],
+                          ['./configure', '--disable-static',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
                            '--libdir=$ISAL_CRYPTO_PREFIX/lib64'],
                           ['make'],
@@ -371,8 +368,12 @@ def define_components(reqs):
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
 
+    spdk_reqs = ['isal', 'isal_crypto']
+    spdk_conf = ['--with-isal=$ISAL_PREFIX', '--with-isal-crypto=$ISAL_CRYPTO_PREFIX']
     if ARM_PLATFORM:
         spdk_arch = 'native'
+        spdk_reqs = []
+        spdk_conf = []
     elif dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
@@ -388,25 +389,24 @@ def define_components(reqs):
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
                            '--disable-unit-tests',
-                           '--disable-apps',
                            '--without-vhost',
-                           '--without-crypto',
-                           '--without-pmdk',
                            '--without-rbd',
                            '--without-iscsi-initiator',
-                           '--without-isal',
                            '--without-vtune',
                            '--with-shared',
-                           f'--target-arch={spdk_arch}'],
+                           '--without-nvme-cuse',
+                           '--without-crypto',
+                           f'--target-arch={spdk_arch}'] + spdk_conf,
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'libdir=$SPDK_PREFIX/lib64/daos_srv',
                            'includedir=$SPDK_PREFIX/include/daos_srv', 'install'],
                           [copy_files, 'dpdk/build/lib', '$SPDK_PREFIX/lib64/daos_srv'],
+                          ['rm', '-rf', '$SPDK_PREFIX/lib'],
                           [copy_files, 'dpdk/build/include', '$SPDK_PREFIX/include/daos_srv/dpdk'],
                           [copy_files, 'include', '$SPDK_PREFIX/share/daos/spdk/include'],
                           [copy_files, 'scripts', '$SPDK_PREFIX/share/daos/spdk/scripts'],
-                          ['mv', '$SPDK_PREFIX/bin/spdk_nvme_discovery_aer',
-                           '$SPDK_PREFIX/bin/daos_spdk_nvme_discovery_aer'],
+                          ['mv', '$SPDK_PREFIX/bin/spdk_nvme_discover',
+                           '$SPDK_PREFIX/bin/daos_spdk_nvme_discover'],
                           ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/daos_spdk_nvme_lsvmd'],
                           ['cp', 'build/examples/nvme_manage',
                            '$SPDK_PREFIX/bin/daos_spdk_nvme_manage'],
@@ -418,7 +418,8 @@ def define_components(reqs):
                 extra_lib_path=['lib64/daos_srv'],
                 headers=['spdk/nvme.h'],
                 pkgconfig='daos_spdk',
-                patch_rpath=['lib64/daos_srv', 'bin'])
+                patch_rpath=['lib64/daos_srv', 'bin'],
+                requires=spdk_reqs)
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever(),

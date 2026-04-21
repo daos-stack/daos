@@ -10,7 +10,7 @@ if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/libfabric.sh
   utils/rpms/mercury.sh
   utils/rpms/pmdk.sh
-  utils/rpms/spdk.sh
+  utils/rpms/daos-spdk.sh
 fi
 if [[ "${build_type}" =~ daos|all ]]; then
   utils/rpms/daos.sh

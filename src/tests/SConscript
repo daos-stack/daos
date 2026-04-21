@@ -18,7 +18,7 @@ def build_tests(env, prereqs):
     denv.compiler_setup()
 
     libs_server = ['dts', 'daos_tests', 'daos_common_pmem', 'cart', 'gurt', 'uuid', 'pthread',
-                   'dpar', 'isal', 'protobuf-c', 'cmocka']
+                   'dpar', 'isal', 'protobuf-c', 'cmocka', 'daos_mgmt_crtproto']
     libs_client = ['dts', 'daos_tests', 'daos', 'daos_common', 'daos_tests', 'gurt', 'cart', 'uuid',
                    'pthread', 'dpar', 'cmocka']
 
@@ -38,7 +38,7 @@ def build_tests(env, prereqs):
         tenv = denv.Clone()
         tenv.require('argobots', 'pmdk')
 
-        libs_server += ['vos', 'bio', 'abt', 'numa']
+        libs_server += ['vos', 'bio', 'ssl', 'abt', 'numa']
         vos_engine = tenv.StaticObject(['vos_engine.c'])
 
         vos_perf = tenv.d_program('vos_perf',

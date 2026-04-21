@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -32,31 +34,33 @@ type (
 
 	// MockSysConfig alters mock SystemProvider behavior.
 	MockSysConfig struct {
-		IsMountedBool   bool
-		IsMountedErr    error
-		MountErr        error
-		UnmountErr      error
-		MkfsErr         error
-		ChmodErr        error
-		ChownErr        error
-		GetfsStr        string
-		GetfsErr        error
-		SourceToTarget  map[string]string
-		GetfsIndex      int
-		GetfsUsageResps []GetfsUsageRetval
-		GetfsTypeRes    *FsType
-		GetfsTypeErr    []error
-		StatErrors      map[string]error
-		RealStat        bool
-		ReadFileResults map[string][]byte
-		ReadFileErrors  map[string]error
-		RealReadFile    bool
-		GeteuidRes      int
-		GetegidRes      int
-		MkdirErr        error
-		RealMkdir       bool
-		RemoveAllErr    error
-		RealRemoveAll   bool
+		IsMountedBool     bool
+		IsMountedErr      error
+		MountErr          error
+		UnmountErr        error
+		MkfsErr           error
+		ChmodErr          error
+		ChownErr          error
+		GetfsStr          string
+		GetfsErr          error
+		SourceToTarget    map[string]string
+		GetfsIndex        int
+		GetfsUsageResps   []GetfsUsageRetval
+		GetfsTypeRes      *FsType
+		GetfsTypeErr      []error
+		GetDeviceLabelRes string
+		GetDeviceLabelErr error
+		StatErrors        map[string]error
+		RealStat          bool
+		ReadFileResults   map[string][]byte
+		ReadFileErrors    map[string]error
+		RealReadFile      bool
+		GeteuidRes        int
+		GetegidRes        int
+		MkdirErr          error
+		RealMkdir         bool
+		RemoveAllErr      error
+		RealRemoveAll     bool
 	}
 
 	// MockSysProvider gives a mock SystemProvider implementation.
@@ -67,6 +71,7 @@ type (
 		isMounted       MountMap
 		IsMountedInputs []string
 		GetfsTypeCount  int
+		MkfsReqs        []MkfsReq
 	}
 )
 
@@ -146,7 +151,10 @@ func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	return msp.cfg.UnmountErr
 }
 
-func (msp *MockSysProvider) Mkfs(_ MkfsReq) error {
+func (msp *MockSysProvider) Mkfs(in MkfsReq) error {
+	msp.Lock()
+	msp.MkfsReqs = append(msp.MkfsReqs, in)
+	msp.Unlock()
 	return msp.cfg.MkfsErr
 }
 
@@ -185,6 +193,10 @@ func (msp *MockSysProvider) GetfsType(path string) (*FsType, error) {
 	}
 
 	return result, err
+}
+
+func (msp *MockSysProvider) GetDeviceLabel(device string) (string, error) {
+	return msp.cfg.GetDeviceLabelRes, msp.cfg.GetDeviceLabelErr
 }
 
 func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
@@ -227,11 +239,10 @@ func (msp *MockSysProvider) Getegid() int {
 	return msp.cfg.GetegidRes
 }
 
-// Mkdir creates a new directory with the specified name and permission
-// bits (before umask).
+// Mkdir creates a new directory with the specified name and permission bits (umask ignored).
 func (msp *MockSysProvider) Mkdir(path string, flags os.FileMode) error {
 	if msp.cfg.RealMkdir {
-		return os.Mkdir(path, flags)
+		return common.MkdirForcePerm(path, flags)
 	}
 	return msp.cfg.MkdirErr
 }
@@ -257,6 +268,7 @@ func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider
 		isMounted: MountMap{
 			mounted: make(map[string]string),
 		},
+		MkfsReqs: make([]MkfsReq, 0),
 	}
 	log.Debugf("creating MockSysProvider with cfg: %+v", msp.cfg)
 	return msp

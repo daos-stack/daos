@@ -20,6 +20,10 @@ case "$ID_LIKE" in
         ;;
 esac
 
+SERVER_CONFIG="/etc/daos/daos_server.yml"
+AGENT_CONFIG="/etc/daos/daos_agent.yml"
+CONTROL_CONFIG="/etc/daos/daos_control.yml"
+
 if [ -n "$DAOS_PKG_VERSION" ]; then
     DAOS_PKG_VERSION="-${DAOS_PKG_VERSION}"
 fi
@@ -30,6 +34,7 @@ if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
   exit 1
 fi
+
 if ! sudo $YUM -y history undo last; then
     echo "Error trying to undo previous dnf transaction"
     $YUM history
@@ -82,13 +87,38 @@ if ! sudo $YUM -y history undo last; then
     $YUM history
     exit 1
 fi
+
+# Verify config files my creating an existing config file before installing the RPM
+if [ -f "${SERVER_CONFIG}" ]; then
+  echo "A ${SERVER_CONFIG} config file should not exist before the daos-server install"
+  ls -al /etc/daos/daos*
+  exit 1
+fi
+if [ -f "${AGENT_CONFIG}" ]; then
+  echo "A ${AGENT_CONFIG} config file should not exist before the daos-client-tests-openmpi install"
+  ls -al /etc/daos/daos*
+  exit 1
+fi
+sudo touch "${SERVER_CONFIG}"
+sudo touch "${AGENT_CONFIG}"
+
 sudo $YUM -y install daos-server"$DAOS_PKG_VERSION"
 if rpm -q daos-client; then
   echo "daos-client RPM should not be installed as a dependency of daos-server"
   exit 1
 fi
+if [ ! -f "${SERVER_CONFIG}.rpmnew" ]; then
+  echo "A ${SERVER_CONFIG}.rpmnew file should exist after the daos-server install"
+  ls -al /etc/daos/daos*
+  exit 1
+fi
 
 sudo $YUM -y install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
+if [ ! -f "${AGENT_CONFIG}.rpmnew" ]; then
+  echo "A ${AGENT_CONFIG}.rpmnew file should exist after the daos-client-tests-openmpi install"
+  ls -al /etc/daos/daos*
+  exit 1
+fi
 
 me=$(whoami)
 for dir in server agent; do
@@ -105,19 +135,27 @@ FTEST=/usr/lib/daos/TESTING/ftest
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
+
+cat <<EOF > venv/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+    quiet = 1
+EOF
+
 pip install --upgrade pip
 pip install -r $FTEST/requirements-ftest.txt
 
 sudo PYTHONPATH="$FTEST/util"                        \
      "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
-        -a /etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml
-sudo bash -c 'echo "system_ram_reserved: 4" >> /etc/daos/daos_server.yml'
+     -a "$AGENT_CONFIG" -s "$SERVER_CONFIG"
+sudo bash -c 'echo "system_ram_reserved: 4" >> '"$SERVER_CONFIG"
 sudo PYTHONPATH="$FTEST/util"                        \
      "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py \
-     -n "$HOSTNAME" -d /etc/daos/daos_control.yml
-cat /etc/daos/daos_server.yml
-cat /etc/daos/daos_agent.yml
-cat /etc/daos/daos_control.yml
+     -n "$HOSTNAME" -d "$CONTROL_CONFIG"
+cat "$SERVER_CONFIG"
+cat "$AGENT_CONFIG"
+cat "$CONTROL_CONFIG"
 
 # python3.6 does not like deactivate with -u set, later versions are OK with it however.
 set +u

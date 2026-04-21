@@ -1,153 +1,260 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
-#include <wordexp.h>
-#include <getopt.h>
-#include <gurt/common.h>
-#include "daos_errno.h"
+#include <regex.h>
+#include <errno.h>
+#include <string.h>
+
+#include <daos_errno.h>
+#include <daos_srv/bio.h>
+
 #include "ddb_common.h"
 #include "ddb_parse.h"
 
-void
-safe_strcat(char *dst, const char *src, size_t dst_size)
-{
-	size_t remaining_space = dst_size - strlen(dst) - 1; // Subtract 1 for null terminator
+/**
+ * Define the regex match group indices for the different parts of the VOS path. The regex is
+ * defined in the init_regex_vos_file_parts function. The regex is used to parse a VOS path into its
+ * different components, such as the DB path, pool UUID, VOS file name, and target index. The match
+ * groups are used to extract these components from the regex match results.
+ *
+ * The MATCH_SIZE is the total number of match groups in the regex, which is used to define the size
+ * of the regmatch_t array when executing the regex. The regex is designed to be flexible in terms
+ * of the format of the VOS path, allowing for optional DB paths and different VOS file names, while
+ * still enforcing the presence of a valid pool UUID and either a VOS file name or "rdb-pool".
+ *
+ * For example with a vos_path such as "/path/to/db/123e4567-e89b-12d3-a456-426614174000/vos-1", the
+ * regex will match and the match groups will be as follows:
+ * - MATCH_DB_PATH_ROOT_IDX: not matched
+ * - MATCH_DB_PATH_DIR_IDX: "/path/to/db/"
+ * - MATCH_POOL_UUID_IDX: "123e4567-e89b-12d3-a456-426614174000"
+ * - MATCH_VOS_FILE_NAME_IDX: "vos-1"
+ * - MATCH_TARGET_IDX_IDX: "1"
+ * - MATCH_RDB_POOL_IDX: not matched
+ *
+ * With a vos_path such as "/123e4567-e89b-12d3-a456-426614174000/rdb-pool", the match groups will
+ * be:
+ * - MATCH_DB_PATH_ROOT_IDX: "/"
+ * - MATCH_DB_PATH_DIR_IDX: not matched
+ * - MATCH_POOL_UUID_IDX: "123e4567-e89b-12d3-a456-426614174000"
+ * - MATCH_VOS_FILE_NAME_IDX: not matched
+ * - MATCH_TARGET_IDX_IDX: not matched
+ * - MATCH_RDB_POOL_IDX: "rdb-pool"
+ */
+enum {
+	MATCH_DB_PATH_ROOT_IDX  = 2,
+	MATCH_DB_PATH_DIR_IDX   = 4,
+	MATCH_POOL_UUID_IDX     = 6,
+	MATCH_VOS_FILE_NAME_IDX = 9,
+	MATCH_TARGET_IDX_IDX    = 10,
+	MATCH_RDB_POOL_IDX      = 12,
+	MATCH_SIZE              = 13
+};
 
-	strncat(dst, src, remaining_space);
+static void
+init_regex_vos_file_parts(regex_t *preg)
+{
+	const char *regex_buf = "^((/+)|((/*[^/]+(/+[^/]+)*)/+))?"
+				"([0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})/+"
+				"((vos-([0-9]|([1-9][0-9]+)))|(rdb-pool))$";
+	char       *buf;
+	size_t      buf_size;
+	int         rc;
+
+	rc = regcomp(preg, regex_buf, REG_EXTENDED);
+	if (rc == 0)
+		return;
+
+	buf_size = regerror(rc, preg, NULL, 0);
+	D_ASSERT(buf_size > 0);
+	D_ALLOC_ARRAY(buf, buf_size);
+	D_ASSERT(buf != NULL);
+	regerror(rc, preg, buf, buf_size);
+	D_FATAL("Invalid regex '%s': %s", regex_buf, buf);
+	D_FREE(buf);
+	D_ASSERT(0);
+}
+
+static int
+parse_path(const char *vos_path, const regmatch_t *path_match, char *db_path)
+{
+	size_t db_path_len;
+
+	D_ASSERT(path_match->rm_so == 0);
+	D_ASSERT(path_match->rm_so < path_match->rm_eo);
+
+	db_path_len = path_match->rm_eo - path_match->rm_so;
+	if (db_path_len >= DB_PATH_SIZE) {
+		D_ERROR("DB path '%.*s' too long in VOS path: got=%zu, max=%d\n", (int)db_path_len,
+			&vos_path[0], db_path_len, DB_PATH_SIZE - 1);
+		return -DER_EXCEEDS_PATH_LEN;
+	}
+	memcpy(db_path, &vos_path[0], db_path_len);
+	db_path[db_path_len] = '\0';
+
+	return DER_SUCCESS;
+}
+
+static int
+parse_db_path(const char *vos_path, const regmatch_t *vp_match, char *db_path)
+{
+	const regmatch_t *pr_match = &vp_match[MATCH_DB_PATH_ROOT_IDX];
+	const regmatch_t *pd_match = &vp_match[MATCH_DB_PATH_DIR_IDX];
+
+	if (pr_match->rm_so != (regoff_t)-1)
+		return parse_path(vos_path, pr_match, db_path);
+
+	if (pd_match->rm_so == (regoff_t)-1) {
+		/* No DB path provided, use current directory */
+		memcpy(db_path, ".", 2);
+		return 0;
+	}
+
+	return parse_path(vos_path, pd_match, db_path);
+}
+
+static void
+parse_pool_uuid(const char *vos_path, const regmatch_t *vp_match, uuid_t pool_uuid)
+{
+	const regmatch_t *pu_match = &vp_match[MATCH_POOL_UUID_IDX];
+	char              pool_uuid_str[UUID_STR_LEN];
+	int               rc;
+
+	D_ASSERT(pu_match->rm_so != (regoff_t)-1);
+	D_ASSERT(pu_match->rm_eo - pu_match->rm_so == UUID_STR_LEN - 1);
+
+	memcpy(pool_uuid_str, &vos_path[pu_match->rm_so], UUID_STR_LEN - 1);
+	pool_uuid_str[UUID_STR_LEN - 1] = '\0';
+	rc                              = uuid_parse(pool_uuid_str, pool_uuid);
+	D_ASSERTF(rc == 0, "Invalid Pool UUID '%s' in VOS path '%s'\n", pool_uuid_str, vos_path);
+}
+
+static int
+parse_vos_file_name(const char *vos_path, const regmatch_t *vp_match, char *vos_file_name)
+{
+	const regmatch_t *vf_match = &vp_match[MATCH_VOS_FILE_NAME_IDX];
+	size_t            vos_file_name_len;
+
+	D_ASSERT(vf_match->rm_so != (regoff_t)-1);
+	D_ASSERT(vf_match->rm_so < vf_match->rm_eo);
+
+	vos_file_name_len = vf_match->rm_eo - vf_match->rm_so;
+	if (vos_file_name_len >= VOS_FILE_NAME_SIZE) {
+		D_ERROR("VOS file name '%.*s' too long in VOS path '%s': got=%zu, max=%d\n",
+			(int)vos_file_name_len, &vos_path[vf_match->rm_so], vos_path,
+			vos_file_name_len, VOS_FILE_NAME_SIZE - 1);
+		return -DER_EXCEEDS_PATH_LEN;
+	}
+	memcpy(vos_file_name, &vos_path[vf_match->rm_so], vos_file_name_len + 1);
+
+	return DER_SUCCESS;
+}
+
+static int
+parse_target_idx(const char *vos_path, const regmatch_t *vp_match, uint32_t *target_idx)
+{
+	const regmatch_t  *ti_match = &vp_match[MATCH_TARGET_IDX_IDX];
+	char              *endptr;
+	unsigned long long idx;
+
+	D_ASSERT(ti_match->rm_so != (regoff_t)-1);
+	D_ASSERT(ti_match->rm_so < ti_match->rm_eo);
+
+	errno = 0;
+	idx   = strtoull(&vos_path[ti_match->rm_so], &endptr, 10);
+	if (errno == ERANGE) {
+		D_ASSERT(idx == ULLONG_MAX);
+		D_ERROR("Target index '%s' out of range in VOS path '%s': %s\n",
+			&vos_path[ti_match->rm_so], vos_path, strerror(errno));
+		return -DER_OVERFLOW;
+	}
+	D_ASSERTF(errno == 0, "Invalid target index '%s' in VOS path '%s': %s\n",
+		  &vos_path[ti_match->rm_so], vos_path, strerror(errno));
+	D_ASSERT(endptr != &vos_path[ti_match->rm_so]);
+	D_ASSERT(*endptr == '\0');
+
+	if (idx > UINT32_MAX) {
+		D_ERROR("Target index '%llu' out of range in VOS path '%s': min=0 , max=%" PRIu32
+			"\n",
+			idx, vos_path, UINT32_MAX);
+		return -DER_OVERFLOW;
+	}
+	*target_idx = idx;
+
+	return DER_SUCCESS;
 }
 
 int
-vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
+parse_vos_file_parts(const char *vos_path, const char *db_path,
+		     struct vos_file_parts *vos_file_parts)
 {
-	uint32_t	 path_len = strlen(path) + 1;
-	char		*path_copy;
-	char		*tok;
-	int		 rc = -DER_INVAL;
+	regex_t                preg;
+	regmatch_t             match[MATCH_SIZE];
+	struct vos_file_parts *vfp_tmp;
+	int                    rc;
 
-	D_ASSERT(path != NULL && vos_file_parts != NULL);
+	D_ASSERT(vos_path != NULL && vos_file_parts != NULL);
 
-	D_ALLOC(path_copy, path_len);
-	if (path_copy == NULL)
-		return -DER_NOMEM;
-	strcpy(path_copy, path);
+	D_ALLOC_PTR(vfp_tmp);
+	if (vfp_tmp == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
-	tok = strtok(path_copy, "/");
-	while (tok != NULL && rc != 0) {
-		rc = uuid_parse(tok, vos_file_parts->vf_pool_uuid);
-		if (!SUCCESS(rc)) {
-			safe_strcat(vos_file_parts->vf_db_path, "/", DB_PATH_LEN);
-			safe_strcat(vos_file_parts->vf_db_path, tok, DB_PATH_LEN);
+	init_regex_vos_file_parts(&preg);
+
+	rc = regexec(&preg, vos_path, MATCH_SIZE, match, 0);
+	if (rc == REG_NOMATCH) {
+		D_ERROR("Invalid VOS path: '%s'. Expected format: "
+			"[/path/to/db/]pool-uuid/(vos-N|rdb-pool)\n",
+			vos_path);
+		rc = -DER_INVAL;
+		goto out_preg;
+	}
+	D_ASSERT(rc == 0);
+
+	if (db_path != NULL && db_path[0] != '\0') {
+		size_t db_path_len = strnlen(db_path, PATH_MAX);
+		if (db_path_len >= DB_PATH_SIZE) {
+			D_ERROR("DB path '%s' too long: got=%zu, max=%d\n", db_path, db_path_len,
+				DB_PATH_SIZE - 1);
+			rc = -DER_EXCEEDS_PATH_LEN;
+			goto out_preg;
 		}
-		tok = strtok(NULL, "/");
+		memcpy(vfp_tmp->vf_db_path, db_path, db_path_len + 1);
+	} else {
+		rc = parse_db_path(vos_path, match, vfp_tmp->vf_db_path);
+		if (!SUCCESS(rc))
+			goto out_preg;
 	}
 
-	if (rc != 0 || tok == NULL) {
-		D_ERROR("Incomplete path: %s\n", path);
-		D_GOTO(done, rc = -DER_INVAL);
+	parse_pool_uuid(vos_path, match, vfp_tmp->vf_pool_uuid);
+
+	if (match[MATCH_RDB_POOL_IDX].rm_so != (regoff_t)-1) {
+		D_ASSERT(match[MATCH_VOS_FILE_NAME_IDX].rm_so == (regoff_t)-1);
+		memcpy(vfp_tmp->vf_vos_file_name, "rdb-pool", sizeof("rdb-pool"));
+		vfp_tmp->vf_target_idx = BIO_SYS_TGT_ID;
+		rc                     = DER_SUCCESS;
+		goto out_preg;
 	}
 
-	strncpy(vos_file_parts->vf_vos_file, tok, ARRAY_SIZE(vos_file_parts->vf_vos_file) - 1);
+	rc = parse_vos_file_name(vos_path, match, vfp_tmp->vf_vos_file_name);
+	if (!SUCCESS(rc))
+		goto out_preg;
 
-	/*
-	 * file name should be vos-N ... split on "-"
-	 * If not, might be test, just assume target of 0
-	 */
-	strtok(tok, "-");
-	tok = strtok(NULL, "-");
-	if (tok != NULL) {
-		D_WARN("vos file name not in correct format: %s\n", vos_file_parts->vf_vos_file);
-		vos_file_parts->vf_target_idx = atoi(tok);
-	}
+	rc = parse_target_idx(vos_path, match, &vfp_tmp->vf_target_idx);
 
-done:
-	if (!SUCCESS(rc)) {
-		/* Reset to if not valid */
-		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
-	}
-	D_FREE(path_copy);
+out_preg:
+	regfree(&preg);
+	if (SUCCESS(rc))
+		memcpy(vos_file_parts, vfp_tmp, sizeof(struct vos_file_parts));
+	D_FREE(vfp_tmp);
+out:
 	return rc;
-}
-
-
-int
-ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args)
-{
-	wordexp_t *we;
-	int rc;
-
-	D_ALLOC_PTR(we);
-	if (we == NULL)
-		return -DER_NOMEM;
-
-	rc = wordexp(buf, we, WRDE_SHOWERR | WRDE_UNDEF);
-	if (rc != 0) {
-		D_FREE(we);
-		return -DER_INVAL;
-	}
-
-	parse_args->ap_argc = we->we_wordc;
-	parse_args->ap_argv = we->we_wordv;
-	parse_args->ap_ctx = we;
-
-	return 0;
-}
-
-void
-ddb_str2argv_free(struct argv_parsed *parse_args)
-{
-	if (parse_args->ap_ctx != NULL) {
-		wordfree(parse_args->ap_ctx);
-		D_FREE(parse_args->ap_ctx);
-	}
-}
-
-int
-ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct program_args *pa)
-{
-	struct option program_options[] = {
-	    {"write_mode", no_argument, NULL, 'w'},     {"run_cmd", required_argument, NULL, 'R'},
-	    {"cmd_file", required_argument, NULL, 'f'}, {"db_path", required_argument, NULL, 'p'},
-	    {"help", required_argument, NULL, 'h'},     {NULL}};
-	int		index = 0, opt;
-
-	optind = 0; /* Reinitialize getopt */
-	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "wR:f:p:h", program_options, &index)) != -1) {
-		switch (opt) {
-		case 'w':
-			pa->pa_write_mode = true;
-			break;
-		case 'R':
-			pa->pa_r_cmd_run = optarg;
-			break;
-		case 'f':
-			pa->pa_cmd_file = optarg;
-			break;
-		case 'p':
-			pa->pa_db_path = optarg;
-			break;
-		case 'h':
-			pa->pa_get_help = true;
-			break;
-		case '?':
-			ddb_errorf(ctx, "'%c'(0x%x) is unknown\n", optopt, optopt);
-		default:
-			return -DER_INVAL;
-		}
-	}
-
-	if (argc - optind > 1) {
-		ddb_error(ctx, "Too many commands\n");
-		return -DER_INVAL;
-	}
-	if (argc - optind == 1)
-		pa->pa_pool_path = argv[optind];
-
-	return 0;
 }
 
 int
@@ -446,8 +553,12 @@ key_parse_str(const char *input, daos_key_t *key)
 			key_len++;
 		}
 	}
-	if (size == 0)
+	if (size == 0) {
+		if (key_len == 0) {
+			return -DER_INVAL;
+		}
 		size = key_len;
+	}
 	if (size < key_len)
 		return -DER_INVAL;
 
