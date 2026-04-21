@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -uex
 
 # This script is used by dockerfiles to optionally use
