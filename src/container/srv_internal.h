@@ -62,7 +62,6 @@ struct ec_eph {
 	d_rank_t	rank;
 	daos_epoch_t	eph;
 	uint64_t        ee_update_ts; /* update timestamp */
-	uint64_t        ee_warn_slug_ts;
 };
 
 /* container EC aggregation epoch control descriptor, which is only on leader */
