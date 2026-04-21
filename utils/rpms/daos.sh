@@ -73,8 +73,6 @@ EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
 DEPENDS=( "mercury >= ${mercury_version}" )
 DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
-# Needed for debugging tasks (ASAN builds)
-EXTERNAL_DEPENDS=("${libasan_lib}")
 build_package "daos"
 
 # Only build server RPMs if we built the server
@@ -401,7 +399,7 @@ TARGET_PATH="${daoshome}/python"
 list_files files "${SL_PREFIX}/lib/daos/python/*"
 append_install_list "${files[@]}"
 
-EXTERNAL_DEPENDS=("${uuid_lib}")
+EXTERNAL_DEPENDS=("${uuid_lib}" "${libasan_lib}")
 DEPENDS=("daos-client = ${VERSION}-${RELEASE}")
 build_package "${daos_dev}"
 
