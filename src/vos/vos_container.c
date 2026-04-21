@@ -654,8 +654,23 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
-	d_iov_set(&iov, &key, sizeof(struct d_uuid));
-	rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
+	/*
+	 * Temporary workaround: Re-check if the container is re-opened by rebuild
+	 * when this function yield on flushing header or starting local tx.
+	 *
+	 * This additional check should be removed once rebuild no longer do on-demand
+	 * container open/create.
+	 */
+	rc = cont_lookup(&key, &pkey, &cont, pool->vp_sysdb);
+	if (rc == 0) {
+		D_ERROR(DF_CONT " Container is re-opened (%d)!\n", DP_CONT(pool->vp_id, co_uuid),
+			cont->vc_open_count);
+		cont_decref(cont);
+		rc = -DER_BUSY;
+	} else {
+		d_iov_set(&iov, &key, sizeof(struct d_uuid));
+		rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
+	}
 
 	rc = umem_tx_end(vos_pool2umm(pool), rc);
 	if (rc) {
