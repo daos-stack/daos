@@ -148,8 +148,8 @@ crt_context_add_counters(struct crt_context *ctx)
 	idx  = ctx->cc_idx;
 
 #define X(name, type, desc, unit_desc)                                                             \
-	rc = d_tm_add_metric(&ctx->cc_metrics.name, type, desc, unit_desc, "net/%s/ctx_%u/%s",     \
-			     prov, idx, #name);                                                    \
+	rc = d_tm_add_metric(&ctx->cc_metrics.name, type, desc, unit_desc, "net/%s/%s/ctx_%u",     \
+			     prov, #name, idx);                                                    \
 	if (rc != 0)                                                                               \
 		DL_WARN(rc, "Failed to add metric " #name "\n");
 
