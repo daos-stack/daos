@@ -24,7 +24,7 @@ distro_custom() {
                /etc/profile.d/lmod.sh;                                        \
     fi
 
-    # Fix for no_pmix_multi_ctx tests on SLES/Leap 15.x
+    # Fix for no_pmix_multi_ctx tests on SLES
     if [[ "${ID:-}" == "sles" ]]; then
         dnf remove -y mercury mercury-debuginfo || true
         dnf remove -y libfabric libfabric1 libfabric-debuginfo || true
