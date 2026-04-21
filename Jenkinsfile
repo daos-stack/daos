@@ -1186,7 +1186,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
@@ -1196,7 +1196,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
-                            other_packages: 'mercury-libfabric mercury-ucx',
+                            other_packages: 'mercury-ucx',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1211,14 +1211,15 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
-                            other_packages: 'mercury-libfabric mercury-ucx',
+                            other_packages: 'mercury-ucx',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
-                            run_if_pr: false,
+                            run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
@@ -1231,7 +1232,8 @@ pipeline {
                             default_nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
@@ -1244,7 +1246,8 @@ pipeline {
                             default_nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                     )
                 }
