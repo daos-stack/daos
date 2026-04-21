@@ -219,9 +219,9 @@ def define_mercury(reqs):
             build_type = "Ubsan"
     except KeyError:
         pass
-    mercury_build.append(f'-DCMAKE_BUILD_TYPE:STRING={build_type}')
+    mercury_build.insert(-1, f'-DCMAKE_BUILD_TYPE:STRING={build_type}')
     if build_type != "RelWithDebInfo":
-        mercury_build.append('-DMERCURY_LIB_DEBUG_NAME_IS_RELEASE:BOOL=ON')
+        mercury_build.insert(-1, '-DMERCURY_LIB_DEBUG_NAME_IS_RELEASE:BOOL=ON')
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever(True),
