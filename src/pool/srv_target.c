@@ -1073,7 +1073,7 @@ pool_fetch_hdls_ult(void *data)
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
 		if (rc == 0)
 			break;
-		dss_sleep(1000 /* ms */);
+		dss_sleep(3000 /* ms */);
 	}
 
 	D_INFO(DF_UUID": signaling done\n", DP_UUID(pool->sp_uuid));
