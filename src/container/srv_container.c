@@ -1999,6 +1999,7 @@ out_lock:
 static void
 cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 {
+	static uint64_t     warn_sluggish_ts;
 	d_rank_list_t       fail_ranks = {0};
 	struct cont_ec_agg *ec_agg;
 	struct cont_ec_agg *tmp;
@@ -2049,11 +2050,14 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			}
 
 			if (pool->sp_reclaim != DAOS_RECLAIM_DISABLED &&
-			    cur_ts > ec_agg->ea_server_ephs[i].ee_update_ts + 600)
+			    !ds_pool_is_rebuilding(pool) && (cur_ts - warn_sluggish_ts) >= 600 &&
+			    (cur_ts - ec_agg->ea_server_ephs[i].ee_update_ts) >= 600) {
+				warn_sluggish_ts = cur_ts;
 				D_WARN(DF_CONT ": Sluggish EC boundary report from rank %d, " DF_U64
 					       " Seconds.",
 				       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), rank,
 				       cur_ts - ec_agg->ea_server_ephs[i].ee_update_ts);
+			}
 
 			if (ec_agg->ea_server_ephs[i].eph < min_eph)
 				min_eph = ec_agg->ea_server_ephs[i].eph;
@@ -2077,11 +2081,14 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		cur_eph = d_hlc2sec(ec_agg->ea_current_eph);
 		new_eph = d_hlc2sec(min_eph);
-		if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+		if (!ds_pool_is_rebuilding(pool) && cur_eph && new_eph > cur_eph &&
+		    (new_eph - cur_eph) >= 600 && (cur_ts - warn_sluggish_ts) >= 600) {
+			warn_sluggish_ts = cur_ts;
 			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
 				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
 			       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), cur_eph, new_eph,
 			       new_eph - cur_eph);
+		}
 
 		if (min_eph > ec_agg->ea_rdb_eph) {
 			rc = cont_agg_eph_store(svc, ec_agg->ea_cont_uuid, min_eph,
