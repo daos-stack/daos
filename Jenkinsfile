@@ -275,6 +275,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL8'),
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -291,6 +292,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL9'),
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -308,6 +310,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -322,6 +325,7 @@ pipeline {
                             pragma_suffix: '-vm',
                             distro: 'ubuntu20',
                             base_branch: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             label: vm9_label('Ubuntu'),
                             next_version: params.BaseBranch,
                             stage_tags: 'vm',
@@ -339,6 +343,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -353,6 +358,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -367,6 +373,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -382,6 +389,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
@@ -396,6 +404,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
