@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2025 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2026 Google LLC
+ * (C) Copyright 2026-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1713,8 +1713,8 @@ out:
 	if (rc != 0)
 		D_FREE(hdl);
 
-	D_DEBUG(DB_MD, DF_UUID": connect "DF_RC"\n",
-		DP_UUID(pool->sp_uuid), DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": connect " DF_UUID " " DF_RC "\n", DP_UUID(pool->sp_uuid),
+		DP_UUID(pic->pic_hdl), DP_RC(rc));
 	return rc;
 }
 
