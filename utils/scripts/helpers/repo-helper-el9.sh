@@ -5,7 +5,6 @@
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
-
 set -uex
 
 # This script is used by dockerfiles to optionally use
