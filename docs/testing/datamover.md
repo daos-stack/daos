@@ -3,8 +3,8 @@
 
 !!! note
   The example below makes use of a DAOS pool and its POSIX directory setup as part of
-  [Run IOR and mdtest](https://docs.daos.io/v2.6/testing/ior/). It also makes use of data
-  written to the same pool as part of [Run dbench](https://docs.daos.io/v2.6/testing/dbench/).
+  [Run IOR and mdtest](ior). It also makes use of data written to the same pool as
+  part of [Run dbench](dbench).
 
 ## 'daos' utility (single process)
 
