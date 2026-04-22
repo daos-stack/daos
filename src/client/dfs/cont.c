@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2018-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -290,8 +290,18 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	/* store SB & root OIDs as container property */
-	roots.cr_oids[2] = roots.cr_oids[3]          = DAOS_OBJ_NIL;
+	/* select oclass and generate GIT (Global Index Table) OID */
+	roots.cr_oids[2].lo = RESERVED_LO;
+	roots.cr_oids[2].hi = GIT_HI;
+	rc = daos_obj_generate_oid_by_rf(poh, rf, &roots.cr_oids[2], 0, dattr.da_dir_oclass_id,
+					 dir_oclass_hint, 0, pa_domain);
+	if (rc) {
+		D_ERROR("Failed to generate GIT OID " DF_RC "\n", DP_RC(rc));
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
+	}
+
+	/* store SB, root & GIT OIDs as container property */
+	roots.cr_oids[3] = DAOS_OBJ_NIL;
 
 	if (roots_entry == NULL) {
 		/* need to add roots prop to list */
@@ -330,7 +340,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	}
 
 	/** Create SB */
-	rc = open_sb(coh, true, false, DAOS_OO_RW, roots.cr_oids[0], &dattr, &super_oh, NULL);
+	rc = open_sb(coh, true, false, DAOS_OO_RW, roots.cr_oids[0], &dattr, &super_oh, NULL, NULL);
 	if (rc)
 		D_GOTO(err_close, rc);
 
@@ -1179,7 +1189,7 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr)
 	}
 
 	/** Recreate SB */
-	rc = open_sb(coh, true, true, DAOS_OO_RW, roots->cr_oids[0], attr, &super_oh, NULL);
+	rc = open_sb(coh, true, true, DAOS_OO_RW, roots->cr_oids[0], attr, &super_oh, NULL, NULL);
 	if (rc)
 		D_GOTO(out_prop, rc);
 
@@ -1255,7 +1265,8 @@ dfs_relink_root(daos_handle_t coh)
 	}
 
 	/** Verify SB */
-	rc = open_sb(coh, false, false, DAOS_OO_RW, roots->cr_oids[0], &attr, &super_oh, &layout_v);
+	rc = open_sb(coh, false, false, DAOS_OO_RW, roots->cr_oids[0], &attr, &super_oh, &layout_v,
+		     NULL);
 	if (rc)
 		D_GOTO(out_prop, rc);
 
