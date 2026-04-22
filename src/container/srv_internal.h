@@ -69,6 +69,7 @@ struct cont_ec_agg {
 	uuid_t			ea_cont_uuid;
 	daos_epoch_t		ea_current_eph;
 	daos_epoch_t             ea_rdb_eph;
+	uint64_t                 ea_warn_slug_ts;
 	struct ec_eph		*ea_server_ephs;
 	d_list_t		ea_list;
 	int			ea_servers_num;
