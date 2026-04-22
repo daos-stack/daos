@@ -192,7 +192,7 @@ EOF
 
 # Setup RubyGems to use artifactory as the primary installation source.
 # Prior to setup, it is essential to ensure that Ruby-Dev is installed.
-# Failure to comply with this procedure will result 
+# Failure to comply with this procedure will result
 # in the manual /etc/gemrc file being overridden.
     dnf --nodocs install ruby-devel
     if [ ! -f /etc/gemrc ]; then
