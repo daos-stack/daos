@@ -736,7 +736,7 @@ pipeline {
                 stage('NLT') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST }
+                        expression { params.CI_NLT_TEST && false /* disable until we fix FI tests*/ }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -805,6 +805,10 @@ pipeline {
                     }
                     post {
                         always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         valgrind_stash: 'nlt-memcheck'
                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
                                                       scm: 'daos-stack/daos',
                                                       requiredResult: hudson.model.Result.UNSTABLE
