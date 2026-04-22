@@ -33,8 +33,8 @@ administrator using `dmg pool get-prop` / `dmg pool set-prop`.
 
 The `self_heal` property describes behavior associated with self-healing and can
 be set at both the system and pool levels. For a given pool to perform the
-recovery actions (map change, rebuild), the policy needs to be enabled at both
-the system and per-pool level.
+recovery actions (map change due to excluded engine/targets, and rebuild), the policy
+needs to be enabled at both the system and per-pool level.
 
 The system level property has flags `exclude;pool_exclude;pool_rebuild` which
 indicate the following:
