@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -137,6 +137,8 @@ class DfuseBashCmd(TestWithServers):
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
             '--group_reporting --exitall_on_error --continue_on_error=none',
+            ('curl "https://jenkins.daos.hpc.amslabs.hpecorp.net" '
+             f'-o {fuse_root_dir}/download.html')
         ]
         # If set, use the HTTPS_PROXY for curl command
         https_proxy = os.environ.get('HTTPS_PROXY')

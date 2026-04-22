@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -154,15 +155,13 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, siz
 		/** for every entry, issue the filler cb */
 		for (i = 0; i < num; i++) {
 			if (op) {
-				char term_char;
+				char name[DFS_MAX_NAME + 1];
 
-				term_char              = ptr[kds[i].kd_key_len];
-				ptr[kds[i].kd_key_len] = '\0';
-				rc                     = op(dfs, obj, ptr, udata);
+				memcpy(name, ptr, kds[i].kd_key_len);
+				name[kds[i].kd_key_len] = '\0';
+				rc                      = op(dfs, obj, name, udata);
 				if (rc)
 					D_GOTO(out, rc);
-
-				ptr[kds[i].kd_key_len] = term_char;
 			}
 
 			/** advance pointer to next entry */

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -112,7 +112,7 @@ struct ds_cont_child {
 	 * VOS aggregation will use this boundary. We will optimize it later.
 	 */
 	uint64_t		sc_ec_agg_eph_boundary;
-	/* The current EC aggregate epoch for this xstream */
+	/* The local EC aggregation epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
 	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
 	 * local VOS.
@@ -142,7 +142,7 @@ struct ds_cont_child {
 struct agg_param {
 	void			*ap_data;
 	struct ds_cont_child	*ap_cont;
-	daos_epoch_t		ap_full_scan_hlc;
+	daos_epoch_t             ap_full_scan_hlc;
 	bool			ap_vos_agg;
 };
 

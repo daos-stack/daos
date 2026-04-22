@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,6 +40,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, da
 	if (name == NULL)
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
+		return EINVAL;
+	if (size > 0 && value == NULL)
 		return EINVAL;
 	if (size > DFS_MAX_XATTR_LEN)
 		return EINVAL;
@@ -146,6 +149,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 		return EINVAL;
 	if (name == NULL)
 		return EINVAL;
+	if (size == NULL)
+		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
 
@@ -167,7 +172,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 	iod.iod_recxs = NULL;
 	iod.iod_type  = DAOS_IOD_SINGLE;
 
-	if (*size) {
+	if (value != NULL && *size) {
 		iod.iod_size = *size;
 
 		/** set sgl for fetch */
@@ -299,6 +304,8 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 		return EINVAL;
 	if (obj == NULL)
 		return EINVAL;
+	if (size == NULL)
+		return EINVAL;
 
 	/** Open parent object and list from entry */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
@@ -333,17 +340,21 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			continue;
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			if (strncmp("x:", ptr, 2) != 0) {
+			if (kds[i].kd_key_len < 2 || strncmp("x:", ptr, 2) != 0) {
 				ptr += kds[i].kd_key_len;
 				continue;
 			}
 
 			ret_size += kds[i].kd_key_len - 1;
 
-			if (list == NULL)
+			if (list == NULL) {
+				ptr += kds[i].kd_key_len;
 				continue;
-			if (list_size < kds[i].kd_key_len - 2)
+			}
+			if (list_size < kds[i].kd_key_len - 2) {
+				ptr += kds[i].kd_key_len;
 				continue;
+			}
 
 			memcpy(ptr_list, ptr + 2, kds[i].kd_key_len - 2);
 			ptr_list[kds[i].kd_key_len - 2] = '\0';

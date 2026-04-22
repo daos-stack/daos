@@ -553,7 +553,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.5') {
+                stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -566,8 +566,7 @@ pipeline {
                                  ' --cap-add=SYS_ADMIN' +
                                  ' --privileged=true'   +
                                  ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs() +
-                                '--build-arg FVERSION=37'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
@@ -631,7 +630,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 8.8') {
+                stage('Build on EL 8') {
                     when {
                         beforeAgent true
                         expression { !params.CI_el8_NOBUILD && !skipStage() }
@@ -707,10 +706,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.5') {
+                stage('Build on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -719,15 +718,19 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
+                                                ' --build-arg POINT_RELEASE=.6 ' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         job_step_update(
                             sconsBuild(parallel_build: true,
+                                       stash_files: 'ci/test_files_to_stash.txt',
+                                       build_deps: 'no',
+                                       stash_opt: true,
                                        scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'yes'))
+                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
                     }
                     post {
                         unsuccessful {
