@@ -2222,6 +2222,8 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			var wg sync.WaitGroup
 			var restartRequested atomic.Bool
 
+			// Run go-routines for each engine which consume from startRequested channel
+			// otherwise the requestStart() instance methods would block.
 			if len(harness.instances) > 0 {
 				targetRank := ranklist.Rank(tc.evt.Rank)
 				for _, inst := range harness.instances {
@@ -2378,8 +2380,8 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 
 	checkPending := func(t *testing.T, shouldExist bool) {
 		t.Helper()
-		restartMgr.mu.Lock()
-		defer restartMgr.mu.Unlock()
+		restartMgr.mu.RLock()
+		defer restartMgr.mu.RUnlock()
 		_, exists := restartMgr.pendingRestart[testRank]
 		if exists && !shouldExist {
 			t.Fatal("expected pending restart timer to have been cleaned up")

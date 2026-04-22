@@ -42,7 +42,7 @@ type engineRestartManager struct {
 	stopChan       chan struct{}
 	lastRestart    map[ranklist.Rank]time.Time
 	pendingRestart map[ranklist.Rank]*time.Timer
-	mu             sync.Mutex
+	mu             sync.RWMutex
 }
 
 // getMinDelay returns the configured minimum delay between restarts.
@@ -57,8 +57,8 @@ func (mgr *engineRestartManager) getMinDelay() time.Duration {
 // canRestartNow checks if a rank can be restarted immediately.
 // Returns true if restart can proceed, false and delay duration if rate limited.
 func (mgr *engineRestartManager) canRestartNow(rank ranklist.Rank) (bool, time.Duration) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
+	mgr.mu.RLock()
+	defer mgr.mu.RUnlock()
 
 	lastRestart, hasRestarted := mgr.lastRestart[rank]
 	if !hasRestarted {
@@ -81,6 +81,7 @@ func (mgr *engineRestartManager) recordRestartTime(rank ranklist.Rank) {
 	defer mgr.mu.Unlock()
 
 	mgr.lastRestart[rank] = time.Now()
+	mgr.log.Debugf("last restart recorded")
 }
 
 // clearPendingRestart removes a pending restart timer for a rank.
