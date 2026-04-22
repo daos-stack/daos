@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// Copyright 2021-2024 Intel Corporation.
+// Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +19,7 @@ import (
 	"github.com/pkg/errors"
 	pclient "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 )
 
 // pbMetricMap is the map returned by the prometheus scraper.
@@ -49,7 +51,7 @@ func scrapeMetrics(ctx context.Context, req httpGetter) (pbMetricMap, error) {
 		return nil, err
 	}
 
-	parser := expfmt.TextParser{}
+	parser := expfmt.NewTextParser(model.LegacyValidation)
 	reader := strings.NewReader(string(body))
 	result, err := parser.TextToMetricFamilies(reader)
 	if err != nil {
