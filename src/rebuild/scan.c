@@ -904,12 +904,6 @@ out:
 	return rc;
 }
 
-static inline bool
-rebuild_cont_rc_is_skippable(int rc)
-{
-	return rc == -DER_CONT_DESTROYING || rc == -DER_CONT_NONEXIST;
-}
-
 static int
 rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			  vos_iter_type_t type, vos_iter_param_t *iter_param,
@@ -948,7 +942,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
-	if (rebuild_cont_rc_is_skippable(rc)) {
+	if (rc == -DER_CONT_NONEXIST) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already destroyed or destroying\n",
 			DP_RB_RPT(rpt), DP_UUID(arg->co_uuid));
 		rc = 0;
@@ -978,7 +972,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc) {
 		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_fetch_snaps failed",
 			 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
-		if (rebuild_cont_rc_is_skippable(rc)) {
+		if (rc == -DER_CONT_NONEXIST) {
 			DL_ERROR(rc, DF_CONT " skip orphan container",
 				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
 			rc = 0;
@@ -990,7 +984,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc) {
 		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_get_props failed",
 			 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
-		if (rebuild_cont_rc_is_skippable(rc)) {
+		if (rc == -DER_CONT_NONEXIST) {
 			DL_ERROR(rc, DF_CONT " skip orphan container",
 				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
 			rc = 0;

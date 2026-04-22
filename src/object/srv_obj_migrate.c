@@ -1840,7 +1840,7 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		 */
 		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, false, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING)
+			if (rc == -DER_CONT_NONEXIST)
 				D_DEBUG(DB_REBUILD,
 					DF_RB ": container " DF_UUID
 					      "already destroyed or destroying\n",
@@ -1850,7 +1850,7 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 	} else {
 		rc = ds_cont_child_lookup(tls->mpt_pool_uuid, cont_uuid, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING)
+			if (rc == -DER_CONT_NONEXIST)
 				D_DEBUG(DB_REBUILD,
 					DF_RB ": container " DF_UUID
 					      "already destroyed or destroying\n",
@@ -4367,7 +4367,7 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(daos_handle_is_valid(cont_toh));
 
 	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, entry->ie_couuid, &cont_child);
-	if (rc == -DER_CONT_DESTROYING || rc == -DER_CONT_NONEXIST) {
+	if (rc == -DER_CONT_NONEXIST) {
 		D_DEBUG(DB_REBUILD, DF_RB" co_uuid "DF_UUID" already destroyed or destroying, "
 			DF_RC"\n", DP_RB_MPT(tls), DP_UUID(entry->ie_couuid), DP_RC(rc));
 		rc = 0;

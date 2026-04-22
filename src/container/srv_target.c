@@ -1071,7 +1071,7 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being destroying (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
 			cont_child->sc_destroying);
-		rc = -DER_CONT_DESTROYING;
+		rc = -DER_CONT_NONEXIST;
 	} else if (cont_child->sc_stopping) {
 		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being stopped (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
@@ -1529,10 +1529,14 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		return rc;
 
+	/**
+	 * Return -DER_CONT_NONEXIST to simplify caller-side handling.
+	 * This may return -DER_CONT_DESTROYING in the future if needed.
+	 **/
 	if ((*ds_cont)->sc_destroying) {
 		cont_child_put(tls->dt_cont_cache, *ds_cont);
 		*ds_cont = NULL;
-		return -DER_CONT_DESTROYING;
+		return -DER_CONT_NONEXIST;
 	}
 
 	if ((*ds_cont)->sc_stopping) {
