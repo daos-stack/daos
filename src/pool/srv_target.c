@@ -1048,8 +1048,7 @@ ds_pool_put(struct ds_pool *pool)
 void
 pool_fetch_hdls_ult(void *data)
 {
-	struct ds_pool	*pool = data;
-	int		rc = 0;
+	struct ds_pool *pool = data;
 
 	D_INFO(DF_UUID": begin: fetch_hdls=%u stopping=%u\n", DP_UUID(pool->sp_uuid),
 	       pool->sp_fetch_hdls, pool->sp_stopping);
@@ -1065,19 +1064,18 @@ pool_fetch_hdls_ult(void *data)
 	}
 	ABT_mutex_unlock(pool->sp_mutex);
 
-	if (pool->sp_stopping) {
-		D_DEBUG(DB_MD, DF_UUID": skip fetching hdl due to stop\n",
-			DP_UUID(pool->sp_uuid));
-		D_GOTO(out, rc);
-	}
-	D_INFO(DF_UUID": fetching handles\n", DP_UUID(pool->sp_uuid));
-	rc = ds_pool_iv_conn_hdl_fetch(pool);
-	if (rc) {
-		D_INFO(DF_UUID" iv conn fetch %d\n", DP_UUID(pool->sp_uuid), rc);
-		D_GOTO(out, rc);
+	while (!pool->sp_stopping) {
+		int rc;
+
+		D_DEBUG(DB_MD, DF_UUID ": fetching handles: begin\n", DP_UUID(pool->sp_uuid));
+		rc = ds_pool_iv_conn_hdl_fetch(pool);
+		D_DEBUG(DB_MD, DF_UUID ": fetching handles: end: " DF_RC "\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc));
+		if (rc == 0)
+			break;
+		dss_sleep(3000 /* ms */);
 	}
 
-out:
 	D_INFO(DF_UUID": signaling done\n", DP_UUID(pool->sp_uuid));
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_signal(pool->sp_fetch_hdls_done_cond);
