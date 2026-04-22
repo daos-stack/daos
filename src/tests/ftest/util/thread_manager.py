@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from concurrent.futures import as_completed
 from logging import getLogger
+import os
 
 from avocado.utils.process import CmdResult
 
@@ -112,7 +113,8 @@ class ThreadManager():
 
         """
         results = []
-        with ThreadPoolExecutor() as thread_executor:
+        # Simulate the Python 3.6 (RHEL 8) ThreadPoolExecutor default max_workers
+        with ThreadPoolExecutor(max_workers=((os.cpu_count() or 1) * 5)) as thread_executor:
             self.log.info("Submitting %d threads ...", len(self.job_kwargs))
             # Keep track of thread ids by assigning an index to each Future object
             futures = {
