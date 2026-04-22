@@ -85,6 +85,10 @@ src/tests/suite/daos_extend_simple.c:
   test-tag: test_daos_extend_simple
   <<: *ftest-only
 
+src/tests/suite/daos_inc_reint.c:
+  test-tag: test_daos_inc_reint_cont_recov
+  <<: *ftest-only
+
 src/tests/suite/daos_kv.c:
   test-tag: test_daos_kv
   <<: *ftest-only

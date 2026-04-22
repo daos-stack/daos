@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -303,14 +303,17 @@ func TestServer_Listen_AcceptConnection(t *testing.T) {
 
 	lis := newMockListener()
 	lis.setNumConnsToAccept(3)
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
+	dss, err := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dss.listener = lis
 
 	dss.Listen(test.Context(t)) // will return when error is sent
 
 	test.AssertEqual(t, lis.acceptCallCount, lis.acceptNumConns+1,
 		"should have returned after listener errored")
-	test.AssertEqual(t, len(dss.sessions), lis.acceptNumConns,
+	test.AssertEqual(t, dss.GetNumSessions(), lis.acceptNumConns,
 		"server should have made connections into sessions")
 }
 
