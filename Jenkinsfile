@@ -93,7 +93,7 @@ pipeline {
                defaultValue: 'ofi+tcp',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
         string(name: 'TestProviderUCX',
-               defaultValue: 'ucx+ud_x',
+               defaultValue: 'ucx+dc_x',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'BaseBranch',
                defaultValue: test_branch,
@@ -120,9 +120,6 @@ pipeline {
         booleanParam(name: 'CI_medium_ucx_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium UCX test stages')
-        booleanParam(name: 'CI_medium_ucx_provider_TEST',
-                     defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_ucx_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Large UCX test stages')
@@ -138,9 +135,6 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL',
                defaultValue: 'ci_ofed9',
                description: 'Label to use for 9 node Functional Hardware Large UCX stage')
@@ -244,21 +238,6 @@ pipeline {
                             next_version: params.BaseBranch,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
-                            other_packages: 'mercury-ucx',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            pragma_suffix: '-hw-medium-ucx-provider',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
                             other_packages: 'mercury-ucx',
