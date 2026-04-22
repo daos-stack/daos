@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2023 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -424,12 +424,19 @@ plt_set_domain_status(uint32_t id, int status, uint32_t *ver,
 }
 
 void
-plt_set_tgt_status(uint32_t id, int status, uint32_t *ver,
-		struct pool_map *po_map, bool pl_debug_msg)
+plt_set_tgt_status(uint32_t id, int status, uint32_t *ver_ptr, struct pool_map *po_map,
+		   bool pl_debug_msg)
 {
 	struct pool_target	*target;
 	char			*str;
+	uint32_t                 ver;
+	bool                     down2up = false;
 	int			 rc;
+
+	if (ver_ptr != NULL)
+		ver = *ver_ptr;
+	else
+		ver = pool_map_get_version(po_map);
 
 	switch (status) {
 	case PO_COMP_ST_UP:
@@ -457,17 +464,34 @@ plt_set_tgt_status(uint32_t id, int status, uint32_t *ver,
 
 	rc = pool_map_find_target(po_map, id, &target);
 	D_ASSERT(rc == 1);
-	(*ver)++;
+
+	ver++;
+	if (status == PO_COMP_ST_UP) {
+		if (target->ta_comp.co_status == PO_COMP_ST_DOWN) {
+			target->ta_comp.co_flags |= PO_COMPF_DOWN2UP;
+			down2up = true;
+		}
+		target->ta_comp.co_in_ver = ver;
+
+	} else if (status == PO_COMP_ST_DRAIN || status == PO_COMP_ST_DOWN ||
+		   status == PO_COMP_ST_DOWNOUT) {
+		target->ta_comp.co_fseq = ver;
+	}
 	target->ta_comp.co_status = status;
 
-	if (status == PO_COMP_ST_DRAIN || status == PO_COMP_ST_DOWN)
-		target->ta_comp.co_fseq = *ver;
-	if (pl_debug_msg)
-		D_PRINT("set target id %d, rank %d as %s, ver %d.\n",
-			id, target->ta_comp.co_rank, str, *ver);
+	if (pl_debug_msg) {
+		if (down2up)
+			D_PRINT("set target id %d, rank %d vos %d as %s (DOWN2UP), ver %d.\n", id,
+				target->ta_comp.co_rank, target->ta_comp.co_index, str, ver);
+		else
+			D_PRINT("set target id %d, rank %d vos %d as %s, ver %d.\n", id,
+				target->ta_comp.co_rank, target->ta_comp.co_index, str, ver);
+	}
 	pool_map_update_failed_cnt(po_map);
-	rc = pool_map_set_version(po_map, *ver);
+	rc = pool_map_set_version(po_map, ver);
 	D_ASSERT(rc == 0);
+	if (ver_ptr != NULL)
+		*ver_ptr = ver;
 }
 
 void
@@ -871,4 +895,88 @@ is_max_class_obj(daos_oclass_id_t cid)
 	    oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
 		return true;
 	return false;
+}
+
+bool
+plt_layout_with_tgts_on_same_dom(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
+{
+	uint32_t i, j, dom, new_dom, tgt, new_tgt;
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		tgt = layout->ol_shards[i].po_target;
+		dom = tgt / tgts_per_dom;
+		for (j = i + 1; j < layout->ol_nr; j++) {
+			new_tgt = layout->ol_shards[j].po_target;
+			assert_true(new_tgt != tgt);
+			assert_true(tgt != -1 && new_tgt != -1);
+			new_dom = new_tgt / tgts_per_dom;
+			if (dom == new_dom) {
+				print_message("shards %d - %d, on same dom %d\n", i, j, dom);
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool
+plt_layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
+{
+	uint32_t i, j, dom, new_dom, tgt, new_tgt;
+
+	print_message("grp_nr %d, grp_size %d\n", layout->ol_grp_nr, layout->ol_grp_size);
+	for (i = 0; i < layout->ol_nr; i++) {
+		tgt = layout->ol_shards[i].po_target;
+		dom = tgt / tgts_per_dom;
+		for (j = i + 1; j < roundup(i, layout->ol_grp_size); j++) {
+			new_tgt = layout->ol_shards[j].po_target;
+			assert_true(new_tgt != tgt);
+			// assert_true(tgt != -1 && new_tgt != -1);
+			new_dom = new_tgt / tgts_per_dom;
+			if (dom == new_dom) {
+				print_message("colocated shards %d - %d, on dom %d\n", i, j, dom);
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/** Dump layout for debugging purposes*/
+void
+plt_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
+{
+	int i;
+
+	D_PRINT("dump layout for " DF_OID ", ver %d\n", DP_OID(oid), layout->ol_ver);
+
+	for (i = 0; i < layout->ol_nr; i++)
+		D_PRINT("%d: shard_id %d, rank %d vos %d, tgt_id %d, f_seq %d, %s %s\n", i,
+			layout->ol_shards[i].po_shard, layout->ol_shards[i].po_rank,
+			layout->ol_shards[i].po_index, layout->ol_shards[i].po_target,
+			layout->ol_shards[i].po_fseq,
+			layout->ol_shards[i].po_rebuilding ? "rebuilding" : "healthy",
+			layout->ol_shards[i].po_reintegrating ? "reintegrating" : "healthy");
+}
+
+int
+plt_obj_place_mode(daos_obj_id_t oid, struct pl_obj_layout **layout, struct pl_map *pl_map,
+		   unsigned int mode)
+{
+	struct daos_obj_md md;
+	int                rc;
+
+	D_ASSERT(pl_map != NULL);
+	memset(&md, 0, sizeof(md));
+	md.omd_id       = oid;
+	md.omd_pda      = 0;
+	md.omd_fdom_lvl = PO_COMP_TP_RANK;
+	md.omd_pdom_lvl = PO_COMP_TP_ROOT;
+	md.omd_ver      = pool_map_get_version(pl_map->pl_poolmap);
+
+	rc = pl_obj_place(pl_map, 2, &md, mode, NULL, layout);
+
+	return rc;
 }
