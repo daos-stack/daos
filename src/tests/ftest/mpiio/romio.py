@@ -14,15 +14,17 @@ class Romio(MpiioTests):
     """
 
     def test_romio(self):
-        """Test ID: DAOS-1994.
+        """
+Test ID: DAOS-1994.
 
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=mpiio,mpich,romio
         :avocado: tags=Romio,test_romio
+        
         """
         # setting romio parameters
         test_repo = self.params.get("romio_repo", '/run/romio/')

@@ -17,14 +17,16 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
     :avocado: recursive
     """
     def test_scrubber_ssd_auto_eviction(self):
-        """JIRA ID: DAOS-7300
+        """
+JIRA ID: DAOS-7300
 
         1. Create checksum faults above scrubber threshold
         and see whether SSD auto eviction works as expected.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=scrubber,faults
         :avocado: tags=TestWithScrubberTargetEviction,test_scrubber_ssd_auto_eviction
+        
         """
         pool_prop = self.params.get("properties", '/run/pool/*')
         cont_prop = self.params.get("properties", '/run/container/*')

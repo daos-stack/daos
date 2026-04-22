@@ -14,7 +14,8 @@ class IoConsistency(IorTestBase):
     """
 
     def test_ioconsistency(self):
-        """Jira ID: DAOS-4778.
+        """
+Jira ID: DAOS-4778.
 
         Test Description:
             Run IOR first using DFS and then using POSIX to verify data
@@ -32,10 +33,11 @@ class IoConsistency(IorTestBase):
             Repeat the same steps as above for SSF this time.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=io,daosio,ior,dfuse
         :avocado: tags=IoConsistency,test_ioconsistency
         :avocado: tags=DAOS_5610
+        
         """
         # test params
         apis_flags = self.params.get("api_flag", "/run/ior/io_consistency/*")

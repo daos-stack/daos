@@ -31,7 +31,8 @@ class DaosCoreTest(DaosCoreBase):
         self.run_subtest()
 
     def test_daos_management(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -m
@@ -43,11 +44,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_management
+        
         """
         self.run_subtest()
 
     def test_daos_pool(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -p
@@ -59,11 +62,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_pool
+        
         """
         self.run_subtest()
 
     def test_daos_container(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -c
@@ -75,11 +80,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_container
+        
         """
         self.run_subtest()
 
     def test_daos_epoch(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -e
@@ -88,14 +95,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_epoch
+        
         """
         self.run_subtest()
 
     def test_daos_single_rdg_tx(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -t
@@ -104,14 +113,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_single_rdg_tx
+        
         """
         self.run_subtest()
 
     def test_daos_distributed_tx(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -T
@@ -120,14 +131,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_distributed_tx
+        
         """
         self.run_subtest()
 
     def test_daos_verify_consistency(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -V
@@ -139,11 +152,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_verify_consistency
+        
         """
         self.run_subtest()
 
     def test_daos_io(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -i
@@ -155,11 +170,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_io
+        
         """
         self.run_subtest()
 
     def test_daos_ec_io(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -i -l"EC_4P2G1"
@@ -171,11 +188,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_ec_io
+        
         """
         self.run_subtest()
 
     def test_daos_ec_obj(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -I
@@ -187,11 +206,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_ec_obj
+        
         """
         self.run_subtest()
 
     def test_daos_object_array(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -A
@@ -200,14 +221,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_object_array
+        
         """
         self.run_subtest()
 
     def test_daos_array(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -D
@@ -216,14 +239,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_array
+        
         """
         self.run_subtest()
 
     def test_daos_kv(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -K
@@ -232,14 +257,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_kv
+        
         """
         self.run_subtest()
 
     def test_daos_capability(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -C
@@ -248,14 +275,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_capability
+        
         """
         self.run_subtest()
 
     def test_daos_epoch_recovery(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -o
@@ -264,14 +293,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_epoch_recovery
+        
         """
         self.run_subtest()
 
     def test_daos_md_replication(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -R
@@ -280,14 +311,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_md_replication
+        
         """
         self.run_subtest()
 
     def test_daos_rebuild_simple(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -v
@@ -299,11 +332,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_rebuild_simple
+        
         """
         self.run_subtest()
 
     def test_daos_drain_simple(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -b
@@ -312,14 +347,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_drain_simple
+        
         """
         self.run_subtest()
 
     def test_daos_extend_simple(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -B
@@ -328,14 +365,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_extend_simple
+        
         """
         self.run_subtest()
 
     def test_daos_rebuild_interactive(self):
-        """Jira ID: DAOS-17358
+        """
+Jira ID: DAOS-17358
 
         Test Description:
             Run daos_test -j
@@ -344,14 +383,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_rebuild_interactive
+        
         """
         self.run_subtest()
 
     def test_daos_oid_allocator(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -O
@@ -360,14 +401,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_oid_allocator
+        
         """
         self.run_subtest()
 
     def test_daos_checksum(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -z
@@ -379,11 +422,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_checksum
+        
         """
         self.run_subtest()
 
     def test_daos_rebuild_ec(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -S
@@ -395,11 +440,13 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_rebuild_ec
+        
         """
         self.run_subtest()
 
     def test_daos_aggregate_ec(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -Z
@@ -408,14 +455,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_aggregate_ec
+        
         """
         self.run_subtest()
 
     def test_daos_degraded_ec(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -X
@@ -424,14 +473,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_degraded_ec
+        
         """
         self.run_subtest()
 
     def test_daos_dedup(self):
-        """Jira ID: DAOS-1568
+        """
+Jira ID: DAOS-1568
 
         Test Description:
             Run daos_test -U
@@ -440,14 +491,16 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_dedup
+        
         """
         self.run_subtest()
 
     def test_daos_upgrade(self):
-        """Jira ID: DAOS-10681
+        """
+Jira ID: DAOS-10681
 
         Test Description:
             Run daos_test -G
@@ -456,9 +509,10 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider
+        :avocado: tags=cb,medium,provider
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_upgrade
+        
         """
         self.run_subtest()
 

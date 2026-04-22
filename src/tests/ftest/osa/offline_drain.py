@@ -145,14 +145,16 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     self.container.check()
 
     def test_osa_offline_drain(self):
-        """JIRA ID: DAOS-4750.
+        """
+JIRA ID: DAOS-4750.
 
         Test Description: Validate Offline Drain
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=osa,osa_drain,offline_drain,checksum,ior
         :avocado: tags=OSAOfflineDrain,test_osa_offline_drain
+        
         """
         self.log.info("Offline Drain : Basic Drain")
         ranks = self.get_random_test_ranks()

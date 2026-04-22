@@ -1114,7 +1114,7 @@ pipeline {
             }
             steps {
                 script {
-//                     Map hwStages = [
+                    Map hwStages = [
 //                         'Functional Hardware Medium': getFunctionalTestStage(
 //                             name: 'Functional Hardware Medium',
 //                             pragma_suffix: '-hw-medium',
@@ -1127,18 +1127,18 @@ pipeline {
 //                             run_if_landing: false,
 //                             job_status: job_status_internal
 //                         ),
-//                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
-//                             name: 'Functional Hardware Medium MD on SSD',
-//                             pragma_suffix: '-hw-medium-md-on-ssd',
-//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-//                             next_version: next_version(),
-//                             stage_tags: 'hw,medium,-provider',
-//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-//                             nvme: 'auto_md_on_ssd',
-//                             run_if_pr: true,
-//                             run_if_landing: false,
-//                             job_status: job_status_internal
-//                         )
+                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium MD on SSD',
+                            pragma_suffix: '-hw-medium-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            stage_tags: 'hw,medium,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        )
 //                         'Functional Hardware Medium VMD': getFunctionalTestStage(
 //                             name: 'Functional Hardware Medium VMD',
 //                             pragma_suffix: '-hw-medium-vmd',
@@ -1230,24 +1230,58 @@ pipeline {
 //                             run_if_landing: false,
 //                             job_status: job_status_internal
 //                         ),
-//                     ]
-                    Map hwStages = [:]
+                    ]
+//                     Map hwStages = [:]
                     // Populate hwStages via dynamic generation below
                     // Static/commented stages can be added here if needed
 
                     List<Map> clusterBoxStageConfigs = [
+                    /*
+
+                    // Passing
                         [stage_tag: 'DaosCoreTestRebuild', label: 'cluster_box'],
-                        [stage_tag: 'DaosCoreTest', label: 'cluster_box'],
                         [stage_tag: 'PoolCreateTests', label: 'cluster_box'],
                         [stage_tag: 'TestWithTelemetryNvme', label: 'cluster_box'],
-                        [stage_tag: 'SnapshotAggregation', label: 'cluster_box_3']
+
+                        [stage_tag: 'SnapshotAggregation', label: 'cluster_box_3'],
+                        [stage_tag: 'AggregationChecksum', label: 'cluster_box'],
+                        [stage_tag: 'OSAOnlineParallelTest', label: 'cluster_box'],
+                        [stage_tag: 'RbldPoolDestroyWithIO', label: 'cluster_box'],
+                        [stage_tag: 'AggregationPunching', label: 'cluster_box'],
+                        [stage_tag: 'ReplayTests', label: 'cluster_box'],
+                        [stage_tag: 'IorSmall', label: 'cluster_box'],
+                        [stage_tag: 'OSAOfflineReintegration', label: 'cluster_box_3'],
+                        [stage_tag: 'test_osa_offline_drain', label: 'cluster_box_3'],
+                        [stage_tag: 'TestWithScrubberBasic', label: 'cluster_box_3'],
+                        [stage_tag: 'test_osa_online_drain_mdtest', label: 'cluster_box_3'],
+                        [stage_tag: 'DaosCoreTest', label: 'cluster_box_3'],
+                    */
+
+                        // Attempting these again:
+                        // these don't look like it ran anything
+                        [stage_tag: 'TestWithScrubberFault', label: 'cluster_box_3'],
+                        [stage_tag: 'TestWithScrubberTargetEviction', label: 'cluster_box_3'],
+
+                        /*
+                        Don't work
+
+                        [stage_tag: 'test_basic_aggregation', label: 'cluster_box_3'],
+                        [stage_tag: 'test_dfuse_daos_build_wb', label: 'cluster_box_3'],
+                        [stage_tag: 'test_daos_vol_mpich', label: 'cluster_box_3'],
+                        [stage_tag: 'MemRatioTest', label: 'cluster_box_3'],
+                        [stage_tag: 'OSAOnlineExtend', label: 'cluster_box_3'],
+                        [stage_tag: 'DaosCoreTestRebuild', label: 'cluster_box_3'],
+                        [stage_tag: 'Romio', label: 'cluster_box_3'],
+                        [stage_tag: 'MdtestSmall', label: 'cluster_box_3'],
+                        [stage_tag: 'test_daos_degraded_mode', label: 'cluster_box_3'],
+                        */
                     ]
 
                     clusterBoxStageConfigs.each { cfg ->
                         String stageTag = cfg.stage_tag
                         String stageKey = "Functional Cluster Box Medium MD on SSD ${stageTag}"
                         hwStages[stageKey] = getFunctionalTestStage(
-                            name: "Functional Cluster Box Medium MD on SSD ${stageTag}",
+                            name: stageKey,
                             pragma_suffix: '-cb-medium-md-on-ssd',
                             label: cfg.label,
                             next_version: next_version(),

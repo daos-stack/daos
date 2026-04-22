@@ -21,7 +21,8 @@ class RbldPoolDestroyWithIO(TestWithServers):
     """
 
     def test_pool_destroy_with_io(self):
-        """Jira ID: DAOS-3794.
+        """
+Jira ID: DAOS-3794.
 
         Test Description: Destroy pool when rebuild is ongoing.
                           I/O performed using IOR.
@@ -35,9 +36,10 @@ class RbldPoolDestroyWithIO(TestWithServers):
           Re-create pool on remaining ranks.
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=pool,rebuild,ior
         :avocado: tags=RbldPoolDestroyWithIO,test_pool_destroy_with_io
+        
         """
         containers = []
 

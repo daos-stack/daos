@@ -80,7 +80,8 @@ class DaosCoreTestRebuild(DaosCoreBase):
         self.run_subtest()
 
     def test_rebuild_18(self):
-        """Jira ID: DAOS-2770
+        """
+Jira ID: DAOS-2770
 
         Test Description:
             Run daos_test -r -s3 -u subtests=18
@@ -89,9 +90,10 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=unittest,rebuild
         :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_18
+        
         """
         self.run_subtest()
 

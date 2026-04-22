@@ -23,7 +23,8 @@ class AggregationChecksum(IorTestBase):
         return free_space
 
     def test_aggregationchecksum(self):
-        """Jira ID: DAOS-4332.
+        """
+Jira ID: DAOS-4332.
         Test Description:
             Verify Aggregated extends have valid checksum.
         Use Cases:
@@ -36,9 +37,10 @@ class AggregationChecksum(IorTestBase):
             Run IOR again this time to read back the data with read verify
             option enabled.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=daosio,checksum,ior
         :avocado: tags=AggregationChecksum,test_aggregationchecksum
+        
         """
 
         # test params

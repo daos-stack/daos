@@ -184,15 +184,17 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.container.check()
 
     def test_osa_offline_reintegration_without_checksum(self):
-        """Test ID: DAOS-6923.
+        """
+Test ID: DAOS-6923.
 
         Test Description: Validate Offline Reintegration without enabling checksum in container
             properties.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=osa,offline_reintegration,ior
         :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegration_without_checksum
+        
         """
         self.test_with_checksum = self.params.get("test_with_checksum", '/run/checksum/*')
         self.log.info("Offline Reintegration : Without Checksum")
@@ -214,14 +216,16 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.run_offline_reintegration_test(num_pool=5, data=True, ranks=ranks)
 
     def test_osa_offline_reintegration_server_stop(self):
-        """Test ID: DAOS-6748.
+        """
+Test ID: DAOS-6748.
 
         Test Description: Validate Offline Reintegration with server stop
 
         :avocado: tags=all,pr,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=osa,checksum,offline_reintegration,ior
         :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegration_server_stop
+        
         """
         self.log.info("Offline Reintegration : System Start/Stop")
         ranks = self.get_random_test_ranks()

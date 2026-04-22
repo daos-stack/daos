@@ -77,7 +77,8 @@ class ReplayTests(TestWithServers):
             sorted(expected), sorted(detected), 'Detected snapshots does not match expected')
 
     def test_restart(self):
-        """Verify data access after engine restart w/ WAL replay + w/ check pointing (DAOS-13009).
+        """
+Verify data access after engine restart w/ WAL replay + w/ check pointing (DAOS-13009).
 
         Tests un-synchronized WAL & VOS
 
@@ -91,9 +92,10 @@ class ReplayTests(TestWithServers):
             6) Verify the previously written data matches with an ior read
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_restart
+        
         """
         container = self.create_container()
 

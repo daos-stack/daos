@@ -177,15 +177,17 @@ class OSAOnlineDrain(OSAUtils):
         self.run_online_drain_test(num_pool=1, ranks=ranks)
 
     def test_osa_online_drain_mdtest(self):
-        """Test ID: DAOS-4750
+        """
+Test ID: DAOS-4750
         Test Description: Validate Online drain with mdtest
         running during the testing.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_mdtest
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain_mdtest
+        
         """
         self.log.info("Online Drain : With Mdtest")
         ranks = self.get_random_test_ranks()
