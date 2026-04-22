@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2019-2024 Intel Corporation.
+ * Copyright 2019-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,7 +54,7 @@
 /** Magic Value */
 #define DFS_SB_MAGIC       0xda05df50da05df50
 /** DFS SB version value */
-#define DFS_SB_VERSION     2
+#define DFS_SB_VERSION     3
 /** DFS Layout Version Value */
 #define DFS_LAYOUT_VERSION 3
 /** Magic value for serializing / deserializing a DFS handle */
@@ -94,6 +95,10 @@
 #define RESERVED_LO        0
 #define SB_HI              0
 #define ROOT_HI            1
+#define GIT_HI             2
+
+/** SB version that introduced hardlink support (GIT object) */
+#define DFS_SB_VERSION_HLS 3
 
 /** DFS mode mask (3rd bit) */
 #define MODE_MASK          (1 << 2)
@@ -175,6 +180,10 @@ struct dfs {
 	daos_obj_id_t        super_oid;
 	/** Open object handle of SB */
 	daos_handle_t        super_oh;
+	/** Global Index Table object OID */
+	daos_obj_id_t        git_oid;
+	/** Open object handle of GIT */
+	daos_handle_t        git_oh;
 	/** Root object info */
 	dfs_obj_t            root;
 	/** DFS container attributes (Default chunk size, oclass, etc.) */
@@ -402,7 +411,7 @@ get_oclass_hints(const char *hints, daos_oclass_hints_t *dir_hints, daos_oclass_
 		 uint64_t rf);
 int
 open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t super_oid,
-	dfs_attr_t *attr, daos_handle_t *oh, dfs_layout_ver_t *ver);
+	dfs_attr_t *attr, daos_handle_t *oh, dfs_layout_ver_t *ver, dfs_sb_ver_t *sb_ver);
 int
 insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	     uint64_t flags, struct dfs_entry *entry);
