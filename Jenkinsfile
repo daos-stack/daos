@@ -736,7 +736,7 @@ pipeline {
                 stage('NLT') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && false /* disable until we fix FI tests*/ }
+                        expression { params.CI_NLT_TEST }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -774,7 +774,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Fault injection testing') {
+                stage('NLT Fault injection testing') {
                     when {
                         beforeAgent true
                         expression { params.CI_NLT_TEST }
