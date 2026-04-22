@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -682,6 +682,10 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 	rc = ds_cont_iter(po_hdl, cont->sc_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
+
+	D_DEBUG(DB_MD, "DTX resync (%s) scan done " DF_UUID "/" DF_UUID ", ver %u, cnt %d, rc %d\n",
+		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver,
+		dra.tables.drh_count, rc);
 
 	/* Handle the DTXs that have been scanned even if some failure happened
 	 * in above ds_cont_iter() step.
