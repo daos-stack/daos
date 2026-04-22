@@ -46,7 +46,7 @@ class ContainerListConsolidationTest(TestWithServers):
         """
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
 
-        self.log_step("Create a pool and a container")
+        self.log_step("Create a pool and a container.")
         pool = self.get_pool(connect=False)
         # This container will be removed by the checker, so skip cleanup.
         container = self.get_container(pool=pool, register_cleanup=False)
