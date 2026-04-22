@@ -9,4 +9,4 @@ yamllint==1.38.0;python_version>="3.10"
 codespell==2.4.2;python_version>="3.9"
 # Used by ci/jira_query.py which pip installs it standalone.
 jira
-torch>=2.2.0;python_version>="3.8"
+torch>=2.11.0;python_version>="3.10"
