@@ -89,12 +89,6 @@ pipeline {
                description: 'Test-repeat to use for this run.  Specifies the number of times to ' +
                             'repeat each functional test. CAUTION: only use in combination with ' +
                             'a reduced number of tests specified with the TestTag parameter.')
-        string(name: 'TestProviderTCP',
-               defaultValue: 'ofi+tcp',
-               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
-        string(name: 'TestProviderVerbs',
-               defaultValue: 'ofi+verbs;ofi_rxm',
-               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+verbs;ofi_rxm)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
@@ -194,10 +188,11 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -208,10 +203,11 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -222,10 +218,11 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_TCP_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -236,11 +233,11 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-verbs', params.TestProviderVerbs),
-                            other_packages: 'mercury-libfabric',
+                            provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -251,11 +248,11 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_VERBS_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-verbs', params.TestProviderVerbs),
-                            other_packages: 'mercury-libfabric',
+                            provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
