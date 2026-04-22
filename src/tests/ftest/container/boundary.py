@@ -61,6 +61,8 @@ class BoundaryTest(TestWithServers):
             container_num (int): container number to create.
 
         """
+        task_id = cont_num
+        self.log.info("CONT_TASK begin id=%s ts=%.6f", task_id, time.time())
         try:
             container = self.get_container(pool)
         except (DaosTestError, TestFail) as err:
@@ -80,6 +82,7 @@ class BoundaryTest(TestWithServers):
         except (DaosTestError, TestFail) as err:
             self.fail(
                 "#(4.{}.{}) container close failed, err: {}".format(pool.label, cont_num, err))
+        self.log.info("CONT_TASK end id=%s ts=%.6f", task_id, time.time())
 
     def create_pools(self, num_pools, num_containers):
         """To create number of pools and containers in parallel.
