@@ -177,13 +177,14 @@ String sconsArgs() {
  * Update default commit pragmas based on files modified.
  */
 Map update_default_commit_pragmas() {
-    String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
-                                    returnStdout: true).trim()
-    println('pragmas from gen_commit_pragmas.py:')
-    println(default_pragmas_str)
-    if (default_pragmas_str) {
-        updatePragmas(default_pragmas_str, false)
-    }
+// Don't use this for now
+//     String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
+//                                     returnStdout: true).trim()
+//     println('pragmas from gen_commit_pragmas.py:')
+//     println(default_pragmas_str)
+//     if (default_pragmas_str) {
+//         updatePragmas(default_pragmas_str, false)
+//     }
 }
 
 Boolean skip_pragma_set(String name, String def_val='false') {
@@ -1115,6 +1116,7 @@ pipeline {
             steps {
                 script {
                     Map hwStages = [
+                    :
 //                         'Functional Hardware Medium': getFunctionalTestStage(
 //                             name: 'Functional Hardware Medium',
 //                             pragma_suffix: '-hw-medium',
@@ -1127,18 +1129,18 @@ pipeline {
 //                             run_if_landing: false,
 //                             job_status: job_status_internal
 //                         ),
-                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium MD on SSD',
-                            pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        )
+//                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+//                             name: 'Functional Hardware Medium MD on SSD',
+//                             pragma_suffix: '-hw-medium-md-on-ssd',
+//                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+//                             next_version: next_version(),
+//                             stage_tags: 'hw,medium,-provider',
+//                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                             nvme: 'auto_md_on_ssd',
+//                             run_if_pr: true,
+//                             run_if_landing: false,
+//                             job_status: job_status_internal
+//                         )
 //                         'Functional Hardware Medium VMD': getFunctionalTestStage(
 //                             name: 'Functional Hardware Medium VMD',
 //                             pragma_suffix: '-hw-medium-vmd',
@@ -1236,14 +1238,15 @@ pipeline {
                     // Static/commented stages can be added here if needed
 
                     List<Map> clusterBoxStageConfigs = [
+                        [stage_tag: 'SnapshotAggregation', label: 'cluster_box_3'],
                     /*
 
                     // Passing
                         [stage_tag: 'DaosCoreTestRebuild', label: 'cluster_box'],
                         [stage_tag: 'PoolCreateTests', label: 'cluster_box'],
+
                         [stage_tag: 'TestWithTelemetryNvme', label: 'cluster_box'],
 
-                        [stage_tag: 'SnapshotAggregation', label: 'cluster_box_3'],
                         [stage_tag: 'AggregationChecksum', label: 'cluster_box'],
                         [stage_tag: 'OSAOnlineParallelTest', label: 'cluster_box'],
                         [stage_tag: 'RbldPoolDestroyWithIO', label: 'cluster_box'],
@@ -1259,8 +1262,8 @@ pipeline {
 
                         // Attempting these again:
                         // these don't look like it ran anything
-                        [stage_tag: 'TestWithScrubberFault', label: 'cluster_box_3'],
-                        [stage_tag: 'TestWithScrubberTargetEviction', label: 'cluster_box_3'],
+//                         [stage_tag: 'TestWithScrubberFault', label: 'cluster_box_3'],
+//                         [stage_tag: 'TestWithScrubberTargetEviction', label: 'cluster_box_3'],
 
                         /*
                         Don't work
@@ -1280,6 +1283,8 @@ pipeline {
                     clusterBoxStageConfigs.each { cfg ->
                         String stageTag = cfg.stage_tag
                         String stageKey = "Functional Cluster Box Medium MD on SSD ${stageTag}"
+                        echo "BANG echo: stageTag: ${stageTag}, stageKey: ${stageKey}, label: ${cfg.label}"
+                        println("BANG println: stageTag: ${stageTag}, stageKey: ${stageKey}, label: ${cfg.label}")
                         hwStages[stageKey] = getFunctionalTestStage(
                             name: stageKey,
                             pragma_suffix: '-cb-medium-md-on-ssd',
@@ -1295,21 +1300,21 @@ pipeline {
                         )
                     }
 
-                    String excludedStageTags = clusterBoxStageConfigs.collect { cfg -> "-${cfg.stage_tag}" }.join(',')
-                    String restStageTags = excludedStageTags ? "cb,medium,${excludedStageTags}" : 'cb,medium'
-                    hwStages['Functional Cluster Box Medium MD on SSD rest'] = getFunctionalTestStage(
-                        name: 'Functional Cluster Box Medium MD on SSD rest',
-                        pragma_suffix: '-cb-medium-md-on-ssd',
-                        label: 'cluster_box',
-                        next_version: next_version(),
-                        stage_tags: restStageTags,
-                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                        nvme: 'auto_md_on_ssd',
-                        node_count: 5,
-                        run_if_pr: true,
-                        run_if_landing: false,
-                        job_status: job_status_internal
-                    )
+//                     String excludedStageTags = clusterBoxStageConfigs.collect { cfg -> "-${cfg.stage_tag}" }.join(',')
+//                     String restStageTags = excludedStageTags ? "cb,medium,${excludedStageTags}" : 'cb,medium'
+//                     hwStages['Functional Cluster Box Medium MD on SSD rest'] = getFunctionalTestStage(
+//                         name: 'Functional Cluster Box Medium MD on SSD rest',
+//                         pragma_suffix: '-cb-medium-md-on-ssd',
+//                         label: 'cluster_box',
+//                         next_version: next_version(),
+//                         stage_tags: restStageTags,
+//                         default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+//                         nvme: 'auto_md_on_ssd',
+//                         node_count: 5,
+//                         run_if_pr: true,
+//                         run_if_landing: false,
+//                         job_status: job_status_internal
+//                     )
 
                     parallel(hwStages)
                 }
