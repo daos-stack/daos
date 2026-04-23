@@ -482,7 +482,7 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 	ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (crt_rpc_completed(rpc_priv)) {
-		CRT_METRIC_INC(ctx, CM_RPCS_DOUBLE_COMPLETE);
+		CRT_METRIC_INC(ctx, CM_RPC_DOUBLE_COMPLETE);
 		crt_rpc_unlock(rpc_priv);
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
 		return;
@@ -501,13 +501,13 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 
 	switch (cbinfo.cci_rc) {
 	case DER_SUCCESS:
-		CRT_METRIC_INC(ctx, CM_RPCS_COMPLETED);
+		CRT_METRIC_INC(ctx, CM_RPC_COMPLETED);
 		break;
 	case -DER_TIMEDOUT:
-		CRT_METRIC_INC(ctx, CM_RPCS_TIMEDOUT);
+		CRT_METRIC_INC(ctx, CM_RPC_TIMEDOUT);
 		break;
 	default:
-		CRT_METRIC_INC(ctx, CM_RPCS_COMPLETED_ERR);
+		CRT_METRIC_INC(ctx, CM_RPC_COMPLETED_ERR);
 		break;
 	}
 

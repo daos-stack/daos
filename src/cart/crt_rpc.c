@@ -1708,7 +1708,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	rpc_priv->crp_pub.cr_ctx = crt_ctx;
 
 	if (rpc_priv->crp_forward)
-		CRT_METRIC_INC(ctx, CM_RPCS_FWD);
+		CRT_METRIC_INC(ctx, CM_RPC_FWD);
 
 	crt_rpc_inout_buff_init(rpc_priv);
 

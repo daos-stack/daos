@@ -442,7 +442,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		D_GOTO(out, rc);
 	}
 
-	CRT_METRIC_INC(ctx, CM_CORPCS_CREATED);
+	CRT_METRIC_INC(ctx, CM_CORPC_CREATED);
 
 	*req = &rpc_priv->crp_pub;
 out:
@@ -553,9 +553,9 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 		ctx = rpc_priv->crp_pub.cr_ctx;
 
 		if (co_info->co_rc == 0)
-			CRT_METRIC_INC(ctx, CM_CORPCS_COMPLETED);
+			CRT_METRIC_INC(ctx, CM_CORPC_COMPLETED);
 		else
-			CRT_METRIC_INC(ctx, CM_CORPCS_COMPLETED_ERR);
+			CRT_METRIC_INC(ctx, CM_CORPC_COMPLETED_ERR);
 
 		crt_rpc_complete_and_unlock(rpc_priv, co_info->co_rc);
 	} else {
