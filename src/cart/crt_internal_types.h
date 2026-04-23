@@ -470,10 +470,10 @@ struct crt_bulk {
 	X(CM_RPC_QUOTA_EXCEEDED, D_TM_COUNTER, "Total number of exceeded RPC quota events",        \
 	  "events")                                                                                \
 	X(CM_RPC_RECV, D_TM_COUNTER, "Total number of RPCs received", "rpcs")                      \
-	X(CM_RPC_FWD, D_TM_COUNTER, "Total number of RPCs forwarded", "rpcs")                      \
+	X(CM_RPC_SENT, D_TM_COUNTER, "Total number of RPCs sent", "rpcs")                          \
+	X(CM_RPC_FWD, D_TM_COUNTER, "Total number of RPCs forwarded to another target", "rpcs")    \
 	X(CM_RPC_REPLIED, D_TM_COUNTER, "Total number of RPCs replied to", "rpcs")                 \
 	X(CM_RPC_REPLY_FAILED, D_TM_COUNTER, "Total number of failed replies", "rpcs")             \
-	X(CM_RPC_SENT, D_TM_COUNTER, "Total number of RPCs sent", "rpcs")                          \
 	X(CM_RPC_COMPLETED, D_TM_COUNTER, "Total number of RPCs completed successfully", "rpcs")   \
 	X(CM_RPC_COMPLETED_ERR, D_TM_COUNTER, "Total number of sent RPCs completed with error",    \
 	  "rpcs")                                                                                  \
