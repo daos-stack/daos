@@ -674,6 +674,13 @@ server_init(int argc, char *argv[])
 	int			rc;
 	struct engine_metrics	*metrics;
 
+	/**
+	 * The typical umask is 022. The group portion is cleared, which allows the group
+	 * permissions to be set freely. This setting is intended to remain in effect for the entire
+	 * lifetime of the process.
+	 */
+	(void)umask(002);
+
 	/*
 	 * Begin the HLC recovery as early as possible. Do not read the HLC
 	 * before the hlc_recovery_end call below.

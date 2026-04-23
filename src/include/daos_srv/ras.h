@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +67,7 @@
 	X(RAS_ENGINE_JOIN_FAILED, "engine_join_failed")                                            \
 	X(RAS_DEVICE_LINK_SPEED_CHANGED, "device_link_speed_changed")                              \
 	X(RAS_DEVICE_LINK_WIDTH_CHANGED, "device_link_width_changed")                              \
+	X(RAS_OBJ_CSUM_ERR, "obj_csum_error")                                                      \
 	X(RAS_DEVICE_LED_SET, "device_led_set")
 
 /** Define RAS event enum */

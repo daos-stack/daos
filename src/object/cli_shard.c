@@ -787,12 +787,14 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR(DF_UOID" (%s) RPC %d to %d/%d, flags %lx/%x, task %p failed, %s: "DF_RC"\n",
-			DP_UOID(orw->orw_oid), is_ec_obj ? "EC" : "non-EC", opc,
+		D_ERROR(DF_UOID
+			" (%s) RPC %p (%d) to %d/%d, flags %lx/%x, task %p failed, %s, TX " DF_DTI
+			": " DF_RC "\n",
+			DP_UOID(orw->orw_oid), is_ec_obj ? "EC" : "non-EC", rw_args->rpc, opc,
 			rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag,
 			(unsigned long)orw->orw_api_flags, orw->orw_flags, task,
-			orw->orw_bulks.ca_arrays != NULL ||
-			orw->orw_bulks.ca_count != 0 ? "DMA" : "non-DMA", DP_RC(ret));
+			orw->orw_bulks.ca_arrays || orw->orw_bulks.ca_count ? "DMA" : "non-DMA",
+			DP_DTI(&orw->orw_dti), DP_RC(ret));
 
 		D_GOTO(out, ret);
 	}

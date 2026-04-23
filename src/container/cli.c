@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -717,26 +717,17 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 		else
 			delay = 0;
 
-		rc = tse_task_register_comp_cb(task, pmap_refresh_cb, cb_arg,
-					       sizeof(*cb_arg));
-		if (rc) {
-			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), failed "
-				"to reg_comp_cb, "DF_RC"\n",
-				DP_UUID(pool->dp_pool), pm_ver,
-				cb_arg->pra_pm_ver, DP_RC(rc));
-			goto out;
-		}
-
 		cb_arg->pra_retry_nr++;
 		D_DEBUG(DB_TRACE, DF_UUID": pmap_refresh version (%d:%d), "
 			"in %d retry\n", DP_UUID(pool->dp_pool), pm_ver,
 			cb_arg->pra_pm_ver, cb_arg->pra_retry_nr);
 
-		rc = tse_task_reinit_with_delay(task, delay);
+		rc = tse_task_register_comp_cb_and_reinit(task, pmap_refresh_cb, cb_arg,
+							  sizeof(*cb_arg), delay);
 		if (rc) {
-			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), resched"
-				" failed, "DF_RC"\n", DP_UUID(pool->dp_pool),
-				pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
+			D_ERROR(DF_UUID ": pmap_refresh version (%d:%d), reg_comp_cb/reinit"
+					" failed, " DF_RC "\n",
+				DP_UUID(pool->dp_pool), pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
 			goto out;
 		}
 
@@ -3599,5 +3590,8 @@ cont_mark_slave(struct d_hlink *link, void *arg)
 int
 dc_cont_mark_all_slave(void)
 {
+	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_AFTER_FORK))
+		return 0;
+
 	return daos_hhash_traverse(DAOS_HTYPE_CO, cont_mark_slave, NULL);
 }
