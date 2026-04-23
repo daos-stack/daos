@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +37,13 @@ type DomainSocketServer struct {
 	service       *ModuleService
 	sessions      map[net.Conn]*Session
 	sessionsMutex sync.Mutex
+}
+
+// GetNumSessions gets the number of current sessions in the server.
+func (d *DomainSocketServer) GetNumSessions() int {
+	d.sessionsMutex.Lock()
+	defer d.sessionsMutex.Unlock()
+	return len(d.sessions)
 }
 
 // closeSession cleans up the session and removes it from the list of active
