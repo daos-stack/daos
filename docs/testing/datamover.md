@@ -3,8 +3,8 @@
 
 !!! note
   The example below makes use of a DAOS pool and its POSIX directory setup as part of
-  [Run IOR and mdtest](ior). It also makes use of data written to the same pool as
-  part of [Run dbench](dbench).
+  [Run IOR and mdtest](https://docs.daos.io/v2.6/testing/ior/). It also makes use of data
+  written to the same pool as part of [Run dbench](https://docs.daos.io/v2.6/testing/dbench/).
 
 ## 'daos' utility (single process)
 
@@ -133,7 +133,7 @@ Use `mpifileutils` to move data between containers.
 Load mpich module or set it's path in your environment
 
 ```sh
-$ module load mpi/mpich
+$ module load mpich
 $ module list
 Currently Loaded Modulefiles:
  1) mpich/5.0.0b1.lua

@@ -24,7 +24,7 @@ section of the Administration Guide contains further information on IOR and mdte
 ## Build ior and mdtest
 
 ```sh
-$ module load mpi/mpich-x86_64 # or any other MPI stack
+$ module load mpich # or any other MPI stack
 
 $ cd /tmp
 $ git clone https://github.com/hpc/ior.git
@@ -82,7 +82,7 @@ For best performance IOR can be run with `API=DFS`, passing in the DAOS pool and
 information (`ior -a DFS --dfs.pool=$DAOS_POOL --daos.cont=$DAOS_CONT ...`).
 
 ```sh
-$ module load mpi/mpich-x86_64 # or any other MPI stack
+$ module load mpich # or any other MPI stack
 
 $ mpirun -hosts $CLIENT_NODES -np 10 ${HOME}/software/ior/bin/ior -a POSIX -b 2G -t 1M -v -W -w -r -R -i 1 -o /tmp/daos_dfuse/testfile
 
