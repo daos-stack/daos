@@ -469,26 +469,26 @@ struct crt_bulk {
 	X(CM_RPC_WAITQ_DEPTH, D_TM_GAUGE, "Current count of enqueued RPCs", "rpcs")                \
 	X(CM_RPC_QUOTA_EXCEEDED, D_TM_COUNTER, "Total number of exceeded RPC quota events",        \
 	  "events")                                                                                \
-	X(CM_RPCS_RECV, D_TM_COUNTER, "Total number of RPCs received", "rpcs")                     \
-	X(CM_RPCS_FWD, D_TM_COUNTER, "Total number of RPCs forwarded", "rpcs")                     \
-	X(CM_RPCS_REPLIED, D_TM_COUNTER, "Total number of RPCs replied to", "rpcs")                \
-	X(CM_RPCS_REPLY_FAILED, D_TM_COUNTER, "Total number of failed replies", "rpcs")            \
-	X(CM_RPCS_SENT, D_TM_COUNTER, "Total number of RPCs sent", "rpcs")                         \
-	X(CM_RPCS_COMPLETED, D_TM_COUNTER, "Total number of RPCs completed successfully", "rpcs")  \
-	X(CM_RPCS_COMPLETED_ERR, D_TM_COUNTER, "Total number of sent RPCs completed with error",   \
+	X(CM_RPC_RECV, D_TM_COUNTER, "Total number of RPCs received", "rpcs")                      \
+	X(CM_RPC_FWD, D_TM_COUNTER, "Total number of RPCs forwarded", "rpcs")                      \
+	X(CM_RPC_REPLIED, D_TM_COUNTER, "Total number of RPCs replied to", "rpcs")                 \
+	X(CM_RPC_REPLY_FAILED, D_TM_COUNTER, "Total number of failed replies", "rpcs")             \
+	X(CM_RPC_SENT, D_TM_COUNTER, "Total number of RPCs sent", "rpcs")                          \
+	X(CM_RPC_COMPLETED, D_TM_COUNTER, "Total number of RPCs completed successfully", "rpcs")   \
+	X(CM_RPC_COMPLETED_ERR, D_TM_COUNTER, "Total number of sent RPCs completed with error",    \
 	  "rpcs")                                                                                  \
-	X(CM_RPCS_TIMEDOUT, D_TM_COUNTER, "Total number of timed out RPC send requests", "rpcs")   \
-	X(CM_RPCS_DOUBLE_COMPLETE, D_TM_COUNTER,                                                   \
+	X(CM_RPC_TIMEDOUT, D_TM_COUNTER, "Total number of timed out RPC send requests", "rpcs")    \
+	X(CM_RPC_DOUBLE_COMPLETE, D_TM_COUNTER,                                                    \
 	  "Total number of RPCs having a duplicate completion ", "rpcs")                           \
 	X(CM_BULK_CREATE, D_TM_COUNTER, "Total number of bulks created", "bulks")                  \
 	X(CM_BULK_CREATE_FAILED, D_TM_COUNTER, "Total number of bulks that failed to create",      \
 	  "bulks")                                                                                 \
 	X(CM_BULK_BOUND, D_TM_COUNTER, "Total number of bulks that were bound", "bulks")           \
 	X(CM_BULK_FREE, D_TM_COUNTER, "Total number of bulks that were freed", "bulks")            \
-	X(CM_CORPCS_CREATED, D_TM_COUNTER, "Total number of corpcs that were created", "corpcs")   \
-	X(CM_CORPCS_COMPLETED, D_TM_COUNTER, "Total number of corpcs that were completed",         \
+	X(CM_CORPC_CREATED, D_TM_COUNTER, "Total number of corpcs that were created", "corpcs")    \
+	X(CM_CORPC_COMPLETED, D_TM_COUNTER, "Total number of corpcs that were completed",          \
 	  "corpcs")                                                                                \
-	X(CM_CORPCS_COMPLETED_ERR, D_TM_COUNTER,                                                   \
+	X(CM_CORPC_COMPLETED_ERR, D_TM_COUNTER,                                                    \
 	  "Total number of corpcs that completed with error", "corpcs")
 
 #undef X
