@@ -1024,6 +1024,83 @@ dtx_23(void **state)
 	ioreq_fini(&req);
 }
 
+#define TSIZE 8
+
+static void
+dtx_24(void **state)
+{
+	test_arg_t   *arg         = *state;
+	const char   *dkey        = dts_dtx_dkey;
+	char          akey[TSIZE] = {0};
+	char          wbuf[TSIZE];
+	char          rbuf[TSIZE];
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	char          i;
+	char          j;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX24: DTX commit under space pressure\n");
+
+	if (!test_runable(arg, dts_dtx_replica_cnt))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	print_message("Filling DTX committed table...\n");
+
+	for (i = 'a'; i <= 'z'; i++) {
+		snprintf(akey, TSIZE - 1, "akey-%c", i);
+		for (j = 'A'; j <= 'Z'; j++) {
+			memset(wbuf, j, TSIZE);
+			insert_single(dkey, akey, (j - 'A') * TSIZE, wbuf, TSIZE, DAOS_TX_NONE,
+				      &req);
+		}
+	}
+
+	/* Wait for batched commit. */
+	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
+
+	/* Simulate DER_NOSPACE when DTX commit via DAOS_DTX_NOSPACE_NOREFRESH. */
+	dtx_set_fail_loc(arg, DAOS_DTX_NOSPACE_NOREFRESH | DAOS_FAIL_ALWAYS);
+
+	print_message("Writing more after space pressure...\n");
+
+	for (i = 'N'; i <= 'Z'; i++) {
+		snprintf(akey, TSIZE - 1, "akey-%c", i);
+		for (j = 'a'; j <= 'm'; j++) {
+			memset(wbuf, j, TSIZE);
+			insert_single(dkey, akey, (j - 'a') * TSIZE, wbuf, TSIZE, DAOS_TX_NONE,
+				      &req);
+		}
+	}
+
+	/* Wait for batched commit. */
+	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
+
+	print_message("Verifying all written data...\n");
+
+	/*
+	 * DAOS_DTX_NOSPACE_NOREFRESH will prevent DTX refresh. If former batched commit failed
+	 * to commit some DTX because of simulated space exhaustion, then related lookup will
+	 * return IO failure and the fetch result will be different from former write one.
+	 */
+	for (i = 'N'; i <= 'Z'; i++) {
+		snprintf(akey, TSIZE - 1, "akey-%c", i);
+		for (j = 'a'; j <= 'm'; j++) {
+			memset(wbuf, j, TSIZE);
+			lookup_single(dkey, akey, (j - 'a') * TSIZE, rbuf, TSIZE, DAOS_TX_NONE,
+				      &req);
+			assert_memory_equal(wbuf, rbuf, TSIZE);
+		}
+	}
+
+	dtx_set_fail_loc(arg, 0);
+	ioreq_fini(&req);
+}
+
 static int
 dtx_base_rf0_setup(void **state)
 {
@@ -1092,6 +1169,8 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_22, NULL, test_case_teardown},
 	{"DTX23: Resend with lost reply from non-leader",
 	 dtx_23, NULL, test_case_teardown},
+	{"DTX24: DTX under space pressure",
+	 dtx_24, NULL, test_case_teardown},
 };
 /* clang-format on */
 
