@@ -210,10 +210,7 @@ func TestServer_EngineRestartManager_RequestRestart(t *testing.T) {
 		},
 	}
 
-	eventTime := time.Now().Add(-5 * time.Second)
-	beforeRequest := time.Now()
-
-	mgr.requestRestart(testRank, mockInstance, eventTime)
+	mgr.requestRestart(testRank, mockInstance)
 
 	// Should receive request on channel
 	select {
@@ -223,12 +220,6 @@ func TestServer_EngineRestartManager_RequestRestart(t *testing.T) {
 		}
 		if req.instance != mockInstance {
 			t.Error("expected mock instance in request")
-		}
-		if req.eventTime != eventTime {
-			t.Errorf("expected event time %s, got %s", eventTime, req.eventTime)
-		}
-		if req.requestTime.Before(beforeRequest) {
-			t.Error("request time should be recent")
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("timeout waiting for restart request")
@@ -251,11 +242,11 @@ func TestServer_EngineRestartManager_RequestRestart_ChannelFull(t *testing.T) {
 
 	// Fill the channel
 	for i := 0; i < engineRestartMaxQueueSz; i++ {
-		mgr.requestRestart(ranklist.Rank(i), mockInstance, time.Now())
+		mgr.requestRestart(ranklist.Rank(i), mockInstance)
 	}
 
 	// Next request should be dropped
-	mgr.requestRestart(testRank, mockInstance, time.Now())
+	mgr.requestRestart(testRank, mockInstance)
 
 	// Should see error in log
 	logOutput := buf.String()
@@ -296,10 +287,8 @@ func TestServer_EngineRestartManager_ProcessRestartRequest_Immediate(t *testing.
 	}(ctx, instance.(*EngineInstance))
 
 	req := engineRestartRequest{
-		rank:        testRank,
-		instance:    instance,
-		requestTime: time.Now(),
-		eventTime:   time.Now(),
+		rank:     testRank,
+		instance: instance,
 	}
 
 	// Process request (no previous restart, should be immediate)
@@ -348,10 +337,8 @@ func TestServer_EngineRestartManager_ProcessRestartRequest_Deferred(t *testing.T
 	mgr.lastRestart[testRank] = time.Now()
 
 	req := engineRestartRequest{
-		rank:        testRank,
-		instance:    instances[0],
-		requestTime: time.Now(),
-		eventTime:   time.Now(),
+		rank:     testRank,
+		instance: instances[0],
 	}
 
 	// Process request (should be deferred due to rate limiting)
@@ -469,7 +456,7 @@ func TestServer_EngineRestartManager_Start_ProcessRequests(t *testing.T) {
 	}(ctx)
 
 	// Submit restart request
-	mgr.requestRestart(testRank, instance, time.Now())
+	mgr.requestRestart(testRank, instance)
 
 	// Wait for restart time to be recorded
 	select {
@@ -516,10 +503,8 @@ func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
 	mgr.lastRestart[testRank] = time.Now()
 
 	req := engineRestartRequest{
-		rank:        testRank,
-		instance:    instance,
-		requestTime: time.Now(),
-		eventTime:   time.Now(),
+		rank:     testRank,
+		instance: instance,
 	}
 
 	// Process request (should create deferred restart)
@@ -618,10 +603,8 @@ func TestServer_EngineRestartManager_CancelExistingTimer(t *testing.T) {
 
 	// First deferred request
 	req1 := engineRestartRequest{
-		rank:        testRank,
-		instance:    instances[0],
-		requestTime: time.Now(),
-		eventTime:   time.Now(),
+		rank:     testRank,
+		instance: instances[0],
 	}
 	mgr.processRestartRequest(ctx, req1)
 
@@ -636,10 +619,8 @@ func TestServer_EngineRestartManager_CancelExistingTimer(t *testing.T) {
 	// Second deferred request (should cancel first)
 	time.Sleep(100 * time.Millisecond)
 	req2 := engineRestartRequest{
-		rank:        testRank,
-		instance:    instances[0],
-		requestTime: time.Now(),
-		eventTime:   time.Now(),
+		rank:     testRank,
+		instance: instances[0],
 	}
 	mgr.processRestartRequest(ctx, req2)
 

@@ -28,10 +28,8 @@ const (
 
 // engineRestartRequest represents a request to restart an engine instance.
 type engineRestartRequest struct {
-	rank        ranklist.Rank
-	instance    Engine
-	requestTime time.Time
-	eventTime   time.Time
+	rank     ranklist.Rank
+	instance Engine
 }
 
 // engineRestartManager manages engine restart requests with rate limiting.
@@ -159,12 +157,10 @@ func (mgr *engineRestartManager) processRestartRequest(ctx context.Context, req 
 }
 
 // requestRestart submits a restart request to the manager.
-func (mgr *engineRestartManager) requestRestart(rank ranklist.Rank, instance Engine, eventTime time.Time) {
+func (mgr *engineRestartManager) requestRestart(rank ranklist.Rank, instance Engine) {
 	req := engineRestartRequest{
-		rank:        rank,
-		instance:    instance,
-		requestTime: time.Now(),
-		eventTime:   eventTime,
+		rank:     rank,
+		instance: instance,
 	}
 
 	select {

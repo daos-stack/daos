@@ -818,7 +818,7 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 	}
 
 	// Submit restart request to the restart manager
-	srv.restartMgr.requestRestart(rank, ei, ts)
+	srv.restartMgr.requestRestart(rank, ei)
 
 	return nil
 }
