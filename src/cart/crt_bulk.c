@@ -16,8 +16,8 @@
 static inline bool
 crt_sgl_valid(d_sg_list_t *sgl)
 {
-	d_iov_t		*iov;
-	int		i;
+	d_iov_t *iov;
+	int      i;
 
 	if (sgl == NULL || sgl->sg_nr == 0) {
 		if (sgl == NULL)
@@ -209,10 +209,10 @@ out:
 int
 crt_bulk_free(crt_bulk_t crt_bulk)
 {
-	struct crt_context 	*ctx;
-	struct crt_bulk 	*bulk = crt_bulk;
-	int              	rc   = -DER_SUCCESS;
-	hg_return_t      	hg_ret;
+	struct crt_context *ctx;
+	struct crt_bulk    *bulk = crt_bulk;
+	int                 rc   = -DER_SUCCESS;
+	hg_return_t         hg_ret;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
