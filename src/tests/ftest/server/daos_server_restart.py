@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -20,7 +21,7 @@ class DaosServerTest(TestWithServers):
 
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)
-    def restart_daos_server(self, force=True):
+    def restart_daos_server(self):
         """Perform server stop and start.
 
         Args:
@@ -35,7 +36,11 @@ class DaosServerTest(TestWithServers):
         for pool in self.pool:
             pool.skip_cleanup()
         self.log.info("=Restart daos_server, dmg storage_format.")
-        self.server_managers[0].dmg.storage_format(force)
+        try:
+            self.server_managers[0].dmg.debug.value = True
+            self.server_managers[0].dmg.storage_format(force=False, verbose=False)
+        finally:
+            self.server_managers[0].dmg.debug.value = False
         self.log.info("=Restart daos_server, detect_engine_start().")
         self.server_managers[0].detect_engine_start()
         self.log.info("=Restart daos_agent, stop")
