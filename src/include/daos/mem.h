@@ -1090,7 +1090,7 @@ static inline void
 umem_tx_set_failure_behavior(struct umem_instance *umm, enum umem_tx_failure_behavior behavior)
 {
 	if (umm->umm_ops->mo_tx_set_failure_behavior)
-		return umm->umm_ops->mo_tx_set_failure_behavior(behavior);
+		umm->umm_ops->mo_tx_set_failure_behavior(behavior);
 }
 
 static inline int

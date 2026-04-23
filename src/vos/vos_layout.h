@@ -118,10 +118,10 @@ struct vos_gc_bkt_df {
 
 #define VOS_POOL_EXT_DF_PADDING_SIZE            52
 
-/* 512K preallocated buffer for TX snapshot in case of space emergency.
+/* Preallocate 512KB buffer for backend transaction snapshots under space pressure.
  * NB: workload of GC/DTX is deterministic (tree operations), 512K should be sufficient.
  */
-#define VOS_SNAPBUF_EMERG                       (1 << 19)
+#define VOS_SNAPBUF_EMERG_SIZE                  (1 << 19)
 
 /* VOS pool durable format extension */
 struct vos_pool_ext_df {
@@ -129,7 +129,7 @@ struct vos_pool_ext_df {
 	struct vos_gc_bkt_df	ped_gc_bkt;
 	/* Memory file size for md-on-ssd phase2 pool */
 	uint64_t                ped_mem_sz;
-	/* emergency buffer for GC */
+	/* emergency buffer for TX snapshots under space pressure */
 	umem_off_t              ped_emerg_buf;
 	/* Paddings for other potential new feature */
 	uint64_t                ped_paddings[VOS_POOL_EXT_DF_PADDING_SIZE];

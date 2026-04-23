@@ -1025,7 +1025,7 @@ pmem_tx_get_failure_behavior(void)
 	case POBJ_TX_FAILURE_RETURN:
 		return TX_FAILURE_RETURN;
 	default:
-		D_ERROR("Unknown TX failure behavior %d\n", behavior);
+		D_ASSERTF(0, "Unknown TX failure behavior %d\n", behavior);
 		return -DER_INVAL;
 	}
 }
@@ -1037,14 +1037,7 @@ pmem_tx_set_snapbuf(struct umem_instance *umm, umem_off_t snapbuf, size_t size)
 	int   rc;
 
 	rc = pmemobj_tx_log_append_buffer(TX_LOG_TYPE_SNAPSHOT, buf, size);
-	if (rc != 0)
-		return rc;
-
-	rc = pmemobj_tx_log_auto_alloc(TX_LOG_TYPE_SNAPSHOT, 0);
-	if (rc != 0)
-		return rc;
-
-	return 0;
+	return rc ? umem_tx_errno(rc) : 0;
 }
 
 static int

@@ -1444,7 +1444,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	/* pd_ext is newly allocated, no need to call tx_add_ptr() */
 	pd_ext_df                = umem_off2ptr(&umem, pool_df->pd_ext);
 	pd_ext_df->ped_mem_sz    = scm_sz;
-	pd_ext_df->ped_emerg_buf = umem_zalloc(&umem, VOS_SNAPBUF_EMERG);
+	pd_ext_df->ped_emerg_buf = umem_zalloc(&umem, VOS_SNAPBUF_EMERG_SIZE);
 	if (UMOFF_IS_NULL(pd_ext_df->ped_emerg_buf)) {
 		D_ERROR("Failed to allocate pool emergency buffer.\n");
 		rc = -DER_NOSPACE;

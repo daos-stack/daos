@@ -196,8 +196,9 @@ dtx_handler(crt_rpc_t *rpc)
 		if (unlikely(din->di_epoch == 1))
 			D_GOTO(out, rc = -DER_IO);
 
-		rc1 = dtx_commit_large(cont->sc_hdl, (struct dtx_id *)(din->di_dtx_array.ca_arrays),
-				       din->di_dtx_array.ca_count, false, NULL);
+		/* The count of DTX entries will not exceed DTX_THRESHOLD_COUNT. */
+		rc1 = dtx_commit_large(cont->sc_hdl, (struct dtx_id *)din->di_dtx_array.ca_arrays,
+				       (int)din->di_dtx_array.ca_count, false, NULL);
 		if (rc1 < 0)
 			D_GOTO(out, rc = rc1);
 
