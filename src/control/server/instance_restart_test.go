@@ -18,6 +18,103 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
+// Test helper functions
+
+func setupTestLogger(t *testing.T) (logging.Logger, *logging.LogBuffer) {
+	t.Helper()
+	log, buf := logging.NewTestLogger(t.Name())
+	t.Cleanup(func() {
+		test.ShowBufferOnFailure(t, buf)
+	})
+
+	return log, buf
+}
+
+func getTestLogger(t *testing.T, loggers []logging.Logger) logging.Logger {
+	t.Helper()
+	var log logging.Logger
+
+	switch len(loggers) {
+	case 0:
+		log, _ = setupTestLogger(t)
+	case 1:
+		log = loggers[0]
+	default:
+		t.Fatal("multiple loggers provided, want one")
+	}
+
+	return log
+}
+
+func setupTestManager(t *testing.T, cfg *config.Server, loggers ...logging.Logger) *engineRestartManager {
+	t.Helper()
+	log := getTestLogger(t, loggers)
+	if cfg == nil {
+		cfg = &config.Server{}
+	}
+
+	return newEngineRestartManager(log, cfg)
+}
+
+func setupTestHarness(t *testing.T, rankStr string, loggers ...logging.Logger) (*EngineInstance, ranklist.Rank) {
+	t.Helper()
+	log := getTestLogger(t, loggers)
+	harness := NewEngineHarness(log)
+	setupTestEngine(t, log, harness, false)
+
+	instances, err := harness.FilterInstancesByRankSet(rankStr)
+	if err != nil || len(instances) == 0 {
+		t.Fatalf("failed to get instance: %v", err)
+	}
+
+	rank, err := ranklist.ParseRanks(rankStr)
+	if err != nil || len(rank) != 1 {
+		t.Fatalf("failed to parse rank: %v", err)
+	}
+
+	return instances[0].(*EngineInstance), rank[0]
+}
+
+func startInstanceConsumer(ctx context.Context, instance *EngineInstance) {
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-instance.startRequested:
+		}
+	}()
+}
+
+func waitForRestartRecorded(ctx context.Context, t *testing.T, mgr *engineRestartManager, rank ranklist.Rank) bool {
+	recorded := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				mgr.mu.RLock()
+				_, exists := mgr.lastRestart[rank]
+				mgr.mu.RUnlock()
+
+				if exists {
+					close(recorded)
+					return
+				}
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-recorded:
+		return true
+	}
+}
+
 func TestServer_EngineRestartManager_GetMinDelay(t *testing.T) {
 	for name, tc := range map[string]struct {
 		configDelay int
@@ -37,14 +134,9 @@ func TestServer_EngineRestartManager_GetMinDelay(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			cfg := &config.Server{
+			mgr := setupTestManager(t, &config.Server{
 				EngineAutoRestartMinDelay: tc.configDelay,
-			}
-
-			mgr := newEngineRestartManager(log, cfg)
+			})
 
 			gotDelay := mgr.getMinDelay()
 			if gotDelay != tc.expDelay {
@@ -82,14 +174,9 @@ func TestServer_EngineRestartManager_CanRestartNow(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			cfg := &config.Server{
+			mgr := setupTestManager(t, &config.Server{
 				EngineAutoRestartMinDelay: tc.minDelay,
-			}
-
-			mgr := newEngineRestartManager(log, cfg)
+			})
 			testRank := ranklist.Rank(1)
 
 			// Set last restart time if test case specifies
@@ -118,11 +205,7 @@ func TestServer_EngineRestartManager_CanRestartNow(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_RecordRestartTime(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfg := &config.Server{}
-	mgr := newEngineRestartManager(log, cfg)
+	mgr := setupTestManager(t, nil)
 	testRank := ranklist.Rank(1)
 
 	beforeRecord := time.Now()
@@ -141,11 +224,7 @@ func TestServer_EngineRestartManager_RecordRestartTime(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_SetPendingRestart(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfg := &config.Server{}
-	mgr := newEngineRestartManager(log, cfg)
+	mgr := setupTestManager(t, nil)
 	testRank := ranklist.Rank(1)
 
 	// Set initial timer
@@ -174,11 +253,7 @@ func TestServer_EngineRestartManager_SetPendingRestart(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_ClearPendingRestart(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfg := &config.Server{}
-	mgr := newEngineRestartManager(log, cfg)
+	mgr := setupTestManager(t, nil)
 	testRank := ranklist.Rank(1)
 
 	// Set a timer
@@ -196,11 +271,7 @@ func TestServer_EngineRestartManager_ClearPendingRestart(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_RequestRestart(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfg := &config.Server{}
-	mgr := newEngineRestartManager(log, cfg)
+	mgr := setupTestManager(t, nil)
 	testRank := ranklist.Rank(1)
 
 	// Create mock instance
@@ -227,11 +298,8 @@ func TestServer_EngineRestartManager_RequestRestart(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_RequestRestart_ChannelFull(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfg := &config.Server{}
-	mgr := newEngineRestartManager(log, cfg)
+	log, buf := setupTestLogger(t)
+	mgr := setupTestManager(t, nil, log)
 	testRank := ranklist.Rank(1)
 
 	mockInstance := &MockInstance{
@@ -257,34 +325,13 @@ func TestServer_EngineRestartManager_RequestRestart_ChannelFull(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_ProcessRestartRequest_Immediate(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
 	ctx := test.Context(t)
-	cfg := &config.Server{
+	instance, testRank := setupTestHarness(t, "1")
+	mgr := setupTestManager(t, &config.Server{
 		EngineAutoRestartMinDelay: 10,
-	}
+	})
 
-	harness := NewEngineHarness(log)
-	setupTestEngine(t, log, harness, false)
-
-	instances, err := harness.FilterInstancesByRankSet("1")
-	if err != nil || len(instances) == 0 {
-		t.Fatalf("failed to get instance: %v", err)
-	}
-
-	mgr := newEngineRestartManager(log, cfg)
-	testRank := ranklist.Rank(1)
-	instance := instances[0]
-
-	// Run go-routine for engine to consume from startRequested channel otherwise
-	// requestStart() instance methods would block
-	go func(inCtx context.Context, e *EngineInstance) {
-		select {
-		case <-inCtx.Done():
-		case <-e.startRequested:
-		}
-	}(ctx, instance.(*EngineInstance))
+	startInstanceConsumer(ctx, instance)
 
 	req := engineRestartRequest{
 		rank:     testRank,
@@ -314,31 +361,19 @@ func TestServer_EngineRestartManager_ProcessRestartRequest_Immediate(t *testing.
 }
 
 func TestServer_EngineRestartManager_ProcessRestartRequest_Deferred(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
+	log, buf := setupTestLogger(t)
 	ctx := test.Context(t)
-	cfg := &config.Server{
+	instance, testRank := setupTestHarness(t, "1", log)
+	mgr := setupTestManager(t, &config.Server{
 		EngineAutoRestartMinDelay: 2, // 2 seconds for fast test
-	}
-
-	harness := NewEngineHarness(log)
-	setupTestEngine(t, log, harness, false)
-
-	instances, err := harness.FilterInstancesByRankSet("1")
-	if err != nil || len(instances) == 0 {
-		t.Fatalf("failed to get instance: %v", err)
-	}
-
-	mgr := newEngineRestartManager(log, cfg)
-	testRank := ranklist.Rank(1)
+	}, log)
 
 	// Record a recent restart
 	mgr.lastRestart[testRank] = time.Now()
 
 	req := engineRestartRequest{
 		rank:     testRank,
-		instance: instances[0],
+		instance: instance,
 	}
 
 	// Process request (should be deferred due to rate limiting)
@@ -368,11 +403,7 @@ func TestServer_EngineRestartManager_ProcessRestartRequest_Deferred(t *testing.T
 }
 
 func TestServer_EngineRestartManager_Stop(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfg := &config.Server{}
-	mgr := newEngineRestartManager(log, cfg)
+	mgr := setupTestManager(t, nil)
 
 	// Add some pending restarts
 	timer1 := time.NewTimer(10 * time.Second)
@@ -398,106 +429,39 @@ func TestServer_EngineRestartManager_Stop(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_Start_ProcessRequests(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
 	ctx, cancel := context.WithTimeout(test.Context(t), 10*time.Second)
 	defer cancel()
 
-	cfg := &config.Server{
+	instance, testRank := setupTestHarness(t, "1")
+	mgr := setupTestManager(t, &config.Server{
 		EngineAutoRestartMinDelay: 10,
-	}
-
-	harness := NewEngineHarness(log)
-	setupTestEngine(t, log, harness, false)
-
-	instances, err := harness.FilterInstancesByRankSet("1")
-	if err != nil || len(instances) == 0 {
-		t.Fatalf("failed to get instance: %v", err)
-	}
-
-	mgr := newEngineRestartManager(log, cfg)
+	})
 	mgr.start(ctx)
 	defer mgr.stop()
 
-	testRank := ranklist.Rank(1)
-	instance := instances[0]
-
-	// Run go-routine for engine to consume from startRequested channel otherwise
-	// requestStart() instance methods would block
-	go func(inCtx context.Context, e *EngineInstance) {
-		select {
-		case <-inCtx.Done():
-		case <-e.startRequested:
-		}
-	}(ctx, instance.(*EngineInstance))
-
-	// Channel to signal when restart is recorded
-	recorded := make(chan struct{})
-	go func(inCtx context.Context) {
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-inCtx.Done():
-				return
-			case <-ticker.C:
-				mgr.mu.RLock()
-				_, exists := mgr.lastRestart[testRank]
-				mgr.mu.RUnlock()
-
-				if exists {
-					close(recorded)
-					return
-				}
-			}
-		}
-	}(ctx)
+	startInstanceConsumer(ctx, instance)
 
 	// Submit restart request
 	mgr.requestRestart(testRank, instance)
 
 	// Wait for restart time to be recorded
-	select {
-	case <-ctx.Done():
+	if !waitForRestartRecorded(ctx, t, mgr, testRank) {
 		t.Error("expected restart time to be recorded after processing")
-	case <-recorded:
+	} else {
 		t.Log("restart time recorded successfully")
 	}
 }
 
 func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
 	ctx, cancel := context.WithTimeout(test.Context(t), 20*time.Second)
 	defer cancel()
 
-	cfg := &config.Server{
+	instance, testRank := setupTestHarness(t, "1")
+	mgr := setupTestManager(t, &config.Server{
 		EngineAutoRestartMinDelay: 2, // seconds
-	}
+	})
 
-	harness := NewEngineHarness(log)
-	setupTestEngine(t, log, harness, false)
-
-	instances, err := harness.FilterInstancesByRankSet("1")
-	if err != nil || len(instances) == 0 {
-		t.Fatalf("failed to get instance: %v", err)
-	}
-
-	mgr := newEngineRestartManager(log, cfg)
-	testRank := ranklist.Rank(1)
-	instance := instances[0]
-
-	// Run go-routine for engine to consume from startRequested channel otherwise
-	// requestStart() instance methods would block
-	go func(inCtx context.Context, e *EngineInstance) {
-		select {
-		case <-inCtx.Done():
-		case <-e.startRequested:
-		}
-	}(ctx, instance.(*EngineInstance))
+	startInstanceConsumer(ctx, instance)
 
 	// Set recent restart time
 	mgr.lastRestart[testRank] = time.Now()
@@ -538,14 +502,9 @@ func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_MultipleRanks(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfg := &config.Server{
+	mgr := setupTestManager(t, &config.Server{
 		EngineAutoRestartMinDelay: 10,
-	}
-
-	mgr := newEngineRestartManager(log, cfg)
+	})
 
 	rank1 := ranklist.Rank(1)
 	rank2 := ranklist.Rank(2)
@@ -579,24 +538,12 @@ func TestServer_EngineRestartManager_MultipleRanks(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_CancelExistingTimer(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
+	log, buf := setupTestLogger(t)
 	ctx := test.Context(t)
-	cfg := &config.Server{
+	instance, testRank := setupTestHarness(t, "1", log)
+	mgr := setupTestManager(t, &config.Server{
 		EngineAutoRestartMinDelay: 5,
-	}
-
-	harness := NewEngineHarness(log)
-	setupTestEngine(t, log, harness, false)
-
-	instances, err := harness.FilterInstancesByRankSet("1")
-	if err != nil || len(instances) == 0 {
-		t.Fatalf("failed to get instance: %v", err)
-	}
-
-	mgr := newEngineRestartManager(log, cfg)
-	testRank := ranklist.Rank(1)
+	}, log)
 
 	// Set recent restart
 	mgr.lastRestart[testRank] = time.Now()
@@ -604,7 +551,7 @@ func TestServer_EngineRestartManager_CancelExistingTimer(t *testing.T) {
 	// First deferred request
 	req1 := engineRestartRequest{
 		rank:     testRank,
-		instance: instances[0],
+		instance: instance,
 	}
 	mgr.processRestartRequest(ctx, req1)
 
@@ -620,7 +567,7 @@ func TestServer_EngineRestartManager_CancelExistingTimer(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	req2 := engineRestartRequest{
 		rank:     testRank,
-		instance: instances[0],
+		instance: instance,
 	}
 	mgr.processRestartRequest(ctx, req2)
 
@@ -650,14 +597,10 @@ func TestServer_EngineRestartManager_CancelExistingTimer(t *testing.T) {
 }
 
 func TestServer_NewEngineRestartManager(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
 	cfg := &config.Server{
 		EngineAutoRestartMinDelay: 42,
 	}
-
-	mgr := newEngineRestartManager(log, cfg)
+	mgr := setupTestManager(t, cfg)
 
 	if mgr.log == nil {
 		t.Error("expected logger to be set")
