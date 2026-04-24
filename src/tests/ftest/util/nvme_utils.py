@@ -192,7 +192,7 @@ class ServerFillUp(IorTestBase):
         # Created new container or use the existing container for reading
         if create_cont:
             self.create_container()
-        self.ior_local_cmd.dfs_cont.update(self.nvme_local_cont)
+        self.ior_local_cmd.dfs_cont.update(self.nvme_local_cont.identifier)
 
         # Define the job manager for the IOR command
         job_manager_main = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
