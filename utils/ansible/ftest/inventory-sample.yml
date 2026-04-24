@@ -30,14 +30,12 @@
 #         # script.
 #         #  default: None
 #         daos_ofi_interface: eth0
+#         #
+#         # Optional variable defining the http proxy to use for downloading external dependencies
+#         daos_http_proxy: http://myproxy.net:8080
 #       hosts:
 #         wolf-666:
 #     daos_servers:
-#       vars:
-#         #
-#         # Optional variable defining the number of hugepages to be allocated by the linux kernel.
-#         #  default: 4096
-#         daos_hugepages_nb: 8182
 #       hosts:
 #         wolf-666:
 #         wolf-999:
