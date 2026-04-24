@@ -67,8 +67,8 @@ class ContainerListConsolidationTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        self.log_step("Use ddb to verify that the container is left in shards (PMEM only).")
         if not md_on_ssd:
+            self.log_step("Use ddb to verify that the container is left in shards (PMEM only).")
             # We're using a PMEM cluster.
             vos_paths = self.server_managers[0].get_vos_files(pool)
             ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
