@@ -2,17 +2,8 @@
 ## CVE-2025-52999,HIGH,,"com.fasterxml.jackson.core/jackson-core: jackson-core Potential StackoverflowError","com.fasterxml.jackson.core:jackson-core","2.10.2","2.15.0",https://avd.aquasec.com/nvd/cve-2025-52999
 CVE-2025-52999
 
-## CVE-2025-53864,MEDIUM,,"com.nimbusds/nimbus-jose-jwt: Uncontrolled recursion in Connect2id Nimbus JOSE + JWT","com.nimbusds:nimbus-jose-jwt","9.37.2","10.0.2",https://avd.aquasec.com/nvd/cve-2025-53864
-CVE-2025-53864
-
-## CVE-2025-48924,MEDIUM,,"commons-lang/commons-lang: org.apache.commons/commons-lang3: Uncontrolled Recursion vulnerability in Apache Commons Lang","org.apache.commons:commons-lang3","3.12.0","3.18.0",https://avd.aquasec.com/nvd/cve-2025-48924
-CVE-2025-48924
-
-## CVE-2025-58057,MEDIUM,7.5,"netty-codec: netty-codec-compression: Netty's BrotliDecoder is vulnerable to DoS via zip bomb style attack","io.netty:netty-codec","4.1.100.Final","4.1.125.Final",https://avd.aquasec.com/nvd/cve-2025-58057
-CVE-2025-58057
-
-## CVE-2025-33042,MEDIUM,,"org.apache.avro/avro: Apache Avro Java SDK: Code injection on Java generated code","org.apache.avro:avro","1.11.4","1.12.1, 1.11.5",https://avd.aquasec.com/nvd/cve-2025-33042
-CVE-2025-33042
-
 ## GHSA-72hv-8253-57qq,HIGH,,"jackson-core: Number Length Constraint Bypass in Async Parser Leads to Potential DoS Condition","com.fasterxml.jackson.core:jackson-core","2.14.3","2.18.6, 2.21.1, 3.1.0",https://github.com/advisories/GHSA-72hv-8253-57qq
 GHSA-72hv-8253-57qq
+
+## CVE-2026-0636,MEDIUM,,"Improper neutralization of special elements used in an LDAP query ('LD ...","org.bouncycastle:bcprov-jdk18on","1.82","1.84",https://avd.aquasec.com/nvd/cve-2026-0636
+CVE-2026-0636
