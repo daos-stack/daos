@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// Copyright 2020-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -608,6 +608,54 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 
 	// DAOS-17289 TODO: Perform SystemDrain with Exclude flag set in request so that PoolExclude
 	//                  gets called for each of the rank's pools.
+}
+
+// SystemRemoveRanksReq contains the inputs for the system remove-ranks request.
+type SystemRemoveRanksReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+}
+
+// SystemRemoveRanksResp contains the request response.
+type SystemRemoveRanksResp struct {
+	sysResponse `json:"-"`
+	Results     system.MemberResults
+}
+
+// Errors returns a single error combining all error messages associated with a system remove-ranks
+// response.
+func (resp *SystemRemoveRanksResp) Errors() error {
+	if resp == nil || resp.Results == nil {
+		return nil
+	}
+	return resp.Results.Errors()
+}
+
+// SystemRemoveRanks will remove the specified ranks from the MS database after verifying they
+// are not enabled in any pool.
+func SystemRemoveRanks(ctx context.Context, rpcClient UnaryInvoker, req *SystemRemoveRanksReq) (*SystemRemoveRanksResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemRemoveRanksReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemRemoveRanks(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS system remove-ranks request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemRemoveRanksResp)
+	return resp, convertMSResponse(ur, resp)
 }
 
 // SystemDrainReq contains the inputs for the system drain request.

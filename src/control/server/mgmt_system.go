@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+// Copyright 2020-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -181,10 +181,6 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 }
 
 // Check rank to be replaced is excluded from all it's pools.
-// 1. Get potential replacement rank from membership
-// 2. Retrieve pool-rank map for pools to query
-// 3. Query each pool that rank belongs to
-// 4. Check rank is not in response list of enabled ranks
 func (svc *mgmtSvc) checkReplaceRank(ctx context.Context, rankToReplace ranklist.Rank) error {
 	if rankToReplace == ranklist.NilRank {
 		return errors.New("checking replace mode rank, nil rank supplied")
@@ -624,6 +620,21 @@ type (
 		AbsentRanks *ranklist.RankSet
 	}
 )
+
+func (fResp *fanoutResponse) checkHostsRanksExist() error {
+	if fResp.AbsentHosts.Count() > 0 {
+		return errors.Errorf("invalid %s: %s",
+			english.PluralWord(fResp.AbsentHosts.Count(), "host", "hosts"),
+			fResp.AbsentHosts.String())
+	}
+	if fResp.AbsentRanks.Count() > 0 {
+		return errors.Errorf("invalid %s: %s",
+			english.PluralWord(fResp.AbsentRanks.Count(), "rank", "ranks"),
+			fResp.AbsentRanks.String())
+	}
+
+	return nil
+}
 
 // resolveRanks derives ranks to be used for fanout by comparing host and rank
 // sets with the contents of the membership.
@@ -1140,11 +1151,8 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 		return nil, err
 	}
 
-	if fResp.AbsentHosts.Count() > 0 {
-		return nil, errors.Errorf("invalid host(s): %s", fResp.AbsentHosts.String())
-	}
-	if fResp.AbsentRanks.Count() > 0 {
-		return nil, errors.Errorf("invalid rank(s): %s", fResp.AbsentRanks.String())
+	if err := fResp.checkHostsRanksExist(); err != nil {
+		return nil, err
 	}
 
 	resp := new(mgmtpb.SystemExcludeResp)
@@ -1171,6 +1179,74 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 	}
 
 	svc.reqGroupUpdate(ctx, false)
+
+	return resp, nil
+}
+
+// SystemRemoveRank implements the method defined for the Management Service.
+//
+// Remove ranks from the MS database after verifying they are not enabled in any pool.
+func (svc *mgmtSvc) SystemRemoveRanks(ctx context.Context, req *mgmtpb.SystemRemoveRanksReq) (*mgmtpb.SystemRemoveRanksResp, error) {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if req.Hosts == "" && req.Ranks == "" {
+		return nil, errors.New("no hosts or ranks specified")
+	}
+
+	fReq, fResp, err := svc.getFanout(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := fResp.checkHostsRanksExist(); err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.SystemRemoveRanksResp)
+	removed := false
+
+	for _, r := range fReq.Ranks.Ranks() {
+		result := sharedpb.RankResult{
+			Rank: r.Uint32(),
+		}
+
+		m, err := svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			result.Errored = true
+			result.Msg = fmt.Sprintf("failed to find rank %d: %s", r, err.Error())
+			resp.Results = append(resp.Results, &result)
+			continue
+		}
+		result.Addr = m.Addr.String()
+
+		// Only allow removal of ranks in Excluded or AdminExcluded state
+		if m.State != system.MemberStateExcluded && m.State != system.MemberStateAdminExcluded {
+			result.Errored = true
+			result.Msg = fmt.Sprintf("cannot remove rank %d: rank must be in Excluded "+
+				"or AdminExcluded state (current state: %s)", r, m.State)
+			resp.Results = append(resp.Results, &result)
+			continue
+		}
+
+		if err := svc.checkReplaceRank(ctx, r); err != nil {
+			result.Errored = true
+			result.Msg = fmt.Sprintf("cannot remove rank %d: %s", r, err.Error())
+			resp.Results = append(resp.Results, &result)
+			continue
+		}
+
+		svc.membership.Remove(r)
+		removed = true
+		result.State = "removed"
+
+		resp.Results = append(resp.Results, &result)
+	}
+
+	if removed {
+		svc.reqGroupUpdate(ctx, false)
+	}
 
 	return resp, nil
 }
@@ -1254,6 +1330,12 @@ type poolRanksMap map[string]*ranklist.RankSet
 
 // Build mappings of pools to any ranks that match the input filter by iterating through the pool
 // service list. Identify pools by label if possible.
+//  1. Get rank from membership
+//  2. Retrieve pool-rank map for pools to query
+//  3. Query each pool that rank belongs to
+//  4. Return list of pool IDs that any of the provided ranks are a member of in addition to a map of
+//     pool-IDs to any of the input ranks that are either enabled or disabled based on the input
+//     enabled flag.
 func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.RankSet, getEnabled bool) ([]string, poolRanksMap, error) {
 	filterRanksMap := make(map[ranklist.Rank]struct{})
 	for _, r := range filterRanks.Ranks() {

@@ -1,7 +1,7 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// Copyright 2019-2024 Intel Corporation.
+// Copyright 2025 Google LLC
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -190,6 +190,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemRebuildManageResp{})
 	case *control.SystemSelfHealEvalReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemRemoveRanksReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemRemoveRanksResp{})
 	case *control.SystemCheckEnableReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckDisableReq:

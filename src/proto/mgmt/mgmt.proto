@@ -1,6 +1,6 @@
 //
-// (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// Copyright 2019-2024 Intel Corporation.
+// Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -88,6 +88,8 @@ service MgmtSvc {
 	rpc SystemStart(SystemStartReq) returns (SystemStartResp) {}
 	// Exclude DAOS ranks
 	rpc SystemExclude(SystemExcludeReq) returns (SystemExcludeResp) {}
+	// Remove DAOS ranks from MS database
+	rpc SystemRemoveRanks(SystemRemoveRanksReq) returns (SystemRemoveRanksResp) {}
 	// Drain or reintegrate DAOS ranks from all pools
 	rpc SystemDrain(SystemDrainReq) returns (SystemDrainResp) {}
 	// Perform interactive rebuild operation on all DAOS pools
