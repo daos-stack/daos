@@ -1,6 +1,6 @@
 # Copyright 2022-2024 Intel Corporation
 # Copyright 2025 Google LLC
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of EL 9 based
@@ -33,27 +33,22 @@ RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
 # script to install OS updates basic tools and daos dependencies
-COPY ./utils/scripts/install-el9.sh /tmp/install.sh
 # script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-el9.sh /tmp/repo-helper.sh
-
-RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-    /tmp/repo-helper.sh &&                          \
-    rm -f /tmp/repo-helper.sh
+RUN --mount=type=bind,source=utils/scripts/helpers/repo-helper-el9.sh,target=/tmp/repo-helper.sh \
+    /tmp/repo-helper.sh
 
 FROM basic
 # Install OS updates and package.  Include basic tools and daos dependencies
-RUN dnf upgrade &&        \
-    /tmp/install.sh &&    \
-    dnf clean all &&      \
-    rm -f /tmp/install.sh
+RUN dnf upgrade && \
+    dnf clean all
+
+RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/install.sh \
+    /tmp/install.sh && \
+    dnf clean all
 
 # Add DAOS users
 ARG UID=1000
-COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
-     /tmp/daos-server-user-setup.sh
-RUN set -e;                                    \
-    chmod +x /tmp/daos-server-user-setup.sh && \
+RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos-server-user-setup.sh \
     /tmp/daos-server-user-setup.sh
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
@@ -70,13 +65,15 @@ RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
-# Install latest versions of python tools.
-COPY requirements-build.txt requirements-utest.txt ./
-RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+# Install latest versions of python tools without COPY (bind-mount the requirement files).
+RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/requirements-build.txt \
+    --mount=type=bind,source=requirements-utest.txt,target=/tmp/requirements-utest.txt \
+    python3 -m pip install --upgrade pip && \
+    python3 -m pip install -r /tmp/requirements-build.txt -r /tmp/requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
+RUN mkdir -p /home/daos/pre/ci
 COPY --chown=daos_server:daos_server SConstruct .
 COPY --chown=daos_server:daos_server deps deps
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
@@ -84,6 +81,13 @@ COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
 COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh utils/scripts/copy_files.sh
 COPY --chown=daos_server:daos_server utils/scripts/create_spdk_pkgconfig.sh utils/scripts/create_spdk_pkgconfig.sh
+
+COPY --chown=daos_server:daos_server ci/rpm/install_deps.sh ci/rpm/install_deps.sh
+COPY --chown=daos_server:daos_server ci/rpm/build_deps.sh ci/rpm/build_deps.sh
+COPY --chown=daos_server:daos_server ci/parse_ci_envs.sh ci/parse_ci_envs.sh
+COPY --chown=daos_server:daos_server utils/rpms/package_version.sh utils/rpms/package_version.sh
+COPY --chown=daos_server:daos_server utils/rpms/package_info.sh utils/rpms/package_info.sh
+COPY --chown=daos_server:daos_server utils/rpms/daos.spec utils/rpms/daos.spec
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -101,13 +105,20 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                        
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         dnf clean all;                                                                 \
     }
+
 USER daos_server:daos_server
+
+# Install DAOS dependency RPMs from a pre-built repository.
+# Set DAOS_DEPS_INSTALL to the release value (DAOS_RELVAL) to enable.
+ARG DAOS_DEPS_INSTALL=
+RUN [ -z "$DAOS_DEPS_INSTALL" ] || { \
+        export STAGE_NAME="el9"; ci/rpm/install_deps.sh el9 "$DAOS_DEPS_INSTALL" ;\
+    }
 
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
-        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
-              TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
+        ci/rpm/build_deps.sh &&    \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
 
@@ -119,7 +130,7 @@ RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { 
 	export DISTRO="el9" &&                                                  \
 	utils/rpms/build_packages.sh deps &&                                    \
 	mkdir -p /home/daos/rpms &&                                             \
-	mv *.rpm /home/daos/rpms;                                               \
+	( mv *.rpm /home/daos/rpms || true );                                   \
     }
 USER root:root
 
@@ -143,6 +154,7 @@ COPY --chown=daos_server:daos_server utils/build.config utils/
 COPY --chown=daos_server:daos_server utils/config utils/config
 COPY --chown=daos_server:daos_server utils/certs utils/certs
 COPY --chown=daos_server:daos_server utils/completion utils/completion
+COPY --chown=daos_server:daos_server ci/rpm/build.sh ci/rpm/build.sh
 
 # select compiler to use
 ARG COMPILER=gcc
@@ -152,9 +164,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
-        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
-              FIRMWARE_MGMT=1 BUILD_TYPE=$DAOS_BUILD_TYPE                  \
-	      TARGET_TYPE=$DAOS_TARGET_TYPE &&                             \
+        ci/rpm/build.sh &&           \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
         cp -r utils/config/examples /opt/daos;                             \

@@ -8,14 +8,15 @@ set -e
 
 set -x
 
-. utils/sl/setup_local.sh
+#. utils/sl/setup_local.sh
 
-ps auwx
-sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_server_helper.sh
+#ps auwx
+#sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_server_helper.sh
 
 TMP_DIR=$(mktemp -d)
 
-cp utils/node_local_test.py utils/nlt_server.yaml .build_vars.json "$TMP_DIR"
+#cp utils/node_local_test.py utils/nlt_server.yaml .build_vars.json "$TMP_DIR"
+cp utils/node_local_test.py utils/nlt_server.yaml "$TMP_DIR"
 cp src/tests/ftest/cart/util/cart_logparse.py src/tests/ftest/cart/util/cart_logtest.py "$TMP_DIR"
 if [ -e nltr.json ]
 then

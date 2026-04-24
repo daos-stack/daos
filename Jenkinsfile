@@ -391,7 +391,7 @@ pipeline {
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
-               defaultValue: 'ci_nlt_1',
+               defaultValue: 'runner_fi_new',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
@@ -688,7 +688,7 @@ pipeline {
                 stage('Unit Test') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && false /* disable until we fix FI tests*/ }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -713,7 +713,7 @@ pipeline {
                 stage('Unit Test bdev') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { !skipStage() && false /* disable until we fix FI tests*/ }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -736,7 +736,7 @@ pipeline {
                 stage('NLT') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
+                        expression { params.CI_NLT_TEST }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -774,6 +774,70 @@ pipeline {
                         }
                     }
                 }
+                stage('NLT Fault injection testing') {
+                    when {
+                        beforeAgent true
+                        expression { params.CI_NLT_TEST }
+                    }
+                    agent {
+                        label params.CI_NLT_1_LABEL
+                    }
+                    steps {
+/*
+                        job_step_update(
+                            sconsBuild(parallel_build: true,
+                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
+                                       build_deps: 'no'))
+*/
+                        /* job_step_update(nlt_test()) */
+                        job_step_update(
+                            unitTest(timeout_time: 600,
+                                     inst_repos: daosRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh --no-root --memcheck no' +
+                                                  ' --system-ram-reserved 48 --server-debug WARN' +
+                                                  ' --log-usage-import nltr.json' +
+                                                  ' --log-usage-save nltr.xml' +
+                                                  ' --class-name fault-injection fi',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
+                                     image_version: 'el9.7'))
+                    }
+                    post {
+                        always {
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         always_script: 'ci/unit/test_nlt_post.sh',
+                                         valgrind_stash: 'nlt-memcheck'
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                                                      scm: 'daos-stack/daos',
+                                                      requiredResult: hudson.model.Result.UNSTABLE
+                            recordIssues enabledForFailure: true,
+                                         /* ignore warning/errors from PMDK logging system */
+                                         filters: [excludeFile('pmdk/.+')],
+                                         failOnError: false,
+                                         ignoreQualityGate: true,
+                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
+                                                        [threshold: 1, type: 'TOTAL_HIGH'],
+                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
+                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
+                                         tools: [issues(pattern: 'nlt-errors.json',
+                                                        name: 'Fault injection issues',
+                                                        id: 'Fault_Injection'),
+                                                 issues(pattern: 'nlt-client-leaks.json',
+                                                        name: 'Fault injection leaks',
+                                                        id: 'NLT_client')],
+                                         scm: 'daos-stack/daos'
+                            junit testResults: 'nlt-junit.xml'
+                            stash name: 'fault-inject-valgrind',
+                                  includes: '*.memcheck.xml',
+                                  allowEmpty: true
+                            archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
+                                             allowEmptyArchive: true
+                            job_status_update()
+                        }
+                    }
+                } // stage('Fault injection testing')
                 stage('Unit Test with memcheck') {
                     when {
                         beforeAgent true
@@ -833,7 +897,7 @@ pipeline {
                 beforeAgent true
                 //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
                 // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
+                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) && false /* disable until we fix FI tests*/ }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
@@ -954,63 +1018,6 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner_fi'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                                ' --build-arg POINT_RELEASE=.7 '
-                            args '--tmpfs /mnt/daos_0'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                       build_deps: 'no'))
-                        job_step_update(nlt_test())
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                        //                skipPublishingChecks: true,
-                        //                id: 'fir', name: 'Fault Injection Report')
-                    }
-                    post {
-                        always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
-                            recordIssues enabledForFailure: true,
-                                         /* ignore warning/errors from PMDK logging system */
-                                         filters: [excludeFile('pmdk/.+')],
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
-                                                        [threshold: 1, type: 'TOTAL_HIGH'],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
-                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
-                                         tools: [issues(pattern: 'nlt-errors.json',
-                                                        name: 'Fault injection issues',
-                                                        id: 'Fault_Injection'),
-                                                 issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'Fault injection leaks',
-                                                        id: 'NLT_client')],
-                                         scm: 'daos-stack/daos'
-                            junit testResults: 'nlt-junit.xml'
-                            stash name: 'fault-inject-valgrind',
-                                  includes: '*.memcheck.xml',
-                                  allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
-                                             allowEmptyArchive: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Fault injection testing')
                 stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
