@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2018-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -573,6 +573,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	struct daos_prop_entry    *entry;
 	struct daos_prop_co_roots *roots;
 	struct dfs_entry           root_dir;
+	daos_cont_info_t           cinfo;
 	int                        amode, omode;
 	int                        rc;
 	int                        i;
@@ -594,7 +595,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	for (i = 0; i < num_props; i++)
 		prop->dpp_entries[i].dpe_type = props[i];
 
-	rc = daos_cont_query(coh, NULL, prop, NULL);
+	rc = daos_cont_query(coh, &cinfo, prop, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_query() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -741,6 +742,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	dfs->mounted = DFS_MOUNT;
 	*_dfs        = dfs;
 	daos_prop_free(prop);
+	D_ERROR("lxzlxz mount cont " DF_UUID ", dfs %p\n", DP_UUID(cinfo.ci_uuid), dfs);
 	return rc;
 
 err_root:
@@ -855,6 +857,7 @@ dfs_umount(dfs_t *dfs)
 
 	dfs_metrics_fini(dfs);
 
+	D_ERROR("lxzlxz umount dfs %p\n", dfs);
 	D_FREE(dfs->prefix);
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);

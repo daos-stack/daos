@@ -1,5 +1,6 @@
 """
-(C) Copyright 2018-2024 Intel Corporation.
+Copyright 2018-2024 Intel Corporation.
+Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -228,6 +229,9 @@ class IorTestBase(TestWithServers):
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
             manager.working_dir.value = self.dfuse.mount_dir.value
+        env['D_LOG_MASK'] = 'DEBUG'
+        env['D_LOG_FLUSH'] = 'DEBUG'
+        env['DD_MASK'] = 'all'
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         # Pass only processes or ppn to be compatible with previous behavior
