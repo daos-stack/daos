@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+  Copyright 2018-2024 Intel Corporation.
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -169,7 +169,21 @@ def __get_test_tag(test_tag_config, paths):
     # Get tags for ftest paths
     ftest_tag_map = tags.FtestTagMap(tags.all_ftest_python_files())
 
-    all_tags = set()
+    commit_msg = subprocess.check_output(
+        ["git", "log", "-1", "--pretty=%B"],
+        text=True
+    )
+
+    commit_tags = []
+    for line in commit_msg.splitlines():
+        if line.lower().startswith("test-tag:"):
+            # remove prefix and split into individual tags
+            value = line.split(":", 1)[1].strip()
+            if value:
+                commit_tags.extend(value.split())
+
+    # commit message tags have highest priority
+    all_tags = set(commit_tags)
 
     for path in paths:
         for _pattern, _config in test_tag_config.items():
