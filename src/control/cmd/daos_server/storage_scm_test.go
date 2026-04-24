@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -127,7 +128,7 @@ func TestDaosServer_setSockFromCfg(t *testing.T) {
 func getMockScmCmdInit(log logging.Logger, smbc scm.MockBackendConfig, sc *config.Server) (*scm.MockBackend, initScmCmdFn) {
 	msb := scm.NewMockBackend(&smbc)
 	scs := server.NewMockStorageControlService(log, nil, nil,
-		scm.NewProvider(log, msb, system.NewMockSysProvider(log, nil), nil),
+		scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: msb, Sys: system.NewMockSysProvider(log, nil)}),
 		bdev.NewProvider(log, bdev.NewMockBackend(nil)), nil)
 
 	return msb, func(cmd *scmCmd) (*server.StorageControlService, *config.Server, error) {
