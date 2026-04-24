@@ -72,6 +72,7 @@ install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
 
 DEPENDS=( "mercury >= ${mercury_version}" )
+DEPENDS+=( "${isal_lib} >= ${isal_version}" )
 DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
 build_package "daos"
 
@@ -432,8 +433,7 @@ DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-# Don't do autoreq, we know we need OpenMPI so add it explicitly
-build_package "daos-client-tests-openmpi" "noautoreq"
+build_package "daos-client-tests-openmpi"
 
 #shim packages
 PACKAGE_TYPE="empty"
