@@ -385,11 +385,12 @@ debug_prio_err_load_env(void)
 	if (env == NULL)
 		return;
 
-	/* handle some quirks */
-	if (strncasecmp(env, "ERR", sizeof("ERR")) == 0) {
+	/* ERROR can be used as an alias for ERR */
+	if (strncasecmp(env, "ERROR", sizeof("ERROR")) == 0) {
 		d_dbglog_data.dd_prio_err = DLOG_ERR;
 		goto out_env;
 	}
+	/* DBUG can be used as an alias for DEBUG */
 	if (strncasecmp(env, "DBUG", sizeof("DBUG")) == 0) {
 		d_dbglog_data.dd_prio_err = DLOG_DBG;
 		goto out_env;
