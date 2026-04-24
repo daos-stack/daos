@@ -24,7 +24,7 @@
 
 Name:          daos
 Version:       2.9.100
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -134,6 +134,7 @@ BuildRequires: libasan
 %if (0%{?suse_version} > 0)
 BuildRequires: libasan8
 %endif
+BuildRequires: gperftools-devel
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release

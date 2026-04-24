@@ -399,7 +399,7 @@ TARGET_PATH="${daoshome}/python"
 list_files files "${SL_PREFIX}/lib/daos/python/*"
 append_install_list "${files[@]}"
 
-EXTERNAL_DEPENDS=("${uuid_lib}")
+EXTERNAL_DEPENDS=("${uuid_lib}" "${gperftools_dev}")
 DEPENDS=("daos-client = ${VERSION}-${RELEASE}")
 build_package "${daos_dev}"
 

@@ -1,4 +1,7 @@
 %changelog
+* Mon Apr 21 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-3
+- Add gperftools-devel as a build dependency of daos-devel
+
 * Wed Apr 08 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-2
 - Fix ASAN ODR violation: move src/mgmt/rpc.c into new libdaos_mgmt_crtproto.so
   shared library to ensure mgmt_proto_fmt_v3/v4 globals are defined exactly
