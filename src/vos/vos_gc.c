@@ -851,6 +851,7 @@ gc_update_stats(struct vos_pool *pool)
 static int
 gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 {
+	struct vos_pool_df      *pool_df = pool->vp_pool_df;
 	struct vos_container	*cont = gc_get_container(pool);
 	struct vos_gc		*gc    = &gc_table[0]; /* start from akey */
 	struct vos_gc_bin_df	*bin;
@@ -874,6 +875,16 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 			vos_cont_decref(cont);
 		*empty_ret = false;
 		goto done;
+	}
+
+	if (pool->vp_gc_nospc != 0) {
+		struct vos_pool_ext_df *ext;
+
+		ext = umem_off2ptr(&pool->vp_umm, pool_df->pd_ext);
+		if (!UMOFF_IS_NULL(ext->ped_gc_emerg)) {
+			/* ignore the returned value */
+			umem_tx_set_snapbuf(&pool->vp_umm, ext->ped_gc_emerg, VOS_GC_SNAPBUF_EMERG);
+		}
 	}
 
 	*empty_ret = false;
@@ -1981,6 +1992,7 @@ int
 vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg)
 {
+	static const int         gc_emerg_cycles = 32;
 	struct d_tm_node_t      *duration = NULL;
 	struct d_tm_node_t      *tight    = NULL;
 	struct d_tm_node_t      *slack    = NULL;
@@ -2025,7 +2037,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 			d_tm_inc_counter(slack, 1);
 
 		/* Try small credits when GC failed to allocate space */
-		if (pool->vp_gc_nospc)
+		if (pool->vp_gc_nospc > 0)
 			creds = 2;
 
 		if (credits > 0 && (credits - total) < creds)
@@ -2036,8 +2048,15 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 
 		if (rc) {
 			D_ERROR("GC pool failed: " DF_RC "\n", DP_RC(rc));
-			if (rc == -DER_NOSPACE)
-				pool->vp_gc_nospc = 1;
+			if (rc == -DER_NOSPACE) {
+				if (pool->vp_gc_nospc == 0) {
+					D_INFO("Enter GC emergency mode (pool=" DF_UUID ")\n",
+					       DP_UUID(pool->vp_id));
+					pool->vp_gc_nospc = gc_emerg_cycles;
+				} else { /* switch back, nothing else we can do */
+					pool->vp_gc_nospc = 0;
+				}
+			}
 			d_tm_mark_duration_end(duration);
 			break;
 		}
@@ -2062,8 +2081,8 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 
 	if (total != 0) { /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
-		if (rc == 0)
-			pool->vp_gc_nospc = 0;
+		if (rc == 0 && pool->vp_gc_nospc > 0)
+			pool->vp_gc_nospc--;
 	}
 
 	D_ASSERT(tls->vtl_gc_running > 0);

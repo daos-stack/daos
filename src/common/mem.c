@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1003,6 +1003,23 @@ pmem_tx_stage(void)
 	return pmemobj_tx_stage();
 }
 
+static int
+pmem_tx_set_snapbuf(struct umem_instance *umm, umem_off_t snapbuf, size_t size)
+{
+	void *buf = umem_off2ptr(umm, snapbuf);
+	int   rc;
+
+	rc = pmemobj_tx_log_append_buffer(TX_LOG_TYPE_SNAPSHOT, buf, size);
+	if (rc)
+		return rc;
+
+	rc = pmemobj_tx_log_auto_alloc(TX_LOG_TYPE_SNAPSHOT, 0);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
 static umem_off_t
 pmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num,
 	     unsigned int unused)
@@ -1135,27 +1152,27 @@ umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	return 0;
 }
 
-static umem_ops_t	pmem_ops = {
-	.mo_tx_free		= pmem_tx_free,
-	.mo_tx_alloc		= pmem_tx_alloc,
-	.mo_tx_add		= pmem_tx_add,
-	.mo_tx_xadd		= pmem_tx_xadd,
-	.mo_tx_add_ptr		= pmem_tx_add_ptr,
-	.mo_tx_abort		= pmem_tx_abort,
-	.mo_tx_begin		= pmem_tx_begin,
-	.mo_tx_commit		= pmem_tx_commit,
-	.mo_tx_stage		= pmem_tx_stage,
-	.mo_reserve		= pmem_reserve,
-	.mo_defer_free		= pmem_defer_free,
-	.mo_cancel		= pmem_cancel,
-	.mo_tx_publish		= pmem_tx_publish,
-	.mo_atomic_copy		= pmem_atomic_copy,
-	.mo_atomic_alloc	= pmem_atomic_alloc,
-	.mo_atomic_free		= pmem_atomic_free,
-	.mo_atomic_flush	= pmem_atomic_flush,
-	.mo_tx_add_callback	= umem_tx_add_cb,
+static umem_ops_t pmem_ops = {
+    .mo_tx_free         = pmem_tx_free,
+    .mo_tx_alloc        = pmem_tx_alloc,
+    .mo_tx_add          = pmem_tx_add,
+    .mo_tx_xadd         = pmem_tx_xadd,
+    .mo_tx_add_ptr      = pmem_tx_add_ptr,
+    .mo_tx_abort        = pmem_tx_abort,
+    .mo_tx_begin        = pmem_tx_begin,
+    .mo_tx_commit       = pmem_tx_commit,
+    .mo_tx_stage        = pmem_tx_stage,
+    .mo_tx_set_snapbuf  = pmem_tx_set_snapbuf,
+    .mo_reserve         = pmem_reserve,
+    .mo_defer_free      = pmem_defer_free,
+    .mo_cancel          = pmem_cancel,
+    .mo_tx_publish      = pmem_tx_publish,
+    .mo_atomic_copy     = pmem_atomic_copy,
+    .mo_atomic_alloc    = pmem_atomic_alloc,
+    .mo_atomic_free     = pmem_atomic_free,
+    .mo_atomic_flush    = pmem_atomic_flush,
+    .mo_tx_add_callback = umem_tx_add_cb,
 };
-
 
 /** BMEM operations (depends on dav) */
 
