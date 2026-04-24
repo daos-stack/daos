@@ -6,8 +6,6 @@
  */
 #define D_LOGFAC DD_FAC(ddb)
 
-#include <wordexp.h>
-#include <getopt.h>
 #include <regex.h>
 #include <errno.h>
 #include <string.h>
@@ -17,14 +15,6 @@
 
 #include "ddb_common.h"
 #include "ddb_parse.h"
-
-void
-safe_strcat(char *dst, const char *src, size_t dst_size)
-{
-	size_t remaining_space = dst_size - strlen(dst) - 1; // Subtract 1 for null terminator
-
-	strncat(dst, src, remaining_space);
-}
 
 /**
  * Define the regex match group indices for the different parts of the VOS path. The regex is
@@ -265,83 +255,6 @@ out_preg:
 	D_FREE(vfp_tmp);
 out:
 	return rc;
-}
-
-int
-ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args)
-{
-	wordexp_t *we;
-	int rc;
-
-	D_ALLOC_PTR(we);
-	if (we == NULL)
-		return -DER_NOMEM;
-
-	rc = wordexp(buf, we, WRDE_SHOWERR | WRDE_UNDEF);
-	if (rc != 0) {
-		D_FREE(we);
-		return -DER_INVAL;
-	}
-
-	parse_args->ap_argc = we->we_wordc;
-	parse_args->ap_argv = we->we_wordv;
-	parse_args->ap_ctx = we;
-
-	return 0;
-}
-
-void
-ddb_str2argv_free(struct argv_parsed *parse_args)
-{
-	if (parse_args->ap_ctx != NULL) {
-		wordfree(parse_args->ap_ctx);
-		D_FREE(parse_args->ap_ctx);
-	}
-}
-
-int
-ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct program_args *pa)
-{
-	struct option program_options[] = {
-	    {"write_mode", no_argument, NULL, 'w'},     {"run_cmd", required_argument, NULL, 'R'},
-	    {"cmd_file", required_argument, NULL, 'f'}, {"db_path", required_argument, NULL, 'p'},
-	    {"help", required_argument, NULL, 'h'},     {NULL}};
-	int		index = 0, opt;
-
-	optind = 0; /* Reinitialize getopt */
-	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "wR:f:p:h", program_options, &index)) != -1) {
-		switch (opt) {
-		case 'w':
-			pa->pa_write_mode = true;
-			break;
-		case 'R':
-			pa->pa_r_cmd_run = optarg;
-			break;
-		case 'f':
-			pa->pa_cmd_file = optarg;
-			break;
-		case 'p':
-			pa->pa_db_path = optarg;
-			break;
-		case 'h':
-			pa->pa_get_help = true;
-			break;
-		case '?':
-			ddb_errorf(ctx, "'%c'(0x%x) is unknown\n", optopt, optopt);
-		default:
-			return -DER_INVAL;
-		}
-	}
-
-	if (argc - optind > 1) {
-		ddb_error(ctx, "Too many commands\n");
-		return -DER_INVAL;
-	}
-	if (argc - optind == 1)
-		pa->pa_pool_path = argv[optind];
-
-	return 0;
 }
 
 int
