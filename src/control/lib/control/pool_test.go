@@ -2299,6 +2299,16 @@ func TestControl_PoolSetProp(t *testing.T) {
 				},
 			},
 		},
+		"success with byte value": {
+			req: &PoolSetPropReq{
+				ID: test.MockUUID(),
+				Properties: func() []*daos.PoolProperty {
+					p := propWithVal("label", "ok")
+					p.Value.SetBytes([]byte("test-byte-data"))
+					return []*daos.PoolProperty{p}
+				}(),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2556,6 +2566,31 @@ func TestControl_PoolGetProp(t *testing.T) {
 			expResp: []*daos.PoolProperty{
 				propWithVal("label", "foo"),
 				propWithVal("space_rb", "42"),
+			},
+		},
+		"byte value in response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Byteval{Byteval: []byte("test-cert-data")},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: test.MockUUID(),
+				Properties: []*daos.PoolProperty{
+					propWithVal("label", ""),
+				},
+			},
+			expResp: []*daos.PoolProperty{
+				func() *daos.PoolProperty {
+					p := propWithVal("label", "")
+					p.Value.SetBytes([]byte("test-cert-data"))
+					return p
+				}(),
 			},
 		},
 		"missing props in response; compatibility with old pool": {
