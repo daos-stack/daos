@@ -440,6 +440,102 @@
    fun:runtime.persistentalloc
 }
 {
+   libdaos_control_go_runtime_cond
+   Memcheck:Cond
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_value8
+   Memcheck:Value8
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_addr8
+   Memcheck:Addr8
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   # Go runtime retains references to heap objects (goroutine stacks,
+   # finalizer lists, global maps) that Memcheck flags as reachable/possible
+   # leaks at exit. Real C-side leaks (missing C.free, nested chains) show up
+   # as definite/indirect and are left un-suppressed so they stay visible.
+   libdaos_control_go_runtime_leak
+   Memcheck:Leak
+   match-leak-kinds: possible,reachable
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_free
+   Memcheck:Free
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_addr1
+   Memcheck:Addr1
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_addr2
+   Memcheck:Addr2
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_addr4
+   Memcheck:Addr4
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_addr16
+   Memcheck:Addr16
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_value1
+   Memcheck:Value1
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_value2
+   Memcheck:Value2
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_value4
+   Memcheck:Value4
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_value16
+   Memcheck:Value16
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_param
+   Memcheck:Param
+   *
+   ...
+   obj:*/libdaos_control.so
+}
+{
+   libdaos_control_go_runtime_overlap
+   Memcheck:Overlap
+   ...
+   obj:*/libdaos_control.so
+}
+{
    DAOS-16866
    Memcheck:Leak
    match-leak-kinds: reachable
