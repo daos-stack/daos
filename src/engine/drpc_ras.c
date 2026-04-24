@@ -367,6 +367,17 @@ ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation)
 			 NULL /* ctlop */, &evt, false /* wait_for_resp */);
 }
 
+int
+ds_notify_rank_self_terminated(d_rank_t rank, uint64_t incarnation)
+{
+	Shared__RASEvent evt = SHARED__RASEVENT__INIT;
+
+	return raise_ras(RAS_ENGINE_SELF_TERMINATED, "excluded rank self terminated detected",
+			 RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL /* hwid */, &rank /* rank */,
+			 &incarnation /* inc */, NULL /* jobid */, NULL /* pool */, NULL /* cont */,
+			 NULL /* objid */, NULL /* ctlop */, &evt, false /* wait_for_resp */);
+}
+
 void
 ds_chk_free_pool_list(struct chk_list_pool *clp, uint32_t nr)
 {

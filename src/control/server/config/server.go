@@ -98,7 +98,9 @@ type Server struct {
 	Path string `yaml:"-"` // path to config file
 
 	// Behavior flags
-	AutoFormat bool `yaml:"-"`
+	AutoFormat                bool `yaml:"-"`
+	DisableEngineAutoRestart  bool `yaml:"disable_engine_auto_restart"`
+	EngineAutoRestartMinDelay int  `yaml:"engine_auto_restart_min_delay,omitempty"`
 
 	deprecatedParams `yaml:",inline"`
 }
@@ -352,6 +354,18 @@ func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
 // WithTelemetryPort sets the port for the telemetry exporter.
 func (cfg *Server) WithTelemetryPort(port int) *Server {
 	cfg.TelemetryPort = port
+	return cfg
+}
+
+// WithDisableEngineAutoRestart enables or disables automatic engine restarts on self-termination.
+func (cfg *Server) WithDisableEngineAutoRestart(disabled bool) *Server {
+	cfg.DisableEngineAutoRestart = disabled
+	return cfg
+}
+
+// WithEngineAutoRestartMinDelay sets minimum time between automatic engine restarts.
+func (cfg *Server) WithEngineAutoRestartMinDelay(secs uint) *Server {
+	cfg.EngineAutoRestartMinDelay = int(secs)
 	return cfg
 }
 
@@ -828,6 +842,11 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	if cfg.SystemRamReserved <= 0 {
 		return FaultConfigSysRsvdZero
+	}
+
+	if cfg.EngineAutoRestartMinDelay < 0 {
+		return errors.Errorf("engine_auto_restart_min_delay must be >= 0 (got %d)",
+			cfg.EngineAutoRestartMinDelay)
 	}
 
 	// A config without engines is valid when initially discovering hardware prior to adding

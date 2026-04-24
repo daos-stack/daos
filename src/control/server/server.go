@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
 	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -167,6 +168,13 @@ type server struct {
 	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
 	onShutdown       []func()
+
+	restartMgr *engineRestartManager
+
+	// Deprecated: use restartMgr instead
+	rankRestartMu      sync.Mutex
+	rankRestartTimes   map[ranklist.Rank]time.Time
+	rankRestartPending map[ranklist.Rank]*time.Timer
 }
 
 func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -183,12 +191,15 @@ func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.Fault
 	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
 	return &server{
-		log:         log,
-		cfg:         cfg,
-		hostname:    hostname,
-		runningUser: cu,
-		faultDomain: faultDomain,
-		harness:     harness,
+		log:                log,
+		cfg:                cfg,
+		hostname:           hostname,
+		runningUser:        cu,
+		faultDomain:        faultDomain,
+		harness:            harness,
+		restartMgr:         newEngineRestartManager(log, cfg),
+		rankRestartTimes:   make(map[ranklist.Rank]time.Time),
+		rankRestartPending: make(map[ranklist.Rank]*time.Timer),
 	}, nil
 }
 
@@ -283,6 +294,11 @@ func (srv *server) OnShutdown(fns ...func()) {
 }
 
 func (srv *server) shutdown() {
+	// Stop the restart manager first
+	if srv.restartMgr != nil {
+		srv.restartMgr.stop()
+	}
+
 	srv.cbLock.Lock()
 	onShutdownCbs := srv.onShutdown
 	srv.cbLock.Unlock()
@@ -406,6 +422,11 @@ func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error
 		allStarted.Wait()
 		srv.log.Debug("engines have started")
 
+		// Start the restart manager
+		if srv.restartMgr != nil {
+			srv.restartMgr.start(ctx)
+		}
+
 		srv.cbLock.Lock()
 		onEnginesStartedCbs := srv.onEnginesStarted
 		srv.cbLock.Unlock()
@@ -466,7 +487,7 @@ func (srv *server) setupGrpc() error {
 }
 
 func (srv *server) registerEvents() {
-	registerFollowerSubscriptions(srv)
+	registerSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
@@ -507,7 +528,7 @@ func (srv *server) registerEvents() {
 	)
 	srv.sysdb.OnLeadershipLost(func() error {
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
-		registerFollowerSubscriptions(srv)
+		registerSubscriptions(srv)
 		return nil
 	})
 }
