@@ -438,11 +438,6 @@ def get_base_env(clean=False):
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
 
-    # If set, retain the HTTPS_PROXY for valgrind
-    http_proxy = os.environ.get('HTTPS_PROXY')
-    if http_proxy:
-        env['HTTPS_PROXY'] = http_proxy
-
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
     # env['MALLOC_CHECK_'] = '3'

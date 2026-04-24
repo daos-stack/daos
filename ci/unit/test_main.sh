@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -46,6 +46,5 @@ rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . jenkins@"$NODE":build/
 ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME        \
                                          HOSTPWD=$PWD              \
                                          WITH_VALGRIND=$WITH_VALGRIND \
-                                         DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
                                          BDEV_TEST=$BDEV_TEST       \
                                          ./build/ci/unit/test_main_node.sh"
