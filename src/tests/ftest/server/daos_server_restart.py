@@ -38,7 +38,7 @@ class DaosServerTest(TestWithServers):
         self.log.info("=Restart daos_server, dmg storage_format.")
         try:
             self.server_managers[0].dmg.debug.value = True
-            self.server_managers[0].dmg.storage_format(force=False, verbose=False)
+            self.server_managers[0].dmg.storage_format(force=True, verbose=False)
         finally:
             self.server_managers[0].dmg.debug.value = False
         self.log.info("=Restart daos_server, detect_engine_start().")
