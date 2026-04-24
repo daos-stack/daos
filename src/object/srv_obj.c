@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1089,23 +1089,15 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 	return rc;
 }
 
-/* Call internal method to increment CSUM media error. */
-static void
-obj_log_csum_err(void)
+static inline void
+obj_log_csum_err(daos_unit_oid_t oid)
 {
-	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc;
+	struct dss_module_info *info = dss_get_module_info();
 
 	D_ASSERT(info != NULL);
-	bxc = info->dmi_nvme_ctxt;
-
-	if (bxc == NULL) {
-		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
-		info->dmi_xs_id, info->dmi_tgt_id);
-		return;
-	}
-
-	bio_log_data_csum_err(bxc);
+	ras_notify_eventf(RAS_OBJ_CSUM_ERR, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, NULL, "CSUM error for " DF_UOID " on target %u\n",
+			  DP_UOID(oid), info->dmi_tgt_id);
 }
 
 /**
@@ -1818,7 +1810,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	}
 
 	if (rc == -DER_CSUM)
-		obj_log_csum_err();
+		obj_log_csum_err(orw->orw_oid);
 post:
 	time = daos_get_ntime();
 	rc = bio_iod_post_async(biod, rc);
@@ -2450,12 +2442,14 @@ static int
 obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		      uint32_t rpc_map_ver, uint32_t flags)
 {
+	struct ds_pool *pool = child->sc_pool->spc_pool;
+
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
-		/* EC aggregation is still inflight, rebuild should wait until it's paused */
+		/* EC aggregation is still in-flight, rebuild should wait until it's paused */
 		if (ds_cont_child_ec_aggregating(child)) {
 			D_ERROR(DF_CONT " ec aggregate still active, rebuilding %d\n",
-				DP_CONT(child->sc_pool->spc_uuid, child->sc_uuid),
-				atomic_load(&child->sc_pool->spc_pool->sp_rebuilding));
+				DP_CONT(pool->sp_uuid, child->sc_uuid),
+				atomic_load(&pool->sp_rebuilding));
 			return -DER_UPDATE_AGAIN;
 		}
 	}
@@ -2463,7 +2457,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	if (!obj_is_modification_opc(opc) && (opc != DAOS_OBJ_RPC_CPD || flags & ORF_CPD_RDONLY))
 		return 0;
 
-	if (atomic_load(&child->sc_pool->spc_pool->sp_rebuilding)) {
+	if (atomic_load(&pool->sp_rebuilding)) {
 		uint32_t version;
 
 		ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD,
@@ -2480,10 +2474,8 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 	 * vos discard to finish, which otherwise might discard these new in-flight
 	 * I/O update.
 	 */
-	if ((flags & ORF_REINTEGRATING_IO) &&
-	    (child->sc_pool->spc_pool->sp_need_discard &&
-	     child->sc_pool->spc_discard_done == 0)) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+	if ((flags & ORF_REINTEGRATING_IO) && atomic_load(&pool->sp_discarding) > 0) {
+		D_ERROR("reintegrating " DF_UUID " retry.\n", DP_UUID(pool->sp_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
 
@@ -2562,8 +2554,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	if (iod->iod_nr == 0) /* nothing to replicate, directly remove parity */
 		goto remove_parity;
 	iod_csums = oer->er_iod_csums.ca_arrays;
-	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi,
-			      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
+	rc        = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi,
+				     VOS_OF_REBUILD | VOS_OF_CRIT, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -2644,7 +2636,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	dkey = (daos_key_t *)&oea->ea_dkey;
 	if (parity_bulk != CRT_BULK_NULL) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid, oea->ea_epoch_range.epr_hi,
-				      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
+				      VOS_OF_REBUILD | VOS_OF_CRIT, dkey, 1, iod, iod_csums, 0,
+				      &ioh, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -2705,6 +2698,11 @@ out:
 	obj_ioc_end(&ioc, rc);
 }
 
+enum obj_resend_status {
+	ORS_PREPARED = 1,
+	ORS_DONE     = 2,
+};
+
 static int
 obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
 		  uint32_t *flags, struct dtx_memberships *mbs, bool leader, bool dist)
@@ -2722,7 +2720,7 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 	switch (rc) {
 	case -DER_ALREADY:
 		/* Do nothing if 'committed' or 'committable'. */
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc = ORS_DONE);
 	case 0:
 		/* For 'prepared' DTX, if pool map has been changed, then DTX membership maybe
 		 * changed also. Let's refresh it if necessary.
@@ -2744,6 +2742,7 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 			*epoch = e;
 		}
 
+		rc = ORS_PREPARED;
 		break;
 	case -DER_MISMATCH:
 		if (dist)
@@ -2890,6 +2889,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 out:
 	if (dth != NULL)
 		rc = dtx_end(dth, ioc.ioc_coc, rc);
+	if (!(orw->orw_flags & ORF_RESEND) && DAOS_FAIL_CHECK(DAOS_DTX_RESEND_NONLEADER))
+		ioc.ioc_lost_reply = 1;
 	obj_rw_reply(rpc, rc, 0, true, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
@@ -3050,6 +3051,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle	*dth;
 
+		if (orw->orw_flags & ORF_CSUM_REPORT) {
+			obj_log_csum_err(orw->orw_oid);
+			D_GOTO(out, rc = 0);
+		}
+
 		/* ORF_FETCH_EPOCH_EC_AGG_BOUNDARY only used for rebuild fetch. The container's
 		 * sc_ec_agg_eph_boundary possibly be different on the initiator and target engines
 		 * of the rebuild fetch, initiator selected fetch epoch possibly lower than readable
@@ -3092,11 +3098,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 				orw->orw_epoch = fetch_epoch;
 			}
 			orw->orw_epoch_first = orw->orw_epoch;
-		}
-
-		if (orw->orw_flags & ORF_CSUM_REPORT) {
-			obj_log_csum_err();
-			D_GOTO(out, rc = 0);
 		}
 
 		if (DAOS_FAIL_CHECK(DAOS_OBJ_FETCH_DATA_LOST))
@@ -3148,8 +3149,10 @@ again:
 		version = orw->orw_map_ver;
 		rc = obj_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &orw->orw_epoch, &version,
 				       &flags, mbs, true, false);
-		if (rc != 0)
-			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+		if (rc < 0)
+			goto out;
+		if (rc == ORS_DONE)
+			D_GOTO(out, rc = 0);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		ioc.ioc_lost_reply = 1;
 		D_GOTO(out, rc);
@@ -3378,8 +3381,10 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
 		param.ip_flags |= VOS_IT_RECX_VISIBLE;
-		dump_enum_anchor(oei->oei_oid, &anchors->ia_dkey, "dkey");
-		dump_enum_anchor(oei->oei_oid, &anchors->ia_akey, "akey");
+		if (D_LOG_ENABLED(DB_REBUILD)) {
+			dump_enum_anchor(oei->oei_oid, &anchors->ia_dkey, "dkey");
+			dump_enum_anchor(oei->oei_oid, &anchors->ia_akey, "akey");
+		}
 		if (daos_anchor_get_flags(&anchors->ia_dkey) &
 		      DIOF_WITH_SPEC_EPOCH) {
 			/* For obj verification case. */
@@ -4051,8 +4056,10 @@ again:
 		version = opi->opi_map_ver;
 		rc = obj_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &opi->opi_epoch, &version,
 				       &flags, mbs, true, false);
-		if (rc != 0)
-			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+		if (rc < 0)
+			goto out;
+		if (rc == ORS_DONE)
+			D_GOTO(out, rc = 0);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST) ||
 		   DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 		goto cleanup;
@@ -4869,6 +4876,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		if (dcsr->dcsr_opc != DCSO_UPDATE)
 			continue;
 
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
+
 		dcu = &dcsr->dcsr_update;
 		rc = vos_dedup_verify(iohs[i]);
 		if (rc != 0) {
@@ -4881,7 +4890,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 					 ioc->ioc_coc->sc_csummer, piod_nrs[i]);
 		if (rc != 0) {
 			if (rc == -DER_CSUM)
-				obj_log_csum_err();
+				obj_log_csum_err(dcsr->dcsr_oid);
 			goto out;
 		}
 
@@ -4927,6 +4936,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 	/* P5: punch and vos_update_end. */
 	for (i = 0; i < dcde->dcde_write_cnt; i++) {
 		dcsr = &dcsrs[dcri[i].dcri_req_idx];
+
+		dcsr->dcsr_oid.id_shard = dcri[i].dcri_shard_id;
 
 		if (dcsr->dcsr_opc == DCSO_UPDATE) {
 			rc = dtx_sub_init(dth, &dcsr->dcsr_oid,
@@ -5241,8 +5252,10 @@ again:
 		rc = obj_handle_resend(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
 				       &dcsh->dcsh_epoch.oe_value, &oci->oci_map_ver, &flags,
 				       dcsh->dcsh_mbs, true, true);
-		if (rc != 0)
-			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+		if (rc < 0)
+			goto out;
+		if (rc == ORS_DONE)
+			D_GOTO(out, rc = 0);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		D_GOTO(out, rc = 0);
 	}
@@ -5834,8 +5847,10 @@ again:
 		version = ocpi->ocpi_map_ver;
 		rc      = obj_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &ocpi->ocpi_epoch,
 					    &version, &flags, odm->odm_mbs, leader, false);
-		if (rc != 0)
-			D_GOTO(out, rc = (rc > 0 ? 0 : rc));
+		if (rc < 0)
+			goto out;
+		if (rc == ORS_DONE)
+			D_GOTO(out, rc = 0);
 
 		dce->dce_ver = version;
 	}
@@ -6054,7 +6069,7 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 
 out:
-	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS, DLOG_ERR, DB_IO, rc,
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_NONEXIST, DLOG_ERR, DB_IO, rc,
 		  "Handled collective query RPC %p %s forwarding for obj " DF_UOID " on rank %u XS "
 		  "%u/%u epc " DF_X64 " pmv %u, with dti " DF_DTI ", dct_nr %u, forward width %u, "
 		  "forward depth %u",
