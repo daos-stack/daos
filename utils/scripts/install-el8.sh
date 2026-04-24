@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# (C) Copyright 2025 Google LLC
+# Copyright 2025-2026 Google LLC
 
 # Install OS updates and packages as required for building DAOS on EL 8 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -116,5 +116,8 @@ else
     # shellcheck disable=SC2086
     dnf install ${dnf_install_args} maven
 fi
+
+# if available, install to get c++20 support
+dnf install -y gcc-toolset-12 || true
 
 gem install fpm
