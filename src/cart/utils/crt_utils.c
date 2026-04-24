@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,26 +57,16 @@ crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 static inline int
 crtu_drain_queue(crt_context_t ctx)
 {
-	int	rc;
-	int	i;
+	int rc;
 
 	/* TODO: Need better mechanism for tests to drain all queues */
-	for (i = 0; i < 1000; i++)
-		crt_progress(ctx, 1000);
-
-	/* Drain the queue. Progress until 1 second timeout.  We need
-	 * a more robust method
-	 */
 	do {
-		rc = crt_progress(ctx, 1000000);
+		rc = crt_progress(ctx, 1000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress() failed with rc=%d\n", rc);
 			return rc;
 		}
-
-		if (rc == -DER_TIMEDOUT)
-			break;
-	} while (1);
+	} while (rc == 0);
 
 	D_DEBUG(DB_TEST, "Done draining queue\n");
 	return 0;
