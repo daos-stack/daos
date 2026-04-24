@@ -18,9 +18,9 @@ static const char *SWIM_STATUS_STR[] = {
 	[SWIM_MEMBER_INACTIVE]	= "INACTIVE",
 };
 
-static uint64_t swim_prot_period_len;
-static uint64_t swim_suspect_timeout;
-static uint64_t swim_ping_timeout;
+static uint64_t swim_prot_period_len_ms;
+static uint64_t swim_suspect_timeout_ms;
+static uint64_t swim_ping_timeout_ms;
 static int      swim_subgroup_size;
 
 static inline uint64_t
@@ -63,39 +63,39 @@ void
 swim_period_set(uint64_t val)
 {
 	D_DEBUG(DB_TRACE, "swim_prot_period_len set as %lu\n", val);
-	swim_prot_period_len = val;
+	swim_prot_period_len_ms = val;
 }
 
 uint64_t
 swim_period_get(void)
 {
-	return swim_prot_period_len;
+	return swim_prot_period_len_ms;
 }
 
 void
 swim_suspect_timeout_set(uint64_t val)
 {
 	D_DEBUG(DB_TRACE, "swim_suspect_timeout set as %lu\n", val);
-	swim_suspect_timeout = val;
+	swim_suspect_timeout_ms = val;
 }
 
 uint64_t
 swim_suspect_timeout_get(void)
 {
-	return swim_suspect_timeout;
+	return swim_suspect_timeout_ms;
 }
 
 void
 swim_ping_timeout_set(uint64_t val)
 {
 	D_DEBUG(DB_TRACE, "swim_ping_timeout set as %lu\n", val);
-	swim_ping_timeout = val;
+	swim_ping_timeout_ms = val;
 }
 
 uint64_t
 swim_ping_timeout_get(void)
 {
-	return swim_ping_timeout;
+	return swim_ping_timeout_ms;
 }
 
 static inline void
@@ -401,7 +401,7 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from, swim_id_t id, uint
 	int				 rc;
 
 	/* if there is no suspicion timeout, just kill the member */
-	if (swim_suspect_timeout_get() == 0)
+	if (swim_suspect_timeout_ms == 0)
 		return swim_member_dead(ctx, from, id, nr);
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
@@ -432,7 +432,8 @@ search:
 			 */
 			if (nr > id_state.sms_incarnation) {
 				item->si_from = from;
-				item->u.si_deadline = swim_now_ms() + swim_suspect_timeout_get();
+				d_gettime_coarse(&item->u.si_deadline);
+				d_timeinc_ms(&item->u.si_deadline, swim_suspect_timeout_ms);
 			}
 			goto update;
 		}
@@ -444,7 +445,8 @@ search:
 		D_GOTO(out, rc = -DER_NOMEM);
 	item->si_id   = id;
 	item->si_from = from;
-	item->u.si_deadline = swim_now_ms() + swim_suspect_timeout_get();
+	d_gettime_coarse(&item->u.si_deadline);
+	d_timeinc_ms(&item->u.si_deadline, swim_suspect_timeout_ms);
 	TAILQ_INSERT_TAIL(&ctx->sc_suspects, item, si_link);
 
 update:
@@ -458,7 +460,8 @@ out:
 }
 
 static int
-swim_member_update_suspected(struct swim_context *ctx, uint64_t now, uint64_t net_glitch_delay)
+swim_member_update_suspected(struct swim_context *ctx, const struct timespec *now,
+			     const struct timespec *net_glitch_delay)
 {
 	TAILQ_HEAD(, swim_item)		 targets;
 	struct swim_member_state	 id_state;
@@ -474,8 +477,9 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now, uint64_t ne
 	item = TAILQ_FIRST(&ctx->sc_suspects);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
-		item->u.si_deadline += net_glitch_delay;
-		if (now > item->u.si_deadline) {
+		// item->u.si_deadline += net_glitch_delay;
+		item->u.si_deadline = d_timeadd(&item->u.si_deadline, net_glitch_delay);
+		if (d_timeless(&item->u.si_deadline, now)) {
 			rc = ctx->sc_ops->get_member_state(ctx, item->si_id, &id_state);
 			if (rc || (id_state.sms_status != SWIM_MEMBER_SUSPECT)) {
 				/* this member was removed or updated already */
@@ -491,7 +495,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now, uint64_t ne
 				from_id = item->si_from;
 
 				item->si_from = self_id;
-				item->u.si_deadline += swim_ping_timeout_get();
+				d_timeinc_ms(&item->u.si_deadline, swim_ping_timeout_ms);
 
 				D_ALLOC_PTR(item);
 				if (item == NULL)
@@ -510,7 +514,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now, uint64_t ne
 				D_FREE(item);
 			}
 		} else {
-			if (item->u.si_deadline < ctx->sc_next_event)
+			if (d_timeless(&item->u.si_deadline, &ctx->sc_next_event))
 				ctx->sc_next_event = item->u.si_deadline;
 		}
 next_item:
@@ -538,7 +542,8 @@ next_item:
 }
 
 static int
-swim_ipings_update(struct swim_context *ctx, uint64_t now, uint64_t net_glitch_delay)
+swim_ipings_update(struct swim_context *ctx, const struct timespec *now,
+		    const struct timespec *net_glitch_delay)
 {
 	TAILQ_HEAD(, swim_item)		 targets;
 	struct swim_item		*next, *item;
@@ -551,12 +556,12 @@ swim_ipings_update(struct swim_context *ctx, uint64_t now, uint64_t net_glitch_d
 	item = TAILQ_FIRST(&ctx->sc_ipings);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
-		item->u.si_deadline += net_glitch_delay;
-		if (now > item->u.si_deadline) {
+		item->u.si_deadline = d_timeadd(&item->u.si_deadline, net_glitch_delay);
+		if (d_timeless(&item->u.si_deadline, now)) {
 			TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
 			TAILQ_INSERT_TAIL(&targets, item, si_link);
 		} else {
-			if (item->u.si_deadline < ctx->sc_next_event)
+			if (d_timeless(&item->u.si_deadline, &ctx->sc_next_event))
 				ctx->sc_next_event = item->u.si_deadline;
 		}
 		item = next;
@@ -642,7 +647,8 @@ swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id, swim_id_t to_id
 		item->si_id   = to_id;
 		item->si_from = from_id;
 		item->si_args = args;
-		item->u.si_deadline = swim_now_ms() + swim_ping_timeout_get();
+		d_gettime_coarse(&item->u.si_deadline);
+		d_timeinc_ms(&item->u.si_deadline, swim_ping_timeout_ms);
 		TAILQ_INSERT_TAIL(&ctx->sc_ipings, item, si_link);
 	} else {
 		rc = -DER_NOMEM;
@@ -697,7 +703,7 @@ swim_self_set(struct swim_context *ctx, swim_id_t self_id)
 
 	/* Reset it when disabled to avoid false error report about stopping progress */
 	if (self_id == SWIM_ID_INVALID)
-		ctx->sc_expect_progress_time = 0;
+		ctx->sc_expect_progress_time = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
 }
 
 struct swim_context *
@@ -743,15 +749,16 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	ctx->sc_target = SWIM_ID_INVALID;
 
 	/* set global tunable defaults */
-	swim_prot_period_len = swim_prot_period_len_default();
-	swim_suspect_timeout = swim_suspect_timeout_default();
-	swim_ping_timeout    = swim_ping_timeout_default();
-	swim_subgroup_size   = swim_subgroup_size_default();
+	swim_prot_period_len_ms = swim_prot_period_len_default();
+	swim_suspect_timeout_ms = swim_suspect_timeout_default();
+	swim_ping_timeout_ms    = swim_ping_timeout_default();
+	swim_subgroup_size      = swim_subgroup_size_default();
 
-	ctx->sc_default_ping_timeout = swim_ping_timeout;
+	ctx->sc_default_ping_timeout = swim_ping_timeout_ms;
 
+	d_gettime_coarse(&ctx->sc_next_tick_time);
 	/* delay the first ping until all things will be initialized */
-	ctx->sc_next_tick_time = swim_now_ms() + 3 * swim_prot_period_len;
+	d_timeinc_ms(&ctx->sc_next_tick_time, 3 * swim_prot_period_len_ms);
 out:
 	return ctx;
 }
@@ -759,13 +766,14 @@ out:
 void
 swim_fini(struct swim_context *ctx)
 {
-	struct swim_item	*next, *item;
-	int			 rc;
+	struct swim_item *next, *item;
+	struct timespec   now = d_time_ms(UINT_MAX), net_glitch_delay = d_time_ms(0);
+	int               rc;
 
 	if (ctx == NULL)
 		return;
 
-	swim_ipings_update(ctx, UINT64_MAX, 0);
+	swim_ipings_update(ctx, &now, &net_glitch_delay);
 	item = TAILQ_FIRST(&ctx->sc_ipings);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
@@ -806,7 +814,7 @@ swim_fini(struct swim_context *ctx)
 }
 
 int
-swim_net_glitch_update(struct swim_context *ctx, swim_id_t id, uint64_t delay)
+swim_net_glitch_update(struct swim_context *ctx, swim_id_t id, uint64_t delay_ms)
 {
 	struct swim_item	*item;
 	swim_id_t		 self_id = swim_self_get(ctx);
@@ -817,24 +825,24 @@ swim_net_glitch_update(struct swim_context *ctx, swim_id_t id, uint64_t delay)
 	/* update expire time of suspected members */
 	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
 		if (id == self_id || id == item->si_id)
-			item->u.si_deadline += delay;
+			d_timeinc_ms(&item->u.si_deadline, delay_ms);
 	}
 	/* update expire time of ipinged members */
 	TAILQ_FOREACH(item, &ctx->sc_ipings, si_link) {
 		if (id == self_id || id == item->si_id)
-			item->u.si_deadline += delay;
+			d_timeinc_ms(&item->u.si_deadline, delay_ms);
 	}
 
 	if (id == self_id || id == ctx->sc_target) {
 		if (swim_state_get(ctx) == SCS_PINGED || swim_state_get(ctx) == SCS_IPINGED)
-			ctx->sc_deadline += delay;
+			d_timeinc_ms(&ctx->sc_deadline, delay_ms);
 	}
 
 	swim_ctx_unlock(ctx);
 
 	if (id != self_id)
 		SWIM_ERROR("%lu: A network glitch of %lu with %lu ms delay"
-			   " is detected.\n", self_id, id, delay);
+			   " is detected.\n", self_id, id, delay_ms);
 	return rc;
 }
 
@@ -850,16 +858,16 @@ swim_ping_delay(uint64_t state_delay)
 }
 
 int
-swim_progress(struct swim_context *ctx, int64_t timeout_us)
+swim_progress(struct swim_context *ctx, const struct timespec *deadline)
 {
-	enum swim_context_state	 ctx_state = SCS_TIMEDOUT;
+	enum swim_context_state  ctx_state = SCS_TIMEDOUT;
 	struct swim_member_state target_state;
-	struct swim_item	*item;
-	uint64_t		 now, end = 0;
-	uint64_t		 net_glitch_delay = 0UL;
-	swim_id_t		 target_id, sendto_id;
-	bool			 send_updates = false;
-	int			 rc;
+	struct swim_item        *item;
+	struct timespec          now;
+	struct timespec          net_glitch_delay = {.tv_sec = 0, .tv_nsec = 0};
+	swim_id_t                target_id, sendto_id;
+	bool                     send_updates = false;
+	int                      rc;
 
 	/* validate input parameters */
 	if (ctx == NULL) {
@@ -870,26 +878,26 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 	if (ctx->sc_self == SWIM_ID_INVALID) /* not initialized yet */
 		D_GOTO(out_err, rc = 0); /* Ignore this update */
 
-	now = swim_now_ms();
-	if (timeout_us > 0)
-		end = now + timeout_us / 1000; /* timeout in us */
-	ctx->sc_next_event = now + swim_period_get();
+	d_gettime_coarse(&now);
+	ctx->sc_next_event = now;
+	d_timeinc_ms(&ctx->sc_next_event, swim_prot_period_len_ms);
 
-	if (now > ctx->sc_expect_progress_time &&
-	    0  != ctx->sc_expect_progress_time) {
-		net_glitch_delay = now - ctx->sc_expect_progress_time;
+	if (!d_timenull(&ctx->sc_expect_progress_time) &&
+	    d_timeless(&ctx->sc_expect_progress_time, &now)) {
+		net_glitch_delay = d_timediff(&ctx->sc_expect_progress_time, &now);
 		SWIM_ERROR("The progress callback was not called for too long: "
-			   "%lu ms after expected.\n", net_glitch_delay);
+			   "%lf ms after expected.\n",
+			   d_time2ms(net_glitch_delay));
 	}
 
-	for (; now <= end || ctx_state == SCS_TIMEDOUT; now = swim_now_ms()) {
-		rc = swim_member_update_suspected(ctx, now, net_glitch_delay);
+	do {
+		rc = swim_member_update_suspected(ctx, &now, &net_glitch_delay);
 		if (rc) {
 			SWIM_ERROR("swim_member_update_suspected(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
-		rc = swim_ipings_update(ctx, now, net_glitch_delay);
+		rc = swim_ipings_update(ctx, &now, &net_glitch_delay);
 		if (rc) {
 			SWIM_ERROR("swim_ipings_update(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -916,27 +924,29 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 
 		switch (ctx_state) {
 		case SCS_BEGIN:
-			if (now > ctx->sc_next_tick_time) {
-				uint64_t delay = swim_ping_delay(target_state.sms_delay);
+			if (d_timeless(&ctx->sc_next_tick_time, &now)) {
+				uint64_t delay_ms = swim_ping_delay(target_state.sms_delay);
 
-				target_id = ctx->sc_target;
-				sendto_id = ctx->sc_target;
+				target_id    = ctx->sc_target;
+				sendto_id    = ctx->sc_target;
 				send_updates = true;
 				SWIM_DEBUG("%lu: dping %lu => {%lu %c %lu} "
 					   "delay: %u ms, timeout: %lu ms\n",
 					   ctx->sc_self, ctx->sc_self, sendto_id,
 					   SWIM_STATUS_CHARS[target_state.sms_status],
 					   target_state.sms_incarnation, target_state.sms_delay,
-					   delay);
+					   delay_ms);
 
-				ctx->sc_next_tick_time = now + swim_period_get();
-				ctx->sc_deadline = now + delay;
-				if (ctx->sc_deadline < ctx->sc_next_event)
+				ctx->sc_next_tick_time = now;
+				d_timeinc_ms(&ctx->sc_next_tick_time, swim_prot_period_len_ms);
+				ctx->sc_deadline = now;
+				d_timeinc_ms(&ctx->sc_deadline, delay_ms);
+				if (d_timeless(&ctx->sc_deadline, &ctx->sc_next_event))
 					ctx->sc_next_event = ctx->sc_deadline;
 				ctx_state = SCS_PINGED;
 			} else {
 				ctx->sc_next_event =
-				    MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
+				    D_TIME_MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
 			}
 			break;
 		case SCS_PINGED:
@@ -944,8 +954,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 			 * protocol tick ever successfully acked a direct
 			 * ping request
 			 */
-			ctx->sc_deadline += net_glitch_delay;
-			if (now > ctx->sc_deadline) {
+			ctx->sc_deadline = d_timeadd(&ctx->sc_deadline, &net_glitch_delay);
+			if (d_timeless(&ctx->sc_deadline, &now)) {
 				/* no response from direct ping */
 				if (target_state.sms_status != SWIM_MEMBER_INACTIVE) {
 					ctx_state = SCS_TIMEDOUT;
@@ -957,7 +967,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 				}
 				ctx->sc_next_event = now;
 			} else {
-				if (ctx->sc_deadline < ctx->sc_next_event)
+				if (d_timeless(&ctx->sc_deadline, &ctx->sc_next_event))
 					ctx->sc_next_event = ctx->sc_deadline;
 			}
 			break;
@@ -980,8 +990,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 
 			if (item != NULL) {
 				struct swim_member_state	state;
-				uint64_t			delay;
-				uint64_t			deadline;
+				uint64_t			delay_ms;
+				struct timespec			delay_deadline;
 
 				target_id = item->si_from;
 				sendto_id = item->si_id;
@@ -995,20 +1005,20 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 					goto done_item;
 				}
 
-				delay = swim_ping_delay(target_state.sms_delay);
+				delay_ms = swim_ping_delay(target_state.sms_delay);
 
 				if (target_id != sendto_id) {
 					/* Send indirect ping request to ALIVE member only */
 					if (state.sms_status != SWIM_MEMBER_ALIVE)
 						goto done_item;
 
-					delay *= 2;
+					delay_ms *= 2;
 					SWIM_DEBUG("%lu: ireq  %lu => {%lu %c %lu} "
 						   "delay: %u ms, timeout: %lu ms\n",
 						   ctx->sc_self, sendto_id, target_id,
 						   SWIM_STATUS_CHARS[target_state.sms_status],
 						   target_state.sms_incarnation,
-						   target_state.sms_delay, delay);
+						   target_state.sms_delay, delay_ms);
 				} else {
 					/* Send ping only if this member is not respond yet */
 					if (state.sms_status != SWIM_MEMBER_INACTIVE)
@@ -1018,15 +1028,16 @@ swim_progress(struct swim_context *ctx, int64_t timeout_us)
 						   "delay: %u ms, timeout: %lu ms\n",
 						   ctx->sc_self, ctx->sc_self, sendto_id,
 						   SWIM_STATUS_CHARS[state.sms_status],
-						   state.sms_incarnation, state.sms_delay, delay);
+						   state.sms_incarnation, state.sms_delay, delay_ms);
 				}
 
 				send_updates = true;
 
-				deadline = now + delay;
-				if (deadline > ctx->sc_deadline)
-					ctx->sc_deadline = deadline;
-				if (ctx->sc_deadline < ctx->sc_next_event)
+				delay_deadline = now;
+				d_timeinc_ms(&delay_deadline, delay_ms);
+				if (d_timeless(&ctx->sc_deadline, &delay_deadline))
+					ctx->sc_deadline = delay_deadline;
+				if (d_timeless(&ctx->sc_deadline, &ctx->sc_next_event))
 					ctx->sc_next_event = ctx->sc_deadline;
 			}
 
@@ -1035,8 +1046,8 @@ done_item:
 				ctx_state = SCS_IPINGED;
 			break;
 		case SCS_IPINGED:
-			ctx->sc_deadline += net_glitch_delay;
-			if (now > ctx->sc_deadline) {
+			ctx->sc_deadline = d_timeadd(&ctx->sc_deadline, &net_glitch_delay);
+			if (d_timeless(&ctx->sc_deadline, &now)) {
 				/* no response from indirect pings */
 				if (target_state.sms_status != SWIM_MEMBER_INACTIVE) {
 					/* suspect this member */
@@ -1046,23 +1057,23 @@ done_item:
 				ctx->sc_next_event = now;
 				ctx_state = SCS_SELECT;
 			} else {
-				ctx->sc_next_event =
-				    MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
+				ctx->sc_next_event = D_TIME_MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
 			}
 			break;
 		case SCS_SELECT:
 			ctx->sc_target = ctx->sc_ops->get_dping_target(ctx);
 			if (ctx->sc_target == SWIM_ID_INVALID) {
-				ctx->sc_next_event = now + swim_period_get();
+				ctx->sc_next_event = now;
+				d_timeinc_ms(&ctx->sc_next_event, swim_prot_period_len_ms);
 			} else {
 				ctx->sc_next_event =
-				    MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
+				    D_TIME_MIN(ctx->sc_next_event, ctx->sc_next_tick_time);
 				ctx_state = SCS_BEGIN;
 			}
 			break;
 		}
 
-		net_glitch_delay = 0UL;
+		net_glitch_delay = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
 		swim_state_set(ctx, ctx_state);
 		swim_ctx_unlock(ctx);
 
@@ -1073,13 +1084,23 @@ done_item:
 				D_GOTO(out, rc);
 			}
 			send_updates = false;
-		} else if (now + 100 < ctx->sc_next_event) {
-			break; /* break loop if need to wait more than 100 ms. */
+		} else {
+			uint64_t wait_ms = 100; /* wait at most 100 ms to check the next event. */
+			struct timespec wait_deadline = now;
+			d_timeinc_ms(&wait_deadline, wait_ms);
+			if (d_timeless(&wait_deadline, &ctx->sc_next_event))
+				break; /* break loop if need to wait more than 100 ms. */
 		}
-	}
-	rc = (now > end) ? -DER_TIMEDOUT : -DER_CANCELED;
+	} while ((ctx->sc_target != SWIM_ID_INVALID && deadline != NULL &&
+		  d_gettime_coarse(&now) == 0 && d_timeless(&now, deadline)) ||
+		 ctx_state == SCS_TIMEDOUT);
+
+	rc = (deadline != NULL && !d_timeless(&now, deadline)) ? -DER_TIMEDOUT : -DER_CANCELED;
 out:
-	ctx->sc_expect_progress_time = now + swim_period_get();
+	/* We use a resolution of 1 ms for progress callback, so add 5 ms here to avoid false error
+	 * report about missing progress callback. */
+	ctx->sc_expect_progress_time = now;
+	d_timeinc_ms(&ctx->sc_expect_progress_time, swim_prot_period_len_ms + 5);
 out_err:
 	return rc;
 }

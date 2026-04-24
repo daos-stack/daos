@@ -1781,8 +1781,8 @@ crt_proc_reset(crt_proc_t proc, void *buf, size_t buf_size, crt_proc_op_t proc_o
 size_t
 crp_proc_get_size_used(crt_proc_t proc);
 
-typedef int64_t
-(*crt_progress_cb) (crt_context_t ctx, int64_t timeout, void *arg);
+typedef struct timespec
+(*crt_progress_cb) (crt_context_t ctx, const struct timespec *deadline, void *arg);
 
 /**
  * Register a callback function which will be called inside crt_progress()

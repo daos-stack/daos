@@ -275,10 +275,11 @@ static void *srv_progress(void *data)
 	return NULL;
 }
 
-static int64_t swim_progress_cb(crt_context_t ctx, int64_t timeout, void *arg)
+static struct timespec swim_progress_cb(crt_context_t ctx, const struct timespec *deadline, void *arg)
 {
 	struct swim_global_srv *srv = arg;
 	swim_id_t self_id = swim_self_get(srv->swim_ctx);
+	struct timespec new_deadline = (deadline != NULL) ? *deadline : (struct timespec){0};
 	int rc = 0;
 
 	dbg("---%s--->", __func__);
@@ -286,14 +287,14 @@ static int64_t swim_progress_cb(crt_context_t ctx, int64_t timeout, void *arg)
 	if (self_id == SWIM_ID_INVALID)
 		goto out;
 
-	rc = swim_progress(srv->swim_ctx, 1);
+	rc = swim_progress(srv->swim_ctx, deadline);
 	if (rc == -ESHUTDOWN)
 		srv->shutdown = 1;
 	else if (rc != -ETIMEDOUT)
 		D_ERROR("swim_progress() failed rc=%d\n", rc);
 out:
 	dbg("<---%s---", __func__);
-	return timeout;
+	return new_deadline;
 }
 
 static void srv_fini(void)

@@ -777,6 +777,22 @@ d_timediff(const struct timespec *t1, const struct timespec *t2)
 	return temp;
 }
 
+/* Add time */
+static inline struct timespec
+d_timeadd(const struct timespec *t1, const struct timespec *t2)
+{
+	struct timespec temp;
+
+	temp.tv_sec  = t1->tv_sec + t2->tv_sec;
+	temp.tv_nsec = t1->tv_nsec + t2->tv_nsec;
+	if (temp.tv_nsec >= NSEC_PER_SEC) {
+		temp.tv_sec += 1;
+		temp.tv_nsec -= NSEC_PER_SEC;
+	}
+
+	return temp;
+}
+
 /* Return true if time is null */
 static inline bool
 d_timenull(const struct timespec *t)
@@ -790,6 +806,14 @@ d_timeless(const struct timespec *t1, const struct timespec *t2)
 {
 	return ((t1->tv_sec < t2->tv_sec) ||
 		((t1->tv_sec == t2->tv_sec) && (t1->tv_nsec < t2->tv_nsec)));
+}
+#define D_TIME_MIN(t1, t2) (d_timeless((&t1), (&t2)) ? (t1) : (t2))
+
+/* Return true if t1 == t2, false otherwise */
+static inline bool
+d_timecmp(const struct timespec *t1, const struct timespec *t2)
+{
+	return (t1->tv_sec == t2->tv_sec) && (t1->tv_nsec == t2->tv_nsec);
 }
 
 /* Calculate remaining time in ns */
@@ -839,6 +863,12 @@ d_timeinc(struct timespec *now, uint64_t ns)
 	now->tv_nsec += ns;
 	now->tv_sec += now->tv_nsec / NSEC_PER_SEC;
 	now->tv_nsec = now->tv_nsec % NSEC_PER_SEC;
+}
+
+static inline void
+d_timeinc_ms(struct timespec *now, unsigned int ms)
+{
+	d_timeinc(now, ms * 1000000);
 }
 
 static inline struct timespec
