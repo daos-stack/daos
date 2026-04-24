@@ -441,6 +441,7 @@ struct vos_container {
 	/* Various flags */
 	uint32_t vc_in_aggregation : 1, vc_in_discard : 1, vc_cmt_dtx_indexed : 1, vc_dtx_reset : 1;
 	unsigned int		vc_obj_discard_count;
+	unsigned int		vc_obj_aggregate_count;
 	unsigned int		vc_open_count;
 	/* The latest pool map version that DTX resync has been done. */
 	uint32_t                vc_dtx_resync_ver;

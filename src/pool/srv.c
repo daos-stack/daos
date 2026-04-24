@@ -22,6 +22,9 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
+unsigned int	agg_max_ults = 16; /* Max concurrent per-object aggregation ULTs */
+unsigned int	agg_num_scanners = 4; /* Number of VOS aggregation scanner ULTs per xstream */
+unsigned int	ec_agg_num_scanners = 16; /* Number of EC aggregation scanner ULTs per xstream */
 uint32_t        pw_rf = -1; /* pool wise redundancy factor */
 uint32_t        ps_cache_intvl = 2;  /* pool space cache expiration time, in seconds */
 #define PW_RF_DEFAULT (2)
@@ -72,6 +75,21 @@ init(void)
 	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
+
+	d_getenv_uint("DAOS_AGG_MAX_ULTS", &agg_max_ults);
+	if (agg_max_ults == 0)
+		agg_max_ults = 1;
+	D_INFO("Max concurrent per-object aggregation ULTs: %u\n", agg_max_ults);
+
+	d_getenv_uint("DAOS_AGG_SCANNERS", &agg_num_scanners);
+	if (agg_num_scanners == 0)
+		agg_num_scanners = 1;
+	D_INFO("VOS aggregation scanner ULTs per xstream (max): %u\n", agg_num_scanners);
+
+	d_getenv_uint("DAOS_EC_AGG_SCANNERS", &ec_agg_num_scanners);
+	if (ec_agg_num_scanners == 0)
+		ec_agg_num_scanners = 1;
+	D_INFO("EC aggregation scanner ULTs per xstream (max): %u\n", ec_agg_num_scanners);
 
 	pw_rf = -1;
 	if (!check_pool_redundancy_factor("DAOS_POOL_RF"))
@@ -204,6 +222,10 @@ pool_tls_fini(int tags, void *data)
 	struct ds_pool_child	*child;
 
 	D_ASSERT(tls != NULL);
+
+	/* Stop all aggregation scanners before tearing down */
+	ds_stop_agg_scanner();
+	ds_stop_ec_agg_scanner();
 
 	/* pool child cache should be empty now */
 	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {

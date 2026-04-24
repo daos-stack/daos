@@ -2534,6 +2534,7 @@ enum {
 	AGG_MODE_AGGREGATE,
 	AGG_MODE_DISCARD,
 	AGG_MODE_OBJ_DISCARD,
+	AGG_MODE_OBJ_AGGREGATE,
 };
 
 static int
@@ -2571,6 +2572,14 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				cont->vc_epr_aggregation.epr_lo,
 				cont->vc_epr_aggregation.epr_hi,
+				epr->epr_lo, epr->epr_hi);
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_obj_aggregate_count != 0) {
+			D_DEBUG(DB_EPC, DF_CONT ": In per-object aggregation, "
+				"discard epr[" DF_U64 ", " DF_U64 "]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				epr->epr_lo, epr->epr_hi);
 			return -DER_BUSY;
 		}
@@ -2619,6 +2628,25 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 
 		cont->vc_obj_discard_count++;
 		break;
+	case AGG_MODE_OBJ_AGGREGATE:
+		/**
+		 * Per-object aggregation: allow multiple per-object aggregation
+		 * ULTs to run concurrently on the same container (using a counter).
+		 * Conflict with full discard to avoid epoch range issues.
+		 */
+		if (cont->vc_in_discard &&
+		    cont->vc_epr_discard.epr_lo <= epr->epr_hi) {
+			D_DEBUG(DB_EPC, DF_CONT ": Discard epr[" DF_U64 ", " DF_U64 "], "
+				"obj aggregation epr[" DF_U64 ", " DF_U64 "]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo,
+				cont->vc_epr_discard.epr_hi,
+				epr->epr_lo, epr->epr_hi);
+			return -DER_BUSY;
+		}
+
+		cont->vc_obj_aggregate_count++;
+		break;
 	}
 
 	rc = vos_flush_wal_header(cont->vc_pool);
@@ -2656,6 +2684,10 @@ aggregate_exit(struct vos_container *cont, int agg_mode)
 	case AGG_MODE_OBJ_DISCARD:
 		D_ASSERT(cont->vc_obj_discard_count > 0);
 		cont->vc_obj_discard_count--;
+		break;
+	case AGG_MODE_OBJ_AGGREGATE:
+		D_ASSERT(cont->vc_obj_aggregate_count > 0);
+		cont->vc_obj_aggregate_count--;
 		break;
 	}
 }
@@ -2801,6 +2833,99 @@ update_hae:
 		cont->vc_cont_df->cd_hae = epr->epr_hi;
 exit:
 	aggregate_exit(cont, AGG_MODE_AGGREGATE);
+
+	if (run_agg && merge_window_status(&ad->ad_agg_param.ap_window) != MW_CLOSED)
+		D_ASSERTF(false, "Merge window resource leaked.\n");
+
+free_agg_data:
+	D_FREE(ad);
+
+	if (rc < 0) {
+		if (vam && vam->vam_fail_count)
+			d_tm_inc_counter(vam->vam_fail_count, 1);
+	}
+	umem_heap_gc(&cont->vc_pool->vp_umm);
+
+	return rc;
+}
+
+int
+vos_aggregate_obj(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+		  int (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_agg_metrics  *vam  = agg_cont2metrics(cont);
+	struct agg_data		*ad;
+	bool			 run_agg = false;
+	int			 blocks  = 0;
+	int			 rc;
+
+	D_DEBUG(DB_EPC, "Per-object aggregation " DF_UOID " epr: " DF_U64 " -> " DF_U64 "\n",
+		DP_UOID(oid), epr->epr_lo, epr->epr_hi);
+	D_ASSERT(epr != NULL);
+	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
+		  "epr_lo:" DF_U64 ", epr_hi:" DF_U64 "\n",
+		  epr->epr_lo, epr->epr_hi);
+
+	D_ALLOC_PTR(ad);
+	if (ad == NULL)
+		return -DER_NOMEM;
+
+	rc = aggregate_enter(cont, AGG_MODE_OBJ_AGGREGATE, epr);
+	if (rc)
+		goto free_agg_data;
+
+	if (flags & VOS_AGG_FL_FORCE_SCAN)
+		ad->ad_agg_param.ap_filter_epoch = epr->epr_lo;
+	else
+		ad->ad_agg_param.ap_filter_epoch = cont->vc_cont_df->cd_hae;
+
+	/* Set iteration parameters - start from DKEY level for specific object */
+	ad->ad_iter_param.ip_hdl = coh;
+	ad->ad_iter_param.ip_epr = *epr;
+	ad->ad_iter_param.ip_oid = oid;
+	ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_RR;
+	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_COVERED;
+	ad->ad_iter_param.ip_filter_cb = vos_agg_filter;
+	ad->ad_iter_param.ip_filter_arg = &ad->ad_agg_param;
+
+	/* Set aggregation parameters */
+	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
+	ad->ad_agg_param.ap_coh = coh;
+	ad->ad_agg_param.ap_oid = oid;
+	credits_set(cont->vc_pool, &ad->ad_agg_param.ap_credits, true);
+	ad->ad_agg_param.ap_discard = 0;
+	ad->ad_agg_param.ap_yield_func = yield_func;
+	ad->ad_agg_param.ap_yield_arg = yield_arg;
+	run_agg = true;
+	merge_window_init(&ad->ad_agg_param.ap_window);
+	ad->ad_agg_param.ap_flags = flags;
+
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
+retry:
+	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_DKEY, true, &ad->ad_anchors,
+			 vos_aggregate_pre_cb, vos_aggregate_post_cb, &ad->ad_agg_param, NULL);
+	if (rc == -DER_BUSY) {
+		if (vam && vam->vam_agg_blocked)
+			d_tm_inc_counter(vam->vam_agg_blocked, 1);
+		blocks++;
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
+			 "Per-object aggregation hit conflict (nr=%d), retrying...\n", blocks);
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
+		vos_aggregate_yield(&ad->ad_agg_param);
+		goto retry;
+	} else if (rc != 0 || ad->ad_agg_param.ap_nospc_err) {
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
+		goto exit;
+	} else if (ad->ad_agg_param.ap_csum_err) {
+		rc = -DER_CSUM;
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
+	} else if (ad->ad_agg_param.ap_in_progress) {
+		goto exit;
+	}
+
+exit:
+	aggregate_exit(cont, AGG_MODE_OBJ_AGGREGATE);
 
 	if (run_agg && merge_window_status(&ad->ad_agg_param.ap_window) != MW_CLOSED)
 		D_ASSERTF(false, "Merge window resource leaked.\n");
