@@ -89,12 +89,6 @@ pipeline {
                description: 'Test-repeat to use for this run.  Specifies the number of times to ' +
                             'repeat each functional test. CAUTION: only use in combination with ' +
                             'a reduced number of tests specified with the TestTag parameter.')
-        string(name: 'TestProviderTCP',
-               defaultValue: 'ofi+tcp',
-               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
-        string(name: 'TestProviderUCX',
-               defaultValue: 'ucx+ud_x',
-               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
@@ -108,42 +102,36 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        booleanParam(name: 'CI_medium_tcp_TEST',
+        booleanParam(name: 'CI_medium_tcp_md_on_ssd_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium TCP test stages')
-        booleanParam(name: 'CI_medium_tcp_provider_TEST',
+                     description: 'Run the CI Functional Hardware Medium TCP MD on SSD test stages')
+        booleanParam(name: 'CI_medium_tcp_provider_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
-        booleanParam(name: 'CI_large_tcp_TEST',
+        booleanParam(name: 'CI_large_tcp_md_on_ssd_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Large TCP test stages')
-        booleanParam(name: 'CI_medium_ucx_TEST',
+                     description: 'Run the CI Functional Hardware Large TCP MD on SSD test stages')
+        booleanParam(name: 'CI_medium_verbs_md_on_ssd_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium UCX test stages')
-        booleanParam(name: 'CI_medium_ucx_provider_TEST',
+                     description: 'Run the CI Functional Hardware Medium Verbs MD on SSD test stages')
+        booleanParam(name: 'CI_large_verbs_md_on_ssd_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
-        booleanParam(name: 'CI_large_ucx_TEST',
-                     defaultValue: true,
-                     description: 'Run the CI Functional Hardware Large UCX test stages')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL',
+                     description: 'Run the CI Functional Hardware Large Verbs MD on SSD test stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_MD_ON_SSD_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium TCP stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL',
+               description: 'Label to use for 5 node Functional Hardware Medium TCP MD on SSD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_MD_ON_SSD_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium TCP Provider stage')
-        string(name: 'FUNCTIONAL_HARDWARE_LARGE_TCP_LABEL',
+               description: 'Label to use for 5 node Functional Hardware Medium TCP Provider MD on SSD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_TCP_MD_ON_SSD_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node Functional Hardware Large TCP stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL',
+               description: 'Label to use for 9 node Functional Hardware Large TCP MD on SSD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium UCX stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
-        string(name: 'FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL',
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs MD on SSD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_VERBS_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed9',
-               description: 'Label to use for 9 node Functional Hardware Large UCX stage')
+               description: 'Label to use for 9 node Functional Hardware Large Verbs MD on SSD stage')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -194,89 +182,77 @@ pipeline {
             steps {
                 script {
                     parallel(
-                        'Functional Hardware Medium TCP': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium TCP',
-                            pragma_suffix: '-hw-medium-tcp',
+                        'Functional Hardware Medium TCP MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium TCP MD on SSD',
+                            pragma_suffix: '-hw-medium-tcp-md-on-ssd',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional Hardware Medium TCP Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium TCP Provider',
-                            pragma_suffix: '-hw-medium-tcp-provider',
+                        'Functional Hardware Medium TCP Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium TCP Provider MD on SSD',
+                            pragma_suffix: '-hw-medium-tcp-provider-md-on-ssd',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional Hardware Large TCP': getFunctionalTestStage(
-                            name: 'Functional Hardware Large TCP',
-                            pragma_suffix: '-hw-large-tcp',
+                        'Functional Hardware Large TCP MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Large TCP MD on SSD',
+                            pragma_suffix: '-hw-large-tcp-md-on-ssd',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_TCP_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_TCP_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            provider: 'ofi+tcp',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional Hardware Medium UCX': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX',
-                            pragma_suffix: '-hw-medium-ucx',
+                        'Functional Hardware Medium Verbs MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Verbs MD on SSD',
+                            pragma_suffix: '-hw-medium-verbs-md-on-ssd',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
-                            other_packages: 'mercury-ucx',
+                            provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            pragma_suffix: '-hw-medium-ucx-provider',
+                        'Functional Hardware Large Verbs MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Large Verbs MD on SSD',
+                            pragma_suffix: '-hw-large-verbs-md-on-ssd',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_VERBS_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
-                            other_packages: 'mercury-ucx',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Large UCX': getFunctionalTestStage(
-                            name: 'Functional Hardware Large UCX',
-                            pragma_suffix: '-hw-large-ucx',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL,
-                            next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
-                            other_packages: 'mercury-ucx',
+                            provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
