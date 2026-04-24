@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -122,8 +122,36 @@ def read_commit_pragma_mapping():
                     raise TypeError(
                         f'Expected {str} for tags, not '
                         f'{type(config[path_match][pragma_key]["tags"])}')
-                continue
-            raise ValueError(f'Invalid pragma key: {pragma_key}')
+            elif pragma_key == 'need-unit-test':
+                _type = type(pragma_config)
+                if _type not in (bool, dict):
+                    raise TypeError(f'Expected {bool} or {dict}, not {_type}')
+                if _type == bool:
+                    # Direct, no further checking needed
+                    continue
+
+                # Check for invalid config options
+                extra_keys = set(config[path_match][pragma_key].keys()) - \
+                    set(['val', 'stop_on_match'])
+                if extra_keys:
+                    raise ValueError(f'Unsupported keys in config: {", ".join(extra_keys)}')
+
+                # Set default stop_on_match and check for invalid values
+                if 'stop_on_match' not in config[path_match][pragma_key]:
+                    config[path_match][pragma_key]['stop_on_match'] = False
+                elif not isinstance(config[path_match][pragma_key]['stop_on_match'], bool):
+                    raise ValueError(
+                        f'Invalid stop_on_match: {config[path_match][pragma_key]["stop_on_match"]}')
+
+                # Check for missing or invalid val
+                if 'val' not in config[path_match][pragma_key]:
+                    raise ValueError(f'Missing val for {path_match}')
+                if not isinstance(config[path_match][pragma_key]['val'], bool):
+                    raise TypeError(
+                        f'Expected {bool} for val, not '
+                        f'{type(config[path_match][pragma_key]["val"])}')
+            else:
+                raise ValueError(f'Invalid pragma key: {pragma_key}')
 
     return config
 
@@ -173,6 +201,35 @@ def __get_test_tag(test_tag_config, paths):
     return ' '.join(sorted(all_tags))
 
 
+def __get_need_unit_test(need_unit_test_config, paths):
+    """Determine whether we need to run unit tests for these paths.
+
+    Args:
+        need_unit_test_config (dict): need-unit-test config. E.g. {path1: True, path2: False}
+        paths (list): paths to match on
+
+    Returns:
+        bool: whether we need to run unit tests for these paths
+    """
+    for path in paths:
+        for _pattern, _config in need_unit_test_config.items():
+            if re.search(rf'{_pattern}', path):
+                if isinstance(_config, bool):
+                    _config = {
+                        'val': _config,
+                        'stop_on_match': False
+                    }
+                if _config['val']:
+                    # If any path matches with a True value, we need to run unit tests
+                    return True
+
+                if _config['stop_on_match']:
+                    # Don't process further entries for this path
+                    break
+
+    return False
+
+
 def gen_commit_pragmas(target):
     """Generate commit pragmas based on files modified.
 
@@ -220,6 +277,11 @@ def gen_commit_pragmas(target):
     if test_tag:
         pragmas['Test-tag'] = test_tag
 
+    need_unit_test = __get_need_unit_test(__pragma_config('need-unit-test', True), modified_files)
+    if modified_files and not need_unit_test:
+        pragmas['Skip-unit-tests'] = True
+        pragmas['Skip-fault-injection-test'] = True
+
     return pragmas
 
 
@@ -229,7 +291,7 @@ def main():
     parser.add_argument(
         "--target",
         required=True,
-        help="git target to as reference diff")
+        help="git target to use as reference diff")
     args = parser.parse_args()
 
     commit_pragmas = gen_commit_pragmas(git_merge_base('HEAD', args.target))
