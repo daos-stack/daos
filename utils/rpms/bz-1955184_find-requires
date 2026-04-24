@@ -1,3 +1,0 @@
-#!/bin/bash
-
-/usr/lib/rpm/find-requires | sed -e '/libmpi/s/$/(openmpi-x86_64)/'

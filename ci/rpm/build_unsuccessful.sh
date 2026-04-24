@@ -16,14 +16,6 @@ fi
 
 artdir="${PWD}/artifacts/${TARGET}"
 
-if [ -d /var/cache/pbuilder/ ]; then
-    mockroot=/var/cache/pbuilder/
-    (if cd "$mockroot/result/"; then
-      cp -r . "$artdir"
-    fi)
-    exit 0
-fi
-
 rpm -q mock
 mock --debug-config
 
