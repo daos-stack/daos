@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,8 +149,12 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 
 			rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl, bulk->bulk_perm,
 						&bulk->hg_bulk_hdl);
-			if (rc != DER_SUCCESS)
+			if (rc != DER_SUCCESS) {
+				CRT_METRIC_INC(ctx, CM_BULK_CREATE_FAILED);
 				return rc;
+			}
+
+			CRT_METRIC_INC(ctx, CM_BULK_CREATE);
 
 			record_quota_resource(ctx, CRT_QUOTA_BULKS);
 
@@ -162,6 +166,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 					crt_bulk_free(bulk->hg_bulk_hdl);
 					return rc;
 				}
+				CRT_METRIC_INC(ctx, CM_BULK_BOUND);
 			}
 			bulk->deferred = false;
 		}
