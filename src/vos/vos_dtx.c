@@ -1086,8 +1086,8 @@ vos_dtx_reuse_cmt_blob(struct vos_container *cont)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (unlikely(rc != 0)) {
-			D_ERROR("Failed to remove DTX entry "
-				DF_DTI " for urgent DTX aggregation " UMOFF_PF ": " DF_RC "\n",
+			D_ERROR("Failed to remove DTX entry " DF_DTI
+				" for urgent DTX aggregation " UMOFF_PF ": " DF_RC "\n",
 				DP_DTI(&dce_df->dce_xid), UMOFF_P(dbd_off), DP_RC(rc));
 			goto out;
 		}
