@@ -370,11 +370,14 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
+        booleanParam(name: 'CI_medium_ucx_provider_md_on_ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium UCX Provider MD on SSD test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: false,
                      description: 'Run the Functional Hardware Large test stage')
@@ -1120,6 +1123,7 @@ pipeline {
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1133,6 +1137,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
@@ -1146,6 +1151,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1160,6 +1166,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1174,11 +1181,12 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
@@ -1188,6 +1196,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-ucx',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1197,29 +1206,48 @@ pipeline {
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
+                        'Functional Hardware Medium UCX Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX Provider MD on SSD',
+                            pragma_suffix: '-hw-medium-ucx-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            next_version: next_version(),
+                            other_packages: 'mercury-ucx',
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto_md_on_ssd',
+                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                     )
                 }

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -16,9 +16,9 @@ from util.run_utils import run_remote
 # Order here is used to select default provider in environment_utils
 SUPPORTED_PROVIDERS = (
     "ofi+cxi",
-    "ofi+verbs;ofi_rxm",
-    "ucx+dc_x",
     "ucx+ud_x",
+    "ucx+dc_x",
+    "ofi+verbs;ofi_rxm",
     "ofi+tcp",
     "ofi+tcp;ofi_rxm",
     "ofi+opx"
@@ -281,8 +281,16 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
             class_protocol_device = re.findall(
                 r'(\S+) +([\S]+) +([\S]+)$', without_header, re.MULTILINE)
             for _class, protocol, device in class_protocol_device:
+                if ":" in device:
+                    # e.g. convert mlx5_0:1 => mlx5_0
+                    device = device.split(":")[0]
                 if filter_device and device not in filter_device:
                     continue
+                if "_" in protocol:
+                    _protocol = protocol.split("_")
+                    if _protocol[0] in ("dc", "rc", "ud"):
+                        # e.g. convert ud_mlx5, ud_verbs => ud_x
+                        protocol = f"{_protocol[0]}_x"
                 provider = f"{_class}+{protocol}"
                 if filter_provider and provider not in filter_provider:
                     continue
