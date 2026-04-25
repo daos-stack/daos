@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -264,8 +264,8 @@ int
 
 int pool_map_comp_cnt(struct pool_map *map);
 
-int  pool_map_create(struct pool_buf *buf, uint32_t version,
-		     struct pool_map **mapp);
+int
+	 pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **map_ptr);
 void pool_map_addref(struct pool_map *map);
 void pool_map_decref(struct pool_map *map);
 int  pool_map_extend(struct pool_map *map, uint32_t version,

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -192,9 +192,7 @@ struct cont_iv_key {
 
 /* srv_container.c */
 void
-     ds_cont_op_handler_v8(crt_rpc_t *rpc);
-void ds_cont_op_handler_v7(crt_rpc_t *rpc);
-void ds_cont_op_handler_v6(crt_rpc_t *rpc);
+ds_cont_op_handler(crt_rpc_t *rpc);
 void
      ds_cont_set_prop_srv_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
@@ -208,13 +206,13 @@ void cont_put(struct cont *cont);
 void cont_svc_put_leader(struct cont_svc *svc);
 int
 ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		 struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+		 struct container_hdl *hdl, crt_rpc_t *rpc);
 int
 ds_cont_acl_update(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		   struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+		   struct container_hdl *hdl, crt_rpc_t *rpc);
 int
     ds_cont_acl_delete(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		       struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+		       struct container_hdl *hdl, crt_rpc_t *rpc);
 int ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 		     daos_prop_t **prop_out);
 int ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
@@ -223,30 +221,29 @@ int ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 /* srv_epoch.c */
 int
 ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver,
-		    struct ds_pool_svc_op_val *op_val);
+		    struct container_hdl *hdl, crt_rpc_t *rpc, struct ds_pool_svc_op_val *op_val);
 
 int
 ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+			struct container_hdl *hdl, crt_rpc_t *rpc);
 int
 ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		  struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+		  struct container_hdl *hdl, crt_rpc_t *rpc);
 int
      ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			  struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+			  struct container_hdl *hdl, crt_rpc_t *rpc);
 int ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t **snapshots,
 			  int *snap_count);
 void ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
 int
 ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			 struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+			 struct container_hdl *hdl, crt_rpc_t *rpc);
 int
 ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+			struct container_hdl *hdl, crt_rpc_t *rpc);
 int
-      ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			       struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+     ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+			      struct container_hdl *hdl, crt_rpc_t *rpc);
 
 /* srv_target.c */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
