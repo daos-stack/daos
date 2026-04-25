@@ -1,7 +1,7 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2016-2022 Intel Corporation.
-#  * Copyright 2025 Hewlett Packard Enterprise Development LP
+#  * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 #  */
@@ -114,6 +114,7 @@ shift || true
 args+=" $*"
 
 _DAOS_HTTPS_PROXY=${DAOS_HTTPS_PROXY:-}
+_DAOS_NO_PROXY=${DAOS_NO_PROXY:-}
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
@@ -130,6 +131,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      WITH_VALGRIND=\"$WITH_VALGRIND\"
      STAGE_NAME=\"$STAGE_NAME\"
      DAOS_HTTPS_PROXY=\"$_DAOS_HTTPS_PROXY\"
+     DAOS_NO_PROXY=\"$_DAOS_NO_PROXY\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
     if ${SETUP_ONLY:-false}; then
