@@ -3,7 +3,6 @@ hosts:
 server_config:
   name: daos_server
   engines_per_host: 2
-  # Custom restart delay for faster testing (15 seconds instead of default 300)
   engine_auto_restart_min_delay: 15
   engines:
     0:

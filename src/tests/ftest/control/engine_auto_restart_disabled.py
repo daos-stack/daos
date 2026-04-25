@@ -59,9 +59,11 @@ class EngineAutoRestartDisabled(ControlTestBase):
         time.sleep(5)
 
         failed_ranks = self.server_managers[0].check_rank_state(
-            ranks=[test_rank], valid_states=["excluded"], max_checks=10)
+            ranks=[test_rank], valid_states=["adminexcluded"], max_checks=10)
         if failed_ranks:
-            self.fail("Rank %s did not reach Excluded state" % test_rank)
+            self.fail("Rank %s did not reach adminexcluded state" % test_rank)
+
+        self.dmg.system_clear_exclude(ranks=[test_rank], rank_hosts=None)
 
         # Step 3: Wait to verify NO automatic restart
         wait_time = 20  # Wait 20 seconds
@@ -85,11 +87,7 @@ class EngineAutoRestartDisabled(ControlTestBase):
         self.log.info("Confirmed: Rank %s did NOT automatically restart (as expected)",
                       test_rank)
 
-        # Step 4: Manually clear exclusion
-        self.log_step("Step 4: Manually clearing exclusion for rank %s", test_rank)
-        self.dmg.system_clear_exclude(ranks=[test_rank], rank_hosts=None)
-
-        # Step 5: Manually start the rank
+        # Step 4: Manually start the rank
         self.log_step("Step 5: Manually starting rank %s", test_rank)
         self.dmg.system_start(ranks=f"{test_rank}")
 
@@ -109,7 +107,7 @@ class EngineAutoRestartDisabled(ControlTestBase):
             Server configured with disable_engine_auto_restart: true.
 
             1. Exclude multiple ranks
-            2. Verify all self-terminate and reach Excluded state
+            2. Verify all self-terminate and reach AdminExcluded state
             3. Wait to confirm none automatically restart
             4. Manually restart all ranks
             5. Verify all successfully rejoin
@@ -133,15 +131,16 @@ class EngineAutoRestartDisabled(ControlTestBase):
             self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
             time.sleep(1)  # Small delay between exclusions
 
-        # Step 2: Verify all reach Excluded state
+        # Step 2: Verify all reach adminexcluded state
         self.log_step("Step 2: Verifying all ranks self-terminate")
         time.sleep(10)
 
         for rank in test_ranks:
             failed = self.server_managers[0].check_rank_state(
-                ranks=[rank], valid_states=["excluded"], max_checks=5)
+                ranks=[rank], valid_states=["adminexcluded"], max_checks=5)
             if failed:
                 self.fail("Rank %s did not self-terminate" % rank)
+            self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
 
         # Step 3: Wait and verify none restart
         wait_time = 20
@@ -161,9 +160,8 @@ class EngineAutoRestartDisabled(ControlTestBase):
 
         self.log.info("Confirmed: None of %s automatically restarted", test_ranks)
 
-        # Step 4: Manually clear and restart all
-        self.log_step("Step 4: Manually clearing exclusion and restarting ranks")
-        self.dmg.system_clear_exclude(ranks=test_ranks, rank_hosts=None)
+        # Step 4: Manually restart all
+        self.log_step("Step 4: Manually restart ranks")
 
         for rank in test_ranks:
             self.dmg.system_start(ranks=f"{rank}")
