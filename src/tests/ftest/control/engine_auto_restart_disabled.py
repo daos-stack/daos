@@ -19,15 +19,6 @@ class EngineAutoRestartDisabled(ControlTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-        self.dmg = self.get_dmg_command()
-
-    def get_all_ranks(self):
-        """Get list of all ranks in the system."""
-        return list(self.server_managers[0].ranks.keys())
-
     def test_no_restart_when_disabled(self):
         """Test that engines do not automatically restart when feature is disabled.
 
@@ -52,43 +43,20 @@ class EngineAutoRestartDisabled(ControlTestBase):
         test_rank = self.random.choice(all_ranks)
 
         self.log_step("Step 1: Excluding rank %s (auto-restart is DISABLED)", test_rank)
-        self.dmg.system_exclude(ranks=[test_rank], rank_hosts=None)
 
-        # Step 2: Wait for self-termination
-        self.log_step("Step 2: Waiting for rank %s to self-terminate", test_rank)
-        time.sleep(5)
+        restarted, final_state = self.exclude_rank_and_wait_restart(test_rank,
+                                                                    expect_restart=False,
+                                                                    timeout=35)
 
-        failed_ranks = self.server_managers[0].check_rank_state(
-            ranks=[test_rank], valid_states=["adminexcluded"], max_checks=10)
-        if failed_ranks:
-            self.fail("Rank %s did not reach adminexcluded state" % test_rank)
-
-        self.dmg.system_clear_exclude(ranks=[test_rank], rank_hosts=None)
-
-        # Step 3: Wait to verify NO automatic restart
-        wait_time = 20  # Wait 20 seconds
-        self.log_step("Step 3: Waiting %ss to verify NO automatic restart occurs", wait_time)
-        time.sleep(wait_time)
-
-        # Verify rank is still excluded
-        failed_ranks = self.server_managers[0].check_rank_state(
-            ranks=[test_rank], valid_states=["excluded"], max_checks=1)
-
-        if failed_ranks:
-            # Rank is NOT excluded, check if it restarted
-            check_joined = self.server_managers[0].check_rank_state(
-                ranks=[test_rank], valid_states=["joined"], max_checks=1)
-            if not check_joined:
-                self.fail("Rank %s unexpectedly restarted when auto-restart disabled!"
-                          % test_rank)
-            else:
-                self.fail("Rank %s in unexpected state (not excluded or joined)" % test_rank)
+        if restarted:
+            self.fail("Rank %s unexpectedly restarted when auto-restart disabled!"
+                      % test_rank)
 
         self.log.info("Confirmed: Rank %s did NOT automatically restart (as expected)",
                       test_rank)
 
         # Step 4: Manually start the rank
-        self.log_step("Step 5: Manually starting rank %s", test_rank)
+        self.log_step("Step 2: Manually starting rank %s", test_rank)
         self.dmg.system_start(ranks=f"{test_rank}")
 
         # Verify manual start succeeds
