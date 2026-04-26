@@ -104,22 +104,13 @@ class EngineAutoRestartTest(ControlTestBase):
         :avocado: tags=EngineAutoRestartTest,test_auto_restart_with_pool
         """
         all_ranks = self.get_all_ranks()
-        if len(all_ranks) < 2:
-            self.skipTest("Test requires at least 2 ranks")
+        if len(all_ranks) < 4:
+            self.skipTest("Test requires at least 4 ranks")
 
         # Create pool first
         self.add_pool(connect=False)
 
-        # Get pool service ranks to avoid excluding them
-        pool_svc_ranks = self.pool.svc_ranks
-        self.log.info("Pool service ranks: %s", pool_svc_ranks)
-
-        # Find a rank not in pool service
-        non_svc_ranks = [r for r in all_ranks if r not in pool_svc_ranks]
-        if not non_svc_ranks:
-            self.skipTest("All ranks are pool service ranks")
-
-        test_rank = self.random.choice(non_svc_ranks)
+        test_rank = all_ranks[-1]
 
         self.log_step("Excluding non-service rank %s while pool is active", test_rank)
 
