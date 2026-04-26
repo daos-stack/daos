@@ -1,9 +1,8 @@
 hosts:
-  test_servers: 1
+  test_servers: 2
 server_config:
   name: daos_server
   engines_per_host: 2
-  # Disable automatic engine restart
   disable_engine_auto_restart: true
   engines:
     0:
