@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,14 +56,16 @@
 /** DFS SB version value */
 #define DFS_SB_VERSION     2
 /** DFS Layout Version Value */
-#define DFS_LAYOUT_VERSION 3
+#define DFS_LAYOUT_VERSION     4
+/** Minimum DFS layout version supported by this client */
+#define DFS_LAYOUT_VERSION_MIN 3
 /** Magic value for serializing / deserializing a DFS handle */
 #define DFS_GLOB_MAGIC     0xda05df50
 /** Magic value for serializing / deserializing a DFS object handle */
 #define DFS_OBJ_GLOB_MAGIC 0xdf500b90
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS        12
+#define INODE_AKEYS            14
 #define INODE_AKEY_NAME    "DFS_INODE"
 #define SLINK_AKEY_NAME    "DFS_SLINK"
 #define MODE_IDX           0
@@ -77,7 +80,10 @@
 #define GID_IDX            (UID_IDX + sizeof(uid_t))
 #define SIZE_IDX           (GID_IDX + sizeof(gid_t))
 #define HLC_IDX            (SIZE_IDX + sizeof(daos_size_t))
-#define END_IDX            (HLC_IDX + sizeof(uint64_t))
+#define END_L3_IDX             (HLC_IDX + sizeof(uint64_t))
+#define TAIL_OID_IDX           END_L3_IDX
+#define TAIL_STATE_IDX         (TAIL_OID_IDX + sizeof(daos_obj_id_t))
+#define END_IDX                (TAIL_STATE_IDX + sizeof(uint8_t))
 
 /*
  * END IDX for layout V2 (2.0) is at the current offset where we store the mtime nsec, but also need
@@ -130,6 +136,14 @@ struct dfs_obj {
 			/** Default chunk size for all entries in dir */
 			daos_size_t      chunk_size;
 		} d;
+		struct {
+			/** Optional tail array object id for progressive layout */
+			daos_obj_id_t tail_oid;
+			/** Optional tail array object handle for progressive layout */
+			daos_handle_t tail_oh;
+			/** Whether this open regular file uses progressive layout */
+			bool          has_tail;
+		} f;
 	};
 };
 
@@ -217,6 +231,10 @@ struct dfs_entry {
 	daos_size_t      chunk_size;
 	/** oclass of file or all files in a dir */
 	daos_oclass_id_t oclass;
+	/** Optional tail object id for progressive-layout regular files */
+	daos_obj_id_t    tail_oid;
+	/** Informational state for the tail object */
+	uint8_t          tail_state;
 	/** uid - not enforced at this level. */
 	uid_t            uid;
 	/** gid - not enforced at this level. */
@@ -297,6 +315,33 @@ check_tx(daos_handle_t th, int rc)
 	}
 
 	return rc;
+}
+
+static inline uint64_t
+dfs_inode_record_size(dfs_layout_ver_t ver)
+{
+	if (ver >= DFS_LAYOUT_VERSION)
+		return END_IDX;
+
+	return END_L3_IDX;
+}
+
+static inline bool
+dfs_file_layout_has_tail(dfs_layout_ver_t ver, mode_t mode)
+{
+	return ver >= DFS_LAYOUT_VERSION && S_ISREG(mode);
+}
+
+static inline bool
+dfs_layout_version_supported(dfs_layout_ver_t ver)
+{
+	return ver >= DFS_LAYOUT_VERSION_MIN && ver <= DFS_LAYOUT_VERSION;
+}
+
+static inline bool
+dfs_entry_has_tail(dfs_layout_ver_t ver, struct dfs_entry *entry)
+{
+	return dfs_file_layout_has_tail(ver, entry->mode) && !daos_obj_id_is_nil(entry->tail_oid);
 }
 
 static inline int
@@ -421,6 +466,14 @@ create_dir(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, dfs_obj_t *dir);
 int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, size_t len,
 	   struct dfs_obj *obj, bool get_size, struct stat *stbuf, uint64_t *obj_hlc);
+int
+file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tail, daos_handle_t th,
+	  daos_array_stbuf_t *stbuf);
+int
+file_stat_by_oid(dfs_t *dfs, daos_obj_id_t head_oid, daos_obj_id_t tail_oid, bool has_tail,
+		 daos_size_t chunk_size, daos_handle_t th, daos_array_stbuf_t *stbuf);
+int
+file_truncate_zero(dfs_obj_t *obj, daos_handle_t th);
 int
 get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr, bool check_empty);
 int

@@ -188,11 +188,13 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	d_iov_set(&iod->iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod->iod_nr    = 1;
 	recx.rx_idx    = 0;
-	recx.rx_nr     = END_IDX;
+	recx.rx_nr     = dfs_inode_record_size(ver);
 	iod->iod_recxs = &recx;
 	iod->iod_type  = DAOS_IOD_ARRAY;
 	iod->iod_size  = 1;
 
+	entry->tail_oid   = DAOS_OBJ_NIL;
+	entry->tail_state = 0;
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
@@ -206,6 +208,10 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
 	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
+	if (ver >= DFS_LAYOUT_VERSION) {
+		d_iov_set(&sg_iovs[i++], &entry->tail_oid, sizeof(daos_obj_id_t));
+		d_iov_set(&sg_iovs[i++], &entry->tail_state, sizeof(uint8_t));
+	}
 
 	sgl->sg_nr     = i;
 	sgl->sg_nr_out = 0;
@@ -318,6 +324,22 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *
 	if (rc)
 		return daos_der2errno(rc);
 
+	if (dfs_entry_has_tail(dfs->layout_v, &entry)) {
+		rc = daos_obj_open(dfs->coh, entry.tail_oid, DAOS_OO_RW, &oh, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+
+		rc = daos_obj_punch(oh, th, 0, NULL);
+		if (rc) {
+			daos_obj_close(oh, NULL);
+			return daos_der2errno(rc);
+		}
+
+		rc = daos_obj_close(oh, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+	}
+
 punch_entry:
 	d_iov_set(&dkey, (void *)name, len);
 	/** we only need a conditional dkey punch if we are not using a DTX */
@@ -344,7 +366,7 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	d_iov_set(&iods[0].iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iods[0].iod_nr    = 1;
 	recx.rx_idx       = 0;
-	recx.rx_nr        = END_IDX;
+	recx.rx_nr        = dfs_inode_record_size(ver);
 	iods[0].iod_recxs = &recx;
 	iods[0].iod_type  = DAOS_IOD_ARRAY;
 	iods[0].iod_size  = 1;
@@ -363,6 +385,10 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	/** Add file size / symlink length. for now, file size cached in the entry is 0. */
 	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
+	if (ver >= DFS_LAYOUT_VERSION) {
+		d_iov_set(&sg_iovs[i++], &entry->tail_oid, sizeof(daos_obj_id_t));
+		d_iov_set(&sg_iovs[i++], &entry->tail_state, sizeof(uint8_t));
+	}
 
 	/** add the symlink as a separate akey */
 	if (S_ISLNK(entry->mode)) {
@@ -551,8 +577,10 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 	}
 	case S_IFREG: {
 		daos_array_stbuf_t array_stbuf = {0};
+		bool               has_tail;
 
 		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
+		has_tail          = dfs_entry_has_tail(dfs->layout_v, &entry);
 
 		/** don't stat the array and use the entry mtime */
 		if (!get_size) {
@@ -563,31 +591,15 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		}
 
 		if (obj) {
-			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
+			rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail, th,
+				       &array_stbuf);
 			if (rc)
-				return daos_der2errno(rc);
+				return rc;
 		} else {
-			daos_handle_t file_oh;
-
-			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
-						       entry.chunk_size ? entry.chunk_size
-									: dfs->attr.da_chunk_size,
-						       &file_oh, NULL);
-			if (rc) {
-				D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n",
-					DP_RC(rc));
-				return daos_der2errno(rc);
-			}
-
-			rc = daos_array_stat(file_oh, th, &array_stbuf, NULL);
-			if (rc) {
-				daos_array_close(file_oh, NULL);
-				return daos_der2errno(rc);
-			}
-
-			rc = daos_array_close(file_oh, NULL);
+			rc = file_stat_by_oid(dfs, entry.oid, entry.tail_oid, has_tail,
+					      entry.chunk_size, th, &array_stbuf);
 			if (rc)
-				return daos_der2errno(rc);
+				return rc;
 		}
 
 		size = array_stbuf.st_size;
@@ -908,7 +920,7 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 	}
 
 	if (iods[LAYOUT_VER_IDX].iod_size != sizeof(layout_ver) ||
-	    layout_ver != DFS_LAYOUT_VERSION) {
+	    !dfs_layout_version_supported(layout_ver)) {
 		rc = EINVAL;
 		D_ERROR("Incompatible DFS Layout version %d: %d (%s)\n", layout_ver, rc,
 			strerror(rc));
