@@ -2085,20 +2085,16 @@ cont_query_one(void *vin)
 	int                          tid       = info->dmi_tgt_id;
 	struct xstream_cont_query   *pack_args = streams[tid].st_arg;
 	struct cont_tgt_query_in    *in        = pack_args->xcq_rpc_in;
-	struct ds_pool_hdl          *pool_hdl;
 	struct ds_pool_child        *pool_child;
 	daos_handle_t                vos_chdl;
 	vos_cont_info_t              vos_cinfo;
 	int                          rc;
 
 	info = dss_get_module_info();
-	pool_hdl = ds_pool_hdl_lookup(in->tqi_pool_uuid);
-	if (pool_hdl == NULL)
-		return -DER_NO_HDL;
 
-	pool_child = ds_pool_child_lookup(pool_hdl->sph_pool->sp_uuid);
+	pool_child = ds_pool_child_lookup(in->tqi_pool_uuid);
 	if (pool_child == NULL)
-		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
+		return -DER_NO_HDL;
 
 	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
 	if (rc != 0) {
@@ -2119,8 +2115,6 @@ out:
 	vos_cont_close(vos_chdl);
 ds_child:
 	ds_pool_child_put(pool_child);
-ds_pool_hdl:
-	ds_pool_hdl_put(pool_hdl);
 	return rc;
 }
 
@@ -2164,8 +2158,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	struct cont_tgt_query_out	*out = crt_reply_get(rpc);
 	struct dss_coll_ops		coll_ops;
 	struct dss_coll_args		coll_args = { 0 };
-	struct xstream_cont_query	pack_args;
-	struct ds_pool_hdl		*pool_hdl;
+	struct xstream_cont_query        pack_args;
 
 	out->tqo_hae			= DAOS_EPOCH_MAX;
 
@@ -2184,18 +2177,12 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_aggregator		= &pack_args;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
-	pool_hdl = ds_pool_hdl_lookup(in->tqi_pool_uuid);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	rc = ds_pool_task_collective_reduce(pool_hdl->sph_pool->sp_uuid,
+	rc = ds_pool_task_collective_reduce(in->tqi_pool_uuid,
 					    PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 					    &coll_ops, &coll_args, 0);
 
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
-	ds_pool_hdl_put(pool_hdl);
-out:
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
 	out->tqo_rc	= (rc == 0 ? 0 : 1);
 
@@ -2540,16 +2527,17 @@ close:
 static int
 cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 {
-	struct cont_oid_alloc_in	*in = crt_req_get(rpc);
-	struct cont_oid_alloc_out	*out;
-	d_sg_list_t			sgl;
-	d_iov_t				iov;
-	struct oid_iv_range		rg;
-	int				rc;
+	struct cont_op_in         *in = crt_req_get(rpc);
+	daos_size_t                num_oids;
+	struct cont_oid_alloc_out *out;
+	d_sg_list_t                sgl;
+	d_iov_t                    iov;
+	struct oid_iv_range        rg;
+	int                        rc;
 
-	D_DEBUG(DB_MD, DF_CONT": oid alloc: num_oids="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		in->num_oids);
+	cont_oid_alloc_in_get_data(rpc, &num_oids);
+	D_DEBUG(DB_MD, DF_CONT ": oid alloc: num_oids=" DF_U64 "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), num_oids);
 
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
@@ -2560,20 +2548,19 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns, pool_hdl->sph_pool->sp_uuid,
-			    in->coai_op.ci_uuid, in->num_oids, &sgl);
+	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns, pool_hdl->sph_pool->sp_uuid, in->ci_uuid,
+			    num_oids, &sgl);
 	if (rc)
 		D_GOTO(out, rc);
 
 	out->oid = rg.oid;
 
-	D_DEBUG(DB_MD, DF_CONT": allocate "DF_X64"/"DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		rg.oid, rg.num_oids);
+	D_DEBUG(DB_MD, DF_CONT ": allocate " DF_X64 "/" DF_U64 "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rg.oid, rg.num_oids);
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
 }
