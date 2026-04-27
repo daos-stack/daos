@@ -106,7 +106,6 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     remote_env['COVFILE'] = os.environ['COVFILE']
     remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
     remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
-    remote_env['no_proxy'] = os.environ.get('no_proxy', os.environ.get('NO_PROXY', ''))
 
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
