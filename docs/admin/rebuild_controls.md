@@ -26,7 +26,7 @@ operations. Subsequent self-healing automatic recovery, or administrator command
 (e.g., system stop, system/pool exclude, reintegrate, drain, pool extend) can
 trigger new rebuild(s). Also, if a rebuild is stopped, whatever progress it had
 made in reconstructing the data in the pool is not retained — a subsequent
-"rebuild start" command will start the rebuild from the beginning (i.e., this is
+`rebuild start` command will start the rebuild from the beginning (i.e., this is
 not a pause/resume interface).
 
 Some circumstances where rebuild stop/start controls may be helpful are:
@@ -62,17 +62,21 @@ For a **failed rebuild**, the sequence is:
     * If `Fail_reclaim` *itself* failed, retry `Fail_reclaim`
     * If `Fail_reclaim` succeeded, retry the original `op:Rebuild`
 
-The `rebuild stop` commands are not typically allowed to terminate a rebuild in
-the `op:Reclaim` and `op:Fail_reclaim` phases — instead the command must be
-issued during the `op:Rebuild` execution. An exception is available with the
-`--force` option to `rebuild stop`, intended to be applied for rebuilds that
-repeatedly fail and possibly may even be looping `Fail_reclaim` operations.
+A `rebuild stop` command (without `--force`) will immediately stop a rebuild in
+the `op:Rebuild` phase. During `op:Reclaim`, the command is rejected with a
+`-DER_BUSY` error (the rebuild has already succeeded). During `op:Fail_reclaim`,
+the command succeeds (no error returned to the administrator), but the
+`Fail_reclaim` cleanup is allowed to finish — once it completes, the normal
+retry of the original `op:Rebuild` is suppressed, and the rebuild transitions to
+the stopped state. The `--force` option to `rebuild stop` is intended for the
+pathological case where `Fail_reclaim` itself is repeatedly failing and retrying
+in a loop; `--force` will terminate the `Fail_reclaim` immediately (provided it
+has already failed at least once).
 
-Because of these details, carefully timing the execution of `rebuild stop`
-commands is needed, which can be facilitated with pool rebuild state querying
-with `dmg pool query`. See the section
-[Rebuild Stop Command Errors](#rebuild-stop-command-errors) for examples of
-errors returned by "rebuild stop" in different timing circumstances.
+The `dmg pool query` command can be used to monitor rebuild state transitions
+after issuing a `rebuild stop`. See the section
+[Rebuild Stop Command Responses](#rebuild-stop-command-responses) for details on
+the responses returned in different circumstances.
 
 
 ## Example Usage: Stop a Single Pool Rebuild, then Direct Reintegration
@@ -94,7 +98,7 @@ $ dmg pool query --health-only p1
 Pool cdf27ec1-ed97-4aa6-a766-39a2ed2136a1, ntarget=64, disabled=8, leader=6, version=77, state=TargetsExcluded
 Pool health info:
 - Disabled ranks: 3
-- Rebuild busy, 1 objs, 0 recs
+- Rebuild busy, 1 objs, 524288000 recs
 - Data redundancy: degraded
 ```
 
@@ -107,10 +111,12 @@ sent to the storage system.
 $ dmg pool rebuild stop p1
 ```
 
-Run `dmg pool query` in a loop (with short delays between commands).
+Run `dmg pool query` a few times, though not too frequently. The `--health-only` option is
+useful to keep the overall query lighter-weight (by interacting with the pool service leader
+engine, and that engine not interacting with all pool engines while it is handling the query).
 
-The rebuild state output `stopping` along with `state=busy` and `status=-2027` is an indication 
-that the stop command is being processed, and rebuild has not been entirely stopped yet.
+Rebuild state output `stopping` along with `state=busy` and `status=-2027` indicates
+the stop command is being processed, and rebuild has not been entirely stopped yet.
 ```bash
 $ dmg pool query --health-only p1
 Pool cdf27ec1-ed97-4aa6-a766-39a2ed2136a1, ntarget=64, disabled=8, leader=6, version=77, state=TargetsExcluded
@@ -119,9 +125,8 @@ Pool health info:
 - Rebuild stopping (state=busy, status=-2027)
 ```
 
-The rebuild state has temporarily transitioned to `busy`, reflecting that the `op:Rebuild` is no
-longer running, but a reclaim phase is now running (in this case, `op:Fail_reclaim`, since a stopped
-rebuild is processed in the same way as a failed rebuild).
+Rebuild state (temporarily) transitioned to `busy` without an error status indicates the
+`op:Rebuild` is no longer running, and a reclaim phase is now running (in this case, `op:Fail_reclaim`, since a stopped rebuild is processed in the same way as a failed rebuild).
 ```bash
 $ dmg pool query --health-only p1
 Pool cdf27ec1-ed97-4aa6-a766-39a2ed2136a1, ntarget=64, disabled=8, leader=6, version=77, state=TargetsExcluded
@@ -130,9 +135,7 @@ Pool health info:
 - Rebuild busy, 0 objs, 0 recs
 ```
 
-The rebuild `op:Fail_reclaim` has finished, and now the pool query output shows that the
-rebuild is stopped. This is the final state reflecting that the rebuild is stopped
-(`state=idle, status=-2027`).
+Rebuild state `idle` with `status=-2027` indicates the rebuild is now stopped.
 ```bash
 $ dmg pool query --health-only p1
 Pool cdf27ec1-ed97-4aa6-a766-39a2ed2136a1, ntarget=64, disabled=8, leader=6, version=77, state=TargetsExcluded
@@ -163,7 +166,8 @@ Rank  State
 $ dmg pool reintegrate --ranks=3 p1
 ```
 
-Run `dmg pool query` in a loop (with short delays between commands).
+Run `dmg pool query` a few times, possibly with the `--health-only` option, and not too
+frequently.
 
 First, it may be seen that the pool map has been updated for the reintegrating engine rank 3
 (pool map `version=85` instead of 77, and targets `disabled=0` instead of 8). And it could be
@@ -178,15 +182,6 @@ Pool health info:
 ```
 
 Rebuild is now `busy` (performing the reintegration) according to rebuild state.
-```bash
-$ dmg pool query --health-only p1
-Pool cdf27ec1-ed97-4aa6-a766-39a2ed2136a1, ntarget=64, disabled=0, leader=6, version=85, state=Ready
-Pool health info:
-- Rebuild busy, 0 objs, 0 recs
-- Data redundancy: normal
-```
-
-Rebuild is still `busy`, showing increasing object / record counts.
 ```bash
 $ dmg pool query --health-only p1
 Pool cdf27ec1-ed97-4aa6-a766-39a2ed2136a1, ntarget=64, disabled=0, leader=6, version=85, state=Ready
@@ -246,6 +241,15 @@ Rank      State
 ----      -----
 [0-2,4-7] Joined
 3         Stopped
+```
+
+The stopped engine will eventually also be reported as `Excluded` from the system
+```bash
+$ dmg system query
+Rank      State
+----      -----
+[0-2,4-7] Joined
+3         Excluded
 ```
 
 Attempting to stop pool rebuilds too soon (before they have actually started) will produce an error.
@@ -357,11 +361,33 @@ p1    cdf27ec1-ed97-4aa6-a766-39a2ed2136a1 Ready [0-1,4-6] 120 GB   42 GB    31%
 p2    dcfe63e0-e10f-464d-b18c-0915e52e048c Ready [0-2,6-7] 56 GB    4.9 GB   62%           0 B       0 B       0%             0/64     None           done
 ```
 
+## Example Usage: Stop and Restart a Rebuild Failing in Fail\_reclaim
 
-## Rebuild Stop Command Errors
+For some cases in which rebuild fails, `Fail_reclaim` runs successfully, and the process
+repeats, an ordinary `rebuild stop` command (without `--force` option) is sufficient. However,
+if the `Fail_reclaim` itself fails, and retries itself repeatedly, eventually the administrator
+may need to terminate this bad loop with the `--force` option.
 
-The `rebuild stop` command may return errors when it is issued at a time that it
-may not be able to handle the request. The following subsections show examples.
+```bash
+# Administrator has been monitoring pool rebuild state with dmg pool query and noticed occasional
+# rebuild failures, and retries - with busy and failed states seen in a cycle.
+
+# Attempt to stop the rebuild
+$ dmg pool rebuild stop <pool_label>
+
+# Continue to monitor with dmg pool query, though the pool rebuild continues to run
+# and the `stopped` state is never seen. Observe more rebuild busy / failed cycles.
+
+# Forcibly stop the rebuild (since it may be looping in `Fail_reclaim`)
+$ dmg pool rebuild stop --force <pool_label>
+```
+
+
+
+## Rebuild Stop Command Responses
+
+The `rebuild stop` command behavior depends on the current rebuild phase.
+The following subsections describe the responses in each case.
 
 ### No Rebuild Currently Running
 
@@ -381,8 +407,7 @@ ERROR: dmg: pool-rebuild stop failed: DER_NONEXIST(-1005): The specified entity 
 ### Rebuild Finished Successfully, Reclaim in Progress
 
 When the rebuild stage has successfully finished and is in its `op:Reclaim` cleanup
-stage, `dmg` will report a (generic) busy error. For example when pools `p1` and `p2` are
-both done rebuilding and in the reclaim stage:
+stage, `dmg` will report a busy error:
 ```bash
 $ dmg system rebuild stop
 System-rebuild stop request succeeded on 0 pools
@@ -391,24 +416,42 @@ ERROR: dmg: system rebuild stop failed: pool-rebuild stop failed on pool p1: poo
 
 ### Rebuild Failed, Fail\_reclaim in Progress
 
-When the rebuild stage has finished (but failed), and is in its `Fail_reclaim`
-cleanup stage, `dmg` will report a no permissions error, `-DER_NO_PERM`.
+When the rebuild has failed and is in its `op:Fail_reclaim` cleanup stage,
+`rebuild stop` (without `--force`) succeeds with **no error**. The
+`Fail_reclaim` is allowed to run to completion, and once it finishes, the
+normal retry of the original `op:Rebuild` is suppressed. The rebuild then
+transitions to the stopped state (`state=idle, status=-2027`).
 
-In this scenario, the admin can wait for the rebuild to be retried, and then
-reissue the `rebuild stop` command:
 ```bash
-# multiple command invocations to query pool rebuild status
-$ dmg pool query <pool_label>
-# Possibly observe Rebuild failed, status=<nonzero_error_code>
-# Observe Rebuild busy (representing the retried rebuild)
-
 $ dmg pool rebuild stop <pool_label>
+# No error output — command accepted, stop deferred until Fail_reclaim finishes
+
+# Monitor with pool query until the rebuild reaches the stopped state
+$ dmg pool query --health-only <pool_label>
+# ... Rebuild busy (Fail_reclaim still running) ...
+
+$ dmg pool query --health-only <pool_label>
+# ... Rebuild stopped (state=idle, status=-2027) ...
 ```
 
-Or, if the `Fail_reclaim` itself is failing and retrying, resulting in
-`-DER_NO_PERM` in every attempt to stop the rebuild, then the force option can
-be used to terminate the bad loop:
+If the `Fail_reclaim` itself is repeatedly failing and retrying (never reaching
+a successful completion), the `--force` option can be used to terminate it
+immediately:
 
 ```bash
 $ dmg pool rebuild stop --force <pool_label>
+```
+
+Note: `--force` only takes effect if the `Fail_reclaim` has already failed at
+least once. On the first attempt (before any failure), `--force` behaves the
+same as a non-force stop (deferring until `Fail_reclaim` finishes).
+
+### Another Rebuild Queued for the Same Pool
+
+If another rebuild task is already queued for the same pool (e.g., a
+reintegration was scheduled after the current rebuild), the `rebuild stop`
+command will return a no-permission error:
+```bash
+$ dmg pool rebuild stop <pool_label>
+ERROR: dmg: pool-rebuild stop failed: DER_NO_PERM(-1001): No permission
 ```
