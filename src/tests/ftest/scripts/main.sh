@@ -103,8 +103,7 @@ if [ -n "$DAOS_HTTPS_PROXY" ]; then
     export HTTPS_PROXY="${DAOS_HTTPS_PROXY:-""}"
 fi
 if [ -n "$DAOS_NO_PROXY" ]; then
-    export NO_PROXY="${DAOS_NO_PROXY}"
-    export no_proxy="${DAOS_NO_PROXY}"
+    export NO_PROXY="${DAOS_NO_PROXY:-""}"
 fi
 
 launch_node_args="-ts ${TEST_NODES}"
