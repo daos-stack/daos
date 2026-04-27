@@ -902,8 +902,6 @@ migrate_csum_calc(struct daos_csummer *csummer, struct migrate_one *mrone, daos_
 		  int iod_num, d_sg_list_t *sgls, d_iov_t *csum_iov,
 		  struct dcs_iod_csums **iod_csums)
 {
-	d_iov_t		tmp_csum_iov;
-	d_iov_t		*p_csum_iov;
 	int		rc;
 
 	if (daos_oclass_is_ec(&mrone->mo_oca)) {
@@ -916,14 +914,12 @@ migrate_csum_calc(struct daos_csummer *csummer, struct migrate_one *mrone, daos_
 
 	D_DEBUG(DB_CSUM, DF_RB ": " DF_C_UOID_DKEY ": Using packed csums\n", DP_RB_MRO(mrone),
 		DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey));
-	/** make a copy of the iov because it will be modified while
-	 * iterating over the csums
+	/*
+	 * The packed checksum iov is consumed as iod csums are unpacked, so
+	 * callers that need to preserve the original iov must pass a mutable copy.
 	 */
 	D_ASSERT(csum_iov != NULL);
-	tmp_csum_iov = *csum_iov;
-	p_csum_iov = &tmp_csum_iov;
-	rc = daos_csummer_alloc_iods_csums_with_packed(csummer, iods, iod_num,
-						       p_csum_iov, iod_csums);
+	rc = daos_csummer_alloc_iods_csums_with_packed(csummer, iods, iod_num, csum_iov, iod_csums);
 	if (rc != 0)
 		DL_ERROR(rc, DF_RB ": failed to alloc iod csums", DP_RB_MRO(mrone));
 
@@ -956,6 +952,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	int			 rc = 0;
 	d_iov_t			*p_csum_iov = NULL;
 	d_iov_t			 csum_iov = {0};
+	d_iov_t                  packed_csum_iov = {0};
 
 	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -1012,6 +1009,9 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 					      &mrone->mo_oca, mrone->mo_oid.id_shard))
 		mrone_recx_daos2_vos(mrone, mrone->mo_iods, mrone->mo_iod_num);
 
+	if (!daos_oclass_is_ec(&mrone->mo_oca))
+		packed_csum_iov = fetch ? csum_iov : mrone->mo_csum_iov;
+
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
 	for (i = 0, start = 0; i < mrone->mo_iod_num; i++) {
 		daos_iod_t *iods = mrone->mo_iods;
@@ -1024,6 +1024,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		/* skip empty record */
 		if (iod_cnt == 0) {
 			D_DEBUG(DB_TRACE, DF_RB ": i %d iod_size = 0\n", DP_RB_MRO(mrone), i);
+			start = i + 1;
 			continue;
 		}
 
@@ -1031,7 +1032,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			iod_cnt);
 
 		rc = migrate_csum_calc(csummer, mrone, &iods[start], iod_cnt, &sgls[start],
-				       fetch ? &csum_iov : &mrone->mo_csum_iov,  &iod_csums);
+				       &packed_csum_iov, &iod_csums);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_RB ": error calculating checksums", DP_RB_MRO(mrone));
 			break;
@@ -1052,8 +1053,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 	if (iod_cnt > 0) {
 		rc = migrate_csum_calc(csummer, mrone, &mrone->mo_iods[start], iod_cnt,
-				       &sgls[start], fetch ? &csum_iov : &mrone->mo_csum_iov,
-				       &iod_csums);
+				       &sgls[start], &packed_csum_iov, &iod_csums);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_RB ": error calculating checksums", DP_RB_MRO(mrone));
 			D_GOTO(out, rc);
