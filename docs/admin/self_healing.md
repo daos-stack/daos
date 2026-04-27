@@ -9,11 +9,11 @@ started. An engine is assigned a numeric rank upon initially joining the system.
 This document may frequently interchange the term "rank" and "engine" to refer
 to a DAOS engine.
 
-By default, the system works as previous versions (per-pool `self_heal`
-property) if one doesn't modify the "new" system `self_heal` property. An
-administrator doesn't have to use the new system `self_heal` after upgrading to
-DAOS version 2.8 and instead can choose to adopt it in the administrator's
-workflow when the need arises.
+By default, the system works as pre-2.8 DAOS versions (per-pool `self_heal`
+property) if one doesn't modify the system `self_heal` property introduced in
+DAOS version 2.8. An administrator doesn't have to use the system `self_heal`
+property after upgrading to DAOS version 2.8 and instead can choose to adopt it
+in the administrator's workflow when the need arises.
 
 DAOS behavior can be managed through "system" and "pool" properties.
 
@@ -28,6 +28,11 @@ and write system properties using `dmg system get-prop` / `dmg system set-prop`.
 Pool-level properties apply to pool-specific behavior and each pool has its own
 set of pool-properties, which can be read and written by the system
 administrator using `dmg pool get-prop` / `dmg pool set-prop`.
+
+When setting system or pool `self_heal` property using "set-prop" commands, the
+semi-colon separator needs to be escaped e.g.
+`dmg pool set-prop <pool_name> self_heal:exclude\;rebuild`
+
 
 ### Self-heal Properties
 
@@ -47,6 +52,11 @@ indicate the following:
 * **`pool_rebuild`** — Whether, following a pool map update, rebuild activities
   automatically get triggered (or not) for the affected pools.
 
+For both `exclude` and `pool_exclude` it should be noted that when disabled, future
+operations (pool create, object update, rebuild tasks, etc.) may time out and retry
+until either the exclusion happens or the unavailable targets/engines become
+available again.
+
 The pool level property has flags `exclude;rebuild;delay_rebuild` which indicate
 the following:
 
@@ -62,8 +72,7 @@ the following:
   rebuild does not necessarily trigger automatically and can be delayed based on
   user requirements. Delay rebuild is mostly out of scope for this section.
 
-On starting a DAOS system and pool creation, default `self_heal` flags will be
-set as follows:
+On creating a DAOS system, default `self_heal` flags will be set as follows:
 
 * **System-level:** `exclude;pool_exclude;pool_rebuild`
 * **Pool-level:** `exclude;rebuild`
@@ -82,11 +91,12 @@ refers roughly to the amount of time for:
 
 ## Pool Query Data Redundancy Status
 
-**Available in:** DAOS 2.6+
+**Available in:** DAOS >= 2.8
 
 The `dmg pool query` command displays the pool's data redundancy status as part
-of the health information output. This field provides a clear indication of
-whether the pool has sufficient target availability to maintain data redundancy.
+of the health information output. This field provides an indication of whether
+the pool has sufficient target availability and the relevant rebuild state to
+maintain data redundancy.
 
 ### Output Field
 
