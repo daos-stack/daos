@@ -162,6 +162,26 @@ struct agg_param {
 	struct ds_cont_child	*ap_cont;
 	daos_epoch_t		ap_full_scan_hlc;
 	bool			ap_vos_agg;
+	/* Sched request for per-object aggregation ULTs (NULL for legacy path) */
+	struct sched_request	*ap_req;
+};
+
+/**
+ * Per-object aggregation ULT argument.
+ * Passed to each per-object ULT spawned by the global aggregation scanner.
+ */
+struct agg_obj_ult_arg {
+	struct ds_cont_child	*ao_cont;
+	struct ds_pool_child	*ao_pool_child;
+	daos_unit_oid_t		 ao_oid;
+	daos_epoch_range_t	 ao_epr;
+	uint32_t		 ao_flags;
+	bool			 ao_vos_agg;
+	int			 ao_rc;		/* result code */
+	uint32_t		*ao_inflight;	/* pointer to inflight counter */
+	ABT_mutex		 ao_mutex;	/* protect inflight counter */
+	ABT_cond		 ao_cond;	/* signal when slot freed */
+	struct sched_request	*ao_scanner_req; /* global scanner's sched req */
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
@@ -189,6 +209,24 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
  *			 1:	Inform aggregation to run in slack mode; (yield more often)
  */
 int agg_rate_ctl(void *arg);
+
+/* Exported container aggregation helpers used by the global scanner in pool module */
+bool
+cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
+			bool vos_agg);
+
+int
+cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
+		     struct agg_param *param);
+
+int
+cont_vos_agg_per_obj(struct ds_cont_child *cont, daos_epoch_range_t *epr,
+		     uint32_t flags, uint32_t *inflight, ABT_mutex mutex,
+		     ABT_cond cond, struct sched_request *scanner_req);
+
+int
+cont_vos_agg_per_obj_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
+			uint32_t flags, struct agg_param *param);
 
 /*
  * Per-thread container handle (memory) object

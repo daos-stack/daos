@@ -10,4 +10,5 @@
 #include <daos_srv/container.h>
 
 void ds_obj_ec_aggregate(void *arg);
+int ds_obj_ec_agg_cont(struct ds_cont_child *cont, struct sched_request *scanner_req);
 #endif /* __DAOS_SRV_OBJ_EC_H__ */
