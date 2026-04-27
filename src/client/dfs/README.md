@@ -346,3 +346,7 @@ sequenceDiagram
     Note over B: Allocate directory handle<br/>Save object info
     B->>A: Return directory handle
 ```
+
+  ## Design Notes
+
+  - [DFS Progressive File Layout Design](dfs-progressive-layout.md)
