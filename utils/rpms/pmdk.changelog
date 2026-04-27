@@ -1,7 +1,8 @@
 %changelog
 * Fri Apr 24 2026  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 2.1.3-2
 - Fix "The pool was not closed" message (no ADR failure) (daos-stack/pmdk#36, DAOS-18692)
-- Fix ... (daos-stack/pmdk#37, DAOS-18882, DAOS-12860, DAOS-11978)
+- Fix recalculate curr_allocated on underflow (daos-stack/pmdk#37, daos-stack/pmdk#38,
+  DAOS-18882, DAOS-12860, DAOS-11978)
 
 * Mon Jan 19 2026  Oksana Salyk <oksana.salyk@hpe.com> - 2.1.3-1
 - Expand the sds.at_create CTL to disable unnecessary bad-block checking when running without PMem, preventing the stack overflow (DAOS-18296).
