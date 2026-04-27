@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,11 +33,25 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	struct fuse_bufvec    ibuf       = FUSE_BUFVEC_INIT(len);
 	struct dfuse_eq      *eqt;
 	int                   rc;
-	struct dfuse_event   *ev;
+	struct dfuse_event   *ev = NULL;
 	uint64_t              eqt_idx;
 	bool                  wb_cache = false;
+	bool                  first_write      = false;
+	bool                  first_open_write = false;
+	off_t                 end_position;
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_WRITE);
+
+	if (len == 0) {
+		DFUSE_REPLY_WRITE(oh, req, (size_t)0);
+		return;
+	}
+
+	if (position < 0)
+		D_GOTO(err, rc = EINVAL);
+
+	if (__builtin_add_overflow(position, (off_t)len, &end_position))
+		D_GOTO(err, rc = EFBIG);
 
 	oh->doh_linear_read = false;
 
@@ -53,8 +68,11 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 			bufv->buf[0].flags);
 
 	/* Evict the metadata cache here so the lookup doesn't return stale size/time info */
-	if (atomic_fetch_add_relaxed(&oh->doh_write_count, 1) == 0) {
-		if (atomic_fetch_add_relaxed(&oh->doh_ie->ie_open_write_count, 1) == 0) {
+	first_write = (atomic_fetch_add_relaxed(&oh->doh_write_count, 1) == 0);
+	if (first_write) {
+		first_open_write =
+		    (atomic_fetch_add_relaxed(&oh->doh_ie->ie_open_write_count, 1) == 0);
+		if (first_open_write) {
 			dfuse_mcache_evict(oh->doh_ie);
 		}
 	}
@@ -67,6 +85,12 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	 * For page size and above this will read directly into the
 	 * buffer, avoiding any copying of the data.
 	 */
+	if (len > ev->de_iov.iov_buf_len) {
+		D_WARN("Fuse write buffer not large enough %zx > %zx\n", len,
+		       ev->de_iov.iov_buf_len);
+		D_GOTO(err, rc = EIO);
+	}
+
 	ibuf.buf[0].mem = ev->de_iov.iov_buf;
 
 	rc = fuse_buf_copy(&ibuf, bufv, 0);
@@ -82,6 +106,10 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	ev->de_len         = len;
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
+	if (rc != 0)
+		D_GOTO(err, rc);
+
 	/* Check for potentially using readahead on this file, ie_truncated
 	 * will only be set if caching is enabled so only check for the one
 	 * flag rather than two here
@@ -89,21 +117,17 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	if (oh->doh_ie->ie_truncated) {
 		if (oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) {
 			oh->doh_ie->ie_start_off = position;
-			oh->doh_ie->ie_end_off   = position + len;
+			oh->doh_ie->ie_end_off   = end_position;
 		} else {
 			if (oh->doh_ie->ie_start_off > position)
 				oh->doh_ie->ie_start_off = position;
-			if (oh->doh_ie->ie_end_off < position + len)
-				oh->doh_ie->ie_end_off = position + len;
+			if (oh->doh_ie->ie_end_off < end_position)
+				oh->doh_ie->ie_end_off = end_position;
 		}
 	}
 
-	if (len + position > oh->doh_ie->ie_stat.st_size)
-		oh->doh_ie->ie_stat.st_size = len + position;
-
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
-	if (rc != 0)
-		D_GOTO(err, rc);
+	if (end_position > oh->doh_ie->ie_stat.st_size)
+		oh->doh_ie->ie_stat.st_size = end_position;
 
 	if (wb_cache)
 		DFUSE_REPLY_WRITE(oh, req, len);
@@ -119,6 +143,13 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 err:
 	if (wb_cache)
 		D_RWLOCK_UNLOCK(&oh->doh_ie->ie_wlock);
+
+	if (first_write) {
+		if (first_open_write)
+			atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
+		atomic_fetch_sub_relaxed(&oh->doh_write_count, 1);
+	}
+
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	if (ev) {
 		daos_event_fini(&ev->de_ev);

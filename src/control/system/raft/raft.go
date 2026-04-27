@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
@@ -179,7 +180,7 @@ func (db *Database) ShutdownRaft() error {
 		// run as many of them as possible in order to clean things
 		// up.
 		if shutdownErr == nil {
-			for _, cb := range db.onRaftShutdown {
+			for _, cb := range db.onRaftShutdownCbs() {
 				if cbErr := cb(); cbErr != nil {
 					db.log.Errorf("onRaftShutdown callback failed: %s", cbErr)
 				}
@@ -265,6 +266,13 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to init boltdb at %s", dbCfg.DBFilePath())
+	}
+
+	// Boltdb file permissions on create are set to 0600.
+	// The os.Chmod ensures the final permissions for both the user and their group are the same.
+	err = os.Chmod(dbCfg.DBFilePath(), daos.DefaultFilePerm)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to set permissions for boltdb at %s", dbCfg.DBFilePath())
 	}
 
 	return &RaftComponents{

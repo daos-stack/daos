@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -563,13 +564,14 @@ dtx_15(void **state)
 static void
 dtx_16(void **state)
 {
-	FAULT_INJECTION_REQUIRED();
 	test_arg_t	*arg = *state;
 	char		*update_buf;
 	const char	*dkey = dts_dtx_dkey;
 	const char	*akey = dts_dtx_akey;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("Resend after DTX aggregation\n");
 
@@ -986,6 +988,42 @@ dtx_22(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
+static void
+dtx_23(void **state)
+{
+	test_arg_t   *arg = *state;
+	char         *update_buf;
+	const char   *dkey = dts_dtx_dkey;
+	const char   *akey = dts_dtx_akey;
+	daos_obj_id_t oid;
+	struct ioreq  req;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX23: Resend with lost reply from non-leader\n");
+
+	if (!test_runable(arg, dts_dtx_replica_cnt))
+		return;
+
+	D_ALLOC(update_buf, dts_dtx_iosize);
+	assert_non_null(update_buf);
+	dts_buf_render(update_buf, dts_dtx_iosize);
+
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	dtx_set_fail_loc(arg, DAOS_DTX_RESEND_NONLEADER | DAOS_FAIL_ALWAYS);
+
+	insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+
+	dtx_set_fail_loc(arg, 0);
+
+	dtx_check_replicas(dkey, akey, "update_succ", update_buf, dts_dtx_iosize, &req);
+
+	D_FREE(update_buf);
+	ioreq_fini(&req);
+}
+
 static int
 dtx_base_rf0_setup(void **state)
 {
@@ -1006,6 +1044,7 @@ dtx_base_rf1_setup(void **state)
 	return rc;
 }
 
+/* clang-format off */
 static const struct CMUnitTest dtx_tests[] = {
 	{"DTX1: update/punch single value with DTX successfully",
 	 dtx_1, NULL, test_case_teardown},
@@ -1051,7 +1090,10 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_21, dtx_base_rf0_setup, rebuild_sub_teardown},
 	{"DTX22: iteration does not return aborted DTX",
 	 dtx_22, NULL, test_case_teardown},
+	{"DTX23: Resend with lost reply from non-leader",
+	 dtx_23, NULL, test_case_teardown},
 };
+/* clang-format on */
 
 static int
 dtx_test_setup(void **state)

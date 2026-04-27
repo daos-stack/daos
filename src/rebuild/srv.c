@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -163,6 +163,7 @@ rebuild_pool_tls_create(struct rebuild_tgt_pool_tracker *rpt)
 	rebuild_pool_tls->rebuild_pool_scanning = 1;
 	rebuild_pool_tls->rebuild_pool_scan_done = 0;
 	rebuild_pool_tls->rebuild_pool_obj_count = 0;
+	rebuild_pool_tls->rebuild_pool_obj_send_pending  = 0;
 	rebuild_pool_tls->rebuild_pool_reclaim_obj_count = 0;
 	rebuild_pool_tls->rebuild_tree_hdl = DAOS_HDL_INVAL;
 	/* Only 1 thread will access the list, no need lock */
@@ -680,7 +681,12 @@ dss_rebuild_check_one(void *data)
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
 
-	status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
+		/* use rec_count to simulate progress when no object need to be reclaim */
+		status->rec_count += pool_tls->rebuild_pool_obj_count;
+	}
+
 	status->tobe_obj_count += pool_tls->rebuild_pool_obj_count;
 	ABT_mutex_unlock(status->lock);
 
@@ -3065,11 +3071,14 @@ rebuild_tgt_status_check_ult(void *arg)
 		}
 
 		if (check_cnt % log_cnt_intv == 0 || rpt->rt_global_done || rpt->rt_abort) {
-			D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
-				     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
-			       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
-			       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
-			       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+			D_INFO(DF_RB
+			       " obj " DF_U64 "/" DF_U64 " rec " DF_U64 " size " DF_U64
+			       " scan done %d pull done %d scan gl done %d gl done %d status %d "
+			       "abort %s\n",
+			       DP_RB_RPT(rpt), iv.riv_toberb_obj_count, iv.riv_obj_count,
+			       iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done, iv.riv_pull_done,
+			       rpt->rt_global_scan_done, rpt->rt_global_done, iv.riv_status,
+			       rpt->rt_abort ? "yes" : "no");
 			log_cnt_intv = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
 		}
 		check_cnt++;

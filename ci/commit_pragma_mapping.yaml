@@ -1,15 +1,18 @@
 #  (C) Copyright 2024 Intel Corporation.
-#  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+#  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 # Each key is a regex path to match.
-# The value for each key can either be the direct tags to use
-# or a dictionary containing
-#  handler: either "direct" or "FtestTagMap" for special handling. Default is "direct"
-#  stop_on_match: Whether to stop processing other entries if when a match is found.
-#                 For example, if "src/tests/ftest*" matches, we don't want to also process ".*"
-#  tags: the tags to use for a match
+# Under each path is optionally each key:
+#   test-tag <string|dict>: Either direct test tags for this path or:
+#    handler: either "direct" or "FtestTagMap" for special handling. Default is "direct"
+#    stop_on_match: Whether to stop processing other entries if when a match is found.
+#                   For example, if "src/tests/ftest*" matches, we don't want to also process ".*"
+#    tags: the tags to use for a match
+#  need-unit-test <bool|dict>: Either a direct boolean value or:
+#    stop_on_match: Whether to stop processing other entries for this path when a match is found.
+#    val: Whether this path needs unit tests. Default is True.
 
 # Special handling for ftest, defaulting to pr
 src/tests/ftest*:
@@ -17,6 +20,9 @@ src/tests/ftest*:
     handler: FtestTagMap
     stop_on_match: True
     tags: pr
+  need-unit-test:
+    stop_on_match: True
+    val: False
 
 # Individual code areas
 src/client/dfs/:
