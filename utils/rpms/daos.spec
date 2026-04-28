@@ -22,8 +22,8 @@
 %endif
 
 Name:          daos
-Version:       2.6.4
-Release:       22%{?relval}%{?dist}
+Version:       2.6.5
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -635,6 +635,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Apr 28 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.6.5-1
+- First release candidate for 2.6.5
+
 * Fri Apr 24 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.4-22
 - Bump PMDK (libpmemobj) version to 2.1.3-2
 
