@@ -1,4 +1,4 @@
-### Ignored hadoop 3.4.2 related CVEs
+### Ignored hadoop 3.5.0 related CVEs
 ## CVE-2025-52999,HIGH,,"com.fasterxml.jackson.core/jackson-core: jackson-core Potential StackoverflowError","com.fasterxml.jackson.core:jackson-core","2.10.2","2.15.0",https://avd.aquasec.com/nvd/cve-2025-52999
 CVE-2025-52999
 
