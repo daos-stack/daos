@@ -31,8 +31,7 @@ def insert_objects(context, container, object_count, dkey_count, akey_count, bas
         akey_count (int): Number of akeys to insert.
         base_dkey (str): Base dkey. Index numbers will be appended to it.
         base_akey (str):Base akey. Index numbers will be appended to it.
-        base_data (str):Base data that goes inside akey. Index numbers will be appended
-            to it.
+        base_data (str):Base data that goes inside akey. Index numbers will be appended to it.
 
     Returns:
         tuple: Inserted objects, dkeys, akeys, and data as (ioreqs, dkeys, akeys,
