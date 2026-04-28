@@ -98,7 +98,7 @@
 #define GIT_HI             2
 
 /** SB version that introduced hardlink support (GIT object) */
-#define DFS_SB_VERSION_HLS 3
+#define DFS_MIN_GIT_SB_VERSION 3
 
 /** DFS mode mask (3rd bit) */
 #define MODE_MASK          (1 << 2)

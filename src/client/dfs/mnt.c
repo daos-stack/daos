@@ -648,7 +648,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 		D_GOTO(err_dfs, rc);
 
 	/** Load GIT OID only if SB version supports hardlinks */
-	if (sb_ver >= DFS_SB_VERSION_HLS)
+	if (sb_ver >= DFS_MIN_GIT_SB_VERSION)
 		dfs->git_oid = roots->cr_oids[2];
 
 	/** set oid hints for files and dirs */
