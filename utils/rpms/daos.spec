@@ -23,7 +23,7 @@
 
 Name:          daos
 Version:       2.6.4
-Release:       21%{?relval}%{?dist}
+Release:       22%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -58,7 +58,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
-BuildRequires: libpmemobj-devel >= 2.1.3
+BuildRequires: libpmemobj-devel >= 2.1.3-2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
@@ -156,11 +156,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.3
+Requires: libpmemobj1 >= 2.1.3-2
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.3
+Requires: libpmemobj >= 2.1.3-2
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury-libfabric >= %{mercury_version}
@@ -635,6 +635,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Apr 24 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.4-22
+- Bump PMDK (libpmemobj) version to 2.1.3-2
+
 * Mon Mar 23 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-21
 - Bump version
 
