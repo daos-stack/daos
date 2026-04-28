@@ -1547,6 +1547,18 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("version",))
 
+    def server_version(self):
+        """Call dmg server-version.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the dmg server-version command fails.
+
+        """
+        return self._get_json_result(("server-version",))
+
     def check_enable(self, pool=None, stop=True):
         """Call dmg check enable.
 
