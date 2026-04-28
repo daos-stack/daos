@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"strings"
 
 	"github.com/desertbit/columnize"
@@ -318,17 +319,17 @@ func run(api DdbAPI, log *logging.LeveledLogger, opts cliOptions, parser *flags.
 	if opts.VosPath != "" {
 		// Commands that manage the pool open/close lifecycle themselves and must
 		// not have the pool pre-opened by the CLI layer.
-		noAutoOpen := map[string]bool{
-			"feature":     true,
-			"open":        true,
-			"close":       true,
-			"prov_mem":    true,
-			"smd_sync":    true,
-			"rm_pool":     true,
-			"dev_list":    true,
-			"dev_replace": true,
+		noAutoOpen := []string{
+			"feature",
+			"open",
+			"close",
+			"prov_mem",
+			"smd_sync",
+			"rm_pool",
+			"dev_list",
+			"dev_replace",
 		}
-		if !noAutoOpen[opts.Args.RunCmd] {
+		if !slices.Contains(noAutoOpen, opts.Args.RunCmd) {
 			log.Debugf("Connect to path: %s\n", opts.VosPath)
 			if err := api.Open(string(opts.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
 				return errors.Wrapf(err, vosPathOpenErr, opts.VosPath)
