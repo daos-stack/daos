@@ -140,9 +140,9 @@ parse_vos_file_parts_test_success(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Test with root path */
-	rc = parse_vos_file_parts("/" MOCKED_POOL_UUID_STR "/vos-0", NULL, &parts);
+	rc = parse_vos_file_parts(MOCKED_VOS_PATH_STR, NULL, &parts);
 	assert_rc_equal(rc, DER_SUCCESS);
-	assert_string_equal("/" MOCKED_POOL_UUID_STR "/vos-0", parts.vf_vos_file_path);
+	assert_string_equal(MOCKED_VOS_PATH_STR, parts.vf_vos_file_path);
 	assert_string_equal("/", parts.vf_db_path);
 	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
 	assert_string_equal("vos-0", parts.vf_vos_file_name);
