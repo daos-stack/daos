@@ -907,7 +907,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.6') {
+                stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -930,8 +930,8 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.6')
-                stage('Functional on SLES 15.7') {
+                } // stage('Functional on Leap 15')
+                stage('Functional on SLES 15') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -954,7 +954,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on SLES 15.7')
+                } // stage('Functional on SLES 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
