@@ -907,6 +907,30 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
+                stage('Functional on Leap 15.6') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('Leap15')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'leap15.6'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } // post
+                } // stage('Functional on Leap 15.6')
                 stage('Functional on SLES 15.7') {
                     when {
                         beforeAgent true
