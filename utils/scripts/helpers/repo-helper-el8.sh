@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+#  Copyright 2022-2023 Intel Corporation.
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -uex
 
 # This script is used by dockerfiles to optionally use
@@ -122,10 +128,11 @@ done
 
 disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
 
-# Setup the PyPi to use the artifactory as the installation packages source
 if [ -n "$REPO_FILE_URL" ]; then
     trusted_host="${REPO_FILE_URL##*//}"
     trusted_host="${trusted_host%%/*}"; \
+
+# Setup the PyPi to use the artifactory as the installation packages source
     cat <<EOF > /etc/pip.conf
 [global]
     trusted-host = ${trusted_host}
@@ -133,5 +140,11 @@ if [ -n "$REPO_FILE_URL" ]; then
     progress_bar = off
     no_color = true
     quiet = 1
+EOF
+
+# Setup RubyGems to use artifactory as the installation source.
+    cat <<EOF > /etc/gemrc
+:sources:
+- https://${trusted_host}/artifactory/api/gems/rubygems-proxy/
 EOF
 fi
