@@ -1725,7 +1725,7 @@ dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
 	/* Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case. */
 	if (err == -DER_OVERLOAD_RETRY) {
 		delay = daos_rpc_rand_delay(timeout_sec) << 20;
-	} else if (++(*retry_cnt) > 1) {
+	} else if (++(*retry_cnt) > 1 || obj_is_modification_opc(opc)) {
 		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
 		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
 		/* Rebuild is being established on the server side, wait a bit longer */
@@ -1739,16 +1739,18 @@ dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
 				delay <<= 8;
 				break;
 			case DAOS_OBJ_RPC_CPD:
-				/* 8 times of the delay for compounded RPC. */
-				delay <<= 3;
+				delay <<= (*retry_cnt + 3);
 				break;
 			default:
+				if (obj_is_modification_opc(opc))
+					delay <<= (*retry_cnt + 1);
+				else
+					delay <<= (*retry_cnt - 1);
 				break;
 			}
 
-			/* Increase delay after multiple times retry. */
-			if (*retry_cnt >= 5)
-				delay <<= 1;
+			if (*retry_cnt > 10 || delay > 3000000)
+				delay = 3000000 + ((d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1));
 		}
 	}
 
