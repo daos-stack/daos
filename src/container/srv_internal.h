@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -72,9 +72,11 @@ struct cont_track_eph_leader {
 	daos_epoch_t		cte_current_stable_eph;
 	daos_epoch_t             cte_rdb_ec_agg_eph; /* EC agg epoch in RDB */
 	struct rank_eph		*cte_server_ephs;
-	d_list_t		cte_list;
-	int			cte_servers_num;
-	uint32_t		cte_deleted:1;
+	d_list_t                 cte_list;
+	int                      cte_servers_num;
+	uint32_t                 cte_deleted : 1;
+	/* TS to check for ec_agg_eph sluggish warning */
+	uint64_t                 cte_ec_agg_warn_slug_ts;
 };
 
 /*
