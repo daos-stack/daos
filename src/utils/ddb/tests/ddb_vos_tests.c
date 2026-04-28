@@ -1176,9 +1176,9 @@ static void
 helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_state fs[2],
 				   bool write_mode)
 {
-	const char    *path      = tctx->dvt_pmem_file;
+	const char           *path       = tctx->dvt_pmem_file;
 	struct vos_file_parts path_parts = {0};
-	daos_handle_t  saved_poh = tctx->dvt_poh;
+	daos_handle_t         saved_poh  = tctx->dvt_poh;
 
 	assert_int_equal(stat(path, &fs[FILE_STATE_PRE].stat), 0);
 	sha256sum(path, fs[FILE_STATE_PRE].digest);
