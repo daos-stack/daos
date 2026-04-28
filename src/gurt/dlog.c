@@ -551,6 +551,9 @@ d_log_disable_logging(void)
 	mst.log_old_fd = -1;
 }
 
+static __thread uint32_t dlog_tid = -1;
+static __thread uint32_t dlog_pid = -1;
+
 /**
  * d_vlog: core log function, front-ended by d_log
  * we vsnprintf the message into a holding buffer to format it.  then we
@@ -569,8 +572,6 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
 	static __thread char     buf[DLOG_TBSIZ];
-	static __thread uint32_t tid = -1;
-	static __thread uint32_t pid = -1;
 	static uint64_t	last_flush;
 
 	uint64_t uid = 0;
@@ -608,14 +609,14 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	if ((mst.oflags & DLOG_FLV_TAG) && (mst.oflags & DLOG_FLV_LOGPID)) {
 		/* Init static members in ahead of lock */
-		if (pid == (uint32_t)(-1))
-			pid = (uint32_t)getpid();
+		if (unlikely(dlog_pid == (uint32_t)(-1)))
+			dlog_pid = (uint32_t)getpid();
 
-		if (tid == (uint32_t)(-1)) {
+		if (unlikely(dlog_tid == (uint32_t)(-1))) {
 			if (mst.log_id_cb)
-				mst.log_id_cb(&tid, NULL);
+				mst.log_id_cb(&dlog_tid, NULL);
 			else
-				tid = (uint32_t)syscall(SYS_gettid);
+				dlog_tid = (uint32_t)syscall(SYS_gettid);
 		}
 
 		if (mst.log_id_cb)
@@ -1396,4 +1397,14 @@ int d_log_getmasks(char *buf, int discard, int len, int unterm)
 		clog_bput(&bp, &skipcnt, &resid, &total, NULL);
 	/* buf == NULL means probe for length ... */
 	return ((buf == NULL) ? total : len - resid);
+}
+
+void
+d_log_reset(void)
+{
+	dlog_tid     = -1;
+	dlog_pid     = -1;
+	pre_err      = 0;
+	pre_err_line = 0;
+	pre_err_time = 0;
 }
