@@ -290,7 +290,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	/* select oclass and generate GIT (Global Index Table) OID */
+	/* select oclass and generate GIT (Global Inode Table) OID */
 	roots.cr_oids[2].lo = RESERVED_LO;
 	roots.cr_oids[2].hi = GIT_HI;
 	rc = daos_obj_generate_oid_by_rf(poh, rf, &roots.cr_oids[2], 0, dattr.da_dir_oclass_id,
