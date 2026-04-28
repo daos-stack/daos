@@ -2892,7 +2892,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
 			(rc == -DER_NONEXIST &&
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
-		    DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(orw->orw_oid));
+		    DB_IO, DLOG_ERR, rc, "tgt_update " DF_UOID " with TX " DF_DTI,
+		    DP_UOID(orw->orw_oid), DP_DTI(&orw->orw_dti));
 
 out:
 	if (dth != NULL)
@@ -3447,9 +3448,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_FOR_MIGRATION) {
 		/* just in case ds_pool::sp_rebuilding is not set, pause my local EC aggregation
 		 * by setting this flag.
-		 * NB: it's a lockess write to shared data structure and it's harmless.
 		 */
-		ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_scan = 1;
+		atomic_store(&ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_enum, 1);
 		flags = DTX_FOR_MIGRATION;
 	}
 
