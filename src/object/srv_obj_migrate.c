@@ -4547,8 +4547,9 @@ migr_res_watchdog(void)
 
 			ABT_mutex_lock(res->res_mutex);
 			if (d_list_empty(&res->res_waitq)) {
-				D_WARN(" bucket=%d: limit=%lu, used=0, waiter=<NULL>\n", j,
-				       res->res_limit);
+				D_WARN(" bucket=%d: limit=" DF_U64 ", used=" DF_U64
+				       ", waiter=<NULL>\n",
+				       j, res->res_limit, res->res_used);
 				ABT_mutex_unlock(res->res_mutex);
 				continue;
 			}
