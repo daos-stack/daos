@@ -2,7 +2,7 @@
 """
   Copyright 2023-2024 Intel Corporation.
   Copyright 2025 Google LLC
-  Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
   All rights reserved.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -359,11 +359,6 @@ class Test():
 
         if self.needs_aio():
             self.env["VOS_BDEV_CLASS"] = "AIO"
-
-        # If set, retain the HTTPS_PROXY for valgrind
-        http_proxy = os.environ.get('HTTPS_PROXY')
-        if http_proxy:
-            self.env['HTTPS_PROXY'] = http_proxy
 
     def log_dir(self):
         """Return the log directory"""
