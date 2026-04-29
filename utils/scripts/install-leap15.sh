@@ -70,6 +70,7 @@ dnf --nodocs install ${dnf_install_args} \
     pciutils \
     pciutils-devel \
     python3-devel \
+    rpm-build \
     scons \
     sg3_utils \
     sudo \
