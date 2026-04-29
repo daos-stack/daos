@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2025 Google LLC
+#  Copyright 2025-2026 Google LLC
 #  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -62,8 +62,8 @@ export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
 export daos_spdk_version="2.0.0"
 export daos_spdk_release="1${distro_name}"
 export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
-export fused_version="1.0.0"
-export fused_release="3${distro_name}"
+export fused_version="1.1.0"
+export fused_release="1${distro_name}"
 export fused_full="${fused_version}-${fused_release}"
 
 set_lib_name openmpi lib openmpi openmpi3 openmpi

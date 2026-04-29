@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# (C) Copyright 2025 Google LLC
+# Copyright 2025-2026 Google LLC
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -28,7 +28,7 @@ dnf --nodocs install ${dnf_install_args} \
     flex \
     fuse3 \
     gcc \
-    gcc-c++ \
+    gcc11-c++ \
     git \
     go \
     go-race \
@@ -77,6 +77,10 @@ dnf --nodocs install ${dnf_install_args} \
     valgrind-devel \
     which \
     yasm
+
+update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110
+update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 110
+update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-11 110
 
 # shellcheck disable=SC2086
 dnf install ${dnf_install_args} ruby-devel
