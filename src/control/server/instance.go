@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,7 +53,7 @@ type EngineInstance struct {
 	incarnation     uint64
 	storage         *storage.Provider
 	waitFormat      atm.Bool
-	storageReady    chan bool
+	storageReady    chan storageReadyInfo
 	waitDrpc        atm.Bool
 	drpcReady       chan *srvpb.NotifyReadyReq
 	ready           atm.Bool
@@ -62,6 +62,7 @@ type EngineInstance struct {
 	hostFaultDomain *system.FaultDomain
 	joinSystem      systemJoinFn
 	replaceRank     atm.Bool
+	targetRank      atm.Uint32
 	onAwaitFormat   []onAwaitFormatFn
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
@@ -86,7 +87,7 @@ func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r
 		storage:          p,
 		joinSystem:       jf,
 		drpcReady:        make(chan *srvpb.NotifyReadyReq),
-		storageReady:     make(chan bool),
+		storageReady:     make(chan storageReadyInfo),
 		startRequested:   make(chan bool),
 		Publisher:        ps,
 		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
@@ -200,6 +201,12 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	r := ranklist.NilRank
 	if superblock.Rank != nil {
 		r = *superblock.Rank
+	}
+
+	// If replacing a rank and a target rank was specified, use that rank.
+	targetRank := ei.targetRank.Load()
+	if ei.replaceRank.Load() && targetRank != uint32(ranklist.NilRank) {
+		r = ranklist.Rank(targetRank)
 	}
 
 	joinReq := &control.SystemJoinReq{

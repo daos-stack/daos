@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -339,11 +340,11 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 type tally struct {
 	sync.Mutex
 	evtDesc      string
-	storageReady chan bool
+	storageReady chan storageReadyInfo
 	finished     chan struct{}
 }
 
-func newTally(sr chan bool) *tally {
+func newTally(sr chan storageReadyInfo) *tally {
 	return &tally{
 		storageReady: sr,
 		finished:     make(chan struct{}),
@@ -355,7 +356,7 @@ func (tly *tally) fakePublish(evt *events.RASEvent) {
 	defer tly.Unlock()
 
 	tly.evtDesc = evt.Msg
-	close(tly.storageReady)
+	tly.storageReady <- storageReadyInfo{}
 	close(tly.finished)
 }
 

@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -70,9 +71,12 @@ func (ei *EngineInstance) MountScm() error {
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
+func (ei *EngineInstance) NotifyStorageReady(replaceRank bool, targetRank uint32) {
 	go func() {
-		ei.storageReady <- replaceRank
+		ei.storageReady <- storageReadyInfo{
+			replaceRank: replaceRank,
+			targetRank:  targetRank,
+		}
 	}()
 }
 
@@ -183,12 +187,17 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		ei.log.Infof("%s %s storage not ready: %s", build.DataPlaneName, msgIdx, ctx.Err())
-	case replaceRank := <-ei.storageReady:
+	case readyInfo := <-ei.storageReady:
 		// Set replaceRank instance state to be used later in join request.
-		ei.replaceRank.Store(replaceRank)
+		ei.replaceRank.Store(readyInfo.replaceRank)
+		ei.targetRank.Store(readyInfo.targetRank)
 		msg := fmt.Sprintf("%s %s storage ready", build.DataPlaneName, msgIdx)
-		if replaceRank {
-			msg += ", attempting to replace rank..."
+		if readyInfo.replaceRank {
+			if readyInfo.targetRank != uint32(ranklist.NilRank) {
+				msg += fmt.Sprintf(", attempting to replace rank %d...", readyInfo.targetRank)
+			} else {
+				msg += ", attempting to replace rank..."
+			}
 		}
 		ei.log.Info(msg)
 	}

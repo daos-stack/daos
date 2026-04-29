@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,7 +44,7 @@ type Engine interface {
 
 	// These methods should probably be replaced by callbacks.
 	NotifyDrpcReady(*srvpb.NotifyReadyReq)
-	NotifyStorageReady(bool)
+	NotifyStorageReady(bool, uint32)
 
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
