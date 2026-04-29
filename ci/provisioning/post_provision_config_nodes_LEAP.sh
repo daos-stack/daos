@@ -23,16 +23,4 @@ distro_custom() {
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                     \
                /etc/profile.d/lmod.sh;                                        \
     fi
-
-    # Fix for no_pmix_multi_ctx tests on SLES
-    if [[ "${ID:-}" == "sles" ]]; then
-        dnf remove -y mercury mercury-debuginfo || true
-        dnf remove -y libfabric libfabric1 libfabric-debuginfo || true
-        dnf autoremove -y
-        dnf clean all
-        ldconfig
-
-        dnf install -y daos-server daos-client daos-client-tests \
-                        daos-tests-internal openmpi3 openmpi3-devel
-    fi
 }
