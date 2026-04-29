@@ -74,7 +74,6 @@ dnf --nodocs install ${dnf_install_args} \
     protobuf-c-devel \
     python3-devel \
     python3-pip \
-    rpm-build \
     sg3_utils \
     squashfs-tools \
     sudo \
