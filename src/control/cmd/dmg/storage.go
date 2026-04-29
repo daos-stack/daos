@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
@@ -97,9 +98,10 @@ type storageFormatCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	cmdutil.JSONOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
-	Force   bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
-	Replace bool `long:"replace" description:"Replace an excluded rank. Allows a DAOS engine instance to reclaim its old rank number after metadata is lost due to PMem or other storage media failure (CAUTION: experimental operation)"`
+	Verbose bool    `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
+	Force   bool    `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
+	Replace bool    `long:"replace" description:"Replace an excluded rank. Allows a DAOS engine instance to reclaim its old rank number after metadata is lost due to PMem or other storage media failure (CAUTION: experimental operation)"`
+	Rank    *uint32 `long:"rank" description:"Specific rank to replace (only valid with --replace)"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -116,7 +118,17 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		return errors.New("command expects a single host in hostlist if replace option used")
 	}
 
-	req := &control.StorageFormatReq{Reformat: cmd.Force, Replace: cmd.Replace}
+	if cmd.Rank != nil && !cmd.Replace {
+		return errors.New("--rank option is only valid when used with --replace")
+	}
+
+	// Default to NilRank if no rank specified
+	rank := uint32(ranklist.NilRank)
+	if cmd.Rank != nil {
+		rank = *cmd.Rank
+	}
+
+	req := &control.StorageFormatReq{Reformat: cmd.Force, Replace: cmd.Replace, Rank: rank}
 	req.SetHostList(cmd.getHostList())
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
