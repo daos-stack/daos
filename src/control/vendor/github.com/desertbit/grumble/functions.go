@@ -297,19 +297,19 @@ func printFlags(a *App, flags *Flags) {
 	flags.sort()
 
 	var output []string
-	for _, f := range flags.list {
-		long := "--" + f.Long
+	for _, fi := range flags.list {
+		long := "--" + fi.Long
 		short := ""
-		if len(f.Short) > 0 {
-			short = "-" + f.Short + ","
+		if len(fi.Short) > 0 {
+			short = "-" + fi.Short + ","
 		}
 
 		defaultValue := ""
-		if f.Default != nil && f.HelpShowDefault && len(fmt.Sprintf("%v", f.Default)) > 0 {
-			defaultValue = fmt.Sprintf("(default: %v)", f.Default)
+		if fi.showDefault() && len(fmt.Sprintf("%v", fi.Default)) > 0 {
+			defaultValue = fmt.Sprintf("(default: %v)", fi.Default)
 		}
 
-		output = append(output, fmt.Sprintf("%s | %s | %s |||| %s %s", short, long, f.HelpArgs, f.Help, defaultValue))
+		output = append(output, fmt.Sprintf("%s | %s | %s |||| %s %s", short, long, fi.HelpArgs, fi.Help, defaultValue))
 	}
 
 	if len(output) > 0 {
