@@ -182,7 +182,6 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
     String dockerTag = jobStatusKey("build-rpm-${uploadTarget}-${compiler}").toLowerCase()
     String dockerLabel = kwargs.get('dockerLabel', 'docker_runner')
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
-    String dockerImageArgs = kwargs.get('dockerImageArgs', '')
 
     return {
         stage("${name}") {
@@ -194,7 +193,7 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
                     //                             dockerBuildArgs())
                     // dockerImage.inside('--group-add mock --cap-add=SYS_ADMIN --privileged=true -v /scratch:/scratch') {
                     def dockerImage = docker.build(dockerTag, dockerBuildArgs)
-                    dockerImage.inside(dockerImageArgs) {
+                    dockerImage.inside() {
                         try {
                             job_step_update(buildRpm())
                         } catch (Exception e) {
@@ -252,7 +251,6 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String dockerLabel = kwargs.get('dockerLabel', 'docker_runner')
     String dockerArgs = kwargs.get('dockerArgs', '')
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
-    String dockerImageArgs = kwargs.get('dockerImageArgs', '')
     Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
 
     return {
@@ -261,7 +259,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                 println("[${name}] Start build stage")
                 node(dockerLabel) {
                     def dockerImage = docker.build(dockerTag, dockerBuildArgs)
-                    dockerImage.inside(dockerImageArgs) {
+                    dockerImage.inside() {
                         try {
                             job_step_update(sconsBuild(sconsBuildArgs))
                         } catch (Exception e) {
@@ -614,68 +612,68 @@ pipeline {
                             distro: 'el8',
                             uploadTarget: 'el8',
                             dockerLabel: 'docker_runner',
-                            dockerBuildArgs: dockerBuildArgs() +
-                                             ' -f utils/rpms/packaging/Dockerfile.mockbuild',
-                            dockerImageArgs: '--group-add mock' +
-                                             ' --cap-add=SYS_ADMIN' +
-                                             ' --privileged=true'   +
-                                             ' -v /scratch:/scratch'
+                            dockerBuildArgs: '-f utils/rpms/packaging/Dockerfile.mockbuild ' +
+                                             '--group-add mock ' +
+                                             '--cap-add=SYS_ADMIN ' +
+                                             '--privileged=true '   +
+                                             '-v /scratch:/scratch ' +
+                                             dockerBuildArgs()
                         ),
                         'Build RPM on EL 9': scriptedBuildRpmStage(
                             name: 'Build RPM on EL 9',
                             distro: 'el9',
                             uploadTarget: 'el9',
                             dockerLabel: 'docker_runner',
-                            dockerBuildArgs: dockerBuildArgs() +
-                                             ' -f utils/rpms/packaging/Dockerfile.mockbuild',
-                            dockerImageArgs: '--group-add mock' +
-                                             ' --cap-add=SYS_ADMIN' +
-                                             ' -v /scratch:/scratch'
+                            dockerBuildArgs: '-f utils/rpms/packaging/Dockerfile.mockbuild ' +
+                                             '--group-add mock ' +
+                                             '--cap-add=SYS_ADMIN ' +
+                                             '-v /scratch:/scratch ' +
+                                             dockerBuildArgs()
                         ),
                         'Build RPM on Leap 15.5': scriptedBuildRpmStage(
                             name: 'Build RPM on Leap 15.5',
                             distro: 'leap15',
                             uploadTarget: 'leap15-5',
                             dockerLabel: 'docker_runner',
-                            dockerBuildArgs: dockerBuildArgs() +
-                                             ' -f utils/rpms/packaging/Dockerfile.mockbuild' +
-                                             ' --build-arg FVERSION=37',
-                            dockerImageArgs: '--group-add mock' +
-                                             ' --cap-add=SYS_ADMIN' +
-                                             ' --privileged=true'   +
-                                             ' -v /scratch:/scratch'
+                            dockerBuildArgs: '-f utils/rpms/packaging/Dockerfile.mockbuild ' +
+                                             '--group-add mock ' +
+                                             '--cap-add=SYS_ADMIN ' +
+                                             '--privileged=true ' +
+                                             '-v /scratch:/scratch ' +
+                                             '--build-arg FVERSION=37 ' +
+                                             dockerBuildArgs()
                         ),
                         'Build RPM on Leap 15.6': scriptedBuildRpmStage(
                             name: 'Build RPM on Leap 15.6',
                             distro: 'leap15',
                             uploadTarget: 'leap15-6',
                             dockerLabel: 'docker_runner',
-                            dockerBuildArgs: dockerBuildArgs() +
-                                             ' -f utils/rpms/packaging/Dockerfile.mockbuild',
-                            dockerImageArgs: '--group-add mock' +
-                                             ' --cap-add=SYS_ADMIN' +
-                                             ' --privileged=true'   +
-                                             ' -v /scratch:/scratch'
+                            dockerBuildArgs: '-f utils/rpms/packaging/Dockerfile.mockbuild ' +
+                                             '--group-add mock ' +
+                                             '--cap-add=SYS_ADMIN ' +
+                                             '--privileged=true ' +
+                                             '-v /scratch:/scratch ' +
+                                             dockerBuildArgs()
                         ),
                         'Build DEB on Ubuntu 20.04': scriptedBuildRpmStage(
                             name: 'Build DEB on Ubuntu 20.04',
                             distro: 'ubuntu20',
                             uploadTarget: 'ubuntu20',
                             dockerLabel: 'docker_runner',
-                            dockerBuildArgs: dockerBuildArgs() +
-                                             ' -f utils/rpms/packaging/Dockerfile.ubuntu',
-                            dockerImageArgs: '--cap-add=SYS_ADMIN'
+                            dockerBuildArgs: '-f utils/rpms/packaging/Dockerfile.ubuntu ' +
+                                             '--cap-add=SYS_ADMIN ' +
+                                             dockerBuildArgs()
                         ),
                         'Build on EL 8': scriptedBuildStage(
                             name: 'Build on EL 8',
                             distro: 'el8',
                             dockerLabel: 'docker_runner',
-                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                            dockerBuildArgs: '-f utils/docker/Dockerfile.el.8 ' +
+                                             "-t ${sanitized_JOB_NAME()}-el8 " +
+                                             '--build-arg REPOS="' + prRepos() + '" ' +
+                                             dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: true,
-                                                             parallel_build: true) +
-                                             ' -f utils/docker/Dockerfile.el.8 ' +
-                                             " -t ${sanitized_JOB_NAME()}-el8 " +
-                                             ' --build-arg REPOS="' + prRepos() + '"',
+                                                             parallel_build: true),
                             sconsBuildArgs: [parallel_build: true,
                                              stash_files: 'ci/test_files_to_stash.txt',
                                              build_deps: 'no',
@@ -687,12 +685,12 @@ pipeline {
                             name: 'Build on EL 9',
                             distro: 'el9',
                             dockerLabel: 'docker_runner',
-                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                            dockerBuildArgs: '-f utils/docker/Dockerfile.el.9 ' +
+                                             "-t ${sanitized_JOB_NAME()}-el9 " +
+                                             '--build-arg REPOS="' + prRepos() + '" ' +
+                                             dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: true,
-                                                             parallel_build: true) +
-                                             '-f utils/docker/Dockerfile.el.9 ' +
-                                             " -t ${sanitized_JOB_NAME()}-el9 " +
-                                             ' --build-arg REPOS="' + prRepos() + '"',
+                                                             parallel_build: true),
                             sconsBuildArgs: [parallel_build: true,
                                              stash_files: 'ci/test_files_to_stash.txt',
                                              build_deps: 'no',
