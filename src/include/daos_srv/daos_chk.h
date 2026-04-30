@@ -86,7 +86,7 @@ int chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 int chk_leader_prop(chk_prop_cb_t prop_cb, void *buf);
 
 int
-    chk_leader_act(uint64_t seq, uint32_t act);
+chk_act(uint64_t seq, uint32_t act);
 
 int
     chk_leader_set_policy(uint32_t policy_nr, struct chk_policy *policies);

@@ -266,7 +266,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithHyperthreads(true). // hyper-threads disabled by default
 		WithSystemRamReserved(5).
 		WithAllowNumaImbalance(true).
-		WithAllowTHP(true)
+		WithAllowTHP(true).
+		WithKernelConfigPath("/host/boot/config")
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{
@@ -744,6 +745,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
 						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageKernelConfigPath("/host/boot/config").
 						WithStorageConfigOutputPath(filepath.Join(
 							testMetadataDir,
 							storage.ControlMetadataSubdir,
@@ -767,6 +769,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
 						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageKernelConfigPath("/host/boot/config").
 						WithStorageConfigOutputPath(filepath.Join(
 							testMetadataDir,
 							storage.ControlMetadataSubdir,
@@ -818,6 +821,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
 						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageKernelConfigPath("/host/boot/config").
 						WithStorageConfigOutputPath(filepath.Join(
 							testMetadataDir,
 							storage.ControlMetadataSubdir,
@@ -901,6 +905,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithStorageControlMetadataPath(testMetadataDir).
 					WithStorageControlMetadataDevice("").
+					WithStorageKernelConfigPath("/host/boot/config").
 					WithStorageConfigOutputPath(filepath.Join(
 						testMetadataDir,
 						storage.ControlMetadataSubdir,

@@ -23,4 +23,4 @@ server_config:
 
 daos_racer:
   runtime: 7200
-  clush_timeout: 10080
+  daos_racer_timeout: 10080
