@@ -69,7 +69,9 @@ if [ -e "${COVFILE:-}" ]; then
     /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 fi
 
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" ./utils/node_local_test.py "${nlt_args[@]}" all
+HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+    NO_PROXY="${DAOS_NO_PROXY:-}" \
+    ./utils/node_local_test.py "${nlt_args[@]}" all
 
 if [ -e "${COVFILE:-}" ]; then
     echo "Code coverage after running unit tests:"

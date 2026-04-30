@@ -96,8 +96,10 @@ if [[ -n "${COVFILE:-}" ]]; then
     /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 fi
 
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
-    --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
+HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+    NO_PROXY="${DAOS_NO_PROXY:-}" \
+    utils/run_utest.py $RUN_TEST_VALGRIND \
+        --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG
 
 if [[ -n "${COVFILE:-}" ]]; then
     echo "Code coverage after running unit tests:"

@@ -6,6 +6,7 @@
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 set -eEuo pipefail
+set -x
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
@@ -49,6 +50,7 @@ files=()
 TARGET_PATH="${sysconfdir}/daos"
 list_files files "${SL_PREFIX}/etc/memcheck*.supp"
 append_install_list "${files[@]}"
+CONFIG_FILES+=("${TARGET_PATH}/memcheck-cart.supp")
 
 TARGET_PATH="${sysconfdir}/bash_completion.d"
 list_files files "${SL_PREFIX}/etc/bash_completion.d/daos.bash"
@@ -150,6 +152,8 @@ if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
   list_files files "${SL_PREFIX}/etc/daos_server.yml" \
   "${SL_PREFIX}/etc/vos_size_input.yaml"
   append_install_list "${files[@]}"
+  CONFIG_FILES+=("${TARGET_PATH}/daos_server.yml")
+  CONFIG_FILES+=("${TARGET_PATH}/vos_size_input.yaml")
 
   TARGET_PATH="${datadir}/daos/control"
   list_files files "${SL_PREFIX}/share/daos/control/*"
@@ -246,6 +250,7 @@ append_install_list "${files[@]}"
 TARGET_PATH="${sysconfdir}/daos"
 list_files files "${SL_PREFIX}/etc/daos_control.yml"
 append_install_list "${files[@]}"
+CONFIG_FILES+=("${TARGET_PATH}/daos_control.yml")
 
 DEPENDS=( "${base_name} = ${VERSION}-${RELEASE}" )
 build_package "${base_name}-admin"
@@ -290,6 +295,7 @@ append_install_list "${files[@]}"
 TARGET_PATH="${sysconfdir}/daos"
 list_files files "${SL_PREFIX}/etc/daos_agent.yml"
 append_install_list "${files[@]}"
+CONFIG_FILES+=("${TARGET_PATH}/daos_agent.yml")
 
 mkdir -p "${tmp}/${unitdir}"
 install -m 644 "utils/systemd/${agent_svc_name}" "${tmp}/${unitdir}"
@@ -375,6 +381,7 @@ append_install_list "${files[@]}"
 TARGET_PATH="${sysconfdir}/daos"
 list_files files "${SL_PREFIX}/etc/fault-inject-cart.yaml"
 append_install_list "${files[@]}"
+CONFIG_FILES+=("${TARGET_PATH}/fault-inject-cart.yaml")
 
 #todo add external depends
 EXTERNAL_DEPENDS=("${protobufc_lib}")

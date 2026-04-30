@@ -33,9 +33,10 @@ NODE=${NODELIST%%,*}
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . jenkins@"$NODE":build/
 
 # shellcheck disable=SC2029
-ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME        \
-                                         HOSTPWD=$PWD              \
+ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME \
+                                         HOSTPWD=$PWD \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
-                                         BDEV_TEST=$BDEV_TEST       \
+                                         DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\" \
+                                         BDEV_TEST=$BDEV_TEST \
                                          ./build/ci/unit/test_main_node.sh"

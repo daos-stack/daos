@@ -2,7 +2,7 @@
 """
   Copyright 2023-2024 Intel Corporation.
   Copyright 2025 Google LLC
-  Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
   All rights reserved.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -363,6 +363,9 @@ class Test():
         http_proxy = os.environ.get('HTTPS_PROXY')
         if http_proxy:
             self.env['HTTPS_PROXY'] = http_proxy
+        no_proxy = os.environ.get('NO_PROXY')
+        if no_proxy:
+            self.env['NO_PROXY'] = no_proxy
 
     def log_dir(self):
         """Return the log directory"""

@@ -854,8 +854,30 @@ pipeline {
                             ],
                             artifacts: "config.log-el9-gcc"
                         ),
-                        'Build on Leap 15': scriptedBuildStage(
-                            name: 'Build on Leap 15',
+                        'Build on Leap 15.5': scriptedBuildStage(
+                            name: 'Build on Leap 15.5',
+                            distro:'leap15',
+                            rpmDistro: 'suse.lp155',
+                            compiler: 'gcc',
+                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
+                            buildRpms: true,
+                            release: env.DAOS_RELVAL,
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: false,
+                                                             parallel_build: true) +
+                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
+                                             ' --build-arg DAOS_KEEP_SRC=yes' +
+                                             ' --build-arg POINT_RELEASE=.5' +
+                                             ' -f utils/docker/Dockerfile.leap.15 .',
+                            sconsBuildArgs: [
+                                parallel_build: true,
+                                build_deps: 'yes',
+                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
+                            ],
+                            artifacts: "config.log-leap155-gcc"
+                        ),
+                        'Build on Leap 15.6': scriptedBuildStage(
+                            name: 'Build on Leap 15.6',
                             distro:'leap15',
                             rpmDistro: 'suse.lp156',
                             compiler: 'gcc',
@@ -874,7 +896,7 @@ pipeline {
                                 build_deps: 'yes',
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            artifacts: "config.log-leap15-gcc"
+                            artifacts: "config.log-leap156-gcc"
                         ),
                         'Build on EL 9 with Bullseye': scriptedBuildStage(
                             name: 'Build on EL 9 with Bullseye',
@@ -1429,6 +1451,7 @@ pipeline {
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
+                            image_version: 'el9.7',
                             coverage_stash: 'func_hw_medium_bullseye'
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
@@ -1443,6 +1466,7 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal,
+                            image_version: 'el9.7',
                             coverage_stash: 'func_hw_medium_md_on_ssd_bullseye'
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
@@ -1458,6 +1482,7 @@ pipeline {
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
+                            image_version: 'el9.7',
                             coverage_stash: 'func_hw_medium_vmd_bullseye'
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
@@ -1505,6 +1530,7 @@ pipeline {
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
+                            image_version: 'el9.7',
                             coverage_stash: 'func_hw_medium_ucx_provider_bullseye'
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
@@ -1519,6 +1545,7 @@ pipeline {
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
+                            image_version: 'el9.7',
                             coverage_stash: 'func_hw_large_bullseye'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
@@ -1533,6 +1560,7 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal,
+                            image_version: 'el9.7',
                             coverage_stash: 'func_hw_large_md_on_ssd_bullseye'
                         ),
                     )

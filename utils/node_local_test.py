@@ -442,6 +442,9 @@ def get_base_env(clean=False):
     http_proxy = os.environ.get('HTTPS_PROXY')
     if http_proxy:
         env['HTTPS_PROXY'] = http_proxy
+    no_proxy = os.environ.get('NO_PROXY')
+    if no_proxy:
+        env['NO_PROXY'] = no_proxy
 
     # If set, retain the COVFILE for bullseye code coverage
     covfile = os.environ.get('COVFILE')
