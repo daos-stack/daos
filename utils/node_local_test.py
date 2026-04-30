@@ -442,6 +442,9 @@ def get_base_env(clean=False):
     http_proxy = os.environ.get('HTTPS_PROXY')
     if http_proxy:
         env['HTTPS_PROXY'] = http_proxy
+    no_proxy = os.environ.get('NO_PROXY')
+    if no_proxy:
+        env['NO_PROXY'] = no_proxy
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
