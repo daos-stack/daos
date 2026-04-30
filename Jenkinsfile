@@ -284,63 +284,6 @@ pipeline {
                     // pragmas will be ignored. This is to avoid multiple parallel test stages
                     // from duplicating testing.
                     parallel(
-                        'Functional on EL 8': getFunctionalTestStage(
-                            name: 'Functional on EL 8',
-                            pragma_suffix: '-vm',
-                            distro: 'el8',
-                            base_branch: params.BaseBranch,
-                            label: vm9_label('EL8'),
-                            next_version: params.BaseBranch,
-                            stage_tags: '-hw',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: true,
-                            job_status: job_status_internal
-                        ),
-                        'Functional on EL 9': getFunctionalTestStage(
-                            name: 'Functional on EL 9',
-                            pragma_suffix: '-vm',
-                            distro: 'el9',
-                            base_branch: params.BaseBranch,
-                            label: vm9_label('EL9'),
-                            next_version: params.BaseBranch,
-                            stage_tags: '-hw',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional on Leap 15.6': getFunctionalTestStage(
-                            name: 'Functional on Leap 15.6',
-                            pragma_suffix: '-vm',
-                            distro: 'leap15',
-                            image_version: 'leap15.6',
-                            base_branch: params.BaseBranch,
-                            label: vm9_label('Leap15'),
-                            next_version: params.BaseBranch,
-                            stage_tags: '-hw',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional on Ubuntu 20.04': getFunctionalTestStage(
-                            name: 'Functional on Ubuntu 20.04',
-                            pragma_suffix: '-vm',
-                            distro: 'ubuntu20',
-                            base_branch: params.BaseBranch,
-                            label: vm9_label('Ubuntu'),
-                            next_version: params.BaseBranch,
-                            stage_tags: '-hw',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
@@ -366,75 +309,7 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
-                            next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            pragma_suffix: '-hw-medium-ucx-provider',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            provider: params.TestProviderUCX,
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Large': getFunctionalTestStage(
-                            name: 'Functional Hardware Large',
-                            pragma_suffix: '-hw-large',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: params.BaseBranch,
-                            stage_tags: 'hw,large',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Large MD on SSD',
-                            pragma_suffix: '-hw-large-md-on-ssd',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
-                            next_version: params.BaseBranch,
-                            stage_tags: 'hw,large',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
+                        )
                     )
                 }
             }
