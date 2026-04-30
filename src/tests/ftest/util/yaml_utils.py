@@ -1,6 +1,6 @@
 """
 (C) Copyright 2020-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -108,7 +108,7 @@ class YamlUpdater():
         ("bdev_list", "_storage", list),
         ("timeout", "_timeout", int),
         ("timeouts", "_timeout", dict),
-        ("clush_timeout", "_timeout", int),
+        ("daos_racer_timeout", "_timeout", int),
         ("ior_timeout", "_timeout", int),
         ("job_manager_timeout", "_timeout", int),
         ("pattern_timeout", "_timeout", int),
