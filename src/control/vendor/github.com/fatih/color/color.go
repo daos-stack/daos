@@ -19,10 +19,10 @@ var (
 	// set (regardless of its value). This is a global option and affects all
 	// colors. For more control over each color block use the methods
 	// DisableColor() individually.
-	NoColor = noColorIsSet() || os.Getenv("TERM") == "dumb" ||
+	NoColor = noColorExists() || os.Getenv("TERM") == "dumb" ||
 		(!isatty.IsTerminal(os.Stdout.Fd()) && !isatty.IsCygwinTerminal(os.Stdout.Fd()))
 
-	// Output defines the standard output of the print functions. By default,
+	// Output defines the standard output of the print functions. By default
 	// os.Stdout is used.
 	Output = colorable.NewColorableStdout()
 
@@ -35,9 +35,10 @@ var (
 	colorsCacheMu sync.Mutex // protects colorsCache
 )
 
-// noColorIsSet returns true if the environment variable NO_COLOR is set to a non-empty string.
-func noColorIsSet() bool {
-	return os.Getenv("NO_COLOR") != ""
+// noColorExists returns true if the environment variable NO_COLOR exists.
+func noColorExists() bool {
+	_, exists := os.LookupEnv("NO_COLOR")
+	return exists
 }
 
 // Color defines a custom color object which is defined by SGR parameters.
@@ -119,7 +120,7 @@ func New(value ...Attribute) *Color {
 		params: make([]Attribute, 0),
 	}
 
-	if noColorIsSet() {
+	if noColorExists() {
 		c.noColor = boolPtr(true)
 	}
 
@@ -151,7 +152,7 @@ func (c *Color) Set() *Color {
 		return c
 	}
 
-	fmt.Fprint(Output, c.format())
+	fmt.Fprintf(Output, c.format())
 	return c
 }
 
@@ -163,21 +164,16 @@ func (c *Color) unset() {
 	Unset()
 }
 
-// SetWriter is used to set the SGR sequence with the given io.Writer. This is
-// a low-level function, and users should use the higher-level functions, such
-// as color.Fprint, color.Print, etc.
-func (c *Color) SetWriter(w io.Writer) *Color {
+func (c *Color) setWriter(w io.Writer) *Color {
 	if c.isNoColorSet() {
 		return c
 	}
 
-	fmt.Fprint(w, c.format())
+	fmt.Fprintf(w, c.format())
 	return c
 }
 
-// UnsetWriter resets all escape attributes and clears the output with the give
-// io.Writer. Usually should be called after SetWriter().
-func (c *Color) UnsetWriter(w io.Writer) {
+func (c *Color) unsetWriter(w io.Writer) {
 	if c.isNoColorSet() {
 		return
 	}
@@ -196,14 +192,20 @@ func (c *Color) Add(value ...Attribute) *Color {
 	return c
 }
 
+func (c *Color) prepend(value Attribute) {
+	c.params = append(c.params, 0)
+	copy(c.params[1:], c.params[0:])
+	c.params[0] = value
+}
+
 // Fprint formats using the default formats for its operands and writes to w.
 // Spaces are added between operands when neither is a string.
 // It returns the number of bytes written and any write error encountered.
 // On Windows, users should wrap w with colorable.NewColorable() if w is of
 // type *os.File.
 func (c *Color) Fprint(w io.Writer, a ...interface{}) (n int, err error) {
-	c.SetWriter(w)
-	defer c.UnsetWriter(w)
+	c.setWriter(w)
+	defer c.unsetWriter(w)
 
 	return fmt.Fprint(w, a...)
 }
@@ -225,8 +227,8 @@ func (c *Color) Print(a ...interface{}) (n int, err error) {
 // On Windows, users should wrap w with colorable.NewColorable() if w is of
 // type *os.File.
 func (c *Color) Fprintf(w io.Writer, format string, a ...interface{}) (n int, err error) {
-	c.SetWriter(w)
-	defer c.UnsetWriter(w)
+	c.setWriter(w)
+	defer c.unsetWriter(w)
 
 	return fmt.Fprintf(w, format, a...)
 }
@@ -246,8 +248,8 @@ func (c *Color) Printf(format string, a ...interface{}) (n int, err error) {
 // On Windows, users should wrap w with colorable.NewColorable() if w is of
 // type *os.File.
 func (c *Color) Fprintln(w io.Writer, a ...interface{}) (n int, err error) {
-	c.SetWriter(w)
-	defer c.UnsetWriter(w)
+	c.setWriter(w)
+	defer c.unsetWriter(w)
 
 	return fmt.Fprintln(w, a...)
 }
@@ -394,7 +396,7 @@ func (c *Color) DisableColor() {
 }
 
 // EnableColor enables the color output. Use it in conjunction with
-// DisableColor(). Otherwise, this method has no side effects.
+// DisableColor(). Otherwise this method has no side effects.
 func (c *Color) EnableColor() {
 	c.noColor = boolPtr(false)
 }

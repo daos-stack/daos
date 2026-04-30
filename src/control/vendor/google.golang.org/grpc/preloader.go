@@ -47,6 +47,9 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 	}
 
 	// check if the context has the relevant information to prepareMsg
+	if rpcInfo.preloaderInfo == nil {
+		return status.Errorf(codes.Internal, "grpc: rpcInfo.preloaderInfo is nil")
+	}
 	if rpcInfo.preloaderInfo.codec == nil {
 		return status.Errorf(codes.Internal, "grpc: rpcInfo.preloaderInfo.codec is nil")
 	}
@@ -59,7 +62,7 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 
 	materializedData := data.Materialize()
 	data.Free()
-	p.encodedData = mem.BufferSlice{mem.SliceBuffer(materializedData)}
+	p.encodedData = mem.BufferSlice{mem.NewBuffer(&materializedData, nil)}
 
 	// TODO: it should be possible to grab the bufferPool from the underlying
 	//  stream implementation with a type cast to its actual type (such as
@@ -73,7 +76,7 @@ func (p *PreparedMsg) Encode(s Stream, msg any) error {
 	if p.pf.isCompressed() {
 		materializedCompData := compData.Materialize()
 		compData.Free()
-		compData = mem.BufferSlice{mem.SliceBuffer(materializedCompData)}
+		compData = mem.BufferSlice{mem.NewBuffer(&materializedCompData, nil)}
 	}
 
 	p.hdr, p.payload = msgHeader(p.encodedData, compData, p.pf)

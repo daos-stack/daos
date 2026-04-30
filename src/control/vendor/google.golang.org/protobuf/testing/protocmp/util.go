@@ -32,7 +32,7 @@ var (
 //     values of a map field, or standalone [Enum] values
 //   - [][Enum] for list fields
 //   - map[K][Enum] for map fields
-//   - any for a [Message] map entry value
+//   - interface{} for a [Message] map entry value
 //
 // This must be used in conjunction with [Transform].
 func FilterEnum(enum protoreflect.Enum, opt cmp.Option) cmp.Option {
@@ -48,7 +48,7 @@ func FilterEnum(enum protoreflect.Enum, opt cmp.Option) cmp.Option {
 //     values of a map field, or standalone [Message] values
 //   - [][Message] for list fields
 //   - map[K][Message] for map fields
-//   - any for a [Message] map entry value
+//   - interface{} for a [Message] map entry value
 //
 // This must be used in conjunction with [Transform].
 func FilterMessage(message proto.Message, opt cmp.Option) cmp.Option {
@@ -62,7 +62,7 @@ func FilterMessage(message proto.Message, opt cmp.Option) cmp.Option {
 //   - T for singular fields
 //   - []T for list fields
 //   - map[K]T for map fields
-//   - any for a [Message] map entry value
+//   - interface{} for a [Message] map entry value
 //
 // This must be used in conjunction with [Transform].
 func FilterField(message proto.Message, name protoreflect.Name, opt cmp.Option) cmp.Option {
@@ -78,7 +78,7 @@ func FilterField(message proto.Message, name protoreflect.Name, opt cmp.Option) 
 //   - T for singular fields
 //   - []T for list fields
 //   - map[K]T for map fields
-//   - any for a [Message] map entry value
+//   - interface{} for a [Message] map entry value
 //
 // This must be used in conjunction with [Transform].
 func FilterOneof(message proto.Message, name protoreflect.Name, opt cmp.Option) cmp.Option {
@@ -524,11 +524,8 @@ func IgnoreUnknown() cmp.Option {
 // handled by this option. To sort Go slices that are not repeated fields,
 // consider using [github.com/google/go-cmp/cmp/cmpopts.SortSlices] instead.
 //
-// The sorting of messages does not take into account ignored fields or oneofs
-// as a result of [IgnoreFields] or [IgnoreOneofs].
-//
 // This must be used in conjunction with [Transform].
-func SortRepeated(lessFunc any) cmp.Option {
+func SortRepeated(lessFunc interface{}) cmp.Option {
 	t, ok := checkTTBFunc(lessFunc)
 	if !ok {
 		panic(fmt.Sprintf("invalid less function: %T", lessFunc))
@@ -592,7 +589,7 @@ func SortRepeated(lessFunc any) cmp.Option {
 	}, opt)
 }
 
-func checkTTBFunc(lessFunc any) (reflect.Type, bool) {
+func checkTTBFunc(lessFunc interface{}) (reflect.Type, bool) {
 	switch t := reflect.TypeOf(lessFunc); {
 	case t == nil:
 		return nil, false
@@ -627,9 +624,6 @@ func checkTTBFunc(lessFunc any) (reflect.Type, bool) {
 //	    ... // user-provided definition for less
 //	}))
 //
-// The sorting of messages does not take into account ignored fields or oneofs
-// as a result of [IgnoreFields] or [IgnoreOneofs].
-//
 // This must be used in conjunction with [Transform].
 func SortRepeatedFields(message proto.Message, names ...protoreflect.Name) cmp.Option {
 	var opts cmp.Options
@@ -640,7 +634,7 @@ func SortRepeatedFields(message proto.Message, names ...protoreflect.Name) cmp.O
 			panic(fmt.Sprintf("message field %q is not repeated", fd.FullName()))
 		}
 
-		var lessFunc any
+		var lessFunc interface{}
 		switch fd.Kind() {
 		case protoreflect.BoolKind:
 			lessFunc = func(x, y bool) bool { return !x && y }
