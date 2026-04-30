@@ -53,7 +53,7 @@ class EngineAutoRestartAdvanced(ControlTestBase):
 
         Test Description:
             This test requires custom server configuration with a short
-            engine_auto_restart_min_delay (e.g., 15 seconds) to avoid long test runtime.
+            engine_auto_restart_min_delay (20 seconds) to avoid long test runtime.
 
             1. Exclude rank and wait for automatic restart (first restart)
             2. Immediately exclude same rank again (second self-termination)
@@ -67,7 +67,8 @@ class EngineAutoRestartAdvanced(ControlTestBase):
         :avocado: tags=EngineAutoRestartAdvanced,test_deferred_restart
         """
         # Get configured restart delay from test params
-        restart_delay = 20
+        restart_delay = self.params.get("engine_auto_restart_min_delay",
+                                        "/run/server_config/*", 20)
 
         all_ranks = self.get_all_ranks()
         if len(all_ranks) < 2:

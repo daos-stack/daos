@@ -3,8 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
+
 from control_test_base import ControlTestBase
-from general_utils import report_errors
 
 
 class EngineAutoRestartTest(ControlTestBase):
@@ -70,24 +71,26 @@ class EngineAutoRestartTest(ControlTestBase):
 
         self.log_step("Testing automatic restart of multiple ranks: %s", ranks_to_test)
 
-        errors = []
-        results = {}
+        self.dmg.system_exclude(ranks=ranks_to_test, rank_hosts=None)
 
-        for test_rank in ranks_to_test:
-            restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
-            results[test_rank] = (restarted, final_state)
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=ranks_to_test, valid_states=["adminexcluded"], max_checks=10)
+        if failed_ranks:
+            self.fail("Ranks %s did not all reach AdminExcluded state after exclusion"
+                      % ranks_to_test)
 
-            if not restarted:
-                errors.append(
-                    "Rank %s did not automatically restart. State: %s" % (test_rank, final_state))
+        self.dmg.system_clear_exclude(ranks=ranks_to_test, rank_hosts=None)
 
-        # Report results
-        self.log.info("=== Multiple Rank Restart Results ===")
-        for rank, (restarted, state) in results.items():
-            status = "PASS" if restarted else "FAIL"
-            self.log.info("Rank %s: %s (final state: %s)", rank, status, state)
+        time.sleep(10)
 
-        report_errors(test=self, errors=errors)
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=ranks_to_test, valid_states=["joined"], max_checks=10)
+        if failed_ranks:
+            self.fail("Ranks %s did not all reach Joined state after auto-restart"
+                      % ranks_to_test)
+
+        self.log.info("SUCCESS: Ranks %s automatically restarted after self-termination",
+                      ranks_to_test)
 
     def test_auto_restart_with_pool(self):
         """Test automatic restart works with active pools.
