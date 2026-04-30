@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 (C) Copyright 2021-2022 Intel Corporation.
 (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
@@ -10,7 +9,6 @@ from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
-from run_utils import run_remote
 
 
 class DaosRacerParallelTest(TestWithServers):
@@ -35,39 +33,24 @@ class DaosRacerParallelTest(TestWithServers):
         :avocado: tags=io,daos_racer
         :avocado: tags=DaosRacerParallelTest,test_daos_racer_parallel
         """
-        # DAOS-18236 - Debug missing libdpar_mpi.so
-        run_remote(
-            self.log, self.hostlist_clients,
-            'ls -l /usr/mpi/gcc/openmpi-4.1.7rc1/lib | grep -i libdpar')
-        run_remote(
-            self.log, self.hostlist_clients,
-            'ls -l /usr/mpi/gcc/openmpi-4.1.7rc1/lib64 | grep -i libdpar')
-        run_remote(
-            self.log, self.hostlist_clients,
-            'ls -l /usr/lib | grep -i libdpar')
-        run_remote(
-            self.log, self.hostlist_clients,
-            'ls -l /usr/lib64 | grep -i libdpar')
-
         # Create the daos_racer command
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients, self.get_dmg_command())
         daos_racer.get_params(self)
 
-        # Create the orterun command
+        # Create the mpi command
         job_manager = get_job_manager(self)
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        job_manager.assign_processes(len(self.hostlist_clients))
+        job_manager.assign_processes(ppn=self.params.get('ppn', daos_racer.namespace))
         job_manager.assign_environment(daos_racer.env)
         job_manager.job = daos_racer
-        job_manager.check_results_list = ["<stderr>"]
-        job_manager.timeout = daos_racer.clush_timeout.value
-        self.log.info("Multi-process command: %s", str(job_manager))
+        job_manager.check_results_list = ["<stderr>", "No MPI found"]
+        job_manager.timeout = daos_racer.daos_racer_timeout.value
 
-        # Run the daos_racer command and check for errors
+        self.log_step("Run daos_racer with multiple clients")
         try:
             job_manager.run()
 
         except CommandFailure as error:
             self.fail(f"daos_racer failed: {error}")
 
-        self.log.info("Test passed!")
+        self.log_step("Test passed!")

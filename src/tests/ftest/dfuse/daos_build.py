@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
   (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -104,7 +104,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
     remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
     remote_env['COVFILE'] = os.environ['COVFILE']
-    remote_env['HTTPS_PROXY'] = os.environ['HTTPS_PROXY']
+    remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
+    remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
 
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
