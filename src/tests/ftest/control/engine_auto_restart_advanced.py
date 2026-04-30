@@ -145,7 +145,7 @@ class EngineAutoRestartAdvanced(ControlTestBase):
         test_rank = self.random.choice(all_ranks)
 
         self.log_step("Testing custom restart delay of %s s for rank %s",
-                      (expected_delay, test_rank))
+                      expected_delay, test_rank)
 
         # First restart to establish baseline
         self.log_step("Step 1: First exclusion and restart")

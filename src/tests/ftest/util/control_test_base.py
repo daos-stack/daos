@@ -101,13 +101,19 @@ class ControlTestBase(TestWithServers):
         if failed_ranks:
             self.fail("Rank %s did not reach AdminExcluded state after exclusion" % rank)
 
-        if expect_restart:
-            # After triggering rank exclusion with dmg system exclude, clear
-            # AdminExcluded state so rank can join on auto-restart. This enables
-            # mimic of rank exclusion via SWIM inactivity detection.
-            self.log_step("Clearing exclusion for rank %s", rank)
-            self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
+        # After triggering rank exclusion with dmg system exclude, clear
+        # AdminExcluded state so rank can join on auto-restart. This enables
+        # mimic of rank exclusion via SWIM inactivity detection.
+        self.log_step("Clearing exclusion for rank %s", rank)
+        self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
 
+        # Check if rank is excluded
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=[rank], valid_states=["excluded"], max_checks=10)
+        if failed_ranks:
+            self.fail("Rank %s did not reach Excluded state after clear-excluded" % rank)
+
+        if expect_restart:
             # Wait for automatic restart (rank should go to Joined state)
             self.log_step("Waiting for rank %s to automatically restart", rank)
             start_time = time.time()

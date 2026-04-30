@@ -65,32 +65,44 @@ class EngineAutoRestartTest(ControlTestBase):
         if len(all_ranks) < 3:
             self.skipTest("Test requires at least 3 ranks")
 
-        # Exclude half the ranks (but keep at least one for quorum)
-        num_to_exclude = max(1, len(all_ranks) // 2)
-        ranks_to_test = self.random.sample(all_ranks, num_to_exclude)
+        # Exclude half the ranks
+        num_to_test = max(2, len(all_ranks) // 2)
+        test_ranks = self.random.sample(all_ranks, num_to_test)
 
-        self.log_step("Testing automatic restart of multiple ranks: %s", ranks_to_test)
+        self.log_step("Step 1: Excluding %s ranks: %s", num_to_test, test_ranks)
 
-        self.dmg.system_exclude(ranks=ranks_to_test, rank_hosts=None)
+        for rank in test_ranks:
+            self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
+            time.sleep(1)  # Small delay between exclusions
 
-        failed_ranks = self.server_managers[0].check_rank_state(
-            ranks=ranks_to_test, valid_states=["adminexcluded"], max_checks=10)
-        if failed_ranks:
-            self.fail("Ranks %s did not all reach AdminExcluded state after exclusion"
-                      % ranks_to_test)
-
-        self.dmg.system_clear_exclude(ranks=ranks_to_test, rank_hosts=None)
-
+        # Step 2: Verify all reach adminexcluded state
+        self.log_step("Step 2: Verifying all ranks get excluded from system")
         time.sleep(10)
 
-        failed_ranks = self.server_managers[0].check_rank_state(
-            ranks=ranks_to_test, valid_states=["joined"], max_checks=10)
-        if failed_ranks:
-            self.fail("Ranks %s did not all reach Joined state after auto-restart"
-                      % ranks_to_test)
+        for rank in test_ranks:
+            failed = self.server_managers[0].check_rank_state(
+                ranks=[rank], valid_states=["adminexcluded"], max_checks=5)
+            if failed:
+                self.fail("Rank %s did not get excluded from system" % rank)
+            self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
 
-        self.log.info("SUCCESS: Ranks %s automatically restarted after self-termination",
-                      ranks_to_test)
+        # Step 3: Wait and verify all restart
+        wait_time = 20
+        self.log_step("Step 3: Waiting %ss to verify all automatically restart", wait_time)
+        time.sleep(wait_time)
+
+        errors = []
+        for rank in test_ranks:
+            failed = self.server_managers[0].check_rank_state(
+                ranks=[rank], valid_states=["joined"], max_checks=1)
+            if failed:
+                errors.append("Rank %s unexpectedly not restarted when auto-restart enabled"
+                              % rank)
+
+        if errors:
+            self.fail("\n".join(errors))
+
+        self.log.info("SUCCESS: All of %s automatically restarted", test_ranks)
 
     def test_auto_restart_with_pool(self):
         """Test automatic restart works with active pools.

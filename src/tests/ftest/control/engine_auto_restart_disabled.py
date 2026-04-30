@@ -44,9 +44,9 @@ class EngineAutoRestartDisabled(ControlTestBase):
 
         self.log_step("Step 1: Excluding rank %s (auto-restart is DISABLED)", test_rank)
 
-        restarted, final_state = self.exclude_rank_and_wait_restart(test_rank,
-                                                                    expect_restart=False,
-                                                                    timeout=35)
+        restarted, _ = self.exclude_rank_and_wait_restart(test_rank,
+                                                          expect_restart=False,
+                                                          timeout=35)
 
         if restarted:
             self.fail("Rank %s unexpectedly restarted when auto-restart disabled!"
@@ -93,21 +93,21 @@ class EngineAutoRestartDisabled(ControlTestBase):
         num_to_test = max(2, len(all_ranks) // 2)
         test_ranks = self.random.sample(all_ranks, num_to_test)
 
-        self.log_step("Step 1: Excluding %s ranks: %s", (num_to_test, test_ranks))
+        self.log_step("Step 1: Excluding %s ranks: %s", num_to_test, test_ranks)
 
         for rank in test_ranks:
             self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
             time.sleep(1)  # Small delay between exclusions
 
         # Step 2: Verify all reach adminexcluded state
-        self.log_step("Step 2: Verifying all ranks self-terminate")
+        self.log_step("Step 2: Verifying all ranks get excluded from system")
         time.sleep(10)
 
         for rank in test_ranks:
             failed = self.server_managers[0].check_rank_state(
                 ranks=[rank], valid_states=["adminexcluded"], max_checks=5)
             if failed:
-                self.fail("Rank %s did not self-terminate" % rank)
+                self.fail("Rank %s did not get excluded from system" % rank)
             self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
 
         # Step 3: Wait and verify none restart
