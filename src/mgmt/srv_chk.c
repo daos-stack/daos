@@ -119,7 +119,7 @@ ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf)
 int
 ds_mgmt_check_act(uint64_t seq, uint32_t act)
 {
-	return chk_leader_act(seq, act);
+	return chk_act(seq, act);
 }
 
 int

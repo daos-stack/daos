@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -71,6 +71,7 @@ const (
 	MgmtSvc_SystemCheckSetPolicy_FullMethodName     = "/mgmt.MgmtSvc/SystemCheckSetPolicy"
 	MgmtSvc_SystemCheckGetPolicy_FullMethodName     = "/mgmt.MgmtSvc/SystemCheckGetPolicy"
 	MgmtSvc_SystemCheckRepair_FullMethodName        = "/mgmt.MgmtSvc/SystemCheckRepair"
+	MgmtSvc_SystemCheckEngineReport_FullMethodName  = "/mgmt.MgmtSvc/SystemCheckEngineReport"
 	MgmtSvc_SystemSetAttr_FullMethodName            = "/mgmt.MgmtSvc/SystemSetAttr"
 	MgmtSvc_SystemGetAttr_FullMethodName            = "/mgmt.MgmtSvc/SystemGetAttr"
 	MgmtSvc_SystemSetProp_FullMethodName            = "/mgmt.MgmtSvc/SystemSetProp"
@@ -178,6 +179,8 @@ type MgmtSvcClient interface {
 	SystemCheckGetPolicy(ctx context.Context, in *CheckGetPolicyReq, opts ...grpc.CallOption) (*CheckGetPolicyResp, error)
 	// Send the desired action to repair an inconsistency.
 	SystemCheckRepair(ctx context.Context, in *CheckActReq, opts ...grpc.CallOption) (*CheckActResp, error)
+	// Report on checker results for an individual rank.
+	SystemCheckEngineReport(ctx context.Context, in *shared.CheckReportReq, opts ...grpc.CallOption) (*shared.CheckReportResp, error)
 	// Set a system attribute or attributes.
 	SystemSetAttr(ctx context.Context, in *SystemSetAttrReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Get a system attribute or attributes.
@@ -632,6 +635,16 @@ func (c *mgmtSvcClient) SystemCheckRepair(ctx context.Context, in *CheckActReq, 
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemCheckEngineReport(ctx context.Context, in *shared.CheckReportReq, opts ...grpc.CallOption) (*shared.CheckReportResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(shared.CheckReportResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_SystemCheckEngineReport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) SystemSetAttr(ctx context.Context, in *SystemSetAttrReq, opts ...grpc.CallOption) (*DaosResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DaosResp)
@@ -800,6 +813,8 @@ type MgmtSvcServer interface {
 	SystemCheckGetPolicy(context.Context, *CheckGetPolicyReq) (*CheckGetPolicyResp, error)
 	// Send the desired action to repair an inconsistency.
 	SystemCheckRepair(context.Context, *CheckActReq) (*CheckActResp, error)
+	// Report on checker results for an individual rank.
+	SystemCheckEngineReport(context.Context, *shared.CheckReportReq) (*shared.CheckReportResp, error)
 	// Set a system attribute or attributes.
 	SystemSetAttr(context.Context, *SystemSetAttrReq) (*DaosResp, error)
 	// Get a system attribute or attributes.
@@ -952,6 +967,9 @@ func (UnimplementedMgmtSvcServer) SystemCheckGetPolicy(context.Context, *CheckGe
 }
 func (UnimplementedMgmtSvcServer) SystemCheckRepair(context.Context, *CheckActReq) (*CheckActResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckRepair not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemCheckEngineReport(context.Context, *shared.CheckReportReq) (*shared.CheckReportResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckEngineReport not implemented")
 }
 func (UnimplementedMgmtSvcServer) SystemSetAttr(context.Context, *SystemSetAttrReq) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemSetAttr not implemented")
@@ -1769,6 +1787,24 @@ func _MgmtSvc_SystemCheckRepair_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemCheckEngineReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(shared.CheckReportReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCheckEngineReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_SystemCheckEngineReport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCheckEngineReport(ctx, req.(*shared.CheckReportReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_SystemSetAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemSetAttrReq)
 	if err := dec(in); err != nil {
@@ -2073,6 +2109,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemCheckRepair",
 			Handler:    _MgmtSvc_SystemCheckRepair_Handler,
+		},
+		{
+			MethodName: "SystemCheckEngineReport",
+			Handler:    _MgmtSvc_SystemCheckEngineReport_Handler,
 		},
 		{
 			MethodName: "SystemSetAttr",
