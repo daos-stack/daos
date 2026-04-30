@@ -49,7 +49,7 @@ class EngineAutoRestartAdvanced(ControlTestBase):
         return False
 
     def test_deferred_restart(self):
-        """Test deferred restart when multiple self-terminations occur rapidly.
+        """Test deferred restart when multiple self-terminations occur rapidly. Use custom delay.
 
         Test Description:
             This test requires custom server configuration with a short
@@ -57,9 +57,11 @@ class EngineAutoRestartAdvanced(ControlTestBase):
 
             1. Exclude rank and wait for automatic restart (first restart)
             2. Immediately exclude same rank again (second self-termination)
-            3. Verify restart is deferred, not immediate
-            4. Wait for deferred restart to execute after delay expires
-            5. Verify rank successfully rejoins
+               Confirm restart is deferred, not immediate
+            3. Wait for deferred restart to execute after delay expires
+               Confirm deferred restart executes successfully and rank joined
+            4. Measure time until deferred restart executed
+            5. Verify delay matches configured value
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
@@ -67,8 +69,8 @@ class EngineAutoRestartAdvanced(ControlTestBase):
         :avocado: tags=EngineAutoRestartAdvanced,test_deferred_restart
         """
         # Get configured restart delay from test params
-        restart_delay = self.params.get("engine_auto_restart_min_delay",
-                                        "/run/server_config/*", 20)
+        expected_delay = self.params.get("engine_auto_restart_min_delay",
+                                         "/run/server_config/*", 20)
 
         all_ranks = self.get_all_ranks()
         if len(all_ranks) < 2:
@@ -102,80 +104,20 @@ class EngineAutoRestartAdvanced(ControlTestBase):
 
         # Wait for deferred restart to execute (after delay expires)
         # Add buffer time for processing
-        wait_time = restart_delay + 10
+        wait_time = expected_delay + 10
         self.log_step("Step 3: Waiting %ss for deferred restart to execute", wait_time)
 
         if not self.wait_for_rank_state(test_rank, "joined", timeout=wait_time):
             self.fail("Rank %s did not restart after rate-limit delay" % test_rank)
 
+        self.log_step("Step 4: Measure time between initial and deferred restarts")
         deferred_restart_time = time.time()
         actual_delay = deferred_restart_time - first_restart_time
 
-        self.log.info("SUCCESS: Deferred restart executed after %.1fs (expected ~%ss)",
-                      actual_delay, restart_delay)
+        self.log.info("Confirmed: Deferred restart executed after %.1fs (expected ~%ss)",
+                      actual_delay, expected_delay)
 
-        # Verify delay was approximately correct (within tolerance)
-        if actual_delay < restart_delay * 0.8:
-            self.fail("Restart occurred too early: %.1fs < %ss" % (actual_delay, restart_delay))
-
-    def test_custom_restart_delay(self):
-        """Test custom engine_auto_restart_min_delay configuration.
-
-        Test Description:
-            This test requires server configuration with custom
-            engine_auto_restart_min_delay value.
-
-            1. Exclude rank and wait for first restart
-            2. Exclude same rank again
-            3. Measure time until deferred restart executes
-            4. Verify delay matches configured value
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=dmg,control,engine_auto_restart
-        :avocado: tags=EngineAutoRestartAdvanced,test_custom_restart_delay
-        """
-        # Get configured delay from test parameters
-        expected_delay = 15
-
-        all_ranks = self.get_all_ranks()
-        if len(all_ranks) < 2:
-            self.skipTest("Test requires at least 2 ranks")
-
-        test_rank = self.random.choice(all_ranks)
-
-        self.log_step("Testing custom restart delay of %s s for rank %s",
-                      expected_delay, test_rank)
-
-        # First restart to establish baseline
-        self.log_step("Step 1: First exclusion and restart")
-
-        restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
-
-        if not restarted:
-            self.fail("Rank %s did not automatically restart. Final state: %s"
-                      % (test_rank, final_state))
-
-        first_restart_time = time.time()
-
-        # Second restart to measure delay and wait for deferred restart
-        self.log_step("Step 2: Wait for deferred restart (expected delay: %ss)",
-                      expected_delay)
-
-        restarted, final_state = self.exclude_rank_and_wait_restart(test_rank,
-                                                                    timeout=35)
-
-        if not restarted:
-            self.fail("Rank %s did not automatically restart again. Final state: %s"
-                      % (test_rank, final_state))
-
-        second_restart_time = time.time()
-        actual_delay = second_restart_time - first_restart_time
-
-        self.log.info("Measured delay: %.1fs (expected: ~%ss)", actual_delay,
-                      expected_delay)
-
-        # Verify delay is within acceptable range (80% to 120% of expected)
+        self.log_step("Step 5: Verify delay was approximately correct (80% to 120% of expected)")
         min_delay = expected_delay * 0.8
         max_delay = expected_delay * 1.2
 
