@@ -58,7 +58,11 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
+%if (0%{?suse_version} >= 1500)
+BuildRequires: libpmemobj-devel == 2.1.3-2.suse.lp155
+%else
 BuildRequires: libpmemobj-devel >= 2.1.3-2
+%endif
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
@@ -156,7 +160,7 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.3-2
+Requires: libpmemobj1 = 2.1.3-2.suse.lp155
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468

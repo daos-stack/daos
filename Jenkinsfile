@@ -18,6 +18,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@grom72/SRE-3764') _
 
 // The trusted-pipeline-lib daosLatestVersion() method will convert this into a number
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -553,7 +554,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15') {
+                stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -566,7 +567,8 @@ pipeline {
                                  ' --cap-add=SYS_ADMIN' +
                                  ' --privileged=true'   +
                                  ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
+                            additionalBuildArgs dockerBuildArgs() +
+                            ' --build-arg FVERSION=37'
                         }
                     }
                     steps {
