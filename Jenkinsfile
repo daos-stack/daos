@@ -352,7 +352,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
     String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
     String uploadTarget = kwargs.get('uploadTarget', distro)
-    String dockerTag = jobStatusKey("build-${distro}-${compiler}").toLowerCase()
+    String dockerTag = jobStatusKey("build-${uploadTarget}-${compiler}").toLowerCase()
     String bullseye = 'false'
     if (compiler == 'covc') {
         bullseye = 'true'
@@ -874,7 +874,8 @@ pipeline {
                                 build_deps: 'yes',
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            artifacts: "config.log-leap155-gcc"
+                            artifacts: "config.log-leap155-gcc",
+                            uploadTarget: 'leap15-5'
                         ),
                         'Build on Leap 15.6': scriptedBuildStage(
                             name: 'Build on Leap 15.6',
@@ -896,7 +897,8 @@ pipeline {
                                 build_deps: 'yes',
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            artifacts: "config.log-leap156-gcc"
+                            artifacts: "config.log-leap156-gcc",
+                            uploadTarget: 'leap15-6'
                         ),
                         'Build on EL 9 with Bullseye': scriptedBuildStage(
                             name: 'Build on EL 9 with Bullseye',
