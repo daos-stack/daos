@@ -1093,11 +1093,21 @@ static inline void
 obj_log_csum_err(daos_unit_oid_t oid)
 {
 	struct dss_module_info *info = dss_get_module_info();
+	struct bio_xs_context  *bxc;
 
 	D_ASSERT(info != NULL);
 	ras_notify_eventf(RAS_OBJ_CSUM_ERR, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
 			  NULL, NULL, NULL, NULL, NULL, "CSUM error for " DF_UOID " on target %u\n",
 			  DP_UOID(oid), info->dmi_tgt_id);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n", info->dmi_xs_id,
+			info->dmi_tgt_id);
+		return;
+	}
+
+	bio_log_data_csum_err(bxc);
 }
 
 /**
