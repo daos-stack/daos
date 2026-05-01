@@ -175,7 +175,7 @@ Map update_default_commit_pragmas() {
  *          dockerLabel         the label to use for the docker agent; defaults to 'docker_runner'
  *          dockerBuildArgs     optional docker build arguments
  *          dockerImageArgs     optional docker image arguments
- *          runCondition        Boolean for whether to run this stage; defaults to !skipStage()
+ *          runCondition        Boolean condition for whether to run this stage; defaults to true
  *
  * @return a scripted stage to run in a pipeline
  */
@@ -188,11 +188,11 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
     String dockerLabel = kwargs.get('dockerLabel', 'docker_runner')
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
     String dockerImageArgs = kwargs.get('dockerImageArgs', '')
-    Boolean runCondition = kwargs.get('runCondition', !skipStage())
+    Boolean runCondition = kwargs.get('runCondition', true)
 
     return {
         stage("${name}") {
-            if (runCondition) {
+            if (runCondition && !skipStage()) {
                 println("[${name}] Start RPM build stage")
                 node(dockerLabel) {
                     println("[${name}] Check out from version control")
@@ -246,7 +246,7 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
  *          dockerBuildArgs     optional docker build arguments
  *          dockerImageArgs     optional docker image arguments
  *          sconsBuildArgs      optional Map of arguments to pass to sconsBuild()
- *          runCondition        Boolean for whether to run this stage; defaults to !skipStage()
+ *          runCondition        Boolean condition for whether to run this stage; defaults to true
  *
  * @return a scripted stage to run in a pipeline
  */
@@ -260,11 +260,11 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
     String dockerImageArgs = kwargs.get('dockerImageArgs', '')
     Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
-    Boolean runCondition = kwargs.get('runCondition', !skipStage())
+    Boolean runCondition = kwargs.get('runCondition', true)
 
     return {
         stage("${name}") {
-            if (runCondition) {
+            if (runCondition && !skipStage()) {
                 println("[${name}] Start build stage")
                 node(dockerLabel) {
                     println("[${name}] Check out from version control")
@@ -691,7 +691,8 @@ pipeline {
                                              build_deps: 'no',
                                              stash_opt: true,
                                              scons_args: sconsFaultsArgs() +
-                                                         ' PREFIX=/opt/daos TARGET_TYPE=release']
+                                                         ' PREFIX=/opt/daos TARGET_TYPE=release'],
+                            runCondition: !params.CI_el8_NOBUILD
                         ),
                         'Build on EL 9': scriptedBuildStage(
                             name: 'Build on EL 9',
@@ -708,7 +709,8 @@ pipeline {
                                              build_deps: 'no',
                                              stash_opt: true,
                                              scons_args: sconsFaultsArgs() +
-                                                         ' PREFIX=/opt/daos TARGET_TYPE=release']
+                                                         ' PREFIX=/opt/daos TARGET_TYPE=release'],
+                            runCondition: !params.CI_el9_NOBUILD
                         ),
                         'Build on Leap 15.5': scriptedBuildStage(
                             name: 'Build on Leap 15.5',
@@ -726,7 +728,8 @@ pipeline {
                                              build_deps: 'no',
                                              stash_opt: true,
                                              scons_args: sconsFaultsArgs() +
-                                                         ' PREFIX=/opt/daos TARGET_TYPE=release']
+                                                         ' PREFIX=/opt/daos TARGET_TYPE=release'],
+                            runCondition: !params.CI_leap15_NOBUILD
                         ),
                         'Build on Leap 15.6': scriptedBuildStage(
                             name: 'Build on Leap 15.6',
@@ -745,7 +748,8 @@ pipeline {
                                              build_deps: 'no',
                                              stash_opt: true,
                                              scons_args: sconsFaultsArgs() +
-                                                         ' PREFIX=/opt/daos TARGET_TYPE=release']
+                                                         ' PREFIX=/opt/daos TARGET_TYPE=release'],
+                            runCondition: !params.CI_leap15_NOBUILD
                         ),
                     ) // parallel
                 } // script
