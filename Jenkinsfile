@@ -189,10 +189,9 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
             if (!skipStage()) {
                 println("[${name}] Start RPM build stage")
                 node(dockerLabel) {
-                    // def dockerImage = docker.build("leap15-build:${env.BUILD_ID}",
-                    //                             "-f utils/rpms/packaging/Dockerfile.mockbuild " +
-                    //                             dockerBuildArgs())
-                    // dockerImage.inside('--group-add mock --cap-add=SYS_ADMIN --privileged=true -v /scratch:/scratch') {
+                    println("[${name}] Check out from version control")
+                    checkoutScm(pruneStaleBranch: true)
+
                     def dockerImage = docker.build(dockerTag, dockerBuildArgs)
                     dockerImage.inside(dockerImageArgs) {
                         try {
@@ -260,6 +259,9 @@ def scriptedBuildStage(Map kwargs = [:]) {
             if (!skipStage()) {
                 println("[${name}] Start build stage")
                 node(dockerLabel) {
+                    println("[${name}] Check out from version control")
+                    checkoutScm(pruneStaleBranch: true)
+
                     def dockerImage = docker.build(dockerTag, dockerBuildArgs)
                     dockerImage.inside(dockerImageArgs) {
                         try {
