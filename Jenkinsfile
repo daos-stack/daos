@@ -15,6 +15,8 @@
  * LICENSE file.
  */
 
+import org.jenkinsci.plugins.pipeline.modeldefinition.Utils
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
@@ -212,7 +214,7 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
                                 buildRpmPost target: uploadTarget, condition: 'unsuccessful'
                             }
                             buildRpmPost target: uploadTarget, condition: 'cleanup'
-                            job_status_update(job_status_internal, name)
+                            job_status_update(name)
                         }
                     }
                 }
@@ -220,7 +222,7 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
             else {
                 println("[${name}] Marking build RPM stage as skipped")
                 Utils.markStageSkippedForConditional("${name}")
-                job_status_update(job_status_internal, name)
+                job_status_update(name)
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -278,7 +280,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                                 archiveArtifacts artifacts: "config.log-${dockerTag}-${compiler}",
                                                  allowEmptyArchive: true
                             }
-                            job_status_update(job_status_internal, name)
+                            job_status_update(name)
                         }
                     }
                 }
@@ -286,7 +288,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
             else {
                 println("[${name}] Marking build stage as skipped")
                 Utils.markStageSkippedForConditional("${name}")
-                job_status_update(job_status_internal, name)
+                job_status_update(name)
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
