@@ -300,7 +300,8 @@ struct vos_pool {
 	uint32_t                vp_dying:1,
 				vp_opening:1,
 	/** exclusive handle (see VOS_POF_EXCL) */
-				vp_excl:1;
+				vp_excl:1,
+				vp_gc_nospc:1;
 	ABT_mutex		vp_mutex;
 	ABT_cond		vp_cond;
 	/* this pool is for sysdb */

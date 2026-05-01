@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -223,6 +224,24 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay);
 int
 tse_task_register_comp_cb(tse_task_t *task, tse_task_cb_t comp_cb,
 			  void *arg, size_t arg_size);
+
+/**
+ * Atomically register a completion callback and reinitialize the task for
+ * retry with an optional scheduling delay.  If the reinitialization fails the
+ * newly registered callback is removed and freed so the caller never leaks a
+ * dangling tse_task_cb node.
+ *
+ * \param[in] task	Task to reinitialize for retry
+ * \param[in] comp_cb	Completion callback to register for the retried run
+ * \param[in] arg	Callback argument (copied internally, like tse_task_register_comp_cb)
+ * \param[in] arg_size	Size of the argument
+ * \param[in] delay	Scheduling delay in microseconds (0 = immediate)
+ *
+ * \return		0 on success, negative errno on failure.
+ */
+int
+tse_task_register_comp_cb_and_reinit(tse_task_t *task, tse_task_cb_t comp_cb, void *arg,
+				     size_t arg_size, uint64_t delay);
 
 /**
  * Mark task as completed.

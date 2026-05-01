@@ -102,7 +102,7 @@ The installation path can be modified by adding the PREFIX= option to the above
 command line (e.g., PREFIX=/usr/local).
 
 !!! note
-    Several parameters can be set (e.g., COMPILER=clang or COMPILER=icc) on the
+    Several parameters can be set (e.g., COMPILER=clang) on the
     scons command line. Please see `scons --help` for all the possible options.
     Those options are also saved for future compilations.
 

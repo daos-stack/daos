@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,7 +37,7 @@ check_one_success(int rc, int err)
 			failed++;
 	}
 
-	free(rc_arr);
+	d_free(rc_arr);
 
 	if (failed || passed != 1)
 		return -1;

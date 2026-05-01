@@ -88,18 +88,16 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_need_discard : 1,
-	    sp_disable_rebuild : 1, sp_disable_dtx_resync : 1, sp_incr_reint : 1;
+	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_disable_rebuild : 1,
+	    sp_disable_dtx_resync : 1, sp_incr_reint : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
 	uint32_t                 sp_rebuild_gen;
+	ATOMIC int               sp_discarding;
 	ATOMIC int               sp_rebuilding;
-	/**
-	 * someone has already messaged this pool to for rebuild scan,
-	 * NB: all xstreams can do lockless-write on it but it's OK
-	 */
-	int                      sp_rebuild_scan;
+	/* someone has already messaged this pool to for rebuild object/key enumeration */
+	ATOMIC int               sp_rebuild_enum;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -177,22 +175,11 @@ struct ds_pool_child {
 	d_list_t		spc_cont_list;
 	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
-	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
-	 * vos aggregation can not cross this epoch during rebuild to avoid
-	 * interfering rebuild process.
-	 */
-	uint64_t	spc_rebuild_fence;
-
-	/* The HLC when current rebuild ends, which will be used to compare
-	 * with the aggregation full scan start HLC to know whether the
-	 * aggregation needs to be restarted from 0. */
-	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1,
-			spc_no_storage:1; /* The pool shard has no storage. */
+	uint64_t                 spc_no_storage : 1; /* The pool shard has no storage. */
 
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
@@ -219,7 +206,7 @@ struct ds_pool_svc_op_val {
 static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
-	return (atomic_load(&pool->sp_rebuilding) > 0 || pool->sp_rebuild_scan > 0);
+	return (atomic_load(&pool->sp_rebuilding) > 0 || atomic_load(&pool->sp_rebuild_enum) > 0);
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.

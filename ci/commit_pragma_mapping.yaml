@@ -1,22 +1,183 @@
 #  (C) Copyright 2024 Intel Corporation.
-#  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+#  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 # Each key is a regex path to match.
-# The value for each key can either be the direct tags to use
-# or a dictionary containing
-#  handler: either "direct" or "FtestTagMap" for special handling. Default is "direct"
-#  stop_on_match: Whether to stop processing other entries if when a match is found.
-#                 For example, if "src/tests/ftest*" matches, we don't want to also process ".*"
-#  tags: the tags to use for a match
+# Under each path is optionally each key:
+#   stop_on_match: Whether to stop processing other entries if when a match is found.
+#                  For example, if "src/tests/ftest*" matches, we don't want to also process ".*"
+#   test-tag <string|dict>: Either direct test tags for this path or:
+#    handler: either "direct" or "FtestTagMap" for special handling. Default is "direct"
+#    tags: the tags to use for a match
+#  need-unit-test <bool|dict>: Either a direct boolean value or:
+#    stop_on_match: Whether to stop processing other entries for this path when a match is found.
+#    val: Whether this path needs unit tests. Default is True.
+
+ftest-only: &ftest-only
+  stop_on_match: True
+  need-unit-test: False
 
 # Special handling for ftest, defaulting to pr
 src/tests/ftest*:
+  <<: *ftest-only
   test-tag:
     handler: FtestTagMap
-    stop_on_match: True
     tags: pr
+
+src/tests/suite/daos_aggregate_ec.c:
+  test-tag: test_daos_aggregate_ec
+  <<: *ftest-only
+
+src/tests/suite/daos_array.c:
+  test-tag: test_daos_array
+  <<: *ftest-only
+
+src/tests/suite/daos_base_tx.c:
+  test-tag: test_daos_single_rdg_tx
+  <<: *ftest-only
+
+src/tests/suite/daos_capa.c:
+  test-tag: test_daos_capability
+  <<: *ftest-only
+
+src/tests/suite/daos_checksum.c:
+  test-tag: test_daos_checksum
+  <<: *ftest-only
+
+src/tests/suite/daos_container.c:
+  test-tag: test_daos_container
+  <<: *ftest-only
+
+src/tests/suite/daos_cr.c:
+  test-tag: test_daos_cat_recov_core
+  <<: *ftest-only
+
+src/tests/suite/daos_dedup.c:
+  test-tag: test_daos_dedup
+  <<: *ftest-only
+
+src/tests/suite/daos_degraded.c:
+  test-tag: test_daos_degraded_mode
+  <<: *ftest-only
+
+src/tests/suite/daos_degrade_ec.c:
+  test-tag: test_daos_degraded_ec
+  <<: *ftest-only
+
+src/tests/suite/daos_dist_tx.c:
+  test-tag: test_daos_distributed_tx
+  <<: *ftest-only
+
+src/tests/suite/daos_drain_simple.c:
+  test-tag: test_daos_drain_simple
+  <<: *ftest-only
+
+src/tests/suite/daos_epoch.c:
+  test-tag: test_daos_epoch
+  <<: *ftest-only
+
+src/tests/suite/daos_epoch_recovery.c:
+  test-tag: test_daos_epoch_recovery
+  <<: *ftest-only
+
+src/tests/suite/daos_extend_simple.c:
+  test-tag: test_daos_extend_simple
+  <<: *ftest-only
+
+src/tests/suite/daos_inc_reint.c:
+  test-tag: test_daos_inc_reint_cont_recov
+  <<: *ftest-only
+
+src/tests/suite/daos_kv.c:
+  test-tag: test_daos_kv
+  <<: *ftest-only
+
+src/tests/suite/daos_md_replication.c:
+  test-tag: test_daos_md_replication
+  <<: *ftest-only
+
+src/tests/suite/daos_mgmt.c:
+  test-tag: test_daos_management
+  <<: *ftest-only
+
+src/tests/suite/daos_nvme_recovery.c:
+  test-tag: DaosCoreTestNvme
+  <<: *ftest-only
+
+src/tests/suite/daos_obj_array.c:
+  test-tag: test_daos_object_array
+  <<: *ftest-only
+
+src/tests/suite/daos_obj.c:
+  test-tag: test_daos_io test_daos_ec_io
+  <<: *ftest-only
+
+src/tests/suite/daos_obj_ec.c:
+  test-tag: test_daos_ec_obj
+  <<: *ftest-only
+
+src/tests/suite/daos_oid_alloc.c:
+  test-tag: test_daos_oid_allocator
+  <<: *ftest-only
+
+src/tests/suite/daos_pipeline.c:
+  test-tag: test_daos_pipeline
+  <<: *ftest-only
+
+src/tests/suite/daos_pool.c:
+  test-tag: test_daos_pool
+  <<: *ftest-only
+
+src/tests/suite/daos_rebuild.c:
+  test-tag: DaosCoreTestRebuild
+  <<: *ftest-only
+
+src/tests/suite/daos_rebuild_ec.c:
+  test-tag: test_daos_rebuild_ec
+  <<: *ftest-only
+
+src/tests/suite/daos_rebuild_interactive.c:
+  test-tag: test_daos_rebuild_interactive
+  <<: *ftest-only
+
+src/tests/suite/daos_rebuild_simple.c:
+  test-tag: test_daos_rebuild_simple
+  <<: *ftest-only
+
+src/tests/suite/daos_upgrade.c:
+  test-tag: test_daos_upgrade
+  <<: *ftest-only
+
+src/tests/suite/daos_verify_consistency.c:
+  test-tag: test_daos_verify_consistency
+  <<: *ftest-only
+
+src/tests/suite/dfs_par_test.c:
+  test-tag: test_daos_dfs_parallel
+  <<: *ftest-only
+
+src/tests/suite/dfs_sys_unit_test.c:
+  test-tag: test_daos_dfs_sys
+  <<: *ftest-only
+
+src/tests/suite/dfs_test.c:
+  test-tag: dfs_test
+  <<: *ftest-only
+
+src/tests/suite/dfs_unit_test.c:
+  test-tag: test_daos_dfs_unit
+  <<: *ftest-only
+
+src/tests/suite/dfuse_test.c:
+  test-tag: DaosCoreTestDfuse
+  <<: *ftest-only
+
+# Run all daos_test for common daos_test files
+src/tests/suite/:
+  test-tag: daos_test
+  <<: *ftest-only
+
 
 # Individual code areas
 src/client/dfs/:
