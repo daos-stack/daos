@@ -15,6 +15,8 @@
  * LICENSE file.
  */
 
+import org.jenkinsci.plugins.pipeline.modeldefinition.Utils
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
@@ -157,6 +159,144 @@ Map update_default_commit_pragmas() {
     println(default_pragmas_str)
     if (default_pragmas_str) {
         updatePragmas(default_pragmas_str, false)
+    }
+}
+
+/**
+ * scriptedBuildRpmStage
+ *
+ * Get a build RPM stage in scripted syntax.
+ *
+ * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
+ *          name                the build stage name
+ *          distro              the shorthand distro name; defaults to 'el8'
+ *          compiler            the compiler to use; defaults to 'gcc'
+ *          uploadTarget        the distro to use when uploading rpms; defaults to distro
+ *          dockerLabel         the label to use for the docker agent; defaults to 'docker_runner'
+ *          dockerBuildArgs     optional docker build arguments
+ *          dockerImageArgs     optional docker image arguments
+ *          runCondition        Boolean condition for whether to run this stage; defaults to true
+ *
+ * @return a scripted stage to run in a pipeline
+ */
+def scriptedBuildRpmStage(Map kwargs = [:]) {
+    String name = kwargs.get('name', 'Unknown Build Stage')
+    String distro = kwargs.get('distro', 'el8')
+    String compiler = kwargs.get('compiler', 'gcc')
+    String uploadTarget = kwargs.get('uploadTarget', distro)
+    String dockerTag = jobStatusKey("build-rpm-${uploadTarget}-${compiler}").toLowerCase()
+    String dockerLabel = kwargs.get('dockerLabel', 'docker_runner')
+    String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
+    String dockerImageArgs = kwargs.get('dockerImageArgs', '')
+    Boolean runCondition = kwargs.get('runCondition', true)
+
+    return {
+        stage("${name}") {
+            if (runCondition && !skipStage()) {
+                println("[${name}] Start RPM build stage")
+                node(dockerLabel) {
+                    println("[${name}] Check out from version control")
+                    checkoutScm(pruneStaleBranch: true)
+
+                    def dockerImage = docker.build(dockerTag, dockerBuildArgs)
+                    dockerImage.inside(dockerImageArgs) {
+                        try {
+                            job_step_update(buildRpm())
+                        } catch (Exception e) {
+                            currentBuild.result = 'FAILURE'
+                            throw e
+                        } finally {
+                            // Handle post actions based on build result
+                            if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
+                                fixup_rpmlintrc()
+                                buildRpmPost target: uploadTarget, condition: 'success', rpmlint: true
+                            } else if (currentBuild.result == 'UNSTABLE') {
+                                buildRpmPost target: uploadTarget, condition: 'unstable'
+                            } else if (currentBuild.result == 'FAILURE') {
+                                buildRpmPost target: uploadTarget, condition: 'failure'
+                            } else {
+                                buildRpmPost target: uploadTarget, condition: 'unsuccessful'
+                            }
+                            buildRpmPost target: uploadTarget, condition: 'cleanup'
+                            job_status_update(name)
+                        }
+                    }
+                }
+            }
+            else {
+                println("[${name}] Marking build RPM stage as skipped")
+                Utils.markStageSkippedForConditional("${name}")
+            }
+            println("[${name}] Finished with ${job_status_internal}")
+        }
+    }
+}
+
+/**
+ * scriptedBuildStage
+ *
+ * Get a build stage in scripted syntax.
+ *
+ * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
+ *          name                the build stage name
+ *          distro              the shorthand distro name; defaults to 'el8'
+ *          compiler            the compiler to use; defaults to 'gcc'
+ *          uploadTarget        the distro to use when uploading rpms; defaults to distro
+ *          dockerLabel         the label to use for the docker agent; defaults to 'docker_runner'
+ *          dockerBuildArgs     optional docker build arguments
+ *          dockerImageArgs     optional docker image arguments
+ *          sconsBuildArgs      optional Map of arguments to pass to sconsBuild()
+ *          runCondition        Boolean condition for whether to run this stage; defaults to true
+ *
+ * @return a scripted stage to run in a pipeline
+ */
+def scriptedBuildStage(Map kwargs = [:]) {
+    String name = kwargs.get('name', 'Unknown Build Stage')
+    String distro = kwargs.get('distro', 'el8')
+    String compiler = kwargs.get('compiler', 'gcc')
+    String uploadTarget = kwargs.get('uploadTarget', distro)
+    String dockerTag = jobStatusKey("build-${uploadTarget}-${compiler}").toLowerCase()
+    String dockerLabel = kwargs.get('dockerLabel', 'docker_runner')
+    String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
+    String dockerImageArgs = kwargs.get('dockerImageArgs', '')
+    Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
+    Boolean runCondition = kwargs.get('runCondition', true)
+
+    return {
+        stage("${name}") {
+            if (runCondition && !skipStage()) {
+                println("[${name}] Start build stage")
+                node(dockerLabel) {
+                    println("[${name}] Check out from version control")
+                    checkoutScm(pruneStaleBranch: true)
+
+                    def dockerImage = docker.build(dockerTag, dockerBuildArgs)
+                    dockerImage.inside(dockerImageArgs) {
+                        try {
+                            job_step_update(sconsBuild(sconsBuildArgs))
+                        } catch (Exception e) {
+                            currentBuild.result = 'FAILURE'
+                            throw e
+                        } finally {
+                            // Handle post actions based on build result
+                            if (currentBuild.result != null && currentBuild.result != 'SUCCESS') {
+                                sh """if [ -f config.log ]; then
+                                      mv config.log config.log-${dockerTag}-${compiler}
+                                   fi"""
+                                archiveArtifacts artifacts: "config.log-${dockerTag}-${compiler}",
+                                                 allowEmptyArchive: true
+                            }
+                            job_status_update(name)
+                        }
+                    }
+                }
+            }
+            else {
+                println("[${name}] Marking build stage as skipped")
+                Utils.markStageSkippedForConditional("${name}")
+            }
+            println("[${name}] Finished with ${job_status_internal}")
+        }
     }
 }
 
@@ -475,277 +615,145 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('Build RPM on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                /* This stage is commented out until it can be replaced
-                with code for building the current Ubuntu release. */
-                stage('Build DEB on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        // expression { !skipStage() }
-                        expression { false }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.ubuntu'
-                            label 'docker_runner'
-                            args '--cap-add=SYS_ADMIN'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_el8_NOBUILD && !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_el9_NOBUILD && !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el9-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el9-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD && !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
-                                                ' --build-arg POINT_RELEASE=.6 ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-            }
+            steps {
+                script {
+                    parallel(
+                        'Build RPM on EL 8': scriptedBuildRpmStage(
+                            name: 'Build RPM on EL 8',
+                            distro: 'el8',
+                            uploadTarget: 'el8',
+                            dockerLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs() +
+                                             ' -f utils/rpms/packaging/Dockerfile.mockbuild .',
+                            dockerImageArgs: '--group-add mock' +
+                                             ' --cap-add=SYS_ADMIN' +
+                                             ' --privileged=true' +
+                                             ' -v /scratch:/scratch'
+                        ),
+                        'Build RPM on EL 9': scriptedBuildRpmStage(
+                            name: 'Build RPM on EL 9',
+                            distro: 'el9',
+                            uploadTarget: 'el9',
+                            dockerLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs() +
+                                             ' -f utils/rpms/packaging/Dockerfile.mockbuild .',
+                            dockerImageArgs: '--group-add mock' +
+                                             ' --cap-add=SYS_ADMIN' +
+                                             ' -v /scratch:/scratch'
+                        ),
+                        'Build RPM on Leap 15.5': scriptedBuildRpmStage(
+                            name: 'Build RPM on Leap 15.5',
+                            distro: 'leap15',
+                            uploadTarget: 'leap15-5',
+                            dockerLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs() +
+                                             ' --build-arg FVERSION=37' +
+                                             ' -f utils/rpms/packaging/Dockerfile.mockbuild .',
+                            dockerImageArgs: '--group-add mock' +
+                                             ' --cap-add=SYS_ADMIN' +
+                                             ' --privileged=true' +
+                                             ' -v /scratch:/scratch'
+                        ),
+                        'Build RPM on Leap 15.6': scriptedBuildRpmStage(
+                            name: 'Build RPM on Leap 15.6',
+                            distro: 'leap15',
+                            uploadTarget: 'leap15-6',
+                            dockerLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs() +
+                                             ' -f utils/rpms/packaging/Dockerfile.mockbuild .',
+                            dockerImageArgs: '--group-add mock' +
+                                             ' --cap-add=SYS_ADMIN' +
+                                             ' --privileged=true' +
+                                             ' -v /scratch:/scratch'
+                        ),
+                        'Build DEB on Ubuntu 20.04': scriptedBuildRpmStage(
+                            name: 'Build DEB on Ubuntu 20.04',
+                            distro: 'ubuntu20',
+                            uploadTarget: 'ubuntu20',
+                            dockerLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs() +
+                                             ' -f utils/rpms/packaging/Dockerfile.ubuntu .',
+                            dockerImageArgs: '--cap-add=SYS_ADMIN',
+                            runCondition: false // No DEB builds until updated for latest release
+                        ),
+                        'Build on EL 8': scriptedBuildStage(
+                            name: 'Build on EL 8',
+                            distro: 'el8',
+                            dockerLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: true,
+                                                             parallel_build: true) +
+                                             " -t ${sanitized_JOB_NAME()}-el8" +
+                                             ' --build-arg REPOS="' + prRepos() + '"' +
+                                             ' -f utils/docker/Dockerfile.el.8 .',
+                            sconsBuildArgs: [parallel_build: true,
+                                             stash_files: 'ci/test_files_to_stash.txt',
+                                             build_deps: 'no',
+                                             stash_opt: true,
+                                             scons_args: sconsFaultsArgs() +
+                                                         ' PREFIX=/opt/daos TARGET_TYPE=release'],
+                            runCondition: !params.CI_el8_NOBUILD
+                        ),
+                        'Build on EL 9': scriptedBuildStage(
+                            name: 'Build on EL 9',
+                            distro: 'el9',
+                            dockerLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: true,
+                                                             parallel_build: true) +
+                                             " -t ${sanitized_JOB_NAME()}-el9 " +
+                                             ' --build-arg REPOS="' + prRepos() + '"' +
+                                             ' -f utils/docker/Dockerfile.el.9 .',
+                            sconsBuildArgs: [parallel_build: true,
+                                             stash_files: 'ci/test_files_to_stash.txt',
+                                             build_deps: 'no',
+                                             stash_opt: true,
+                                             scons_args: sconsFaultsArgs() +
+                                                         ' PREFIX=/opt/daos TARGET_TYPE=release'],
+                            runCondition: !params.CI_el9_NOBUILD
+                        ),
+                        'Build on Leap 15.5': scriptedBuildStage(
+                            name: 'Build on Leap 15.5',
+                            distro: 'leap15',
+                            dockerLabel: 'docker_runner',
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: true,
+                                                             parallel_build: true) +
+                                              " -t ${sanitized_JOB_NAME()}-leap15-5 " +
+                                              ' --build-arg POINT_RELEASE=.5 ' +
+                                              ' --build-arg REPOS="' + prRepos() + '"' +
+                                              ' -f utils/docker/Dockerfile.leap.15 .',
+                            sconsBuildArgs: [parallel_build: true,
+                                             stash_files: 'ci/test_files_to_stash.txt',
+                                             build_deps: 'no',
+                                             stash_opt: true,
+                                             scons_args: sconsFaultsArgs() +
+                                                         ' PREFIX=/opt/daos TARGET_TYPE=release'],
+                            runCondition: !params.CI_leap15_NOBUILD
+                        ),
+                        'Build on Leap 15.6': scriptedBuildStage(
+                            name: 'Build on Leap 15.6',
+                            distro: 'leap15',
+                            dockerLabel: 'docker_runner',
+                            dockerFile: 'utils/docker/Dockerfile.leap.15',
+                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
+                                                             deps_build: true,
+                                                             parallel_build: true) +
+                                             " -t ${sanitized_JOB_NAME()}-leap15-6 " +
+                                             ' --build-arg POINT_RELEASE=.6 ' +
+                                             ' --build-arg REPOS="' + prRepos() + '"' +
+                                             ' -f utils/docker/Dockerfile.leap.15 .',
+                            sconsBuildArgs: [parallel_build: true,
+                                             stash_files: 'ci/test_files_to_stash.txt',
+                                             build_deps: 'no',
+                                             stash_opt: true,
+                                             scons_args: sconsFaultsArgs() +
+                                                         ' PREFIX=/opt/daos TARGET_TYPE=release'],
+                            runCondition: !params.CI_leap15_NOBUILD
+                        ),
+                    ) // parallel
+                } // script
+            } // steps
         }
         stage('Unit Tests') {
             when {
