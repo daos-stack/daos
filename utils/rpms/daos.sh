@@ -356,6 +356,10 @@ list_files files "${SL_PREFIX}/bin/hello_drpc" \
                  "${SL_PREFIX}/bin/security_test" \
                  "${SL_PREFIX}/bin/fault_status" \
                  "${SL_PREFIX}/bin/crt_launch" \
+                 "${SL_PREFIX}/bin/crt_perf_server" \
+                 "${SL_PREFIX}/bin/crt_rate" \
+                 "${SL_PREFIX}/bin/crt_bw_read" \
+                 "${SL_PREFIX}/bin/crt_bw_write" \
                  "${SL_PREFIX}/bin/daos_perf" \
                  "${SL_PREFIX}/bin/daos_racer" \
                  "${SL_PREFIX}/bin/daos_test" \
