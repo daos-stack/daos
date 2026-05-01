@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1846,6 +1846,7 @@ static int
 close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 {
 	int i, rc, idx_dup = -1, fd_dest = -1;
+	int fake_fd_idx;
 
 	if (close_fd) {
 		/* close the fd from kernel */
@@ -1878,7 +1879,20 @@ close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 		errno = EINVAL;
 		return (-1);
 	}
-	free_fd(fd_dest - FD_FILE_BASE, true);
+
+	fake_fd_idx = fd_dest - FD_FILE_BASE;
+	if (fake_fd_idx < 0 || fake_fd_idx >= MAX_OPENED_FILE) {
+		DS_ERROR(EINVAL, "invalid fake fd %d for duplicated fd %d", fd_dest, fd);
+		errno = EINVAL;
+		return (-1);
+	}
+	if (d_file_list[fake_fd_idx] == NULL) {
+		DS_ERROR(EBADF, "stale fake fd %d for duplicated fd %d", fd_dest, fd);
+		errno = EBADF;
+		return (-1);
+	}
+
+	free_fd(fake_fd_idx, true);
 
 	return 0;
 }
@@ -7474,6 +7488,9 @@ finalize_myhook(void)
 		destroy_all_eqs();
 	}
 
+	/* Do not re-enter interception paths while releasing tracked state at process exit. */
+	d_hook_enabled = 0;
+
 	if (d_compatible_mode) {
 		/* Free record left in fd hash table then destroy it */
 		while (1) {
@@ -7578,9 +7595,6 @@ finalize_dfs(void)
 {
 	int i;
 	int rc;
-
-	/* Disable interception */
-	d_hook_enabled = 0;
 
 	for (i = 0; i < num_dfs; i++) {
 		if (atomic_load_relaxed(&(dfs_list[i].inited)) == 0) {
