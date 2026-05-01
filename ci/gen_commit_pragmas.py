@@ -150,18 +150,22 @@ def read_commit_pragma_mapping():
                     raise TypeError(
                         f'Expected {bool} for val, not '
                         f'{type(config[path_match][pragma_key]["val"])}')
+            elif pragma_key == 'stop_on_match':
+                if not isinstance(pragma_config, bool):
+                    raise TypeError(f'Expected {bool} for stop_on_match, not {type(pragma_config)}')
             else:
                 raise ValueError(f'Invalid pragma key: {pragma_key}')
 
     return config
 
 
-def __get_test_tag(test_tag_config, paths):
+def __get_test_tag(commit_pragma_mapping, paths, default='pr'):
     """Get the Test-tag pragma.
 
     Args:
-        test_tag_config (dict): test-tag config. E.g. {path1: foo, path2: {tags: pr}}
+        commit_pragma_mapping (dict): full commit pragma mapping config
         paths (list): paths to get tags for
+        default (str): default tag to use if a path does not have a test-tag config
 
     Returns:
         str: Test-tag pragma for these paths
@@ -172,58 +176,65 @@ def __get_test_tag(test_tag_config, paths):
     all_tags = set()
 
     for path in paths:
-        for _pattern, _config in test_tag_config.items():
+        for _pattern, config in commit_pragma_mapping.items():
             if re.search(rf'{_pattern}', path):
-                if isinstance(_config, str):
-                    _config = {
-                        'tags': _config,
-                        'handler': 'direct',
-                        'stop_on_match': False
+                test_tag_config = config.get('test-tag', default)
+                if isinstance(test_tag_config, str):
+                    test_tag_config = {
+                        'tags': test_tag_config,
+                        'handler': 'direct'
                     }
-                _handler = _config['handler']
+                _handler = test_tag_config['handler']
                 if _handler == 'FtestTagMap':
                     # Special ftest handling
                     try:
                         all_tags.update(ftest_tag_map.minimal_tags(path))
                     except KeyError:
                         # Use default from config
-                        all_tags.update(_config['tags'].split(' '))
+                        all_tags.update(test_tag_config['tags'].split(' '))
                 elif _handler == 'direct':
                     # Use direct tags from config
-                    all_tags.update(_config['tags'].split(' '))
+                    all_tags.update(test_tag_config['tags'].split(' '))
                 else:
-                    raise ValueError(f'Invalid handler: {_config["handler"]}')
+                    raise ValueError(f'Invalid handler: {test_tag_config["handler"]}')
 
-                if _config['stop_on_match']:
+                if test_tag_config.get('stop_on_match', config.get('stop_on_match', False)):
                     # Don't process further entries for this path
                     break
+
+    # Make sure the test-tag we get from the config are valid tags in ftest
+    ftest_unique_tags = ftest_tag_map.unique_tags()
+    invalid_tags = all_tags - ftest_unique_tags
+    if invalid_tags:
+        raise ValueError(f'test-tag does not match any tests: {", ".join(invalid_tags)}')
 
     return ' '.join(sorted(all_tags))
 
 
-def __get_need_unit_test(need_unit_test_config, paths):
+def __get_need_unit_test(commit_pragma_mapping, paths, default=True):
     """Determine whether we need to run unit tests for these paths.
 
     Args:
-        need_unit_test_config (dict): need-unit-test config. E.g. {path1: True, path2: False}
+        commit_pragma_mapping (dict): full commit pragma mapping config
         paths (list): paths to match on
+        default (bool): default value to use if a path does not have a need-unit-test config
 
     Returns:
         bool: whether we need to run unit tests for these paths
     """
     for path in paths:
-        for _pattern, _config in need_unit_test_config.items():
+        for _pattern, config in commit_pragma_mapping.items():
             if re.search(rf'{_pattern}', path):
-                if isinstance(_config, bool):
-                    _config = {
-                        'val': _config,
-                        'stop_on_match': False
+                unit_test_config = config.get('need-unit-test', default)
+                if isinstance(unit_test_config, bool):
+                    unit_test_config = {
+                        'val': unit_test_config
                     }
-                if _config['val']:
+                if unit_test_config['val']:
                     # If any path matches with a True value, we need to run unit tests
                     return True
 
-                if _config['stop_on_match']:
+                if unit_test_config.get('stop_on_match', config.get('stop_on_match', False)):
                     # Don't process further entries for this path
                     break
 
@@ -254,30 +265,11 @@ def gen_commit_pragmas(target):
 
     commit_pragma_mapping = read_commit_pragma_mapping()
 
-    def __pragma_config(pragma_key, default):
-        """Return the configs for a single pragma key.
-
-        Args:
-            pragma_key (str): key to get for each path. E.g. 'test-tag'
-            default (obj): default value if a path does not have the key
-
-        Returns:
-            dict: each path mapping to its pragma_key value
-
-        For example:
-            config = {path: {test-tag: tag_config}}
-            __pragma_config('test-tag', default) -> {path: tag_config}
-        """
-        return {
-            path_match: path_config.get(pragma_key, default)
-            for path_match, path_config in commit_pragma_mapping.items()
-        }
-
-    test_tag = __get_test_tag(__pragma_config('test-tag', 'pr'), modified_files)
+    test_tag = __get_test_tag(commit_pragma_mapping, modified_files)
     if test_tag:
         pragmas['Test-tag'] = test_tag
 
-    need_unit_test = __get_need_unit_test(__pragma_config('need-unit-test', True), modified_files)
+    need_unit_test = __get_need_unit_test(commit_pragma_mapping, modified_files)
     if modified_files and not need_unit_test:
         pragmas['Skip-unit-tests'] = True
         pragmas['Skip-fault-injection-test'] = True
