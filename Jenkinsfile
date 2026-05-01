@@ -172,7 +172,10 @@ Map update_default_commit_pragmas() {
  *          distro              the shorthand distro name; defaults to 'el8'
  *          compiler            the compiler to use; defaults to 'gcc'
  *          uploadTarget        the distro to use when uploading rpms; defaults to distro
+ *          dockerLabel         the label to use for the docker agent; defaults to 'docker_runner'
  *          dockerBuildArgs     optional docker build arguments
+ *          dockerImageArgs     optional docker image arguments
+ *          runCondition        Boolean for whether to run this stage; defaults to !skipStage()
  *
  * @return a scripted stage to run in a pipeline
  */
@@ -185,10 +188,11 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
     String dockerLabel = kwargs.get('dockerLabel', 'docker_runner')
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
     String dockerImageArgs = kwargs.get('dockerImageArgs', '')
+    Boolean runCondition = kwargs.get('runCondition', !skipStage())
 
     return {
         stage("${name}") {
-            if (!skipStage()) {
+            if (runCondition) {
                 println("[${name}] Start RPM build stage")
                 node(dockerLabel) {
                     println("[${name}] Check out from version control")
@@ -239,8 +243,11 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
  *          distro              the shorthand distro name; defaults to 'el8'
  *          compiler            the compiler to use; defaults to 'gcc'
  *          uploadTarget        the distro to use when uploading rpms; defaults to distro
+ *          dockerLabel         the label to use for the docker agent; defaults to 'docker_runner'
  *          dockerBuildArgs     optional docker build arguments
- *          sconsBuildArgs      optional scons build arguments
+ *          dockerImageArgs     optional docker image arguments
+ *          sconsBuildArgs      optional Map of arguments to pass to sconsBuild()
+ *          runCondition        Boolean for whether to run this stage; defaults to !skipStage()
  *
  * @return a scripted stage to run in a pipeline
  */
@@ -251,14 +258,14 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String uploadTarget = kwargs.get('uploadTarget', distro)
     String dockerTag = jobStatusKey("build-rpm-${uploadTarget}-${compiler}").toLowerCase()
     String dockerLabel = kwargs.get('dockerLabel', 'docker_runner')
-    String dockerArgs = kwargs.get('dockerArgs', '')
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
     String dockerImageArgs = kwargs.get('dockerImageArgs', '')
     Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
+    Boolean runCondition = kwargs.get('runCondition', !skipStage())
 
     return {
         stage("${name}") {
-            if (!skipStage()) {
+            if (runCondition) {
                 println("[${name}] Start build stage")
                 node(dockerLabel) {
                     println("[${name}] Check out from version control")
@@ -668,7 +675,8 @@ pipeline {
                             dockerLabel: 'docker_runner',
                             dockerBuildArgs: dockerBuildArgs() +
                                              ' -f utils/rpms/packaging/Dockerfile.ubuntu .',
-                            dockerImageArgs: '--cap-add=SYS_ADMIN'
+                            dockerImageArgs: '--cap-add=SYS_ADMIN',
+                            runCondition: false // No DEB builds until updated for latest release
                         ),
                         'Build on EL 8': scriptedBuildStage(
                             name: 'Build on EL 8',
