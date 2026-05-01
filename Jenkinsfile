@@ -226,7 +226,6 @@ def scriptedBuildRpmStage(Map kwargs = [:]) {
             else {
                 println("[${name}] Marking build RPM stage as skipped")
                 Utils.markStageSkippedForConditional("${name}")
-                job_status_update(name)
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -295,7 +294,6 @@ def scriptedBuildStage(Map kwargs = [:]) {
             else {
                 println("[${name}] Marking build stage as skipped")
                 Utils.markStageSkippedForConditional("${name}")
-                job_status_update(name)
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
