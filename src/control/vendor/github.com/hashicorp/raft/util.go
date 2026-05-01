@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package raft
 
 import (
@@ -12,7 +9,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/hashicorp/go-msgpack/v2/codec"
+	"github.com/hashicorp/go-msgpack/codec"
 )
 
 func init() {
@@ -129,11 +126,7 @@ func decodeMsgPack(buf []byte, out interface{}) error {
 // Encode writes an encoded object to a new bytes buffer.
 func encodeMsgPack(in interface{}) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
-	hd := codec.MsgpackHandle{
-		BasicHandle: codec.BasicHandle{
-			TimeNotBuiltin: true,
-		},
-	}
+	hd := codec.MsgpackHandle{}
 	enc := codec.NewEncoder(buf, &hd)
 	err := enc.Encode(in)
 	return buf, err
@@ -147,23 +140,6 @@ func backoff(base time.Duration, round, limit uint64) time.Duration {
 	for power > 2 {
 		base *= 2
 		power--
-	}
-	return base
-}
-
-// cappedExponentialBackoff computes the exponential backoff with an adjustable
-// cap on the max timeout.
-func cappedExponentialBackoff(base time.Duration, round, limit uint64, cap time.Duration) time.Duration {
-	power := min(round, limit)
-	for power > 2 {
-		if base > cap {
-			return cap
-		}
-		base *= 2
-		power--
-	}
-	if base > cap {
-		return cap
 	}
 	return base
 }

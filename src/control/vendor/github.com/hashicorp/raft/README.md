@@ -1,4 +1,4 @@
-raft [![Build Status](https://github.com/hashicorp/raft/workflows/ci/badge.svg)](https://github.com/hashicorp/raft/actions)
+raft [![CircleCI](https://circleci.com/gh/hashicorp/raft.svg?style=svg)](https://circleci.com/gh/hashicorp/raft)
 ====
 
 raft is a [Go](http://www.golang.org) library that manages a replicated
@@ -12,7 +12,7 @@ fault tolerance as well.
 
 ## Building
 
-If you wish to build raft you'll need Go version 1.16+ installed.
+If you wish to build raft you'll need Go version 1.2+ installed.
 
 Please check your installation with:
 
@@ -34,8 +34,7 @@ and `StableStore`.
 
 
 ## Community Contributed Examples 
-- [Raft gRPC Example](https://github.com/Jille/raft-grpc-example) - Utilizing the Raft repository with gRPC
-- [Raft-based KV-store Example](https://github.com/otoolep/hraftd) - Uses Hashicorp Raft to build a distributed key-value store
+[Raft gRPC Example](https://github.com/Jille/raft-grpc-example) - Utilizing the Raft repository with gRPC
 
 
 ## Tagged Releases

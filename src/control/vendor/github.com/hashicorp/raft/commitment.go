@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package raft
 
 import (
@@ -9,7 +6,7 @@ import (
 )
 
 // Commitment is used to advance the leader's commit index. The leader and
-// replication goroutines report in newly written entries with match(), and
+// replication goroutines report in newly written entries with Match(), and
 // this notifies on commitCh when the commit index has advanced.
 type commitment struct {
 	// protects matchIndexes and commitIndex

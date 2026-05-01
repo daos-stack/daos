@@ -1,13 +1,10 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package raftboltdb
 
 import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/hashicorp/go-msgpack/v2/codec"
+	"github.com/hashicorp/go-msgpack/codec"
 )
 
 // Decode reverses the encode operation on a byte slice input
@@ -19,13 +16,9 @@ func decodeMsgPack(buf []byte, out interface{}) error {
 }
 
 // Encode writes an encoded object to a new bytes buffer
-func encodeMsgPack(in interface{}, useNewTimeFormat bool) (*bytes.Buffer, error) {
+func encodeMsgPack(in interface{}) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
-	hd := codec.MsgpackHandle{
-		BasicHandle: codec.BasicHandle{
-			TimeNotBuiltin: !useNewTimeFormat,
-		},
-	}
+	hd := codec.MsgpackHandle{}
 	enc := codec.NewEncoder(buf, &hd)
 	err := enc.Encode(in)
 	return buf, err
