@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,12 +115,43 @@ CRT_PROC_TYPE_FUNC(int64_t)
 CRT_PROC_TYPE_FUNC(uint64_t)
 CRT_PROC_TYPE_FUNC(bool)
 
+static int
+crt_proc_crt_bulk_t_deffered(struct crt_bulk *bulk)
+{
+	struct crt_context *ctx;
+	int                 rc;
+
+	/* Create mercury handle based on saved params */
+	ctx = bulk->crt_ctx;
+	D_ASSERT(ctx != NULL);
+
+	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl, bulk->bulk_perm, &bulk->hg_bulk_hdl);
+	if (rc != DER_SUCCESS)
+		return rc;
+
+	record_quota_resource(ctx, CRT_QUOTA_BULKS);
+
+	if (bulk->bound) {
+		rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
+		if (rc != 0) {
+			D_ERROR("Failed to bind bulk during proc\n");
+			/* free will return quota resource */
+			crt_bulk_free(bulk->hg_bulk_hdl);
+			return rc;
+		}
+	}
+	bulk->deferred = false;
+
+	return 0;
+}
+
 int
 crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bulk)
 {
 	struct crt_bulk *bulk = NULL;
+	hg_bulk_t        hg_bulk;
 	hg_return_t      hg_ret;
-	hg_bulk_t        tmp_hg_bulk;
+	int              rc;
 
 	/*
 	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
@@ -131,54 +162,30 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 	case CRT_PROC_ENCODE:
 		bulk = *pcrt_bulk;
 
-		/* RPC can have a NULL bulk. if so, encode a NULL value */
-		if (!bulk) {
-			tmp_hg_bulk = HG_BULK_NULL;
-			hg_ret      = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&tmp_hg_bulk);
-			return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-		}
-
 		/* Deferred allocation as a result of D_QUOTA_BULKS limit */
-		if (bulk->deferred) {
-			struct crt_context *ctx;
-			int                 rc;
-
-			/* Create mercury handle based on saved params */
-			ctx = bulk->crt_ctx;
-			D_ASSERT(ctx != NULL);
-
-			rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl, bulk->bulk_perm,
-						&bulk->hg_bulk_hdl);
-			if (rc != DER_SUCCESS)
+		if (bulk != CRT_BULK_NULL) {
+			if (bulk->deferred && (rc = crt_proc_crt_bulk_t_deffered(bulk)) != 0) {
+				D_ERROR("Failed to do deferred bulk allocation during proc\n");
 				return rc;
-
-			record_quota_resource(ctx, CRT_QUOTA_BULKS);
-
-			if (bulk->bound) {
-				rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
-				if (rc != 0) {
-					D_ERROR("Failed to bind bulk during proc\n");
-					/* free will return quota resource */
-					crt_bulk_free(bulk->hg_bulk_hdl);
-					return rc;
-				}
 			}
-			bulk->deferred = false;
+			hg_bulk = bulk->hg_bulk_hdl;
+		} else {
+			/* RPC can have a NULL bulk. if so, encode a NULL value */
+			hg_bulk = HG_BULK_NULL;
 		}
 
 		/* Pack mercury bulk handle to send over the wire */
-		hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)&bulk->hg_bulk_hdl);
+		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
 		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-		break;
 
 	case CRT_PROC_DECODE:
 		/* unpack mercury handle and wrap it around crt_bulk_t struct */
-		hg_ret = hg_proc_hg_bulk_t(proc, &tmp_hg_bulk);
+		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
 		if (hg_ret != HG_SUCCESS)
 			return -DER_HG;
 
 		/* don't create a bulk wrapper if null bulk was transmitted */
-		if (tmp_hg_bulk == HG_BULK_NULL) {
+		if (hg_bulk == HG_BULK_NULL) {
 			*pcrt_bulk = NULL;
 			return 0;
 		}
@@ -188,13 +195,13 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 		if (!bulk)
 			return -DER_NOMEM;
 
-		bulk->hg_bulk_hdl = tmp_hg_bulk;
+		bulk->hg_bulk_hdl = hg_bulk;
 		bulk->deferred    = false;
 		bulk->crt_ctx     = NULL;
+		bulk->refcount    = 1;
 
 		*pcrt_bulk = bulk;
 		return 0;
-		break;
 
 	case CRT_PROC_FREE:
 		bulk = *pcrt_bulk;
@@ -202,15 +209,23 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 		if (bulk == NULL)
 			return 0;
 
-		hg_ret = hg_proc_hg_bulk_t(proc, &bulk->hg_bulk_hdl);
+		/* Prevent HG proc from assigning NULL if recount is not zero */
+		hg_bulk = bulk->hg_bulk_hdl;
+		hg_ret  = hg_proc_hg_bulk_t(proc, &hg_bulk);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("Failed to free bulk during proc\n");
+			return -DER_HG;
+		}
+
+		if (atomic_fetch_sub(&bulk->refcount, 1) > 1)
+			return 0;
 
 		/* Free the wrapper struct */
 		if (bulk->iovs)
 			D_FREE(bulk->iovs);
 		D_FREE(bulk);
 		*pcrt_bulk = NULL;
-		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
-		break;
+		return 0;
 	}
 
 	/* Should not get here */

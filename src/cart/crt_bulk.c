@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -106,6 +106,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	D_ALLOC_PTR(ret_hdl);
 	if (ret_hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	ret_hdl->refcount = 1;
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc == -DER_QUOTA_LIMIT) {
@@ -196,6 +197,7 @@ crt_bulk_addref(crt_bulk_t crt_bulk)
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
+	atomic_fetch_add(&bulk->refcount, 1);
 out:
 	return rc;
 }
@@ -227,6 +229,9 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
 		rc = crt_hgret_2_der(hg_ret);
 	}
+
+	if (atomic_fetch_sub(&bulk->refcount, 1) > 1)
+		return DER_SUCCESS;
 
 	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
 	if (bulk->crt_ctx)
