@@ -553,7 +553,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15') {
+                stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -566,7 +566,8 @@ pipeline {
                                  ' --cap-add=SYS_ADMIN' +
                                  ' --privileged=true'   +
                                  ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
+                            additionalBuildArgs dockerBuildArgs() +
+                            ' --build-arg FVERSION=37'
                         }
                     }
                     steps {
@@ -719,7 +720,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
-                                                ' --build-arg POINT_RELEASE=.6 ' +
+                                                ' --build-arg POINT_RELEASE=.5 ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -1085,7 +1086,7 @@ pipeline {
                         }
                     }
                 } // stage('Test RPMs on EL 8.6')
-                stage('Test RPMs on Leap 15.5') {
+                stage('Test RPMs on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
