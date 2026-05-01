@@ -720,7 +720,7 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
-                                                ' --build-arg POINT_RELEASE=.6 ' +
+                                                ' --build-arg POINT_RELEASE=.5 ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
