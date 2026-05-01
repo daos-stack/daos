@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MIT
-
 package hclog
 
 import (
@@ -51,8 +48,6 @@ func (l *nullLogger) Named(name string) Logger { return l }
 func (l *nullLogger) ResetNamed(name string) Logger { return l }
 
 func (l *nullLogger) SetLevel(level Level) {}
-
-func (l *nullLogger) GetLevel() Level { return NoLevel }
 
 func (l *nullLogger) StandardLogger(opts *StandardLoggerOptions) *log.Logger {
 	return log.New(l.StandardWriter(opts), "", log.LstdFlags)

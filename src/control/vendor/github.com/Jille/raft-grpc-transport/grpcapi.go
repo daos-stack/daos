@@ -34,22 +34,13 @@ func (g gRPCAPI) handleRPC(command interface{}, data io.Reader) (interface{}, er
 			goto wait
 		}
 	}
-	select {
-	case g.manager.rpcChan <- rpc:
-	case <-g.manager.shutdownCh:
-		return nil, raft.ErrTransportShutdown
-	}
-
+	g.manager.rpcChan <- rpc
 wait:
-	select {
-	case resp := <-ch:
-		if resp.Error != nil {
-			return nil, resp.Error
-		}
-		return resp.Response, nil
-	case <-g.manager.shutdownCh:
-		return nil, raft.ErrTransportShutdown
+	resp := <-ch
+	if resp.Error != nil {
+		return nil, resp.Error
 	}
+	return resp.Response, nil
 }
 
 func (g gRPCAPI) AppendEntries(ctx context.Context, req *pb.AppendEntriesRequest) (*pb.AppendEntriesResponse, error) {
@@ -74,14 +65,6 @@ func (g gRPCAPI) TimeoutNow(ctx context.Context, req *pb.TimeoutNowRequest) (*pb
 		return nil, err
 	}
 	return encodeTimeoutNowResponse(resp.(*raft.TimeoutNowResponse)), nil
-}
-
-func (g gRPCAPI) RequestPreVote(ctx context.Context, req *pb.RequestPreVoteRequest) (*pb.RequestPreVoteResponse, error) {
-	resp, err := g.handleRPC(decodeRequestPreVoteRequest(req), nil)
-	if err != nil {
-		return nil, err
-	}
-	return encodeRequestPreVoteResponse(resp.(*raft.RequestPreVoteResponse)), nil
 }
 
 func (g gRPCAPI) InstallSnapshot(s pb.RaftTransport_InstallSnapshotServer) error {

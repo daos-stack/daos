@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -32,8 +31,6 @@ import (
 	credinternal "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/envconfig"
 )
-
-const alpnFailureHelpMessage = "If you upgraded from a grpc-go version earlier than 1.67, your TLS connections may have stopped working due to ALPN enforcement. For more details, see: https://github.com/grpc/grpc-go/issues/434"
 
 var logger = grpclog.Component("credentials")
 
@@ -49,25 +46,6 @@ type TLSInfo struct {
 // AuthType returns the type of TLSInfo as a string.
 func (t TLSInfo) AuthType() string {
 	return "tls"
-}
-
-// ValidateAuthority validates the provided authority being used to override the
-// :authority header by verifying it against the peer certificates. It returns a
-// non-nil error if the validation fails.
-func (t TLSInfo) ValidateAuthority(authority string) error {
-	var errs []error
-	host, _, err := net.SplitHostPort(authority)
-	if err != nil {
-		host = authority
-	}
-	for _, cert := range t.State.PeerCertificates {
-		var err error
-		if err = cert.VerifyHostname(host); err == nil {
-			return nil
-		}
-		errs = append(errs, err)
-	}
-	return fmt.Errorf("credentials: invalid authority %q: %v", authority, errors.Join(errs...))
 }
 
 // cipherSuiteLookup returns the string version of a TLS cipher suite ID.
@@ -114,14 +92,14 @@ func (c tlsCreds) Info() ProtocolInfo {
 func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (_ net.Conn, _ AuthInfo, err error) {
 	// use local cfg to avoid clobbering ServerName if using multiple endpoints
 	cfg := credinternal.CloneTLSConfig(c.config)
-
-	serverName, _, err := net.SplitHostPort(authority)
-	if err != nil {
-		// If the authority had no host port or if the authority cannot be parsed, use it as-is.
-		serverName = authority
+	if cfg.ServerName == "" {
+		serverName, _, err := net.SplitHostPort(authority)
+		if err != nil {
+			// If the authority had no host port or if the authority cannot be parsed, use it as-is.
+			serverName = authority
+		}
+		cfg.ServerName = serverName
 	}
-	cfg.ServerName = serverName
-
 	conn := tls.Client(rawConn, cfg)
 	errChannel := make(chan error, 1)
 	go func() {
@@ -150,7 +128,7 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 	if np == "" {
 		if envconfig.EnforceALPNEnabled {
 			conn.Close()
-			return nil, nil, fmt.Errorf("credentials: cannot check peer: missing selected ALPN property. %s", alpnFailureHelpMessage)
+			return nil, nil, fmt.Errorf("credentials: cannot check peer: missing selected ALPN property")
 		}
 		logger.Warningf("Allowing TLS connection to server %q with ALPN disabled. TLS connections to servers with ALPN disabled will be disallowed in future grpc-go releases", cfg.ServerName)
 	}
@@ -180,7 +158,7 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 	if cs.NegotiatedProtocol == "" {
 		if envconfig.EnforceALPNEnabled {
 			conn.Close()
-			return nil, nil, fmt.Errorf("credentials: cannot check peer: missing selected ALPN property. %s", alpnFailureHelpMessage)
+			return nil, nil, fmt.Errorf("credentials: cannot check peer: missing selected ALPN property")
 		} else if logger.V(2) {
 			logger.Info("Allowing TLS connection from client with ALPN disabled. TLS connections with ALPN disabled will be disallowed in future grpc-go releases")
 		}
@@ -222,40 +200,25 @@ var tls12ForbiddenCipherSuites = map[uint16]struct{}{
 
 // NewTLS uses c to construct a TransportCredentials based on TLS.
 func NewTLS(c *tls.Config) TransportCredentials {
-	config := applyDefaults(c)
-	if config.GetConfigForClient != nil {
-		oldFn := config.GetConfigForClient
-		config.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
-			cfgForClient, err := oldFn(hello)
-			if err != nil || cfgForClient == nil {
-				return cfgForClient, err
-			}
-			return applyDefaults(cfgForClient), nil
-		}
-	}
-	return &tlsCreds{config: config}
-}
-
-func applyDefaults(c *tls.Config) *tls.Config {
-	config := credinternal.CloneTLSConfig(c)
-	config.NextProtos = credinternal.AppendH2ToNextProtos(config.NextProtos)
+	tc := &tlsCreds{credinternal.CloneTLSConfig(c)}
+	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	// If the user did not configure a MinVersion and did not configure a
 	// MaxVersion < 1.2, use MinVersion=1.2, which is required by
 	// https://datatracker.ietf.org/doc/html/rfc7540#section-9.2
-	if config.MinVersion == 0 && (config.MaxVersion == 0 || config.MaxVersion >= tls.VersionTLS12) {
-		config.MinVersion = tls.VersionTLS12
+	if tc.config.MinVersion == 0 && (tc.config.MaxVersion == 0 || tc.config.MaxVersion >= tls.VersionTLS12) {
+		tc.config.MinVersion = tls.VersionTLS12
 	}
 	// If the user did not configure CipherSuites, use all "secure" cipher
 	// suites reported by the TLS package, but remove some explicitly forbidden
 	// by https://datatracker.ietf.org/doc/html/rfc7540#appendix-A
-	if config.CipherSuites == nil {
+	if tc.config.CipherSuites == nil {
 		for _, cs := range tls.CipherSuites() {
 			if _, ok := tls12ForbiddenCipherSuites[cs.ID]; !ok {
-				config.CipherSuites = append(config.CipherSuites, cs.ID)
+				tc.config.CipherSuites = append(tc.config.CipherSuites, cs.ID)
 			}
 		}
 	}
-	return config
+	return tc
 }
 
 // NewClientTLSFromCert constructs TLS credentials from the provided root
@@ -263,11 +226,9 @@ func applyDefaults(c *tls.Config) *tls.Config {
 // certificates to establish the identity of the client need to be included in
 // the credentials (eg: for mTLS), use NewTLS instead, where a complete
 // tls.Config can be specified.
-//
-// serverNameOverride is for testing only. If set to a non empty string, it will
-// override the virtual host name of authority (e.g. :authority header field) in
-// requests.  Users should use grpc.WithAuthority passed to grpc.NewClient to
-// override the authority of the client instead.
+// serverNameOverride is for testing only. If set to a non empty string,
+// it will override the virtual host name of authority (e.g. :authority header
+// field) in requests.
 func NewClientTLSFromCert(cp *x509.CertPool, serverNameOverride string) TransportCredentials {
 	return NewTLS(&tls.Config{ServerName: serverNameOverride, RootCAs: cp})
 }
@@ -277,11 +238,9 @@ func NewClientTLSFromCert(cp *x509.CertPool, serverNameOverride string) Transpor
 // certificates to establish the identity of the client need to be included in
 // the credentials (eg: for mTLS), use NewTLS instead, where a complete
 // tls.Config can be specified.
-//
-// serverNameOverride is for testing only. If set to a non empty string, it will
-// override the virtual host name of authority (e.g. :authority header field) in
-// requests.  Users should use grpc.WithAuthority passed to grpc.NewClient to
-// override the authority of the client instead.
+// serverNameOverride is for testing only. If set to a non empty string,
+// it will override the virtual host name of authority (e.g. :authority header
+// field) in requests.
 func NewClientTLSFromFile(certFile, serverNameOverride string) (TransportCredentials, error) {
 	b, err := os.ReadFile(certFile)
 	if err != nil {

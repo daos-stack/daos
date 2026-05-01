@@ -23,7 +23,7 @@ import (
 	"github.com/prometheus/procfs/internal/util"
 )
 
-// NetProtocolStats stores the contents from /proc/net/protocols.
+// NetProtocolStats stores the contents from /proc/net/protocols
 type NetProtocolStats map[string]NetProtocolStatLine
 
 // NetProtocolStatLine contains a single line parsed from /proc/net/protocols. We
@@ -41,7 +41,7 @@ type NetProtocolStatLine struct {
 	Capabilities NetProtocolCapabilities
 }
 
-// NetProtocolCapabilities contains a list of capabilities for each protocol.
+// NetProtocolCapabilities contains a list of capabilities for each protocol
 type NetProtocolCapabilities struct {
 	Close               bool // 8
 	Connect             bool // 9
@@ -115,25 +115,23 @@ func (ps NetProtocolStats) parseLine(rawLine string) (*NetProtocolStatLine, erro
 	if err != nil {
 		return nil, err
 	}
-	switch fields[4] {
-	case enabled:
+	if fields[4] == enabled {
 		line.Pressure = 1
-	case disabled:
+	} else if fields[4] == disabled {
 		line.Pressure = 0
-	default:
+	} else {
 		line.Pressure = -1
 	}
 	line.MaxHeader, err = strconv.ParseUint(fields[5], 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	switch fields[6] {
-	case enabled:
+	if fields[6] == enabled {
 		line.Slab = true
-	case disabled:
+	} else if fields[6] == disabled {
 		line.Slab = false
-	default:
-		return nil, fmt.Errorf("%w: capability for protocol: %s", ErrFileParse, line.Name)
+	} else {
+		return nil, fmt.Errorf("unable to parse capability for protocol: %s", line.Name)
 	}
 	line.ModuleName = fields[7]
 
@@ -170,13 +168,12 @@ func (pc *NetProtocolCapabilities) parseCapabilities(capabilities []string) erro
 	}
 
 	for i := 0; i < len(capabilities); i++ {
-		switch capabilities[i] {
-		case "y":
+		if capabilities[i] == "y" {
 			*capabilityFields[i] = true
-		case "n":
+		} else if capabilities[i] == "n" {
 			*capabilityFields[i] = false
-		default:
-			return fmt.Errorf("%w: capability block for protocol: position %d", ErrFileParse, i)
+		} else {
+			return fmt.Errorf("unable to parse capability block for protocol: position %d", i)
 		}
 	}
 	return nil
