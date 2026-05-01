@@ -268,6 +268,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
 		network.DefaultFabricScanner(srv.log))
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
+	srv.mgmtSvc.restartMgr = srv.restartMgr
 
 	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
 		return srv.cfg.SystemName

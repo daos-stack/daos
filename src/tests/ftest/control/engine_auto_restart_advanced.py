@@ -18,6 +18,18 @@ class EngineAutoRestartAdvanced(ControlTestBase):
     :avocado: recursive
     """
 
+    def tearDown(self):
+        """Clean up after each test method."""
+        # Reset restart state for next test method
+        # This ensures clean state between sequential tests
+        try:
+            self.reset_engine_restart_state()
+        except Exception as error:
+            self.log.error("Failed to reset engine restart state: %s", error)
+            self.fail("tearDown failed to reset engine restart state: {}".format(error))
+        finally:
+            super().tearDown()
+
     def wait_for_rank_state(self, rank, expected_state, timeout=30, check_interval=2):
         """Wait for a rank to reach expected state.
 

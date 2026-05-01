@@ -190,6 +190,33 @@ func (mgr *engineRestartManager) start(ctx context.Context) {
 	}()
 }
 
+// clearRankRestartHistory clears the restart history for specific ranks.
+// This is called when ranks are manually stopped or started to ensure
+// manual operations don't interfere with automatic restart rate limiting.
+func (mgr *engineRestartManager) clearRankRestartHistory(ranks []ranklist.Rank) {
+	if mgr == nil || len(ranks) == 0 {
+		return
+	}
+
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
+	for _, rank := range ranks {
+		// Cancel any pending restart for this rank
+		if timer, exists := mgr.pendingRestart[rank]; exists {
+			timer.Stop()
+			delete(mgr.pendingRestart, rank)
+			mgr.log.Debugf("cancelled pending restart for rank %d during manual operation", rank)
+		}
+
+		// Clear restart history for this rank
+		if _, exists := mgr.lastRestart[rank]; exists {
+			delete(mgr.lastRestart, rank)
+			mgr.log.Debugf("cleared restart history for rank %d (manual operation)", rank)
+		}
+	}
+}
+
 // stop shuts down the restart manager.
 func (mgr *engineRestartManager) stop() {
 	mgr.log.Debug("stopping engine restart manager")

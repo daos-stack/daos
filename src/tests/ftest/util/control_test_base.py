@@ -193,3 +193,43 @@ class ControlTestBase(TestWithServers):
             # Catch all exceptions to prevent test framework crashes during rank queries
             self.log.error("Exception getting incarnation for rank %s: %s", rank, error)
             return None
+
+    def reset_engine_restart_state(self):
+        """Reset engine auto-restart state between tests.
+
+        The engine restart manager tracks last restart times for rate-limiting
+        automatic restarts. This state persists across test methods when servers
+        continue running, which can cause unexpected rate-limiting behavior in
+        sequential tests.
+
+        This method resets the state by restarting all servers via:
+        1. dmg system stop (automatically clears restart history for stopped ranks)
+        2. dmg system start (automatically clears restart history for started ranks)
+        3. Wait for all ranks to rejoin
+
+        The automatic clearing is handled by SystemStop/SystemStart in mgmt_system.go,
+        which calls clearRankRestartHistory() for affected ranks.
+
+        Usage:
+            Should be called in tearDown() of test classes that use engine restart
+            functionality. If this method fails, tearDown() should fail the test
+            to prevent subsequent tests from running with contaminated state.
+
+        Raises:
+            Exception: If server stop/start fails or ranks fail to rejoin
+
+        Note:
+            This operation adds ~5-10 seconds per test due to server restart overhead,
+            but is necessary to ensure test isolation and reliable results.
+        """
+        self.log.info("Restarting servers to reset engine restart manager state")
+        self.server_managers[0].system_stop()
+        time.sleep(2)
+        self.server_managers[0].system_start()
+
+        # Wait for all ranks to join
+        all_ranks = self.get_all_ranks()
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=all_ranks, valid_states=["joined"], max_checks=30)
+        if failed_ranks:
+            self.log.warning("Some ranks failed to rejoin after restart: %s", failed_ranks)

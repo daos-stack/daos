@@ -1026,6 +1026,12 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 		return nil, err
 	}
 
+	// Clear restart history for manually stopped ranks
+	// This prevents rate-limiting from interfering with manual operations
+	if svc.restartMgr != nil && fReq.Ranks != nil {
+		svc.restartMgr.clearRankRestartHistory(fReq.Ranks.Ranks())
+	}
+
 	return resp, nil
 }
 
@@ -1120,6 +1126,12 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	resp, err := processStartResp(fResp, svc.events)
 	if err != nil {
 		return nil, err
+	}
+
+	// Clear restart history for manually started ranks
+	// This prevents rate-limiting from interfering with manual operations
+	if svc.restartMgr != nil && fReq.Ranks != nil {
+		svc.restartMgr.clearRankRestartHistory(fReq.Ranks.Ranks())
 	}
 
 	return resp, nil
