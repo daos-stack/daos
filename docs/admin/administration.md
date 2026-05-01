@@ -975,6 +975,94 @@ specified on the command line:
 If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
 
+### Engine Auto-Restart
+
+DAOS automatically restarts engines that self-terminate after being excluded from
+the system. This feature improves system availability by recovering from transient
+failures without administrator intervention.
+
+#### How It Works
+
+When an engine is excluded (e.g., due to network issues detected by SWIM), the
+engine detects the exclusion and performs a self-termination. The control plane
+monitors for these events and automatically restarts the affected engine after
+clearing the exclusion state, allowing it to rejoin the system.
+
+The automatic restart includes rate-limiting to prevent restart storms. By default,
+an engine must wait 5 minutes between automatic restarts.
+
+#### Configuration
+
+Control auto-restart behavior in `daos_server.yml`:
+
+```yaml
+# Disable automatic restart (default: enabled)
+disable_engine_auto_restart: false
+
+# Minimum delay between automatic restarts per rank (default: 300 seconds)
+engine_auto_restart_min_delay: 300
+```
+
+#### Manual Operations
+
+Manual `dmg system stop` and `dmg system start` operations are never affected by
+the rate-limiting mechanism. Administrators can always immediately stop and start
+ranks regardless of recent automatic restart activity.
+
+```bash
+# Manual operations always work immediately
+$ dmg system stop --ranks=0,1,2
+$ dmg system start --ranks=0,1,2
+```
+
+When you manually stop or start ranks, the restart history for those ranks is
+automatically cleared, ensuring no delays from previous automatic restarts.
+
+#### Monitoring
+
+The `engine_self_terminated` RAS event is logged when an engine self-terminates
+and triggers an automatic restart:
+
+```
+&&& RAS EVENT id: [engine_self_terminated] ... msg: [excluded rank self terminated detected]
+```
+
+Use `dmg system query` to check rank status and incarnation numbers. The
+incarnation number increments each time a rank restarts, helping track restart
+events:
+
+```bash
+$ dmg system query --ranks=0
+Rank UUID                                 Control Address  Fault Domain State  Reason Incarnation
+---- ----                                 --------------- ------------- -----  ------ -----------
+0    12345678-1234-1234-1234-123456789012 10.0.0.1:10001  /node1        Joined        3
+```
+
+#### Best Practices
+
+- **Leave enabled**: Automatic restart improves availability for transient failures
+- **Adjust timing**: For frequent exclusions, consider increasing `engine_auto_restart_min_delay`
+- **Monitor events**: Watch for repeated `engine_self_terminated` events indicating persistent issues
+- **Manual control**: Use `dmg system stop/start` for maintenance without worrying about delays
+
+#### Troubleshooting
+
+**Problem**: Rank keeps self-terminating and restarting
+
+**Solution**: Investigate root cause:
+1. Check network connectivity (SWIM may be detecting real failures)
+2. Review engine logs for errors
+3. Verify hardware health
+4. Consider disabling auto-restart temporarily for investigation
+
+**Problem**: Need immediate restart but recently auto-restarted
+
+**Solution**: Use manual operations (not affected by rate-limiting):
+```bash
+$ dmg system stop --ranks=X
+$ dmg system start --ranks=X
+```
+
 ### Storage Reformat
 
 To reformat the system after a controlled shutdown, run the command:

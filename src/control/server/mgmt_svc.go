@@ -83,7 +83,6 @@ type mgmtSvc struct {
 	serialReqs        batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
-	restartMgr        *engineRestartManager
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {

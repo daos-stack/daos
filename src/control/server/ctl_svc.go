@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,10 +20,11 @@ import (
 type ControlService struct {
 	ctlpb.UnimplementedCtlSvcServer
 	StorageControlService
-	harness *EngineHarness
-	srvCfg  *config.Server
-	events  *events.PubSub
-	fabric  *hardware.FabricScanner
+	harness    *EngineHarness
+	srvCfg     *config.Server
+	events     *events.PubSub
+	fabric     *hardware.FabricScanner
+	restartMgr *engineRestartManager
 }
 
 // NewControlService returns ControlService to be used as gRPC control service
