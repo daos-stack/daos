@@ -80,14 +80,29 @@ class EngineAutoRestartAdvanced(ControlTestBase):
 
         self.log_step("Step 1: Automatic restart of rank %s", test_rank)
 
+        # Get initial incarnation
+        initial_incarnation = self.get_rank_incarnation(test_rank)
+        if initial_incarnation is None:
+            self.fail(f"Failed to get initial incarnation for rank {test_rank}")
+
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
 
         if not restarted:
-            self.fail("Rank %s did not automatically restart. Final state: %s"
-                      % (test_rank, final_state))
+            self.fail(f"Rank {test_rank} did not automatically restart. "
+                      f"Final state: {final_state}")
+
+        # Verify incarnation increased
+        first_restart_incarnation = self.get_rank_incarnation(test_rank)
+        if first_restart_incarnation is None:
+            self.fail(f"Failed to get incarnation after first restart for rank {test_rank}")
+
+        if first_restart_incarnation <= initial_incarnation:
+            self.fail(f"Rank {test_rank} incarnation did not increase after first restart. "
+                      f"Before: {initial_incarnation}, After: {first_restart_incarnation}")
 
         first_restart_time = time.time()
-        self.log.info("First restart completed at T=%.1f", first_restart_time)
+        self.log.info("First restart completed at T=%.1f (incarnation %s -> %s)",
+                      first_restart_time, initial_incarnation, first_restart_incarnation)
 
         # Second exclusion - should be deferred due to rate-limiting
         self.log_step("Step 2: Second exclusion of rank %s (should be deferred)", test_rank)
@@ -108,21 +123,33 @@ class EngineAutoRestartAdvanced(ControlTestBase):
         self.log_step("Step 3: Waiting %ss for deferred restart to execute", wait_time)
 
         if not self.wait_for_rank_state(test_rank, "joined", timeout=wait_time):
-            self.fail("Rank %s did not restart after rate-limit delay" % test_rank)
+            self.fail(f"Rank {test_rank} did not restart after rate-limit delay")
+
+        # Verify incarnation increased again after deferred restart
+        deferred_restart_incarnation = self.get_rank_incarnation(test_rank)
+        if deferred_restart_incarnation is None:
+            self.fail(f"Failed to get incarnation after deferred restart for rank {test_rank}")
+
+        if deferred_restart_incarnation <= first_restart_incarnation:
+            self.fail(f"Rank {test_rank} incarnation did not increase after deferred restart. "
+                      f"After first: {first_restart_incarnation}, "
+                      f"After deferred: {deferred_restart_incarnation}")
 
         self.log_step("Step 4: Measure time between initial and deferred restarts")
         deferred_restart_time = time.time()
         actual_delay = deferred_restart_time - first_restart_time
 
-        self.log.info("Confirmed: Deferred restart executed after %.1fs (expected ~%ss)",
-                      actual_delay, expected_delay)
+        self.log.info("Confirmed: Deferred restart executed after %.1fs (expected ~%ss), "
+                      "incarnation %s -> %s",
+                      actual_delay, expected_delay,
+                      first_restart_incarnation, deferred_restart_incarnation)
 
-        self.log_step("Step 5: Verify delay was approximately correct (80% to 120% of expected)")
+        self.log_step("Step 5: Verify delay was approximately correct (80%% to 120%% of expected)")
         min_delay = expected_delay * 0.8
         max_delay = expected_delay * 1.2
 
         if actual_delay < min_delay:
-            self.fail("Restart too early: %.1fs < %.1fs" % (actual_delay, min_delay))
+            self.fail(f"Restart too early: {actual_delay:.1f}s < {min_delay:.1f}s")
         elif actual_delay > max_delay:
             self.log.warning("Restart delayed beyond expected: %.1fs > %.1fs "
                              "(may be acceptable depending on system load)",

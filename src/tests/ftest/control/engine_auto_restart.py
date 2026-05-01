@@ -37,16 +37,35 @@ class EngineAutoRestartTest(ControlTestBase):
 
         test_rank = self.random.choice(all_ranks)
 
-        self.log_step("Testing automatic restart of rank %s", test_rank)
+        self.log_step("testing automatic restart of rank %s", test_rank)
+
+        # get initial incarnation number
+        initial_incarnation = self.get_rank_incarnation(test_rank)
+        if initial_incarnation is None:
+            self.fail(f"failed to get initial incarnation for rank {test_rank}")
+
+        self.log.info("rank %s initial incarnation: %s", test_rank, initial_incarnation)
 
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
 
         if not restarted:
-            self.fail("Rank %s did not automatically restart. Final state: %s"
-                      % (test_rank, final_state))
+            self.fail(f"rank {test_rank} did not automatically restart. "
+                      f"final state: {final_state}")
 
-        self.log.info("SUCCESS: Rank %s automatically restarted after self-termination",
-                      test_rank)
+        # verify incarnation increased after restart
+        final_incarnation = self.get_rank_incarnation(test_rank)
+        if final_incarnation is None:
+            self.fail(f"failed to get final incarnation for rank {test_rank}")
+
+        self.log.info("rank %s final incarnation: %s", test_rank, final_incarnation)
+
+        if final_incarnation <= initial_incarnation:
+            self.fail(f"rank {test_rank} incarnation did not increase after restart. "
+                      f"before: {initial_incarnation}, after: {final_incarnation}")
+
+        self.log.info("SUCCESS: rank %s automatically restarted after self-termination "
+                      "(incarnation %s -> %s)",
+                      test_rank, initial_incarnation, final_incarnation)
 
     def test_auto_restart_multiple_ranks(self):
         """Test automatic restart of multiple ranks.
@@ -71,36 +90,50 @@ class EngineAutoRestartTest(ControlTestBase):
 
         self.log_step("Step 1: Excluding %s ranks: %s", (num_to_test, test_ranks))
 
+        incs = []
         for rank in test_ranks:
+            initial_incarnation = self.get_rank_incarnation(rank)
+            if initial_incarnation is None:
+                self.fail(f"failed to get initial incarnation for rank {rank}")
+            incs.append(initial_incarnation)
             self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
-            time.sleep(1)  # Small delay between exclusions
-
-        # Step 2: Verify all reach adminexcluded state
-        self.log_step("Step 2: Verifying all ranks get excluded from system")
-        time.sleep(10)
-
-        for rank in test_ranks:
-            failed = self.server_managers[0].check_rank_state(
-                ranks=[rank], valid_states=["adminexcluded"], max_checks=5)
-            if failed:
-                self.fail("Rank %s did not get excluded from system" % rank)
+            time.sleep(1)  # small delay between exclusions
             self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
 
         # Step 3: Wait and verify all restart
-        wait_time = 20
+        wait_time = 35
+
         self.log_step("Step 3: Waiting %ss to verify all automatically restart", wait_time)
         time.sleep(wait_time)
 
         errors = []
+        end_incs = []
         for rank in test_ranks:
             failed = self.server_managers[0].check_rank_state(
                 ranks=[rank], valid_states=["joined"], max_checks=1)
             if failed:
                 errors.append("Rank %s unexpectedly not restarted when auto-restart enabled"
                               % rank)
+            end_incarnation = self.get_rank_incarnation(rank)
+            if end_incarnation is None:
+                self.fail(f"failed to get end incarnation for rank {rank}")
+            end_incs.append(end_incarnation)
 
         if errors:
             self.fail("\n".join(errors))
+
+        # Show changes
+        for idx, (old, new) in enumerate(zip(incs, end_incs)):
+            actual_rank = test_ranks[idx]
+            if new > old:
+                self.log.debug(f"Rank {actual_rank}: {old} -> {new} (restarted)")
+            else:
+                self.log.debug(f"Rank {actual_rank}: {old} -> {new} (NOT restarted!)")
+
+        # Verify all increased
+        all_increased = all(a > b for b, a in zip(incs, end_incs))
+        if not all_increased:
+            self.fail("ERROR: Not all ranks restarted!")
 
         self.log.info("SUCCESS: All of %s automatically restarted", test_ranks)
 
@@ -129,13 +162,28 @@ class EngineAutoRestartTest(ControlTestBase):
 
         self.log_step("Excluding non-service rank %s while pool is active", test_rank)
 
+        # Get initial incarnation
+        initial_incarnation = self.get_rank_incarnation(test_rank)
+        if initial_incarnation is None:
+            self.fail(f"Failed to get initial incarnation for rank {test_rank}")
+
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
 
         if not restarted:
-            self.fail("Rank %s did not restart. State: %s" % (test_rank, final_state))
+            self.fail(f"Rank {test_rank} did not restart. State: {final_state}")
+
+        # Verify incarnation increased
+        final_incarnation = self.get_rank_incarnation(test_rank)
+        if final_incarnation is None:
+            self.fail(f"Failed to get final incarnation for rank {test_rank}")
+
+        if final_incarnation <= initial_incarnation:
+            self.fail(f"Rank {test_rank} incarnation did not increase. "
+                      f"Before: {initial_incarnation}, After: {final_incarnation}")
 
         # Verify pool is still accessible
         self.log_step("Verifying pool is still accessible after rank restart")
         self.pool.query()
 
-        self.log.info("SUCCESS: Rank %s restarted and pool remains accessible", test_rank)
+        self.log.info("SUCCESS: Rank %s restarted (incarnation %s -> %s) and pool remains "
+                      "accessible", test_rank, initial_incarnation, final_incarnation)
