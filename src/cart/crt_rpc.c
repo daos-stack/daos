@@ -23,7 +23,7 @@
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 
-void
+static void
 crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 {
 	struct crt_ctl_fi_toggle_in	*in_args;
@@ -44,7 +44,7 @@ crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
 }
 
-void
+static void
 crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 {
 	struct crt_ctl_log_add_msg_in	*in_args;
@@ -68,7 +68,7 @@ crt_hdlr_ctl_log_add_msg(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
 }
 
-void
+static void
 crt_hdlr_ctl_log_set(crt_rpc_t *rpc_req)
 {
 	struct crt_ctl_log_set_in	*in_args;
@@ -86,7 +86,7 @@ crt_hdlr_ctl_log_set(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
 }
 
-void
+static void
 crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 {
 	struct crt_ctl_fi_attr_set_in	*in_args_fi_attr;
@@ -108,6 +108,48 @@ crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 		D_ERROR("d_fault_attr_set() failed. rc: " DF_RC "\n", DP_RC(rc));
 
 	out_args_fi_attr->fa_ret = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
+}
+
+static int
+crt_perf_verify_data(const void *buf, size_t buf_size, int *idx_p, int *val_p)
+{
+	const int *buf_ptr = (const int *)buf;
+	size_t     i;
+
+	/* Skip first integer (used for checking rank) */
+	for (i = 1; i < buf_size / sizeof(int); i++)
+		if (buf_ptr[i] != (int)i) {
+			*idx_p = (int)i;
+			*val_p = buf_ptr[i];
+			return -DER_INVAL;
+		}
+
+	return 0;
+}
+
+static void
+crt_hdlr_perf_rate(crt_rpc_t *rpc_req)
+{
+	struct crt_perf_rate_in  *in_args;
+	struct crt_perf_rate_out *out_args;
+	int                       rc;
+
+	in_args  = crt_req_get(rpc_req);
+	out_args = crt_reply_get(rpc_req);
+
+	if (in_args->verify) {
+		d_iov_t *iov = &in_args->iov;
+		out_args->rc = crt_perf_verify_data(iov->iov_buf, iov->iov_buf_len, &out_args->idx,
+						    &out_args->val);
+	} else {
+		out_args->rc  = 0;
+		out_args->idx = 0;
+		out_args->val = 0;
+	}
+
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send() failed. rc: %d\n", rc);
@@ -187,6 +229,8 @@ CRT_RPC_DEFINE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
 CRT_RPC_DEFINE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 	       CRT_OSEQ_CTL_LOG_ADD_MSG)
 
+CRT_RPC_DEFINE(crt_perf_rate, CRT_ISEQ_PERF_RATE, CRT_OSEQ_PERF_RATE)
+
 /* Define for crt_internal_rpcs[] array population below.
  * See CRT_INTERNAL_RPCS_LIST macro definition
  */
@@ -217,6 +261,8 @@ static struct crt_proto_rpc_format crt_ctl_rpcs[] = {
 static struct crt_proto_rpc_format crt_iv_rpcs[] = {
 	CRT_IV_RPCS_LIST
 };
+
+static struct crt_proto_rpc_format crt_perf_rpcs[] = {CRT_PERF_RPCS_LIST};
 
 #undef X
 
@@ -400,10 +446,24 @@ crt_internal_rpc_register(bool server)
 	cpf.cpf_base  = CRT_OPC_IV_BASE;
 
 	rc = crt_proto_register(&cpf);
-	if (rc != 0)
-		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed, " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
 
-	return rc;
+	cpf.cpf_name  = "perf";
+	cpf.cpf_ver   = CRT_PROTO_PERF_VERSION;
+	cpf.cpf_count = ARRAY_SIZE(crt_perf_rpcs);
+	cpf.cpf_prf   = crt_perf_rpcs;
+	cpf.cpf_base  = CRT_OPC_PERF_BASE;
+
+	rc = crt_proto_register(&cpf);
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	return 0;
 }
 
 struct crt_pfi {

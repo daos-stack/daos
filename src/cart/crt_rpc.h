@@ -253,10 +253,11 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 }
 
 #define CRT_PROTO_INTERNAL_VERSION 4
-#define CRT_PROTO_FI_VERSION 3
-#define CRT_PROTO_ST_VERSION 1
-#define CRT_PROTO_CTL_VERSION 1
+#define CRT_PROTO_FI_VERSION       3
+#define CRT_PROTO_ST_VERSION       1
+#define CRT_PROTO_CTL_VERSION      1
 #define CRT_PROTO_IV_VERSION       2
+#define CRT_PROTO_PERF_VERSION     1
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -314,6 +315,8 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 		0, &CQF_crt_iv_sync,					\
 		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)
 
+#define CRT_PERF_RPCS_LIST X(CRT_OPC_PERF_RATE, 0, &CQF_crt_perf_rate, crt_hdlr_perf_rate, NULL)
+
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a,
 
@@ -325,7 +328,7 @@ enum {
 	CRT_INTERNAL_RPCS_LIST
 };
 
-/* CRT fault injection opcode definitions, must be 0xFF00xxxx.*/
+/* CRT fault injection opcode definitions, must be 0xF100xxxxx.*/
 #define CRT_OPC_FI_BASE		0xF1000000UL
 enum {
 	__FIRST_FI  = CRT_PROTO_OPC(CRT_OPC_FI_BASE,
@@ -333,7 +336,7 @@ enum {
 	CRT_FI_RPCS_LIST
 };
 
-/* CRT self-test opcode definitions, must be 0xFF00xxxx.*/
+/* CRT self-test opcode definitions, must be 0xF200xxxxx.*/
 #define CRT_OPC_ST_BASE		0xF2000000UL
 enum {
 	__FIRST_ST  = CRT_PROTO_OPC(CRT_OPC_ST_BASE,
@@ -341,7 +344,7 @@ enum {
 	CRT_ST_RPCS_LIST
 };
 
-/* CRT ctl opcode definitions, must be 0xFF00xxxx.*/
+/* CRT ctl opcode definitions, must be 0xF300xxxxx.*/
 #define CRT_OPC_CTL_BASE		0xF3000000UL
 enum {
 	__FIRST_CTL  = CRT_PROTO_OPC(CRT_OPC_CTL_BASE,
@@ -349,12 +352,19 @@ enum {
 	CRT_CTL_RPCS_LIST
 };
 
-/* CRT IV opcode definitions, must be 0xFF00xxxx.*/
+/* CRT IV opcode definitions, must be 0xF400xxxxx.*/
 #define CRT_OPC_IV_BASE		0xF4000000UL
 enum {
 	__FIRST_IV  = CRT_PROTO_OPC(CRT_OPC_IV_BASE,
 				    CRT_PROTO_IV_VERSION, 0) - 1,
 	CRT_IV_RPCS_LIST
+};
+
+/* CRT Perf opcode definitions, must be 0xF500xxxxx.*/
+#define CRT_OPC_PERF_BASE 0xF5000000UL
+enum {
+	__FIRST_PERF = CRT_PROTO_OPC(CRT_OPC_PERF_BASE, CRT_PROTO_PERF_VERSION, 0) - 1,
+	CRT_PERF_RPCS_LIST
 };
 
 #define CRT_OPC_SWIM_BASE	0xFE000000UL
@@ -611,6 +621,12 @@ CRT_RPC_DECLARE(crt_ctl_log_set, CRT_ISEQ_CTL_LOG_SET, CRT_OSEQ_CTL_LOG_SET)
 
 CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 		CRT_OSEQ_CTL_LOG_ADD_MSG)
+
+#define CRT_ISEQ_PERF_RATE /* input fields */ ((d_iov_t)(iov)CRT_VAR)((uint8_t)(verify)CRT_VAR)
+#define CRT_OSEQ_PERF_RATE                    /* output fields */                                  \
+	((int32_t)(rc)CRT_VAR)((int32_t)(idx)CRT_VAR)((int32_t)(val)CRT_VAR)
+
+CRT_RPC_DECLARE(crt_perf_rate, CRT_ISEQ_PERF_RATE, CRT_OSEQ_PERF_RATE)
 
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public
