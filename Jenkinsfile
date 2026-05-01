@@ -989,6 +989,52 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Leap 15.6')
+                stage('Functional on Leap 15.5') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('Leap15')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'leap15.5'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } // post
+                } // stage('Functional on Leap 15.5')
+                stage('Functional on Leap 15.4') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('Leap15')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'leap15.4'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } // post
+                } // stage('Functional on Leap 15.4')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
