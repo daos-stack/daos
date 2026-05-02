@@ -16,6 +16,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/SRE-3764') _
 
 // Name of branch to be tested
 test_branch = 'release/2.6'
@@ -302,6 +303,7 @@ pipeline {
                             pragma_suffix: '-vm',
                             distro: 'leap15',
                             image_version: 'leap15.6',
+                            rpm_version: 'leap15.5',
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: params.BaseBranch,
