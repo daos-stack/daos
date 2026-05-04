@@ -1001,8 +1001,8 @@ struct dfs_glob {
 	uuid_t           coh_uuid;
 	daos_obj_id_t    super_oid;
 	daos_obj_id_t    root_oid;
-	daos_obj_id_t    git_oid;
 	daos_epoch_t     th_epoch;
+	daos_obj_id_t    git_oid;
 };
 
 static inline void

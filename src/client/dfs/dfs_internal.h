@@ -370,7 +370,7 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 	/** set oid and lo, bump the current hi value */
 	oid->lo = dfs->oid.lo;
 	daos_obj_oid_cycle(&dfs->oid);
-	if (unlikely(dfs->oid.lo == RESERVED_LO && dfs->oid.hi <= 1))
+	if (unlikely(dfs->oid.lo == RESERVED_LO && dfs->oid.hi <= GIT_HI))
 		daos_obj_oid_cycle(&dfs->oid); /* Avoid reserved oids */
 	oid->hi = dfs->oid.hi;
 	D_MUTEX_UNLOCK(&dfs->lock);
