@@ -2,6 +2,10 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
+## DAOS Version 2.6.5 (2026-05-04)
+
+Bugfix release
+
 ## DAOS Version 2.6.4 (2025-10-29, updated 2025-11-04)
 
 The DAOS 2.6.4 release includes the daos-2.6.4-7 RPM packages and their prerequisites.
