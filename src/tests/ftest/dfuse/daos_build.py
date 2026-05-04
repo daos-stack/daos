@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +33,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,daos_cmd
+        :avocado: tags=daosio,dfs,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         self.run_build_test("writeback")
@@ -64,7 +65,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfs,dfuse,ioil
+        :avocado: tags=daosio,dfuse,ioil
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
         self.run_build_test("writethrough", il_lib='libioil.so', run_on_vms=True)
@@ -80,7 +81,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfs,dfuse,pil4dfs
+        :avocado: tags=daosio,dfuse,pil4dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
         """
         self.run_build_test("nocache", il_lib='libpil4dfs.so', run_on_vms=True)
