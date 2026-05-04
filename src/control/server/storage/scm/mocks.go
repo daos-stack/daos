@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -483,7 +484,12 @@ func DefaultMockBackend() *MockBackend {
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.MockSysConfig) *Provider {
 	sysProv := system.NewMockSysProvider(log, msc)
 	mountProv := mount.NewProvider(log, sysProv)
-	return NewProvider(log, NewMockBackend(mbc), sysProv, mountProv)
+	return NewProvider(&ProviderConfig{
+		Log:     log,
+		Backend: NewMockBackend(mbc),
+		Sys:     sysProv,
+		Mounter: mountProv,
+	})
 }
 
 // DefaultMockProvider stubs os calls by mocking system and mount providers. scm provider functions
@@ -491,5 +497,10 @@ func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.Moc
 func DefaultMockProvider(log logging.Logger) *Provider {
 	sysProv := system.DefaultMockSysProvider(log)
 	mountProv := mount.NewProvider(log, sysProv)
-	return NewProvider(log, DefaultMockBackend(), sysProv, mountProv)
+	return NewProvider(&ProviderConfig{
+		Log:     log,
+		Backend: DefaultMockBackend(),
+		Sys:     sysProv,
+		Mounter: mountProv,
+	})
 }

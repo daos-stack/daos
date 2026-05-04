@@ -1,6 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -44,17 +44,18 @@ class ContainerListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,container_list_consolidation,faults
         :avocado: tags=ContainerListConsolidationTest,test_orphan_container
         """
+        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
+
         self.log_step("Create a pool and a container")
         pool = self.get_pool(connect=False)
-        container = self.get_container(pool=pool)
+        # This container will be removed by the checker, so skip cleanup.
+        container = self.get_container(pool=pool, register_cleanup=False)
         expected_uuid = container.uuid.lower()
 
         self.log_step("Inject fault to cause orphan container.")
         daos_command = self.get_daos_command()
         daos_command.faults_container(
-            pool=pool.identifier, cont=container.identifier,
-            location="DAOS_CHK_CONT_ORPHAN")
-        container.skip_cleanup()
+            pool=pool.identifier, cont=container.identifier, location="DAOS_CHK_CONT_ORPHAN")
 
         self.log_step("Check that the container doesn't appear with daos command.")
         pool_list = daos_command.pool_list_containers(pool=pool.identifier)
@@ -66,10 +67,10 @@ class ContainerListConsolidationTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        self.log_step("Use ddb to verify that the container is left in shards (PMEM only).")
-        vos_paths = self.server_managers[0].get_vos_files(pool)
-        if vos_paths:
+        if not md_on_ssd:
+            self.log_step("Use ddb to verify that the container is left in shards (PMEM only).")
             # We're using a PMEM cluster.
+            vos_paths = self.server_managers[0].get_vos_files(pool)
             ddb_command = DdbCommand(self.server_managers[0].hosts[0:1], self.bin, vos_paths[0])
             cmd_result = ddb_command.list_component()
             uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
@@ -107,9 +108,8 @@ class ContainerListConsolidationTest(TestWithServers):
         if not seq_num:
             self.fail("Checker didn't detect any fault!")
 
-        msg = ("Repair with option 0; Destroy the orphan container to release space "
-               "[suggested].")
-        self.log_step(msg)
+        self.log_step(
+            "Repair with option 0; Destroy the orphan container to release space [suggested].")
         dmg_command.check_repair(seq_num=seq_num, action=0)
 
         self.log_step("Query the checker until the fault is repaired.")
@@ -124,11 +124,11 @@ class ContainerListConsolidationTest(TestWithServers):
         self.log_step("Disable the checker.")
         dmg_command.check_disable(start=False)
 
-        if vos_paths:
+        if not md_on_ssd:
             # ddb requires the vos file. PMEM cluster only.
-            msg = ("Run the ddb command and verify that the container is removed from shard "
-                   "(PMEM only).")
-            self.log_step(msg)
+            self.log_step(
+                "Run the ddb command and verify that the container is removed from shard "
+                "(PMEM only).")
             cmd_result = ddb_command.list_component()
             uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
             match = re.search(uuid_regex, cmd_result.joined_stdout)
@@ -143,7 +143,3 @@ class ContainerListConsolidationTest(TestWithServers):
             self.log.error(error)
         finally:
             report_errors(test=self, errors=errors)
-
-        # Remove container object so that tearDown will not try to destroy the non-existent
-        # container.
-        container.skip_cleanup()
