@@ -1053,7 +1053,7 @@ iod_split(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size, daos_s
 	daos_size_t rgs_sz = 0; /* sizes in bytes */
 	daos_size_t sgl_sz = 0;
 	daos_size_t spl_sz = 0;
-	daos_size_t iod_ix, sgl_ix, spl_ix, len, ix, tail;
+	daos_size_t sgl_ix, spl_ix, len, ix, tail;
 	daos_off_t  boff = 0;
 	char       *bptr;
 	int         rc = 0;
@@ -1115,7 +1115,7 @@ iod_split(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size, daos_s
 			split->sgl_v[spl_ix].sg_iovs[ix].iov_buf_len = len;
 			ix++;
 			if (ix == split->sgl_v[spl_ix].sg_nr) {
-				d_sg_list_t *new;
+				d_iov_t *new;
 				daos_size_t n = split->sgl_v[spl_ix].sg_nr + 4;
 				D_REALLOC_ARRAY(new, split->sgl_v[spl_ix].sg_iovs,
 						split->sgl_v[spl_ix].sg_nr, n);
@@ -1579,7 +1579,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th, daos_array_iod_t *rg_iod_i
 	d_sg_list_t      *user_sgl; /* sgl for a current split */
 	daos_size_t       sn;
 
-	if (rg_iod == NULL) {
+	if (rg_iod_in == NULL) {
 		D_ERROR("NULL iod passed\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
