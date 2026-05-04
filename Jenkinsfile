@@ -302,6 +302,7 @@ pipeline {
                             pragma_suffix: '-vm',
                             distro: 'leap15',
                             image_version: 'leap15.6',
+                            rpm_distro: '.suse.lp155',
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: params.BaseBranch,
