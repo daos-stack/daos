@@ -18,6 +18,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@grom72/SRE-3764') _
 
 // The trusted-pipeline-lib daosLatestVersion() method will convert this into a number
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -553,7 +554,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.5') {
+                stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1137,7 +1138,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on Leap 15.5')
+                } // stage('Test RPMs on Leap 15.4')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
