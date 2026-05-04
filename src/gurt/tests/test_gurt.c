@@ -749,12 +749,12 @@ test_log(void **state)
 static void
 test_dd_stderr(void **state)
 {
-	int	rc;
-	int	i;
+	int rc;
+	int i;
 
 	struct {
-		const char	*env_val;
-		d_dbug_t	 expected;
+		const char *env_val;
+		d_dbug_t    expected;
 	} test_cases[] = {
 		/* Standard dictionary values */
 		{"emit",	DLOG_EMIT},
