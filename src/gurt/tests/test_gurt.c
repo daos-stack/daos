@@ -756,25 +756,25 @@ test_dd_stderr(void **state)
 		const char *env_val;
 		d_dbug_t    expected;
 	} test_cases[] = {
-		/* Standard dictionary values */
-		{"emit",	DLOG_EMIT},
-		{"fatal",	DLOG_EMERG},
-		{"alert",	DLOG_ALERT},
-		{"crit",	DLOG_CRIT},
-		{"err",		DLOG_ERR},
-		{"error",	DLOG_ERR},
-		{"warn",	DLOG_WARN},
-		{"note",	DLOG_NOTE},
-		{"info",	DLOG_INFO},
-		{"debug",	DLOG_DBG},
-		{"dbug",	DLOG_DBG},
-		/* Case insensitivity */
-		{"ERR",		DLOG_ERR},
-		{"Warn",	DLOG_WARN},
-		{"CRIT",	DLOG_CRIT},
-		{"Info",	DLOG_INFO},
-		{"error",	DLOG_ERR},
-		{"dbug",	DLOG_DBG},
+	    /* Standard dictionary values */
+	    {"emit", DLOG_EMIT},
+	    {"fatal", DLOG_EMERG},
+	    {"alert", DLOG_ALERT},
+	    {"crit", DLOG_CRIT},
+	    {"err", DLOG_ERR},
+	    {"error", DLOG_ERR},
+	    {"warn", DLOG_WARN},
+	    {"note", DLOG_NOTE},
+	    {"info", DLOG_INFO},
+	    {"debug", DLOG_DBG},
+	    {"dbug", DLOG_DBG},
+	    /* Case insensitivity */
+	    {"ERR", DLOG_ERR},
+	    {"Warn", DLOG_WARN},
+	    {"CRIT", DLOG_CRIT},
+	    {"Info", DLOG_INFO},
+	    {"error", DLOG_ERR},
+	    {"dbug", DLOG_DBG},
 	};
 
 	/* Tear down the log initialized by init_tests */
