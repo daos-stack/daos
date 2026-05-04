@@ -2108,6 +2108,9 @@ restart:
 
 	/* Populate stbuf if requested */
 	if (stbuf) {
+		daos_array_stbuf_t array_stbuf = {0};
+		daos_handle_t      stat_oh;
+
 		memset(stbuf, 0, sizeof(struct stat));
 		stbuf->st_nlink        = entry.ref_cnt;
 		stbuf->st_mode         = entry.mode & ~MODE_HARDLINK_BIT;
@@ -2119,6 +2122,17 @@ restart:
 		stbuf->st_ctim.tv_nsec = entry.ctime_nano;
 		stbuf->st_atim         = stbuf->st_mtim;
 		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
+
+		/* Query the array size using the open handle, matching entry_stat() behavior */
+		stat_oh = new_obj ? new_obj->oh : obj->oh;
+		rc      = daos_array_stat(stat_oh, DAOS_TX_NONE, &array_stbuf, NULL);
+		if (rc) {
+			D_WARN("daos_array_stat() failed for new link '%s' " DF_RC "\n", name,
+			       DP_RC(rc));
+		} else {
+			stbuf->st_size   = array_stbuf.st_size;
+			stbuf->st_blocks = (array_stbuf.st_size + (1 << 9) - 1) >> 9;
+		}
 	}
 
 	DFS_OP_STAT_INCR(dfs, DOS_LINK);

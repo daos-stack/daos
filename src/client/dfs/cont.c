@@ -1508,7 +1508,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				hlink = d_hash_rec_find(hlm_hash, &oids[i], sizeof(daos_obj_id_t));
 				if (hlink != NULL) {
 					struct hlm_check_entry *hce = hlm_check_obj(hlink);
-					struct dfs_entry        hlm_entry;
+					struct dfs_entry        hlm_entry = {0};
 					int                     delta;
 
 					/* Set hardlink bit in the new entry */

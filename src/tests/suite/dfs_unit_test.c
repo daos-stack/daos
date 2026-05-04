@@ -7658,6 +7658,85 @@ dfs_test_checker_hlm(void **state)
 	print_message("\ndfs_test_checker_hlm completed successfully!\n");
 }
 
+static void
+dfs_test_hardlink_stbuf_size(void **state)
+{
+	test_arg_t *arg = *state;
+	dfs_obj_t  *dir;
+	dfs_obj_t  *file, *link_obj;
+	struct stat stbuf_before, stbuf_link, stbuf_after;
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	char        buf[512];
+	int         rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("dfs_test_hardlink_stbuf_size: verify st_size in dfs_link() stbuf\n");
+
+	/* Create a directory for this test */
+	rc = dfs_open(dfs_mt, NULL, "hlsz_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Create a regular file */
+	rc = dfs_open(dfs_mt, dir, "hlsz_file", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+
+	/* Write a known amount of data so st_size is non-zero */
+	memset(buf, 'A', sizeof(buf));
+	d_iov_set(&iov, buf, sizeof(buf));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs_mt, file, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Stat the source file to capture its size before linking */
+	rc = dfs_ostat(dfs_mt, file, &stbuf_before);
+	assert_int_equal(rc, 0);
+	print_message("  Source file st_size = %lld (expected %zu)\n",
+		      (long long)stbuf_before.st_size, sizeof(buf));
+	assert_int_equal(stbuf_before.st_size, sizeof(buf));
+
+	/* Create a hardlink and capture the stbuf returned by dfs_link() */
+	rc = dfs_link(dfs_mt, file, dir, "hlsz_link", &link_obj, &stbuf_link);
+	assert_int_equal(rc, 0);
+
+	/* Bug check: st_size must not be 0 after dfs_link() */
+	print_message("  dfs_link() stbuf st_size  = %lld (expected %zu)\n",
+		      (long long)stbuf_link.st_size, sizeof(buf));
+	assert_int_equal(stbuf_link.st_size, sizeof(buf));
+
+	/* st_blocks must also be consistent (non-zero for a non-empty file) */
+	print_message("  dfs_link() stbuf st_blocks = %lld\n", (long long)stbuf_link.st_blocks);
+	assert_true(stbuf_link.st_blocks > 0);
+
+	/* Cross-check: stat through the link entry and confirm size matches */
+	rc = dfs_ostat(dfs_mt, link_obj, &stbuf_after);
+	assert_int_equal(rc, 0);
+	print_message("  dfs_ostat(link) st_size    = %lld\n", (long long)stbuf_after.st_size);
+	assert_int_equal(stbuf_after.st_size, sizeof(buf));
+
+	/* Cleanup */
+	rc = dfs_release(link_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "hlsz_link", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "hlsz_file", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "hlsz_dir", false, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("dfs_test_hardlink_stbuf_size: PASSED\n");
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
@@ -7713,6 +7792,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST36: dfs hardlink osetattr", dfs_test_hardlink_osetattr, async_disable,
      test_case_teardown},
     {"DFS_UNIT_TEST37: dfs checker HLM", dfs_test_checker_hlm, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST38: dfs hardlink stbuf st_size", dfs_test_hardlink_stbuf_size, async_disable,
+     test_case_teardown},
 };
 
 static int
