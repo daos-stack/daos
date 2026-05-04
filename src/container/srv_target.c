@@ -210,7 +210,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
 		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			atomic_load(&pool->sp_rebuilding), pool->sp_rebuild_scan);
+			atomic_load(&pool->sp_rebuilding), atomic_load(&pool->sp_rebuild_enum));
 		return false;
 	}
 
@@ -319,8 +319,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	daos_epoch_t		epoch_max, epoch_min;
 	daos_epoch_range_t	epoch_range;
 	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
-	uint64_t		hlc = d_hlc_get();
-	uint64_t		change_hlc;
+	uint64_t                 hlc = d_hlc_get();
 	uint64_t		interval;
 	uint64_t		snapshots_local[MAX_SNAPSHOT_LOCAL] = { 0 };
 	uint64_t		*snapshots = NULL;
@@ -329,16 +328,14 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	uint32_t		flags = 0;
 	int			i, rc = 0;
 
-	change_hlc = max(cont->sc_snapshot_delete_hlc,
-			 cont->sc_pool->spc_rebuild_end_hlc);
-	if (param->ap_full_scan_hlc < change_hlc) {
-		/* Snapshot has been deleted or rebuild happens since the last
+	if (param->ap_full_scan_hlc < cont->sc_snapshot_delete_hlc) {
+		/* Snapshot has been deleted since the last
 		 * aggregation, let's restart from 0.
 		 */
 		epoch_min = 0;
 		flags |= VOS_AGG_FL_FORCE_SCAN;
-		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
-			change_hlc, param->ap_full_scan_hlc);
+		D_DEBUG(DB_EPC, "snapshot del hlc " DF_X64 " > full " DF_X64 "\n",
+			cont->sc_snapshot_delete_hlc, param->ap_full_scan_hlc);
 	} else {
 		epoch_min = get_hae(cont, param->ap_vos_agg);
 	}
@@ -378,41 +375,18 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
 		hlc, epoch_max, epoch_min, cont->sc_aggregation_max);
 
-	if (cont->sc_snapshots_nr + 1 < MAX_SNAPSHOT_LOCAL) {
+	snapshots_nr = cont->sc_snapshots_nr;
+	if (snapshots_nr < MAX_SNAPSHOT_LOCAL) {
 		snapshots = snapshots_local;
 	} else {
-		D_ALLOC(snapshots, (cont->sc_snapshots_nr + 1) *
-			sizeof(daos_epoch_t));
+		D_ALLOC(snapshots, snapshots_nr * sizeof(daos_epoch_t));
 		if (snapshots == NULL)
 			return -DER_NOMEM;
 	}
 
-	if (cont->sc_pool->spc_rebuild_fence != 0) {
-		uint64_t rebuild_fence = cont->sc_pool->spc_rebuild_fence;
-		int	j;
-		int	insert_idx;
-
-		/* insert rebuild_fetch into the snapshot list */
-		D_DEBUG(DB_EPC, "rebuild fence "DF_X64"\n", rebuild_fence);
-		for (j = 0, insert_idx = 0; j < cont->sc_snapshots_nr; j++) {
-			if (cont->sc_snapshots[j] < rebuild_fence) {
-				snapshots[j] = cont->sc_snapshots[j];
-				insert_idx++;
-			} else {
-				snapshots[j + 1] = cont->sc_snapshots[j];
-			}
-		}
-		snapshots[insert_idx] = rebuild_fence;
-		snapshots_nr = cont->sc_snapshots_nr + 1;
-	} else {
-		/* Since sc_snapshots might be freed by other ULT, let's
-		 * always copy here.
-		 */
-		snapshots_nr = cont->sc_snapshots_nr;
-		if (snapshots_nr > 0)
-			memcpy(snapshots, cont->sc_snapshots,
-					snapshots_nr * sizeof(daos_epoch_t));
-	}
+	/* Since sc_snapshots might be freed by other ULT, let's always copy here. */
+	if (snapshots_nr > 0)
+		memcpy(snapshots, cont->sc_snapshots, snapshots_nr * sizeof(daos_epoch_t));
 
 	/* Find highest snapshot less than last aggregated epoch. */
 	for (i = 0; i < snapshots_nr && snapshots[i] < epoch_min; ++i)
@@ -1056,18 +1030,24 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
 			  DF_CONT "[%d]: Load container error",
 			  DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
+		if (rc == -DER_NONEXIST)
+			return -DER_CONT_NONEXIST;
 		return rc;
 	}
 
 	/*
-	 * The container is in stopping because:
-	 * 1. Container is going to be destroyed, or;
-	 * 2. Pool is going to be destroyed, or;
-	 * 3. Pool service is going to be stopped;
+	 * The container can be unavailable because:
+	 * 1. Container is going to be destroyed; or
+	 * 2. Pool is going to be destroyed; or
+	 * 3. Pool service is going to be stopped.
 	 */
-	if (cont_child->sc_stopping || cont_child->sc_destroying) {
-		D_DEBUG(DB_MD,
-			DF_CONT "[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
+	if (cont_child->sc_destroying) {
+		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being destroying (s=%d, d=%d)\n",
+			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
+			cont_child->sc_destroying);
+		rc = -DER_CONT_NONEXIST;
+	} else if (cont_child->sc_stopping) {
+		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being stopped (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
 			cont_child->sc_destroying);
 		rc = -DER_SHUTDOWN;
@@ -1517,10 +1497,23 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid, false /* create */,
 			       ds_cont);
+	if (rc == -DER_NONEXIST)
+		return -DER_CONT_NONEXIST;
+
 	if (rc != 0)
 		return rc;
 
-	if ((*ds_cont)->sc_stopping || (*ds_cont)->sc_destroying) {
+	/**
+	 * Return -DER_CONT_NONEXIST to simplify caller-side handling.
+	 * This may return -DER_CONT_DESTROYING in the future if needed.
+	 **/
+	if ((*ds_cont)->sc_destroying) {
+		cont_child_put(tls->dt_cont_cache, *ds_cont);
+		*ds_cont = NULL;
+		return -DER_CONT_NONEXIST;
+	}
+
+	if ((*ds_cont)->sc_stopping) {
 		cont_child_put(tls->dt_cont_cache, *ds_cont);
 		*ds_cont = NULL;
 		return -DER_SHUTDOWN;
@@ -1548,7 +1541,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 	}
 
 	rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
-	if (rc != -DER_NONEXIST) {
+	if (rc != -DER_CONT_NONEXIST) {
 		if (rc == 0) {
 			if (cont_out != NULL) {
 				D_ASSERT(*cont_out != NULL);
