@@ -38,17 +38,17 @@ func addAppCommands(app *grumble.App, api DdbAPI) {
 	app.AddCommand(&grumble.Command{
 		Name:    "open",
 		Aliases: nil,
-		Help:    "Opens the vos file at <path>",
-		LongHelp: `Opens the vos file at <path>. The '-w' option allows for modifying the vos file
+		Help:    "Opens the VOS file at <path>",
+		LongHelp: `Opens the VOS file at <path>. The '-w' option allows for modifying the VOS file
 with the rm, load, commit_ilog, etc commands. The path <path> should be an absolute path to the
 pool shard. Part of the path is used to determine what the pool uuid is.`,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
-			f.Bool("w", "write_mode", false, "Open the vos file in write mode.")
+			f.Bool("w", "write_mode", false, "Open the VOS file in write mode.")
 			f.String("p", "db_path", "", "Path to the sys db to open.")
 		},
 		Args: func(a *grumble.Args) {
-			a.String("path", "Path to the vos file to open.")
+			a.String("path", "Path to the VOS file to open.")
 		},
 		Run: func(c *grumble.Context) error {
 			return api.Open(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.Bool("write_mode"))
@@ -71,7 +71,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 	app.AddCommand(&grumble.Command{
 		Name:      "close",
 		Aliases:   nil,
-		Help:      "Close the currently opened vos pool shard",
+		Help:      "Close the currently opened VOS pool shard",
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
@@ -96,7 +96,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		Name:    "value_dump",
 		Aliases: nil,
 		Help:    "Dump a value",
-		LongHelp: `Dump a value to the screen or file. The vos path should be a complete
+		LongHelp: `Dump a value to the screen or file. The VOS path should be a complete
 path, including the akey and if the value is an array value it should include
 the extent. If a path to a file was provided then the value will be written to
 the file, else it will be printed to the screen.`,
@@ -130,17 +130,17 @@ and everything under it, to a single value.`,
 	app.AddCommand(&grumble.Command{
 		Name:    "value_load",
 		Aliases: nil,
-		Help:    "Load a value to a vos path. ",
-		LongHelp: `Load a value to a vos path. This can be used to update
+		Help:    "Load a value to a VOS path. ",
+		LongHelp: `Load a value to a VOS path. This can be used to update
 the value of an existing key, or create a new key. The <src> is a path to a
-file on the file system. The <dst> is a vos tree path to a value where the
+file on the file system. The <dst> is a VOS tree path to a value where the
 data will be loaded. If the <dst> path currently exists, then the destination
 path must match the value type, meaning, if the value type is an array, then
 the path must include the extent, otherwise, it must not.`,
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
 			a.String("src", "Source file path.")
-			a.String("dst", "Destination vos tree path to a value.")
+			a.String("dst", "Destination VOS tree path to a value.")
 		},
 		Run: func(c *grumble.Context) error {
 			return api.ValueLoad(c.Args.String("src"), c.Args.String("dst"))
@@ -235,7 +235,7 @@ the path must include the extent, otherwise, it must not.`,
 		HelpGroup: "smd",
 		Args: func(a *grumble.Args) {
 			a.String("nvme_conf", "Path to the nvme conf file. (default /mnt/daos/daos_nvme.conf)", grumble.Default(""))
-			a.String("db_path", "Path to the vos db. (default /mnt/daos)", grumble.Default(""))
+			a.String("db_path", "Path to the sys db. (default /mnt/daos)", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
 			return api.SmdSync(c.Args.String("nvme_conf"), c.Args.String("db_path"))
@@ -306,17 +306,17 @@ the path must include the extent, otherwise, it must not.`,
 	app.AddCommand(&grumble.Command{
 		Name:      "feature",
 		Aliases:   nil,
-		Help:      "Manage vos pool features",
+		Help:      "Manage VOS pool features",
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
-			f.String("e", "enable", "", "Enable vos pool features")
-			f.String("d", "disable", "", "Disable vos pool features")
+			f.String("e", "enable", "", "Enable VOS pool features")
+			f.String("d", "disable", "", "Disable VOS pool features")
 			f.String("p", "db_path", "", "Path to the sys db")
 			f.Bool("s", "show", false, "Show current features")
 		},
 		Args: func(a *grumble.Args) {
-			a.String("path", "Optional, Path to the vos file", grumble.Default(""))
+			a.String("path", "Optional, Path to the VOS file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
 			return api.Feature(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
@@ -327,14 +327,14 @@ the path must include the extent, otherwise, it must not.`,
 	app.AddCommand(&grumble.Command{
 		Name:      "rm_pool",
 		Aliases:   nil,
-		Help:      "Remove a vos pool.",
+		Help:      "Remove a VOS pool.",
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.String("p", "db_path", "", "Path to the sys db")
 		},
 		Args: func(a *grumble.Args) {
-			a.String("path", "Path to the vos file")
+			a.String("path", "Path to the VOS file")
 		},
 		Run: func(c *grumble.Context) error {
 			return api.RmPool(c.Args.String("path"), c.Flags.String("db_path"))
@@ -365,7 +365,7 @@ the path must include the extent, otherwise, it must not.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
-			a.String("db_path", "Path to the vos db.")
+			a.String("db_path", "Path to the sys db.")
 		},
 		Run: func(c *grumble.Context) error {
 			return api.DevList(c.Args.String("db_path"))
@@ -380,7 +380,7 @@ the path must include the extent, otherwise, it must not.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
-			a.String("db_path", "Path to the vos db.")
+			a.String("db_path", "Path to the sys db.")
 			a.String("old_dev", "Old device UUID.")
 			a.String("new_dev", "New device UUID.")
 		},

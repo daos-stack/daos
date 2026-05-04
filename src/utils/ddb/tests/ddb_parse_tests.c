@@ -75,7 +75,7 @@ parse_vos_file_parts_test_errors(void **state)
 	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-01", NULL, &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	/* Test invalid vos paths with too long vos path */
+	/* Test invalid VOS paths with too long VOS path */
 	D_ALLOC_ARRAY_CHECK(buf, VOS_PATH_SIZE + 1);
 	memset(buf, 'a', VOS_PATH_SIZE + 1);
 	buf[0] = '/';

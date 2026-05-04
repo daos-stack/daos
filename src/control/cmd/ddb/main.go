@@ -56,7 +56,7 @@ func exitWithError(err error) {
 }
 
 type cliOptions struct {
-	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
+	WriteMode bool   `long:"write_mode" short:"w" description:"Open the VOS file in write mode."`
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	SysdbPath string `long:"db_path" short:"p" description:"Path to the sys db."`
 	VosPath   string `long:"vos_path" short:"s" description:"Path to the VOS file to open."`
@@ -75,7 +75,7 @@ Available Commands:
 `
 
 const helpTreePath = `
-Vos Tree Paths:
+VOS Paths:
 
 Many of the commands take a VOS tree path. The format for this path is
 [cont]/[obj]/[dkey]/[akey]/[extent].  To make it easier to navigate the tree, indexes can be used
@@ -104,7 +104,7 @@ MODE section of the manpage for details.
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
 const runCmdArgsErr = "Cannot use both command file and a command string"
-const vosPathMissErr = "Cannot use sys db path without a vos path"
+const vosPathMissErr = "Cannot use sys db path without a VOS path"
 const loggerInitErr = "Logging facilities cannot be initialized"
 const ctxInitErr = "DDB Context cannot be initialized"
 const vosPathOpenErr = "Error opening VOS path '%s'"
