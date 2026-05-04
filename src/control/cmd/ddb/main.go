@@ -37,7 +37,7 @@ type unknownCmdError struct {
 }
 
 func (e *unknownCmdError) Error() string {
-	return fmt.Sprintf("Error running command '%s' unknown command, try 'help'", e.cmd)
+	return fmt.Sprintf("Unknown command: '%s'. Run 'help' to see available commands.", e.cmd)
 }
 
 func exitWithError(err error) {
