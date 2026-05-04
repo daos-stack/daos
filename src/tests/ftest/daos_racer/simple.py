@@ -15,7 +15,8 @@ class DaosRacerSimpleTest(TestWithServers):
     """
 
     def test_daos_racer_simple(self):
-        """JIRA-3855: daos_racer/consistency checker test.
+        """
+JIRA-3855: daos_racer/consistency checker test.
 
         Test Description:
             The daos_racer test tool generates a bunch of simultaneous,
@@ -29,9 +30,10 @@ class DaosRacerSimpleTest(TestWithServers):
             Running simultaneous, conflicting I/O requests.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=io,daos_racer
-        :avocado: tags=DaosRacerSimpleTest,test_daos_racer_simple
+        :avocado: tags=DaosRacerSimpleTest,test_daos_racer_simple,stage_ftest
+        
         """
         dmg = self.get_dmg_command()
         self.assertGreater(

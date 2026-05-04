@@ -188,13 +188,17 @@ class OSAOnlineParallelTest(OSAUtils):
     @skipForTicket("DAOS-6664")
     def test_osa_online_parallel_test(self):
         """
+
+
         JIRA ID: DAOS-4752
 
         Test Description: Runs multiple OSA commands/IO in parallel
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=osa,checksum,osa_parallel
-        :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test
+        :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test,stage_ftest
+        
+        
         """
         self.run_online_parallel_test(1)

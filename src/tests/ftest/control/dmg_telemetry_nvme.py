@@ -27,14 +27,16 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
                 "Initial " if key == 0 else "Test Loop {}".format(key), metrics_data[key])
 
     def test_nvme_telemetry_metrics(self):
-        """JIRA ID: DAOS-7833.
+        """
+JIRA ID: DAOS-7833.
 
             Verify the telemetry engine NVMe metrics.
 
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control,telemetry,nvme
-        :avocado: tags=TestWithTelemetryNvme,test_nvme_telemetry_metrics
+            :avocado: tags=all,pr,daily_regression
+            :avocado: tags=cb,medium
+            :avocado: tags=control,telemetry,nvme
+            :avocado: tags=TestWithTelemetryNvme,test_nvme_telemetry_metrics,stage_ftest
+        
         """
         metrics_data = self.telemetry.get_nvme_metrics()
         self.display_nvme_test_metrics(metrics_data)
@@ -62,14 +64,16 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
         self.log.info("------Test passed------")
 
     def test_telemetry_list_nvme(self):
-        """JIRA ID: DAOS-7667 / SRS-324.
+        """
+JIRA ID: DAOS-7667 / SRS-324.
 
         Test Description:
             Verify the dmg telemetry list command.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=control,telemetry,nvme
-        :avocado: tags=TestWithTelemetryNvme,test_telemetry_list_nvme
+        :avocado: tags=TestWithTelemetryNvme,test_telemetry_list_nvme,stage_ftest
+        
         """
         self.verify_telemetry_list()

@@ -68,7 +68,7 @@ server_config:
       storage: auto
   transport_config:
     allow_insecure: true
-  system_ram_reserved: 64
+  system_ram_reserved: 16
 
 agent_config:
   transport_config:

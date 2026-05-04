@@ -5,6 +5,7 @@ timeout: 150
 # below mentioned path should be replaced by path of
 # romio test suite directory in CI nodes when available.
 server_config:
+  system_ram_reserved: 16
   name: daos_server
   engines_per_host: 1
   engines:

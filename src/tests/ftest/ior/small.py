@@ -16,7 +16,9 @@ class IorSmall(IorTestBase):
     """
 
     def test_ior_small(self):
-        """Jira ID: DAOS-2715, DAOS-3657, DAOS-4909, DAOS-9947.
+        """
+
+Jira ID: DAOS-2715, DAOS-3657, DAOS-4909, DAOS-9947.
 
         Test Description:
             Verify basic IOR functionality with various APIs.
@@ -26,10 +28,12 @@ class IorSmall(IorTestBase):
             Repeat for various IOR APIs and configurations.
             Run ior with Read, Write, CheckWrite, CheckRead in FPP mode.
 
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=daosio,mpiio,checksum,mpich,dfuse,ior,dfs,hdf5
-        :avocado: tags=IorSmall,test_ior_small
+:avocado: tags=all,pr,daily_regression
+:avocado: tags=hw,medium
+:avocado: tags=daosio,mpiio,checksum,mpich,dfuse,ior,dfs,hdf5
+:avocado: tags=IorSmall,test_ior_small
+        
+        
         """
         cncl_tickets = []
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')

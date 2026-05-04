@@ -35,7 +35,9 @@ class TestWithScrubberBasic(TestWithScrubber):
         self.log.info("------Test passed------")
 
     def test_scrubber_disabled_during_pool_creation(self):
-        """JIRA ID: DAOS-7371
+        """
+
+JIRA ID: DAOS-7371
 
             1. Create a test pool without scrubber properties
             2. Enable scrubber on a test pool and gather
@@ -44,11 +46,13 @@ class TestWithScrubberBasic(TestWithScrubber):
                scrubber statistics
             3. Disable checksum on a container and run
                IOR. Gather scrubber statistics.
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=scrubber
-        :avocado: tags=TestWithScrubberBasic,test_scrubber_disabled_during_pool_creation
+:avocado: tags=all,pr,daily_regression
+:avocado: tags=hw,medium
+:avocado: tags=scrubber
+:avocado: tags=TestWithScrubberBasic,test_scrubber_disabled_during_pool_creation,stage_ftest
 
+        
+        
         """
         other_properties = self.params.get("other_properties", '/run/pool/*')
 
@@ -62,7 +66,9 @@ class TestWithScrubberBasic(TestWithScrubber):
         self.run_scrubber_basic()
 
     def test_scrubber_enabled_during_pool_creation(self):
-        """JIRA ID: DAOS-7371
+        """
+
+JIRA ID: DAOS-7371
 
             1. Create a test pool with scrubber properties
             2. Enable scrubber on a test pool creation.
@@ -70,11 +76,13 @@ class TestWithScrubberBasic(TestWithScrubber):
                scrubber statistics
             3. Disable checksum on a container and run
                IOR. Gather scrubber statistics.
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=scrubber
-        :avocado: tags=TestWithScrubberBasic,test_scrubber_enabled_during_pool_creation
+:avocado: tags=all,pr,daily_regression
+:avocado: tags=hw,medium
+:avocado: tags=scrubber
+:avocado: tags=TestWithScrubberBasic,test_scrubber_enabled_during_pool_creation,stage_ftest
 
+        
+        
         """
         pool_properties = self.params.get("properties", '/run/pool/*')
         other_properties = self.params.get("other_properties", '/run/pool/*')
