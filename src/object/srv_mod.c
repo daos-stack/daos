@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,9 +40,16 @@ obj_mod_init(void)
 		D_ERROR("failed to obj_ec_codec_init\n");
 		goto out_class;
 	}
+	rc = obj_migrate_init();
+	if (rc) {
+		D_ERROR("failed to init migration resource managers\n");
+		goto out_ec;
+	}
 
 	return 0;
 
+out_ec:
+	obj_ec_codec_fini();
 out_class:
 	obj_class_fini();
 out_utils:
@@ -55,6 +62,7 @@ out:
 static int
 obj_mod_fini(void)
 {
+	obj_migrate_fini();
 	obj_ec_codec_fini();
 	obj_class_fini();
 	obj_utils_fini();

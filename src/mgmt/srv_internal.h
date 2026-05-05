@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -129,9 +129,10 @@ int
 			    const char *user, const char *group);
 
 /** srv_chk.c */
-int ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-			Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
-			uint32_t flags, int phase);
+int
+     ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+			 Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
+			 uint32_t flags);
 int ds_mgmt_check_stop(int pool_nr, char **pools);
 int ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
 			chk_query_pool_cb_t pool_cb, void *buf);
@@ -181,5 +182,9 @@ void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 /** srv_util.c */
 int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
 void ds_mgmt_kill_rank(bool force);
+int
+ds_mgmt_pbl_create(void);
+void
+ds_mgmt_pbl_destroy(void);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

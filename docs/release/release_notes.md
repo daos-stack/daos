@@ -2,13 +2,13 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
-## DAOS Version 2.6.4 (2025-10-29)
+## DAOS Version 2.6.4 (2025-10-29, updated 2025-11-04)
 
 The DAOS 2.6.4 release includes the daos-2.6.4-7 RPM packages and their prerequisites.
 It contains the following updates on top of DAOS 2.6.3:
 
 * Libfabric has been updated to version 1.20.0.
-* Mercury has been upgraded to version 2.4.0-7.
+* Mercury has been upgraded to version 2.4.0-8.
 * Argobots has been upgraded to version 1.2-3.
 * Libisal has been upgraded to version 2.31.1-7.
 * pmemobj has been upgraded to version 2.1.0-6.
@@ -62,6 +62,20 @@ This release includes fixes and improvements, including:
   errors that are unrelated to the device.
 * Avoid returning non-retryable errors to clients when an SSD is marked FAULTY, allowing
   applications to continue accessing data in degraded mode.
+
+### Known Issues and limitations
+
+* An RPM dependency in daos-2.6.4-6 and mercury-2.4.0-7 causes their installation
+  to fail on systems with Slingshot Host Stack (SHS) version 11 and 12.
+  This dependency has been corrected in daos-2.6.4-7 and mercury-2.4.0-8,
+  which are otherwise identical.
+
+* With MD-on-SSD, when creating a pool with the `--size=xx%` option, the available
+  SCM capacity is used to calculate the absolute tier sizes (not the available NVMe
+  capacity). When the actual ratio of SCM capacity to NVMe capacity in the system
+  is smaller than the default tier-ratio of 6% SCM, this will leave some NVMe
+  capacity unused. The workaround is to specify absolute per-engine sizes with the
+  `--scm-size`and `--nvme-size` options of `dmg pool create`.
 
 ## DAOS Version 2.6.3 (2025-03-26)
 

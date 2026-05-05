@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,6 +60,9 @@
 #include "srv_internal.h"
 
 #define EC_AGG_ITERATION_MAX	1024
+#define EC_AGG_PROCESS_CREDITS  128
+#define EC_AGG_FILTER_CREDITS   1
+#define EC_AGG_SCAN_CREDITS     20
 
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
@@ -1278,6 +1281,42 @@ out:
 	return rc;
 }
 
+static bool
+agg_peer_failed(struct ec_agg_param *agg_param, struct daos_shard_loc *peer_loc)
+{
+	struct pool_target *targets         = NULL;
+	uint32_t            failed_tgts_cnt = 0;
+	int                 i;
+	int                 rc;
+
+	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map, &targets,
+				       &failed_tgts_cnt);
+	if (rc) {
+		DL_ERROR(rc, DF_CONT " pool_map_find_failed_tgts failed.",
+			 DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+				 agg_param->ap_pool_info.api_cont_uuid));
+		return false;
+	}
+
+	if (targets == NULL || failed_tgts_cnt == 0)
+		return false;
+
+	for (i = 0; i < failed_tgts_cnt; i++) {
+		if (targets[i].ta_comp.co_rank == peer_loc->sd_rank &&
+		    targets[i].ta_comp.co_index == peer_loc->sd_tgt_idx) {
+			D_DEBUG(DB_EPC, DF_CONT " peer parity tgt failed rank %d, tgt_idx %d.\n",
+				DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+					agg_param->ap_pool_info.api_cont_uuid),
+				peer_loc->sd_rank, peer_loc->sd_tgt_idx);
+			D_FREE(targets);
+			return true;
+		}
+	}
+
+	D_FREE(targets);
+	return false;
+}
+
 int
 agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 {
@@ -1334,6 +1373,12 @@ out:
 	return rc;
 }
 
+static bool
+agg_peer_retryable_err(int err)
+{
+	return err == -DER_STALE || err == -DER_TIMEDOUT || daos_crt_network_error(err);
+}
+
 /* Sends the generated parity and the stripe number to the peer
  * parity target. Handler writes the parity and deletes the replicas
  * for the stripe.
@@ -1382,15 +1427,15 @@ agg_peer_update_ult(void *arg)
 	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	for (peer = 0; peer < p; peer++) {
 		uint64_t enqueue_id = 0;
-		bool     overloaded;
+		bool     peer_retry;
 
 		if (peer == pidx)
 			continue;
+retry:
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag  = entry->ae_peer_pshards[peer].sd_tgt_idx;
-retry:
-		overloaded = false;
+		peer_retry = false;
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
@@ -1470,13 +1515,20 @@ retry:
 			rc         = ec_agg_out->ea_status;
 			if (rc == -DER_OVERLOAD_RETRY) {
 				enqueue_id = ec_agg_out->ea_comm_out.req_out_enqueue_id;
-				overloaded = true;
+				peer_retry = true;
 			}
 			D_CDEBUG(rc == 0, DB_TRACE, DLOG_ERR,
 				 "update parity[%d] to %d:%d, status = " DF_RC "\n", peer,
 				 tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
 			peer_updated += rc == 0;
 		}
+		if (rc != 0 && peer_updated && agg_peer_retryable_err(rc) &&
+		    !agg_peer_failed(agg_param, &entry->ae_peer_pshards[peer])) {
+			DL_INFO(rc, DF_UOID " pidx %d to parity[%d] will retry.",
+				DP_UOID(entry->ae_oid), pidx, peer);
+			peer_retry = true;
+		}
+
 next:
 		if (bulk_hdl)
 			crt_bulk_free(bulk_hdl);
@@ -1487,7 +1539,7 @@ next:
 		rpc = NULL;
 		bulk_hdl  = NULL;
 		iod_csums = NULL;
-		if (overloaded) {
+		if (peer_retry) {
 			dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 			goto retry;
 		}
@@ -1665,13 +1717,13 @@ agg_process_holes_ult(void *arg)
 	for (peer = 0; peer < p; peer++) {
 		uint64_t enqueue_id = 0;
 		uint32_t peer_shard;
-		bool     overloaded;
+		bool     peer_retry;
 
 		if (pidx == peer)
 			continue;
 
 retry:
-		overloaded = false;
+		peer_retry = false;
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
@@ -1719,7 +1771,7 @@ retry:
 			rc         = ec_rep_out->er_status;
 			if (rc == -DER_OVERLOAD_RETRY) {
 				enqueue_id = ec_rep_out->er_comm_out.req_out_enqueue_id;
-				overloaded = true;
+				peer_retry = true;
 			}
 			D_CDEBUG(rc == 0, DB_TRACE, DLOG_ERR,
 				 DF_UOID " parity[%d] er_status = " DF_RC "\n",
@@ -1728,7 +1780,13 @@ retry:
 		}
 		crt_req_decref(rpc);
 		rpc = NULL;
-		if (overloaded) {
+		if (rc != 0 && peer_updated && agg_peer_retryable_err(rc) &&
+		    !agg_peer_failed(agg_param, &entry->ae_peer_pshards[peer])) {
+			DL_INFO(rc, DF_UOID " pidx %d to parity[%d] will retry.",
+				DP_UOID(entry->ae_oid), pidx, peer);
+			peer_retry = true;
+		}
+		if (peer_retry) {
 			dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 			goto retry;
 		}
@@ -2096,6 +2154,7 @@ agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
 					DP_RC(rc));
 				D_GOTO(out, rc);
 			}
+			agg_param->ap_credits += EC_AGG_PROCESS_CREDITS;
 			D_ASSERT(agg_entry->ae_cur_stripe.as_extent_cnt == 0);
 		}
 	}
@@ -2118,6 +2177,7 @@ agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 				DP_RC(rc));
 			return rc;
 		}
+		agg_param->ap_credits += EC_AGG_PROCESS_CREDITS;
 
 		agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
 		agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
@@ -2288,9 +2348,9 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	int	rc;
 
 	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
-		D_INFO(DF_UUID": abort ec aggregation, sp_rebuilding %d\n",
+		D_INFO(DF_UUID ": abort ec aggregation, sp_rebuilding %d\n",
 		       DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
-		       agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
 		return true;
 	}
 
@@ -2391,14 +2451,14 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 			DP_OID(desc->id_oid.id_pub),
 			daos_obj_id2class(desc->id_oid.id_pub));
 		*acts = VOS_ITER_CB_SKIP;
-		agg_param->ap_credits++;
+		agg_param->ap_credits += EC_AGG_FILTER_CREDITS;
 		goto done;
 	}
 
 	if (!daos_oclass_is_ec(&oca)) { /* Skip non-EC object */
 		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" non-ec obj\n",
 			DP_UOID(desc->id_oid));
-		agg_param->ap_credits++;
+		agg_param->ap_credits += EC_AGG_FILTER_CREDITS;
 		*acts = VOS_ITER_CB_SKIP;
 		goto done;
 	}
@@ -2413,7 +2473,7 @@ check:
 			D_DEBUG(DB_EPC, "Skip key:"DF_KEY" agg_epoch="DF_X64" filter="DF_X64"\n",
 				DP_KEY(&desc->id_key), desc->id_agg_write,
 				agg_param->ap_filter_eph);
-		agg_param->ap_credits++;
+		agg_param->ap_credits += EC_AGG_FILTER_CREDITS;
 		*acts = VOS_ITER_CB_SKIP;
 		goto done;
 	}
@@ -2461,6 +2521,8 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 
 	props = dc_cont_hdl2props(info->api_cont_hdl);
 	md.omd_id = entry->ie_oid.id_pub;
+	md.omd_grp_spec = entry->ie_oid.id_shard / daos_oclass_grp_size(&oca);
+	md.omd_flags    = PL_FL_GRP_SPEC;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
 	md.omd_pdom_lvl = props.dcp_perf_domain;
@@ -2494,10 +2556,10 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	 * (see obj_inflight_io_check()).
 	 */
 	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
-		D_INFO(DF_CONT" abort as rebuild started, sp_rebuilding %d\n",
-			DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
-				agg_param->ap_pool_info.api_cont_uuid),
-			agg_param->ap_pool_info.api_pool->sp_rebuilding);
+		D_INFO(DF_CONT " abort as rebuild started, sp_rebuilding %d\n",
+		       DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+			       agg_param->ap_pool_info.api_cont_uuid),
+		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
 		return -1;
 	}
 
@@ -2522,13 +2584,13 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR(DF_UUID" EC aggregation (rebuilding %d) failed: "DF_RC"\n",
+		D_ERROR(DF_UUID " EC aggregation (rebuilding %d) failed: " DF_RC "\n",
 			DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
-			agg_param->ap_pool_info.api_pool->sp_rebuilding, DP_RC(rc));
+			atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding), DP_RC(rc));
 		return rc;
 	}
 
-	agg_param->ap_credits += 20;
+	agg_param->ap_credits += EC_AGG_SCAN_CREDITS;
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
 		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
@@ -2734,17 +2796,25 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
-	if (likely(cont->sc_ec_agg_eph_valid)) {
-		if (cont->sc_ec_agg_eph == 0) {
-			D_INFO(DF_CONT ": update cont->sc_ec_agg_eph to " DF_X64,
-			       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			       cont->sc_ec_agg_eph_boundary);
-			cont->sc_ec_agg_eph = cont->sc_ec_agg_eph_boundary;
-		}
-	} else {
+	if (!cont->sc_ec_agg_eph_valid) {
 		D_DEBUG(DB_EPC, DF_CONT ": pause EC aggregation for sc_ec_agg_eph_boundary.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		return 0;
+	}
+
+	if (cont->sc_ec_agg_eph == 0) {
+		D_INFO(DF_CONT ": update cont->sc_ec_agg_eph to " DF_X64,
+		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		       cont->sc_ec_agg_eph_boundary);
+		cont->sc_ec_agg_eph = cont->sc_ec_agg_eph_boundary;
+	}
+
+	if (cont->sc_ec_update_timestamp == 0) {
+		vos_cont_info_t info;
+
+		/* load the timestamp of the last write that can be aggregated from VOS */
+		vos_cont_query(ec_agg_param->ap_cont_handle, &info);
+		cont->sc_ec_update_timestamp = info.ci_agg_write;
 	}
 
 	ec_agg_eph                     = cont->sc_ec_agg_eph;
@@ -2758,10 +2828,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		ec_agg_param->ap_filter_eph = MAX(epr->epr_lo, cont->sc_ec_agg_eph);
 	}
 
-	/* Currently cont->sc_ec_update_timestamp is in memory so this optimization won't be helpful
-	 * when there is no container update since restart.
-	 */
-	if (ec_agg_param->ap_filter_eph != 0 && cont->sc_ec_update_timestamp != 0 &&
+	if (ec_agg_param->ap_filter_eph != 0 &&
 	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
 		D_DEBUG(DB_EPC, DF_CONT " skip EC agg " DF_U64 ">= " DF_U64 "\n",
 			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,

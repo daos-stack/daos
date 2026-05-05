@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -260,6 +261,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 		/** make sure that the akey value size matches what is in the inode */
 		if (iod->iod_size != val_len) {
 			D_ERROR("Symlink value length inconsistent with inode data\n");
+			D_FREE(value);
 			D_GOTO(out, rc = EIO);
 		}
 		value[val_len] = 0;
@@ -641,8 +643,15 @@ create_dir(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, dfs_obj_t *dir)
 	if (cid == 0) {
 		if (parent->d.oclass == 0)
 			cid = dfs->attr.da_dir_oclass_id;
-		else
+		else {
 			cid = parent->d.oclass;
+			/*
+			 * If the parent oclass is EC, do not use that for a directory and use the
+			 * container default instead.
+			 */
+			if (daos_cid_is_ec(cid))
+				cid = dfs->attr.da_dir_oclass_id;
+		}
 	}
 
 	/** Allocate an OID for the dir - local operation */
@@ -911,8 +920,13 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 	attr->da_dir_oclass_id  = dir_oclass;
 	attr->da_file_oclass_id = file_oclass;
 	attr->da_mode           = mode;
-	if (iods[CONT_HINT_IDX].iod_size != 0)
-		strcpy(attr->da_hints, hints);
+	if (iods[CONT_HINT_IDX].iod_size != 0) {
+		daos_size_t hint_len =
+		    min_t(daos_size_t, iods[CONT_HINT_IDX].iod_size, DAOS_CONT_HINT_MAX_LEN - 1);
+
+		memcpy(attr->da_hints, hints, hint_len);
+		attr->da_hints[hint_len] = '\0';
+	}
 
 	return 0;
 err:
@@ -961,7 +975,7 @@ dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid)
 		return EINVAL;
 	if (hint == NULL)
 		return EINVAL;
-	if (strnlen(hint, DAOS_CONT_HINT_MAX_LEN) > DAOS_CONT_HINT_MAX_LEN + 1)
+	if (strnlen(hint, DAOS_CONT_HINT_MAX_LEN) >= DAOS_CONT_HINT_MAX_LEN)
 		return EINVAL;
 
 	/** get the Redundancy Factor */
@@ -982,7 +996,7 @@ dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid)
 	rc = daos_obj_get_oclass(dfs->coh, type, obj_hint, 0, cid);
 	if (rc) {
 		D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 out:
 	D_FREE(local);

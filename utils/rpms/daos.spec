@@ -10,7 +10,7 @@
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4.0-7
+%global mercury_version   2.4.1
 %global libfabric_version 1.20
 %global argobots_version 1.2-3
 %global __python %{__python3}
@@ -22,8 +22,8 @@
 %endif
 
 Name:          daos
-Version:       2.6.4
-Release:       11%{?relval}%{?dist}
+Version:       2.6.5
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -58,7 +58,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
-BuildRequires: libpmemobj-devel >= 2.1.0
+BuildRequires: libpmemobj-devel >= 2.1.3-2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
@@ -132,7 +132,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury >= %{mercury_version}
+Requires: mercury-libfabric >= %{mercury_version}
 
 
 %description
@@ -156,14 +156,14 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.0-3.suse1500
+Requires: libpmemobj1 >= 2.1.3-2
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.0-6%{?dist}
+Requires: libpmemobj >= 2.1.3-2
 %endif
 Requires: libfabric >= %{libfabric_version}
-Requires: mercury >= %{mercury_version}
+Requires: mercury-libfabric >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
@@ -184,7 +184,7 @@ This package contains DAOS administrative tools (e.g. dmg).
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury >= %{mercury_version}
+Requires: mercury-libfabric >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
@@ -635,6 +635,35 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon May 04 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.6.5-2
+- Second release candidate for 2.6.5
+
+* Tue Apr 28 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.6.5-1
+- First release candidate for 2.6.5
+
+* Fri Apr 24 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.4-22
+- Bump PMDK (libpmemobj) version to 2.1.3-2
+
+* Mon Mar 23 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-21
+- Bump version
+
+* Mon Mar 09 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.6.4-19
+- Bump PMDK (libpmemobj) version to 2.1.3
+- Point https://github.com/daos-stack/pmdk as the main PMDK reference source.
+
+* Fri Mar 06 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-18
+- Bump version
+
+* Thu Feb 05 2026 Jerome Soumagne <jerome.soumagne@hpe.com> 2.6.4-16
+- Require mercury-libfabric to always install libfabric plugin
+- Bump mercury min version to 2.4.1
+
+* Fri Jan 16 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.6.4-15
+- Bump version
+
+* Thu Jan 8 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-13
+- Bump version
+
 * Thu Dec 4 2025 Phillip Henderson <phillip.henderson@hpe.com> 2.6.4-11
 - Bump version
 

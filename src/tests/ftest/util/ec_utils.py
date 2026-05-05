@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -136,7 +136,6 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_local_cmd.block_size.update(sizes[1])
         self.ior_local_cmd.transfer_size.update(sizes[2])
         self.ior_local_cmd.dfs_oclass.update(oclass[0])
-        self.ior_local_cmd.dfs_dir_oclass.update(oclass[0])
 
     def ior_write_single_dataset(self, oclass, sizes, storage='NVMe', operation="WriteRead",
                                  percent=1):

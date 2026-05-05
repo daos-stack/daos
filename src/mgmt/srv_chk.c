@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +48,7 @@ out:
 int
 ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		    Mgmt__CheckInconsistPolicy **policies, int32_t pool_nr, char **pools,
-		    uint32_t flags, int32_t phase)
+		    uint32_t flags)
 {
 	uuid_t			*uuids = NULL;
 	struct chk_policy	*ply = NULL;
@@ -69,7 +70,7 @@ ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		}
 	}
 
-	rc = chk_leader_start(rank_nr, ranks, policy_nr, ply, pool_nr, uuids, flags, phase);
+	rc = chk_leader_start(rank_nr, ranks, policy_nr, ply, pool_nr, uuids, flags);
 
 out:
 	D_FREE(uuids);

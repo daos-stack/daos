@@ -1,5 +1,6 @@
 # Copyright 2018-2024 Intel Corporation
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025 Google LLC
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Leap based
@@ -16,6 +17,17 @@ ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
+
+# Accept DAOS_NO_PROXY at build time
+ARG DAOS_NO_PROXY
+# Propagate into the build environment
+ENV no_proxy=${DAOS_NO_PROXY}
+ENV NO_PROXY=${DAOS_NO_PROXY}
+# Persist into /etc/environment for use by shells and services
+RUN cat <<EOF >> /etc/environment
+"no_proxy=${DAOS_NO_PROXY}"
+"NO_PROXY=${DAOS_NO_PROXY}"
+EOF
 
 ARG REPO_FILE_URL
 ARG JENKINS_URL
@@ -43,6 +55,20 @@ RUN if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
     /tmp/install.sh &&    \
     dnf clean all &&      \
     rm -f /tmp/install.sh
+
+# According to https://pkgs.org/search/?q=lua-lmod, Leap 15.6 only has lua-lmod-8.7.34.
+# This version has a problem with loading modules, as described in https://github.com/TACC/Lmod/issues/687.
+# This affects MPI detection in scons, so DAOS cannot be built with MPI support.
+# A custom source of the package is required in CI to install a valid version
+# of lua-lmod and its dependencies:
+# opensuse-network-cluster for lua-lmod (>=8.7.55)
+# opensuse-oss for lua53, lua53-luaterm,, sqlite3-tcl, tcl
+# opensuse-devel-languages-lua for lua53-luafilesystem, lua53-luaposix
+ARG JENKINS_URL
+RUN if [ -n "$JENKINS_URL" ]; then \
+    dnf -y remove lua-lmod; \
+    dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*'; \
+    fi
 
 # Add DAOS users
 ARG UID=1000
@@ -119,16 +145,6 @@ USER root:root
 # below in the general update section.  Only install the compilers at
 # ~900Mb rather than the entire stack at ~3Gb download.
 ARG COMPILER=gcc
-RUN if [ "$COMPILER" = "icc" ]; then                                                                     \
-        if [ -z "$REPO_FILE_URL" ] || true; then                                                         \
-            rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
-            dnf config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                     \
-        fi;                                                                                              \
-        if [ -n "$REPO_FILE_URL" ]; then direct="${REPO_FILE_URL##*//}; "\
-            direct="${direct%%/*}"; export no_proxy="${direct}"; fi; \
-        dnf install intel-oneapi-compiler-dpcpp-cpp &&                                                   \
-        dnf clean all;                                                                                   \
-    fi
 
 # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1

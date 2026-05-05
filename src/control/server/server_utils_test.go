@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -320,11 +320,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		iommuDisabled   bool
 		srvCfgExtra     func(*config.Server) *config.Server
 		hugepagesFree   int
 		bmbc            *bdev.MockBackendConfig
 		overrideUser    string
+		iommuDisabled   bool
+		iommuCheckErr   error
+		thpEnabled      bool
+		thpCheckErr     error
 		expPrepErr      error
 		expPrepCalls    []storage.BdevPrepareRequest
 		expMemChkErr    error
@@ -377,6 +380,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugepageSize: 2,
 		},
+		"iommu check error": {
+			iommuCheckErr: errors.New("fail"),
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: errors.New("iommu check: fail"),
+		},
 		"iommu disabled": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -419,6 +429,41 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expMemSize:      16384,
 			expHugepageSize: 2,
+		},
+		"thp check error": {
+			thpCheckErr: errors.New("fail"),
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: errors.New("transparent hugepage check: fail"),
+		},
+		"thp enabled": {
+			thpEnabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: FaultTransparentHugepageEnabled,
+		},
+		"thp enabled; override flag set": {
+			thpEnabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithAllowTHP(true).
+					WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				defCleanDualEngine,
+				{
+					HugepageCount: 8194,
+					HugeNodes:     "0,1",
+					TargetUser:    username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(0),
+						storage.BdevPciAddrSep, test.MockPCIAddr(1)),
+					EnableVMD: true,
+				},
+			},
+			expHugepageSize: 2,
+			// Allocation change logged.
+			expNotice: true,
 		},
 		"no bdevs configured; hugepages disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -735,6 +780,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				cfg = tc.srvCfgExtra(cfg)
 			}
 
+			// Defaults are IOMMU=ON and THP=OFF.
+			iommuChecker := mockIOMMUDetector{
+				enabled: !tc.iommuDisabled,
+				err:     tc.iommuCheckErr,
+			}
+			thpChecker := mockTHPDetector{
+				enabled: tc.thpEnabled,
+				err:     tc.thpCheckErr,
+			}
+
 			mockAffSrc := func(l logging.Logger, e *engine.Config) (uint, error) {
 				iface := e.Fabric.Interface
 				l.Debugf("eval affinity of iface %q", iface)
@@ -794,7 +849,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				srv.runningUser = &user.User{Username: tc.overrideUser}
 			}
 
-			gotPrepErr := prepBdevStorage(srv, !tc.iommuDisabled)
+			gotPrepErr := prepBdevStorage(srv, iommuChecker, thpChecker)
 
 			mbb.RLock()
 			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls, prepCmpOpt); diff != "" {
@@ -830,14 +885,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				"unexpected memory size")
 			test.AssertEqual(t, tc.expHugepageSize, ei.runner.GetConfig().HugepageSz,
 				"unexpected huge page size")
-			txtMod := ""
-			if !tc.expNotice {
-				txtMod = "not "
+
+			gotNotice := strings.Contains(buf.String(), "NOTICE")
+			if tc.expNotice && !gotNotice {
+				t.Fatal("expected NOTICE level message but got none")
+			} else if !tc.expNotice && gotNotice {
+				t.Fatal("expected no NOTICE level message but got one")
 			}
-			msg := fmt.Sprintf("expected NOTICE level message to %shave been logged",
-				txtMod)
-			test.AssertEqual(t, tc.expNotice, strings.Contains(buf.String(), "NOTICE"),
-				msg)
 		})
 	}
 }

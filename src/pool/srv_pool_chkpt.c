@@ -1,5 +1,6 @@
 /*
- * (C) Copyright 2023 Intel Corporation.
+ * Copyright 2023 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,12 +38,6 @@ yield_fn(struct chkpt_ctx *ctx)
 	return 0;
 }
 
-static bool
-is_idle()
-{
-	return !dss_xstream_is_busy();
-}
-
 static int
 wait_fn(struct chkpt_ctx *ctx)
 {
@@ -74,8 +69,7 @@ wait_cb(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx)
 		/** Sometimes we may need to yield here to make progress such as when we need
 		 *  more DMA buffers to prepare entries.
 		 */
-		if (!is_idle())
-			yield_fn(ctx);
+		yield_fn(ctx);
 		goto done;
 	}
 

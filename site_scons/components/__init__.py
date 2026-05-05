@@ -1,4 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -178,15 +179,12 @@ def define_mercury(reqs):
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
+                     '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
+                     '-DMERCURY_ENABLE_DEBUG:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
                      '../mercury']
-
-    if reqs.target_type == 'debug':
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
-    else:
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever(True),

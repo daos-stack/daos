@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,6 +53,8 @@ func PoolProperties() PoolPropertyMap {
 						return "not set"
 					}
 					switch n {
+					case 0:
+						return "none"
 					case PoolSelfHealingAutoExclude:
 						return "exclude"
 					case PoolSelfHealingAutoRebuild:
@@ -69,6 +71,7 @@ func PoolProperties() PoolPropertyMap {
 				},
 			},
 			values: map[string]uint64{
+				"none":                  0,
 				"exclude":               PoolSelfHealingAutoExclude,
 				"rebuild":               PoolSelfHealingAutoRebuild,
 				"delay_rebuild":         PoolSelfHealingDelayRebuild,

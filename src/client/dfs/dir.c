@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,8 +47,10 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, daos_ocl
 	entry.mode = S_IFDIR | mode;
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
-	if (rc)
+	if (rc) {
+		daos_obj_close(new_dir.oh, NULL);
 		return errno;
+	}
 	entry.mtime = entry.ctime = now.tv_sec;
 	entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 	entry.chunk_size                    = parent->d.chunk_size;
@@ -106,8 +109,6 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 			struct dfs_entry child_entry = {0};
 			bool             exists;
 
-			ptr += kds[i].kd_key_len;
-
 			rc = fetch_entry(dfs->layout_v, oh, th, ptr, kds[i].kd_key_len, false,
 					 &exists, &child_entry, 0, NULL, NULL, NULL);
 			if (rc)
@@ -125,6 +126,8 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 			rc = remove_entry(dfs, th, oh, ptr, kds[i].kd_key_len, child_entry);
 			if (rc)
 				D_GOTO(out, rc);
+
+			ptr += kds[i].kd_key_len;
 		}
 	}
 

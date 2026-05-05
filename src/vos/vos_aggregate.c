@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1813,8 +1814,9 @@ trigger_flush(struct agg_merge_window *mw, struct evt_extent *lgc_ext)
 	D_AGG_ASSERTF(mw, w_ext->ex_hi < lgc_ext->ex_lo, "win:" DF_EXT ", lgc_ent:" DF_EXT "\n",
 		      DP_EXT(w_ext), DP_EXT(lgc_ext));
 
-	/* Window is large enough */
-	if (merge_window_size(mw) >= mw->mw_flush_thresh)
+	/* Cap the merged extent at the defined threshold */
+	if ((merge_window_size(mw) + (evt_extent_width(lgc_ext) * mw->mw_rsize)) >
+	    mw->mw_flush_thresh)
 		return true;
 
 	/* Trigger flush when entry is disjoint with window */

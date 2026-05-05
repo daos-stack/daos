@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -619,18 +619,17 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	if (prov == CRT_PROV_OFI_TCP || prov == CRT_PROV_OFI_TCP_RXM)
 		file_limit_bump();
 
-	if (prov == CRT_PROV_OFI_CXI)
-		mrc_enable = 1;
+	/* Enable mrc on clients for all providers except verbs; disable on servers */
+	mrc_enable = 1;
+	if (crt_is_service() || prov == CRT_PROV_OFI_VERBS_RXM)
+		mrc_enable = 0;
 
 	crt_env_get(CRT_MRC_ENABLE, &mrc_enable);
 	if (mrc_enable == 0) {
-		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
+		D_INFO("Disabling MR CACHE\n");
 		d_setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
+		d_setenv("UCX_RCACHE_ENABLE", "n", 1);
 	}
-
-	/* Use tagged messages for other providers, disable multi-recv */
-	if (prov != CRT_PROV_OFI_CXI && prov != CRT_PROV_OFI_TCP)
-		d_setenv("NA_OFI_UNEXPECTED_TAG_MSG", "1", 0);
 
 	g_prov_settings_applied[prov] = true;
 }

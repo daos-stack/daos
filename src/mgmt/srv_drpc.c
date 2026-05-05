@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -970,6 +970,10 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
 				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes, false);
+
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
+		  DF_UUID ": reintegrate: rank=%u n_target_idx=%zu target_idx[0]=%u", req->id,
+		  req->rank, req->n_targetidx, req->n_targetidx > 0 ? req->targetidx[0] : -1);
 
 	d_rank_list_free(svc_ranks);
 
@@ -2563,7 +2567,7 @@ ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to start check\n");
 
 	rc = ds_mgmt_check_start(req->n_ranks, req->ranks, req->n_policies, req->policies,
-				 req->n_uuids, req->uuids, req->flags, -1 /* phase */);
+				 req->n_uuids, req->uuids, req->flags);
 	if (rc < 0)
 		D_ERROR("Failed to start check: "DF_RC"\n", DP_RC(rc));
 

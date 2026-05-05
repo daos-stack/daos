@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +27,7 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
+
 /** container cell size */
 unsigned int	dt_cell_size;
 int		dt_obj_class;
@@ -500,6 +502,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 			continue;
 		}
 
+		print_message("done waiting for rebuild, state %d\n", rstat->rs_state);
 		/* no rebuild */
 		break;
 	}
@@ -756,8 +759,45 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **eng
 	return rc;
 }
 
+/* Determine if pool rebuild is busy (or finished already), and rebuild version > rs_version */
 static bool
-rebuild_pool_wait(test_arg_t *arg)
+rebuild_pool_started_after_ver(test_arg_t *arg, uint32_t rs_version)
+{
+	daos_pool_info_t            pinfo = {0};
+	struct daos_rebuild_status *rst;
+	int                         rc;
+
+	pinfo.pi_bits = DPI_REBUILD_STATUS;
+	rc            = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
+	rst           = &pinfo.pi_rebuild_st;
+
+	if (rc != 0) {
+		print_message("pool query for rebuild status failed, rc=%d, pool " DF_UUIDF "\n",
+			      rc, DP_UUID(arg->pool.pool_uuid));
+		return false;
+	} else {
+		bool in_progress = (rst->rs_state == DRS_IN_PROGRESS);
+		bool done        = (rst->rs_state == DRS_COMPLETED);
+
+		/* NB: check for done (e.g., test killed leader, query times out during rebuild. */
+		print_message("rebuild for pool " DF_UUIDF "%s, rs_version=%u (waiting for > %d)\n",
+			      DP_UUID(arg->pool.pool_uuid),
+			      in_progress ? "started"
+			      : done      ? "finished already"
+					  : "not yet started",
+			      rst->rs_version, rs_version);
+		if ((in_progress || done) && (rst->rs_version > rs_version)) {
+			/* save final pool query info to be able to inspect rebuild status */
+			memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
+
+			return true;
+		}
+		return false;
+	}
+}
+
+static bool
+rebuild_pool_done(test_arg_t *arg)
 {
 	daos_pool_info_t	   pinfo = {0};
 	struct daos_rebuild_status *rst;
@@ -770,17 +810,25 @@ rebuild_pool_wait(test_arg_t *arg)
 	if ((rst->rs_state == DRS_COMPLETED || rc != 0) &&
 	    (rst->rs_version > arg->rebuild_pre_pool_ver ||
 	     pinfo.pi_map_ver > arg->rebuild_pre_pool_ver)) {
-		print_message("Rebuild "DF_UUIDF" (ver=%u pi_ver = %u orig_ver=%u) is done %d/%d,"
-			      "obj="DF_U64", rec="DF_U64".\n", DP_UUID(arg->pool.pool_uuid),
-			      rst->rs_version, pinfo.pi_map_ver, arg->rebuild_pre_pool_ver,
-			      rc, rst->rs_errno, rst->rs_obj_nr, rst->rs_rec_nr);
+		print_message("Rebuild " DF_UUIDF
+			      " (ver=%u pi_ver=%u orig_ver=%u) %d/%d, query %s rc=%d, "
+			      "obj=" DF_U64 ", rec=" DF_U64 ".\n",
+			      DP_UUID(arg->pool.pool_uuid), rst->rs_version, pinfo.pi_map_ver,
+			      arg->rebuild_pre_pool_ver, rst->rs_state, rst->rs_errno,
+			      rc ? "ERRORED" : "done", rc, rst->rs_obj_nr, rst->rs_rec_nr);
+
+		/* save final pool query info to be able to inspect rebuild status */
+		if (rc == 0)
+			memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
 		done = true;
 	} else {
-		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u pi_ver=%u orig_ver=%u),"
-			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="DF_U64","
-			      "rec="DF_U64"\n", DP_UUID(arg->pool.pool_uuid), rst->rs_version,
-			      pinfo.pi_map_ver, arg->rebuild_pre_pool_ver, rst->rs_toberb_obj_nr,
-			      rst->rs_obj_nr, rst->rs_rec_nr);
+		print_message("wait for rebuild pool " DF_UUIDF
+			      "(ver=%u pi_ver=%u orig_ver=%u) %d/%d, "
+			      "to-be-rebuilt obj=" DF_U64 ", already rebuilt obj=" DF_U64 ","
+			      "rec=" DF_U64 "\n",
+			      DP_UUID(arg->pool.pool_uuid), rst->rs_version, pinfo.pi_map_ver,
+			      arg->rebuild_pre_pool_ver, rst->rs_state, rst->rs_errno,
+			      rst->rs_toberb_obj_nr, rst->rs_obj_nr, rst->rs_rec_nr);
 	}
 
 	return done;
@@ -819,6 +867,45 @@ test_get_last_svr_rank(test_arg_t *arg)
 	return arg->srv_nnodes - disable_nodes - 1;
 }
 
+static bool
+test_rebuild_started_after(test_arg_t **args, int args_cnt, uint32_t *cur_versions)
+{
+	bool all_started = true;
+	int  i;
+
+	for (i = 0; i < args_cnt; i++) {
+		bool started = true;
+
+		if (!args[i]->pool.destroyed)
+			started = rebuild_pool_started_after_ver(args[i], cur_versions[i]);
+
+		if (!started)
+			all_started = false;
+	}
+	return all_started;
+}
+
+/* wait until pools start rebuilds with rs_version > current (e.g.,. expecting op:Rebuild) */
+void
+test_rebuild_wait_to_start_next(test_arg_t **args, int args_cnt)
+{
+	uint32_t *cur_versions;
+	int       i;
+
+	D_ALLOC_ARRAY(cur_versions, args_cnt);
+	assert_true(cur_versions != NULL);
+	for (i = 0; i < args_cnt; i++)
+		cur_versions[i] = args[i]->pool.pool_info.pi_rebuild_st.rs_version;
+
+	while (!test_rebuild_started_after(args, args_cnt, cur_versions))
+		sleep(2);
+
+	/* NB: when control reaches here, each pool's current rs_version has been updated
+	 * (for subsequent calls that will rely on it as a baseline)
+	 */
+	D_FREE(cur_versions);
+}
+
 bool
 test_rebuild_query(test_arg_t **args, int args_cnt)
 {
@@ -829,7 +916,7 @@ test_rebuild_query(test_arg_t **args, int args_cnt)
 		bool done = true;
 
 		if (!args[i]->pool.destroyed)
-			done = rebuild_pool_wait(args[i]);
+			done = rebuild_pool_done(args[i]);
 
 		if (!done)
 			all_done = false;
@@ -921,6 +1008,12 @@ daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		   const char *value)
 {
 	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
+}
+
+int
+daos_pool_get_prop(const uuid_t pool_uuid, const char *name, char **value_out)
+{
+	return dmg_pool_get_prop(dmg_config_file, NULL, pool_uuid, name, value_out);
 }
 
 void
@@ -1502,4 +1595,42 @@ test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_nu
 
 	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
 	assert_rc_equal(rc, 0);
+}
+
+/**
+ * Duplicate unescaped \a value, escaping every ';' with '\\'. The caller is
+ * responsible for freeing the returned string.
+ *
+ * \param[in]	value	self_heal value to escape
+ */
+char *
+test_escape_self_heal(const char *value)
+{
+	size_t      len = 0;
+	char       *new_value;
+	const char *src;
+	char       *dst;
+
+	for (src = value; *src != '\0'; src++) {
+		D_ASSERT(*src != '\\');
+		len++;
+		if (*src == ';')
+			len++; /* for '\\' */
+	}
+
+	D_ALLOC(new_value, len + 1 /* '\0' */);
+	D_ASSERT(new_value != NULL);
+
+	dst = new_value;
+	for (src = value; *src != '\0'; src++) {
+		if (*src == ';') {
+			*dst++ = '\\';
+			*dst++ = ';';
+		} else {
+			*dst++ = *src;
+		}
+	}
+	*dst = '\0';
+
+	return new_value;
 }

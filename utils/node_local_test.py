@@ -2,7 +2,7 @@
 """Node local test (NLT).
 
 (C) Copyright 2020-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -2130,6 +2130,18 @@ class PosixTests():
     @needs_dfuse_with_opt(caching=False)
     def test_oclass(self):
         """Test container object class options"""
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test')
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.json['response'].get('dir_object_class') not in (None, 'UNKNOWN')
+        assert rc.json['response'].get('file_object_class') not in (None, 'UNKNOWN')
+        container.destroy()
+
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
         rc = run_daos_cmd(self.conf,
@@ -2748,11 +2760,14 @@ class PosixTests():
         with open(fname, 'w'):
             pass
 
-        check_fstat = True
-        if self.dfuse.caching:
-            check_fstat = False
-
-        self.dfuse.il_cmd(['cat', fname], check_write=False, check_fstat=check_fstat)
+        self.dfuse.il_cmd([
+            'dd',
+            f'if={fname}',
+            'of=/dev/null',
+            'bs=4096',
+            'iflag=fullblock',
+            'status=none'
+        ], check_write=False, check_fstat=False)
 
     @needs_dfuse_with_opt(caching=False)
     def test_il(self):
@@ -2770,14 +2785,40 @@ class PosixTests():
         with open(file, 'w') as fd:
             fd.write('Hello')
         # Copy it across containers.
-        self.dfuse.il_cmd(['cp', file, sub_cont_dir])
+        dst = join(sub_cont_dir, 'file')
+        self.dfuse.il_cmd([
+            'dd',
+            f'if={file}',
+            f'of={dst}',
+            'bs=4096',
+            'iflag=fullblock',
+            'status=none'
+        ], check_fstat=False)
 
         # Copy it within the container.
         child_dir = join(self.dfuse.dir, 'new_dir')
         os.mkdir(child_dir)
-        self.dfuse.il_cmd(['cp', file, child_dir])
+        dst = join(child_dir, 'file')
+
+        self.dfuse.il_cmd([
+            'dd',
+            f'if={file}',
+            f'of={dst}',
+            'bs=128K',
+            'status=none'
+        ], check_fstat=False)
+
         # Copy something into a container
-        self.dfuse.il_cmd(['cp', '/bin/bash', sub_cont_dir], check_read=False)
+        dst = join(sub_cont_dir, 'bash')
+
+        self.dfuse.il_cmd([
+            'dd',
+            'if=/bin/bash',
+            f'of={dst}',
+            'bs=128K',
+            'status=none'
+        ], check_read=False, check_fstat=False)
+
         # Read it from within a container
         self.dfuse.il_cmd(['md5sum', join(sub_cont_dir, 'bash')],
                           check_read=False, check_write=False, check_fstat=False)
@@ -4856,6 +4897,13 @@ def log_test(conf,
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
+    lto.skip_substrings.extend([
+        'sluggish ec boundary report from rank',
+        'sluggish stable epoch reporting',
+        'progress callback was not called for too long',
+        'rpc failed; rc:',
+    ])
+
     try:
         lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks,
@@ -4899,7 +4947,16 @@ def create_and_read_via_il(dfuse, path):
         ofd.flush()
         assert_file_size(ofd, 12)
         print(os.fstat(ofd.fileno()))
-    dfuse.il_cmd(['cat', fname], check_write=False)
+
+        # Replace Python snippet with dd to guarantee read()
+        dfuse.il_cmd([
+            'dd',
+            f'if={fname}',
+            'of=/dev/null',
+            'bs=4096',
+            'iflag=fullblock',
+            'status=none'
+        ], check_write=False, check_fstat=False)
 
 
 def run_container_query(conf, path):

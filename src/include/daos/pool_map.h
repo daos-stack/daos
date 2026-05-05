@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -306,7 +307,7 @@ int pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  unsigned int *tgt_cnt, d_rank_t rank);
 int
 update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t status,
-			    uint32_t version, bool *updated);
+			    uint32_t version, bool *updated, bool for_revert);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
 
@@ -395,9 +396,9 @@ pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
 }
 
 static inline bool
-pool_target_is_up_or_drain(struct pool_target *tgt)
+pool_target_is_drain(struct pool_target *tgt)
 {
-	return tgt->ta_comp.co_status & (PO_COMP_ST_UP | PO_COMP_ST_DRAIN);
+	return (tgt->ta_comp.co_status & PO_COMP_ST_DRAIN);
 }
 
 static inline bool
@@ -415,7 +416,7 @@ pool_target_is_down2up(struct pool_target *tgt)
 
 /** Check if the target is in PO_COMP_ST_DOWN status */
 static inline bool
-pool_target_down(struct pool_target *tgt)
+pool_target_is_down(struct pool_target *tgt)
 {
 	struct pool_component	*comp = &tgt->ta_comp;
 	uint8_t			 status = comp->co_status;
