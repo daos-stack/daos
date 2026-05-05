@@ -598,7 +598,7 @@ period of time, these engines may become "excluded" or "errored" in
 (see [CRT\_EVENT\_DELAY](env_variables.md)), each pool will check
 whether there is enough redundancy
 (see [Pool RF](pool_operations.md#pool-redundancy-factor))
-o tolerate the unavailability of the "excluded" or "errored" engines.
+to tolerate the unavailability of the "excluded" or "errored" engines.
 If there is enough redundancy, these engines will be excluded from the pool
 ("Disabled ranks" in `dmg pool query --health-only` output).
 Otherwise, the pool will perform no exclusion

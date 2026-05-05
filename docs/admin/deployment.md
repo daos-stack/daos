@@ -97,7 +97,7 @@ for the path specified through the -o option of the `daos_server` command
 line, if unspecified then `/etc/daos/daos_server.yml` is used.
 
 Refer to the example configuration file
-[daosi\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 for latest information and examples.
 
 #### MD-on-SSD Configuration
@@ -118,7 +118,7 @@ Depending on the number of NVMe SSDs per DAOS engine there may be one, two or th
 different `bdev_role` assignments.
 
 For a complete server configuration file example enabling MD-on-SSD, see
-[daos\_server_mdonssd.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml).
+[daos\_server\_mdonssd.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml).
 
 Below are four different `daos_server.yml` storage configuration snippets that represent scenarios
 for a DAOS engine with four NVMe SSDs and MD-on-SSD enabled.
