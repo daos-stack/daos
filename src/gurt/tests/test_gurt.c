@@ -773,8 +773,8 @@ test_dd_stderr(void **state)
 	    {"Warn", DLOG_WARN},
 	    {"CRIT", DLOG_CRIT},
 	    {"Info", DLOG_INFO},
-	    {"error", DLOG_ERR},
-	    {"dbug", DLOG_DBG},
+	    {"eRRor", DLOG_ERR},
+	    {"DBUG", DLOG_DBG},
 	};
 
 	/* Tear down the log initialized by init_tests */
