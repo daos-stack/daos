@@ -58,7 +58,7 @@ For a full list of errors, please check
 (`DER_ERR_GURT_BASE` is equal to 1000, and `DER_ERR_DAOS_BASE` is equal
 to 2000).
 
-The function d_errstr() is provided in the API to convert an error
+The function `d_errstr()` is provided in the API to convert an error
 number to an error message.
 
 ## Log Files
@@ -87,7 +87,7 @@ levels may be set using the `control_log_mask` config parameter:
 Data Plane (`daos_engine`) logging is configured on a per-instance
 basis. In other words, each section under the `servers:` section must
 have its own logging configuration. The `log_file` config parameter
-is converted to a D_LOG_FILE environment variable value. For more
+is converted to a D\_LOG\_FILE environment variable value. For more
 detail, please see the [Debugging System](#debugging-system)
 section of this document.
 
@@ -118,8 +118,8 @@ The debug logging system includes a series of subsystems or facilities
 which define groups for related log messages (defined per source file).
 There are common facilities which are defined in GURT, as well as other
 facilities that can be defined on a per-project basis (such as those for
-CaRT and DAOS). DD_SUBSYS can be used to set which subsystems to enable
-logging. By default all subsystems are enabled ("DD_SUBSYS=all").
+CaRT and DAOS). DD\_SUBSYS can be used to set which subsystems to enable
+logging. By default all subsystems are enabled (`DD_SUBSYS=all`).
 
 -   DAOS Facilities:
     daos, array, kv, common, tree, vos, client, server, rdb, rsvc, pool, container, object,
@@ -203,7 +203,7 @@ composition of multiple individual bits.
 
 Please note: where in these examples the export command is shown setting an environment variable,
 this is intended to convey either that the variable is actually set (for the client environment), or
-configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
+configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and `env_vars`
 values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
 -   Generic setup for all messages (default settings)
@@ -220,7 +220,8 @@ values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 -   Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
 
         D_LOG_MASK=DEBUG -> log at DEBUG level from all facilities
-        DD_MASK=group_metadata -> limit logging to include default and metadata-specific streams. Or, specify DD_MASK=group_metadata_only for just metadata-specific log entries.
+        DD_MASK=group_metadata -> limit logging to include default and metadata-specific streams.
+        Or, specify DD_MASK=group_metadata_only for just metadata-specific log entries.
 
 -   Disable a noisy debug logging subsystem
 
@@ -244,7 +245,9 @@ Refer to the DAOS Environment Variables document for
 more information about the debug system environment.
 
 ## Common DAOS Problems
-### Incompatible Agent ####
+
+### Incompatible Agent
+
 When DER_AGENT_INCOMPAT is received, it means that the client library libdaos.so
 is likely mismatched with the DAOS Agent.  The libdaos.so, DAOS Agent and DAOS
 Server must be built from compatible sources so that the GetAttachInfo protocol
@@ -252,14 +255,16 @@ is the same between each component.  Depending on your situation, you will need
 to either update the DAOS Agent or the libdaos.so to the newer version in order
 to maintain compatibility with each other.
 
-### HLC Sync ###
+### HLC Sync
+
 When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
 are off by more than maximum allowed system clock offset (1 second by default).
 
 In order to correct this situation synchronize all server clocks to the same
 reference time, using services like NTP.
 
-### Shared Memory Errors ###
+### Shared Memory Errors
+
 When DER_SHMEM_PERMS is received it means that this I/O Engine lacked the
 permissions to access the shared memory megment left behind by a previous run of
 the I/O Engine on the same machine.  This happens when the I/O Engine fails to
@@ -267,8 +272,8 @@ remove the shared memory segment upon shutdown, and, there is a mismatch between
 the user/group used to launch the I/O Engine between these successive runs.  To
 remedy the problem, manually identify the shared memory segment and remove it.
 
-Issue ```ipcs``` to view the Shared Memory Segments.  The output will show a
-list of segments organized by ```key```.
+Issue `ipcs` to view the Shared Memory Segments.  The output will show a
+list of segments organized by `key`.
 
 ```
 ipcs
@@ -286,21 +291,26 @@ key        shmid      owner      perms      bytes      nattch     status
 key        semid      owner      perms      nsems
 ```
 
-Shared Memory Segments with keys [0x10242048 .. (0x10242048 + number of I/O
-Engines running)] are the segments that must be removed.  Use ```ipcrm``` to
-remove the segment.
+Shared Memory Segments with keys
+[0x10242048 .. (0x10242048 + number of I/O Engines running)]
+are the segments that must be removed.
+Use `ipcrm` to remove the segment.
 
 For example, to remove the shared memory segment left behind by I/O Engine
 instance 0, issue:
+
 ```
 sudo ipcrm -M 0x10242048
 ```
+
 To remove the shared memory segment left behind by I/O Engine instance 1, issue:
+
 ```
 sudo ipcrm -M 0x10242049
 ```
 
 ### Server Start Issues
+
 1. Read the log located in the `control_log_file`.
 1. Verify that the `daos_server` process is not currently running.
 1. Check the SCM device path in /dev.
@@ -316,26 +326,37 @@ sudo ipcrm -M 0x10242049
 1. Verify that the `mgmt_svc_replicas` host is accessible and the port is not used.
 1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
 1. Check `fabric_iface` in `engines`. They should be available and enabled.
-1. Check that `socket_dir` is writable by the daos_server.
+1. Check that `socket_dir` is writable by the daos\_server.
 
 ### Errors creating a Pool
+
 1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
-1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMem. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
+1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMem. Next, check the size of the existing pool.
+   Then check that this new pool being created will fit into the remaining disk space.
 
 ### Problems creating a container
+
 1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
 1. When the server configuration is changed, it's necessary to restart the agent.
-1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server nvme scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
-1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
+1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe.
+   First, determine which socket you're using with `daos_server network scan -p all`.
+   For example, if the interface you're using in the engine section is eth0,
+   find which NUMA Socket it belongs to. Next, determine the disks you can use with
+   this socket by calling `daos_server nvme scan` or `dmg storage scan`.
+   For example, if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
+1. Check the interface used in the server config (`fabric_iface`) also exists
+   in the client and can communicate with the server.
 1. Check the `access_points` of the agent config points to the correct server hosts.
 1. Call `daos pool query` and check that the pool exists and has free space.
 
 ### Applications run slow
+
 Verify if you're using Infiniband for `fabric_iface`: in the server config. The IO will be significantly slower with Ethernet.
 
 ## Common Errors and Workarounds
 
-### Use dmg command without daos_server_helper privilege
+### Use dmg command without privilege
+
 ```
 # Error message or timeout after dmg system query
 $ dmg system query
@@ -355,7 +376,9 @@ ERROR: dmg: Unable to load Certificate Data: could not load cert: stat /etc/daos
 
 # 2. Make sure the admin-host allow_insecure mode matches the applicable servers.
 ```
-### use daos command before daos_agent started
+
+### use daos command before daos\_agent started
+
 ```
 $ daos cont create $DAOS_POOL
 daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
@@ -364,12 +387,15 @@ failed to initialize daos: Miscellaneous error (-1025)
 
 
 # Work around to check for daos_agent certification and start daos_agent
+
 	#check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
 	$ sudo systemctl stop daos_agent.service
 	$ sudo systemctl start daos_agent.service
 	$ sudo systemctl status daos_agent.service
 ```
+
 ### use daos command with invalid or wrong parameters
+
 ```
 # Lack of providing daos pool_uuid
 $ daos pool list-cont
@@ -407,7 +433,9 @@ use 'daos help RESOURCE' for resource specifics
 $ daos pool list-cont --pool=$DAOS_POOL
 bc4fe707-7470-4b7d-83bf-face75cc98fc
 ```
+
 ### dmg pool create failed due to no space
+
 ```
 $ dmg pool create --size=50G mypool
 Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
@@ -435,7 +463,9 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 	-----  --------- -------- -------- ---------- --------- ---------
 	boro-8 17 GB     2.9 GB   83 %     0 B        0 B       N/A
 ```
+
 ### dmg pool destroy force
+
 ```
 # dmg pool destroy Timeout or failed due to pool having active connections
 # Workaround using pool destroy --force option
@@ -443,7 +473,9 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 	$ dmg pool destroy mypool --force
 	Pool-destroy command succeeded
 ```
+
 ### dmg pool destroy recursive
+
 ```
 # dmg pool destroy Timeout or failed due to pool having associated container(s)
 # Workaround using pool destroy --recursive option
@@ -451,7 +483,9 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 	$ dmg pool destroy mypool --recursive
 	Pool-destroy command succeeded
 ```
-### daos_engine fails to start with error "Address already in use"
+
+### daos\_engine fails to start with error "Address already in use"
+
 ```
 09/26-15:25:38.06 node-1 DAOS[3851384/-1/0] external ERR  # [4462751.071824] mercury->cls: [error] /builddir/build/BUILD/mercury-2.2.0/src/na/na_ofi.c:3638
 na_ofi_basic_ep_open(): fi_enable() failed, rc: -98 (Address already in use)
@@ -463,7 +497,8 @@ fabric_iface_port: 31316
 # engine 1
 fabric_iface_port: 31416
 ```
-### daos_agent cache of engine URIs is stale
+
+### daos\_agent cache of engine URIs is stale
 
 The `daos_agent` cache may become invalid if `daos_engine` processes restart with different
 configurations or IP addresses, or if the DAOS system is reformatted.
@@ -556,13 +591,36 @@ Alternately, the administrator may erase and re-format the DAOS system to start 
 
 ### Engines become unavailable
 
-Engines may become unavailable due to server power losses and reboots, network switch failures, etc. After staying unavailable for a certain period of time, these engines may become "excluded" or "errored" in `dmg system query` output. Once the states of all engines stabilize (see [`CRT_EVENT_DELAY`](env_variables.md)), each pool will check whether there is enough redundancy (see [Pool RF](pool_operations.md#pool-redundancy-factor)) to tolerate the unavailability of the "excluded" or "errored" engines. If there is enough redundancy, these engines will be excluded from the pool ("Disabled ranks" in `dmg pool query --health-only` output); otherwise, the pool will perform no exclusion ("Dead ranks" in `dmg pool query --health-only` output as described in [Querying a Pool](pool_operations.md#querying-a-pool)) and may become temporarily unavailable (as seen by timeouts of `dmg pool query`, `dmg pool list`, etc.). Similarly, when engines become available, whenever the states of all engines stabilize, each pool will perform the aforementioned check for any unavailable engines that remain.
+Engines may become unavailable due to server power losses and reboots,
+network switch failures, etc. After staying unavailable for a certain
+period of time, these engines may become "excluded" or "errored" in
+`dmg system query` output. Once the states of all engines stabilize
+(see [CRT\_EVENT\_DELAY](env_variables.md)), each pool will check
+whether there is enough redundancy
+(see [Pool RF](pool_operations.md#pool-redundancy-factor))
+o tolerate the unavailability of the "excluded" or "errored" engines.
+If there is enough redundancy, these engines will be excluded from the pool
+("Disabled ranks" in `dmg pool query --health-only` output).
+Otherwise, the pool will perform no exclusion
+("Dead ranks" in `dmg pool query --health-only` output as described in
+[Querying a Pool](pool_operations.md#querying-a-pool))
+and may become temporarily unavailable
+(as seen by timeouts of `dmg pool query`, `dmg pool list`, etc.).
+Similarly, when engines become available, whenever the states of all
+engines stabilize, each pool will perform the aforementioned check for
+any unavailable engines that remain.
 
-To restore availability as well as capacity and performance, try to start all "excluded" or "errored" engines. Starting all of them at the same time minimizes the chance of triggering rebuild jobs. In many cases, the following command suffices:
+To restore availability as well as capacity and performance,
+try to start all "excluded" or "errored" engines.
+Starting all of them at the same time minimizes the chance of triggering
+rebuild jobs. In many cases, the following command suffices:
+
 ```
 $ dmg system start
 ```
+
 If some pools remain unavailable (e.g., `dmg pool list` keeps timing out) after the previous step, restart the whole system:
+
 ```
 $ dmg system stop --force
 $ dmg system start
@@ -616,13 +674,14 @@ tmpfs                              4096          0      4096   0% /sys/fs/cgroup
 wolf-1:/export/home/samirrav 6289369088 5927917792 361451296  95% /home/samirrav
 #
 ```
-### e2fsck
 
+### e2fsck
 
 #### e2fsck command execution on non-corrupted file system.
 
 - "-f": Force check file system even it seems clean.
 - "-n": Use the option to assume an answer of 'no' to all questions.
+
 ```
 #/sbin/e2fsck -f -n /dev/pmem1
 e2fsck 1.43.8 (1-Jan-2018)
@@ -636,6 +695,7 @@ daos: 34/759040 files (0.0% non-contiguous), 8179728/777240064 blocks
 #echo $?
 0
 ```
+
 - Return Code: "0 - No errors"
 
 #### e2fsck command execution on corrupted file system.
@@ -643,6 +703,7 @@ daos: 34/759040 files (0.0% non-contiguous), 8179728/777240064 blocks
 - "-f": Force check file system even it seems clean.
 - "-n": Use the option to assume an answer of 'no' to all questions.
 - "-C0": To monitored the progress of the filesystem check.
+
 ```
 # /sbin/e2fsck -f -n -C0 /dev/pmem1
 e2fsck 1.43.8 (1-Jan-2018)
@@ -677,6 +738,7 @@ daos: 13/759040 files (0.0% non-contiguous), 334428/777240064 blocks
 # echo $?
 4
 ```
+
 - Return Code: "4 - File system errors left uncorrected"
 
 #### e2fsck command to repair and fixing the issue.
@@ -684,6 +746,7 @@ daos: 13/759040 files (0.0% non-contiguous), 334428/777240064 blocks
 - "-f": Force check file system even it seems clean.
 - "-p": Automatically fix any filesystem problems that can be safely fixed without human intervention.
 - "-C0": To monitored the progress of the filesystem check.
+
 ```
 #/sbin/e2fsck -f -p -C0 /dev/pmem1
 daos was not cleanly unmounted, check forced.
@@ -701,8 +764,8 @@ daos: 13/759040 files (0.0% non-contiguous), 334428/777240064 blocks
 # echo $?
 1
 ```
-- Return Code: "1 - File system errors corrected"
 
+- Return Code: "1 - File system errors corrected"
 
 ### ipmctl
 
@@ -710,7 +773,8 @@ IPMCTL utility is used for Intel® Optane™ persistent memory for managing, dia
 [IPMCTL user guide](https://docs.pmem.io/ipmctl-user-guide/) has more details about the utility.
 
 DAOS user can use the [diagnostic](https://docs.pmem.io/ipmctl-user-guide/debug/run-diagnostic) and
-[show error log](https://docs.pmem.io/ipmctl-user-guide/debug/show-error-log) functionality to debug the PMem related issues.
+[show error log](https://docs.pmem.io/ipmctl-user-guide/debug/show-error-log)
+functionality to debug the PMem related issues.
 
 #### ipmctl show command to get the DIMM ID connected to specific CPU.
 
@@ -749,6 +813,7 @@ This test will verify the PMem health parameters are under acceptable values. It
 #### Run quick diagnostic test on specific dimm from socket. By default it will run diagnostic test for all dimms.
 
 * -dimm : DIMM ID from the ipmctl command above
+
 ```
 #ipmctl start -diagnostic quick -dimm 0x0001
 --Test = Quick
@@ -859,6 +924,7 @@ No errors found on PMem module 0x1121
  0x1121 | 02/03/2022 16:50:17 | 0x04 - Locked/Illegal Access
 Show Error executed successfully
 ```
+
 ### ndctl
 
 NDCTL is another utility library for managing the PMem. The ndctl provides functional used for PMem and namespace management,
@@ -877,10 +943,11 @@ This utility can be used after ipmctl where name space is already created by ipm
 
 Please refer the [ndctl-list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) command guide for more details about the command options.
 
-Total Sixteen PMem connected to single system. Eight PMem DIMMs are connected to single socket (reference "ipmctl show -topology" section under ipmctl). 
+Total Sixteen PMem connected to single system. Eight PMem DIMMs are connected to single socket (reference "ipmctl show -topology" section under ipmctl).
 The SCM modules are typically configured in AppDirect interleaved mode. They are thus presented to the operating system as a single PMem namespace per socket (in fsdax mode).
 
 * -M : Include Media Error
+
 ```
 # ndctl list -M
 [
@@ -931,11 +998,13 @@ This can lead to an application getting stuck in an infinite loop on IO operatio
 	}
   }
 ]
-```    
+```
 
 #### ndctl wait-scrub command ran on system which has bad blocks.
 
-Please refer the [ndctl wait-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/untitled-2) command guide for more information about the command options.
+Please refer the [ndctl wait-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/untitled-2)
+command guide for more information about the command options.
+
 ```
 # ndctl wait-scrub
 [
@@ -959,7 +1028,8 @@ Please refer the [ndctl wait-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-
 
 #### command execution on system where bad blocks are scrubbed.
 
-Please refer the [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) user guide for more information about the command options.
+Please refer the [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list)
+user guide for more information about the command options.
 
 * -M : Include Media Error
 
@@ -999,19 +1069,24 @@ Please refer the [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pa
   }
 ]
 ```
+
 ### pmempool
 
 The pmempool is a management tool for Persistent Memory pool files created by PMDK libraries.
 DAOS uses the PMDK library to manage persistence inside ext4 files.
-[pmempool](https://github.com/daos-stack/pmdk/blob/stable-2.1/doc/pmempool/pmempool-check.1.md) can check consistency of a given pool file.
-It can be run with -r (repair) option which can fix some of the issues with pool file. DAOS will have more number of such pool file (vos-*), based
-on number of targets mention per daos engine. User may need to check each vos pool file for corruption on faulty pool.
+[pmempool](https://github.com/daos-stack/pmdk/blob/stable-2.1/doc/pmempool/pmempool-check.1.md)
+can check consistency of a given pool file.
+It can be run with -r (repair) option which can fix some of the issues with pool file.
+DAOS will have more number of such pool file (`vos-*`), based
+on number of targets mention per daos engine.
+User may need to check each vos pool file for corruption on faulty pool.
 
 #### Unclean shutdown
 
 Example of the system which is not shutdown properly and that set the mode as dirty on the VOS pool file.
 
 *  -v: More verbose.
+
 ```
 # pmempool check /mnt/daos0/0d977cd9-2571-49e8-902d-953f6adc6120/vos-0  -v
 checking shutdown state
@@ -1028,6 +1103,7 @@ Example of check repair command ran on the system to fix the unclean shutdown.
 *  -v: More verbose.
 *  -r: repair the pool.
 *  -y: Answer yes to all question.
+
 ```
 # pmempool check /mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0 -vry
 checking shutdown state
@@ -1043,6 +1119,7 @@ pool header correct
 #### Check consistency.
 
 Check the consistency of the VOS pool file after repair.
+
 ```
 # pmempool check /mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0 -v
 checking shutdown state
@@ -1056,7 +1133,7 @@ pool header correct
 
 ## Syslog
 
-[`RAS events`](https://docs.daos.io/v2.6/admin/administration/#ras-events) are printed to the Syslog
+[RAS events](https://docs.daos.io/v2.6/admin/administration/#ras-events) are printed to the Syslog
 by 'daos_server' processes via the Go standard library API.
 If no Syslog daemon is configured on the host, errors will be printed to the 'daos_server' log file:
 
@@ -1097,6 +1174,7 @@ server package e.g. 'rsyslog'.
 ## Tools to debug connectivity issues across nodes
 
 ### ifconfig
+
 ```
 $ ifconfig
 lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
@@ -1124,9 +1202,11 @@ eth1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 9000
         TX packets 61  bytes 4156 (4.0 KiB)
         TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 ```
+
 You can get the ip and network interface card (NIC) name with ifconfig. Important: Please run ifconfig on both DAOS server and client nodes to make sure mtu size are same for the network interfaces on different nodes. Mismatched mtu size could lead to DAOS hang on RDMA over converged Ethernet (RoCE) interfaces.
 
 ### lstopo-no-graphics
+
 ```
 $ lstopo-no-graphics
 ...
@@ -1143,10 +1223,12 @@ $ lstopo-no-graphics
           OpenFabrics "mlx5_1"
 ...
 ```
+
 You can get the domain name and numa node information of your NICs.
 In case lstopo-no-graphics in not installed, you can install package "hwloc" with yum/dnf or other package managers.
 
 ### ping
+
 ```
 client_node $ ping -c 3 -I eth1 10.165.192.121
 PING 10.165.192.121 (10.165.192.121) from 10.165.192.2 ens102: 56(84) bytes of data.
@@ -1154,9 +1236,11 @@ PING 10.165.192.121 (10.165.192.121) from 10.165.192.2 ens102: 56(84) bytes of d
 64 bytes from 10.165.192.121: icmp_seq=2 ttl=64 time=0.120 ms
 64 bytes from 10.165.192.121: icmp_seq=3 ttl=64 time=0.083 ms
 ```
+
 Make sure ping can reach the NIC your DAOS server is bound to.
 
-### fi_pingpong
+### fi\_pingpong
+
 ```
 server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0
 client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
@@ -1179,19 +1263,24 @@ Make sure communications with verbs can go through.
 server_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0
 client_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0 ip_of_mlx5_0_server
 ```
-### ib_send_lat
+
+### ib\_send\_lat
+
 ```
 server_node $ ib_send_lat -d mlx5_0 -s 16384 -D 3
 client_node $ ib_send_lat -d mlx5_0 -s 16384 -D 3 ip_of_server
 ```
+
 This test checks whether verbs goes through with Infiniband or RoCE cards. In case ib_send_lat in not installed, you can install package "perftest" with yum/dnf or other package managers.
 
 ## Tools to measure the network latency and bandwidth across nodes
 
 ### The tools in perftest for Infiniband and RoCE
+
 You can install package "perftest" with yum/dnf or other package managers if it is not available.
 
-Examples for measuring bandwidth,
+Examples for measuring bandwidth:
+
 ```
 ib_read_bw -a
 ib_read_bw -a 192.168.1.46
@@ -1214,23 +1303,29 @@ ib_send_lat -a
 ib_send_lat -a 192.168.1.46
 ```
 
-### fi_pingpong for Ethernet
+### fi\_pingpong for Ethernet
+
 You can install package "libfabric" with yum/dnf or other package managers if it is not available.
 
-Example,
+Example:
+
 ```
 server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 -I 1000
 client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 -I 1000 ip_of_eth0_server
 ```
+
 This reports network bandwidth. One can deduce the latency for given packet size.
 
 ## Tools to diagnose network issues for a large cluster
 
 ### [Intel CLuster Checker](https://www.intel.com/content/www/us/en/developer/tools/oneapi/cluster-checker.html)
+
 This suite contains multiple useful tools including network_time_uniformity to debug network issue.
 
 ### [mpi-benchmarks](https://github.com/intel/mpi-benchmarks)
+
 Tools like IMB-P2P, IMB-MPI1, and IMB-RMA are helpful for the sanity check of the latency and bandwidth.
+
 ```
 $ for((i=1;i<=65536;i*=4)); do echo "$i"; done &> msglen
 $ mpirun -np 4 -f hostlist ./IMB-P2P -msglen msglen PingPong
