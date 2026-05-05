@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +17,7 @@ import "ctl/smd.proto";
 import "ctl/ranks.proto";
 import "ctl/server.proto";
 import "ctl/support.proto";
+import "ctl/check.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS system and server hardware.
@@ -53,4 +55,6 @@ service CtlSvc {
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
 	// Perform a Log collection on Servers for support/debug purpose
 	rpc CollectLog (CollectLogReq) returns (CollectLogResp) {};
+	// Send the desired action to repair an inconsistency on a given engine.
+	rpc CheckEngineRepair(CheckEngineActReq) returns (CheckEngineActResp) {}
 }

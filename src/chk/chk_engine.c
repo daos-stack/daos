@@ -87,8 +87,6 @@ enum chk_pm_status {
 	CPS_TGT_DOWN,
 };
 
-static int chk_engine_report(struct chk_report_unit *cru, uint64_t *seq, int *decision);
-
 static int
 chk_cont_hkey_size(void)
 {
@@ -408,7 +406,7 @@ report:
 	cru.cru_details = details;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &seq, &decision);
+	rc = chk_report(ins, &cru, &seq, &decision);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE
@@ -634,7 +632,7 @@ report:
 	cru.cru_details = details;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &seq, &decision);
+	rc = chk_report(ins, &cru, &seq, &decision);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects dangling %s entry in pool map for pool "
@@ -794,7 +792,7 @@ chk_engine_handle_unknown_ult(void *args)
 	cru.cru_msg = msg;
 	cru.cru_result = 0;
 
-	rc = chk_engine_report(&cru, &seq, NULL);
+	rc = chk_report(ins, &cru, &seq, NULL);
 
 	if (ccr != NULL)
 		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
@@ -1102,7 +1100,7 @@ report:
 	cru.cru_msg = msg;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &seq, NULL);
+	rc = chk_report(ins, &cru, &seq, NULL);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects corrupted label %s (MS) vs %s (PS) for pool "
@@ -1332,7 +1330,7 @@ report:
 	cru.cru_details = details;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &seq, &decision);
+	rc = chk_report(ins, &cru, &seq, &decision);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects orphan container "
@@ -1684,7 +1682,7 @@ report:
 	cru.cru_details = details;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &seq, &decision);
+	rc = chk_report(ins, &cru, &seq, &decision);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects inconsistent container label for "DF_UUIDF"/"DF_UUIDF
@@ -2180,15 +2178,17 @@ log:
 static void
 chk_engine_sched(void *args)
 {
-	struct chk_instance	*ins = args;
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_pool_rec	*cpr;
-	uint32_t		 ins_phase;
-	uint32_t		 ins_status;
-	uint32_t		 pool_status;
-	d_rank_t		 myrank = dss_self_rank();
-	int			 done = 0;
-	int			 rc = 0;
+	struct chk_instance    *ins = args;
+	struct chk_bookmark    *cbk = &ins->ci_bk;
+	struct chk_pending_rec *pending;
+	struct chk_pool_rec    *cpr;
+	uint32_t                ins_phase;
+	uint32_t                ins_status;
+	uint32_t                pool_status;
+	uint32_t                act;
+	d_rank_t                myrank = dss_self_rank();
+	int                     done   = 0;
+	int                     rc     = 0;
 
 	D_INFO(DF_ENGINE" scheduler on rank %u entry at phase %u\n",
 	       DP_ENGINE(ins), myrank, cbk->cb_phase);
@@ -2199,6 +2199,17 @@ chk_engine_sched(void *args)
 		/* Someone wants to stop the check. */
 		if (ins->ci_sched_exiting)
 			D_GOTO(out, rc = 0);
+
+		if (!d_list_empty(&ins->ci_interaction_filter_list)) {
+			pending = d_list_pop_entry(&ins->ci_interaction_filter_list,
+						   struct chk_pending_rec, cpr_ins_link);
+			act     = ins->ci_prop.cp_policies[pending->cpr_class];
+			if (pending->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT ||
+			    !chk_is_valid_action(pending, act))
+				d_list_add_tail(&pending->cpr_ins_link, &ins->ci_pending_list);
+			else
+				chk_engine_act(pending->cpr_seq, act);
+		}
 
 		ins_phase = chk_pools_find_slowest(ins, &done);
 
@@ -2935,62 +2946,10 @@ out:
 	return rc;
 }
 
-static int
-chk_engine_act_internal(struct chk_instance *ins, uint64_t seq, uint32_t act)
-{
-	struct chk_pending_rec	*cpr = NULL;
-	int			 rc;
-
-	rc = chk_pending_del(ins, seq, &cpr);
-	if (rc == 0) {
-		/* The cpr will be destroyed by the waiter via chk_engine_report(). */
-		D_ASSERT(cpr->cpr_busy);
-
-		ABT_mutex_lock(cpr->cpr_mutex);
-		/*
-		 * It is the control plane's duty to guarantee that the decision is a valid
-		 * action from the report options. Otherwise, related inconsistency will be
-		 * ignored.
-		 */
-		cpr->cpr_action = act;
-		ABT_cond_broadcast(cpr->cpr_cond);
-		ABT_mutex_unlock(cpr->cpr_mutex);
-	}
-
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" on rank %u takes action for seq "DF_X64" with action %u: %d\n",
-		 DP_ENGINE(ins), dss_self_rank(), seq, act, rc);
-
-	return rc;
-}
-
 int
-chk_engine_act(uint64_t gen, uint64_t seq, uint32_t act)
+chk_engine_act(uint64_t seq, uint32_t act)
 {
-	struct chk_instance *ins = chk_engine;
-	int                  rc;
-
-	CHK_IS_READY(ins);
-
-	if (ins->ci_bk.cb_gen != gen)
-		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
-
-	/* The admin may input the wrong option, not acceptable. */
-	if (unlikely(act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)) {
-		D_ERROR("%u is not acceptable for interaction decision.\n", act);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = chk_engine_act_internal(ins, seq, act);
-	if (rc == -DER_NONEXIST || rc == -DER_NO_HDL)
-		rc = 0;
-
-out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE " on rank %u takes act %u, seq " DF_X64 ", gen " DF_X64 ": " DF_RC "\n",
-		 DP_ENGINE(ins), dss_self_rank(), act, seq, gen, DP_RC(rc));
-
-	return rc;
+	return chk_act_internal(chk_engine, seq, act);
 }
 
 static int
@@ -3199,7 +3158,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 		}
 
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(),
-					&new, ins, NULL, NULL, NULL, &cpr);
+					false, &new, ins, NULL, NULL, NULL, &cpr);
 		if (rc != 0)
 			goto out;
 	} else {
@@ -3386,135 +3345,7 @@ out:
 int
 chk_engine_set_policy(uint64_t gen, uint32_t policy_nr, struct chk_policy *policies)
 {
-	struct chk_instance *ins  = chk_engine;
-	struct chk_bookmark *cbk  = &ins->ci_bk;
-	struct chk_property *prop = &ins->ci_prop;
-	int                  rc   = 0;
-
-	CHK_IS_READY(ins);
-
-	/* Do nothing if no (engine) check instance is running. */
-	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE || cbk->cb_gen != gen ||
-	    cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
-		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
-
-	rc = chk_policy_refresh(policy_nr, policies, prop);
-	if (rc > 0)
-		rc = chk_prop_update(prop, NULL);
-
-out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, DF_ENGINE " set policy: " DF_RC "\n", DP_ENGINE(ins),
-		 DP_RC(rc));
-
-	return rc == -DER_NOTAPPLICABLE ? 0 : rc;
-}
-
-/*
- * \return	Positive value if interaction is interrupted, such as check stop.
- *		Zero on success.
- *		Negative value if error.
- */
-static int
-chk_engine_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
-{
-	struct chk_instance    *ins  = chk_engine;
-	struct chk_pending_rec *cpr  = NULL;
-	struct chk_pool_rec    *pool = NULL;
-	d_iov_t                 kiov;
-	d_iov_t                 riov;
-	int                     rc;
-
-	D_ASSERT(cru->cru_pool != NULL);
-
-	if (*seq == 0) {
-
-new_seq:
-		*seq = chk_report_seq_gen(ins);
-	}
-
-	if (cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
-		d_iov_set(&riov, NULL, 0);
-		d_iov_set(&kiov, cru->cru_pool, sizeof(uuid_t));
-		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
-		if (rc != 0)
-			goto log;
-
-		pool = (struct chk_pool_rec *)riov.iov_buf;
-
-		rc = chk_pending_add(ins, &pool->cpr_pending_list, NULL, *cru->cru_pool, *seq,
-				     cru->cru_rank, cru->cru_cla, cru->cru_option_nr,
-				     cru->cru_options, &cpr);
-		if (unlikely(rc == -DER_AGAIN))
-			goto new_seq;
-
-		if (rc != 0)
-			goto log;
-	}
-
-	rc = chk_report_remote(ins->ci_prop.cp_leader, ins->ci_bk.cb_gen, cru->cru_cla,
-			       cru->cru_act, cru->cru_result, cru->cru_rank, cru->cru_target,
-			       cru->cru_pool, cru->cru_pool_label, cru->cru_cont,
-			       cru->cru_cont_label, cru->cru_obj, cru->cru_dkey,
-			       cru->cru_akey, cru->cru_msg, cru->cru_option_nr, cru->cru_options,
-			       cru->cru_detail_nr, cru->cru_details, *seq);
-	if (unlikely(rc == -DER_AGAIN)) {
-		D_ASSERT(cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT);
-		D_ASSERT(cpr != NULL);
-
-		chk_pending_destroy(ins, cpr);
-		cpr = NULL;
-
-		goto new_seq;
-	}
-
-	/* Check cpr->cpr_action for the case of "dmg check repair" by race. */
-	if (rc == 0 && pool != NULL &&
-	    likely(cpr->cpr_action == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT))
-		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_PENDING;
-
-log:
-	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, rc,
-		  DF_ENGINE " on rank %u report with class %u, action %u, seq " DF_X64 ", %s, "
-			    "handle_rc %d, report_rc %d",
-		  DP_ENGINE(ins), cru->cru_rank, cru->cru_cla, cru->cru_act, *seq, cru->cru_msg,
-		  cru->cru_result, rc);
-
-	if (rc != 0 || cpr == NULL)
-		goto out;
-
-	D_ASSERT(cpr->cpr_busy);
-
-	D_INFO(DF_ENGINE" on rank %u need interaction for class %u\n",
-	       DP_ENGINE(ins), cru->cru_rank, cru->cru_cla);
-
-	ABT_mutex_lock(cpr->cpr_mutex);
-
-again:
-	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
-		*decision = cpr->cpr_action;
-		ABT_mutex_unlock(cpr->cpr_mutex);
-		goto out;
-	}
-
-	if (!ins->ci_sched_running || ins->ci_sched_exiting || cpr->cpr_exiting) {
-		rc = 1;
-		ABT_mutex_unlock(cpr->cpr_mutex);
-		goto out;
-	}
-
-	ABT_cond_wait(cpr->cpr_cond, cpr->cpr_mutex);
-
-	goto again;
-
-out:
-	if (cpr != NULL)
-		chk_pending_destroy(ins, cpr);
-
-	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
-	    d_list_empty(&pool->cpr_pending_list))
-		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-
-	return rc;
+	return chk_set_policy(chk_engine, gen, policy_nr, policies);
 }
 
 int

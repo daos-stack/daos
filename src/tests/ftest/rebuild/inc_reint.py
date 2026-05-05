@@ -24,7 +24,7 @@ class IncReintContRecovTest(DaosCoreBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,provider
-        :avocado: tags=inc_reint,cont_recov
+        :avocado: tags=daos_test,rebuild,inc_reint,cont_recov
         :avocado: tags=IncReintContRecovTest,test_daos_inc_reint_cont_recov
         """
         self.run_subtest()
