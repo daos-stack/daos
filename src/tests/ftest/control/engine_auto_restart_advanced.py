@@ -120,7 +120,6 @@ class EngineAutoRestartAdvanced(ControlTestBase):
         self.log_step("Step 2: Second exclusion of rank %s (should be deferred)", test_rank)
 
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank,
-                                                                    expect_restart=False,
                                                                     timeout=10)
 
         if restarted:

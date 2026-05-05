@@ -56,16 +56,12 @@ class EngineAutoRestartDisabled(ControlTestBase):
 
         self.log_step("Step 1: Excluding rank %s (auto-restart is DISABLED)", test_rank)
 
-        restarted, _ = self.exclude_rank_and_wait_restart(test_rank,
-                                                          expect_restart=False,
-                                                          timeout=35)
+        restarted, _ = self.exclude_rank_and_wait_restart(test_rank, timeout=35)
 
         if restarted:
-            self.fail("Rank %s unexpectedly restarted when auto-restart disabled!"
-                      % test_rank)
+            self.fail("Rank %s unexpectedly restarted when auto-restart disabled!" % test_rank)
 
-        self.log.info("Confirmed: Rank %s did NOT automatically restart (as expected)",
-                      test_rank)
+        self.log.info("Confirmed: Rank %s did NOT automatically restart (as expected)", test_rank)
 
         # Step 4: Manually start the rank
         self.log_step("Step 2: Manually starting rank %s", test_rank)
@@ -77,8 +73,8 @@ class EngineAutoRestartDisabled(ControlTestBase):
         if failed_ranks:
             self.fail("Manual start of rank %s failed" % test_rank)
 
-        self.log.info("SUCCESS: Rank %s stayed excluded when auto-restart disabled, "
-                      "and manual start succeeded", test_rank)
+        self.log.info("SUCCESS: Rank %s stayed excluded when auto-restart disabled, and manual "
+                      "start succeeded", test_rank)
 
     def test_multiple_ranks_no_restart(self):
         """Test that multiple excluded ranks stay excluded when auto-restart disabled.
