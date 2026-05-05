@@ -124,14 +124,12 @@ class EngineAutoRestartAdvanced(ControlTestBase):
                                                                     timeout=10)
 
         if restarted:
-            self.fail("Rank %s unexpectedly restarted. Final state: %s"
-                      % (test_rank, final_state))
+            self.fail("Rank %s unexpectedly restarted. Final state: %s" % (test_rank, final_state))
 
         self.log.info("Confirmed: Restart is deferred (rank still in excluded state)")
 
-        # Wait for deferred restart to execute (after delay expires)
-        # Add buffer time for processing
-        wait_time = expected_delay + 10
+        # Wait for deferred restart to execute (after delay expires), add buffer
+        wait_time = expected_delay + 5
         self.log_step("Step 3: Waiting %ss for deferred restart to execute", wait_time)
 
         if not self.wait_for_rank_state(test_rank, "joined", timeout=wait_time):

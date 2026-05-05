@@ -176,6 +176,10 @@ class DaosServerYamlParameters(YamlParameters):
         self.fault_path = BasicParameter(None)
         self.fault_cb = BasicParameter(None)
 
+        # Engine auto-restart parameters
+        self.disable_engine_auto_restart = BasicParameter(None)
+        self.engine_auto_restart_min_delay = BasicParameter(None)
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 

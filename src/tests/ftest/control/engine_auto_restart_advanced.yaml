@@ -3,7 +3,7 @@ hosts:
 server_config:
   name: daos_server
   engines_per_host: 2
-  engine_auto_restart_min_delay: 20
+  engine_auto_restart_min_delay: 30
   engines:
     0:
       log_file: daos_server0.log
