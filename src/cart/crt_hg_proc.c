@@ -134,12 +134,13 @@ crt_proc_crt_bulk_t_deffered(struct crt_bulk *bulk)
 	if (bulk->bound) {
 		rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
 		if (rc != 0) {
-			D_ERROR("Failed to bind bulk during proc\n");
+			DL_ERROR(rc, "Failed to bind bulk during proc");
 			/* free will return quota resource */
 			crt_bulk_free(bulk->hg_bulk_hdl);
 			return rc;
 		}
 	}
+	/* Mark as no longer deferred once allocation is complete */
 	bulk->deferred = false;
 
 	return 0;
@@ -165,7 +166,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 		/* Deferred allocation as a result of D_QUOTA_BULKS limit */
 		if (bulk != CRT_BULK_NULL) {
 			if (bulk->deferred && (rc = crt_proc_crt_bulk_t_deffered(bulk)) != 0) {
-				D_ERROR("Failed to do deferred bulk allocation during proc\n");
+				DL_ERROR(rc, "Failed to do deferred bulk allocation during proc");
 				return rc;
 			}
 			hg_bulk = bulk->hg_bulk_hdl;
@@ -192,12 +193,10 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 
 		/* Allocate space for a wrapper struct */
 		D_ALLOC_PTR(bulk);
-		if (!bulk)
+		if (bulk == NULL)
 			return -DER_NOMEM;
 
 		bulk->hg_bulk_hdl = hg_bulk;
-		bulk->deferred    = false;
-		bulk->crt_ctx     = NULL;
 		bulk->refcount    = 1;
 
 		*pcrt_bulk = bulk;
@@ -209,21 +208,25 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 		if (bulk == NULL)
 			return 0;
 
-		/* Prevent HG proc from assigning NULL if recount is not zero */
+		/**
+		 * Prevent HG proc from assigning NULL if refcount is not zero and keep reference on
+		 * HG bulk, we'll free it ourselves. hg_proc_hg_bulk_t() will decrement refcount on
+		 * the HG bulk.
+		 */
 		hg_bulk = bulk->hg_bulk_hdl;
-		hg_ret  = hg_proc_hg_bulk_t(proc, &hg_bulk);
+		HG_Bulk_ref_incr(hg_bulk);
+		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
 		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("Failed to free bulk during proc\n");
+			D_ERROR("Failed to free bulk during proc (%s)\n",
+				HG_Error_to_string(hg_ret));
 			return -DER_HG;
 		}
 
 		if (atomic_fetch_sub(&bulk->refcount, 1) > 1)
 			return 0;
 
-		/* Free the wrapper struct */
-		if (bulk->iovs)
-			D_FREE(bulk->iovs);
-		D_FREE(bulk);
+		/* This is the real free */
+		crt_bulk_free_common(bulk);
 		*pcrt_bulk = NULL;
 		return 0;
 	}
