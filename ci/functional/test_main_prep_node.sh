@@ -20,8 +20,12 @@ mail_domain="${domain1%%/*}"
 : "${DAOS_PMEM:=0}"
 : "${DAOS_NVME:=0}"
 
+#cn is for a cleaned up stage name.
+cn=$(echo "$STAGE_NAME" | sed 's/[^a-zA-Z0-9_]/_/g' | sed 's/__*/_/g')
+
 result=0
 mail_message=''
+mail_type='warning'
 nl="
 "
 
@@ -51,7 +55,7 @@ function do_mail {
     fi
     # shellcheck disable=SC2059
     build_info="BUILD_URL = $BUILD_URL$nl STAGE = $STAGE_NAME$nl$nl"
-    mail -s "Hardware check failed after reboot!" \
+    mail -s "Hardware check $mail_type after reboot!" \
          -r "$DAOS_DEVOPS_EMAIL" "$OPERATIONS_EMAIL" \
          <<< "$build_info$mail_message"
     set -x
@@ -335,26 +339,47 @@ if [ "$result" -ne 0 ]; then
 fi
 
 set -x
-if [ -n "$FIRST_NODE" ] && ! grep /mnt/share /proc/mounts; then
+if [ -n "$FIRST_NODE" ] && ! grep -qs ' /mnt/share ' /proc/mounts; then
     mkdir -p /mnt/share
-    mount "$FIRST_NODE":/export/share /mnt/share
+    # Retry the NFS mount to handle the case where the NFS server on
+    # FIRST_NODE has not fully registered its exports yet.
+    nfs_mounted=false
+    for attempt in $(seq 1 3); do
+        if mount "$FIRST_NODE":/export/share /mnt/share; then
+            nfs_mounted=true
+            break
+        fi
+        echo "NFS mount attempt $attempt failed, retrying in 5s..."
+        sleep 5
+    done
+    if ! "$nfs_mounted"; then
+        echo "ERROR: NFS mount failed after $attempt attempts:"
+        echo "  $FIRST_NODE:/export/share -> /mnt/share"
+        echo "Exports advertised by $FIRST_NODE:"
+        showmount -e "$FIRST_NODE" || true
+        echo "DNS/hosts resolution for $FIRST_NODE:"
+        getent hosts "$FIRST_NODE" || true
+        exit 32
+    fi
 fi
 
-# Defaulting the package to "(root)" for now as then Jenkins
-# will default to setting putting the outer stage name and
-# inner stage name in the full test name.
-ts="Hardware"
+# The package name defaults to "(root)" unless there is a dot in the
+# testsuite name, in which case the package name is the part before
+# the last dot in the testsuite name.
+pn="Hardware"
 tf="failures=\"$testfails\""
 te="errors=\"0\""
 tc="tests=\"$testruns\""
 
-# shellcheck disable=SC2089
-junit_xml="<testsuite name=\"$ts\" skipped=\"0\" $tf $te $tc>$nl
+junit_xml="<testsuite name=\"${pn}.${cn}\" skipped=\"0\" $tf $te $tc>$nl
 $testcases</testsuite>$nl"
 
 # Each junit file needs the same name for when they are collected.
 echo "$junit_xml" > "./hardware_prep_node_results.xml"
 
+if [ "$testfails" -gt 0 ]; then
+    mail_type='failed'
+fi
 do_mail
 
 if [ "$result" -ne 0 ]; then

@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2015-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,7 +39,9 @@ int
 			 daos_prop_t *prop);
 int
     ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid);
-int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
+int
+    ds_cont_list(uuid_t pool_uuid, bool include_destroying, struct daos_pool_cont_info **conts,
+		 uint64_t *ncont);
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
 int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
@@ -127,7 +129,7 @@ struct ds_cont_child {
 	 * VOS aggregation will use this boundary. We will optimize it later.
 	 */
 	uint64_t		sc_ec_agg_eph_boundary;
-	/* The current EC aggregate epoch for this xstream */
+	/* The local EC aggregation epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
 	/* Used by ds_cont_eph_report() to query the minimum ec_agg_eph and stable_eph
 	 * from all local VOS.
@@ -158,7 +160,7 @@ struct ds_cont_child {
 struct agg_param {
 	void			*ap_data;
 	struct ds_cont_child	*ap_cont;
-	daos_epoch_t		ap_full_scan_hlc;
+	daos_epoch_t             ap_full_scan_hlc;
 	bool			ap_vos_agg;
 };
 

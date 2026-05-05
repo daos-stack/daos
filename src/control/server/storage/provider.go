@@ -278,16 +278,21 @@ func (p *Provider) MountScm() error {
 	}
 
 	req := ScmMountRequest{
-		Class:  cfg.Class,
-		Target: cfg.Scm.MountPoint,
+		Class:            cfg.Class,
+		Target:           cfg.Scm.MountPoint,
+		KernelConfigPath: p.engineStorage.KernelConfigPath,
 	}
 
 	switch cfg.Class {
 	case ClassRam:
+		disableHugepages := true
+		if cfg.Scm.DisableHugepages != nil {
+			disableHugepages = *cfg.Scm.DisableHugepages
+		}
 		req.Ramdisk = &RamdiskParams{
 			Size:             cfg.Scm.RamdiskSize,
 			NUMANode:         cfg.Scm.NumaNodeIndex,
-			DisableHugepages: cfg.Scm.DisableHugepages,
+			DisableHugepages: disableHugepages,
 		}
 	case ClassDcpm:
 		if len(cfg.Scm.DeviceList) != 1 {
@@ -346,10 +351,14 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 
 	switch class {
 	case ClassRam:
+		disableHugepages := true
+		if scmCfg.DisableHugepages != nil {
+			disableHugepages = *scmCfg.DisableHugepages
+		}
 		req.Ramdisk = &RamdiskParams{
 			Size:             scmCfg.RamdiskSize,
 			NUMANode:         scmCfg.NumaNodeIndex,
-			DisableHugepages: scmCfg.DisableHugepages,
+			DisableHugepages: disableHugepages,
 		}
 	case ClassDcpm:
 		if len(scmCfg.DeviceList) != 1 {
@@ -378,6 +387,7 @@ func (p *Provider) ScmNeedsFormat() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	req.KernelConfigPath = p.engineStorage.KernelConfigPath
 
 	res, err := p.scm.CheckFormat(*req)
 	if err != nil {
@@ -400,6 +410,7 @@ func (p *Provider) FormatScm(force bool) error {
 	if err != nil {
 		return errors.Wrap(err, "generate format request")
 	}
+	req.KernelConfigPath = p.engineStorage.KernelConfigPath
 
 	scmStr := fmt.Sprintf("SCM (%s:%s)", cfg.Class, cfg.Scm.MountPoint)
 	p.log.Infof("Instance %d: starting format of %s", p.engineIndex, scmStr)

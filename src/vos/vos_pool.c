@@ -1162,16 +1162,6 @@ pool_hop_free(struct d_ulink *hlink)
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
-	if (pool->vp_size != 0) {
-		rc = munlock((void *)pool->vp_umm.umm_base, pool->vp_size);
-		if (rc != 0)
-			D_WARN("Failed to unlock pool memory at "DF_X64": errno=%d (%s)\n",
-			       pool->vp_umm.umm_base, errno, strerror(errno));
-		else
-			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: "DF_U64" bytes at "DF_X64"\n",
-				pool->vp_size, pool->vp_umm.umm_base);
-	}
-
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
@@ -1452,8 +1442,14 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		pool_df->pd_version = version;
 
 	/* pd_ext is newly allocated, no need to call tx_add_ptr() */
-	pd_ext_df             = umem_off2ptr(&umem, pool_df->pd_ext);
-	pd_ext_df->ped_mem_sz = scm_sz;
+	pd_ext_df                = umem_off2ptr(&umem, pool_df->pd_ext);
+	pd_ext_df->ped_mem_sz    = scm_sz;
+	pd_ext_df->ped_emerg_buf = umem_zalloc(&umem, VOS_SNAPBUF_EMERG_SIZE);
+	if (UMOFF_IS_NULL(pd_ext_df->ped_emerg_buf)) {
+		D_ERROR("Failed to allocate pool emergency buffer.\n");
+		rc = -DER_NOSPACE;
+	}
+
 end:
 	/**
 	 * The transaction can in reality be aborted
@@ -1608,65 +1604,6 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	return vos_pool_destroy_ex(path, uuid, 0);
 }
 
-enum {
-	/** Memory locking flag not initialized */
-	LM_FLAG_UNINIT,
-	/** Memory locking disabled */
-	LM_FLAG_DISABLED,
-	/** Memory locking enabled */
-	LM_FLAG_ENABLED
-};
-
-static void
-lock_pool_memory(struct vos_pool *pool)
-{
-	static int	lock_mem = LM_FLAG_UNINIT;
-	struct rlimit	rlim;
-	size_t		lock_bytes;
-	int		rc;
-
-	if (lock_mem == LM_FLAG_UNINIT) {
-		rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
-		if (rc != 0) {
-			D_WARN("getrlimit() failed; errno=%d (%s)\n", errno, strerror(errno));
-			lock_mem = LM_FLAG_DISABLED;
-			return;
-		}
-
-		if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
-			D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
-			lock_mem = LM_FLAG_DISABLED;
-			return;
-		}
-
-		lock_mem = LM_FLAG_ENABLED;
-	}
-
-	if (lock_mem == LM_FLAG_DISABLED)
-		return;
-
-	/*
-	 * Mlock may take several tens of seconds to complete when memory
-	 * is tight, so mlock is skipped in current MD-on-SSD scenario.
-	 */
-	if (bio_nvme_configured(SMD_DEV_TYPE_META))
-		return;
-
-	lock_bytes = pool->vp_pool_df->pd_scm_sz;
-	rc = mlock((void *)pool->vp_umm.umm_base, lock_bytes);
-	if (rc != 0) {
-		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
-		       "; errno=%d (%s)\n", lock_bytes, pool->vp_umm.umm_base,
-		       errno, strerror(errno));
-		return;
-	}
-
-	/* Only save the size if the locking was successful */
-	pool->vp_size = lock_bytes;
-	D_DEBUG(DB_MGMT, "Locking VOS pool in memory "DF_U64" bytes at "DF_X64"\n", pool->vp_size,
-		pool->vp_umm.umm_base);
-}
-
 static int
 pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 {
@@ -1816,7 +1753,6 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
-	lock_pool_memory(pool);
 
 out:
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MGMT, rc,

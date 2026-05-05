@@ -43,7 +43,13 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
+if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
+	DEPENDS=("(mercury-libfabric or mercury-ucx)")
+else
+	DEPENDS=("mercury-libfabric | mercury-ucx")
+fi
 build_package "mercury"
+DEPENDS=()
 
 TARGET_PATH="${libdir}/mercury"
 list_files files "${SL_MERCURY_PREFIX}/lib64/mercury/libna_plugin_ofi.so"

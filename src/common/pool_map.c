@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1796,10 +1796,10 @@ error_tree:
  *
  * \param buf		[IN]	The buffer to input pool components.
  * \param version	[IN]	Version for the new created pool map.
- * \param mapp		[OUT]	The returned pool map.
+ * \param map_ptr	[OUT]	The returned pool map.
  */
 int
-pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
+pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **map_ptr)
 {
 	struct pool_domain *tree = NULL;
 	struct pool_map	   *map;
@@ -1844,7 +1844,7 @@ out:
 	if (rc != 0)
 		D_FREE(map);
 	else
-		*mapp = map;
+		*map_ptr = map;
 	return rc;
 }
 
@@ -2064,7 +2064,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 	sorter = &map->po_domain_sorters[i];
 	D_ASSERT(sorter->cs_type == type);
 
-	if (id == PO_COMP_ID_ALL) {
+	if (type == PO_COMP_TP_ROOT || id == PO_COMP_ID_ALL) {
 		if (domain_pp != NULL)
 			*domain_pp = tmp;
 		return sorter->cs_nr;
@@ -2429,7 +2429,7 @@ update_failed_cnt_helper(struct pool_domain *dom,
 
 	if (dom->do_children == NULL) {
 		for (i = 0; i < dom->do_target_nr; ++i) {
-			if (pool_target_down(&dom->do_targets[i]))
+			if (pool_target_is_down(&dom->do_targets[i]))
 				num_failed++;
 		}
 	} else {
