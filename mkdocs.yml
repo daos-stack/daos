@@ -8,6 +8,7 @@ repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
 edit_uri: blob/release/2.8/docs/
 # edit_uri: blob/master/docs/
+# yamllint disable-line rule:line-length
 copyright: Copyright 2025-2026 Hewlett Packard Enterprise Development LP. Copyright 2016-2024 Intel Corporation.
 
 # Theme
