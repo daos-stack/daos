@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -206,6 +206,22 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
+	// Clear restart history for manually stopped ranks on this server
+	// This prevents rate-limiting from interfering with manual operations
+	// Note: instances already filtered by FilterInstancesByRankSet() to match req.GetRanks()
+	if svc.restartMgr != nil {
+		ranks := make([]ranklist.Rank, 0, len(instances))
+		for _, ei := range instances {
+			rank, err := ei.GetRank()
+			if err == nil {
+				ranks = append(ranks, rank)
+			}
+		}
+		if len(ranks) > 0 {
+			svc.restartMgr.clearRankRestartHistory(ranks)
+		}
+	}
+
 	return resp, nil
 }
 
@@ -317,6 +333,22 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	resp := &ctlpb.RanksResp{}
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
+	}
+
+	// Clear restart history for manually started ranks on this server
+	// This prevents rate-limiting from interfering with manual operations
+	// Note: instances already filtered by FilterInstancesByRankSet() to match req.GetRanks()
+	if svc.restartMgr != nil {
+		ranks := make([]ranklist.Rank, 0, len(instances))
+		for _, ei := range instances {
+			rank, err := ei.GetRank()
+			if err == nil {
+				ranks = append(ranks, rank)
+			}
+		}
+		if len(ranks) > 0 {
+			svc.restartMgr.clearRankRestartHistory(ranks)
+		}
 	}
 
 	return resp, nil

@@ -975,6 +975,94 @@ specified on the command line:
 If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
 
+### Engine Auto-Restart
+
+DAOS automatically restarts engines that self-terminate after being excluded from
+the system. This feature improves system availability by recovering from transient
+failures without administrator intervention.
+
+#### How It Works
+
+When an engine is excluded (e.g., due to network issues detected by SWIM), the
+engine detects the exclusion and performs a self-termination. The control plane
+monitors for these events and automatically restarts the affected engine after
+clearing the exclusion state, allowing it to rejoin the system.
+
+The automatic restart includes rate-limiting to prevent restart storms. By default,
+an engine must wait 5 minutes between automatic restarts.
+
+#### Configuration
+
+Control auto-restart behavior in `daos_server.yml`:
+
+```yaml
+# Disable automatic restart (default: enabled)
+disable_engine_auto_restart: false
+
+# Minimum delay between automatic restarts per rank (default: 300 seconds)
+engine_auto_restart_min_delay: 300
+```
+
+#### Manual Operations
+
+Manual `dmg system stop` and `dmg system start` operations are never affected by
+the rate-limiting mechanism. Administrators can always immediately stop and start
+ranks regardless of recent automatic restart activity.
+
+```bash
+# Manual operations always work immediately
+$ dmg system stop --ranks=0,1,2
+$ dmg system start --ranks=0,1,2
+```
+
+When you manually stop or start ranks, the restart history for those ranks is
+automatically cleared, ensuring no delays from previous automatic restarts.
+
+#### Monitoring
+
+The `engine_self_terminated` RAS event is logged when an engine self-terminates
+and triggers an automatic restart:
+
+```
+&&& RAS EVENT id: [engine_self_terminated] ... msg: [excluded rank self terminated detected]
+```
+
+Use `dmg system query` to check rank status and incarnation numbers. The
+incarnation number increments each time a rank restarts, helping track restart
+events:
+
+```bash
+$ dmg system query --ranks=0
+Rank UUID                                 Control Address  Fault Domain State  Reason Incarnation
+---- ----                                 --------------- ------------- -----  ------ -----------
+0    12345678-1234-1234-1234-123456789012 10.0.0.1:10001  /node1        Joined        3
+```
+
+#### Best Practices
+
+- **Leave enabled**: Automatic restart improves availability for transient failures
+- **Adjust timing**: For frequent exclusions, consider increasing `engine_auto_restart_min_delay`
+- **Monitor events**: Watch for repeated `engine_self_terminated` events indicating persistent issues
+- **Manual control**: Use `dmg system stop/start` for maintenance without worrying about delays
+
+#### Troubleshooting
+
+**Problem**: Rank keeps self-terminating and restarting
+
+**Solution**: Investigate root cause:
+1. Check network connectivity (SWIM may be detecting real failures)
+2. Review engine logs for errors
+3. Verify hardware health
+4. Consider disabling auto-restart temporarily for investigation
+
+**Problem**: Need immediate restart but recently auto-restarted
+
+**Solution**: Use manual operations (not affected by rate-limiting):
+```bash
+$ dmg system stop --ranks=X
+$ dmg system start --ranks=X
+```
+
 ### Storage Reformat
 
 To reformat the system after a controlled shutdown, run the command:
@@ -1018,15 +1106,16 @@ the storage server has not changed the old rank can be "reused" by formatting us
 `dmg storage format --replace` option.
 
 An examples workflow would be:
-- `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
-- `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
-- After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
-- Storage server is rebooted after running `daos_server scm prepare` and command is run again.
-- Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
-- `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
-- Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
-  rank will be created).
-- Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
+
+1. `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
+2. `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
+3. After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
+4. Storage server is rebooted after running `daos_server scm prepare` and command is run again.
+5. Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
+6. `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
+7. Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
+   rank will be created).
+8. Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
 
 !!! note
     `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. The

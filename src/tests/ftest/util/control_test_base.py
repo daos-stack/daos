@@ -1,8 +1,10 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
@@ -46,3 +48,176 @@ class ControlTestBase(TestWithServers):
 
         if errors:
             self.fail("\n--- Errors found! ---\n{}".format("\n".join(errors)))
+
+    def get_all_ranks(self):
+        """Get list of all ranks in the system.
+
+        Returns:
+            list: List of all rank numbers
+        """
+        return list(self.server_managers[0].ranks.keys())
+
+    def get_rank_state(self, rank):
+        """Get the state of a rank.
+
+        Args:
+            rank (int): Rank number
+
+        Returns:
+            str: Current state of the rank
+        """
+        data = self.dmg.system_query(ranks="%s" % rank)
+        if data["status"] != 0:
+            self.fail("Cmd dmg system query failed")
+        if "response" in data and "members" in data["response"]:
+            if data["response"]["members"] is None:
+                self.fail("No members returned from dmg system query")
+            for member in data["response"]["members"]:
+                return member["state"].lower()
+        self.fail("No member state returned from dmg system query")
+        return None
+
+    def exclude_rank_and_wait_restart(self, rank, timeout=30):
+        """Exclude a rank and wait for it to self-terminate and potentially restart.
+
+        Args:
+            rank (int): Rank to exclude
+            timeout (int): Maximum seconds to wait for restart
+
+        Returns:
+            tuple: (restarted, final_state) - whether rank restarted and its final state
+        """
+        self.log_step("Excluding rank %s", rank)
+        self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
+
+        # Wait for rank to self-terminate (should go to AdminExcluded state)
+        self.log_step("Waiting for rank %s to self-terminate", rank)
+        time.sleep(2)
+
+        # Check if rank is adminexcluded
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=[rank], valid_states=["adminexcluded"], max_checks=10)
+        if failed_ranks:
+            self.fail("Rank %s did not reach AdminExcluded state after exclusion" % rank)
+
+        # After triggering rank exclusion with dmg system exclude, clear
+        # AdminExcluded state so rank can join on auto-restart. This enables
+        # mimic of rank exclusion via SWIM inactivity detection.
+        self.log_step("Clearing AdminExcluded state for rank %s", rank)
+        self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
+
+        # Check if rank is excluded
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=[rank], valid_states=["excluded"], max_checks=10)
+        if failed_ranks:
+            self.fail("Rank %s did not reach Excluded state after clear-excluded" % rank)
+
+        # Wait for automatic restart (rank should go to Joined state)
+        self.log_step("Waiting for rank %s to automatically restart", rank)
+        start_time = time.time()
+        restarted = False
+
+        while time.time() - start_time < timeout:
+            time.sleep(2)
+            # Check if rank has rejoined
+            failed_ranks = self.server_managers[0].check_rank_state(
+                ranks=[rank], valid_states=["joined"], max_checks=1)
+            if not failed_ranks:
+                restarted = True
+                break
+
+        if restarted:
+            self.log.info("Rank %s automatically restarted and rejoined within %ss", rank, timeout)
+            return (True, "joined")
+
+        state = self.get_rank_state(rank)
+        self.log.info("Rank %s (%s) did not restart within %ss", rank, state, timeout)
+        return (False, state)
+
+    def get_rank_incarnation(self, rank):
+        """Get the incarnation number of a rank.
+
+        The incarnation number increments each time a rank restarts, allowing
+        verification that a rank has actually restarted rather than just
+        remaining in the same state.
+
+        Args:
+            rank (int): Rank number
+
+        Returns:
+            int: Current incarnation number of the rank, or None if not found
+
+        Raises:
+            None - logs error and returns None on failure
+        """
+        try:
+            data = self.dmg.system_query(ranks=f"{rank}")
+            if data.get("status") != 0:
+                self.log.error("dmg system query failed for rank %s", rank)
+                return None
+
+            if "response" not in data or "members" not in data["response"]:
+                self.log.error("Invalid response from dmg system query for rank %s", rank)
+                return None
+
+            members = data["response"]["members"]
+            if not members:
+                self.log.error("No members returned from dmg system query for rank %s", rank)
+                return None
+
+            for member in members:
+                if member.get("rank") == rank:
+                    incarnation = member.get("incarnation")
+                    if incarnation is not None:
+                        self.log.debug("Rank %s incarnation: %s", rank, incarnation)
+                        return incarnation
+                    self.log.error("No incarnation field for rank %s", rank)
+                    return None
+
+            self.log.error("Rank %s not found in system query response", rank)
+            return None
+
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            # Catch all exceptions to prevent test framework crashes during rank queries
+            self.log.error("Exception getting incarnation for rank %s: %s", rank, error)
+            return None
+
+    def reset_engine_restart_state(self):
+        """Reset engine auto-restart state between tests.
+
+        The engine restart manager tracks last restart times for rate-limiting
+        automatic restarts. This state persists across test methods when servers
+        continue running, which can cause unexpected rate-limiting behavior in
+        sequential tests.
+
+        This method resets the state by restarting all servers via:
+        1. dmg system stop (automatically clears restart history for stopped ranks)
+        2. dmg system start (automatically clears restart history for started ranks)
+        3. Wait for all ranks to rejoin
+
+        The automatic clearing is handled by SystemStop/SystemStart in mgmt_system.go,
+        which calls clearRankRestartHistory() for affected ranks.
+
+        Usage:
+            Should be called in tearDown() of test classes that use engine restart
+            functionality. If this method fails, tearDown() should fail the test
+            to prevent subsequent tests from running with contaminated state.
+
+        Raises:
+            Exception: If server stop/start fails or ranks fail to rejoin
+
+        Note:
+            This operation adds ~5-10 seconds per test due to server restart overhead,
+            but is necessary to ensure test isolation and reliable results.
+        """
+        self.log.info("Restarting servers to reset engine restart manager state")
+        self.server_managers[0].system_stop()
+        time.sleep(2)
+        self.server_managers[0].system_start()
+
+        # Wait for all ranks to join
+        all_ranks = self.get_all_ranks()
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=all_ranks, valid_states=["joined"], max_checks=30)
+        if failed_ranks:
+            self.log.warning("Some ranks failed to rejoin after restart: %s", failed_ranks)
