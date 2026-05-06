@@ -1089,23 +1089,15 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 	return rc;
 }
 
-/* Call internal method to increment CSUM media error. */
-static void
-obj_log_csum_err(void)
+static inline void
+obj_log_csum_err(daos_unit_oid_t oid)
 {
-	struct dss_module_info	*info = dss_get_module_info();
-	struct bio_xs_context	*bxc;
+	struct dss_module_info *info = dss_get_module_info();
 
 	D_ASSERT(info != NULL);
-	bxc = info->dmi_nvme_ctxt;
-
-	if (bxc == NULL) {
-		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
-		info->dmi_xs_id, info->dmi_tgt_id);
-		return;
-	}
-
-	bio_log_data_csum_err(bxc);
+	ras_notify_eventf(RAS_OBJ_CSUM_ERR, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, NULL, "CSUM error for " DF_UOID " on target %u\n",
+			  DP_UOID(oid), info->dmi_tgt_id);
 }
 
 /**
@@ -1818,7 +1810,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	}
 
 	if (rc == -DER_CSUM)
-		obj_log_csum_err();
+		obj_log_csum_err(orw->orw_oid);
 post:
 	time = daos_get_ntime();
 	rc = bio_iod_post_async(biod, rc);
@@ -2892,7 +2884,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
 			(rc == -DER_NONEXIST &&
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
-		    DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(orw->orw_oid));
+		    DB_IO, DLOG_ERR, rc, "tgt_update " DF_UOID " with TX " DF_DTI,
+		    DP_UOID(orw->orw_oid), DP_DTI(&orw->orw_dti));
 
 out:
 	if (dth != NULL)
@@ -3059,6 +3052,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle	*dth;
 
+		if (orw->orw_flags & ORF_CSUM_REPORT) {
+			obj_log_csum_err(orw->orw_oid);
+			D_GOTO(out, rc = 0);
+		}
+
 		/* ORF_FETCH_EPOCH_EC_AGG_BOUNDARY only used for rebuild fetch. The container's
 		 * sc_ec_agg_eph_boundary possibly be different on the initiator and target engines
 		 * of the rebuild fetch, initiator selected fetch epoch possibly lower than readable
@@ -3101,11 +3099,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 				orw->orw_epoch = fetch_epoch;
 			}
 			orw->orw_epoch_first = orw->orw_epoch;
-		}
-
-		if (orw->orw_flags & ORF_CSUM_REPORT) {
-			obj_log_csum_err();
-			D_GOTO(out, rc = 0);
 		}
 
 		if (DAOS_FAIL_CHECK(DAOS_OBJ_FETCH_DATA_LOST))
@@ -3447,9 +3440,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_FOR_MIGRATION) {
 		/* just in case ds_pool::sp_rebuilding is not set, pause my local EC aggregation
 		 * by setting this flag.
-		 * NB: it's a lockess write to shared data structure and it's harmless.
 		 */
-		ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_scan = 1;
+		atomic_store(&ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_enum, 1);
 		flags = DTX_FOR_MIGRATION;
 	}
 
@@ -4898,7 +4890,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 					 ioc->ioc_coc->sc_csummer, piod_nrs[i]);
 		if (rc != 0) {
 			if (rc == -DER_CSUM)
-				obj_log_csum_err();
+				obj_log_csum_err(dcsr->dcsr_oid);
 			goto out;
 		}
 

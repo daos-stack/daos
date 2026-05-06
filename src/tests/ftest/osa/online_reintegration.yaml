@@ -63,7 +63,7 @@ ior:
 
 daos_racer:
   runtime: 480
-  clush_timeout: 1000
+  daos_racer_timeout: 1000
 
 mdtest:
   api: DFS
