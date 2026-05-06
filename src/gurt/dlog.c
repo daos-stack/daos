@@ -577,7 +577,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	uint64_t uid = 0;
 	int fac, lvl, pri;
 	bool flush;
-	char *buf_nopt1hdr, facstore[16], *facstr;
+	char                *buf_nopt1hdr, facstore[16], *facstr;
 	struct timeval tv;
 	struct tm *tm;
 	unsigned int hlen_pt1, hlen, mlen, tlen;
