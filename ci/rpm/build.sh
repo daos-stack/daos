@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script for building RPMs in a chroot
+# Script for building DAOS
 # If the STAGE_NAME environment variable is present the script will
 # attempt to parse it to determine what distribution to build for.
 #
@@ -12,49 +12,12 @@
 # has disabled fault injection or this is a Release build
 set -uex
 
-id
-if [ "$(id -u)" = "0" ]; then
-    echo "Should not be run as root"
-    exit 1
-fi
+# Default values for variables that may be set in the environment
+: "${JOBS:=144}"
+: "${COMPILER:=gcc}"
+: "${DAOS_BUILD_TYPE:=dev}"
+: "${DAOS_TARGET_TYPE:=release}"
 
-mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-ci_envs="$mydir/../parse_ci_envs.sh"
-if [ -e "${ci_envs}" ]; then
-  # shellcheck source=parse_ci_envs.sh disable=SC1091
-  source "${ci_envs}"
-fi
-
-: "${SCONS_FAULTS_ARGS:=BUILD_TYPE=dev}"
-SCONS_ARGS="${SCONS_FAULTS_ARGS}"
-
-: "${CHROOT_NAME:='rocky+epel-8-x86_64'}"
-: "${TARGET:='el8'}"
-: "${REPO_SPEC:='el-8'}"
-
-: "${COVFN_DISABLED:=true}"
-: "${JOB_REPOS:=}"
-EXTERNAL_COMPILER_OPT=""
-
-if ! $COVFN_DISABLED && [[ $REPO_SPEC == el-* ]]; then
-    compiler_args="COMPILER=covc"
-    EXTERNAL_COMPILER_OPT=" --define \"compiler_args ${compiler_args}\""
-fi
-
-EXTERNAL_SCONS_OPT=" --define \"scons_args ${SCONS_ARGS}\""
-EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_SCONS_OPT}${EXTERNAL_COMPILER_OPT}"
-
-rm -rf "artifacts/${TARGET}/"
-if ! mkdir -p "artifacts/${TARGET}/"; then
-    echo "Failed to create directory \"artifacts/${TARGET}/\""
-    ls -ld . || true
-    pwd || true
-    exit 1
-fi
-
-# shellcheck disable=SC2086
-DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME"               \
-TOPDIR=$PWD make CHROOT_NAME="${CHROOT_NAME}" ${JOB_REPOS}        \
-    EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_RPM_BUILD_OPTIONS}"    \
-    SCONS_ARGS="${SCONS_ARGS}" DISTRO_VERSION="${DISTRO_VERSION}" \
-    -C utils/rpms chrootbuild
+scons --jobs "$JOBS" --build-deps=no install PREFIX=/opt/daos COMPILER="$COMPILER" \
+      FIRMWARE_MGMT=1 BUILD_TYPE="$DAOS_BUILD_TYPE" TARGET_TYPE="$DAOS_TARGET_TYPE" \
+      USE_INSTALLED=all
