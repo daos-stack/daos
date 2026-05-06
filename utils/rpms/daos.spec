@@ -134,7 +134,6 @@ BuildRequires: libasan
 %if (0%{?suse_version} > 0)
 BuildRequires: libasan8
 %endif
-BuildRequires: gperftools-devel
 
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
