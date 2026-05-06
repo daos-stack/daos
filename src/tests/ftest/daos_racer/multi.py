@@ -1,11 +1,14 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
+from exception_utils import CommandFailure
+from job_manager_utils import get_job_manager
 
 
 class DaosRacerMultiTest(TestWithServers):
@@ -33,10 +36,26 @@ class DaosRacerMultiTest(TestWithServers):
         :avocado: tags=io,daos_racer
         :avocado: tags=DaosRacerMultiTest,test_daos_racer_multi
         """
-        dmg = self.get_dmg_command()
-        self.assertGreater(
-            len(self.hostlist_clients), 0,
-            "This test requires one client: {}".format(self.hostlist_clients))
-        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], dmg)
+        self.assertGreater(len(self.hostlist_clients), 0, "This test requires at least one client")
+
+        # Create the daos_racer command
+        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients, self.get_dmg_command())
         daos_racer.get_params(self)
-        daos_racer.run()
+
+        # Create the mpi command
+        job_manager = get_job_manager(self)
+        job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        job_manager.assign_processes(ppn=self.params.get('ppn', daos_racer.namespace))
+        job_manager.assign_environment(daos_racer.env)
+        job_manager.job = daos_racer
+        job_manager.check_results_list = ["<stderr>", "No MPI found"]
+        job_manager.timeout = daos_racer.daos_racer_timeout.value
+
+        self.log_step("Run daos_racer")
+        try:
+            job_manager.run()
+
+        except CommandFailure as error:
+            self.fail(f"daos_racer failed: {error}")
+
+        self.log_step("Test passed!")
