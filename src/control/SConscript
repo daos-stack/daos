@@ -50,10 +50,13 @@ def get_build_flags(benv):
     """Return string of build flags"""
     if is_release_build(benv):
         return '-buildmode=pie'
+    # Disable optimizations and inlining for debugger support
+    flags = '-gcflags "all=-N -l"'
+    # enable AddressSanitizer to detect memory safety issues at runtime
     if 'SANITIZERS' in benv and benv['SANITIZERS'] != "":
-        return '-asan'
-    # enable race detector for non-release builds
-    return '-race'
+        return f'-asan {flags}'
+    # enable race detector to detect concurrent memory access issues
+    return f'-race {flags}'
 
 
 def gen_build_id():
