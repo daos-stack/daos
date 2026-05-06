@@ -631,3 +631,118 @@ func TestServer_NewEngineRestartManager(t *testing.T) {
 		t.Error("expected pendingRestart map to be initialized")
 	}
 }
+
+func TestServer_EngineRestartManager_ClearRankRestartHistory(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupRanks     []ranklist.Rank
+		clearRanks     []ranklist.Rank
+		expectLogMsgs  []string
+		remainingRanks []ranklist.Rank
+	}{
+		"nil manager": {
+			setupRanks: []ranklist.Rank{1, 2},
+			clearRanks: []ranklist.Rank{1},
+		},
+		"empty ranks": {
+			setupRanks: []ranklist.Rank{1, 2},
+			clearRanks: []ranklist.Rank{},
+		},
+		"clear single rank with history": {
+			setupRanks:     []ranklist.Rank{1, 2, 3},
+			clearRanks:     []ranklist.Rank{2},
+			expectLogMsgs:  []string{"cleared restart history for rank 2"},
+			remainingRanks: []ranklist.Rank{1, 3},
+		},
+		"clear multiple ranks with history": {
+			setupRanks:     []ranklist.Rank{1, 2, 3, 4},
+			clearRanks:     []ranklist.Rank{1, 3},
+			expectLogMsgs:  []string{"cleared restart history for rank 1", "cleared restart history for rank 3"},
+			remainingRanks: []ranklist.Rank{2, 4},
+		},
+		"clear all ranks": {
+			setupRanks:     []ranklist.Rank{1, 2, 3},
+			clearRanks:     []ranklist.Rank{1, 2, 3},
+			expectLogMsgs:  []string{"cleared restart history for rank 1", "cleared restart history for rank 2", "cleared restart history for rank 3"},
+			remainingRanks: []ranklist.Rank{},
+		},
+		"clear rank without history": {
+			setupRanks:     []ranklist.Rank{1, 2},
+			clearRanks:     []ranklist.Rank{5},
+			expectLogMsgs:  []string{},
+			remainingRanks: []ranklist.Rank{1, 2},
+		},
+		"clear rank with pending restart": {
+			setupRanks:     []ranklist.Rank{1, 2},
+			clearRanks:     []ranklist.Rank{1},
+			expectLogMsgs:  []string{"cancelled pending restart for rank 1", "cleared restart history for rank 1"},
+			remainingRanks: []ranklist.Rank{2},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := setupTestLogger(t)
+			var mgr *engineRestartManager
+
+			if name == "nil manager" {
+				// Test nil manager doesn't panic
+				var nilMgr *engineRestartManager
+				nilMgr.clearRankRestartHistory(tc.clearRanks)
+				return
+			}
+
+			mgr = setupTestManager(t, nil, log)
+
+			// Setup restart history for ranks
+			now := time.Now()
+			for i, rank := range tc.setupRanks {
+				mgr.lastRestart[rank] = now.Add(-time.Duration(i) * time.Minute)
+			}
+
+			// Setup pending restart for rank 1 if testing that case
+			if name == "clear rank with pending restart" {
+				timer := time.NewTimer(10 * time.Second)
+				t.Cleanup(func() { timer.Stop() })
+				mgr.pendingRestart[ranklist.Rank(1)] = timer
+			}
+
+			mgr.clearRankRestartHistory(tc.clearRanks)
+
+			// Verify expected log messages
+			for _, expectedMsg := range tc.expectLogMsgs {
+				if !strings.Contains(buf.String(), expectedMsg) {
+					t.Errorf("expected log message %q not found in: %s",
+						expectedMsg, buf.String())
+				}
+			}
+
+			// Verify remaining ranks still have history
+			for _, rank := range tc.remainingRanks {
+				if _, exists := mgr.lastRestart[rank]; !exists {
+					t.Errorf("expected rank %d to still have restart history", rank)
+				}
+			}
+
+			// Verify cleared ranks don't have history
+			for _, rank := range tc.clearRanks {
+				if _, exists := mgr.lastRestart[rank]; exists {
+					found := false
+					for _, remaining := range tc.remainingRanks {
+						if remaining.Equals(rank) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected rank %d to have cleared restart history", rank)
+					}
+				}
+			}
+
+			// Verify pending restart was cleared for rank 1 in specific test
+			if name == "clear rank with pending restart" {
+				if _, exists := mgr.pendingRestart[ranklist.Rank(1)]; exists {
+					t.Error("expected pending restart for rank 1 to be cleared")
+				}
+			}
+		})
+	}
+}
