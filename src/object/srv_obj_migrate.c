@@ -1348,6 +1348,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	char			*data;
 	daos_size_t		 size;
 	d_iov_t			 csum_iov = {0};
+	d_iov_t                  packed_csum_iov = {0};
 	d_iov_t			*p_csum_iov = NULL;
 	struct daos_csummer	*csummer = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
@@ -1385,6 +1386,10 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 
 	rc = mrone_obj_fetch(mrone, oh, sgls, mrone->mo_iods, mrone->mo_iod_num,
 			     mrone->mo_epoch, DIOF_FOR_MIGRATION, p_csum_iov);
+	/* migrate_csum_calc() may change csum_iov->iov_buf, so make a copy as original csum_iov
+	 * will be freed by daos_iov_free() below.
+	 */
+	packed_csum_iov = csum_iov;
 	if (rc == -DER_CSUM) {
 		DL_ERROR(rc,
 			 DF_RB ": migrate dkey " DF_KEY " failed because of checksum error. "
@@ -1472,8 +1477,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
-	rc = migrate_csum_calc(csummer, mrone, mrone->mo_iods, mrone->mo_iod_num, sgls,
-			       p_csum_iov, &iod_csums);
+	rc      = migrate_csum_calc(csummer, mrone, mrone->mo_iods, mrone->mo_iod_num, sgls,
+				    &packed_csum_iov, &iod_csums);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB ": unable to calculate iod csums", DP_RB_MRO(mrone));
 		goto out;
@@ -1514,6 +1519,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	daos_handle_t         ioh;
 	int                   sgl_cnt    = 0;
 	d_iov_t               csum_iov   = {0};
+	d_iov_t               packed_csum_iov = {0};
 	struct daos_csummer  *csummer    = NULL;
 	struct dcs_iod_csums *iod_csums  = NULL;
 	d_iov_t              *p_csum_iov = NULL;
@@ -1568,6 +1574,10 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iod_num, fetch_eph, flags, p_csum_iov);
+	/* migrate_csum_calc() may change csum_iov->iov_buf, so make a copy as original csum_iov
+	 * will be freed by daos_iov_free() below.
+	 */
+	packed_csum_iov = csum_iov;
 	if (rc) {
 		DL_ERROR(rc, DF_RB ": migrate dkey " DF_KEY " failed", DP_RB_MRO(mrone),
 			 DP_KEY(&mrone->mo_dkey));
@@ -1584,7 +1594,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
-	rc = migrate_csum_calc(csummer, mrone, iods, iod_num, sgls, p_csum_iov, &iod_csums);
+	rc = migrate_csum_calc(csummer, mrone, iods, iod_num, sgls, &packed_csum_iov, &iod_csums);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB ": failed to calculate iod csums", DP_RB_MRO(mrone));
 		D_GOTO(post, rc);
