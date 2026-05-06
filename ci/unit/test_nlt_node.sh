@@ -46,13 +46,19 @@ prlimit -n
 
 if [ "$#" -eq 0 ]; then
     set -- --max-log-size 1950MiB \
+        --class-name nlt \
         --system-ram-reserved 4 \
         --dfuse-dir /localhome/jenkins/ \
         --log-usage-save nltir.xml \
         --log-usage-export nltr.json all
 fi
 
+mkdir -p nlt_logs
+sudo mount -t tmpfs tmpfs nlt_logs
+sudo chown jenkins:jenkins nlt_logs
+
 exec env \
+    TMPDIR="$(pwd)/nlt_logs" \
     HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
     NO_PROXY="${DAOS_NO_PROXY:-}" \
     ./utils/node_local_test.py "$@"
