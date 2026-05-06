@@ -183,7 +183,7 @@ int
 crt_bulk_addref(crt_bulk_t crt_bulk)
 {
 	struct crt_bulk *bulk = crt_bulk;
-	int              rc   = -DER_SUCCESS;
+	int              rc   = DER_SUCCESS;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
@@ -220,7 +220,6 @@ crt_bulk_free_common(struct crt_bulk *bulk)
 
 	D_ASSERT(bulk != NULL);
 
-	/* Decrement refcount on bulk handle itself */
 	if (bulk->hg_bulk_hdl != HG_BULK_NULL) {
 		hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
 		if (hg_ret != HG_SUCCESS) {
@@ -233,8 +232,7 @@ crt_bulk_free_common(struct crt_bulk *bulk)
 	if (!bulk->deferred && bulk->crt_ctx != NULL)
 		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 
-	if (bulk->iovs != NULL)
-		D_FREE(bulk->iovs);
+	D_FREE(bulk->iovs);
 	D_FREE(bulk);
 }
 

@@ -116,7 +116,7 @@ CRT_PROC_TYPE_FUNC(uint64_t)
 CRT_PROC_TYPE_FUNC(bool)
 
 static int
-crt_proc_crt_bulk_t_deffered(struct crt_bulk *bulk)
+crt_proc_crt_bulk_t_deferred(struct crt_bulk *bulk)
 {
 	struct crt_context *ctx;
 	int                 rc;
@@ -135,8 +135,9 @@ crt_proc_crt_bulk_t_deffered(struct crt_bulk *bulk)
 		rc = crt_hg_bulk_bind(bulk->hg_bulk_hdl, &ctx->cc_hg_ctx);
 		if (rc != 0) {
 			DL_ERROR(rc, "Failed to bind bulk during proc");
-			/* free will return quota resource */
-			crt_bulk_free(bulk->hg_bulk_hdl);
+			put_quota_resource(ctx, CRT_QUOTA_BULKS);
+			(void)HG_Bulk_free(bulk->hg_bulk_hdl);
+			bulk->hg_bulk_hdl = HG_BULK_NULL;
 			return rc;
 		}
 	}
@@ -165,7 +166,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 
 		/* Deferred allocation as a result of D_QUOTA_BULKS limit */
 		if (bulk != CRT_BULK_NULL) {
-			if (bulk->deferred && (rc = crt_proc_crt_bulk_t_deffered(bulk)) != 0) {
+			if (bulk->deferred && (rc = crt_proc_crt_bulk_t_deferred(bulk)) != 0) {
 				DL_ERROR(rc, "Failed to do deferred bulk allocation during proc");
 				return rc;
 			}
@@ -196,8 +197,14 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 		if (bulk == NULL)
 			return -DER_NOMEM;
 
-		bulk->hg_bulk_hdl = hg_bulk;
-		bulk->refcount    = 1;
+		*bulk = (struct crt_bulk){.hg_bulk_hdl = hg_bulk,
+					  .crt_ctx     = NULL,
+					  .iovs        = NULL,
+					  .sgl         = {0},
+					  .bulk_perm   = 0, /* unused */
+					  .refcount    = 1,
+					  .bound       = false,
+					  .deferred    = false};
 
 		*pcrt_bulk = bulk;
 		return 0;
@@ -214,12 +221,14 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 		 * the HG bulk.
 		 */
 		hg_bulk = bulk->hg_bulk_hdl;
-		HG_Bulk_ref_incr(hg_bulk);
+		(void)HG_Bulk_ref_incr(hg_bulk);
 		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
 		if (hg_ret != HG_SUCCESS) {
+			/* For correctness, call HG_Bulk_free() here but this is theoretically not
+			 * needed as hg_proc_hg_bulk_t() cannot fail in this context */
+			(void)HG_Bulk_free(hg_bulk);
 			D_ERROR("Failed to free bulk during proc (%s)\n",
 				HG_Error_to_string(hg_ret));
-			return -DER_HG;
 		}
 
 		if (atomic_fetch_sub(&bulk->refcount, 1) > 1)
