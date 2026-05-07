@@ -126,7 +126,7 @@ func (mgr *engineRestartManager) performRestart(ctx context.Context, rank rankli
 
 	// Record restart time and clear pending state on exit (deferred)
 	mgr.recordRestartTime(rank)
-	mgr.log.Noticef("recording rank %d", rank)
+	mgr.log.Debugf("recording rank %d", rank)
 }
 
 // processRestartRequest handles a single restart request with rate limiting.
@@ -173,6 +173,16 @@ func (mgr *engineRestartManager) requestRestart(rank ranklist.Rank, instance Eng
 
 // start begins processing restart requests.
 func (mgr *engineRestartManager) start(ctx context.Context) {
+	mgr.mu.Lock()
+	// Reinitialize channels if they were closed
+	if mgr.stopChan == nil {
+		mgr.stopChan = make(chan struct{})
+	}
+	if mgr.requestChan == nil {
+		mgr.requestChan = make(chan engineRestartRequest, engineRestartMaxQueueSz)
+	}
+	mgr.mu.Unlock()
+
 	mgr.log.Debug("engine restart manager started")
 	go func() {
 		for {
@@ -230,7 +240,11 @@ func (mgr *engineRestartManager) stop() {
 	}
 	mgr.pendingRestart = make(map[ranklist.Rank]*time.Timer)
 
-	close(mgr.stopChan)
+	// Close stopChan if it's open
+	if mgr.stopChan != nil {
+		close(mgr.stopChan)
+		mgr.stopChan = nil
+	}
 }
 
 // newEngineRestartManager creates a new restart manager.

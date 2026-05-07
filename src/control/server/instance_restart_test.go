@@ -419,12 +419,72 @@ func TestServer_EngineRestartManager_Stop(t *testing.T) {
 			len(mgr.pendingRestart))
 	}
 
-	// Verify stopChan is closed
-	select {
-	case <-mgr.stopChan:
-		// Expected
-	default:
-		t.Error("stopChan should be closed")
+	// Verify stopChan is nil (cleaned up)
+	mgr.mu.RLock()
+	stopChanNil := mgr.stopChan == nil
+	mgr.mu.RUnlock()
+
+	if !stopChanNil {
+		t.Error("stopChan should be nil after stop")
+	}
+}
+
+func TestServer_EngineRestartManager_StopStartMultipleTimes(t *testing.T) {
+	ctx, cancel := context.WithTimeout(test.Context(t), 30*time.Second)
+	defer cancel()
+
+	instance, testRank := setupTestHarness(t, "1")
+	mgr := setupTestManager(t, &config.Server{
+		EngineAutoRestartMinDelay: 1,
+	})
+
+	// Test multiple stop/start cycles
+	for cycle := 1; cycle <= 3; cycle++ {
+		t.Logf("Starting cycle %d", cycle)
+
+		// Start the manager
+		mgr.start(ctx)
+
+		// Verify channels are initialized
+		if mgr.requestChan == nil {
+			t.Errorf("cycle %d: requestChan should be initialized after start", cycle)
+		}
+		if mgr.stopChan == nil {
+			t.Errorf("cycle %d: stopChan should be initialized after start", cycle)
+		}
+
+		startInstanceConsumer(ctx, instance)
+
+		// Submit a restart request
+		mgr.requestRestart(testRank, instance)
+
+		// Wait for restart to be processed
+		if !waitForRestartRecorded(ctx, t, mgr, testRank) {
+			t.Errorf("cycle %d: expected restart time to be recorded", cycle)
+		}
+
+		// Stop the manager
+		mgr.stop()
+
+		// Verify stopChan is closed/nil
+		mgr.mu.RLock()
+		stopChanNil := mgr.stopChan == nil
+		mgr.mu.RUnlock()
+
+		if !stopChanNil {
+			t.Errorf("cycle %d: stopChan should be nil after stop", cycle)
+		}
+
+		// Verify pending restarts are cleared
+		if len(mgr.pendingRestart) != 0 {
+			t.Errorf("cycle %d: expected pending restarts cleared, got %d",
+				cycle, len(mgr.pendingRestart))
+		}
+
+		// Clear the restart history for next cycle
+		delete(mgr.lastRestart, testRank)
+
+		t.Logf("Cycle %d completed successfully", cycle)
 	}
 }
 
