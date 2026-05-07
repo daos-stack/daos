@@ -1932,9 +1932,6 @@ err_iotask:
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)
 		tse_task_complete(stask, rc);
 err_task:
-	if (array)
-		array_decref(array);
-	tse_task_complete(task, rc);
 	return rc;
 }
 
