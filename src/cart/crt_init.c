@@ -34,8 +34,9 @@ static const char *const crt_tc_name[] = {CRT_TRAFFIC_CLASSES};
 
 static int
 crt_init_prov(crt_provider_t provider, bool primary, struct crt_prov_gdata *prov_gdata,
-	      const char *interface, const char *domain, const char *port, const char *auth_key,
-	      bool port_auto_adjust, crt_init_options_t *opt);
+	      const char *provider_name, const char *interface, const char *domain,
+	      const char *port, const char *auth_key, bool port_auto_adjust,
+	      crt_init_options_t *opt);
 
 static void
 crt_lib_init(void) __attribute__((__constructor__));
@@ -109,8 +110,9 @@ dump_opt(crt_init_options_t *opt)
 }
 
 static int
-crt_na_config_init(bool primary, crt_provider_t provider, const char *interface, const char *domain,
-		   const char *port, const char *auth_key, bool port_auto_adjust);
+crt_na_config_init(bool primary, crt_provider_t provider, const char *provider_name,
+		   const char *interface, const char *domain, const char *port,
+		   const char *auth_key, bool port_auto_adjust);
 
 /* Workaround for CART-890 */
 static void
@@ -429,45 +431,7 @@ crt_plugin_fini(void)
 crt_provider_t
 crt_str_to_provider(const char *str_provider)
 {
-	crt_provider_t prov = CRT_PROV_UNKNOWN;
-	int            i, len;
-	char          *p = NULL;
-
-	if (str_provider == NULL)
-		return prov;
-
-	for (i = 0; crt_na_dict[i].nad_str != NULL; i++) {
-		if (!strncmp(str_provider, crt_na_dict[i].nad_str,
-			     strlen(crt_na_dict[i].nad_str) + 1) ||
-		    (crt_na_dict[i].nad_alt_str &&
-		     !strncmp(str_provider, crt_na_dict[i].nad_alt_str,
-			      strlen(crt_na_dict[i].nad_alt_str) + 1))) {
-			prov = crt_na_dict[i].nad_type;
-			break;
-		}
-		if (crt_na_dict[i].nad_type == CRT_PROV_UCX &&
-		    !strncmp(str_provider, CRT_UCX_STR, strlen(CRT_UCX_STR))) {
-			len = strlen(str_provider);
-			if (len > strlen(CRT_UCX_STR) && strchr(str_provider, '+')) {
-				D_STRNDUP(p, str_provider, len);
-				if (!p) {
-					/* Return provider unknown if allocation fails. */
-					return prov;
-				} else {
-					/* Store the default UCX provider string in the alt_str
-					 * to allow it to be restored if finalize is called.
-					 */
-					crt_na_dict[i].nad_alt_str   = crt_na_dict[i].nad_str;
-					crt_na_dict[i].nad_str       = p;
-					crt_na_dict[i].nad_str_alloc = true;
-				}
-			}
-			prov = crt_na_dict[i].nad_type;
-			break;
-		}
-	}
-
-	return prov;
+	return crt_prov_str_to_prov(str_provider);
 }
 
 static int
@@ -767,8 +731,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	 * coma-separated list then it will be later parsed out
 	 * and processed in crt_na_config_init().
 	 */
-	rc = crt_init_prov(prov, true, &crt_gdata.cg_prov_gdata_primary, interface, domain, port,
-			   auth_key, port_auto_adjust, opt);
+	rc = crt_init_prov(prov, true, &crt_gdata.cg_prov_gdata_primary, provider, interface,
+			   domain, port, auth_key, port_auto_adjust, opt);
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
@@ -823,9 +787,10 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			if (port == NULL || port[0] == '\0')
 				D_WARN("No port specified for secondary provider\n");
 
-			rc = crt_init_prov(crt_gdata.cg_secondary_provs[i], false,
-					   &crt_gdata.cg_prov_gdata_secondary[i], interface, domain,
-					   port, auth_key, port_auto_adjust, opt);
+			rc =
+			    crt_init_prov(crt_gdata.cg_secondary_provs[i], false,
+					  &crt_gdata.cg_prov_gdata_secondary[i], provider,
+					  interface, domain, port, auth_key, port_auto_adjust, opt);
 			if (rc != 0) {
 				D_ERROR("crt_init_prov() failed for secondary provider, " DF_RC
 					"\n",
@@ -915,8 +880,9 @@ out:
 
 static int
 crt_init_prov(crt_provider_t provider, bool primary, struct crt_prov_gdata *prov_gdata,
-	      const char *interface, const char *domain, const char *port, const char *auth_key,
-	      bool port_auto_adjust, crt_init_options_t *opt)
+	      const char *provider_name, const char *interface, const char *domain,
+	      const char *port, const char *auth_key, bool port_auto_adjust,
+	      crt_init_options_t *opt)
 {
 	int rc;
 
@@ -926,7 +892,7 @@ crt_init_prov(crt_provider_t provider, bool primary, struct crt_prov_gdata *prov
 
 	prov_settings_apply(primary, provider, opt);
 
-	rc = crt_na_config_init(primary, provider, interface, domain, port, auth_key,
+	rc = crt_na_config_init(primary, provider, provider_name, interface, domain, port, auth_key,
 				port_auto_adjust);
 	if (rc != 0) {
 		D_ERROR("crt_na_config_init() failed, " DF_RC "\n", DP_RC(rc));
@@ -1005,14 +971,6 @@ crt_finalize(void)
 			for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++)
 				crt_na_config_fini(false, crt_gdata.cg_secondary_provs[i]);
 		}
-
-		for (i = 0; crt_na_dict[i].nad_str != NULL; i++)
-			if (crt_na_dict[i].nad_str_alloc) {
-				D_FREE(crt_na_dict[i].nad_str);
-				crt_na_dict[i].nad_str       = crt_na_dict[i].nad_alt_str;
-				crt_na_dict[i].nad_alt_str   = NULL;
-				crt_na_dict[i].nad_str_alloc = false;
-			}
 
 		D_FREE(crt_gdata.cg_secondary_provs);
 		D_FREE(crt_gdata.cg_prov_gdata_secondary);
@@ -1132,8 +1090,9 @@ crt_port_range_verify(int port)
 }
 
 static int
-crt_na_config_init(bool primary, crt_provider_t provider, const char *interface, const char *domain,
-		   const char *port_str, const char *auth_key, bool port_auto_adjust)
+crt_na_config_init(bool primary, crt_provider_t provider, const char *provider_name,
+		   const char *interface, const char *domain, const char *port_str,
+		   const char *auth_key, bool port_auto_adjust)
 {
 	struct crt_na_config *na_cfg;
 	int                   rc       = 0;
@@ -1149,6 +1108,12 @@ crt_na_config_init(bool primary, crt_provider_t provider, const char *interface,
 	if (provider == CRT_PROV_OFI_CXI && !domain) {
 		D_ERROR("Domain must be set for CXI provider\n");
 		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (provider_name) {
+		D_STRNDUP(na_cfg->noc_provider, provider_name, CRT_ENV_STR_MAX_SIZE);
+		if (!na_cfg->noc_provider)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (interface) {
@@ -1289,6 +1254,7 @@ crt_na_config_init(bool primary, crt_provider_t provider, const char *interface,
 
 out:
 	if (rc != -DER_SUCCESS) {
+		D_FREE(na_cfg->noc_provider);
 		D_FREE(na_cfg->noc_interface);
 		D_FREE(na_cfg->noc_domain);
 		D_FREE(na_cfg->noc_auth_key);
@@ -1304,6 +1270,7 @@ crt_na_config_fini(bool primary, crt_provider_t provider)
 	struct crt_na_config *na_cfg;
 
 	na_cfg = crt_provider_get_na_config(primary, provider);
+	D_FREE(na_cfg->noc_provider);
 	D_FREE(na_cfg->noc_interface);
 	D_FREE(na_cfg->noc_domain);
 	D_FREE(na_cfg->noc_auth_key);

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -69,6 +69,15 @@ crt_prov_str_to_prov(const char *prov_str);
 
 int
 crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
+
+static inline bool
+crt_provider_str_is_ucx(const char *prov_str)
+{
+	size_t prefix_len = strlen(CRT_UCX_STR);
+
+	return prov_str != NULL && !strncmp(prov_str, CRT_UCX_STR, prefix_len) &&
+	       (prov_str[prefix_len] == '\0' || prov_str[prefix_len] == '+');
+}
 
 static inline bool
 crt_provider_is_ucx(crt_provider_t prov)
