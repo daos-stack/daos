@@ -59,7 +59,7 @@ class DfuseBashCmd(TestWithServers):
             if nobypass:
                 env["D_IL_NO_BYPASS"] = "1"
         self.test_env.add_to_env(env, 'bullseye_file')
-        env_str = env.get_export_str()
+        env_str = env.to_export_str()
 
         # Create a pool if one does not already exist.
         self.log_step('Creating a single pool and container')
