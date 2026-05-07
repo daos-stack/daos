@@ -495,6 +495,23 @@ String unitTestCompiler() {
     return 'gcc'
 }
 
+// Get the packages to install for functional testing
+String functionalInstRpms(String otherPackages, Boolean bullseye=false) {
+    String packages = functionalPackages(
+        clientVersion: 1,
+        nextVersion: next_version(),
+        addDaosPkgs: 'tests-internal',
+        rpmDistribution: rpm_distro)
+    if (bullseye) {
+        packages = packages.replace('daos', 'daos-bullseye')
+        packages += ' bullseye'
+    }
+    if (otherPackages) {
+        packages += " ${otherPackages}"
+    }
+    return packages
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -1191,7 +1208,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(false, false),
+                                inst_rpms: functionalInstRpms('mercury-libfabric', false),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'el8.10'))
                     }
@@ -1214,8 +1231,9 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(
-                                    false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                                inst_rpms: functionalInstRpms(
+                                    'mercury-libfabric',
+                                    paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'el9.7',
                                 bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false),
@@ -1241,7 +1259,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(false, false),
+                                inst_rpms: functionalInstRpms('mercury-libfabric', false),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -1252,6 +1270,30 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Leap 15')
+                stage('Functional on SLES 15') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('Leap15')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'sles15.7'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } // post
+                } // stage('Functional on SLES 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1265,7 +1307,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: getFunctionalPackages(false, false),
+                                inst_rpms: functionalInstRpms('mercury-libfabric', false),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1445,8 +1487,8 @@ pipeline {
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            inst_rpms: getFunctionalPackages(
-                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            inst_rpms: functionalInstRpms(
+                                'mercury-libfabric', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1460,8 +1502,8 @@ pipeline {
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            inst_rpms: getFunctionalPackages(
-                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            inst_rpms: functionalInstRpms(
+                                'mercury-libfabric', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
@@ -1475,8 +1517,8 @@ pipeline {
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            inst_rpms: getFunctionalPackages(
-                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            inst_rpms: functionalInstRpms(
+                                'mercury-libfabric', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1491,8 +1533,8 @@ pipeline {
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            inst_rpms: getFunctionalPackages(
-                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            inst_rpms: functionalInstRpms(
+                                'mercury-libfabric', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1507,8 +1549,8 @@ pipeline {
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            inst_rpms: getFunctionalPackages(
-                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            inst_rpms: functionalInstRpms(
+                                'mercury-libfabric', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1523,8 +1565,8 @@ pipeline {
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            inst_rpms: getFunctionalPackages(
-                                true, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            inst_rpms: functionalInstRpms(
+                                'mercury-ucx', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1539,8 +1581,8 @@ pipeline {
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            inst_rpms: getFunctionalPackages(
-                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            inst_rpms: functionalInstRpms(
+                                'mercury-libfabric', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1554,8 +1596,8 @@ pipeline {
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            inst_rpms: getFunctionalPackages(
-                                false, paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            inst_rpms: functionalInstRpms(
+                                'mercury-libfabric', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
