@@ -108,13 +108,6 @@ def read_commit_pragma_mapping():
                     raise ValueError(
                         f'Invalid handler: {config[path_match][pragma_key]["handler"]}')
 
-                # Set default stop_on_match and check for invalid values
-                if 'stop_on_match' not in config[path_match][pragma_key]:
-                    config[path_match][pragma_key]['stop_on_match'] = False
-                elif not isinstance(config[path_match][pragma_key]['stop_on_match'], bool):
-                    raise ValueError(
-                        f'Invalid stop_on_match: {config[path_match][pragma_key]["stop_on_match"]}')
-
                 # Check for missing or invalid tags
                 if 'tags' not in config[path_match][pragma_key]:
                     raise ValueError(f'Missing tags for {path_match}')
@@ -135,13 +128,6 @@ def read_commit_pragma_mapping():
                     set(['val', 'stop_on_match'])
                 if extra_keys:
                     raise ValueError(f'Unsupported keys in config: {", ".join(extra_keys)}')
-
-                # Set default stop_on_match and check for invalid values
-                if 'stop_on_match' not in config[path_match][pragma_key]:
-                    config[path_match][pragma_key]['stop_on_match'] = False
-                elif not isinstance(config[path_match][pragma_key]['stop_on_match'], bool):
-                    raise ValueError(
-                        f'Invalid stop_on_match: {config[path_match][pragma_key]["stop_on_match"]}')
 
                 # Check for missing or invalid val
                 if 'val' not in config[path_match][pragma_key]:

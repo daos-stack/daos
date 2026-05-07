@@ -1,6 +1,10 @@
 # DAOS Common Tasks
 
-This section describes some of the common tasks handled by admins at a high level. See [System Deployment](./deployment.md#system-deployment), [DAOS System Administration](./administration.md#daos-system-administration), and [Pool Operations](./pool_operations.md#pool-operations) for more detailed explanations about each step.
+This section describes some of the common tasks handled by admins at a high level.
+See [System Deployment](./deployment.md#system-deployment),
+[DAOS System Administration](./administration.md#daos-system-administration),
+and [Pool Operations](./pool_operations.md#pool-operations)
+for more detailed explanations about each step.
 
 ## Single host setup with PMEM and NVMe
 
@@ -9,13 +13,12 @@ This section describes some of the common tasks handled by admins at a high leve
 3. Install `daos-server` and `daos-client` RPMs.
 4. Generate certificate files.
 5. Copy one of the example configs from `utils/config/examples` to
-`/etc/daos` and adjust it based on the environment. E.g., `mgmt_svc_replicas`,
-`class`.
+   `/etc/daos` and adjust it based on the environment. E.g., `mgmt_svc_replicas`,
+   `class`.
 6. Check that the directory where the log files will be created exists. E.g.,
-`control_log_file`, `log_file` field in `engines` section.
+   `control_log_file`, `log_file` field in `engines` section.
 7. Start `daos_server`.
-8. Use `dmg config generate` to generate the config file that contains PMEM and
-NVMe.
+8. Use `dmg config generate` to generate the config file that contains PMEM and NVMe.
 9. Define the certificate files in the server config.
 10. Start server with the generated config file.
 11. Check that the server is waiting for SCM format. Call `dmg storage format`.
@@ -62,6 +65,7 @@ server hosts.
 
 1. Start DAOS server with PMEM + NVMe and format.
 2. Create a pool with a size percentage. For example,
+
 ```
 dmg pool create --size=50%
 ```
@@ -72,6 +76,7 @@ The percentage is applied to the usable space.
 1. Start DAOS server on one host.
 2. Create a file that specifies the server host in `/etc/daos`. It's usually
 called `daos_control.yml`. Add the following:
+
 ```
 hostlist:
 - <server_host>
@@ -83,6 +88,7 @@ transport_config:
   cert: /etc/daos/certs/admin.crt
   key: /etc/daos/certs/admin.key
 ```
+
 `server_host` is the hostname where the server is running. `group_name` is
 usually `daos_server`. Match the `port` field defined in the server config.
 Adjust `transport_config` accordingly.
