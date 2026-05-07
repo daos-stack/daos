@@ -575,6 +575,9 @@ dcv_suit_setup(void **state)
 
 	assert_success(vos_cont_open(ctx.dc_poh, g_uuids[0], &coh));
 
+	/* Seed the first container with 1 active + 1 committed DTX entry required by
+	 * dtx_stat_tests, dtx_commit_entry_tests, dtx_act_discard_invalid_tests, and
+	 * dtx_abort_entry_tests. */
 	dvt_vos_insert_2_records_with_dtx(coh);
 	vos_cont_close(coh);
 
