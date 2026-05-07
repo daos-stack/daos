@@ -71,7 +71,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 	app.AddCommand(&grumble.Command{
 		Name:      "close",
 		Aliases:   nil,
-		Help:      "Close the currently opened VOS pool shard",
+		Help:      "Close the currently opened VOS file",
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
@@ -327,7 +327,7 @@ the path must include the extent, otherwise, it must not.`,
 	app.AddCommand(&grumble.Command{
 		Name:      "rm_pool",
 		Aliases:   nil,
-		Help:      "Remove a VOS pool.",
+		Help:      "Remove a VOS pool file.",
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
