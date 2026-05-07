@@ -153,6 +153,21 @@ func (svc *ControlService) memberStateResults(instances []Engine, tgtState syste
 	return results, nil
 }
 
+// Clear restart history for manually stopped ranks on this server. This prevents rate-limiting
+// from interfering with manual operations and vice versa.
+func clearRankRestartHistory(mgr *engineRestartManager, instances []Engine) {
+	ranks := make([]ranklist.Rank, 0, len(instances))
+	for _, ei := range instances {
+		rank, err := ei.GetRank()
+		if err == nil {
+			ranks = append(ranks, rank)
+		}
+	}
+	if len(ranks) > 0 {
+		mgr.clearRankRestartHistory(ranks)
+	}
+}
+
 // StopRanks implements the method defined for the Management Service.
 //
 // Stop data-plane instance(s) managed by control-plane identified by unique
@@ -206,21 +221,9 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	// Clear restart history for manually stopped ranks on this server
-	// This prevents rate-limiting from interfering with manual operations
-	// Note: instances already filtered by FilterInstancesByRankSet() to match req.GetRanks()
-	if svc.restartMgr != nil {
-		ranks := make([]ranklist.Rank, 0, len(instances))
-		for _, ei := range instances {
-			rank, err := ei.GetRank()
-			if err == nil {
-				ranks = append(ranks, rank)
-			}
-		}
-		if len(ranks) > 0 {
-			svc.restartMgr.clearRankRestartHistory(ranks)
-		}
-	}
+	// clearly state history for stopped ranks, instances have already been filtered by
+	// FilterInstancesByRankSet() to match req.GetRanks()
+	clearRankRestartHistory(svc.restartMgr, instances)
 
 	return resp, nil
 }
@@ -335,21 +338,9 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, err
 	}
 
-	// Clear restart history for manually started ranks on this server
-	// This prevents rate-limiting from interfering with manual operations
-	// Note: instances already filtered by FilterInstancesByRankSet() to match req.GetRanks()
-	if svc.restartMgr != nil {
-		ranks := make([]ranklist.Rank, 0, len(instances))
-		for _, ei := range instances {
-			rank, err := ei.GetRank()
-			if err == nil {
-				ranks = append(ranks, rank)
-			}
-		}
-		if len(ranks) > 0 {
-			svc.restartMgr.clearRankRestartHistory(ranks)
-		}
-	}
+	// clearly state history for started ranks, instances have already been filtered by
+	// FilterInstancesByRankSet() to match req.GetRanks()
+	clearRankRestartHistory(svc.restartMgr, instances)
 
 	return resp, nil
 }

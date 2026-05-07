@@ -812,11 +812,6 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 
 	rank := ranklist.Rank(evt.Rank)
 
-	if srv.restartMgr == nil {
-		return errors.Errorf("restart manager not initialized, cannot restart rank %d",
-			rank)
-	}
-
 	// Submit restart request to the restart manager
 	srv.restartMgr.requestRestart(rank, ei)
 
@@ -826,8 +821,7 @@ func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RA
 // subscribeEngineSelfTerminated creates a handler for engine self-termination events.
 func subscribeEngineSelfTerminated(srv *server) events.Handler {
 	return events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
-		switch evt.ID {
-		case events.RASEngineSelfTerminated:
+		if evt.ID == events.RASEngineSelfTerminated {
 			if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
 				srv.log.Errorf("handleEngineSelfTerminated: %s", err)
 			}
