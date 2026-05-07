@@ -1090,7 +1090,7 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 }
 
 static inline void
-obj_log_csum_err(daos_unit_oid_t oid)
+obj_log_csum_err(daos_unit_oid_t oid, bool ondisk)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	struct bio_xs_context  *bxc;
@@ -1100,14 +1100,16 @@ obj_log_csum_err(daos_unit_oid_t oid)
 			  NULL, NULL, NULL, NULL, NULL, "CSUM error for " DF_UOID " on target %u\n",
 			  DP_UOID(oid), info->dmi_tgt_id);
 
-	bxc = info->dmi_nvme_ctxt;
-	if (bxc == NULL) {
-		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n", info->dmi_xs_id,
-			info->dmi_tgt_id);
-		return;
-	}
+	if (ondisk) {
+		bxc = info->dmi_nvme_ctxt;
+		if (bxc == NULL) {
+			D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n", info->dmi_xs_id,
+				info->dmi_tgt_id);
+			return;
+		}
 
-	bio_log_data_csum_err(bxc);
+		bio_log_data_csum_err(bxc);
+	}
 }
 
 /**
@@ -1454,6 +1456,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	uint64_t			bio_pre_latency = 0;
 	uint64_t			bio_post_latency = 0;
 	uint32_t			tgt_off = 0;
+	bool rc_ondisk = false;
 	int				rc = 0;
 
 	create_map = orw->orw_flags & ORF_CREATE_MAP;
@@ -1794,11 +1797,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
 					 biod, ioc->ioc_coc->sc_csummer, iods_nr);
-		if (rc != 0)
+		if (rc != 0) {
+			rc_ondisk = true;
 			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
 				DF_RC"\n",
 				DP_C_UOID_DKEY(orw->orw_oid, dkey),
 				DP_RC(rc));
+		}
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
@@ -1817,10 +1822,11 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			obj_iod_recx_daos2vos(iods_nr, iods, &ioc->ioc_oca);
 
 		rc = obj_fetch_create_maps(rpc, biod, iods, iods_nr, skips);
+		D_ASSERT(rc != -DER_CSUM);
 	}
 
 	if (rc == -DER_CSUM)
-		obj_log_csum_err(orw->orw_oid);
+		obj_log_csum_err(orw->orw_oid, rc_ondisk);
 post:
 	time = daos_get_ntime();
 	rc = bio_iod_post_async(biod, rc);
@@ -3063,7 +3069,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		struct dtx_handle	*dth;
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
-			obj_log_csum_err(orw->orw_oid);
+			obj_log_csum_err(orw->orw_oid, false /** ondisk */);
 			D_GOTO(out, rc = 0);
 		}
 
@@ -4900,7 +4906,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 					 ioc->ioc_coc->sc_csummer, piod_nrs[i]);
 		if (rc != 0) {
 			if (rc == -DER_CSUM)
-				obj_log_csum_err(dcsr->dcsr_oid);
+				obj_log_csum_err(dcsr->dcsr_oid, true /** ondisk */);
 			goto out;
 		}
 
