@@ -106,7 +106,7 @@ pipeline {
         // test stage launch.py --nvme argument is hard-coded in each stage definition to avoid the
         // stages from duplicating testing.
         string(name: 'TestProvider',
-               defaultValue: '',
+               defaultValue: 'ucx+dc_x',
                description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
@@ -160,15 +160,15 @@ pipeline {
         booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
-        booleanParam(name: 'CI_medium_verbs_provider_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
+        booleanParam(name: 'CI_medium_ucx_provider_md_on_ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium UCX Provider MD on SSD test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
@@ -184,15 +184,15 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_ofed5',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large tests')
@@ -370,20 +370,6 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
@@ -407,6 +393,20 @@ pipeline {
                             stage_tags: 'hw,medium,provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
+                            provider: params.TestProviderUCX,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium UCX Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX Provider MD on SSD',
+                            pragma_suffix: '-hw-medium-ucx-provider-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_MD_ON_SSD_LABEL,
+                            next_version: params.BaseBranch,
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
+                            nvme: 'auto_md_on_ssd',
                             provider: params.TestProviderUCX,
                             run_if_pr: true,
                             run_if_landing: false,
