@@ -16,9 +16,8 @@
 #include "check_engine.pb-c.h"
 
 /**
- * TODO DAOS-18537: Move all of the checker upcalls into a new file, and transfer their protobuf
- * definitions into shared/check_upcall.proto.
- * Consider if it would be best to put the checker functionality into a new dRPC module.
+ * TODO DAOS-18537: Consider if it would be best to put the checker functionality into a new dRPC
+ * module.
  */
 
 void
