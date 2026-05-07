@@ -286,17 +286,22 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
                     device = device.split(":")[0]
                 if filter_device and device not in filter_device:
                     continue
+                _class_protocols = []
                 if "_" in protocol:
                     _protocol = protocol.split("_")
-                    if _protocol[0] in ("dc", "rc", "ud"):
-                        # e.g. convert ud_mlx5, ud_verbs => ud_x
-                        protocol = f"{_protocol[0]}_x"
-                provider = f"{_class}+{protocol}"
-                if filter_provider and provider not in filter_provider:
-                    continue
-                if device not in device_providers:
-                    device_providers[device] = set()
-                device_providers[device].add(provider)
+                    if _protocol[0] in ("dc", "rc", "ud") and _protocol[1] in ("mlx5"):
+                        # Add ucx synonyms, e.g. convert ud_mlx5 => ud_mlx5, ud_x, ud
+                        for synonym in (f"_{_protocol[1]}", "_x", ""):
+                            _class_protocols.append(f"{_class}+{_protocol[0]}{synonym}")
+                else:
+                    _class_protocols.append(f"{_class}+{protocol}")
+
+                for provider in _class_protocols:
+                    if filter_provider and provider not in filter_provider:
+                        continue
+                    if device not in device_providers:
+                        device_providers[device] = set()
+                    device_providers[device].add(provider)
 
             for device, provider_set in device_providers.items():
                 if device not in providers:
