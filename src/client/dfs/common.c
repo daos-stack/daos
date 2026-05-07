@@ -788,7 +788,7 @@ set_sb_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 
 int
 open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t super_oid,
-	dfs_attr_t *attr, daos_handle_t *oh, dfs_layout_ver_t *ver)
+	dfs_attr_t *attr, daos_handle_t *oh, dfs_layout_ver_t *ver, dfs_sb_ver_t *sb_ver_out)
 {
 	d_sg_list_t      sgls[SB_AKEYS];
 	d_iov_t          sg_iovs[SB_AKEYS];
@@ -919,6 +919,8 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 	D_DEBUG(DB_ALL, "DFS Library Layout version: %d\n", DFS_LAYOUT_VERSION);
 
 	*ver                    = layout_ver;
+	if (sb_ver_out)
+		*sb_ver_out = sb_ver;
 	attr->da_chunk_size     = (chunk_size) ? chunk_size : DFS_DEFAULT_CHUNK_SIZE;
 	attr->da_oclass_id      = oclass;
 	attr->da_dir_oclass_id  = dir_oclass;
