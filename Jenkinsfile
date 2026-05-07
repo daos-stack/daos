@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value=['pipeline-lib@grom72/SRE-3704','system-pipeline-lib@grom72/SRE-3704']) _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -713,7 +714,7 @@ pipeline {
                     }
                     steps {
                         job_step_update(
-                            unitTest(timeout_time: 240,
+                            unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh',
                                      unstash_opt: true,
@@ -959,7 +960,7 @@ pipeline {
                     steps {
                         /* job_step_update(nlt_test()) */
                         job_step_update(
-                            unitTest(timeout_time: 600,
+                            unitTest(timeout_time: 240,
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh --memcheck no' +
                                                   ' --system-ram-reserved 4 --server-debug WARN' +
