@@ -1,5 +1,5 @@
 %changelog
-* Mon may 04 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-4
+* Mon May 04 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-4
 - Add gperftools-devel as a build dependency of daos-devel
 
 * Fri Apr 24 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.9.100-3
