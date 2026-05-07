@@ -1997,7 +1997,7 @@ const (
 	testProcessingDelay    = 100 * time.Millisecond
 )
 
-func setupAddTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRunning bool, ranks ...uint32) {
+func setupTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRunning bool, ranks ...uint32) {
 	t.Helper()
 
 	rank := uint32(1)
@@ -2005,11 +2005,13 @@ func setupAddTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRu
 		rank = ranks[0]
 	}
 
-	ei := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
-
-	setupTestEngine(t, ei, 0, rank, isRunning)
-
-	if err := h.AddInstance(ei); err != nil {
+	e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+	e._superblock.Rank = ranklist.NewRankPtr(rank)
+	rCfg := &engine.TestRunnerConfig{}
+	rCfg.Running.Store(isRunning)
+	e.runner = engine.NewTestRunner(rCfg, engine.MockConfig())
+	e.ready.Store(isRunning)
+	if err := h.AddInstance(e); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -2039,7 +2041,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Timestamp:   validTimestamp,
 			}).WithForwarded(true),
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-				setupAddTestEngine(t, log, h, false)
+				setupTestEngine(t, log, h, false)
 			},
 			serverHostname:      testHostname,
 			expRestartRequested: false,
@@ -2054,7 +2056,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Timestamp:   validTimestamp,
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-				setupAddTestEngine(t, log, h, false)
+				setupTestEngine(t, log, h, false)
 			},
 			serverHostname:      testHostname,
 			expRestartRequested: false,
@@ -2069,7 +2071,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Timestamp:   validTimestamp,
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-				setupAddTestEngine(t, log, h, false)
+				setupTestEngine(t, log, h, false)
 			},
 			disableEngineAutoRestart: true,
 			expRestartRequested:      false,
@@ -2144,7 +2146,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Timestamp:   validTimestamp,
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-				setupAddTestEngine(t, log, h, false)
+				setupTestEngine(t, log, h, false)
 			},
 			expRestartRequested: true,
 			expLogContains: []string{
@@ -2161,7 +2163,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 				Timestamp:   validTimestamp,
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
-				setupAddTestEngine(t, log, h, true)
+				setupTestEngine(t, log, h, true)
 			},
 			expRestartRequested: false,
 			expLogContains: []string{
@@ -2178,7 +2180,7 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 			},
 			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
 				for i := 0; i < 3; i++ {
-					setupAddTestEngine(t, log, h, false, uint32(i))
+					setupTestEngine(t, log, h, false, uint32(i))
 				}
 			},
 			expRestartRequested: true,
@@ -2285,7 +2287,7 @@ func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
 	defer cancel()
 
 	harness := NewEngineHarness(log)
-	setupAddTestEngine(t, log, harness, false)
+	setupTestEngine(t, log, harness, false)
 
 	cfg := &config.Server{
 		DisableEngineAutoRestart:  false,

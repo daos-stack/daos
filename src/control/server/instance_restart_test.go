@@ -60,7 +60,7 @@ func setupTestHarness(t *testing.T, rankStr string, loggers ...logging.Logger) (
 	t.Helper()
 	log := getTestLogger(t, loggers)
 	harness := NewEngineHarness(log)
-	setupAddTestEngine(t, log, harness, false)
+	setupTestEngine(t, log, harness, false)
 
 	instances, err := harness.FilterInstancesByRankSet(rankStr)
 	if err != nil || len(instances) == 0 {

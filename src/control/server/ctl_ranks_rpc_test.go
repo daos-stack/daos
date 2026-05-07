@@ -76,20 +76,17 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.
 	}
 }
 
-func setupTestEngine(t *testing.T, ei *EngineInstance, idx, rank uint32, stopped ...bool) {
+func setupTestEngine(t *testing.T, srv *EngineInstance, idx, rank uint32, stopped ...bool) {
 	trc := &engine.TestRunnerConfig{}
 	if len(stopped) == 0 || !stopped[0] {
 		trc.Running.SetTrue()
-		ei.ready.SetTrue()
-	} else {
-		trc.Running.SetFalse()
-		ei.ready.SetFalse()
+		srv.ready.SetTrue()
 	}
-	ei.runner = engine.NewTestRunner(trc, engine.MockConfig())
-	ei.setIndex(idx)
+	srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
+	srv.setIndex(idx)
 
-	ei._superblock.Rank = new(ranklist.Rank)
-	*ei._superblock.Rank = ranklist.Rank(rank)
+	srv._superblock.Rank = new(ranklist.Rank)
+	*srv._superblock.Rank = ranklist.Rank(rank)
 }
 
 func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
