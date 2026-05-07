@@ -20,16 +20,6 @@ server_config:
       nr_xs_helpers: 1
       targets: 1
       storage: auto
-  transport_config:
-    allow_insecure: true
-
-agent_config:
-  transport_config:
-    allow_insecure: true
-
-dmg:
-  transport_config:
-    allow_insecure: true
 
 pool:
   scm_size: 5G
