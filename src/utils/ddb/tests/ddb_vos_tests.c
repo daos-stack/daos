@@ -1171,8 +1171,9 @@ static void
 helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_state fs[2],
 				   bool write_mode)
 {
-	struct ddb_ctx ctx  = {0};
-	const char    *path = tctx->dvt_pmem_file;
+	const char           *path       = tctx->dvt_pmem_file;
+	struct vos_file_parts path_parts = {0};
+	daos_handle_t         saved_poh  = tctx->dvt_poh;
 
 	assert_int_equal(stat(path, &fs[FILE_STATE_PRE].stat), 0);
 	sha256sum(path, fs[FILE_STATE_PRE].digest);
@@ -1181,7 +1182,8 @@ helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_sta
 	assert_success(dv_pool_open(path, NULL, &ctx, 0));
 	tctx->dvt_poh = ctx.dc_poh;
 	update_value_to_modify_tests((void **)&tctx);
-	assert_success(dv_pool_close(ctx.dc_poh));
+	assert_success(dv_pool_close(tctx->dvt_poh));
+	tctx->dvt_poh = saved_poh;
 
 	assert_int_equal(stat(path, &fs[FILE_STATE_POST].stat), 0);
 	sha256sum(path, fs[FILE_STATE_POST].digest);
@@ -1196,7 +1198,7 @@ read_only_vs_write_mode_test(void **state)
 	/** In read‑only mode, the pool contents remain unchanged, and its mtime stays the same. */
 	helper_stat_open_modify_close_stat(tctx, fs, false /** read-only */);
 	assert_int_equal(fs[FILE_STATE_PRE].stat.st_mtime, fs[FILE_STATE_POST].stat.st_mtime);
-	assert_memory_equal(fs[FILE_STATE_PRE].digest, fs[FILE_STATE_PRE].digest,
+	assert_memory_equal(fs[FILE_STATE_PRE].digest, fs[FILE_STATE_POST].digest,
 			    SHA256_DIGEST_LEN);
 
 	/** In write mode, the pool contents will change and its mtime will increase. */

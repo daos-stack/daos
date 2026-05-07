@@ -1126,10 +1126,12 @@ skip:
 		ddb_printf(ctx, "Incompat Flags: %lu\n", new_incompat_flags);
 	}
 out:
-	if (close)
+	if (close) {
 		rc = dv_pool_close(ctx->dc_poh);
-	ctx->dc_poh        = DAOS_HDL_INVAL;
-	ctx->dc_write_mode = false;
+		ctx->dc_poh        = DAOS_HDL_INVAL;
+		ctx->dc_write_mode = false;
+	}
+
 	return rc;
 }
 

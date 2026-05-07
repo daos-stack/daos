@@ -270,14 +270,18 @@ func (ctx *DdbContext) Feature(path, dbPath, enable, disable string, show bool) 
 	options.db_path = C.CString(dbPath)
 	defer freeString(options.db_path)
 	if enable != "" {
-		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(enable),
+		cEnable := C.CString(enable)
+		defer freeString(cEnable)
+		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, cEnable,
 			&options.set_compat_flags, &options.set_incompat_flags))
 		if err != nil {
 			return err
 		}
 	}
 	if disable != "" {
-		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(disable),
+		cDisable := C.CString(disable)
+		defer freeString(cDisable)
+		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, cDisable,
 			&options.clear_compat_flags, &options.clear_incompat_flags))
 		if err != nil {
 			return err
@@ -336,8 +340,8 @@ func (ctx *DdbContext) DtxStat(path string, details bool) error {
 	/* Set up the options */
 	options := C.struct_dtx_stat_options{}
 	options.path = C.CString(path)
-	options.details = C.bool(details)
 	defer freeString(options.path)
+	options.details = C.bool(details)
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_stat(&ctx.ctx, &options))
 }
