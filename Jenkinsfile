@@ -871,31 +871,8 @@ pipeline {
                             ],
                             artifacts: "config.log-el9-gcc"
                         ),
-                        'Build on Leap 15.5': scriptedBuildStage(
-                            name: 'Build on Leap 15.5',
-                            distro:'leap15',
-                            rpmDistro: 'suse.lp155',
-                            compiler: 'gcc',
-                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
-                            buildRpms: true,
-                            release: env.DAOS_RELVAL,
-                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
-                                                             deps_build: false,
-                                                             parallel_build: true) +
-                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                             ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg POINT_RELEASE=.5' +
-                                             ' -f utils/docker/Dockerfile.leap.15 .',
-                            sconsBuildArgs: [
-                                parallel_build: true,
-                                build_deps: 'yes',
-                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
-                            ],
-                            artifacts: "config.log-leap155-gcc",
-                            uploadTarget: 'leap15-5'
-                        ),
-                        'Build on Leap 15.6': scriptedBuildStage(
-                            name: 'Build on Leap 15.6',
+                        'Build on Leap 15': scriptedBuildStage(
+                            name: 'Build on Leap 15',
                             distro:'leap15',
                             rpmDistro: 'suse.lp156',
                             compiler: 'gcc',
@@ -915,7 +892,6 @@ pipeline {
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
                             artifacts: "config.log-leap156-gcc",
-                            uploadTarget: 'leap15-6'
                         ),
                         'Build on EL 9 with Bullseye': scriptedBuildStage(
                             name: 'Build on EL 9 with Bullseye',
