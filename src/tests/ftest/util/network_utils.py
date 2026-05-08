@@ -495,6 +495,9 @@ def get_network_information(logger, hosts, supported=None, verbose=True):
     ofi_info = get_hg_info(logger, hosts, filter_provider=supported, verbose=verbose)
     ucx_info = get_ucx_info(logger, hosts, supported, verbose)
 
+    logger.debug("get_network_information(): ofi_info = %s", ofi_info)
+    logger.debug("get_network_information(): ucx_info = %s", ucx_info)
+
     interfaces = get_active_network_interfaces(logger, hosts, verbose)
     for host in hosts:
         for interface, node_set in interfaces.items():
@@ -526,6 +529,8 @@ def get_network_information(logger, hosts, supported=None, verbose=True):
                     these_kwargs = kwargs.copy()
                     these_kwargs["provider"] = item
                     network_devices.append(NetworkDevice(**these_kwargs))
+
+    logger.debug("get_network_information(): network_devices = %s", network_devices)
 
     return network_devices
 
