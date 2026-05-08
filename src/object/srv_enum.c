@@ -173,7 +173,7 @@ static int
 fill_key_csum(vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *arg)
 {
 	struct daos_csummer	*csummer = arg->csummer;
-	d_iov_t			*csum_iov = &arg->csum_iov;
+	d_iov_t                 *csum_iov = &arg->oea_csum_iov;
 	struct dcs_csum_info	*csum_info;
 	int			 rc;
 
@@ -455,14 +455,14 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 			return rc;
 		}
 
-		rc = fill_data_csum(new_csum_info, &arg->csum_iov);
+		rc = fill_data_csum(new_csum_info, &arg->oea_csum_iov);
 		daos_csummer_free_ci(csummer, &new_csum_info);
 		if (rc != 0) {
 			D_ERROR("Issue filling csum data\n");
 			return rc;
 		}
 	} else {
-		rc = fill_data_csum(&ent->ie_csum, &arg->csum_iov);
+		rc = fill_data_csum(&ent->ie_csum, &arg->oea_csum_iov);
 		if (rc != 0) {
 			D_ERROR("Issue filling csum data\n");
 			return rc;
