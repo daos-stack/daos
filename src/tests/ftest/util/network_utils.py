@@ -253,10 +253,8 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
     Args:
         logger (Logger): logger for the messages produced by this method
         hosts (NodeSet): hosts from which to gather the information
-        filter_provider (list, optional): list of supported providers to filter by.
-            Defaults to None.
-        filter_device (list, optional): list of supported devices to filter by.
-            Defaults to None.
+        filter_provider (list, optional): list of providers to be included. Defaults to None.
+        filter_device (list, optional): list of devices to be included. Defaults to None.
         verbose (bool, optional): display command details. Defaults to True.
 
     Returns:
