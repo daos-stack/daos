@@ -496,12 +496,12 @@ String unitTestCompiler() {
 }
 
 // Get the packages to install for functional testing
-String functionalInstRpms(String otherPackages, Boolean bullseye=false) {
+String functionalInstRpms(String otherPackages, Boolean bullseye=false, String rpmDistro=null) {
     String packages = functionalPackages(
         clientVersion: 1,
         nextVersion: next_version(),
         addDaosPkgs: 'tests-internal',
-        rpmDistribution: rpm_distro)
+        rpmDistribution: rpmDistro)
     if (bullseye) {
         packages = packages.replace('daos', 'daos-bullseye')
         packages += ' bullseye'
