@@ -627,6 +627,33 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
+ * Aggregate a single object within the epoch range \a epr.
+ *
+ * Behaves like vos_aggregate() but is scoped to one object ID instead of
+ * iterating every object in the container. This entry point is intended for
+ * future per-object aggregation ULT control: callers can drive aggregation as
+ * one ULT per object and apply admission control (e.g. limiting concurrent
+ * in-flight aggregations) on top.
+ *
+ * Unlike vos_aggregate(), this function does NOT advance the container
+ * highest-aggregated-epoch (cd_hae). The caller is responsible for advancing
+ * the container barrier once all objects in the epoch range have been
+ * processed.
+ *
+ * \param coh         [IN]   Container open handle
+ * \param oid         [IN]   Object ID to aggregate
+ * \param epr         [IN]   The epoch range of aggregation
+ * \param yield_func  [IN]   Pointer to customized yield function
+ * \param yield_arg   [IN]   Argument of yield function
+ * \param flags       [IN]   Aggregation flags (see VOS_AGG_FL_*)
+ *
+ * \return            Zero on success, negative value if error.
+ */
+int
+vos_aggregate_obj(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+		  int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
+
+/**
  * Round up the scm and meta sizes to match the backend requirement.
  * \param[in/out] scm_sz   SCM size that needs to be aligned up
  * \param[in/out] meta_sz  META size that needs to be aligned up

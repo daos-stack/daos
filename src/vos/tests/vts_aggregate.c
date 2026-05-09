@@ -2984,6 +2984,59 @@ agg_tst_teardown(void **state)
 	return 0;
 }
 
+/*
+ * Smoke test for the per-object aggregation API (vos_aggregate_obj).
+ *
+ * Writes a single SV value across several epochs to two distinct objects in
+ * the same container, then aggregates one of the objects at object granularity
+ * and verifies the call succeeds. The other object is left untouched, which
+ * exercises the OID-scoped iteration path.
+ */
+static void
+aggregate_obj_api(void **state)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid_a, oid_b;
+	daos_epoch_range_t	 epr = { 1, 0 };
+	daos_epoch_t		 epoch = 1;
+	daos_recx_t		 recx = { 0, 1 };
+	char			 dkey[2] = "a";
+	char			 akey[2] = "b";
+	char			 val = 'v';
+	int			 i, rc;
+	int			 old_flags = arg->ta_flags;
+
+	oid_a = dts_unit_oid_gen(0, 0);
+	oid_b = dts_unit_oid_gen(0, 0);
+
+	arg->ta_flags = TF_USE_VAL;
+
+	for (i = 0; i < 4; i++) {
+		update_value(arg, oid_a, epoch++, 0, dkey, akey,
+			     DAOS_IOD_SINGLE, sizeof(val), &recx, &val);
+		update_value(arg, oid_b, epoch++, 0, dkey, akey,
+			     DAOS_IOD_SINGLE, sizeof(val), &recx, &val);
+	}
+
+	epr.epr_hi = epoch;
+
+	/* Per-object aggregation on oid_a only */
+	rc = vos_aggregate_obj(arg->ctx.tc_co_hdl, oid_a, &epr, NULL, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	/* Run again to make sure repeated invocations are fine */
+	rc = vos_aggregate_obj(arg->ctx.tc_co_hdl, oid_a, &epr, NULL, NULL,
+			       VOS_AGG_FL_FORCE_SCAN);
+	assert_rc_equal(rc, 0);
+
+	/* And on the second object */
+	rc = vos_aggregate_obj(arg->ctx.tc_co_hdl, oid_b, &epr, NULL, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	arg->ta_flags = old_flags;
+	cleanup();
+}
+
 static const struct CMUnitTest discard_tests[] = {
     {"VOS451: Discard SV with specified epoch", discard_1, NULL, agg_tst_teardown},
     {"VOS452: Discard SV with confined epr", discard_2, NULL, agg_tst_teardown},
@@ -3054,6 +3107,8 @@ static const struct CMUnitTest aggregate_tests[] = {
     {"VOS435: Test aggregation timestamp functions", aggregate_35, NULL, NULL},
     {"VOS436: Aggregate SV, multiple objects, flat dkeys", aggregate_36, NULL, agg_tst_teardown},
     {"VOS437: Aggregate EV, multiple objects, flat dkeys", aggregate_37, NULL, agg_tst_teardown},
+    {"VOS438: Per-object aggregation API smoke test", aggregate_obj_api, NULL,
+     agg_tst_teardown},
 };
 
 int
