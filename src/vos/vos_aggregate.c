@@ -2820,7 +2820,8 @@ free_agg_data:
 
 int
 vos_aggregate_obj(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
-		  int (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
+		  int (*yield_func)(void *arg), void *yield_arg, uint32_t flags,
+		  unsigned int *out_flags)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct vos_agg_metrics	*vam  = agg_cont2metrics(cont);
@@ -2901,9 +2902,12 @@ retry:
 	 * aggregation call cannot safely advance the container barrier
 	 * because other objects in the same epoch range may not have been
 	 * processed yet. The caller is responsible for advancing cd_hae
-	 * (e.g. by calling vos_aggregate() afterwards or by tracking
-	 * completion across all objects in the window).
+	 * via vos_aggregate_advance_hae() once it has driven aggregation
+	 * across all objects in the window and observed no IN_PROGRESS
+	 * (uncommitted DTX) condition.
 	 */
+	if (out_flags != NULL && ad->ad_agg_param.ap_in_progress)
+		*out_flags |= VOS_AGG_OUT_IN_PROGRESS;
 
 	aggregate_exit(cont, AGG_MODE_AGGREGATE);
 
@@ -2920,6 +2924,26 @@ free_agg_data:
 	umem_heap_gc(&cont->vc_pool->vp_umm);
 
 	return rc;
+}
+
+int
+vos_aggregate_advance_hae(daos_handle_t coh, daos_epoch_t epoch)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+
+	if (cont == NULL)
+		return -DER_NO_HDL;
+
+	/*
+	 * cd_hae is monotonic: advance only. When aggregating for snapshot
+	 * deletion, the requested epoch may be smaller than the current
+	 * cd_hae and is silently ignored, mirroring the behavior of
+	 * vos_aggregate() which only advances when epr->epr_hi > cd_hae.
+	 */
+	if (cont->vc_cont_df->cd_hae < epoch)
+		cont->vc_cont_df->cd_hae = epoch;
+
+	return 0;
 }
 
 int

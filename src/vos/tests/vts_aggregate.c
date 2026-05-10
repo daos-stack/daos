@@ -3005,6 +3005,7 @@ aggregate_obj_api(void **state)
 	char			 val = 'v';
 	int			 i, rc;
 	int			 old_flags = arg->ta_flags;
+	unsigned int		 out_flags;
 
 	oid_a = dts_unit_oid_gen(0, 0);
 	oid_b = dts_unit_oid_gen(0, 0);
@@ -3021,16 +3022,24 @@ aggregate_obj_api(void **state)
 	epr.epr_hi = epoch;
 
 	/* Per-object aggregation on oid_a only */
-	rc = vos_aggregate_obj(arg->ctx.tc_co_hdl, oid_a, &epr, NULL, NULL, 0);
+	rc = vos_aggregate_obj(arg->ctx.tc_co_hdl, oid_a, &epr, NULL, NULL, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	/* Run again to make sure repeated invocations are fine */
+	/* Run again to make sure repeated invocations are fine; this time also
+	 * exercise the out_flags out-param (no in-progress DTX expected).
+	 */
+	out_flags = 0;
 	rc = vos_aggregate_obj(arg->ctx.tc_co_hdl, oid_a, &epr, NULL, NULL,
-			       VOS_AGG_FL_FORCE_SCAN);
+			       VOS_AGG_FL_FORCE_SCAN, &out_flags);
 	assert_rc_equal(rc, 0);
+	assert_int_equal(out_flags & VOS_AGG_OUT_IN_PROGRESS, 0);
 
 	/* And on the second object */
-	rc = vos_aggregate_obj(arg->ctx.tc_co_hdl, oid_b, &epr, NULL, NULL, 0);
+	rc = vos_aggregate_obj(arg->ctx.tc_co_hdl, oid_b, &epr, NULL, NULL, 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Advance the container HAE explicitly via the new public API. */
+	rc = vos_aggregate_advance_hae(arg->ctx.tc_co_hdl, epr.epr_hi);
 	assert_rc_equal(rc, 0);
 
 	arg->ta_flags = old_flags;
