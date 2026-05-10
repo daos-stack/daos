@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,8 +36,16 @@ task_is_valid(tse_task_t *task)
 static int
 task_comp_event(tse_task_t *task, void *data)
 {
+	daos_event_t *ev;
+
 	D_ASSERT(task_is_valid(task));
-	daos_event_complete(task_ptr2args(task)->ta_ev, task->dt_result);
+
+	ev = task_ptr2args(task)->ta_ev;
+	if (daos_event_is_priv(ev))
+		daos_event_complete_with_check(ev, task->dt_result, data);
+	else
+		daos_event_complete(ev, task->dt_result);
+
 	return 0;
 }
 
@@ -53,6 +62,8 @@ dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev,
 {
 	struct daos_task_args *args;
 	tse_task_t	      *task;
+	unsigned int           gen;
+	size_t                 size = 0;
 	int		       rc;
 
 	if (sched == NULL) {
@@ -71,8 +82,13 @@ dc_task_create(tse_task_func_t func, tse_sched_t *sched, daos_event_t *ev,
 	args = task_ptr2args(task);
 	args->ta_magic = DAOS_TASK_MAGIC;
 	if (ev) {
+		if (daos_event_is_priv(ev)) {
+			gen  = daos_event_bump_gen(ev);
+			size = sizeof(gen);
+		}
+
 		/** register a comp cb on the task to complete the event */
-		rc = tse_task_register_comp_cb(task, task_comp_event, NULL, 0);
+		rc = tse_task_register_comp_cb(task, task_comp_event, size ? &gen : NULL, size);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 		args->ta_ev = ev;
