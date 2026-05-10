@@ -521,6 +521,22 @@ out:
 	}
 }
 
+void
+daos_event_complete_with_check(struct daos_event *ev, int rc, void *data)
+{
+	struct daos_event_private *evx = daos_ev2evx(ev);
+	unsigned int               gen;
+
+	D_ASSERT(data != NULL);
+
+	gen = *(unsigned int *)data;
+
+	D_ASSERTF(evx->evx_gen == gen, "Triggered completion against stale event %p: %u vs %u\n",
+		  ev, evx->evx_gen, gen);
+
+	daos_event_complete(ev, rc);
+}
+
 struct ev_progress_arg {
 	struct daos_eq_private		*eqx;
 	struct daos_event_private	*evx;
@@ -1002,6 +1018,19 @@ daos_event_destroy_children(struct daos_event *ev, bool force)
 	}
 
 	return rc;
+}
+
+unsigned int
+daos_event_bump_gen(daos_event_t *ev)
+{
+	struct daos_event_private *evx = daos_ev2evx(ev);
+
+	if (likely(evx->evx_gen < DAOS_EVENT_GEN_MAX))
+		evx->evx_gen++;
+	else
+		evx->evx_gen = 1;
+
+	return evx->evx_gen;
 }
 
 /**
