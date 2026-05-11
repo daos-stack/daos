@@ -37,7 +37,7 @@ type unknownCmdError struct {
 }
 
 func (e *unknownCmdError) Error() string {
-	return fmt.Sprintf("%s: '%s'", grumbleUnknownCmdErr, e.cmd)
+	return fmt.Sprintf("Unknown command: '%s'. Run 'help' to see available commands.", e.cmd)
 }
 
 func exitWithError(err error) {
@@ -136,6 +136,9 @@ func runFileCmds(app *grumble.App, log logging.Logger, fileName string) error {
 		log.Debugf("Running Command %q\n", lineStr)
 		err = runCmdStr(app, nil, lineCmd[0], lineCmd[1:]...)
 		if err != nil {
+			if err.Error() == grumbleUnknownCmdErr {
+				return errors.Wrapf(&unknownCmdError{cmd: lineCmd[0]}, "Failed running command %q", lineStr)
+			}
 			return errors.Wrapf(err, "Failed running command %q", lineStr)
 		}
 	}
