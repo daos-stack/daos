@@ -51,7 +51,7 @@ export argobots_version="1.2"
 export argobots_release="4${distro_name}"
 export argobots_full="${argobots_version}-${argobots_release}"
 export pmdk_version="2.1.3"
-export pmdk_release="1${distro_name}"
+export pmdk_release="2${distro_name}"
 export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.31.1"
 export isal_release="8${distro_name}"
@@ -131,6 +131,9 @@ export uuid_lib
 
 set_lib_name hdf5 lib hdf5 hdf5 hdf5
 export hdf5_lib
+
+set_lib_name libasan lib libasan libasan8 libasan8
+export libasan_lib
 
 lmod="Lmod"
 if [[ "${DISTRO:-el8}" =~ suse ]]; then

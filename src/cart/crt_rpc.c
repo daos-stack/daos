@@ -296,7 +296,7 @@ crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 			break;
 		case DAOS_CONT_MODULE:
 			switch (op_id) {
-				CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8)
+				CONT_PROTO_CLI_RPC_LIST(9)
 				CONT_PROTO_SRV_RPC_LIST
 			}
 			break;
