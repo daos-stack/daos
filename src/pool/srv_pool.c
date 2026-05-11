@@ -5284,7 +5284,7 @@ pool_filter_cont_handler(crt_rpc_t *rpc, int handler_version)
 	}
 
 	/* Call container service to get the filtered list of containers */
-	rc = ds_cont_filter(in->pfci_op.pi_uuid, filt_in, &cont_buf, &ncont);
+	rc = ds_cont_filter(in->pfci_op.pi_uuid, filt_in, handler_version, &cont_buf, &ncont);
 	if (rc != 0) {
 		D_GOTO(out_svc, rc);
 	} else if ((ncont_in > 0) && (ncont > ncont_in)) {
