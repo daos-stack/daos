@@ -57,6 +57,8 @@
 #define DFS_SB_VERSION     2
 /** DFS Layout Version Value */
 #define DFS_LAYOUT_VERSION     4
+/** Layout version where progressive-layout tail OID was introduced */
+#define DFS_PL_LAYOUT_VERSION  4
 /** Minimum DFS layout version supported by this client */
 #define DFS_LAYOUT_VERSION_MIN 3
 /** Magic value for serializing / deserializing a DFS handle */
@@ -110,6 +112,11 @@
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
 typedef uint16_t dfs_layout_ver_t;
+
+typedef enum {
+	DFS_TAIL_NONE   = 0,
+	DFS_TAIL_ACTIVE = 1,
+} dfs_tail_state_t;
 
 /** object struct that is instantiated for a DFS open object */
 struct dfs_obj {
@@ -233,7 +240,7 @@ struct dfs_entry {
 	daos_oclass_id_t oclass;
 	/** Optional tail object id for progressive-layout regular files */
 	daos_obj_id_t    tail_oid;
-	/** Informational state for the tail object */
+	/** Informational tail state encoded on disk as a single byte */
 	uint8_t          tail_state;
 	/** uid - not enforced at this level. */
 	uid_t            uid;
@@ -320,7 +327,7 @@ check_tx(daos_handle_t th, int rc)
 static inline uint64_t
 dfs_inode_record_size(dfs_layout_ver_t ver)
 {
-	if (ver >= DFS_LAYOUT_VERSION)
+	if (ver >= DFS_PL_LAYOUT_VERSION)
 		return END_IDX;
 
 	return END_L3_IDX;
@@ -329,7 +336,7 @@ dfs_inode_record_size(dfs_layout_ver_t ver)
 static inline bool
 dfs_file_layout_has_tail(dfs_layout_ver_t ver, mode_t mode)
 {
-	return ver >= DFS_LAYOUT_VERSION && S_ISREG(mode);
+	return ver >= DFS_PL_LAYOUT_VERSION && S_ISREG(mode);
 }
 
 static inline bool

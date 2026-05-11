@@ -194,7 +194,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	iod->iod_size  = 1;
 
 	entry->tail_oid   = DAOS_OBJ_NIL;
-	entry->tail_state = 0;
+	entry->tail_state = DFS_TAIL_NONE;
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
@@ -208,7 +208,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
 	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
-	if (ver >= DFS_LAYOUT_VERSION) {
+	if (ver >= DFS_PL_LAYOUT_VERSION) {
 		d_iov_set(&sg_iovs[i++], &entry->tail_oid, sizeof(daos_obj_id_t));
 		d_iov_set(&sg_iovs[i++], &entry->tail_state, sizeof(uint8_t));
 	}
@@ -385,7 +385,7 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	/** Add file size / symlink length. for now, file size cached in the entry is 0. */
 	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
-	if (ver >= DFS_LAYOUT_VERSION) {
+	if (ver >= DFS_PL_LAYOUT_VERSION) {
 		d_iov_set(&sg_iovs[i++], &entry->tail_oid, sizeof(daos_obj_id_t));
 		d_iov_set(&sg_iovs[i++], &entry->tail_state, sizeof(uint8_t));
 	}

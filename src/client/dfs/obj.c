@@ -210,7 +210,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 			if (rc != 0)
 				return rc;
 			oid_cp(&entry->tail_oid, file->f.tail_oid);
-			entry->tail_state = 1;
+			entry->tail_state = DFS_TAIL_ACTIVE;
 			file->f.has_tail  = true;
 		}
 
@@ -645,6 +645,15 @@ out_free:
 	return 0;
 
 err:
+	if (S_ISREG(obj->mode)) {
+		if (daos_handle_is_valid(new_obj->f.tail_oh))
+			daos_array_close(new_obj->f.tail_oh, NULL);
+		if (daos_handle_is_valid(new_obj->oh))
+			daos_array_close(new_obj->oh, NULL);
+	} else if (S_ISDIR(obj->mode)) {
+		if (daos_handle_is_valid(new_obj->oh))
+			daos_obj_close(new_obj->oh, NULL);
+	}
 	D_FREE(new_obj);
 	return rc;
 }
@@ -856,6 +865,7 @@ int
 dfs_release(dfs_obj_t *obj)
 {
 	int rc = 0;
+	int rc2;
 
 	if (obj == NULL)
 		return EINVAL;
@@ -865,12 +875,11 @@ dfs_release(dfs_obj_t *obj)
 		rc = daos_obj_close(obj->oh, NULL);
 		break;
 	case S_IFREG:
-		if (obj->f.has_tail) {
+		if (obj->f.has_tail)
 			rc = daos_array_close(obj->f.tail_oh, NULL);
-			if (rc)
-				break;
-		}
-		rc = daos_array_close(obj->oh, NULL);
+		rc2 = daos_array_close(obj->oh, NULL);
+		if (rc == 0)
+			rc = rc2;
 		break;
 	case S_IFLNK:
 		D_FREE(obj->value);
@@ -985,6 +994,7 @@ struct statx_op_args {
 	d_iov_t            sg_iovs[INODE_AKEYS];
 	struct dfs_entry   entry;
 	daos_array_stbuf_t array_stbuf;
+	daos_array_stbuf_t tail_array_stbuf;
 };
 
 int
@@ -1004,6 +1014,12 @@ ostatx_cb(tse_task_t *task, void *data)
 	if (args->obj->oid.hi != op_args->entry.oid.hi ||
 	    args->obj->oid.lo != op_args->entry.oid.lo)
 		D_GOTO(out, rc = -DER_ENOENT);
+
+	if (S_ISREG(args->obj->mode) && args->obj->f.has_tail) {
+		op_args->array_stbuf.st_size += op_args->tail_array_stbuf.st_size;
+		if (op_args->tail_array_stbuf.st_max_epoch > op_args->array_stbuf.st_max_epoch)
+			op_args->array_stbuf.st_max_epoch = op_args->tail_array_stbuf.st_max_epoch;
+	}
 
 	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf,
 				NULL);
@@ -1051,8 +1067,10 @@ statx_task(tse_task_t *task)
 	tse_task_t            *fetch_task;
 	daos_obj_fetch_t      *fetch_arg;
 	tse_task_t            *stat_task;
+	tse_task_t            *tail_stat_task = NULL;
 	tse_sched_t           *sched     = tse_task2sched(task);
 	bool                   need_stat = false;
+	bool                   need_tail_stat = false;
 	int                    i;
 	int                    rc;
 
@@ -1091,7 +1109,7 @@ statx_task(tse_task_t *task)
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.gid, sizeof(gid_t));
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.value_len, sizeof(daos_size_t));
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.obj_hlc, sizeof(uint64_t));
-	if (args->dfs->layout_v >= DFS_LAYOUT_VERSION) {
+	if (args->dfs->layout_v >= DFS_PL_LAYOUT_VERSION) {
 		d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.tail_oid, sizeof(daos_obj_id_t));
 		d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.tail_state, sizeof(uint8_t));
 	}
@@ -1123,6 +1141,20 @@ statx_task(tse_task_t *task)
 		stat_arg->th    = args->dfs->th;
 		stat_arg->stbuf = &op_args->array_stbuf;
 		need_stat       = true;
+
+		if (args->obj->f.has_tail) {
+			rc = daos_task_create(DAOS_OPC_ARRAY_STAT, sched, 0, NULL, &tail_stat_task);
+			if (rc != 0) {
+				D_ERROR("daos_task_create() failed: " DF_RC "\n", DP_RC(rc));
+				D_GOTO(err2_out, rc);
+			}
+
+			stat_arg        = daos_task_get_args(tail_stat_task);
+			stat_arg->oh    = args->obj->f.tail_oh;
+			stat_arg->th    = args->dfs->th;
+			stat_arg->stbuf = &op_args->tail_array_stbuf;
+			need_tail_stat  = true;
+		}
 	} else if (S_ISDIR(args->obj->mode)) {
 		daos_obj_query_key_t *stat_arg;
 
@@ -1157,6 +1189,14 @@ statx_task(tse_task_t *task)
 			D_GOTO(err1_out, rc);
 		}
 	}
+	if (need_tail_stat) {
+		rc = tse_task_register_deps(task, 1, &tail_stat_task);
+		if (rc) {
+			D_ERROR("tse_task_register_deps() failed: " DF_RC "\n", DP_RC(rc));
+			tse_task_complete(tail_stat_task, rc);
+			D_GOTO(err1_out, rc);
+		}
+	}
 	rc = tse_task_register_comp_cb(task, ostatx_cb, &op_args, sizeof(op_args));
 	if (rc != 0) {
 		D_ERROR("tse_task_register_comp_cb() failed: " DF_RC "\n", DP_RC(rc));
@@ -1166,8 +1206,12 @@ statx_task(tse_task_t *task)
 	tse_task_schedule(fetch_task, true);
 	if (need_stat)
 		tse_task_schedule(stat_task, true);
+	if (need_tail_stat)
+		tse_task_schedule(tail_stat_task, true);
 	return rc;
 err3_out:
+	if (need_tail_stat)
+		tse_task_complete(tail_stat_task, rc);
 	if (need_stat)
 		tse_task_complete(stat_task, rc);
 err2_out:
