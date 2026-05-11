@@ -37,7 +37,8 @@ class DdbCommandBase(CommandWithParameters):
         self.single_command_1 = BasicParameter(None, position=2)
 
         # Path to the system database. Used for MD-on-SSD.
-        self.db_path = FormattedParameter("--db_path {}", position=3)
+        # self.db_path = FormattedParameter("--db_path {}", position=3)
+        self.db_path = BasicParameter(None, position=3)
 
         # VOS file path.
         self.vos_path = FormattedParameter("--vos_path {}", position=4)
@@ -325,7 +326,8 @@ class DdbCommand(DdbCommandBase):
         """
         self.vos_path.value = None
         self.single_command_1.value = "rm_pool"
-        self.db_path.value = db_path
+        # self.db_path.value = db_path
+        self.db_path.value = " ".join(["--db_path", db_path])
         self.single_command_2.value = removing_path
 
         return self.run()

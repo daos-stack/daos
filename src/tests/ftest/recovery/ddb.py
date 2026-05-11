@@ -171,7 +171,8 @@ class DdbTest(TestWithServers):
             # Add --db_path for MD-on-SSD and set appropriate vos_path. Add -w for rm and load.
             # e.g., ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control/engine0
             # --vos_path /mnt/daos_load/<pool_uuid>/vos-0 value_dump <component_path> <file_path>
-            ddb_command.db_path.value = db_path
+            # ddb_command.db_path.value = db_path
+            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
             ddb_command.vos_path.update(
                 value=os.path.join(self.daos_load_path, pool.uuid.lower(), "vos-0"))
 
