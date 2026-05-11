@@ -1113,7 +1113,8 @@ pool_flags_tests(void **state)
 	uint64_t                incompat_flags;
 
 	ctx.dc_write_mode = true;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, VOS_POF_FOR_FEATURE_FLAG, ctx.dc_write_mode));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh,
+				    VOS_POF_FOR_FEATURE_FLAG, ctx.dc_write_mode));
 	assert_success(dv_pool_get_flags(ctx.dc_poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == 0);
 	assert(incompat_flags == 0);
