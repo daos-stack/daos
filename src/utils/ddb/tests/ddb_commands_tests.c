@@ -476,6 +476,41 @@ dtx_get_cmt_time(char *buf)
 }
 
 static void
+open_cmd_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct ddb_ctx          ctx  = {0};
+	struct open_options     opt  = {0};
+
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+
+	/* Non-existent path: must return DER_INVAL */
+	opt.path = "/non/existent/vos-0";
+	assert_invalid(ddb_run_open(&ctx, &opt));
+
+	/* Read-only open: pool handle must be valid, dc_write_mode must be false */
+	opt.path       = tctx->dvt_pmem_file;
+	opt.write_mode = false;
+	assert_success(ddb_run_open(&ctx, &opt));
+	assert_true(daos_handle_is_valid(ctx.dc_poh));
+	assert_false(ctx.dc_write_mode);
+	assert_success(ddb_run_close(&ctx));
+
+	/* Write-mode open: dc_write_mode must be propagated to the context */
+	opt.write_mode = true;
+	assert_success(ddb_run_open(&ctx, &opt));
+	assert_true(daos_handle_is_valid(ctx.dc_poh));
+	assert_true(ctx.dc_write_mode);
+
+	/* Pool already open: must return DER_BUSY with an error message */
+	dvt_fake_print_reset();
+	assert_rc_equal(-DER_BUSY, ddb_run_open(&ctx, &opt));
+	assert_printed_contains("Cannot operate on an opened pool. Close it first.");
+	assert_success(ddb_run_close(&ctx));
+}
+
+static void
 dtx_aggr_tests(void **state)
 {
 	uuid_t                 *p_uuid   = &g_uuids[3];
@@ -621,6 +656,7 @@ ddb_commands_tests_run()
 	    TEST(dtx_act_discard_invalid_tests),
 	    TEST(dtx_abort_entry_tests),
 	    TEST(feature_cmd_tests),
+	    TEST(open_cmd_tests),
 	    TEST(dtx_aggr_tests),
 	};
 
