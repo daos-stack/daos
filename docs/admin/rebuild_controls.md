@@ -22,21 +22,20 @@ will be an idle state, and an error status=`-2027` (`-DER_OP_CANCELED` DAOS erro
 
 The effect of a `rebuild stop` command is "one shot", meaning only a pool's
 currently-running rebuild is stopped and there is no persistent effect on future
-operations. Subsequent self-healing automatic recovery, or administrator command
-(e.g., system stop, system/pool exclude, reintegrate, drain, pool extend) can
-trigger new rebuild(s). Also, if a rebuild is stopped, whatever progress it had
+operations. Subsequent self-healing automatic recovery, pool service leader switch,
+or administrator command (e.g., system/pool exclude, reintegrate, drain, pool extend) can trigger new rebuild(s). When a rebuild is stopped, whatever progress it had
 made in reconstructing the data in the pool is not retained — a subsequent
-`rebuild start` command will start the rebuild from the beginning (i.e., this is
-not a pause/resume interface).
+`rebuild start` command (or rebuild started any other way) will start from the beginning
+(i.e., stop/start is not a pause/resume interface).
 
 Some circumstances where rebuild stop/start controls may be helpful are:
 
-* When a pool has insufficient free space to accommodate relocation of affected
-  data upon engine(s) excluded/drained. For example, if a rebuild fails with
-  `status=-1007` (`-DER_NOSPACE`) (that will likely repeat in its automatic
-  retries). Stopping such a rebuild allows an administrator to perform alternate
-  actions (e.g., directly reintegrate the lost engine(s); and/or pool expansion
-  to more engines).
+* Due to temporary network errors, a pool's rebuild fails and gets retried.
+  If the instability persists for some time, rather than have DAOS
+  automatically retry the rebuild (and fail) repeatedly, the administrator may choose
+  to stop such rebuilds. Later, the administrator can start the rebuilds, or perform
+  alternate recovery actions (e.g., directly reintegrate lost engine(s)
+  excluded but whose rebuilds did not finish).
 * A system with many tens of pools are all rebuilding simultaneously (requiring
   substantial CPU and network resources in the DAOS system). And the
   administrator deciding in such cases to stagger an overall recovery by
@@ -53,14 +52,23 @@ clean up space that rebuild used while it was operating.
 For a **successful rebuild**, the sequence is:
 
 1. Run `op:Rebuild`
-2. Run `op:Reclaim` to clean up
+2. After successful rebuild, update the pool map so that target states
+   reflect the completion of the rebuild.
+3. Run `op:Reclaim` to clean up
 
 For a **failed rebuild**, the sequence is:
 
 1. Run `op:Rebuild`
-2. Run `op:Fail_reclaim` to clean up
+2. Upon failure, determine if the `op:Rebuild` should be retried. Two cases are:
+2a. case 1: for network and certain "retryable" errors, rebuild shall be retried.
+2b. case 2: for other errors, revert the pool map target states such that (for most rebuild
+            variants - drain, reintegrate, and extend) the rebuild will not be retried.
+            Note: rebuilds initiated due to target exclusion *do* get retried, though a
+            discussion of this behavior is out of scope here.
+3. Run `op:Fail_reclaim` to clean up
     * If `Fail_reclaim` *itself* failed, retry `Fail_reclaim`
-    * If `Fail_reclaim` succeeded, retry the original `op:Rebuild`
+    * If `Fail_reclaim` succeeded, and the original error was retryable (case 1), run
+      `op:Rebuild` again.
 
 A `rebuild stop` command (without `--force`) will immediately stop a rebuild in
 the `op:Rebuild` phase. During `op:Reclaim`, the command is rejected with a
