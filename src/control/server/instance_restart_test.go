@@ -484,7 +484,7 @@ func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
 	}
 
 	// Wait for timer to fire (with buffer)
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// Verify timer was cleaned up
 	mgr.mu.RLock()
@@ -600,7 +600,9 @@ func TestServer_NewEngineRestartManager(t *testing.T) {
 	cfg := &config.Server{
 		EngineAutoRestartMinDelay: 42,
 	}
-	mgr := setupTestManager(t, cfg)
+	ctx := test.MustLogContext(t)
+	log := logging.FromContext(ctx)
+	mgr := newEngineRestartManager(log, cfg)
 
 	if mgr.log == nil {
 		t.Error("expected logger to be set")
