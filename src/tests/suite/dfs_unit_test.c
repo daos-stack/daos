@@ -12,6 +12,7 @@
 #include <daos_types.h>
 #include <daos/placement.h>
 #include <pthread.h>
+#include "../../client/dfs/dfs_internal.h"
 
 /** global DFS mount used for all tests */
 static uuid_t		co_uuid;
@@ -3560,6 +3561,242 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 	assert_int_equal(rc, 0);
 }
 
+/*
+ * Tests for GIT (Global Index Table) internal functions.
+ *
+ * dfs_mt->git_oh is a plain KV object opened during mount.  All four tests
+ * use synthetic OIDs as dkeys so they are self-contained and do not interfere
+ * with the rest of the container.
+ */
+
+/* Build a fully populated dfs_entry for use in GIT tests. */
+static void
+git_test_make_entry(struct dfs_entry *e, daos_obj_id_t oid)
+{
+	memset(e, 0, sizeof(*e));
+	e->mode       = S_IFREG | 0644;
+	e->oid        = oid;
+	e->mtime      = 1000;
+	e->mtime_nano = 500;
+	e->ctime      = 2000;
+	e->ctime_nano = 750;
+	e->chunk_size = 1048576;
+	e->oclass     = OC_SX;
+	e->uid        = 1001;
+	e->gid        = 1002;
+	e->value_len  = 0;
+	e->obj_hlc    = 0;
+	e->link_cnt   = 2;
+}
+
+/*
+ * Test 1: git_insert_entry / git_fetch_entry round-trip.
+ * Also verifies ENOENT for a missing OID.
+ */
+static void
+dfs_test_git_insert_fetch(void **state)
+{
+	test_arg_t      *arg         = *state;
+	struct dfs_entry entry_in    = {0};
+	struct dfs_entry entry_out   = {0};
+	daos_obj_id_t    oid         = {.hi = 0xDEAD0001ULL, .lo = 0xBEEF0001ULL};
+	daos_obj_id_t    missing_oid = {.hi = 0xDEAD0099ULL, .lo = 0xBEEF0099ULL};
+	int              rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/* fetch of non-existent OID must return ENOENT */
+	rc = git_fetch_entry(dfs_mt->git_oh, DAOS_TX_NONE, &missing_oid, &entry_out, 0, NULL, NULL,
+			     NULL);
+	assert_int_equal(rc, ENOENT);
+
+	git_test_make_entry(&entry_in, oid);
+
+	rc = git_insert_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, DAOS_COND_DKEY_INSERT, &entry_in);
+	assert_int_equal(rc, 0);
+	print_message("git_insert_entry: OK\n");
+
+	rc = git_fetch_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, &entry_out, 0, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(entry_out.mode, entry_in.mode);
+	assert_int_equal(entry_out.oid.hi, entry_in.oid.hi);
+	assert_int_equal(entry_out.oid.lo, entry_in.oid.lo);
+	assert_int_equal(entry_out.mtime, entry_in.mtime);
+	assert_int_equal(entry_out.mtime_nano, entry_in.mtime_nano);
+	assert_int_equal(entry_out.ctime, entry_in.ctime);
+	assert_int_equal(entry_out.ctime_nano, entry_in.ctime_nano);
+	assert_int_equal(entry_out.chunk_size, entry_in.chunk_size);
+	assert_int_equal(entry_out.oclass, entry_in.oclass);
+	assert_int_equal(entry_out.uid, entry_in.uid);
+	assert_int_equal(entry_out.gid, entry_in.gid);
+	assert_int_equal(entry_out.link_cnt, entry_in.link_cnt);
+	print_message("git_fetch_entry round-trip: OK\n");
+}
+
+/*
+ * Test 2: git_insert_entry insert-once semantics (DAOS_COND_DKEY_INSERT).
+ * Inserting the same OID twice must return EEXIST.
+ */
+static void
+dfs_test_git_insert_once(void **state)
+{
+	test_arg_t      *arg   = *state;
+	struct dfs_entry entry = {0};
+	daos_obj_id_t    oid   = {.hi = 0xDEAD0002ULL, .lo = 0xBEEF0002ULL};
+	int              rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	git_test_make_entry(&entry, oid);
+
+	rc = git_insert_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, DAOS_COND_DKEY_INSERT, &entry);
+	assert_int_equal(rc, 0);
+
+	/* second insert of the same OID must fail */
+	rc = git_insert_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, DAOS_COND_DKEY_INSERT, &entry);
+	assert_int_equal(rc, EEXIST);
+	print_message("git_insert_entry insert-once semantics: OK\n");
+}
+
+/*
+ * Test 3: git_update_link_cnt — increment, decrement, and underflow guard.
+ */
+static void
+dfs_test_git_update_link_cnt(void **state)
+{
+	test_arg_t      *arg     = *state;
+	struct dfs_entry entry   = {0};
+	struct dfs_entry fetched = {0};
+	daos_obj_id_t    oid     = {.hi = 0xDEAD0003ULL, .lo = 0xBEEF0003ULL};
+	int              rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	git_test_make_entry(&entry, oid); /* link_cnt = 2 */
+
+	rc = git_insert_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, DAOS_COND_DKEY_INSERT, &entry);
+	assert_int_equal(rc, 0);
+
+	/* increment: 2 -> 3 */
+	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry, 1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(entry.link_cnt, 3);
+
+	rc = git_fetch_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, &fetched, 0, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(fetched.link_cnt, 3);
+	print_message("git_update_link_cnt increment (2->3): OK\n");
+
+	/* decrement: 3 -> 2 */
+	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry, -1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(entry.link_cnt, 2);
+
+	rc = git_fetch_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, &fetched, 0, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(fetched.link_cnt, 2);
+	print_message("git_update_link_cnt decrement (3->2): OK\n");
+
+	/* underflow guard: delta=-5 on link_cnt=2 must return EINVAL */
+	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry, -5);
+	assert_int_equal(rc, EINVAL);
+	print_message("git_update_link_cnt underflow guard: OK\n");
+}
+
+/*
+ * Test 4: git_copy_xattr — xattrs set on a dentry are copied to GIT.
+ * Uses dfs_setxattr to set two xattrs on a real file, then calls
+ * git_copy_xattr and verifies the akeys appear under the GIT dkey.
+ */
+static void
+dfs_test_git_copy_xattr(void **state)
+{
+	test_arg_t      *arg       = *state;
+	dfs_obj_t       *obj       = NULL;
+	struct dfs_entry git_entry = {0};
+	struct dfs_entry fetched   = {0};
+	daos_obj_id_t    git_oid;
+	daos_handle_t    dir_oh;
+	const char      *fname  = "git_xattr_test_file";
+	const char      *xname1 = "user.attr1";
+	const char      *xval1  = "value_one";
+	const char      *xname2 = "user.attr2";
+	const char      *xval2  = "value_two";
+	char            *xnames[2];
+	char             xbuf1[64];
+	char             xbuf2[64];
+	void            *xvals[2];
+	daos_size_t      xsizes[2];
+	int              rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/* create a regular file */
+	rc = dfs_open(dfs_mt, NULL, fname, S_IFREG | 0644, O_RDWR | O_CREAT, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	/* set two xattrs */
+	rc = dfs_setxattr(dfs_mt, obj, xname1, xval1, strlen(xval1) + 1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, obj, xname2, xval2, strlen(xval2) + 1, 0);
+	assert_int_equal(rc, 0);
+
+	/* get the file's OID to use as the GIT dkey */
+	rc = dfs_obj2id(obj, &git_oid);
+	assert_int_equal(rc, 0);
+
+	/* insert a GIT entry for this OID */
+	git_test_make_entry(&git_entry, git_oid);
+	rc = git_insert_entry(dfs_mt->git_oh, DAOS_TX_NONE, &git_oid, DAOS_COND_DKEY_INSERT,
+			      &git_entry);
+	assert_int_equal(rc, 0);
+
+	/* open the root dir object to use as src_oh */
+	rc = daos_obj_open(dfs_mt->coh, dfs_mt->root.oid, DAOS_OO_RO, &dir_oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/* copy xattrs from the dentry in root dir -> GIT */
+	rc = git_copy_xattr(dfs_mt->git_oh, DAOS_TX_NONE, &git_oid, dir_oh, fname);
+	assert_int_equal(rc, 0);
+	print_message("git_copy_xattr: OK\n");
+
+	rc = daos_obj_close(dir_oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/* verify both xattrs via git_fetch_entry */
+	xnames[0] = (char *)xname1;
+	xnames[1] = (char *)xname2;
+	memset(xbuf1, 0, sizeof(xbuf1));
+	memset(xbuf2, 0, sizeof(xbuf2));
+	xvals[0]  = xbuf1;
+	xvals[1]  = xbuf2;
+	xsizes[0] = sizeof(xbuf1);
+	xsizes[1] = sizeof(xbuf2);
+
+	rc = git_fetch_entry(dfs_mt->git_oh, DAOS_TX_NONE, &git_oid, &fetched, 2, xnames, xvals,
+			     xsizes);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(xsizes[0], strlen(xval1) + 1);
+	assert_string_equal(xbuf1, xval1);
+	print_message("git_fetch_entry xattr1 verified in GIT: OK\n");
+
+	assert_int_equal(xsizes[1], strlen(xval2) + 1);
+	assert_string_equal(xbuf2, xval2);
+	print_message("git_fetch_entry xattr2 verified in GIT: OK\n");
+
+	/* inode fields must be untouched */
+	assert_int_equal(fetched.link_cnt, git_entry.link_cnt);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
 static void
 dfs_test_pipeline_find(void **state)
 {
@@ -3572,62 +3809,52 @@ dfs_test_pipeline_find(void **state)
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: DFS container modes",
-	  dfs_test_modes, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
-	  dfs_test_lookup, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST4: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
-	  dfs_test_syml_follow, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST6: multi-threads read shared file",
-	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: DFS lookupx",
-	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: DFS IO sync error code",
-	  dfs_test_io_error_code, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST9: DFS IO async error code",
-	  dfs_test_io_error_code, async_enable, test_case_teardown},
-	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
-	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST11: Simple rename",
-	  dfs_test_rename, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST12: DFS API compat",
-	  dfs_test_compat, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
-	  dfs_test_handles, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
-	  dfs_test_mt_connect, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST15: DFS chown",
-	  dfs_test_chown, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST16: DFS stat mtime",
-	  dfs_test_mtime, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST17: multi-threads async IO",
-	  dfs_test_async_io_th, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST18: async IO",
-	  dfs_test_async_io, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST19: DFS readdir",
-	  dfs_test_readdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST20: dfs oclass hints",
-	  dfs_test_oclass_hints, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST21: dfs multiple pools",
-	  dfs_test_multiple_pools, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST22: dfs extended attributes",
-	  dfs_test_xattrs, test_case_teardown},
-	{ "DFS_UNIT_TEST23: dfs MWC container checker",
-	  dfs_test_checker, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST24: dfs MWC SB fix",
-	  dfs_test_fix_sb, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST25: dfs MWC root fix",
-	  dfs_test_relink_root, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
-	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST27: dfs pipeline find",
-	  dfs_test_pipeline_find, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
-	  dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST3: DFS lookup / lookup_rel", dfs_test_lookup, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST4: Simple Symlinks", dfs_test_syml, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW", dfs_test_syml_follow, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST6: multi-threads read shared file", dfs_test_read_shared_file, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST7: DFS lookupx", dfs_test_lookupx, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST8: DFS IO sync error code", dfs_test_io_error_code, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST9: DFS IO async error code", dfs_test_io_error_code, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST10: multi-threads mkdir same dir", dfs_test_mt_mkdir, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST11: Simple rename", dfs_test_rename, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST12: DFS API compat", dfs_test_compat, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST13: DFS l2g/g2l_all", dfs_test_handles, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST14: multi-threads connect to same container", dfs_test_mt_connect, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST15: DFS chown", dfs_test_chown, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST16: DFS stat mtime", dfs_test_mtime, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST17: multi-threads async IO", dfs_test_async_io_th, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST18: async IO", dfs_test_async_io, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST19: DFS readdir", dfs_test_readdir, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST20: dfs oclass hints", dfs_test_oclass_hints, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST21: dfs multiple pools", dfs_test_multiple_pools, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST22: dfs extended attributes", dfs_test_xattrs, test_case_teardown},
+    {"DFS_UNIT_TEST23: dfs MWC container checker", dfs_test_checker, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST24: dfs MWC SB fix", dfs_test_fix_sb, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST25: dfs MWC root fix", dfs_test_relink_root, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST26: dfs MWC chunk size fix", dfs_test_fix_chunk_size, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST29: GIT insert/fetch round-trip", dfs_test_git_insert_fetch, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST30: GIT insert-once semantics", dfs_test_git_insert_once, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST31: GIT update link_cnt", dfs_test_git_update_link_cnt, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST32: GIT copy xattr", dfs_test_git_copy_xattr, async_disable, test_case_teardown},
 };
 
 static int

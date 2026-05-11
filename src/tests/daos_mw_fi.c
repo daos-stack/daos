@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,7 +34,7 @@
 #include <daos/common.h>
 
 /** Copied from dfs.c (TODO: create an internal header file) */
-#define INODE_AKEYS	12
+#define INODE_AKEYS     13
 #define INODE_AKEY_NAME	"DFS_INODE"
 #define SLINK_AKEY_NAME	"DFS_SLINK"
 #define MODE_IDX	0

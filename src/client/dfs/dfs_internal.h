@@ -63,7 +63,7 @@
 #define DFS_OBJ_GLOB_MAGIC 0xdf500b90
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS        12
+#define INODE_AKEYS            13
 #define INODE_AKEY_NAME    "DFS_INODE"
 #define SLINK_AKEY_NAME    "DFS_SLINK"
 #define MODE_IDX           0
@@ -79,6 +79,10 @@
 #define SIZE_IDX           (GID_IDX + sizeof(gid_t))
 #define HLC_IDX            (SIZE_IDX + sizeof(daos_size_t))
 #define END_IDX            (HLC_IDX + sizeof(uint64_t))
+
+/** GIT (Global Index Table) inode layout extends the base inode with link_cnt */
+#define LINK_CNT_IDX           END_IDX
+#define END_GIT_IDX            (LINK_CNT_IDX + sizeof(uint64_t))
 
 /*
  * END IDX for layout V2 (2.0) is at the current offset where we store the mtime nsec, but also need
@@ -232,6 +236,8 @@ struct dfs_entry {
 	gid_t            gid;
 	/** Sym Link value */
 	char            *value;
+	/** Hard link count: always 1 for regular dentries, real count when read from GIT */
+	uint64_t         link_cnt;
 };
 
 /** enum for hash entry type */
@@ -422,6 +428,18 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 int
 remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name, size_t len,
 	     struct dfs_entry entry);
+/** GIT (Global Index Table) entry operations */
+int
+git_fetch_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, struct dfs_entry *entry,
+		int xnr, char *xnames[], void *xvals[], daos_size_t *xsizes);
+int
+git_insert_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t flags,
+		 struct dfs_entry *entry);
+int
+git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, struct dfs_entry *entry, int delta);
+int
+git_copy_xattr(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *dst_oid, daos_handle_t src_oh,
+	       const char *src_name);
 int
 open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct dfs_entry *entry,
 	 size_t len, dfs_obj_t *dir);
