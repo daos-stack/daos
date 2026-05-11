@@ -1043,7 +1043,7 @@ free_splits(struct io_splits *split)
 			D_FREE(split->sgl_v[spl_ix].sg_iovs);
 		D_FREE(split->sgl_v);
 		D_FREE(split->iod_v);
-		D_FEEE(split->nrec);
+		D_FREE(split->nrec);
 	}
 	return;
 }
@@ -1968,12 +1968,12 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th, daos_array_iod_t *rg_iod,
 		daos_array_iod_t *iod = &splits.iod_v[sn];
 		d_sg_list_t      *sgl = &splits.sgl_v[sn];
 		daos_size_t       nr  = splits.cnt > 1 ? splits.nrec[sn] : total_nr;
-		rc = dc_array_io_int(array, th, rg_iod, user_sgl, op_type, task, nr);
+		rc                    = dc_array_io_int(array, th, iod, sgl, op_type, task, nr);
 		if (rc)
 			D_GOTO(err_task, rc);
 	}
 
-	free_split(&splits);
+	free_splits(&splits);
 	array_decref(array);
 	return 0;
 
