@@ -77,7 +77,7 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
+BuildRequires: spdk-devel = 22.01.2
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -150,7 +150,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
+Requires: spdk-tools = 22.01.2
 Conflicts: daos-spdk
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
@@ -635,6 +635,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon May 11 2026 Michael Hennecke <michael.hennecke@hpe.com> 2.6.5-3
+- Pin SPDK to 22.01.2
+
 * Mon May 04 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.6.5-2
 - Second release candidate for 2.6.5
 
