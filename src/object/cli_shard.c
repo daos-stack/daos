@@ -787,12 +787,14 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR(DF_UOID" (%s) RPC %d to %d/%d, flags %lx/%x, task %p failed, %s: "DF_RC"\n",
-			DP_UOID(orw->orw_oid), is_ec_obj ? "EC" : "non-EC", opc,
+		D_ERROR(DF_UOID
+			" (%s) RPC %p (%d) to %d/%d, flags %lx/%x, task %p failed, %s, TX " DF_DTI
+			": " DF_RC "\n",
+			DP_UOID(orw->orw_oid), is_ec_obj ? "EC" : "non-EC", rw_args->rpc, opc,
 			rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag,
 			(unsigned long)orw->orw_api_flags, orw->orw_flags, task,
-			orw->orw_bulks.ca_arrays != NULL ||
-			orw->orw_bulks.ca_count != 0 ? "DMA" : "non-DMA", DP_RC(ret));
+			orw->orw_bulks.ca_arrays || orw->orw_bulks.ca_count ? "DMA" : "non-DMA",
+			DP_DTI(&orw->orw_dti), DP_RC(ret));
 
 		D_GOTO(out, ret);
 	}
@@ -1591,7 +1593,7 @@ struct obj_enum_args {
 	daos_recx_t		*eaa_recxs;
 	daos_size_t		*eaa_size;
 	unsigned int		*eaa_map_ver;
-	d_iov_t			*csum;
+	d_iov_t                 *eaa_csum;
 	struct dtx_epoch	*epoch;
 	daos_handle_t		*th;
 	uint64_t		*enqueue_id;
@@ -1797,7 +1799,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		D_GOTO(out, rc);
 	}
 
-	rc = dc_enumerate_copy_csum(enum_args->csum, &oeo->oeo_csum_iov);
+	rc = dc_enumerate_copy_csum(enum_args->eaa_csum, &oeo->oeo_csum_iov);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2017,7 +2019,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.eaa_obj = obj_shard;
 	enum_args.eaa_size = obj_args->size;
 	enum_args.eaa_sgl = sgl;
-	enum_args.csum = obj_args->csum;
+	enum_args.eaa_csum        = obj_args->csum;
 	enum_args.eaa_map_ver = &args->la_auxi.map_ver;
 	enum_args.eaa_recxs = args->la_recxs;
 	enum_args.epoch = &args->la_auxi.epoch;

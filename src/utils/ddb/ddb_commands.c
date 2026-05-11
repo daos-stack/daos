@@ -64,21 +64,6 @@ ddb_run_version(struct ddb_ctx *ctx)
 	return 0;
 }
 
-int
-ddb_run_help(struct ddb_ctx *ctx)
-{
-	ddb_commands_help(ctx);
-
-	return 0;
-}
-
-int
-ddb_run_quit(struct ddb_ctx *ctx)
-{
-	ctx->dc_should_quit = true;
-	return 0;
-}
-
 bool
 ddb_pool_is_open(struct ddb_ctx *ctx)
 {
@@ -1163,10 +1148,11 @@ skip:
 		ddb_printf(ctx, "Incompat Flags: %lu\n", new_incompat_flags);
 	}
 out:
-	if (close)
+	if (close) {
 		rc = dv_pool_close(ctx->dc_poh);
-	ctx->dc_poh        = DAOS_HDL_INVAL;
-	ctx->dc_write_mode = false;
+		ctx->dc_poh        = DAOS_HDL_INVAL;
+		ctx->dc_write_mode = false;
+	}
 
 	return rc;
 }

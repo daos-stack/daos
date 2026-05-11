@@ -1,4 +1,7 @@
 %changelog
+* Fri Apr 24 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> 2.9.100-3
+- Update PMDK to version 2.1.3-2
+
 * Wed Apr 08 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-2
 - Fix ASAN ODR violation: move src/mgmt/rpc.c into new libdaos_mgmt_crtproto.so
   shared library to ensure mgmt_proto_fmt_v3/v4 globals are defined exactly
