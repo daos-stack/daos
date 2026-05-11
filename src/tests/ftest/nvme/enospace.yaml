@@ -13,11 +13,13 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
+      log_file: daos_server0.log
       targets: 1
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
+      log_file: daos_server1.log
       targets: 1
       storage: auto
 
