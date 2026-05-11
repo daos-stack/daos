@@ -76,7 +76,8 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, opt->db_path, ctx, 0);
+	DDB_CAN_PROCEED(ctx, opt->db_path);
+	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0, opt->write_mode);
 }
 
 int
@@ -1090,7 +1091,9 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (feature_write_action(opt) && !ctx->dc_write_mode)
 		return -DER_NO_PERM;
 
-	rc = dv_pool_open(opt->path, opt->db_path, ctx, VOS_POF_FOR_FEATURE_FLAG);
+	DDB_CAN_PROCEED(ctx, opt->db_path);
+	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
+			  ctx->dc_write_mode);
 	if (rc) {
 		ddb_errorf(ctx, "Unable to open VOS pool '%s'\n", opt->path);
 		return rc;

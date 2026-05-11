@@ -57,7 +57,8 @@ bool
 vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
 
 int
-dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, uint32_t flags)
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
+	     bool write_mode)
 {
 	int                    rc;
 	struct vos_file_parts *vf;
@@ -65,11 +66,6 @@ dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, uint32_
 	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
 		goto out;
-
-	if (!vmd_wa_can_proceed(ctx, vf->vf_db_path)) {
-		rc = -DER_NO_SERVICE;
-		goto out_vf;
-	}
 
 	/**
 	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
@@ -86,7 +82,7 @@ dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, uint32_
 	 * modified, a new private copy is allocated. As a result, any changes made to
 	 * the mapped memory do not propagate to the persistent medium.
 	 */
-	if (!ctx->dc_write_mode) {
+	if (!write_mode) {
 		int cow_val = 1;
 		rc          = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
 		if (rc != 0) {
@@ -102,14 +98,14 @@ dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, uint32_
 		goto out_cow;
 	}
 
-	rc = vos_pool_open(vf->vf_vos_file_path, vf->vf_pool_uuid, flags, &ctx->dc_poh);
+	rc = vos_pool_open(vf->vf_vos_file_path, vf->vf_pool_uuid, flags, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 	}
 
 out_cow:
-	if (!ctx->dc_write_mode) {
+	if (!write_mode) {
 		/** Restore the default value. */
 		int cow_val = 0;
 		pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);

@@ -185,11 +185,11 @@ open_pool_test(void **state)
 	struct ddb_ctx          ctx  = {0};
 	struct dt_vos_pool_ctx *tctx = *state;
 
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
 	assert_success(dv_pool_close(ctx.dc_poh));
 
 	/* should be able to open again after closing */
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
 	assert_success(dv_pool_close(ctx.dc_poh));
 }
 
@@ -1090,7 +1090,7 @@ dv_test_setup(void **state)
 	ctx.dc_write_mode              = true;
 	active_entry_handler_called = 0;
 	committed_entry_handler_called = 0;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx, 0));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
 	tctx->dvt_poh = ctx.dc_poh;
 	return 0;
 }
@@ -1113,7 +1113,7 @@ pool_flags_tests(void **state)
 	uint64_t                incompat_flags;
 
 	ctx.dc_write_mode = true;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx, VOS_POF_FOR_FEATURE_FLAG));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, VOS_POF_FOR_FEATURE_FLAG, ctx.dc_write_mode));
 	assert_success(dv_pool_get_flags(ctx.dc_poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == 0);
 	assert(incompat_flags == 0);
@@ -1179,7 +1179,7 @@ helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_sta
 	sha256sum(path, fs[FILE_STATE_PRE].digest);
 
 	ctx.dc_write_mode = write_mode;
-	assert_success(dv_pool_open(path, NULL, &ctx, 0));
+	assert_success(dv_pool_open(path, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
 	tctx->dvt_poh = ctx.dc_poh;
 	update_value_to_modify_tests((void **)&tctx);
 	assert_success(dv_pool_close(tctx->dvt_poh));
