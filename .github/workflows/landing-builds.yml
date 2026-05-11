@@ -249,7 +249,7 @@ jobs:
             with: rockylinux/rockylinux:8
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:24.04
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
