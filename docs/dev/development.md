@@ -138,11 +138,12 @@ such as maximum function stack size, may lead to unexpected behavior in the inst
 binaries.
 
 #### Customizing ASan Behavior
+
 ASan behavior can be configured using the `ASAN_OPTIONS` environment variable. For example, you can
 add the following entry to the `env_vars` section of the `daos_server.yml` configuration file:
 ```yaml
 engines:
-- ..
+- ...
   env_vars:
   ...
   - ASAN_OPTIONS=atexit=1:print_stats=1:log_path=/tmp/daos_engine0.asan:disable_coredump=1:handle_segv=2:handle_abort=2:handle_sigfpe=2:handle_sigill=2:handle_sigbus=2:use_sigaltstack=1

@@ -515,7 +515,7 @@ class PreReqComponent():
                               ['gcc', 'covc', 'clang'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
-        opts.Add(('SANITIZERS', 'Instrument C code with google sanitizers', None))
+        opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
         opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
         opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
