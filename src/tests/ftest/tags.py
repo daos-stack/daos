@@ -218,11 +218,7 @@ class FtestTagMap():
         with open(path, 'r') as file:
             file_data = file.read()
 
-        try:
-            module = ast.parse(file_data)
-        except Exception as error:      # pylint: disable=broad-except
-            print(f"Error parsing data from {file}: {error}")
-            return
+        module = ast.parse(file_data)
         for class_def in filter(lambda val: isinstance(val, ast.ClassDef), module.body):
             for func_def in filter(lambda val: isinstance(val, ast.FunctionDef), class_def.body):
                 if not func_def.name.startswith('test_'):
