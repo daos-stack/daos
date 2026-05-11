@@ -5924,7 +5924,7 @@ class AllocFailTest():
         # pylint: disable-next=no-member
         num_cores = len(os.sched_getaffinity(0))
 
-        if num_cores < 20:
+        if num_cores < 14:
             max_child = 1
         else:
             max_child = int(num_cores / 4 * 3)
