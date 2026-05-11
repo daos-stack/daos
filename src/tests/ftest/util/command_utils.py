@@ -105,7 +105,7 @@ class ExecutableCommand(CommandWithParameters):
             str: the command with all the defined parameters
 
         """
-        return self.with_exports
+        return self.with_sudo
 
     @property
     def sudo(self):
