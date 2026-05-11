@@ -1,6 +1,6 @@
 # Copyright 2016-2024 Intel Corporation
 # Copyright 2025 Google LLC
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -187,7 +187,6 @@ def define_mercury(reqs):
 
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
-                     '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
                      '-DCMAKE_INSTALL_PREFIX:PATH=$MERCURY_PREFIX',
                      '-DMERCURY_INSTALL_LIB_DIR:PATH=$MERCURY_PREFIX/lib64',
@@ -202,16 +201,27 @@ def define_mercury(reqs):
                      '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
+                     '-DMERCURY_ENABLE_DEBUG:BOOL=ON',
                      '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
                      '-DNA_USE_UCX:BOOL=ON',
                      '../mercury']
 
-    if reqs.target_type == 'debug':
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
-    else:
-        mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
+    build_type = "RelWithDebInfo"
+    try:
+        sanitizers = reqs.get_env('SANITIZERS').split(',')
+        if 'address' in sanitizers:
+            build_type = "Asan"
+        elif 'thread' in sanitizers:
+            build_type = "Tsan"
+        elif 'undefined' in sanitizers:
+            build_type = "Ubsan"
+    except KeyError:
+        pass
+    mercury_build.insert(-1, f'-DCMAKE_BUILD_TYPE:STRING={build_type}')
+    if build_type != "RelWithDebInfo":
+        mercury_build.insert(-1, '-DMERCURY_LIB_DEBUG_NAME_IS_RELEASE:BOOL=ON')
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever(True),

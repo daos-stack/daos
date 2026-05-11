@@ -1,31 +1,57 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
  * (C) Copyright 2025 Vdura Inc.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
-#include <daos/common.h>
-#include <daos_srv/vos.h>
 #include <sys/types.h>
 #include <time.h>
 
-#include "daos_errno.h"
-#include "daos_srv/vos_types.h"
-#include "daos_types.h"
+#include <daos.h>
+#include <daos_errno.h>
+#include <daos_types.h>
+#include <daos/common.h>
+#include <daos_srv/vos.h>
+#include <daos_srv/vos_types.h>
+
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb.h"
 #include "ddb_vos.h"
 #include "ddb_printer.h"
-#include "daos.h"
 #include "ddb_tree_path.h"
-#include "gurt/common.h"
-#include "gurt/debug.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
 #define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
+
+#define DDB_POOL_SHOULD_OPEN(ctx)                                                                  \
+	do {                                                                                       \
+		if (daos_handle_is_inval((ctx)->dc_poh)) {                                         \
+			ddb_error(ctx, "Cannot operate on a closed pool. Open it first.\n");       \
+			return -DER_NO_HDL;                                                        \
+		}                                                                                  \
+	} while (0)
+
+#define DDB_POOL_SHOULD_CLOSE(ctx)                                                                 \
+	do {                                                                                       \
+		if (daos_handle_is_valid((ctx)->dc_poh)) {                                         \
+			ddb_error(ctx, "Cannot operate on an opened pool. Close it first.\n");     \
+			return -DER_BUSY;                                                          \
+		}                                                                                  \
+	} while (0)
+
+bool
+vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
+
+#define DDB_CAN_PROCEED(ctx, db_path)                                                              \
+	do {                                                                                       \
+		if (!vmd_wa_can_proceed(ctx, db_path)) {                                           \
+			return -DER_NO_SERVICE;                                                    \
+		}                                                                                  \
+	} while (0)
 
 int
 ddb_run_version(struct ddb_ctx *ctx)
@@ -38,21 +64,6 @@ ddb_run_version(struct ddb_ctx *ctx)
 	return 0;
 }
 
-int
-ddb_run_help(struct ddb_ctx *ctx)
-{
-	ddb_commands_help(ctx);
-
-	return 0;
-}
-
-int
-ddb_run_quit(struct ddb_ctx *ctx)
-{
-	ctx->dc_should_quit = true;
-	return 0;
-}
-
 bool
 ddb_pool_is_open(struct ddb_ctx *ctx)
 {
@@ -62,12 +73,20 @@ ddb_pool_is_open(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
-	if (ddb_pool_is_open(ctx)) {
-		ddb_error(ctx, "Must close pool before can open another\n");
-		return -DER_EXIST;
-	}
+	struct vos_file_parts path_parts = {0};
+	int                   rc;
+
+	DDB_POOL_SHOULD_CLOSE(ctx);
+
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
+	if (!SUCCESS(rc))
+		return rc;
+
+	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
+
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0);
+
+	return dv_pool_open(opt->path, &path_parts, &ctx->dc_poh, 0, ctx->dc_write_mode);
 }
 
 int
@@ -75,10 +94,8 @@ ddb_run_close(struct ddb_ctx *ctx)
 {
 	int rc;
 
-	if (!ddb_pool_is_open(ctx)) {
-		ddb_error(ctx, "No pool open to close\n");
+	if (!ddb_pool_is_open(ctx))
 		return 0;
-	}
 
 	rc = dv_pool_close(ctx->dc_poh);
 	ctx->dc_poh = DAOS_HDL_INVAL;
@@ -217,12 +234,9 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 	struct dv_tree_path vtp;
 	struct ls_ctx lsctx = {0};
 
-	if (daos_handle_is_inval(ctx->dc_poh)) {
-		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
-		return -DER_NONEXIST;
-	}
-	rc = init_path(ctx, opt->path, &itp);
+	DDB_POOL_SHOULD_OPEN(ctx);
 
+	rc = init_path(ctx, opt->path, &itp);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -266,8 +280,9 @@ ddb_run_superblock_dump(struct ddb_ctx *ctx)
 {
 	int rc;
 
-	rc = dv_superblock(ctx->dc_poh, print_superblock_cb, ctx);
+	DDB_POOL_SHOULD_OPEN(ctx);
 
+	rc = dv_superblock(ctx->dc_poh, print_superblock_cb, ctx);
 	if (rc == -DER_DF_INVAL)
 		ddb_error(ctx, "Error with pool superblock");
 
@@ -294,7 +309,7 @@ print_value_cb(void *cb_args, d_iov_t *value)
 		return 0;
 	}
 
-	ddb_iov_to_printable_buf(value, buf, ARRAY_SIZE(buf));
+	ddb_iov_to_printable_buf(value, buf, ARRAY_SIZE(buf), NULL);
 	ddb_printf(ctx, "Value (size: %lu):\n", value->iov_len);
 	ddb_printf(ctx, "%s\n", buf);
 	return 0;
@@ -330,6 +345,8 @@ ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt)
 	struct dump_value_args		dva = {0};
 	dv_dump_value_cb		cb = NULL;
 	int				rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!opt->path) {
 		ddb_error(ctx, "A VOS path to dump is required.\n");
@@ -382,6 +399,8 @@ ddb_run_ilog_dump(struct ddb_ctx *ctx, struct ilog_dump_options *opt)
 	struct dv_indexed_tree_path	 itp = {0};
 	daos_handle_t			 coh;
 	int				 rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!opt->path) {
 		ddb_error(ctx, ilog_path_required_error_message);
@@ -460,6 +479,8 @@ ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 	bool				both = !(opt->committed ^ opt->active);
 	struct dtx_cb_args	args = {.ctx = ctx, .entry_count = 0};
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	rc = init_path(ctx, opt->path, &itp);
 	if (!SUCCESS(rc))
 		return rc;
@@ -512,6 +533,8 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 	struct dv_tree_path		vtp;
 	int				rc;
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
 		return -DER_INVAL;
@@ -548,6 +571,8 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 	d_iov_t				iov = {0};
 	size_t				file_size;
 	int				rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -615,6 +640,8 @@ process_ilog_op(struct ddb_ctx *ctx, char *path, enum ddb_ilog_op op)
 	struct dv_indexed_tree_path	itp = {0};
 	daos_handle_t			coh = {0};
 	int				rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -685,6 +712,8 @@ ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt)
 	struct dv_indexed_tree_path	itp = {0};
 	daos_handle_t			coh = {0};
 	int				rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -764,10 +793,7 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 	char    db_path[DDB_PATH_MAX]   = DEFAULT_DB_PATH;
 	int	rc;
 
-	if (daos_handle_is_valid(ctx->dc_poh)) {
-		ddb_print(ctx, "Close pool connection before attempting to sync smd\n");
-		return -DER_INVAL;
-	}
+	DDB_POOL_SHOULD_CLOSE(ctx);
 
 	if (opt->nvme_conf != NULL) {
 		if (strlen(opt->nvme_conf) == 0 || strlen(opt->nvme_conf) >= DDB_PATH_MAX) {
@@ -783,6 +809,8 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 		}
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
+
+	DDB_CAN_PROCEED(ctx, db_path);
 
 	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
 	rc = dv_sync_smd(nvme_conf, db_path, sync_smd_cb, ctx);
@@ -815,6 +843,8 @@ ddb_run_vea_dump(struct ddb_ctx *ctx)
 {
 	struct dump_vea_cb_args args = {.dva_ctx = ctx, .dva_count = 0};
 	int			rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	rc = dv_enumerate_vea(ctx->dc_poh, dump_vea_cb, &args);
 
@@ -893,6 +923,8 @@ ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 	uint64_t				offset;
 	uint32_t				blk_cnt;
 	int					rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -983,6 +1015,8 @@ ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 	struct dtx_modify_args	args = {0};
 	int			rc;
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
 		return -DER_INVAL;
@@ -1012,6 +1046,8 @@ ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
+
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
@@ -1046,6 +1082,7 @@ feature_write_action(struct feature_options *opt)
 int
 ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 {
+	struct vos_file_parts path_parts = {0};
 	int      rc;
 	uint64_t new_compat_flags;
 	uint64_t new_incompat_flags;
@@ -1070,7 +1107,14 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
 		opt->db_path = ctx->dc_db_path;
 
-	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG);
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
+	if (!SUCCESS(rc))
+		return rc;
+
+	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
+
+	rc = dv_pool_open(opt->path, &path_parts, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
+			  ctx->dc_write_mode);
 	if (rc)
 		return rc;
 	close = true;
@@ -1104,10 +1148,11 @@ skip:
 		ddb_printf(ctx, "Incompat Flags: %lu\n", new_incompat_flags);
 	}
 out:
-	if (close)
+	if (close) {
 		rc = dv_pool_close(ctx->dc_poh);
-	ctx->dc_poh        = DAOS_HDL_INVAL;
-	ctx->dc_write_mode = false;
+		ctx->dc_poh        = DAOS_HDL_INVAL;
+		ctx->dc_write_mode = false;
+	}
 
 	return rc;
 }
@@ -1115,12 +1160,18 @@ out:
 int
 ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
 {
-	if (ddb_pool_is_open(ctx)) {
-		ddb_error(ctx, "Must close pool before can open another\n");
-		return -DER_BUSY;
-	}
+	struct vos_file_parts path_parts = {0};
+	int                   rc;
 
-	return dv_pool_destroy(opt->path);
+	DDB_POOL_SHOULD_CLOSE(ctx);
+
+	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
+	if (!SUCCESS(rc))
+		return rc;
+
+	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
+
+	return dv_pool_destroy(opt->path, &path_parts);
 }
 
 #define DTI_ALL "all"
@@ -1161,6 +1212,8 @@ ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt
 	struct dtx_active_entry_discard_invalid_cb_arg bundle = {.ctx = ctx, .args = &args};
 	int                                            rc;
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
 		return -DER_INVAL;
@@ -1197,10 +1250,7 @@ ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
 	d_list_t             dev_list;
 	int                  rc, dev_cnt = 0;
 
-	if (daos_handle_is_valid(ctx->dc_poh)) {
-		ddb_print(ctx, "Close pool connection before attempting to list devices\n");
-		return -DER_INVAL;
-	}
+	DDB_POOL_SHOULD_CLOSE(ctx);
 
 	if (opt->db_path != NULL) {
 		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
@@ -1209,6 +1259,8 @@ ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
 		}
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
+
+	DDB_CAN_PROCEED(ctx, db_path);
 
 	ddb_printf(ctx, "List devices, db_path='%s'\n", db_path);
 	D_INIT_LIST_HEAD(&dev_list);
@@ -1240,10 +1292,7 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 	uuid_t old_devid, new_devid;
 	int    rc;
 
-	if (daos_handle_is_valid(ctx->dc_poh)) {
-		ddb_print(ctx, "Close pool connection before attempting to replace device\n");
-		return -DER_INVAL;
-	}
+	DDB_POOL_SHOULD_CLOSE(ctx);
 
 	if (opt->db_path != NULL) {
 		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
@@ -1252,6 +1301,8 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		}
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
+
+	DDB_CAN_PROCEED(ctx, db_path);
 
 	if (opt->old_devid == NULL || opt->new_devid == NULL) {
 		ddb_error(ctx, "Must specify both old and new device ID\n");
@@ -1591,11 +1642,7 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 	struct vos_iter_anchors anchors = {0};
 	int                     rc;
 
-	if (daos_handle_is_inval(ctx->dc_poh)) {
-		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
-		rc = -DER_NONEXIST;
-		goto done;
-	}
+	DDB_POOL_SHOULD_OPEN(ctx);
 
 	args.ctx = ctx;
 	args.opt = opt;
@@ -1723,15 +1770,11 @@ ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt)
 	struct vos_iter_anchors anchors = {0};
 	int                     rc;
 
+	DDB_POOL_SHOULD_OPEN(ctx);
+
 	if (!ctx->dc_write_mode) {
 		ddb_error(ctx, error_msg_write_mode_only);
 		rc = -DER_INVAL;
-		goto done;
-	}
-
-	if (daos_handle_is_inval(ctx->dc_poh)) {
-		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
-		rc = -DER_NONEXIST;
 		goto done;
 	}
 
@@ -1774,12 +1817,16 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 {
 	int rc = 0;
 
+	DDB_POOL_SHOULD_CLOSE(ctx);
+
 	if (opt->db_path == NULL || strlen(opt->db_path) == 0 ||
 	    strlen(opt->db_path) >= DDB_PATH_MAX) {
 		ddb_errorf(ctx, "db_path '%s' either too short (==0) or too long (>=%d).\n",
 			   opt->db_path, DDB_PATH_MAX);
 		return -DER_INVAL;
 	}
+
+	DDB_CAN_PROCEED(ctx, opt->db_path);
 
 	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 ||
 	    strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {

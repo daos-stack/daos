@@ -57,40 +57,15 @@ typedef struct _Mgmt__PoolSelfHealEvalReq Mgmt__PoolSelfHealEvalReq;
 /* --- enums --- */
 
 typedef enum _Mgmt__PoolRebuildStatus__State {
-  /*
-   * DRS_IN_PROGRESS
-   */
   MGMT__POOL_REBUILD_STATUS__STATE__BUSY = 0,
-  /*
-   * DRS_NOT_STARTED
-   */
   MGMT__POOL_REBUILD_STATUS__STATE__IDLE = 1,
-  /*
-   * DRS_COMPLETED
-   */
-  MGMT__POOL_REBUILD_STATUS__STATE__DONE = 2
+  MGMT__POOL_REBUILD_STATUS__STATE__DONE = 2,
+  MGMT__POOL_REBUILD_STATUS__STATE__STOPPING = 3,
+  MGMT__POOL_REBUILD_STATUS__STATE__STOPPED = 4,
+  MGMT__POOL_REBUILD_STATUS__STATE__FAILING = 5,
+  MGMT__POOL_REBUILD_STATUS__STATE__FAILED = 6
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_REBUILD_STATUS__STATE)
 } Mgmt__PoolRebuildStatus__State;
-typedef enum _Mgmt__PoolQueryTargetInfo__TargetType {
-  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN = 0,
-  /*
-   * Rotating disk
-   */
-  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__HDD = 1,
-  /*
-   * Flash-based
-   */
-  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__SSD = 2,
-  /*
-   * Persistent memory
-   */
-  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__PM = 3,
-  /*
-   * Volatile memory
-   */
-  MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__VM = 4
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE)
-} Mgmt__PoolQueryTargetInfo__TargetType;
 typedef enum _Mgmt__PoolQueryTargetInfo__TargetState {
   MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN = 0,
   /*
@@ -799,10 +774,15 @@ struct  _Mgmt__PoolRebuildStatus
   Mgmt__PoolRebuildStatus__State state;
   uint64_t objects;
   uint64_t records;
+  Mgmt__PoolRebuildStatus__State derived_state;
+  /*
+   * data redundancy degraded
+   */
+  protobuf_c_boolean degraded;
 };
 #define MGMT__POOL_REBUILD_STATUS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_rebuild_status__descriptor) \
-    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0 }
+    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0 }
 
 
 /*
@@ -1123,10 +1103,6 @@ struct  _Mgmt__PoolQueryTargetInfo
 {
   ProtobufCMessage base;
   /*
-   * Target type jsee enum daos_target_type_t
-   */
-  Mgmt__PoolQueryTargetInfo__TargetType type;
-  /*
    * target state see enum daos_target_state_t
    */
   Mgmt__PoolQueryTargetInfo__TargetState state;
@@ -1149,7 +1125,7 @@ struct  _Mgmt__PoolQueryTargetInfo
 };
 #define MGMT__POOL_QUERY_TARGET_INFO__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_info__descriptor) \
-    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL, 0, 0 }
+    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL, 0, 0 }
 
 
 /*
@@ -2085,7 +2061,6 @@ extern const ProtobufCMessageDescriptor mgmt__pool_upgrade_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_query_target_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__storage_target_usage__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_query_target_info__descriptor;
-extern const ProtobufCEnumDescriptor    mgmt__pool_query_target_info__target_type__descriptor;
 extern const ProtobufCEnumDescriptor    mgmt__pool_query_target_info__target_state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_query_target_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_start_req__descriptor;

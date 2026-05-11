@@ -33,10 +33,10 @@ jobs:
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Run Trivy vulnerability scanner in filesystem mode (table format)
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # 0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # 0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -49,7 +49,7 @@ jobs:
           cp utils/trivy/.trivyignore report/trivyignore.txt
 
       - name: Upload the report to the GitHub artifact store
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           path: report/*
           name: trivy-report-daos
@@ -61,14 +61,14 @@ jobs:
           sed -i 's/format: template/format: sarif/g' utils/trivy/trivy.yaml
 
       - name: Run Trivy vulnerability scanner in filesystem mode (sarif format)
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # 0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # 0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@1b168cd39490f61582a9beae412bb7057a6b2c4e  # v4.31.8
+        uses: github/codeql-action/upload-sarif@e46ed2cbd01164d986452f91f178727624ae40d7  # v4.35.3
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -79,7 +79,7 @@ jobs:
           sed -i 's/exit-code: 0/exit-code: 1/g' utils/trivy/trivy.yaml
 
       - name: Run Trivy vulnerability scanner in filesystem mode (human readable format)
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # 0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # 0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -303,13 +303,13 @@ chk_traverse_pools(sys_db_trav_cb_t cb, void *args)
 }
 
 void
-chk_vos_init(void)
+chk_vos_setup(void)
 {
 	chk_db = vos_db_get();
 }
 
 void
-chk_vos_fini(void)
+chk_vos_cleanup(void)
 {
 	chk_db = NULL;
 }

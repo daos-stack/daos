@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2026 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,7 +89,7 @@ test_time(void **state)
 
 	timeleft = d_timeleft_ns(&t1);
 	/* This check shouldn't take 1 second */
-	assert_in_range(timeleft, 0, NSEC_PER_SEC);
+	assert_uint_in_range(timeleft, 0, NSEC_PER_SEC);
 
 	/* Sleep for 1 second.  Time should expire */
 	sleep(1);
@@ -130,11 +131,11 @@ test_d_errstr(void **state)
 	assert_string_equal(value, "DER_UNKNOWN");
 
 	/* Check the end of the DAOS error numbers. */
-	value = d_errstr(-DER_CONT_NONEXIST);
-	assert_string_equal(value, "DER_CONT_NONEXIST");
-	value = d_errstr(-2050);
-	assert_string_equal(value, "DER_CONT_NONEXIST");
-	value = d_errstr(-(DER_CONT_NONEXIST + 1));
+	value = d_errstr(-DER_CONT_DESTROYING);
+	assert_string_equal(value, "DER_CONT_DESTROYING");
+	value = d_errstr(-2051);
+	assert_string_equal(value, "DER_CONT_DESTROYING");
+	value = d_errstr(-(DER_CONT_DESTROYING + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 }
 
@@ -743,6 +744,89 @@ test_log(void **state)
 		d_log_setmasks("ERR", -1);
 
 	d_log_fini();
+}
+
+static void
+test_dd_stderr(void **state)
+{
+	int rc;
+	int i;
+
+	struct {
+		const char *env_val;
+		d_dbug_t    expected;
+	} test_cases[] = {
+	    /* Standard dictionary values */
+	    {"emit", DLOG_EMIT},
+	    {"fatal", DLOG_EMERG},
+	    {"alert", DLOG_ALERT},
+	    {"crit", DLOG_CRIT},
+	    {"err", DLOG_ERR},
+	    {"error", DLOG_ERR},
+	    {"warn", DLOG_WARN},
+	    {"note", DLOG_NOTE},
+	    {"info", DLOG_INFO},
+	    {"debug", DLOG_DBG},
+	    {"dbug", DLOG_DBG},
+	    /* Case insensitivity */
+	    {"ERR", DLOG_ERR},
+	    {"Warn", DLOG_WARN},
+	    {"CRIT", DLOG_CRIT},
+	    {"Info", DLOG_INFO},
+	    {"eRRor", DLOG_ERR},
+	    {"DBUG", DLOG_DBG},
+	};
+
+	/* Tear down the log initialized by init_tests */
+	d_log_fini();
+
+	for (i = 0; i < ARRAY_SIZE(test_cases); i++) {
+		setenv("DD_STDERR", test_cases[i].env_val, 1);
+		rc = d_log_init();
+		assert_int_equal(rc, 0);
+		assert_int_equal(d_dbglog_data.dd_prio_err, test_cases[i].expected);
+		d_log_fini();
+	}
+
+	/* Test invalid value: dd_prio_err should be 0 */
+	setenv("DD_STDERR", "INVALID", 1);
+	rc = d_log_init();
+	assert_int_equal(rc, 0);
+	assert_int_equal(d_dbglog_data.dd_prio_err, 0);
+	d_log_fini();
+
+	/* Test invalid value with valid prefix: dd_prio_err should be 0 */
+	setenv("DD_STDERR", "DEBUG_FOO", 1);
+	rc = d_log_init();
+	assert_int_equal(rc, 0);
+	assert_int_equal(d_dbglog_data.dd_prio_err, 0);
+	d_log_fini();
+
+	/* Test invalid value with incomplete name: dd_prio_err should be 0 */
+	setenv("DD_STDERR", "DEB", 1);
+	rc = d_log_init();
+	assert_int_equal(rc, 0);
+	assert_int_equal(d_dbglog_data.dd_prio_err, 0);
+	d_log_fini();
+
+	/* Test invalid value with incomplete name: dd_prio_err should be 0 */
+	setenv("DD_STDERR", "ERRO", 1); /* codespell:ignore */
+	rc = d_log_init();
+	assert_int_equal(rc, 0);
+	assert_int_equal(d_dbglog_data.dd_prio_err, 0);
+	d_log_fini();
+
+	/* Test unset: dd_prio_err should remain 0 */
+	unsetenv("DD_STDERR");
+	rc = d_log_init();
+	assert_int_equal(rc, 0);
+	assert_int_equal(d_dbglog_data.dd_prio_err, 0);
+	d_log_fini();
+
+	/* Re-initialize for the group teardown (fini_tests) */
+	unsetenv("DD_STDERR");
+	rc = d_log_init();
+	assert_int_equal(rc, 0);
 }
 
 #define TEST_GURT_HASH_NUM_BITS (D_ON_VALGRIND ? 4 : 12)
@@ -2739,6 +2823,7 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_gurt_hlist),
 	    cmocka_unit_test(test_binheap),
 	    cmocka_unit_test(test_log),
+	    cmocka_unit_test(test_dd_stderr),
 	    cmocka_unit_test(test_gurt_hash_empty),
 	    cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
 	    cmocka_unit_test(test_gurt_hash_decref),
@@ -2770,6 +2855,13 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_d_rank_range_list_str)};
 
 	d_register_alt_assert(mock_assert);
+
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+	if (argc > 1)
+		cmocka_set_test_filter(argv[1]);
+#else
+	printf("Test filtering disabled at compile time.\n");
+#endif
 
 	return cmocka_run_group_tests_name("test_gurt", tests, init_tests, fini_tests);
 }

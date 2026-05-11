@@ -24,6 +24,10 @@ static struct argp_option args_common_options[] = {
     LIST_ENTRY(DLCK_OPT_NON_ZERO_PADDING_STR "=EVENT",
 	       "Action to take when non-zero padding or reserved fields are detected. EVENT can be "
 	       "either 'error' or 'warning'. It is 'error' by default."),
+    /** this is expected to be necessary only while solving issues with the tool itself so it seems
+       to fit better with a different group */
+    {"verbose", KEY_COMMON_VERBOSE, 0, 0,
+     "Print DAOS log messages. All standard environment variables apply.", GROUP_AUTOMAGIC},
     {0}};
 
 enum dlck_options_values { DLCK_OPT_NON_ZERO_PADDING };
@@ -38,6 +42,7 @@ args_common_init(struct dlck_args_common *args)
 	memset(args, 0, sizeof(*args));
 	/** set defaults */
 	args->write_mode = false; /** dry run */
+	args->verbose                      = false;
 	args->options.cko_non_zero_padding = CHECKER_EVENT_WARNING;
 }
 
@@ -86,6 +91,9 @@ args_common_parser(int key, char *arg, struct argp_state *state)
 	switch (key) {
 	case KEY_COMMON_WRITE_MODE:
 		args->write_mode = true;
+		break;
+	case KEY_COMMON_VERBOSE:
+		args->verbose = true;
 		break;
 	case KEY_COMMON_OPTIONS:
 		rc = args_common_options_parse(arg, &args->options, state);

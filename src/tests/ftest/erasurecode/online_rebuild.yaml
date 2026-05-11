@@ -7,13 +7,17 @@ hosts:
     12_server:
       test_servers: server-[1-6]
   test_clients: 2
+
 timeout: 1000
+
 setup:
   start_agents_once: False
   start_servers_once: False
+
 agent_config:
   #cache_expiration: 1
   disable_caching: true
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -21,27 +25,27 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31416
       log_file: daos_server0.log
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31517
       log_file: daos_server1.log
       storage: auto
+
 pool:
   size: 93%
+
 container:
   type: POSIX
   control_method: daos
+
 daos:
   container:
     destroy:
       env_vars:
         - CRT_TIMEOUT=10
+
 ior:
   api: "DFS"
   client_processes:

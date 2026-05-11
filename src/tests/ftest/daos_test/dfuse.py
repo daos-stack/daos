@@ -74,8 +74,6 @@ class DaosCoreTestDfuse(TestWithServers):
             container.set_attr(attrs=cont_attrs)
 
             dfuse = get_dfuse(self, self.hostlist_clients)
-            # Only for test. Set directory expiration time 1 second.
-            dfuse.env['D_EXPIRATION_TIME_DIR'] = '1'
             start_dfuse(self, dfuse, pool, container)
 
             mount_dir = dfuse.mount_dir.value

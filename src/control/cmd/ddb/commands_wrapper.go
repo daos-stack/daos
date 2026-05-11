@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
 // (C) Copyright 2025 Vdura Inc.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -35,6 +35,15 @@ func daosError(rc C.int) error {
 
 func freeString(s *C.char) {
 	C.free(unsafe.Pointer(s))
+}
+
+func SetCString(out **C.char, s string) func() {
+	cstr := C.CString(s)
+	*out = cstr
+
+	return func() {
+		C.free(unsafe.Pointer(cstr))
+	}
 }
 
 // InitDdb initializes the ddb context and returns a closure to finalize it.
@@ -78,13 +87,12 @@ func ddbLs(ctx *DdbContext, path string, recursive bool, details bool) error {
 	return daosError(C.ddb_run_ls(&ctx.ctx, &options))
 }
 
-func ddbOpen(ctx *DdbContext, path string, db_path string, write_mode bool) error {
+func ddbOpen(ctx *DdbContext, path string, write_mode bool) error {
 	/* Set up the options */
 	options := C.struct_open_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.db_path = C.CString(db_path)
-	defer freeString(options.db_path)
+	options.db_path = ctx.ctx.dc_db_path
 	options.write_mode = C.bool(write_mode)
 	/* Run the c code command */
 	return daosError(C.ddb_run_open(&ctx.ctx, &options))
@@ -232,22 +240,25 @@ func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
 }
 
-func ddbFeature(ctx *DdbContext, path, db_path, enable, disable string, show bool) error {
+func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error {
 	/* Set up the options */
 	options := C.struct_feature_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.db_path = C.CString(db_path)
-	defer freeString(options.db_path)
+	options.db_path = ctx.ctx.dc_db_path
 	if enable != "" {
-		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(enable),
+		cEnable := C.CString(enable)
+		defer freeString(cEnable)
+		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, cEnable,
 			&options.set_compat_flags, &options.set_incompat_flags))
 		if err != nil {
 			return err
 		}
 	}
 	if disable != "" {
-		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, C.CString(disable),
+		cDisable := C.CString(disable)
+		defer freeString(cDisable)
+		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, cDisable,
 			&options.clear_compat_flags, &options.clear_incompat_flags))
 		if err != nil {
 			return err
@@ -263,6 +274,7 @@ func ddbRmPool(ctx *DdbContext, path string) error {
 	options := C.struct_rm_pool_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
+	options.db_path = ctx.ctx.dc_db_path
 	/* Run the c code command */
 	return daosError(C.ddb_run_rm_pool(&ctx.ctx, &options))
 }
@@ -304,8 +316,8 @@ func ddbDtxStat(ctx *DdbContext, path string, details bool) error {
 	/* Set up the options */
 	options := C.struct_dtx_stat_options{}
 	options.path = C.CString(path)
-	options.details = C.bool(details)
 	defer freeString(options.path)
+	options.details = C.bool(details)
 	/* Run the c code command */
 	return daosError(C.ddb_run_dtx_stat(&ctx.ctx, &options))
 }

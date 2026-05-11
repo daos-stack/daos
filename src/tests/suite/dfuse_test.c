@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2026 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -638,23 +639,7 @@ do_directory(void **state)
 	DIR            *dirp;
 	struct dirent **namelist;
 	long            pos;
-	int             entry_count  = 100;
-	bool            with_pil4dfs = false;
-	bool            use_dfuse    = true;
-	char           *env_ldpreload;
-	/* "/tmp/dfuse-test" is assigned in src/tests/ftest/daos_test/dfuse.py */
-	char            native_mount_dir[] = "/tmp/dfuse-test";
-	char            cwd[1024];
-	char            cwd_saved[1024];
-	char           *resolved_path;
-	char           *path_ret;
-
-	if (strstr(test_dir, native_mount_dir))
-		use_dfuse = false;
-
-	env_ldpreload = getenv("LD_PRELOAD");
-	if (env_ldpreload != NULL && strstr(env_ldpreload, "libpil4dfs.so") != NULL)
-		with_pil4dfs = true;
+	int             entry_count = 100;
 
 	printf("Creating dir and files\n");
 	root = open(test_dir, O_PATH | O_DIRECTORY);
@@ -672,7 +657,7 @@ do_directory(void **state)
 		int  fd;
 
 		rc = snprintf(fname, 17, "file_%02d", i);
-		assert_in_range(rc, 0, 16);
+		assert_int_in_range(rc, 0, 16);
 
 		fd = openat(dfd, fname, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 		assert_return_code(fd, errno);
@@ -749,61 +734,6 @@ do_directory(void **state)
 
 	rc = close(root);
 	assert_return_code(rc, errno);
-
-	if (!with_pil4dfs || !use_dfuse)
-		return;
-
-	/* start testing getcwd() and realpath() */
-	resolved_path = malloc(PATH_MAX);
-	assert_true(resolved_path != NULL);
-
-	path_ret = getcwd(cwd_saved, sizeof(cwd_saved));
-	assert_true(path_ret != NULL);
-
-	rc = chdir(test_dir);
-	assert_return_code(rc, errno);
-
-	rc = mkdir("dir_test", 0755);
-	assert_return_code(rc, errno);
-
-	rc = symlink("dir_test", "link_test");
-	assert_return_code(rc, errno);
-
-	rc = chdir("link_test");
-	assert_return_code(rc, errno);
-
-	path_ret = getcwd(cwd, sizeof(cwd));
-	assert_true(path_ret != NULL);
-	assert_true(strstr(cwd, "dir_test") != NULL);
-
-	path_ret = realpath(".", resolved_path);
-	assert_true(path_ret != NULL);
-	assert_true(strstr(resolved_path, "dir_test") != NULL);
-
-	sleep(2);
-
-	path_ret = getcwd(cwd, sizeof(cwd));
-	assert_true(path_ret != NULL);
-	assert_true(strstr(cwd, "dir_test") != NULL);
-
-	path_ret = realpath(".", resolved_path);
-	assert_true(path_ret != NULL);
-	assert_true(strstr(resolved_path, "dir_test") != NULL);
-
-	rc = chdir("..");
-	assert_return_code(rc, errno);
-
-	rc = unlink("link_test");
-	assert_return_code(rc, errno);
-
-	rc = rmdir("dir_test");
-	assert_return_code(rc, errno);
-
-	rc = chdir(cwd_saved);
-	assert_return_code(rc, errno);
-
-	free(resolved_path);
-	/* end   testing getcwd() and realpath() */
 }
 
 void
@@ -1371,6 +1301,90 @@ do_cachingcheck(void **state)
 	assert_return_code(rc, errno);
 }
 
+/*
+ * Regression test for cached/readahead read path handling at EOF boundaries.
+ * Reads at EOF or beyond EOF must return 0 and not modify user buffers.
+ */
+void
+do_cache_read_eof(void **state)
+{
+	int            root;
+	int            fd;
+	int            rc;
+	char           file_name[] = "cache_read_eof_file";
+	unsigned char *write_buf;
+	size_t         write_len = 8192;
+	unsigned char  read_buf[256];
+	unsigned char  expect_buf[256];
+	ssize_t        bytes_read;
+	size_t         i;
+
+	(void)state;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	write_buf = malloc(write_len);
+	assert_non_null(write_buf);
+
+	for (i = 0; i < write_len; i++)
+		write_buf[i] = (unsigned char)((i % 251) + 1);
+
+	fd = openat(root, file_name, O_RDWR | O_CREAT | O_TRUNC, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	rc = write(fd, write_buf, write_len);
+	assert_return_code(rc, errno);
+	assert_int_equal(rc, write_len);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	fd = openat(root, file_name, O_RDONLY);
+	assert_return_code(fd, errno);
+
+	bytes_read = pread(fd, read_buf, 32, write_len - 32);
+	assert_return_code(bytes_read, errno);
+	assert_int_equal(bytes_read, 32);
+	assert_memory_equal(read_buf, &write_buf[write_len - 32], 32);
+
+	memset(read_buf, 0xA5, sizeof(read_buf));
+	bytes_read = pread(fd, read_buf, sizeof(read_buf), write_len);
+	assert_return_code(bytes_read, errno);
+	assert_int_equal(bytes_read, 0);
+
+	memset(expect_buf, 0xA5, sizeof(expect_buf));
+	assert_memory_equal(read_buf, expect_buf, sizeof(read_buf));
+
+	memset(read_buf, 0x5A, sizeof(read_buf));
+	bytes_read = pread(fd, read_buf, sizeof(read_buf), write_len + 64);
+	assert_return_code(bytes_read, errno);
+	assert_int_equal(bytes_read, 0);
+
+	memset(expect_buf, 0x5A, sizeof(expect_buf));
+	assert_memory_equal(read_buf, expect_buf, sizeof(read_buf));
+
+	memset(read_buf, 0xCC, sizeof(read_buf));
+	bytes_read = pread(fd, read_buf, sizeof(read_buf), write_len - 64);
+	assert_return_code(bytes_read, errno);
+	assert_int_equal(bytes_read, 64);
+	assert_memory_equal(read_buf, &write_buf[write_len - 64], 64);
+
+	memset(expect_buf, 0xCC, sizeof(expect_buf));
+	assert_memory_equal(&read_buf[64], &expect_buf[64], sizeof(read_buf) - 64);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, file_name, 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+
+	free(write_buf);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -1471,6 +1485,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("=====================\n");
 			const struct CMUnitTest cache_tests[] = {
 			    cmocka_unit_test(do_cachingcheck),
+			    cmocka_unit_test(do_cache_read_eof),
 			};
 			nr_failed += cmocka_run_group_tests(cache_tests, NULL, NULL);
 			break;

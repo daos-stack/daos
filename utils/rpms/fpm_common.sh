@@ -10,6 +10,7 @@ export install_list=()
 export PACKAGE_TYPE="dir"
 export dbg_list=()
 export CONFLICTS=()
+export CONFIG_FILES=()
 export DEPENDS=()
 export EXTERNAL_DEPENDS=()
 export EXTRA_OPTS=()
@@ -152,9 +153,6 @@ create_opts() {
 
 build_package() {
   name="$1"; shift
-  if [ "${1-}" != "noautoreq" ]; then
-    EXTRA_OPTS+=("--rpm-autoreq")
-  fi
 
   output_type="${OUTPUT_TYPE:-rpm}"
   EXTRA_OPTS+=("--rpm-autoprov")
@@ -167,10 +165,12 @@ build_package() {
   create_opts "--depends" depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
   conflicts=()
   create_opts "--conflicts" conflicts "${CONFLICTS[@]}"
+  config_files=()
+  create_opts "--config-files" config_files "${CONFIG_FILES[@]}"
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
-  fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
+  fpm --verbose -s "${PACKAGE_TYPE}" -t "${output_type}" \
   -p "${pkgname}" \
   --name "${name}" \
   --license "${LICENSE}" \
@@ -184,6 +184,7 @@ build_package() {
   --prefix "" \
   "${depends[@]}" \
   "${conflicts[@]}" \
+  "${config_files[@]}" \
   "${EXTRA_OPTS[@]}" \
   "${install_list[@]}"
 
@@ -191,6 +192,7 @@ build_package() {
   install_list=()
 
   CONFLICTS=()
+  CONFIG_FILES=()
   DEPENDS=()
   EXTERNAL_DEPENDS=()
   if [[ ! "${name}" =~ debuginfo ]]; then

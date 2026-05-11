@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -14,13 +14,17 @@ import (
 	"sort"
 	"strings"
 
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -85,6 +89,35 @@ func (svc *mgmtSvc) unwrapCheckerReq(req proto.Message) (proto.Message, error) {
 	}
 
 	return req, nil
+}
+
+// getCheckLeader gets the rank number of the check leader.
+//
+// NB: For now, this is the first usable rank on the MS leader.
+func (svc *mgmtSvc) getCheckLeader() (ranklist.Rank, error) {
+	for i, ei := range svc.harness.instances {
+		r, err := ei.GetRank()
+		if err != nil {
+			svc.log.Debugf("unable to use rank at index %d: %s", i, err)
+			continue
+		}
+
+		m, err := svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			svc.log.Debugf("unable to get member for rank %d (index %d): %s", r, i, err)
+			continue
+		}
+
+		if m.State != system.MemberStateCheckerStarted {
+			svc.log.Tracef("unable use rank %d as check leader (state: %s)", r, m.State)
+			continue
+		}
+
+		svc.log.Tracef("selected rank %d as check leader", r)
+		return r, nil
+	}
+
+	return ranklist.NilRank, errors.New("no ranks are usable as the check leader")
 }
 
 func (svc *mgmtSvc) makeCheckerCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
@@ -263,22 +296,70 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	}
 
 	if resp.Status > 0 {
-		if len(req.Uuids) == 0 {
-			svc.log.Debug("resetting checker findings DB")
-			if err := svc.sysdb.ResetCheckerData(); err != nil {
-				return nil, errors.Wrap(err, "failed to reset checker finding database")
-			}
-		} else {
-			pools := strings.Join(req.Uuids, ", ")
-			svc.log.Debugf("removing old checker findings for pools: %s", pools)
-			if err := svc.sysdb.RemoveCheckerFindingsForPools(req.Uuids...); err != nil {
-				return nil, errors.Wrapf(err, "failed to remove old findings for pools: %s", pools)
-			}
+		// Checker instance was reset. We can safely clear all findings related to any pools
+		// requested.
+		if err := svc.resetFindings(req.Uuids); err != nil {
+			return nil, err
 		}
 		resp.Status = 0 // reset status to indicate success
 	}
 
+	// If either the checker was not reset, or it was only reset against specified pools above,
+	// there may still be unresolved findings in the DB that need to be marked stale or removed.
+	if resp.Status == 0 {
+		svc.handleUnresolvedInteractions(req.Uuids)
+	}
+
 	return resp, nil
+}
+
+func (svc *mgmtSvc) resetFindings(uuids []string) error {
+	if len(uuids) == 0 {
+		svc.log.Debug("resetting checker findings DB")
+		if err := svc.sysdb.ResetCheckerData(); err != nil {
+			return errors.Wrap(err, "failed to reset checker finding database")
+		}
+	} else {
+		pools := strings.Join(uuids, ", ")
+		svc.log.Debugf("removing old checker findings for pools: %s", pools)
+		if err := svc.sysdb.RemoveCheckerFindingsForPools(uuids...); err != nil {
+			return errors.Wrapf(err, "failed to remove old findings for pools: %s", pools)
+		}
+	}
+	return nil
+}
+
+// handleUnresolvedInteractions goes through all unresolved (INTERACT/STALE) findings in the database.
+// Those that will be rediscovered in the next run can be removed. All others must be marked stale
+// as the user will be unable to act on them after the new check instance started. To fix the
+// inconsistency, they'll need to re-run the checker on the affected pool.
+func (svc *mgmtSvc) handleUnresolvedInteractions(uuids []string) {
+	findings, err := svc.sysdb.GetCheckerFindings()
+	if err != nil {
+		svc.log.Errorf("unable to fetch old checker findings: %s", err.Error())
+		return
+	}
+
+	uuidSet := common.NewStringSet(uuids...)
+	for _, f := range findings {
+		switch f.Action {
+		case chkpb.CheckInconsistAction_CIA_INTERACT, chkpb.CheckInconsistAction_CIA_STALE:
+			if len(uuids) == 0 || uuidSet.Has(f.PoolUuid) {
+				// Unresolved interactive and stale findings for pools that will be scanned will be re-discovered.
+				svc.log.Debugf("removing unresolved %s finding %d for pool %s", f.Action, f.Seq, f.PoolUuid)
+				if err := svc.sysdb.RemoveCheckerFinding(f); err != nil {
+					svc.log.Errorf("unable to remove stale checker finding %s: %s", f, err.Error())
+				}
+			} else if f.Action != chkpb.CheckInconsistAction_CIA_STALE { // No need to re-mark stale interactions
+				// If the pool isn't being re-checked, we should keep the unresolved finding, but the user
+				// won't be able to act on it anymore.
+				svc.log.Debugf("marking unresolved interaction %d stale for pool %s", f.Seq, f.PoolUuid)
+				if err := svc.sysdb.SetCheckerFindingAction(f.Seq, int32(chkpb.CheckInconsistAction_CIA_STALE)); err != nil {
+					svc.log.Errorf("unable to mark interactive finding %s stale: %s", f, err.Error())
+				}
+			}
+		}
+	}
 }
 
 func (svc *mgmtSvc) mergePoliciesWithCurrent(policies []*mgmtpb.CheckInconsistPolicy) ([]*mgmtpb.CheckInconsistPolicy, error) {
@@ -356,6 +437,14 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 				reports = append(reports, r)
 			}
 		}
+	}
+
+	leader, err := svc.getCheckLeader()
+	if err != nil {
+		svc.log.Errorf("can't get the check leader rank: %s", err)
+		resp.Leader = uint32(ranklist.NilRank)
+	} else {
+		resp.Leader = leader.Uint32()
 	}
 
 	// Collect saved older reports
@@ -539,7 +628,15 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 
 // SystemCheckRepair repairs a previous checker finding.
 func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActReq) (*mgmtpb.CheckActResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
 		return nil, err
 	}
 
@@ -552,22 +649,77 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, errors.Errorf("invalid action %s (must be one of %s)", req.Act, f.ValidChoicesString())
 	}
 
-	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerAction, req)
+	// Repair must be sent to the rank associated with the finding
+	r := ranklist.Rank(f.Rank)
+	m, err := svc.sysdb.FindMemberByRank(r)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "looking up rank %d for finding 0x%x", r, f.Seq)
 	}
 
-	resp := new(mgmtpb.CheckActResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
+	// Send to rank's control address
+	engReq := &control.CheckEngineRepairReq{
+		CheckEngineActReq: ctlpb.CheckEngineActReq{
+			Rank: r.Uint32(),
+			Req:  req,
+		},
+	}
+	engReq.HostList = []string{m.Addr.String()}
+	engResp, err := control.CheckEngineRepair(ctx, svc.rpcClient, engReq)
+	if err != nil {
+		return nil, errors.Wrapf(err, "send repair request to rank %d", r)
 	}
 
-	if resp.Status == 0 {
+	if engResp.Resp.Status == 0 {
 		if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
 			return nil, err
 		}
 		svc.log.Debugf("Set action %s for finding %d", req.Act, req.Seq)
 	}
 
-	return resp, nil
+	return engResp.Resp, nil
+}
+
+// SystemCheckEngineReport registers a checker report with the management service.
+func (svc *mgmtSvc) SystemCheckEngineReport(ctx context.Context, req *sharedpb.CheckReportReq) (*sharedpb.CheckReportResp, error) {
+	if req == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "nil %T", req)
+	}
+
+	if req.Report == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "no report in request")
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	if req.Report.PoolLabel == "" && req.Report.PoolUuid != "" {
+		svc.log.Tracef("looking up pool label for UUID %s, check report 0x%x", req.Report.PoolUuid, req.Report.Seq)
+		poolUUID, err := uuid.Parse(req.Report.PoolUuid)
+		if err != nil {
+			svc.log.Errorf("unable to parse pool UUID %q: %s", req.Report.PoolUuid, err)
+			return nil, errors.Wrapf(daos.InvalidInput, "parse pool UUID %q", req.Report.PoolUuid)
+		}
+
+		if ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID); err == nil {
+			// Annotate the report with the pool label for the user.
+			// NB: In some cases this label may be incorrect, in which
+			// case the user will want to use the verbose or JSON output
+			// modes of the checker in order to get the UUID.
+			req.Report.PoolLabel = ps.PoolLabel
+		}
+	}
+
+	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
+	svc.log.Debugf("annotated finding: %+v", finding)
+
+	if err := svc.sysdb.AddOrUpdateCheckerFinding(finding); err != nil {
+		svc.log.Errorf("AddOrUpdateCheckerFinding %+v: %s", finding, err)
+		return nil, err
+	}
+	return new(sharedpb.CheckReportResp), nil
 }

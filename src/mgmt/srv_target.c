@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -418,7 +418,8 @@ recreate_pooltgts()
 
 		D_ASSERT(pool_info->spi_scm_sz > 0);
 		rc = ds_mgmt_tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
-					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], rdb_blob_sz,
+					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META],
+					  pool_info->spi_tgts[SMD_DEV_TYPE_META], rdb_blob_sz,
 					  dss_storage_path, dss_bind_to_xstream_cpuset);
 		if (rc)
 			goto out;
@@ -448,7 +449,7 @@ ds_mgmt_tgt_setup(void)
 
 	stored_mode = umask(0);
 	/** create NEWBORNS directory if it does not exist already */
-	rc = mkdir(newborns_path, S_IRWXU);
+	rc = mkdir(newborns_path, DEFAULT_DIR_PERM);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
 		umask(stored_mode);
@@ -456,7 +457,7 @@ ds_mgmt_tgt_setup(void)
 	}
 
 	/** create ZOMBIES directory if it does not exist already */
-	rc = mkdir(zombies_path, S_IRWXU);
+	rc = mkdir(zombies_path, DEFAULT_DIR_PERM);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
 		umask(stored_mode);
@@ -647,7 +648,7 @@ struct tgt_create_args {
 static void *
 tgt_create_preallocate(void *arg)
 {
-	struct tgt_create_args	*tca = arg;
+	struct tgt_create_args  *tca = arg;
 	int			 rc;
 
 	(void)dss_xstream_set_affinity(tca->tca_dx);
@@ -676,7 +677,7 @@ tgt_create_preallocate(void *arg)
 		if (rc)
 			goto out;
 
-		rc = mkdir(tca->tca_newborn, 0700);
+		rc = mkdir(tca->tca_newborn, DEFAULT_DIR_PERM);
 		if (rc < 0 && errno != EEXIST) {
 			rc = daos_errno2der(errno);
 			D_ERROR("failed to created pool directory: "DF_RC"\n",
@@ -702,7 +703,7 @@ tgt_create_preallocate(void *arg)
 			rc = ds_mgmt_tgt_preallocate_parallel(
 			    tca->tca_ptrec->dptr_uuid, tca->tca_scm_size / dss_tgt_nr, dss_tgt_nr,
 			    &tca->tca_ptrec->cancel_create, newborns_path,
-			    dss_bind_to_xstream_cpuset);
+			    dss_bind_to_xstream_cpuset, NULL);
 		}
 		if (rc)
 			goto out;
@@ -711,6 +712,7 @@ tgt_create_preallocate(void *arg)
 	}
 out:
 	tca->tca_rc = rc;
+
 	return NULL;
 }
 

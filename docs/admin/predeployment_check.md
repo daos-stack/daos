@@ -29,9 +29,9 @@ $ sudo reboot
 ```
 
 !!! note
-    To force SPDK to use UIO rather than VFIO at daos_server runtime, set
-    'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
-    but note that this will require running daos_server as root.
+    To force SPDK to use UIO rather than VFIO at daos\_server runtime, set
+    `disable_vfio` in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
+    but note that this will require running daos\_server as root.
 
 !!! warning
     If VFIO is not enabled on RHEL 8.x and derivatives, you will run into the issue described in:
@@ -114,9 +114,10 @@ across the different subnets.
 #### Interface Settings
 
 Some special configuration is required for the `verbs` provider to use librdmacm
-with multiple interfaces, and the same configuration is required for the `tcp` provider.
+with multiple interfaces. The same configuration is required for the `tcp` provider
+and for all of the `ucx` provider options.
 
-First, the accept_local feature must be enabled on the network interfaces
+First, the `accept_local` feature must be enabled on the network interfaces
 to be used by DAOS. This can be done using the following command:
 
 ```
@@ -124,7 +125,7 @@ $ sudo sysctl -w net.ipv4.conf.all.accept_local=1
 ```
 
 Second, Linux must be configured to only send ARP replies on the interface
-targeted in the ARP request. This is configured via the arp_ignore parameter.
+targeted in the ARP request. This is configured via the `arp_ignore` parameter.
 This should be set to 2 if all the IPoIB interfaces on the client and storage
 nodes are in the same logical subnet (e.g. ib0 == 10.0.0.27, ib1 == 10.0.1.27,
 prefix=16).
@@ -140,7 +141,7 @@ set to 1.
 $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 ```
 
-Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
+Finally, the `rp_filter` is set to 1 by default on several distributions (e.g. on
 CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
 true even if the configuration uses a single logical subnet. <ifaces> must be replaced with
 the interface names)
@@ -153,7 +154,8 @@ All those parameters can be made persistent in /etc/sysctl.conf by adding a new
 sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf)
 with all the relevant settings.
 
-For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
+For more information, please refer to the
+[librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
 ### Firewall
 
@@ -180,10 +182,12 @@ the necessary directories are setup.
 
 A sign that this step may have been missed is when starting daos_server
 or daos_agent, you may see the message:
+
 ```bash
 $ mkdir /var/run/daos_server: permission denied
 Unable to create socket directory: /var/run/daos_server
 ```
+
 #### Non-default Directory
 
 By default, daos_server and daos_agent will use the directories
@@ -210,14 +214,16 @@ therefore, if reboots are infrequent, an easy solution
 while still utilizing the default locations is to create the
 required directories manually. To do this execute the following commands.
 
-daos_server:
+daos\_server:
+
 ```bash
 $ mkdir /var/run/daos_server
 $ chmod 0755 /var/run/daos_server
 $ chown user:user /var/run/daos_server (where user is the user you
     will run daos_server as)
 ```
-daos_agent:
+daos\_agent:
+
 ```bash
 $ mkdir /var/run/daos_agent
 $ chmod 0755 /var/run/daos_agent
@@ -252,7 +258,7 @@ that require elevated privileges on behalf of `daos_server`.
 
 
 When DAOS is installed from RPM, the `daos_server_helper` helper is automatically installed
-to the correct location with the correct permissions. The RPM creates a "daos_server"
+to the correct location with the correct permissions. The RPM creates a `daos_server`
 system group and configures permissions such that `daos_server_helper` may only be invoked
 from `daos_server`.
 
@@ -308,9 +314,9 @@ failures.
 
 For RPM installations, the `daos_server` and `daos_agent` services will typically be
 launched by `systemd` and its `LimitMEMLOCK` limit is set to `infinity` in the
-[`daos_server.service`](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+[daos\_server.service](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
 and
-[`daos_agent.service`](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_agent.service)
+[daos\_agent.service](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_agent.service)
 unit files.
 (Note that values set in `/etc/security/limits.conf` are ignored by services
 launched through `systemd`.)
@@ -389,6 +395,7 @@ is installed
 - `<daos_src>/install/share/spdk/scripts/setup.sh` after build from DAOS source
 
 Bind the SSDs with the following commands:
+
 ```bash
 $ sudo /usr/share/spdk/scripts/setup.sh
 0000:01:00.0 (8086 0953): nvme -> vfio-pci
@@ -403,10 +410,12 @@ Now the SSDs can be accessed by SPDK we can use the `spdk_nvme_manage` tool to f
 the SSDs with a 4K block size.
 
 `spdk_nvme_manage` tool is provided by SPDK and will be found in the following locations:
+
 - `/usr/bin/spdk_nvme_manage` if DAOS-maintained spdk-21.07-10 (or greater) RPM is installed
 - `<daos_src>/install/prereq/release/spdk/bin/spdk_nvme_manage` after build from DAOS source
 
 Choose to format a SSD, use option "6" for formatting:
+
 ```bash
 $ sudo /usr/bin/spdk_nvme_manage
 NVMe Management Options
@@ -424,6 +433,7 @@ NVMe Management Options
 Available SSDs will then be listed and you will be prompted to select one.
 
 Select the SSD to format, enter PCI Address "01:00.00":
+
 ```bash
 0000:01:00.00 INTEL SSDPEDMD800G4 CVFT45050002800CGN 0
 Please Input PCI Address(domain:bus:dev.func):
@@ -498,6 +508,7 @@ NVMe Management Options
 Controller details should show new "Current LBA Format".
 
 Verify "Current LBA Format" is set to "LBA Format #03":
+
 ```bash
 =====================================================
 NVMe Controller:        0000:01:00.00
@@ -530,3 +541,27 @@ Current LBA Format:          LBA Format #03
 Displayed details for controller show LBA format is now "#03".
 
 Perform the above process for all SSDs that will be used by DAOS.
+
+## Hugepage allocation and memory fragmentation
+
+DAOS uses linux hugepages for DMA buffer allocation. If hugepage memory becomes fragmented, DMA
+buffer allocations may fail because of insufficient contiguous memory availability.
+
+By default DAOS will allocate necessary hugepages at runtime based on supplied server file
+configuration details (mainly the number of engine targets). Runtime allocation of hugepages
+may cause fragmentation over time.
+
+To reduce the chance of memory fragmentation, hugepages can be allocated on the kernel boot
+command line by specifying the "hugepages=N" parameter, where 'N' = the number of huge pages
+requested.
+
+[See here for details of allocating hugepages at
+boot](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/performance_tuning_guide/sect-red_hat_enterprise_linux-performance_tuning_guide-memory-configuring-huge-pages)
+
+## Disabling transparent hugepage (THP) feature at boot-time
+
+Linux transparent hugepages feature can increase the likelihood of hugepage memory fragmentation
+and should be disabled for optimal performance of DAOS.
+
+[See here for details of how to disable THP on
+boot](https://docs.kernel.org/admin-guide/mm/transhuge.html#boot-parameters)

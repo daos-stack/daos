@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -374,7 +374,6 @@ mock_ds_mgmt_pool_query_targets_gen_infos(uint32_t n_infos)
 
 	D_ALLOC_ARRAY(infos, n_infos);
 	for (i = 0; i < n_infos; i++) {
-		infos[i].ta_type = DAOS_TP_UNKNOWN;
 		infos[i].ta_state = (i == 0) ? DAOS_TS_DOWN_OUT : DAOS_TS_UP_IN;
 		infos[i].ta_space.s_total[DAOS_MEDIA_SCM] = 1000000000;
 		infos[i].ta_space.s_free[DAOS_MEDIA_SCM] = 800000000 + i;
@@ -695,7 +694,7 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 int
 ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		    Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
-		    uint32_t flags, int phase)
+		    uint32_t flags)
 {
 	return 0;
 }

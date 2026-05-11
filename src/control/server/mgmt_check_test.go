@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,16 +14,21 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto/chk"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
@@ -118,16 +123,52 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 	testPolicies := testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_INTERACT)
 
 	uuids := testPoolUUIDs(3)
-	testFindings := func() []*checker.Finding {
+	testFindings := func(act chkpb.CheckInconsistAction) []*checker.Finding {
 		findings := []*checker.Finding{}
 		for i, uuid := range uuids {
 			f := &checker.Finding{CheckReport: chkpb.CheckReport{
 				Seq:      uint64(i + 1),
 				PoolUuid: uuid,
+				Action:   act,
 			}}
 			findings = append(findings, f)
 		}
 		return findings
+	}
+
+	defaultTestFindings := func() []*checker.Finding {
+		return testFindings(chkpb.CheckInconsistAction_CIA_TRUST_MS)
+	}
+
+	actionTestFindings := func(act chkpb.CheckInconsistAction, idx ...int) []*checker.Finding {
+		findings := defaultTestFindings()
+		for _, i := range idx {
+			t.Logf("findings[%d].Action: %s -> %s", i, findings[i].Action, act)
+			findings[i].Action = act
+		}
+		t.Logf("findings: %+v", findings)
+		return findings
+	}
+
+	interactTestFindings := func(idx ...int) []*checker.Finding {
+		return actionTestFindings(chkpb.CheckInconsistAction_CIA_INTERACT, idx...)
+	}
+
+	staleTestFindings := func(idx ...int) []*checker.Finding {
+		return actionTestFindings(chkpb.CheckInconsistAction_CIA_STALE, idx...)
+	}
+
+	createMSWithFindings := func(t *testing.T, log logging.Logger, findings []*checker.Finding) *mgmtSvc {
+		svc := testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
+		if err := svc.setCheckerPolicyMap(testPolicies); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range findings {
+			if err := svc.sysdb.AddCheckerFinding(f); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return svc
 	}
 
 	for name, tc := range map[string]struct {
@@ -178,7 +219,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Sys: "daos_server",
 			},
 			expErr:      errors.New("mock dRPC"),
-			expFindings: testFindings(),
+			expFindings: defaultTestFindings(),
 			expPolicies: testPolicies,
 		},
 		"bad resp": {
@@ -189,7 +230,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Sys: "daos_server",
 			},
 			expErr:      errors.New("unmarshal CheckStart response"),
-			expFindings: testFindings(),
+			expFindings: defaultTestFindings(),
 			expPolicies: testPolicies,
 		},
 		"request failed": {
@@ -200,7 +241,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Sys: "daos_server",
 			},
 			expResp:     &mgmt.CheckStartResp{Status: int32(daos.MiscError)},
-			expFindings: testFindings(),
+			expFindings: defaultTestFindings(),
 			expPolicies: testPolicies,
 		},
 		"no reset": {
@@ -208,7 +249,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Sys: "daos_server",
 			},
 			expResp:     &mgmtpb.CheckStartResp{},
-			expFindings: testFindings(),
+			expFindings: defaultTestFindings(),
 			expPolicies: testPolicies,
 		},
 		"reset": {
@@ -236,12 +277,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			},
 			expResp: &mgmtpb.CheckStartResp{},
 			expFindings: []*checker.Finding{
-				{
-					CheckReport: chkpb.CheckReport{
-						Seq:      2,
-						PoolUuid: uuids[1],
-					},
-				},
+				defaultTestFindings()[1],
 			},
 			expPolicies: testPolicies,
 		},
@@ -263,6 +299,63 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			expResp:     &mgmtpb.CheckStartResp{},
 			expPolicies: mergeTestPolicies(testPolicies, specificPolicies),
 		},
+		"interactive findings removed for all pools": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return createMSWithFindings(t, log, interactTestFindings(0, 2))
+			},
+			req: &mgmtpb.CheckStartReq{
+				Sys: "daos_server",
+			},
+			expResp:     &mgmtpb.CheckStartResp{}, // non-reset
+			expPolicies: testPolicies,
+			expFindings: []*checker.Finding{
+				defaultTestFindings()[1], // non-interactive is left alone
+			},
+		},
+		"interactive findings stale for unspecified pool": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return createMSWithFindings(t, log, interactTestFindings(0, 2))
+			},
+			req: &mgmtpb.CheckStartReq{
+				Sys:   "daos_server",
+				Uuids: []string{uuids[0]},
+			},
+			expResp:     &mgmtpb.CheckStartResp{}, // non-reset
+			expPolicies: testPolicies,
+			expFindings: []*checker.Finding{
+				defaultTestFindings()[1], // non-interactive is left alone
+				// interactive for unspecified pool is marked stale and re-annotated
+				checker.AnnotateFinding(testFindings(chkpb.CheckInconsistAction_CIA_STALE)[2]),
+			},
+		},
+		"stale findings removed for all pools": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return createMSWithFindings(t, log, staleTestFindings(0, 2))
+			},
+			req: &mgmtpb.CheckStartReq{
+				Sys: "daos_server",
+			},
+			expResp:     &mgmtpb.CheckStartResp{}, // non-reset
+			expPolicies: testPolicies,
+			expFindings: []*checker.Finding{
+				defaultTestFindings()[1], // non-stale is left alone
+			},
+		},
+		"stale finding ignored for unspecified pool": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return createMSWithFindings(t, log, staleTestFindings(0, 2))
+			},
+			req: &mgmtpb.CheckStartReq{
+				Sys:   "daos_server",
+				Uuids: []string{uuids[0]},
+			},
+			expResp:     &mgmtpb.CheckStartResp{}, // non-reset
+			expPolicies: testPolicies,
+			expFindings: []*checker.Finding{
+				defaultTestFindings()[1],                              // non-stale is left alone
+				testFindings(chkpb.CheckInconsistAction_CIA_STALE)[2], // stale for unspecified pool remains
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -270,16 +363,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 
 			if tc.createMS == nil {
 				tc.createMS = func(t *testing.T, log logging.Logger) *mgmtSvc {
-					svc := testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
-					if err := svc.setCheckerPolicyMap(testPolicies); err != nil {
-						t.Fatal(err)
-					}
-					for _, f := range testFindings() {
-						if err := svc.sysdb.AddCheckerFinding(f); err != nil {
-							t.Fatal(err)
-						}
-					}
-					return svc
+					return createMSWithFindings(t, log, defaultTestFindings())
 				}
 			}
 			svc := tc.createMS(t, log)
@@ -833,6 +917,36 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 				},
 			},
 		},
+		"get check leader rank failed": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
+				for _, f := range testFindingsMS {
+					if err := svc.sysdb.AddCheckerFinding(&checker.Finding{CheckReport: *f}); err != nil {
+						t.Fatalf("unable to add finding %+v: %s", f, err.Error())
+					}
+				}
+				for _, e := range svc.harness.instances {
+					ei, ok := e.(*EngineInstance)
+					if !ok {
+						t.Fatalf("engine instance bad type %T", e)
+					}
+
+					// make it impossible to get rank
+					ei._superblock = nil
+				}
+				return svc
+			},
+			req: &mgmtpb.CheckQueryReq{
+				Sys: "daos_server",
+			},
+			expResp: &mgmtpb.CheckQueryResp{
+				Leader:    uint32(ranklist.NilRank),
+				InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
+				InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
+				Pools:     drpcPools,
+				Reports:   append(testFindingsMS, testFindingsDrpc...),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -869,6 +983,369 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 			); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_getCheckLeader(t *testing.T) {
+	for name, tc := range map[string]struct {
+		createMS func(t *testing.T, l logging.Logger) *mgmtSvc
+		expRank  ranklist.Rank
+		expErr   error
+	}{
+		"can't get rank": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, l)
+				for _, e := range svc.harness.instances {
+					ei := e.(*EngineInstance)
+					ei._superblock = nil
+				}
+				return svc
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"rank missing from db": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				return newTestMgmtSvc(t, l)
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"bad member state": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, l)
+				if err := svc.sysdb.AddMember(mockMember(t, 0, 1, "adminexcluded")); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"first rank success": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				numEngines := 2
+				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
+				for i := 0; i < numEngines; i++ {
+					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), "checkerstarted")); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return svc
+			},
+		},
+		"second rank success": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				numEngines := 2
+				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
+				for i := 0; i < numEngines; i++ {
+					state := "checkerstarted"
+					if i == 0 {
+						state = "adminexcluded"
+					}
+					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), state)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return svc
+			},
+			expRank: ranklist.Rank(1),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			svc := tc.createMS(t, log)
+
+			rank, err := svc.getCheckLeader()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "rank", tc.expRank, rank)
+		})
+	}
+}
+
+func TestServer_mgmtSvc_SystemCheckEngineReport(t *testing.T) {
+	uuids := testPoolUUIDs(5)
+
+	validReport := &chkpb.CheckReport{
+		Seq:      13,
+		Class:    chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+		Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+		PoolUuid: uuids[0],
+	}
+
+	for name, tc := range map[string]struct {
+		createMS      func(*testing.T, logging.Logger) *mgmtSvc
+		req           *sharedpb.CheckReportReq
+		expErr        error
+		expResp       *sharedpb.CheckReportResp
+		expReportInDB bool
+	}{
+		"nil request": {
+			expErr: daos.InvalidInput,
+		},
+		"nil report": {
+			req:    &sharedpb.CheckReportReq{},
+			expErr: daos.InvalidInput,
+		},
+		"not leader": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := testSvcCheckerEnabled(t, l, system.MemberStateCheckerStarted, uuids)
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req: &sharedpb.CheckReportReq{
+				Report: validReport,
+			},
+			expErr: &system.ErrNotLeader{},
+		},
+		"not checker mode": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				return newTestMgmtSvcMulti(t, l, 3, true)
+			},
+			req: &sharedpb.CheckReportReq{
+				Report: validReport,
+			},
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"bad pool UUID": {
+			req: &sharedpb.CheckReportReq{
+				Report: &chkpb.CheckReport{
+					Seq:      13,
+					Class:    chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+					Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+					PoolUuid: "junk",
+				},
+			},
+			expErr: daos.InvalidInput,
+		},
+		"success": {
+			req: &sharedpb.CheckReportReq{
+				Report: validReport,
+			},
+			expReportInDB: true,
+			expResp:       &sharedpb.CheckReportResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, log logging.Logger) *mgmtSvc {
+					svc := testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
+					return svc
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			resp, err := svc.SystemCheckEngineReport(ctx, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "CheckReportResp", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckReportResp{}))
+
+			if tc.req == nil || tc.req.Report == nil {
+				return
+			}
+
+			seq := tc.req.Report.Seq
+			expReportErr := raft.ErrFindingNotFound(seq)
+			if tc.expReportInDB {
+				expReportErr = nil
+			}
+
+			_, reportErr := svc.sysdb.GetCheckerFinding(seq)
+			test.CmpErr(t, expReportErr, reportErr)
+		})
+	}
+}
+
+func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
+	const testNumRanks = 5
+	const testSeq = 0x1234
+
+	validReq := &mgmtpb.CheckActReq{
+		Sys: build.DefaultSystemName,
+		Seq: testSeq,
+		Act: chkpb.CheckInconsistAction_CIA_DISCARD,
+	}
+
+	testFinding := &checker.Finding{
+		CheckReport: chkpb.CheckReport{
+			Seq:    testSeq,
+			Rank:   testNumRanks - 1,
+			Action: chkpb.CheckInconsistAction_CIA_INTERACT,
+			ActChoices: []chkpb.CheckInconsistAction{
+				chkpb.CheckInconsistAction_CIA_TRUST_MS,
+				chkpb.CheckInconsistAction_CIA_READD,
+				chkpb.CheckInconsistAction_CIA_DISCARD,
+			},
+		},
+	}
+
+	createMSMultiInCheckerMode := func(t *testing.T, log logging.Logger) *mgmtSvc {
+		svc := newTestMgmtSvc(t, log)
+		for i := 0; i < testNumRanks; i++ {
+			svc.sysdb.AddMember(&system.Member{
+				UUID: uuid.New(),
+				Rank: ranklist.Rank(i),
+				Addr: system.MockControlAddr(t, uint32(i)),
+			})
+		}
+		updateTestMemberState(t, svc, system.MemberStateCheckerStarted)
+		if err := svc.enableChecker(); err != nil {
+			t.Fatal(err)
+		}
+		return svc
+	}
+
+	for name, tc := range map[string]struct {
+		createMS     func(*testing.T, logging.Logger) *mgmtSvc
+		startFinding *checker.Finding
+		grpcErr      error
+		grpcResp     proto.Message
+		req          *mgmtpb.CheckActReq
+		expErr       error
+		expResp      *mgmtpb.CheckActResp
+		expFinding   *checker.Finding
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"not leader": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := createMSMultiInCheckerMode(t, l)
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req:    validReq,
+			expErr: &system.ErrNotLeader{},
+		},
+		"not checker mode": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, l, testNumRanks, true)
+				return svc
+			},
+			req:    validReq,
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"invalid seq num": {
+			req: &mgmtpb.CheckActReq{
+				Sys: validReq.Sys,
+				Seq: validReq.Seq - 1,
+				Act: validReq.Act,
+			},
+			expErr: errors.New("not found"),
+		},
+		"invalid action": {
+			req: &mgmtpb.CheckActReq{
+				Sys: validReq.Sys,
+				Seq: validReq.Seq,
+				Act: chkpb.CheckInconsistAction_CIA_INTERACT,
+			},
+			expErr: errors.New("invalid action"),
+		},
+		"finding has invalid rank": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				return createMSMultiInCheckerMode(t, l)
+			},
+			startFinding: &checker.Finding{
+				CheckReport: chkpb.CheckReport{
+					Seq:        testFinding.Seq,
+					ActChoices: testFinding.ActChoices,
+					Rank:       1234,
+				},
+			},
+			req:    validReq,
+			expErr: errors.New("unable to find member"),
+		},
+		"gRPC to engine fails": {
+			grpcErr: errors.New("MockInvoker error"),
+			req:     validReq,
+			expErr:  errors.New("MockInvoker error"),
+		},
+		"status error": {
+			req: validReq,
+			grpcResp: &ctlpb.CheckEngineActResp{
+				Rank: testFinding.Rank,
+				Resp: &mgmtpb.CheckActResp{
+					Status: daos.MiscError.Int32(),
+				},
+			},
+			expResp: &mgmtpb.CheckActResp{
+				Status: daos.MiscError.Int32(),
+			},
+		},
+		"success": {
+			req: validReq,
+			grpcResp: &ctlpb.CheckEngineActResp{
+				Rank: testFinding.Rank,
+				Resp: &mgmtpb.CheckActResp{},
+			},
+			expResp: &mgmtpb.CheckActResp{},
+			expFinding: &checker.Finding{
+				CheckReport: chkpb.CheckReport{
+					Seq:    testFinding.Seq,
+					Rank:   testFinding.Rank,
+					Action: validReq.Act, // action should be updated and choices cleared
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					return createMSMultiInCheckerMode(t, l)
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			if tc.startFinding == nil {
+				tc.startFinding = testFinding
+			}
+			if err := svc.sysdb.AddCheckerFinding(tc.startFinding); err != nil {
+				t.Fatal(err)
+			}
+
+			svc.rpcClient = control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryError: tc.grpcErr,
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{
+						{
+							Message: tc.grpcResp,
+						},
+					},
+				},
+			})
+
+			resp, err := svc.SystemCheckRepair(ctx, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "CheckActResp", tc.expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.CheckActResp{}))
+
+			// Check state of finding in DB
+			if tc.expFinding == nil {
+				tc.expFinding = tc.startFinding
+			}
+
+			f, err := svc.sysdb.GetCheckerFinding(tc.expFinding.Seq)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			test.CmpAny(t, "updated finding", tc.expFinding, f, cmpopts.IgnoreUnexported(chkpb.CheckReport{}))
 		})
 	}
 }

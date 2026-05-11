@@ -1,8 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -387,7 +386,7 @@ obj_layout_refresh(struct dc_object *obj)
 
 	D_RWLOCK_WRLOCK(&obj->cob_lock);
 	obj_layout_free(obj);
-	rc = obj_layout_create(obj, 0, true);
+	rc = obj_layout_create(obj, obj->cob_mode, true);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return rc;
@@ -1575,6 +1574,7 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	md->omd_id	= oid;
 	md->omd_ver	= 0;
 	md->omd_pda	= 0;
+	md->omd_flags   = 0;
 	return 0;
 }
 
@@ -1725,7 +1725,7 @@ dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
 	/* Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case. */
 	if (err == -DER_OVERLOAD_RETRY) {
 		delay = daos_rpc_rand_delay(timeout_sec) << 20;
-	} else if (++(*retry_cnt) > 1) {
+	} else if (++(*retry_cnt) > 1 || obj_is_modification_opc(opc)) {
 		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
 		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
 		/* Rebuild is being established on the server side, wait a bit longer */
@@ -1739,16 +1739,18 @@ dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
 				delay <<= 8;
 				break;
 			case DAOS_OBJ_RPC_CPD:
-				/* 8 times of the delay for compounded RPC. */
-				delay <<= 3;
+				delay <<= (*retry_cnt + 3);
 				break;
 			default:
+				if (obj_is_modification_opc(opc))
+					delay <<= (*retry_cnt + 1);
+				else
+					delay <<= (*retry_cnt - 1);
 				break;
 			}
 
-			/* Increase delay after multiple times retry. */
-			if (*retry_cnt >= 5)
-				delay <<= 1;
+			if (*retry_cnt > 10 || delay > 3000000)
+				delay = 3000000 + ((d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1));
 		}
 	}
 
@@ -4138,8 +4140,10 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 	obj_auxi_shards_iterate(obj_auxi, update_sub_anchor_cb, NULL);
 
 	sub_anchors = (struct shard_anchors *)anchor->da_sub_anchors;
-	if (!d_list_empty(&sub_anchors->sa_merged_list))
+	if (!d_list_empty(&sub_anchors->sa_merged_list)) {
+		D_ASSERT(obj_auxi->opc != DAOS_OBJ_RPC_ENUMERATE);
 		return;
+	}
 
 	if (sub_anchors_is_eof(sub_anchors)) {
 		daos_obj_list_t *obj_args;
@@ -4148,6 +4152,18 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 
 		obj_args = dc_task_get_args(obj_auxi->obj_task);
 		sub_anchors_free(obj_args, obj_auxi->opc);
+	} else if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE && D_LOG_ENABLED(DB_REBUILD)) {
+		for (int i = 0; i < sub_anchors->sa_anchors_nr; i++) {
+			daos_anchor_t *sub_anchor;
+
+			sub_anchor = &sub_anchors->sa_anchors[i].ssa_anchor;
+			if (!daos_anchor_is_eof(sub_anchor)) {
+				D_DEBUG(DB_REBUILD, "shard %d sub_anchor %d/%d non EOF",
+					sub_anchors->sa_anchors[i].ssa_shard, i,
+					sub_anchors->sa_anchors_nr);
+				break;
+			}
+		}
 	}
 }
 
@@ -6468,7 +6484,7 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi, struct shard_anch
 		}
 
 		if (obj_args->recxs != NULL) {
-			if (sub_anchor->ssa_recxs != NULL && sub_anchors->sa_nr == nr)
+			if (sub_anchor->ssa_recxs != NULL && sub_anchors->sa_nr != nr)
 				D_FREE(sub_anchor->ssa_recxs);
 
 			if (sub_anchor->ssa_recxs == NULL) {

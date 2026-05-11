@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -545,6 +545,8 @@ int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 {
 	struct vos_container	*cont;
+	struct vos_cont_df      *cont_df;
+	uint64_t                 feats;
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
@@ -552,9 +554,14 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 		return -DER_INVAL;
 	}
 
-	cont_info->ci_nobjs = cont->vc_cont_df->cd_nobjs;
-	cont_info->ci_used = cont->vc_cont_df->cd_used;
-	cont_info->ci_hae = cont->vc_cont_df->cd_hae;
+	cont_df = cont->vc_cont_df;
+	memset(cont_info, 0, sizeof(*cont_info));
+	cont_info->ci_nobjs = cont_df->cd_nobjs;
+	cont_info->ci_used  = cont_df->cd_used;
+	cont_info->ci_hae   = cont_df->cd_hae;
+
+	feats = dbtree_feats_get(&cont_df->cd_obj_root);
+	vos_feats_agg_time_get(feats, &cont_info->ci_agg_write);
 
 	return 0;
 }
@@ -647,8 +654,23 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
-	d_iov_set(&iov, &key, sizeof(struct d_uuid));
-	rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
+	/*
+	 * Temporary workaround: Re-check if the container is re-opened by rebuild
+	 * when this function yield on flushing header or starting local tx.
+	 *
+	 * This additional check should be removed once rebuild no longer do on-demand
+	 * container open/create.
+	 */
+	rc = cont_lookup(&key, &pkey, &cont, pool->vp_sysdb);
+	if (rc == 0) {
+		D_ERROR(DF_CONT " Container is re-opened (%d)!\n", DP_CONT(pool->vp_id, co_uuid),
+			cont->vc_open_count);
+		cont_decref(cont);
+		rc = -DER_BUSY;
+	} else {
+		d_iov_set(&iov, &key, sizeof(struct d_uuid));
+		rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
+	}
 
 	rc = umem_tx_end(vos_pool2umm(pool), rc);
 	if (rc) {

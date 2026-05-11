@@ -74,7 +74,7 @@ The configuration file location can be specified on the command line
 (`/etc/daos/daos_server.yml`).
 
 Parameter descriptions are specified in
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 and example configuration files in the
 [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
 directory.
@@ -97,30 +97,30 @@ for the path specified through the -o option of the `daos_server` command
 line, if unspecified then `/etc/daos/daos_server.yml` is used.
 
 Refer to the example configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 for latest information and examples.
 
 #### MD-on-SSD Configuration
 
-To enable MD-on-SSD, the Control-Plane-Metadata ('control_metadata') global section of the
+To enable MD-on-SSD, the Control-Plane-Metadata (`control_metadata`) global section of the
 configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 needs to specify a persistent location to store control-plane specific metadata (which would be
-stored on PMem in non MD-on-SSD mode). Either set 'control_metadata:path' to an existing (mounted)
-local filesystem path or set 'control_metadata:device' to a storage partition which can be mounted
+stored on PMem in non MD-on-SSD mode). Either set `control_metadata:path` to an existing (mounted)
+local filesystem path or set `control_metadata:device` to a storage partition which can be mounted
 and formatted by the control-plane during storage format. In the latter case when specifying a
 device the path parameter value will be used as the mountpoint path.
 
 The MD-on-SSD code path will only be used if it is explicitly enabled by specifying the new
-'bdev_role' property for the NVMe storage tier(s) in the 'daos_server.yml' file. There are three
-types of 'bdev_role': wal, meta, and data. Each role must be assigned to exactly one NVMe tier.
+`bdev_role` property for the NVMe storage tier(s) in the `daos_server.yml` file. There are three
+types of `bdev_role`: wal, meta, and data. Each role must be assigned to exactly one NVMe tier.
 Depending on the number of NVMe SSDs per DAOS engine there may be one, two or three NVMe tiers with
-different 'bdev_role' assignments.
+different `bdev_role` assignments.
 
 For a complete server configuration file example enabling MD-on-SSD, see
-[`daos_server_mdonssd.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml).
+[daos\_server\_mdonssd.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml).
 
-Below are four different 'daos_server.yml' storage configuration snippets that represent scenarios
+Below are four different `daos_server.yml` storage configuration snippets that represent scenarios
 for a DAOS engine with four NVMe SSDs and MD-on-SSD enabled.
 
 
@@ -147,7 +147,6 @@ storage:
 This example shows the typical use case for a DAOS server with a small number of NVMe SSDs. With
 only four or five NVMe SSDs per engine, it is natural to assign all three roles to all NVMe SSDs
 configured as a single NVMe tier.
-
 
 2. Two NVMe tiers, one SSD assigned wal role (tier-1) and three SSDs assigned both meta and data
    roles (tier-2):
@@ -254,11 +253,11 @@ engine but maybe practical with a larger number of SSDs and so illustrated here 
 DAOS can attempt to produce a server configuration file that makes optimal use of hardware on a
 given set of hosts either through the `dmg` or `daos_server` tools.
 
-To generate an MD-on-SSD configurations set both '--control-metadata-path' and '--use-tmpfs-scm'
+To generate an MD-on-SSD configurations set both `--control-metadata-path` and `--use-tmpfs-scm`
 options as detailed below. Note that due to the number of variables considered when generating a
 configuration automatically the result may not be the most optimal in all situations.
 
-##### Generating Configuration File Using daos_server Tool
+##### Generating Configuration File Using daos\_server Tool
 
 To generate a configuration file for a single storage server, run the `daos_server config generate`
 command locally. In this case, the `daos_server` service should not be running on the local host.
@@ -399,7 +398,7 @@ storage tier. The RAM-disk sizes will be calculated based on the host's total me
 by `/proc/meminfo`).
 
 - `--control-metadata-path` specifies a persistent location to store control-plane metadata which
-allows MD-on-SSD DAOS deployments to survive without data loss over 'daos_server' restarts. If
+allows MD-on-SSD DAOS deployments to survive without data loss over `daos_server` restarts. If
 this option is set then a MD-on-SSD config will be generated.
 
 - `--fabric-ports` enables custom port numbers to be assigned to each engine's fabric settings.
@@ -438,7 +437,7 @@ per engine. The command redirects stderr to /dev/null and stdout to a temporary 
 installation is from a source build.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server config generate -p ofi+tcp --use-tmpfs-scm 2>/dev/null | tee ~/configs/tmp.yml
+$ daos_server config generate -p ofi+tcp --use-tmpfs-scm 2>/dev/null | tee ~/configs/tmp.yml
 port: 10001
 transport_config:
   allow_insecure: false
@@ -496,6 +495,7 @@ disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 16384
 disable_hugepages: false
+allow_thp: false
 control_log_mask: INFO
 control_log_file: /var/log/daos/daos_server.log
 core_dump_filter: 19
@@ -512,7 +512,7 @@ Now we start the `daos_server` service from the generated config which loads suc
 and runs until the point where a storage format is required, as expected.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server start -i -o ~/configs/tmp.yml
+$ daos_server start -i -o ~/configs/tmp.yml
 DAOS Server config loaded from /home/user/configs/tmp.yml
 install/bin/daos_server logging to file /tmp/daos_server.log
 NOTICE: Configuration includes only one MS replica. This provides no redundancy in the event of a MS replica failure.
@@ -534,12 +534,12 @@ Note the subsequent system query command may not show ranks started immediately 
 format command returns so it is recommended to leave a short delay (~5s) before invoking.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/dmg storage format -i
+$ dmg storage format -i
 Format Summary:
   Hosts     SCM Devices NVMe Devices
   -----     ----------- ------------
   localhost 2           16
-[user@wolf-226 daos]$ install/bin/dmg system query -i
+$ dmg system query -i
 Rank  State
 ----  -----
 [0-1] Joined
@@ -564,17 +564,17 @@ daos_engine:1 Using NUMA core allocation algorithm
 SCM @ /mnt/daos0: 91 GB Total/91 GB Avail
 Starting I/O Engine instance 0: /home/user/projects/daos/install/bin/daos_engine
 daos_engine:0 Using NUMA core allocation algorithm
-MS leader running on wolf-226.wolf.hpdd.intel.com
-daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+MS leader running on wolf-226.domain
+daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.domain.
 Using NUMA node: 1
-daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.domain.
 Using NUMA node: 0
 ```
 
 For reference, the hardware scan results for the target storage server are included below.
 
 ```bash
-[user@wolf-226 daos]$ install/bin/daos_server nvme scan
+$ daos_server nvme scan
 Scan locally-attached NVMe storage...
 NVMe PCI     Model              FW Revision Socket ID Capacity
 --------     -----              ----------- --------- --------
@@ -595,7 +595,7 @@ NVMe PCI     Model              FW Revision Socket ID Capacity
 0000:e0:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
 0000:e1:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
 
-[user@wolf-226 daos]$ install/bin/daos_server network scan
+$ daos_server network scan
 ---------
 localhost
 ---------
@@ -807,6 +807,32 @@ configuration file with a populated per-engine section can be stored in
 `/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service
 it is then ready for the storage to be formatted.
 
+
+### Transparent HugePage (THP) support
+
+DAOS relies on the use of hugepages in a dedicated manner and turning on transparent hugepages means
+the hugepage memory pool gets used in a model more like a cache. This can have adverse effects on
+DAOS behavior and may cause OOM and DMA buffer allocation failures at high load.
+
+By default the server will fail to start and exit when the server is started with THP enabled.
+
+```bash
+DEBUG 2025/12/14 09:54:32.537839 main.go:87: server: code = 623 description = "transparent hugepage (THP) enabled on storage server, DAOS requires THP to be disabled"
+ERROR: server: code = 623 description = "transparent hugepage (THP) enabled on storage server, DAOS requires THP to be disabled"
+ERROR: server: code = 623 resolution = "disable THP by adding 'transparent_hugepage=never' kernel parameter in the grub configuration file then reboot and restart daos_server"
+```
+
+The following command can be used to verify whether THP is enabled:
+
+```bash
+cat /sys/kernel/mm/transparent_hugepage/enabled
+[always] madvise never
+```
+
+If `allow_thp: true` parameter is set in server config file global section, the behavior will change
+and the server will start with THP enabled.
+
+
 ## DAOS Server Remote Access
 
 Remote tasking of the DAOS system and individual DAOS Server processes can be
@@ -817,7 +843,7 @@ To set the addresses of which DAOS Servers to task, provide either:
 - `-l <hostlist>` on the commandline when invoking, or
 
 - `hostlist: <hostlist>` in the control configuration file
-  [`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+  [daos_control.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
 
 Where `<hostlist>` represents a slurm-style hostlist string e.g.
 `foo-1[28-63],bar[256-511]`.
@@ -895,7 +921,7 @@ resetting modules into "MemoryMode" through resource allocations.
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
 
-#### Multiple PMem namespaces per socket (Experimental)
+#### Multiple PMem namespaces per socket
 
 By default the `daos_server scm prepare` command will create one PMem namespace on each PMem
 region.
@@ -951,8 +977,8 @@ network.
 `daos_server (nvme|scm) scan` can be used to query storage on the local host directly.
 
 !!! note
-    'daos_server' commands will refuse to run if a process with the same name exists (e.g. as a
-    systemd service under the 'daos_server' userid).
+    `daos_server` commands will refuse to run if a process with the same name exists (e.g. as a
+    systemd service under the `daos_server` userid).
 
 NVMe SSDs no longer need to be made accessible first by running `daos_server nvme prepare`,
 `daos_server nvme scan` will take the necessary steps to prepare the devices unless `--skip-prep`
@@ -963,17 +989,17 @@ To use an alternative driver with SPDK, set `--disable-vfio` in the nvme prepare
 fallback to using UIO user-space driver with SPDK instead.
 
 !!! note
-    If UIO user-space driver is used instead of VFIO, 'daos_server' needs to be run as root.
+    If UIO user-space driver is used instead of VFIO, `daos_server` needs to be run as root.
 
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
-bash-4.2$ dmg storage scan
+$ dmg storage scan
 Hosts        SCM Total             NVMe Total
 -----        ---------             ----------
 wolf-[71-72] 6.4 TB (2 namespaces) 3.1 TB (3 controllers)
 
-bash-4.2$ dmg storage scan --verbose
+$ dmg storage scan --verbose
 ------------
 wolf-[71-72]
 ------------
@@ -1008,7 +1034,7 @@ manual reset to do so.
 
 !!! warning
     Due to [SPDK issue 2926](https://github.com/spdk/spdk/issues/2926), if VMD is enabled and
-    PCI_ALLOWED list is set to a subset of available VMD controllers (as specified in the server
+    PCI\_ALLOWED list is set to a subset of available VMD controllers (as specified in the server
     config file) then the backing devices of the unselected VMD controllers will be bound to no
     driver and therefore inaccessible from both OS and SPDK. Workaround is to run
     `daos_server nvme scan --ignore-config` to reset driver bindings for all VMD controllers.
@@ -1018,7 +1044,7 @@ manual reset to do so.
 SSD health state can be verified via `dmg storage scan --nvme-health`:
 
 ```bash
-bash-4.2$ dmg storage scan --nvme-health
+$ dmg storage scan --nvme-health
 -------
 wolf-71
 -------
@@ -1252,7 +1278,7 @@ For class == "nvme", the following parameters should be populated:
 - `bdev_list` should be populated with NVMe PCI addresses.
 - `bdev_roles` optionally specifies a list of roles for this tier.
   By default, the DAOS server will assign roles to bdev tiers
-  automatically, so the bdev_roles directive is only needed when that
+  automatically, so the `bdev_roles` directive is only needed when that
   assignment doesn't match your use case.
 
   When "dcpm" is used for the first tier, this list should be omitted or
@@ -1266,7 +1292,7 @@ For class == "nvme", the following parameters should be populated:
   will assign them.  Otherwise all roles must be assigned to a tier.
 
 See the sample configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 and example configuration files in the
 [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
 directory for more details.
@@ -1276,7 +1302,7 @@ To use an alternative driver with SPDK, set `disable_vfio: true` in the global s
 server config file to fallback to using UIO user-space driver with SPDK instead.
 
 !!! note
-    If UIO user-space driver is used instead of VFIO, 'daos_server' needs to be run as root.
+    If UIO user-space driver is used instead of VFIO, `daos_server` needs to be run as root.
 
 If VMD is enabled on a host, its usage will be enabled by default meaning that the `bdev_list`
 device addresses will be interpreted as VMD endpoints and storage scan will report the details of
@@ -1284,21 +1310,13 @@ the physical NVMe backing devices that belong to each VMD endpoint. To disable t
 VMD-enabled host, set `disable_vmd: true` in the global section of the config to fallback to using
 physical NVMe devices only.
 
-!!! warning
-    If upgrading from DAOS 2.0 to a greater version, the old 'enable_vmd' server config file
-    parameter is no longer honored and instead should be removed (or replaced by
-    `disable_vmd: true` if VMD is to be explicitly disabled).
-
-    Otherwise 'daos_server' may fail config validation and not start after an update from 2.0 to a
-    greater version.
-
 #### Example Configurations
 
 To illustrate, assume a cluster with homogeneous hardware configurations that
 returns the following from scan for each host:
 
 ```bash
-[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] storage scan --verbose
+$ dmg -l wolf-7[1-2] storage scan --verbose
 -------
 wolf-7[1-2]
 -------
@@ -1471,7 +1489,8 @@ This configuration yields the fastest access to that network device.
 Information about the network configuration is stored as metadata on the DAOS
 storage.
 
-If, after initial deployment, the provider must be changed, please follow the directions to [`change fabric provider`](https://github.com/daos-stack/daos/blob/master/docs/admin/common_tasks.md#change-fabric-provider-on-a-daos-system).
+If, after initial deployment, the provider must be changed, please follow the directions to
+[change fabric provider](https://github.com/daos-stack/daos/blob/master/docs/admin/common_tasks.md#change-fabric-provider-on-a-daos-system).
 
 #### Provider Testing
 
@@ -1520,10 +1539,10 @@ per four target threads, for example `targets: 16` and `nr_xs_helpers: 4`.
 The server should have sufficiently many physical cores to support the
 number of targets plus the additional service threads.
 
-The 'targets:' and 'nr_xs_helpers:' requirement are mandatory, if the number
+The `targets:` and `nr_xs_helpers:` requirement are mandatory, if the number
 of physical cores are not enough it will fail the starting of the daos engine
 (notes that 2 cores reserved for system service), or configures with ENV
-"DAOS_TARGET_OVERSUBSCRIBE=1" to force starting daos engine (possibly hurts
+`DAOS_TARGET_OVERSUBSCRIBE=1` to force starting daos engine (possibly hurts
 performance as multiple XS compete on same core).
 
 
@@ -1544,7 +1563,7 @@ Upon successful format, DAOS Control Servers will start DAOS I/O engines that
 have been specified in the server config file.
 
 Successful start-up is indicated by the following on stdout:
-`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
+`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.domain.`
 
 ### SCM Format
 
@@ -1715,7 +1734,9 @@ If you wish to use systemd with a development build, you must copy the Agent ser
 file from `utils/systemd/` to `/usr/lib/systemd/system/`.
 Then modify the `ExecStart` line to point to your Agent configuration file:
 
-`ExecStart=/usr/bin/daos_agent -o <'path to agent configuration file/daos_agent.yml'>`
+```
+ExecStart=/usr/bin/daos_agent -o <'path to agent configuration file/daos_agent.yml'>
+```
 
 Once the service file is installed and `systemctl daemon-reload` has been run to
 reload the configuration, the `daos_agent` can be started through systemd

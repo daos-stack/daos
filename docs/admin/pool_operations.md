@@ -79,7 +79,7 @@ whether you want to specify an absolute size, use available capacity percentages
   - **Minimums:**
     - SCM: **16 MiB per target** (e.g., `--scm-size=256MiB` for 16 targets).
     - NVMe: Optional, but if set must be **≥ 1 GiB per target** (e.g., `--nvme-size=16GiB`).
-  - Total pool size is calculated as:  
+  - Total pool size is calculated as:
     ```
     total_size = (scm_size + nvme_size) × number_of_engines
     ```
@@ -101,6 +101,7 @@ whether you want to specify an absolute size, use available capacity percentages
 Examples:
 
 To create a pool labeled `tank`:
+
 ```bash
 $ dmg pool create --size=${N}TB tank
 ```
@@ -189,6 +190,7 @@ rank/engine where bdev roles META and DATA are not shared.
 
 This is a snippet of the server config file engine section showing storage
 definitions with `bdev_roles` "meta" and "data" assigned to separate tiers:
+
 ```bash
     storage:
       -
@@ -206,6 +208,7 @@ definitions with `bdev_roles` "meta" and "data" assigned to separate tiers:
 
 This pool command requests to use all available storage and maintain a 1:1
 Memory-File to Metadata-Storage size ratio (mem-ratio):
+
 ```bash
 $ dmg pool create bob --size 100% --mem-ratio 100%
 
@@ -224,6 +227,7 @@ Pool created with 15.91%,84.09% storage tier ratio
 Rough calculations: `dmg storage scan` shows that for each rank, one 800GB SSD
 is assigned for each tier (first: WAL+META, second: DATA). `df -h /mnt/daos*`
 reports usable ramdisk capacity for the single rank is 142 GiB (152 GB).
+
 - Expected Data storage would then be 800GB for the pool (one rank).
 - Expected Meta storage at 100% mem-ratio would be the total ramdisk capacity.
 - Expected Memory-File size would be identical to Meta storage size.
@@ -249,7 +253,6 @@ Pool created with 27.46%,72.54% storage tier ratio
   Memory File Size : 151 GB (151 GB / rank)
 ```
 
-
 3. If we then try the same with bdev roles META and DATA are shared. Here we
 can illustrate how metadata overheads are accommodated for when the same
 devices share roles (and will be used to store both metadata and data).
@@ -257,6 +260,7 @@ devices share roles (and will be used to store both metadata and data).
 This is a snippet of the server config file engine section showing storage
 definitions with `bdev_roles` "meta" and "data" assigned to the same (single)
 tier:
+
 ```bash
     storage:
       -
@@ -270,6 +274,7 @@ tier:
 
 This pool command requests to use all available storage and maintain a 1:1
 Memory-File to Metadata-Storage size ratio (mem-ratio):
+
 ```bash
 $ dmg pool create bob --size 100% --mem-ratio 100%
 
@@ -288,7 +293,6 @@ Pool created with 17.93%,82.07% storage tier ratio
 Looking at this output and comparing with example no. 1 we observe that
 because both SSDs are sharing META and DATA roles, more capacity is available
 for DATA.
-
 
 4. If the `--mem-ratio` is then reduced to 50% in the above example, we end up
 with double the Metadata-Storage size which detracts from the DATA capacity.
@@ -310,7 +314,6 @@ Pool created with 20.32%,79.68% storage tier ratio
 ```
 
 META has been doubled at the cost of DATA capacity.
-
 
 5. Adding another engine/rank on the same host results in more than double DATA
 capacity because RAM-disk capacity is halved across two engines/ranks on the same
@@ -335,7 +338,6 @@ Pool created with 8.65%,91.35% storage tier ratio
   Memory File Size : 129 GB (64 GB / rank)
 ```
 
-
 6. A larger pool with 6 engines/ranks across 3 hosts using the same shared-role
 configuration and pool-create commandline as the previous example.
 
@@ -357,7 +359,6 @@ Pool created with 8.65%,91.35% storage tier ratio
 
 Here the size has increased linearly with the per-rank sizes remaining the
 same.
-
 
 7. Now for a more involved example with shared roles. Create two pools of
 roughly equal size each using half available capacity and a `--mem-ratio` of
@@ -474,7 +475,6 @@ created pool is slightly smaller meaning the total cumulative pool size reading
 `4.5+3.8 == 8.3 TB` rather than `8.9 TB` which can be partly explained because
 of extra per-pool overheads and possible rounding in size calculations.
 
-
 8. Now for a similar experiment as example no. 8 but with separate META and
 DATA roles.
 
@@ -564,7 +564,6 @@ some idea of how to use the tool commands.
 Capacity can be best utilized by understanding assignment of roles and SSDs
 across tiers and the tuning of the mem-ratio pool create option.
 
-
 ### Listing Pools
 
 To see a list of the pools in the DAOS system:
@@ -602,6 +601,7 @@ tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB     10 kB    0%         
 ```
 
 In MD-on-SSD mode:
+
 ```bash
 $ dmg pool list --verbose
 Label UUID                                 SvcReps Meta Size Meta Used Meta Imbalance DATA Size DATA Used DATA Imbalance Disabled
@@ -783,7 +783,7 @@ $ dmg pool get-prop pool1
    Checksum scrubbing frequency (scrub_freq)                                        not set
    Checksum scrubbing threshold (scrub_thresh)                                      not set
    Self-healing policy (self_heal)                                                  exclude
-   Rebuild space ratio (space_rb)                                                   0%
+   Rebuild space ratio (space_rb)                                                   5%
    Pool service replica list (svc_list)                                             [0]
    Pool service redundancy factor (svc_rf)                                          not set
    Upgrade Status (upgrade_status)                                                  not started
@@ -812,7 +812,7 @@ $ dmg pool get-prop pool1
    Checksum scrubbing frequency (scrub_freq)                                        604800
    Checksum scrubbing threshold (scrub_thresh)                                      0
    Self-healing policy (self_heal)                                                  exclude
-   Rebuild space ratio (space_rb)                                                   0%
+   Rebuild space ratio (space_rb)                                                   5%
    Pool service replica list (svc_list)                                             [0]
    Pool service redundancy factor (svc_rf)                                          2
    Upgrade Status (upgrade_status)                                                  in progress
@@ -876,7 +876,7 @@ $ dmg pool get-prop tank
    Checksum scrubbing frequency (scrub_freq)                                        604800
    Checksum scrubbing threshold (scrub_thresh)                                      0
    Self-healing policy (self_heal)                                                  exclude,rebuild
-   Rebuild space ratio (space_rb)                                                   0%
+   Rebuild space ratio (space_rb)                                                   5%
    Pool service replica list (svc_list)                                             [0]
    Pool service redundancy factor (svc_rf)                                          2
    Upgrade Status (upgrade_status)                                                  not started
@@ -918,7 +918,7 @@ $ dmg pool get-prop tank2
    Checksum scrubbing frequency (scrub_freq)                                        604800
    Checksum scrubbing threshold (scrub_thresh)                                      0
    Self-healing policy (self_heal)                                                  exclude,rebuild
-   Rebuild space ratio (space_rb)                                                   0%
+   Rebuild space ratio (space_rb)                                                   5%
    Pool service replica list (svc_list)                                             [0]
    Pool service redundancy factor (svc_rf)                                          2
    Upgrade Status (upgrade_status)                                                  not started
@@ -953,22 +953,22 @@ called aggregation.
 The reclaim property defines what strategy to use to reclaimed unused version.
 Three options are supported:
 
-* "lazy"     : Trigger aggregation only when there is no IO activities or SCM free space is under pressure (default strategy)
-* "time"     : Trigger aggregation regularly despite of IO activities.
-* "disabled" : Never trigger aggregation. The system will eventually run out of space even if data is being deleted.
+* `lazy`     : Trigger aggregation only when there is no IO activities or SCM free space is under pressure (default strategy)
+* `time`     : Trigger aggregation regularly despite of IO activities.
+* `disabled` : Never trigger aggregation. The system will eventually run out of space even if data is being deleted.
 
 ### Self-healing Policy (self\_heal)
 
 This property defines whether a failing engine is automatically evicted from the
 pool. Once excluded, the self-healing mechanism will be triggered to restore
 the pool data redundancy on the surviving storage engines.
-Two options are supported: "exclude" (default strategy) and "rebuild".
+Two options are supported: `exclude` (default strategy) and `rebuild`.
 
 ### Reserved Space for Rebuilds (space\_rb)
 
 This property defines the percentage of total space reserved on each storage
 engine for self-healing purpose. The reserved space cannot be consumed by
-applications. Valid values are 0% to 100%, the default is 0%.
+applications. Valid values are 0% to 100%, the default is 5%.
 When setting this property, specifying the percentage symbol is optional:
 `space_rb:2%` and `space_rb:2` both specify two percent of storage capacity.
 
@@ -1041,34 +1041,34 @@ This property controls how checkpoints are triggered for each target.  When enab
 checkpointing will always trigger if there is space pressure in the WAL. There are
 three supported options:
 
-* "timed"       : Checkpointing is also triggered periodically (default option).
-* "lazy"        : Checkpointing is only triggered when there is WAL space pressure.
-* "disabled"    : Checkpointing is disabled.  WAL space may be exhausted.
+* `timed`    : Checkpointing is also triggered periodically (default option).
+* `lazy`     : Checkpointing is only triggered when there is WAL space pressure.
+* `disabled` : Checkpointing is disabled.  WAL space may be exhausted.
 
 #### Checkpoint frequency (checkpoint\_freq)
 
 This property controls how often checkpoints are triggered. It is only relevant
-if the checkpoint policy is "timed". The value is specified in seconds in the
+if the checkpoint policy is `timed`. The value is specified in seconds in the
 range [1, 1000000] with a default of 5.  Values outside the range are
 automatically adjusted.
 
 #### Checkpoint threshold (checkpoint\_thresh)
 
 This property controls the percentage of WAL usage to automatically trigger a checkpoint.
-It is not relevant when the checkpoint policy is "disabled". The value is specified
+It is not relevant when the checkpoint policy is `disabled`. The value is specified
 as a percentage in the range [10-75] with a default of 50. Values outside the range are
 automatically adjusted.
 
 #### Reintegration mode (reintegration)
 
 This property controls how reintegration will recover data. Three options are supported:
-"data_sync" (default strategy) and "no_data_sync", "incremental". with "data_sync", reintegration
-will discard pool data and trigger rebuild to sync data. With "no_data_sync", reintegration only
-updates pool map to include rank. While with "incremental", reintegration will not discard pool
+`data_sync` (default strategy) and `no_data_sync`, `incremental`. with `data_sync`, reintegration
+will discard pool data and trigger rebuild to sync data. With `no_data_sync`, reintegration only
+updates pool map to include rank. While with `incremental`, reintegration will not discard pool
 data but will trigger rebuild to sync data only beyond global stable epoch, the reintegration is
 incremental as old data below global stable epoch need not to be migrated.
 
-NB: with "no_data_sync" enabled, containers will be turned to read-only, daos won't trigger
+NB: with `no_data_sync` enabled, containers will be turned to read-only, daos won't trigger
 rebuild to restore the pool data redundancy on the surviving storage engines if there are
 dead rank events.
 
@@ -1258,7 +1258,7 @@ to restore redundancy on the remaining engines.
 !!! note
     Exclusion may compromise the Pool Redundancy Factor (RF), potentially leading
     to data loss. If this is the case, the command will refuse to perform the exclusion
-    and return the error code -DER_RF. You can proceed with the exclusion by specifying
+    and return the error code -DER\_RF. You can proceed with the exclusion by specifying
     the --force option. Please note that forcing the operation may result in data loss,
     and it is strongly recommended to verify the RF status before proceeding.
 
@@ -1304,7 +1304,7 @@ operation is ongoing. Drain additionally enables non-replicated data to be
 rebuilt onto another target whereas in a conventional failure scenario non-replicated
 data would not be integrated into a rebuild and would be lost.
 Drain operation is not allowed if there are other ongoing rebuild operations, otherwise
-it will return -DER_BUSY.
+it will return -DER\_BUSY.
 
 An operator can drain one or more engines or targets from a specific DAOS pool using the rank(s)
 where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx list is
@@ -1354,7 +1354,7 @@ original state.
 The operator can either reintegrate specific targets for an engine rank by
 supplying a target idx list, or reintegrate an entire engine rank by omitting the list.
 Reintegrate operation is not allowed if there are other ongoing rebuild operations,
-otherwise it will return -DER_BUSY.
+otherwise it will return -DER\_BUSY.
 
 An operator can reintegrate one or more engines or targets from a specific DAOS pool using the
 rank(s) where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx
@@ -1400,7 +1400,7 @@ $ dmg pool reintegrate $DAOS_POOL --ranks=5 --target-idx=0,1
     While dmg pool query and list show how many targets are disabled for each pool, there is
     currently no way to list the targets that have actually been disabled. As a result, it is
     recommended for now to try to reintegrate all engine ranks reported as disabled in
-    `dmg pool query`. The string output after "Disabled ranks:" in the pool query output can
+    `dmg pool query`. The string output after `Disabled ranks:` in the pool query output can
     be used as the `--ranks=<disabled_ranks>` option value in `dmg pool reintegrate` command.
 
 #### System Reintegrate
@@ -1435,7 +1435,7 @@ pool.
 This will automatically trigger a server rebalance operation where objects
 within the extended pool will be rebalanced across the new storage.
 Extend operation is not allowed if there are other ongoing rebuild operations,
-otherwise it will return -DER_BUSY.
+otherwise it will return -DER\_BUSY.
 
 ```
 $ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
@@ -1475,7 +1475,7 @@ those failures can be recovered and DAOS engines can be restarted and the system
 can function again.
 
 Administrator can set the default pool redundancy factor by environment variable
-"DAOS_POOL_RF" in the server yaml file. If SWIM detects and reports an engine is
+`DAOS_POOL_RF` in the server yaml file. If SWIM detects and reports an engine is
 dead and the number of failed fault domain exceeds or is going to exceed the pool
 redundancy factor, it will not change pool map immediately. Instead, it will give
 log messages:

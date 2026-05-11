@@ -14,15 +14,11 @@ timeout: 30
 engine_0: &engine_0_base
   pinned_numa_node: 0
   nr_xs_helpers: 1
-  fabric_iface: ib0
-  fabric_iface_port: 31317
   log_file: daos_server0.log
 
 engine_1: &engine_1_base
   pinned_numa_node: 1
   nr_xs_helpers: 1
-  fabric_iface: ib1
-  fabric_iface_port: 31417
   log_file: daos_server1.log
 
 storage_0: &storage_dcpm

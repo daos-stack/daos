@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -77,12 +77,7 @@ struct rebuild_tgt_pool_tracker {
 	uint64_t		rt_stable_epoch;
 
 	/* Only used by reclaim job to discard those half-rebuild data */
-	uint64_t		rt_reclaim_epoch;
-	/* local rebuild epoch mainly to constrain the VOS aggregation
-	 * to make sure aggregation will not cross the epoch
-	 */
-	uint64_t		rt_rebuild_fence;
-
+	uint64_t                 rt_reclaim_epoch;
 	uint32_t		rt_leader_rank;
 
 	/* Global dtx resync version */
@@ -281,7 +276,8 @@ struct rebuild_pool_tls {
 	uint64_t	rebuild_pool_reclaim_obj_count;
 	unsigned int	rebuild_pool_ver;
 	uint32_t	rebuild_pool_gen;
-	uint64_t	rebuild_pool_leader_term;
+	uint64_t        rebuild_pool_leader_term;
+	uint64_t        rebuild_pool_obj_send_pending;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1,
 			rebuild_pool_scan_done:1;
@@ -318,20 +314,21 @@ struct rebuild_iv {
 	uint64_t	riv_size;
 	uint64_t	riv_leader_term;
 	uint64_t	riv_stable_epoch;
+	uint64_t        riv_reserve[3];
 	uint32_t	riv_seconds;
 	uint32_t	riv_dtx_resyc_version;
 	uint32_t	riv_global_dtx_resyc_version;
-	unsigned int	riv_rank;
-	unsigned int	riv_master_rank;
-	unsigned int	riv_ver;
-	unsigned int	riv_rebuild_gen;
+	uint32_t        riv_rank;
+	uint32_t        riv_master_rank;
+	uint32_t        riv_ver;
+	uint32_t        riv_rebuild_gen;
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
 			riv_pull_done:1,
 			riv_sync:1;
-	int		riv_status;
-
+	int32_t  riv_status;
+	uint32_t riv_bukid; /* bucket ID */
 };
 
 extern struct dss_module_key rebuild_module_key;
@@ -371,7 +368,8 @@ void
 rebuild_tgt_status_check_ult(void *arg);
 
 int
-rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
+rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
+		    struct rebuild_tgt_pool_tracker **p_rpt);
 
 bool
 rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,

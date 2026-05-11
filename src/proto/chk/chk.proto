@@ -119,6 +119,9 @@ enum CheckInconsistAction {
 	CIA_TRUST_EC_PARITY = 11;
 	// Trust EC data shard.
 	CIA_TRUST_EC_DATA = 12;
+
+	// Stale unresolved interaction. The checker can no longer address this report without re-running on affected pool.
+	CIA_STALE = 0xffff;
 }
 
 // The flags to control DAOS check general behavior, not related with any detailed inconsistency.

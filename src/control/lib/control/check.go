@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,7 +22,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pbutil "github.com/daos-stack/daos/src/control/common/proto"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -400,6 +403,17 @@ type SystemCheckReport struct {
 	chkpb.CheckReport
 }
 
+func (r *SystemCheckReport) MarshalJSON() ([]byte, error) {
+	type toJSON SystemCheckReport
+	return json.Marshal(struct {
+		Rank uint32 `json:"rank"`
+		*toJSON
+	}{
+		Rank:   r.Rank,
+		toJSON: (*toJSON)(r),
+	})
+}
+
 // RepairChoices lists all possible repair options for this particular report.
 func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 	if r == nil {
@@ -427,6 +441,13 @@ func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 // IsInteractive indicates whether this report requires user interaction to make a repair choice.
 func (r *SystemCheckReport) IsInteractive() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_INTERACT
+}
+
+// IsStale indicates whether this report was awaiting user interaction when it became stale. Stale
+// reports are still valid but can't be repaired without re-running the checker on the affected
+// pool.
+func (r *SystemCheckReport) IsStale() bool {
+	return r.Action == chkpb.CheckInconsistAction_CIA_STALE
 }
 
 // IsRemovedPool indicates whether the error detected in this report indicates a missing pool.
@@ -547,6 +568,7 @@ type SystemCheckQueryResp struct {
 	Status    SystemCheckStatus    `json:"status"`
 	ScanPhase SystemCheckScanPhase `json:"scan_phase"`
 	StartTime time.Time            `json:"start_time"`
+	Leader    ranklist.Rank        `json:"leader"`
 
 	Pools   map[string]*SystemCheckPoolInfo `json:"pools"`
 	Reports []*SystemCheckReport            `json:"reports"`
@@ -589,12 +611,22 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		ScanPhase: SystemCheckScanPhase(pbResp.GetInsPhase()),
 		StartTime: time.Unix(int64(pbResp.GetTime().GetStartTime()), 0),
 		Pools:     getPoolCheckInfo(pbResp.GetPools()),
+		Leader:    ranklist.Rank(pbResp.Leader),
 	}
 	for _, pbReport := range pbResp.GetReports() {
 		rpt := new(SystemCheckReport)
 		proto.Merge(rpt, pbReport)
 		resp.Reports = append(resp.Reports, rpt)
 	}
+
+	// Sort reports by class, then sequence for consistent ordering.
+	sort.Slice(resp.Reports, func(i, j int) bool {
+		if resp.Reports[i].Class != resp.Reports[j].Class {
+			return resp.Reports[i].Class < resp.Reports[j].Class
+		}
+		return resp.Reports[i].Seq < resp.Reports[j].Seq
+	})
+
 	return resp, nil
 }
 
@@ -734,4 +766,110 @@ func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 	}
 
 	return ur.getMSError()
+}
+
+// CheckEngineRepairReq contains a repair request for a specific engine.
+type CheckEngineRepairReq struct {
+	unaryRequest
+
+	ctlpb.CheckEngineActReq
+}
+
+// CheckEngineRepairResp contains the engine response for a repair request.
+type CheckEngineRepairResp struct {
+	ctlpb.CheckEngineActResp
+}
+
+// CheckEngineRepair directs a repair request to a specific engine.
+//
+// NB: This is an inter-server RPC.
+func CheckEngineRepair(ctx context.Context, rpcClient UnaryInvoker, req *CheckEngineRepairReq) (*CheckEngineRepairResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Req == nil {
+		return nil, errors.Errorf("no action request included in %T", req)
+	}
+
+	if len(req.HostList) != 1 {
+		return nil, errors.Errorf("CheckEngineRepair requires exactly one host")
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).CheckEngineRepair(ctx, &req.CheckEngineActReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	if len(ur.Responses) == 0 {
+		return nil, errors.New("no host responses")
+	}
+
+	pbResp, ok := ur.Responses[0].Message.(*ctlpb.CheckEngineActResp)
+	if !ok {
+		return nil, errors.Errorf("bad response type %T", ur.Responses[0].Message)
+	}
+
+	return &CheckEngineRepairResp{
+		CheckEngineActResp: *pbResp,
+	}, nil
+}
+
+// SystemCheckEngineReportReq contains parameters to be passed to SystemCheckEngineReport.
+type SystemCheckEngineReportReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckReportReq
+}
+
+// SystemCheckEngineReportResp contains the response from the SystemCheckEngineReport RPC.
+type SystemCheckEngineReportResp struct {
+	sharedpb.CheckReportResp
+}
+
+// SystemCheckEngineReport registers a checker report for an individual rank with the management service.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckEngineReport(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckEngineReportReq) (*SystemCheckEngineReportResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Report == nil {
+		return nil, errors.Errorf("no check report in %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckEngineReport(ctx, &req.CheckReportReq)
+	})
+
+	rpcClient.Debugf("DAOS system check report request: %s", pbutil.Debug(&req.CheckReportReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	if err := ur.getMSError(); err != nil {
+		return nil, errors.Wrap(err, "MS error")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckReportResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckEngineReportResp)
+	resp.CheckReportResp = *pbResp
+
+	return resp, nil
 }

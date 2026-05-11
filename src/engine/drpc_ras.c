@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +18,7 @@
 #include "drpc_internal.h"
 #include "srv_internal.h"
 #include "srv.pb-c.h"
+#include "check_engine.pb-c.h"
 
 static void
 free_event(Shared__RASEvent *evt)
@@ -36,7 +38,6 @@ safe_self_rank(void)
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
 	if (rc != 0) {
-		D_ERROR("failed to get self rank: "DF_RC"\n", DP_RC(rc));
 		rank = CRT_NO_RANK;
 	}
 
@@ -367,6 +368,11 @@ ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation)
 			 NULL /* ctlop */, &evt, false /* wait_for_resp */);
 }
 
+/**
+ * TODO DAOS-18537: Move all of the checker upcalls into a new file, and transfer their protobuf
+ * definitions into shared/check_upcall.proto.
+ * Consider if it would be best to put the checker functionality into a new dRPC module.
+ */
 void
 ds_chk_free_pool_list(struct chk_list_pool *clp, uint32_t nr)
 {
@@ -573,8 +579,8 @@ int
 ds_chk_report_upcall(void *rpt)
 {
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Srv__CheckReportReq	 req = SRV__CHECK_REPORT_REQ__INIT;
-	Srv__CheckReportResp	*respb = NULL;
+	Shared__CheckReportReq   req   = SHARED__CHECK_REPORT_REQ__INIT;
+	Shared__CheckReportResp *respb = NULL;
 	Drpc__Response		*dresp = NULL;
 	uint8_t			*reqb = NULL;
 	size_t			 size;
@@ -583,12 +589,12 @@ ds_chk_report_upcall(void *rpt)
 	D_ASSERT(rpt != NULL);
 	req.report = rpt;
 
-	size = srv__check_report_req__get_packed_size(&req);
+	size = shared__check_report_req__get_packed_size(&req);
 	D_ALLOC(reqb, size);
 	if (reqb == NULL)
 		D_GOTO(out_req, rc = -DER_NOMEM);
 
-	rc = srv__check_report_req__pack(&req, reqb);
+	rc = shared__check_report_req__pack(&req, reqb);
 	if (rc < 0)
 		goto out_req;
 
@@ -601,12 +607,12 @@ ds_chk_report_upcall(void *rpt)
 		D_GOTO(out_dresp, rc = -DER_IO);
 	}
 
-	respb = srv__check_report_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
+	respb = shared__check_report_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
 	if (alloc.oom || respb == NULL)
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 
 	rc = respb->status;
-	srv__check_report_resp__free_unpacked(respb, &alloc.alloc);
+	shared__check_report_resp__free_unpacked(respb, &alloc.alloc);
 
 out_dresp:
 	drpc_response_free(dresp);

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1764,6 +1764,8 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
 	else
 		rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
+
+	rebuild->degraded = !!(info->rs_flags & DAOS_RSF_DEGRADED);
 }
 
 static void
@@ -1984,7 +1986,6 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		resp.infos[i] = &resp_infos[i];
 		mgmt__pool_query_target_info__init(resp.infos[i]);
 
-		resp.infos[i]->type = (Mgmt__PoolQueryTargetInfo__TargetType) infos[i].ta_type;
 		resp.infos[i]->state = (Mgmt__PoolQueryTargetInfo__TargetState) infos[i].ta_state;
 		D_ALLOC_ARRAY(resp.infos[i]->space, DAOS_MEDIA_MAX);
 		if (resp.infos[i]->space == NULL)
@@ -2790,7 +2791,7 @@ ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to start check\n");
 
 	rc = ds_mgmt_check_start(req->n_ranks, req->ranks, req->n_policies, req->policies,
-				 req->n_uuids, req->uuids, req->flags, -1 /* phase */);
+				 req->n_uuids, req->uuids, req->flags);
 	if (rc < 0)
 		D_ERROR("Failed to start check: "DF_RC"\n", DP_RC(rc));
 

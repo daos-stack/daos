@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -167,6 +167,12 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	int                 creds = *credits;
 	int		    rc;
 
+	/**
+	 * Since the key's structure does not have a magic value and the ilog root (which has
+	 * a magic value) is already destroyed at this stage there is no way to verify the pointer
+	 * actually points to a valid data.
+	 */
+
 	if (key->kr_bmap & KREC_BF_NO_AKEY && gc->gc_type == GC_DKEY) {
 		/** Special case, this will defer to the free callback
 		 *  and the tree will be inserted as akey.
@@ -302,8 +308,10 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	 * the container (that may yield).
 	 */
 	rc = vos_dtx_table_destroy(&pool->vp_umm, cont);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to destroy DTX table.");
 		return rc;
+	}
 
 	/** Move any leftover bags to the pool gc */
 	for (i = GC_AKEY; i < GC_CONT; i++) {
@@ -314,8 +322,10 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 		rc = gc_bags_move(pool, &pool->vp_pool_df->pd_gc_bins[i],
 				  src_bin);
-		if (rc != 0)
+		if (rc != 0) {
+			DL_ERROR(rc, "Failed to move GC bags.");
 			return rc;
+		}
 
 		/** Indicate to caller that we've taken over container bags */
 		if (!vos_pool_is_evictable(pool))
@@ -582,8 +592,10 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	int		      rc;
 
 	bag = gc_bin_find_bag(umm, bin);
-	if (!bag)
+	if (!bag) {
+		D_ERROR("Failed to find GC bag\n");
 		return -DER_NOSPACE;
+	}
 
 	D_ASSERT(bag->bag_item_nr < bin->bin_bag_size);
 	/* NB: umem_tx_add with UMEM_XADD_NO_SNAPSHOT, this is totally
@@ -1914,7 +1926,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 		rc = gc_reclaim_pool(pool, credits, &empty);
 	if (rc) {
 		D_CRIT("gc_reclaim_pool failed " DF_RC "\n", DP_RC(rc));
-		return 0; /* caller can't do anything for it */
+		return rc;
 	}
 	total -= *credits; /* subtract the remained credits */
 
@@ -2012,6 +2024,10 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 		else
 			d_tm_inc_counter(slack, 1);
 
+		/* Try small credits when GC failed to allocate space */
+		if (pool->vp_gc_nospc)
+			creds = 2;
+
 		if (credits > 0 && (credits - total) < creds)
 			creds = credits - total;
 
@@ -2020,6 +2036,8 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 
 		if (rc) {
 			D_ERROR("GC pool failed: " DF_RC "\n", DP_RC(rc));
+			if (rc == -DER_NOSPACE)
+				pool->vp_gc_nospc = 1;
 			d_tm_mark_duration_end(duration);
 			break;
 		}
@@ -2042,8 +2060,11 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 		}
 	}
 
-	if (total != 0) /* did something */
+	if (total != 0) { /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
+		if (rc == 0)
+			pool->vp_gc_nospc = 0;
+	}
 
 	D_ASSERT(tls->vtl_gc_running > 0);
 	tls->vtl_gc_running--;
