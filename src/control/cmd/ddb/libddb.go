@@ -16,8 +16,8 @@ package main
 */
 import "C"
 
-func ddb_init() C.int               { return C.ddb_init() }
-func ddb_fini()                      { C.ddb_fini() }
+func ddb_init() C.int                    { return C.ddb_init() }
+func ddb_fini()                          { C.ddb_fini() }
 func ddb_ctx_init(ctx *C.struct_ddb_ctx) { C.ddb_ctx_init(ctx) }
 
 func ddb_pool_is_open(ctx *C.struct_ddb_ctx) C.bool {

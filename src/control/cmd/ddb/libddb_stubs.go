@@ -63,8 +63,8 @@ func resetDdbStubs() {
 
 var ddb_init_RC C.int = 0
 
-func ddb_init() C.int { return ddb_init_RC }
-func ddb_fini()        {}
+func ddb_init() C.int                  { return ddb_init_RC }
+func ddb_fini()                        {}
 func ddb_ctx_init(_ *C.struct_ddb_ctx) {}
 
 var ddb_pool_is_open_RC = false
