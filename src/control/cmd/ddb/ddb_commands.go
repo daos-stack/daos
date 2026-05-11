@@ -9,6 +9,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/desertbit/grumble"

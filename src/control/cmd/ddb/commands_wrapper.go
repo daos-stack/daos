@@ -14,7 +14,6 @@ import (
 	"unsafe"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 /*
@@ -39,12 +38,11 @@ func freeString(s *C.char) {
 // DdbContext wraps the C ddb_ctx structure and provides Go methods for all ddb operations.
 type DdbContext struct {
 	ctx C.struct_ddb_ctx
-	log *logging.LeveledLogger
 }
 
 // Init initializes the ddb context and returns a cleanup function that must be
 // called when done.
-func (ctx *DdbContext) Init(log *logging.LeveledLogger) (func(), error) {
+func (ctx *DdbContext) Init() (func(), error) {
 	// Must lock to OS thread because vos init/fini uses ABT init and finalize which must be called on the same thread
 	runtime.LockOSThread()
 
@@ -54,7 +52,6 @@ func (ctx *DdbContext) Init(log *logging.LeveledLogger) (func(), error) {
 	}
 
 	ddb_ctx_init(&ctx.ctx) // Initialize with ctx default values
-	ctx.log = log
 
 	return func() {
 		ddb_fini()
@@ -367,15 +364,6 @@ func (ctx *DdbContext) ProvMem(dbPath string, tmpfsMount string, tmpfsMountSize 
 // Exactly one of cmtTime (a POSIX timestamp) or cmtDate (a date string) must be specified;
 // aggregation discards DTX entries committed before that point in time.
 func (ctx *DdbContext) DtxAggr(path string, cmtTime uint64, cmtDate string) error {
-	if cmtTime != math.MaxUint64 && cmtDate != "" {
-		ctx.log.Error("'--cmt_time' and '--cmt_date' options are mutually exclusive")
-		return daosError(-C.DER_INVAL)
-	}
-	if cmtTime == math.MaxUint64 && cmtDate == "" {
-		ctx.log.Error("'--cmt_time' or '--cmt_date' option has to be defined")
-		return daosError(-C.DER_INVAL)
-	}
-
 	/* Set up the options */
 	options := C.struct_dtx_aggr_options{}
 	options.path = C.CString(path)
