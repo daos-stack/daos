@@ -423,3 +423,103 @@ func TestStrToLogLevels(t *testing.T) {
 		})
 	}
 }
+
+// TestNewLogger verifies the newLogger code paths: default level, explicit debug
+// level, invalid level, and all three LogDir branches (valid dir, non-existent
+// path, path that is a file rather than a directory).
+func TestNewLogger(t *testing.T) {
+	t.Run("no LogDir default level", func(t *testing.T) {
+		log, err := newLogger(cliOptions{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if log == nil {
+			t.Fatal("expected non-nil logger")
+		}
+	})
+
+	t.Run("explicit valid debug level", func(t *testing.T) {
+		log, err := newLogger(cliOptions{Debug: "DEBUG"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if log == nil {
+			t.Fatal("expected non-nil logger")
+		}
+	})
+
+	t.Run("invalid debug level", func(t *testing.T) {
+		_, err := newLogger(cliOptions{Debug: "INVALID"})
+		if err == nil {
+			t.Fatal("expected error for invalid log level, got nil")
+		}
+	})
+
+	t.Run("valid LogDir", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		log, err := newLogger(cliOptions{LogDir: tmpDir})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if log == nil {
+			t.Fatal("expected non-nil logger")
+		}
+	})
+
+	t.Run("non-existent LogDir", func(t *testing.T) {
+		_, err := newLogger(cliOptions{LogDir: "/non/existent/path"})
+		if err == nil {
+			t.Fatal("expected error for non-existent log dir, got nil")
+		}
+	})
+
+	t.Run("LogDir is a file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "not-a-dir")
+		if err := os.WriteFile(tmpFile, []byte(""), 0644); err != nil {
+			t.Fatalf("failed to create temp file: %v", err)
+		}
+		_, err := newLogger(cliOptions{LogDir: tmpFile})
+		if err == nil {
+			t.Fatal("expected error when LogDir is a file, got nil")
+		}
+	})
+}
+
+// TestClosePoolIfOpen verifies that closePoolIfOpen only calls Close when the
+// pool is actually open, and that it tolerates a Close error (log only, no panic).
+func TestClosePoolIfOpen(t *testing.T) {
+	log := logging.NewCommandLineLogger()
+
+	t.Run("pool not open, close not called", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_pool_is_open_RC = false
+		ddb_run_close_Fn = func() error {
+			t.Fatal("Close should not be called when pool is not open")
+			return nil
+		}
+		closePoolIfOpen(ctx, log)
+	})
+
+	t.Run("pool open, close called", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_pool_is_open_RC = true
+		closeCalled := false
+		ddb_run_close_Fn = func() error {
+			closeCalled = true
+			return nil
+		}
+		closePoolIfOpen(ctx, log)
+		test.AssertTrue(t, closeCalled, "expected Close to have been called when pool is open")
+	})
+
+	t.Run("pool open, close returns error", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_pool_is_open_RC = true
+		ddb_run_close_Fn = func() error {
+			return fmt.Errorf("close failed")
+		}
+		// Should not panic; the error is only logged.
+		closePoolIfOpen(ctx, log)
+	})
+}

@@ -67,6 +67,8 @@ func TestHelpCmds(t *testing.T) {
 			cmdStr:     "open",
 			helpSubStr: "Usage:\n  open [flags] path\n",
 		},
+		// TODO(follow-up PR): Add help tests for the remaining commands.
+		// Use runHelpCmd(t, "<cmd>", "Usage:\n  <cmd>") following the same pattern.
 	} {
 		t.Run(name, func(t *testing.T) {
 			runHelpCmd(t, tc.cmdStr, tc.helpSubStr)
@@ -80,6 +82,11 @@ func TestCmds(t *testing.T) {
 		setup     func()
 		expStdout []string
 		expErr    error
+		// skipCmdLine skips the command-line sub-test with a message. Use when
+		// a flag is shared between the CLI layer and the grumble command: go-flags
+		// consumes it before grumble can see it, making a clean command-line test
+		// impossible for that particular flag.
+		skipCmdLine string
 	}{
 		"ls invalid options": {
 			args:   []string{"ls", "--bar"},
@@ -180,6 +187,183 @@ func TestCmds(t *testing.T) {
 			},
 			expStdout: []string{"ls called"},
 		},
+
+		// --- open command ---
+		// Note: the -w/--write_mode and -p/--db_path flags of the grumble 'open'
+		// command share names with CLI-level flags that are consumed by go-flags
+		// before reaching grumble in command-line mode. The command-line test for
+		// those flags would silently test wrong values. They are correctly exercised
+		// in command-file mode; see TestRun for CLI-level flag coverage.
+		"open default": {
+			args: []string{"open", "/path/to/vos-0"},
+			setup: func() {
+				ddb_run_open_Fn = func(path, dbPath string, writeMode bool) error {
+					fmt.Println("open called")
+					if err := isArgEqual("/path/to/vos-0", path, "path"); err != nil {
+						return err
+					}
+					if err := isArgEqual("", dbPath, "db_path"); err != nil {
+						return err
+					}
+					if err := isArgEqual(false, writeMode, "write_mode"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"open called"},
+		},
+		"open write mode": {
+			args:        []string{"open", "-w", "/path/to/vos-0"},
+			skipCmdLine: "-w is consumed by the CLI write_mode flag before reaching grumble",
+			setup: func() {
+				ddb_run_open_Fn = func(path, dbPath string, writeMode bool) error {
+					fmt.Println("open called")
+					if err := isArgEqual(true, writeMode, "write_mode"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"open called"},
+		},
+		"open with db path": {
+			args:        []string{"open", "-p", "/sysdb", "/path/to/vos-0"},
+			skipCmdLine: "-p is consumed by the CLI db_path flag before reaching grumble",
+			setup: func() {
+				ddb_run_open_Fn = func(path, dbPath string, writeMode bool) error {
+					fmt.Println("open called")
+					if err := isArgEqual("/path/to/vos-0", path, "path"); err != nil {
+						return err
+					}
+					if err := isArgEqual("/sysdb", dbPath, "db_path"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"open called"},
+		},
+
+		// --- feature command ---
+		// feature --show: verifies the show flag is forwarded to the C layer.
+		"feature show": {
+			args: []string{"feature", "--show"},
+			setup: func() {
+				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
+					fmt.Println("feature called")
+					if err := isArgEqual(true, show, "show"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"feature called"},
+		},
+		// feature --enable: verifies that the enable string reaches ddb_feature_string2flags.
+		"feature enable": {
+			args: []string{"feature", "--enable=myflag"},
+			setup: func() {
+				var capturedFlag string
+				ddb_feature_string2flags_Fn = func(s string) (uint64, uint64, error) {
+					capturedFlag = s
+					return 0, 0, nil
+				}
+				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
+					fmt.Println("feature called")
+					if err := isArgEqual("myflag", capturedFlag, "enable flag string"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"feature called"},
+		},
+		// feature --disable: verifies that the disable string reaches ddb_feature_string2flags.
+		"feature disable": {
+			args: []string{"feature", "--disable=otherflag"},
+			setup: func() {
+				var capturedFlag string
+				ddb_feature_string2flags_Fn = func(s string) (uint64, uint64, error) {
+					capturedFlag = s
+					return 0, 0, nil
+				}
+				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
+					fmt.Println("feature called")
+					if err := isArgEqual("otherflag", capturedFlag, "disable flag string"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"feature called"},
+		},
+
+		// --- dtx_aggr command ---
+		// The Run handler in ddb_commands.go enforces that exactly one of --cmt_time or
+		// --cmt_date is provided. These tests exercise that Go-layer validation.
+		"dtx_aggr both cmt_time and cmt_date": {
+			args:   []string{"dtx_aggr", "--cmt_time=0", "--cmt_date=2024-01-01"},
+			expErr: ddbTestErr("mutually exclusive"),
+		},
+		"dtx_aggr neither cmt_time nor cmt_date": {
+			args:   []string{"dtx_aggr"},
+			expErr: ddbTestErr("has to be defined"),
+		},
+		"dtx_aggr cmt_time": {
+			args: []string{"dtx_aggr", "--cmt_time=1000"},
+			setup: func() {
+				ddb_run_dtx_aggr_Fn = func(path string, cmtTime uint64, cmtDate string) error {
+					fmt.Println("dtx_aggr called")
+					if err := isArgEqual(uint64(1000), cmtTime, "cmtTime"); err != nil {
+						return err
+					}
+					if err := isArgEqual("", cmtDate, "cmtDate"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"dtx_aggr called"},
+		},
+		"dtx_aggr cmt_date": {
+			args: []string{"dtx_aggr", "--cmt_date=2024-01-01"},
+			setup: func() {
+				ddb_run_dtx_aggr_Fn = func(path string, cmtTime uint64, cmtDate string) error {
+					fmt.Println("dtx_aggr called")
+					if err := isArgEqual("2024-01-01", cmtDate, "cmtDate"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"dtx_aggr called"},
+		},
+		"dtx_aggr with path": {
+			args: []string{"dtx_aggr", "--cmt_time=0", "[0]"},
+			setup: func() {
+				ddb_run_dtx_aggr_Fn = func(path string, cmtTime uint64, cmtDate string) error {
+					fmt.Println("dtx_aggr called")
+					if err := isArgEqual("[0]", path, "path"); err != nil {
+						return err
+					}
+					if err := isArgEqual(uint64(0), cmtTime, "cmtTime"); err != nil {
+						return err
+					}
+					return nil
+				}
+			},
+			expStdout: []string{"dtx_aggr called"},
+		},
+
+		// TODO(follow-up PR): Add TestCmds cases for the remaining commands.
+		// Each new test case follows the same pattern as the cases above: set the
+		// corresponding ddb_run_<cmd>_Fn hook in setup() to verify argument passing,
+		// then add the case to this table.
+		// Commands still to be covered: close, superblock_dump, value_dump, rm,
+		// value_load, ilog_dump, ilog_commit, ilog_clear, dtx_dump, dtx_cmt_clear,
+		// smd_sync, vea_dump, vea_update, dtx_act_commit, dtx_act_abort, rm_pool,
+		// dtx_act_discard_invalid, dev_list, dev_replace, dtx_stat, prov_mem.
 	} {
 		t.Run(name, func(t *testing.T) {
 			checkCmd := func(t *testing.T, stdout string, err error) {
@@ -195,6 +379,9 @@ func TestCmds(t *testing.T) {
 			}
 
 			t.Run("command-line", func(t *testing.T) {
+				if tc.skipCmdLine != "" {
+					t.Skipf("skipping command-line mode: %s", tc.skipCmdLine)
+				}
 				ctx := newTestContext(t)
 				if tc.setup != nil {
 					tc.setup()

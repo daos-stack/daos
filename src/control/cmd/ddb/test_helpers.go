@@ -28,7 +28,7 @@ func (dte ddbTestErr) Error() string {
 }
 
 const (
-	errUnknownCmd = ddbTestErr(grumbleUnknownCmdErr)
+	errUnknownCmd = ddbTestErr("Unknown command:")
 )
 
 // newTestContext creates a fresh DdbContext for use in tests, resetting all
