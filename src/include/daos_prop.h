@@ -829,7 +829,8 @@ int
 daos_prop_set_byteval(daos_prop_t *prop, uint32_t type, const void *data, size_t len);
 
 /**
- * Set the byte-array value of a property entry. Convenience function.
+ * Set the byte-array value of a property entry. As with daos_prop_set_byteval(),
+ * the buffer is duplicated internally and freed by daos_prop_free().
  *
  * \param[in,out]	entry		Entry whose value to set.
  * \param[in]		data		Bytes to copy into the entry. May be

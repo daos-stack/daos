@@ -1054,18 +1054,7 @@ daos_prop_entry_dup_byteval(struct daos_prop_entry *entry_dst, struct daos_prop_
 		return 0;
 	}
 
-	D_ALLOC_PTR(dst_bv);
-	if (dst_bv == NULL)
-		return -DER_NOMEM;
-	D_ALLOC(dst_bv->dpb_data, src_bv->dpb_len);
-	if (dst_bv->dpb_data == NULL) {
-		D_FREE(dst_bv);
-		return -DER_NOMEM;
-	}
-	memcpy(dst_bv->dpb_data, src_bv->dpb_data, src_bv->dpb_len);
-	dst_bv->dpb_len        = src_bv->dpb_len;
-	entry_dst->dpe_val_ptr = dst_bv;
-	return 0;
+	return daos_prop_entry_set_byteval(entry_dst, src_bv->dpb_data, src_bv->dpb_len);
 }
 
 int
