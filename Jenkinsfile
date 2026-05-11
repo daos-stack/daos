@@ -1597,7 +1597,7 @@ pipeline {
                     parallel(
                         'Bullseye Report': scriptedSummaryStage(
                             name: 'Bullseye Report',
-                            distro: 'el8',
+                            distro: 'el9',
                             compiler: 'covc',
                             runCondition: runStage(['CI_BUILD_BULLSEYE': true]),
                             nodeLabel: 'docker_runner',
@@ -1606,10 +1606,10 @@ pipeline {
                                                              parallel_build: true) +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
+                                             ' --build-arg REPOS="' + prRepos('el9') + '"' +
                                              ' --build-arg COMPILER=covc' +
                                              ' --build-arg CODE_COVERAGE=true' +
-                                             ' -f utils/docker/Dockerfile.el.8 .',
+                                             ' -f utils/docker/Dockerfile.el.9 .',
                             installScript: './ci/summary/install_pkgs.sh',
                             runScriptArgs: [
                                 label: 'Generate Bullseye Report',
