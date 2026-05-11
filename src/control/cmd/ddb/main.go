@@ -270,18 +270,18 @@ func newLogger(opts cliOptions) (*logging.LeveledLogger, error) {
 	return fileLog, nil
 }
 
-func closePoolIfOpen(api DdbAPI, log *logging.LeveledLogger) {
-	if !api.PoolIsOpen() {
+func closePoolIfOpen(ctx *DdbContext, log *logging.LeveledLogger) {
+	if !ctx.PoolIsOpen() {
 		return
 	}
 
 	log.Info("Closing pool...\n")
-	if err := api.Close(); err != nil {
+	if err := ctx.Close(); err != nil {
 		log.Errorf("Error closing pool: %s\n", err)
 	}
 }
 
-func parseOpts(args []string, api DdbAPI) (cliOptions, *flags.Parser, error) {
+func parseOpts(args []string, ctx *DdbContext) (cliOptions, *flags.Parser, error) {
 	var opts cliOptions
 	parser := flags.NewParser(&opts, flags.HelpFlag|flags.IgnoreUnknown)
 	parser.Name = "ddb"
@@ -308,13 +308,13 @@ func parseOpts(args []string, api DdbAPI) (cliOptions, *flags.Parser, error) {
 	return opts, parser, nil
 }
 
-func run(api DdbAPI, log *logging.LeveledLogger, opts cliOptions, parser *flags.Parser) error {
-	cleanup, err := api.Init(log)
+func run(ctx *DdbContext, log *logging.LeveledLogger, opts cliOptions, parser *flags.Parser) error {
+	cleanup, err := ctx.Init()
 	if err != nil {
 		return errors.Wrap(err, ctxInitErr)
 	}
 	defer cleanup()
-	app := createGrumbleApp(api)
+	app := createGrumbleApp(ctx)
 
 	if opts.VosPath != "" {
 		// Commands that manage the pool open/close lifecycle themselves and must
@@ -331,10 +331,10 @@ func run(api DdbAPI, log *logging.LeveledLogger, opts cliOptions, parser *flags.
 		}
 		if !slices.Contains(noAutoOpen, opts.Args.RunCmd) {
 			log.Debugf("Connect to path: %s\n", opts.VosPath)
-			if err := api.Open(string(opts.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
+			if err := ctx.Open(string(opts.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
 				return errors.Wrapf(err, vosPathOpenErr, opts.VosPath)
 			}
-			defer closePoolIfOpen(api, log)
+			defer closePoolIfOpen(ctx, log)
 		}
 	}
 
@@ -358,7 +358,7 @@ func run(api DdbAPI, log *logging.LeveledLogger, opts cliOptions, parser *flags.
 	os.Args = []string{}
 	result := app.Run()
 	// make sure pool is closed
-	closePoolIfOpen(api, log)
+	closePoolIfOpen(ctx, log)
 	return result
 }
 
@@ -397,7 +397,7 @@ func main() {
 	}
 }
 
-func createGrumbleApp(api DdbAPI) *grumble.App {
+func createGrumbleApp(ctx *DdbContext) *grumble.App {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
 		homedir = "/tmp"
@@ -410,7 +410,7 @@ func createGrumbleApp(api DdbAPI) *grumble.App {
 		Prompt:      "ddb:  ",
 	})
 
-	addAppCommands(app, api)
+	addAppCommands(app, ctx)
 
 	// Add the quit command. grumble also includes a builtin exit command
 	app.AddCommand(&grumble.Command{

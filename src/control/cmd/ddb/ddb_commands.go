@@ -14,7 +14,7 @@ import (
 	"github.com/desertbit/grumble"
 )
 
-func addAppCommands(app *grumble.App, api DdbAPI) {
+func addAppCommands(app *grumble.App, ctx *DdbContext) {
 	// Command: ls
 	app.AddCommand(&grumble.Command{
 		Name:      "ls",
@@ -30,7 +30,7 @@ func addAppCommands(app *grumble.App, api DdbAPI) {
 			a.String("path", "Optional, list contents of the provided path", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return api.Ls(c.Args.String("path"), c.Flags.Bool("recursive"), c.Flags.Bool("details"))
+			return ctx.Ls(c.Args.String("path"), c.Flags.Bool("recursive"), c.Flags.Bool("details"))
 		},
 		Completer: nil,
 	})
@@ -51,7 +51,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 			a.String("path", "Path to the VOS file to open.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.Open(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.Bool("write_mode"))
+			return ctx.Open(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.Bool("write_mode"))
 		},
 		Completer: openCompleter,
 	})
@@ -63,7 +63,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		LongHelp:  "",
 		HelpGroup: "",
 		Run: func(c *grumble.Context) error {
-			return api.Version()
+			return ctx.Version()
 		},
 		Completer: nil,
 	})
@@ -75,7 +75,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
-			return api.Close()
+			return ctx.Close()
 		},
 		Completer: nil,
 	})
@@ -87,7 +87,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
-			return api.SuperblockDump()
+			return ctx.SuperblockDump()
 		},
 		Completer: nil,
 	})
@@ -106,7 +106,7 @@ the file, else it will be printed to the screen.`,
 			a.String("dst", "File path to dump the value to.", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return api.ValueDump(c.Args.String("path"), c.Args.String("dst"))
+			return ctx.ValueDump(c.Args.String("path"), c.Args.String("dst"))
 		},
 		Completer: nil,
 	})
@@ -122,7 +122,7 @@ and everything under it, to a single value.`,
 			a.String("path", "VOS tree path to remove.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.Rm(c.Args.String("path"))
+			return ctx.Rm(c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -143,7 +143,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("dst", "Destination VOS tree path to a value.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.ValueLoad(c.Args.String("src"), c.Args.String("dst"))
+			return ctx.ValueLoad(c.Args.String("src"), c.Args.String("dst"))
 		},
 		Completer: nil,
 	})
@@ -158,7 +158,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to an object, dkey, or akey.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.IlogDump(c.Args.String("path"))
+			return ctx.IlogDump(c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -173,7 +173,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to an object, dkey, or akey.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.IlogCommit(c.Args.String("path"))
+			return ctx.IlogCommit(c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -188,7 +188,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to an object, dkey, or akey.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.IlogClear(c.Args.String("path"))
+			return ctx.IlogClear(c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -207,7 +207,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to a container.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DtxDump(c.Args.String("path"), c.Flags.Bool("active"), c.Flags.Bool("committed"))
+			return ctx.DtxDump(c.Args.String("path"), c.Flags.Bool("active"), c.Flags.Bool("committed"))
 		},
 		Completer: nil,
 	})
@@ -222,7 +222,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to a container.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DtxCmtClear(c.Args.String("path"))
+			return ctx.DtxCmtClear(c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -238,7 +238,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("db_path", "Path to the sys db. (default /mnt/daos)", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return api.SmdSync(c.Args.String("nvme_conf"), c.Args.String("db_path"))
+			return ctx.SmdSync(c.Args.String("nvme_conf"), c.Args.String("db_path"))
 		},
 		Completer: nil,
 	})
@@ -250,7 +250,7 @@ the path must include the extent, otherwise, it must not.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
-			return api.VeaDump()
+			return ctx.VeaDump()
 		},
 		Completer: nil,
 	})
@@ -266,7 +266,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("blk_cnt", "Total blocks of the region to mark free.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.VeaUpdate(c.Args.String("offset"), c.Args.String("blk_cnt"))
+			return ctx.VeaUpdate(c.Args.String("offset"), c.Args.String("blk_cnt"))
 		},
 		Completer: nil,
 	})
@@ -282,7 +282,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("dtx_id", "DTX id of the entry to commit. ")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DtxActCommit(c.Args.String("path"), c.Args.String("dtx_id"))
+			return ctx.DtxActCommit(c.Args.String("path"), c.Args.String("dtx_id"))
 		},
 		Completer: nil,
 	})
@@ -298,7 +298,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("dtx_id", "DTX id of the entry to abort. ")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DtxActAbort(c.Args.String("path"), c.Args.String("dtx_id"))
+			return ctx.DtxActAbort(c.Args.String("path"), c.Args.String("dtx_id"))
 		},
 		Completer: nil,
 	})
@@ -319,7 +319,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "Optional, Path to the VOS file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return api.Feature(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+			return ctx.Feature(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
 		},
 		Completer: featureCompleter,
 	})
@@ -337,7 +337,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "Path to the VOS file")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.RmPool(c.Args.String("path"), c.Flags.String("db_path"))
+			return ctx.RmPool(c.Args.String("path"), c.Flags.String("db_path"))
 		},
 		Completer: rmPoolCompleter,
 	})
@@ -353,7 +353,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("dtx_id", "DTX id of the entry to validate or 'all' to validate all active DTX entries.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DtxActDiscardInvalid(c.Args.String("path"), c.Args.String("dtx_id"))
+			return ctx.DtxActDiscardInvalid(c.Args.String("path"), c.Args.String("dtx_id"))
 		},
 		Completer: nil,
 	})
@@ -368,7 +368,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("db_path", "Path to the sys db.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DevList(c.Args.String("db_path"))
+			return ctx.DevList(c.Args.String("db_path"))
 		},
 		Completer: nil,
 	})
@@ -385,7 +385,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("new_dev", "New device UUID.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DevReplace(c.Args.String("db_path"), c.Args.String("old_dev"), c.Args.String("new_dev"))
+			return ctx.DevReplace(c.Args.String("db_path"), c.Args.String("old_dev"), c.Args.String("new_dev"))
 		},
 		Completer: nil,
 	})
@@ -403,7 +403,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "Optional, VOS tree path of a container to query.", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DtxStat(c.Args.String("path"), c.Flags.Bool("details"))
+			return ctx.DtxStat(c.Args.String("path"), c.Flags.Bool("details"))
 		},
 		Completer: nil,
 	})
@@ -422,7 +422,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("tmpfs_mount", "Path to the tmpfs mountpoint.")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.ProvMem(c.Args.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_size"))
+			return ctx.ProvMem(c.Args.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_size"))
 		},
 		Completer: nil,
 	})
@@ -441,7 +441,15 @@ the path must include the extent, otherwise, it must not.`,
 			f.String("d", "cmt_date", "", "Max aggregation committed date (format '1970-01-01 00:00:00')")
 		},
 		Run: func(c *grumble.Context) error {
-			return api.DtxAggr(c.Args.String("path"), c.Flags.Uint64("cmt_time"), c.Flags.String("cmt_date"))
+			cmtTime := c.Flags.Uint64("cmt_time")
+			cmtDate := c.Flags.String("cmt_date")
+			if cmtTime != math.MaxUint64 && cmtDate != "" {
+				return fmt.Errorf("'--cmt_time' and '--cmt_date' options are mutually exclusive")
+			}
+			if cmtTime == math.MaxUint64 && cmtDate == "" {
+				return fmt.Errorf("'--cmt_time' or '--cmt_date' option has to be defined")
+			}
+			return ctx.DtxAggr(c.Args.String("path"), cmtTime, cmtDate)
 		},
 		Completer: nil,
 	})
