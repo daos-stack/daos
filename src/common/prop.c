@@ -1043,7 +1043,6 @@ int
 daos_prop_entry_dup_byteval(struct daos_prop_entry *entry_dst, struct daos_prop_entry *entry_src)
 {
 	struct daos_prop_byteval *src_bv;
-	struct daos_prop_byteval *dst_bv;
 
 	D_ASSERT(entry_src != NULL);
 	D_ASSERT(entry_dst != NULL);
