@@ -25,7 +25,7 @@ class EngineAutoRestartDisabled(ControlTestBase):
         # This ensures clean state between sequential tests
         try:
             self.reset_engine_restart_state()
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-exception-caught
             self.log.error("Failed to reset engine restart state: %s", error)
             self.fail("tearDown failed to reset engine restart state: {}".format(error))
         finally:

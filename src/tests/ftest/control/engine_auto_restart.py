@@ -24,7 +24,7 @@ class EngineAutoRestartTest(ControlTestBase):
         # This ensures clean state between sequential tests
         try:
             self.reset_engine_restart_state()
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-exception-caught
             self.log.error("Failed to reset engine restart state: %s", error)
             self.fail("tearDown failed to reset engine restart state: {}".format(error))
         finally:
@@ -138,9 +138,9 @@ class EngineAutoRestartTest(ControlTestBase):
         for idx, (old, new) in enumerate(zip(incs, end_incs)):
             actual_rank = test_ranks[idx]
             if new > old:
-                self.log.debug(f"Rank {actual_rank}: {old} -> {new} (restarted)")
+                self.log.debug("Rank %s: %s -> %s (restarted)", actual_rank, old, new)
             else:
-                self.log.debug(f"Rank {actual_rank}: {old} -> {new} (NOT restarted!)")
+                self.log.debug("Rank %s: %s -> %s (NOT restarted!)", actual_rank, old, new)
 
         # Verify all increased
         all_increased = all(a > b for b, a in zip(incs, end_incs))

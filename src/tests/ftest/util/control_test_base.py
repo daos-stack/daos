@@ -134,7 +134,7 @@ class ControlTestBase(TestWithServers):
         self.log.info("Rank %s (%s) did not restart within %ss", rank, state, timeout)
         return (False, state)
 
-    def get_rank_incarnation(self, rank):
+    def get_rank_incarnation(self, rank):  # pylint: disable=too-many-return-statements
         """Get the incarnation number of a rank.
 
         The incarnation number increments each time a rank restarts, allowing
