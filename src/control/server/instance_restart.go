@@ -171,7 +171,7 @@ func (mgr *engineRestartManager) requestRestart(rank ranklist.Rank, instance Eng
 	}
 }
 
-// start begins processing restart requests.
+// start begins processing restart requests. Function to be called once on server start-up.
 func (mgr *engineRestartManager) start(ctx context.Context) {
 	mgr.log.Debug("engine restart manager started")
 	go func() {
@@ -217,7 +217,7 @@ func (mgr *engineRestartManager) clearRankRestartHistory(ranks []ranklist.Rank) 
 	}
 }
 
-// stop shuts down the restart manager.
+// stop shuts down the restart manager. Function to be called once on server shutdown.
 func (mgr *engineRestartManager) stop() {
 	mgr.log.Debug("stopping engine restart manager")
 	mgr.mu.Lock()
