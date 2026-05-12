@@ -6749,15 +6749,13 @@ def run(wf, args):
         if fs.returncode == 0:
             run_fi = True
         else:
-            print("Unable to detect fault injection feature, skipping testing")
             print("Use fallback on $PATH")
             fs = subprocess.run(['fault_status'], check=False)
             print(fs)
             if fs.returncode == 0:
                 run_fi = True
             else:
-                print("Unable to detect fault injection feature - fall back does not work, "
-                      "skipping testing")
+                print("Unable to detect fault injection feature - skipping FI testing")
 
     if run_fi:
         args.server_debug = 'INFO'

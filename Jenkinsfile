@@ -955,7 +955,6 @@ pipeline {
                         label params.CI_FI_1_LABEL
                     }
                     steps {
-                        /* job_step_update(nlt_test()) */
                         job_step_update(
                             unitTest(timeout_time: 240,
                                      inst_repos: daosRepos(),
