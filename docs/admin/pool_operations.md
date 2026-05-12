@@ -114,6 +114,7 @@ The capacity of the pool can be specified in three different ways:
 Examples:
 
 To create a pool labeled `tank`:
+
 ```bash
 $ dmg pool create --size=${N}TB tank
 ```
@@ -164,11 +165,11 @@ with pool service redundancy enabled by default (pool service replicas on ranks
 1-5). If no redundancy is desired, use `--properties=svc_rf:0` to set the pool
 service redundancy property to 0 (or `--nsvc=1`).
 
-Note that it is difficult to determine the usable space by the user, and
-currently we cannot provide the precise value. The usable space depends not only
-on pool size, but also on number of targets, target size, object class,
-storage redundancy factor, etc.
-
+!!! note
+    It is difficult to determine the usable space by the user, and currently we
+    cannot provide the precise value. The usable space depends not only on pool
+    size, but also on number of targets, target size, object class, storage
+    redundancy factor, etc.
 
 ### Listing Pools
 
@@ -200,7 +201,16 @@ between SCM and NVMe for each pool:
 $ dmg pool list --verbose
 Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled
 ----- ----                                 ------- -------- -------- ------------- --------- --------- -------------- --------
-tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3      3 GB    10 kB    0%            47 GB     0 B       0%             0/32
+tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3     3 GB     10 kB    0%            47 GB     0 B       0%             0/32
+```
+
+### Renaming a Pool
+
+To rename a pool labeled `tank` to `neo`:
+
+```bash
+$ dmg pool set-prop tank label:neo
+pool set-prop succeeded
 ```
 
 ### Destroying a Pool
@@ -533,16 +543,16 @@ called aggregation.
 The reclaim property defines what strategy to use to reclaimed unused version.
 Three options are supported:
 
-* "lazy"     : Trigger aggregation only when there is no IO activities or SCM free space is under pressure (default strategy)
-* "time"     : Trigger aggregation regularly despite of IO activities.
-* "disabled" : Never trigger aggregation. The system will eventually run out of space even if data is being deleted.
+* `lazy`     : Trigger aggregation only when there is no IO activities or SCM free space is under pressure (default strategy)
+* `time`     : Trigger aggregation regularly despite of IO activities.
+* `disabled` : Never trigger aggregation. The system will eventually run out of space even if data is being deleted.
 
 ### Self-healing Policy (self\_heal)
 
 This property defines whether a failing engine is automatically evicted from the
 pool. Once excluded, the self-healing mechanism will be triggered to restore
 the pool data redundancy on the surviving storage engines.
-Two options are supported: "exclude" (default strategy) and "rebuild".
+Two options are supported: `exclude` (default strategy) and `rebuild`.
 
 ### Reserved Space for Rebuilds (space\_rb)
 
@@ -621,32 +631,32 @@ This property controls how checkpoints are triggered for each target.  When enab
 checkpointing will always trigger if there is space pressure in the WAL. There are
 three supported options:
 
-* "timed"       : Checkpointing is also triggered periodically (default option).
-* "lazy"        : Checkpointing is only triggered when there is WAL space pressure.
-* "disabled"    : Checkpointing is disabled.  WAL space may be exhausted.
+* `timed`    : Checkpointing is also triggered periodically (default option).
+* `lazy`     : Checkpointing is only triggered when there is WAL space pressure.
+* `disabled` : Checkpointing is disabled.  WAL space may be exhausted.
 
 #### Checkpoint frequency (checkpoint\_freq)
 
 This property controls how often checkpoints are triggered. It is only relevant
-if the checkpoint policy is "timed". The value is specified in seconds in the
+if the checkpoint policy is `timed`. The value is specified in seconds in the
 range [1, 1000000] with a default of 5.  Values outside the range are
 automatically adjusted.
 
 #### Checkpoint threshold (checkpoint\_thresh)
 
 This property controls the percentage of WAL usage to automatically trigger a checkpoint.
-It is not relevant when the checkpoint policy is "disabled". The value is specified
+It is not relevant when the checkpoint policy is `disabled`. The value is specified
 as a percentage in the range [10-75] with a default of 50. Values outside the range are
 automatically adjusted.
 
 #### Reintegration mode (reintegration)
 
 This property controls how reintegration will recover data. Two options are supported:
-"data_sync" (default strategy) and "no_data_sync". with "data_sync", reintegration will
-discard pool data and trigger rebuild to sync data. While with "no_data_sync", reintegration
-only updates pool map to include rank.
+`data_sync` (default strategy) and `no_data_sync`. With `data_sync`, reintegration will
+discard pool data and trigger rebuild to sync data. With `no_data_sync`, reintegration
+only updates the pool map to include the rank.
 
-NB: with "no_data_sync" enabled, containers will be turned to read-only, daos won't trigger
+NB: with `no_data_sync` enabled, containers will be turned to read-only, daos won't trigger
 rebuild to restore the pool data redundancy on the surviving storage engines if there are
 dead rank events.
 
@@ -836,7 +846,7 @@ to restore redundancy on the remaining engines.
 !!! note
     Exclusion may compromise the Pool Redundancy Factor (RF), potentially leading
     to data loss. If this is the case, the command will refuse to perform the exclusion
-    and return the error code -DER_RF. You can proceed with the exclusion by specifying
+    and return the error code -DER\_RF. You can proceed with the exclusion by specifying
     the --force option. Please note that forcing the operation may result in data loss,
     and it is strongly recommended to verify the RF status before proceeding.
 
@@ -882,7 +892,7 @@ operation is ongoing. Drain additionally enables non-replicated data to be
 rebuilt onto another target whereas in a conventional failure scenario non-replicated
 data would not be integrated into a rebuild and would be lost.
 Drain operation is not allowed if there are other ongoing rebuild operations, otherwise
-it will return -DER_BUSY.
+it will return -DER\_BUSY.
 
 An operator can drain one or more engines or targets from a specific DAOS pool using the rank(s)
 where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx list is
@@ -932,7 +942,7 @@ original state.
 The operator can either reintegrate specific targets for an engine rank by
 supplying a target idx list, or reintegrate an entire engine rank by omitting the list.
 Reintegrate operation is not allowed if there are other ongoing rebuild operations,
-otherwise it will return -DER_BUSY.
+otherwise it will return -DER\_BUSY.
 
 An operator can reintegrate one or more engines or targets from a specific DAOS pool using the
 rank(s) where the target(s) reside, as well as the target index(es) on the rank(s). If a target idx
@@ -978,7 +988,7 @@ $ dmg pool reintegrate $DAOS_POOL --ranks=5 --target-idx=0,1
     While dmg pool query and list show how many targets are disabled for each pool, there is
     currently no way to list the targets that have actually been disabled. As a result, it is
     recommended for now to try to reintegrate all engine ranks reported as disabled in
-    `dmg pool query`. The string output after "Disabled ranks:" in the pool query output can
+    `dmg pool query`. The string output after `Disabled ranks:` in the pool query output can
     be used as the `--ranks=<disabled_ranks>` option value in `dmg pool reintegrate` command.
 
 #### System Reintegrate
@@ -1013,7 +1023,7 @@ pool.
 This will automatically trigger a server rebalance operation where objects
 within the extended pool will be rebalanced across the new storage.
 Extend operation is not allowed if there are other ongoing rebuild operations,
-otherwise it will return -DER_BUSY.
+otherwise it will return -DER\_BUSY.
 
 ```
 $ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
@@ -1053,7 +1063,7 @@ those failures can be recovered and DAOS engines can be restarted and the system
 can function again.
 
 Administrator can set the default pool redundancy factor by environment variable
-"DAOS_POOL_RF" in the server yaml file. If SWIM detects and reports an engine is
+`DAOS_POOL_RF` in the server yaml file. If SWIM detects and reports an engine is
 dead and the number of failed fault domain exceeds or is going to exceed the pool
 redundancy factor, it will not change pool map immediately. Instead, it will give
 log messages:
