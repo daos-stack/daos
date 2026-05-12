@@ -720,7 +720,7 @@ pipeline {
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
                                                   ' --class-name nlt all',
-                                             unstash_opt: true,
+                                     unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9'),
                                      image_version: 'el9.7'))
