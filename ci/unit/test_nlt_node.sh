@@ -54,7 +54,13 @@ if [ "$#" -eq 0 ]; then
 fi
 
 mkdir -p nlt_logs
-sudo mount -t tmpfs tmpfs nlt_logs
+avail_line=$(grep '^MemAvailable:' /proc/meminfo)
+avail_mem_kib=${avail_line//[^0-9]/}
+if [ "$avail_mem_kib" -lt $((4 * 1024 * 1024)) ]; then
+    echo "ERROR: Less than 4GiB RAM available for nlt_logs tmpfs (${avail_mem_kib} KiB)" >&2
+    exit 1
+fi
+sudo mount -t tmpfs -o size=4g tmpfs nlt_logs
 sudo chown jenkins:jenkins nlt_logs
 
 exec env \
