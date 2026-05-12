@@ -101,6 +101,14 @@ fi
 "python${PYTHON_VERSION}" -m venv "${DAOS_FTEST_VENV}"
 # shellcheck disable=SC1091
 source "${DAOS_FTEST_VENV}"/bin/activate
+
+cat <<EOF > "${DAOS_FTEST_VENV}"/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+    quiet = 1
+EOF
+
 pip install --upgrade pip
 pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 # Copy the pydaos source locally and install it, in an ideal world this would install
