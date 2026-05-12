@@ -64,6 +64,9 @@ crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
 }
 
 void
+crt_bulk_free_common(struct crt_bulk *bulk);
+
+void
 crt_hdlr_proto_query(crt_rpc_t *rpc_req);
 
 int

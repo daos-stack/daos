@@ -106,6 +106,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	D_ALLOC_PTR(ret_hdl);
 	if (ret_hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	ret_hdl->refcount = 1;
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc == -DER_QUOTA_LIMIT) {
@@ -182,20 +183,14 @@ int
 crt_bulk_addref(crt_bulk_t crt_bulk)
 {
 	struct crt_bulk *bulk = crt_bulk;
-	int              rc   = -DER_SUCCESS;
-	hg_return_t      hg_ret;
+	int              rc   = DER_SUCCESS;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hg_ret = HG_Bulk_ref_incr(bulk->hg_bulk_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d.\n", hg_ret);
-		rc = crt_hgret_2_der(hg_ret);
-	}
-
+	atomic_fetch_add(&bulk->refcount, 1);
 out:
 	return rc;
 }
@@ -204,40 +199,41 @@ int
 crt_bulk_free(crt_bulk_t crt_bulk)
 {
 	struct crt_bulk *bulk = crt_bulk;
-	int              rc   = -DER_SUCCESS;
-	hg_return_t      hg_ret;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		return -DER_INVAL;
 	}
 
-	/* This can happen if D_QUOTA_BULKS is enabled on a client */
-	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
-		if (bulk->deferred) {
-			/* Treat as success */
-			D_GOTO(out, rc = DER_SUCCESS);
-		} else {
-			D_ASSERTF(0, "Bulk handle should not be NULL\n");
+	if (atomic_fetch_sub(&bulk->refcount, 1) > 1)
+		return DER_SUCCESS;
+
+	crt_bulk_free_common(bulk);
+
+	return DER_SUCCESS;
+}
+
+void
+crt_bulk_free_common(struct crt_bulk *bulk)
+{
+	hg_return_t hg_ret;
+
+	D_ASSERT(bulk != NULL);
+
+	if (bulk->hg_bulk_hdl != HG_BULK_NULL) {
+		hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Bulk_free() failed (%s)\n", HG_Error_to_string(hg_ret));
+			/* Ignore the error, as we are already in a cleanup path */
 		}
 	}
 
-	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
-		rc = crt_hgret_2_der(hg_ret);
-	}
-
 	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
-	if (bulk->crt_ctx)
+	if (!bulk->deferred && bulk->crt_ctx != NULL)
 		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
-out:
-	if (bulk != NULL) {
-		if (bulk->iovs)
-			D_FREE(bulk->iovs);
-		D_FREE(bulk);
-	}
-	return rc;
+
+	D_FREE(bulk->iovs);
+	D_FREE(bulk);
 }
 
 /* Helper function to check for bulk expiration */
