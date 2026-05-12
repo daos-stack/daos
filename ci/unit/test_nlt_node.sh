@@ -44,15 +44,6 @@ pip install /opt/daos/lib/daos/python/
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
-if [ "$#" -eq 0 ]; then
-    set -- --max-log-size 1950MiB \
-        --class-name nlt \
-        --system-ram-reserved 4 \
-        --dfuse-dir /localhome/jenkins/ \
-        --log-usage-save nltir.xml \
-        --log-usage-export nltr.json all
-fi
-
 mkdir -p nlt_logs
 avail_line=$(grep '^MemAvailable:' /proc/meminfo)
 avail_mem_kib=${avail_line//[^0-9]/}

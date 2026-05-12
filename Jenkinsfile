@@ -713,8 +713,14 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
-                                     unstash_opt: true,
+                                     test_script: 'ci/unit/test_nlt.sh' +
+                                                  ' --system-ram-reserved 4' +
+                                                  ' --max-log-size 1950MiB' +
+                                                  ' --dfuse-dir /localhome/jenkins/' +
+                                                  ' --log-usage-save nltir.xml' +
+                                                  ' --log-usage-export nltr.json' +
+                                                  ' --class-name nlt all',
+                                             unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9'),
                                      image_version: 'el9.7'))
