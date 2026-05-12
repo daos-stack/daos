@@ -508,96 +508,6 @@ void   srv__check_dereg_pool_resp__free_unpacked
   assert(message->base.descriptor == &srv__check_dereg_pool_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   srv__check_report_req__init
-                     (Srv__CheckReportReq         *message)
-{
-  static const Srv__CheckReportReq init_value = SRV__CHECK_REPORT_REQ__INIT;
-  *message = init_value;
-}
-size_t srv__check_report_req__get_packed_size
-                     (const Srv__CheckReportReq *message)
-{
-  assert(message->base.descriptor == &srv__check_report_req__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t srv__check_report_req__pack
-                     (const Srv__CheckReportReq *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &srv__check_report_req__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t srv__check_report_req__pack_to_buffer
-                     (const Srv__CheckReportReq *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &srv__check_report_req__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Srv__CheckReportReq *
-       srv__check_report_req__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Srv__CheckReportReq *)
-     protobuf_c_message_unpack (&srv__check_report_req__descriptor,
-                                allocator, len, data);
-}
-void   srv__check_report_req__free_unpacked
-                     (Srv__CheckReportReq *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &srv__check_report_req__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
-void   srv__check_report_resp__init
-                     (Srv__CheckReportResp         *message)
-{
-  static const Srv__CheckReportResp init_value = SRV__CHECK_REPORT_RESP__INIT;
-  *message = init_value;
-}
-size_t srv__check_report_resp__get_packed_size
-                     (const Srv__CheckReportResp *message)
-{
-  assert(message->base.descriptor == &srv__check_report_resp__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t srv__check_report_resp__pack
-                     (const Srv__CheckReportResp *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &srv__check_report_resp__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t srv__check_report_resp__pack_to_buffer
-                     (const Srv__CheckReportResp *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &srv__check_report_resp__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Srv__CheckReportResp *
-       srv__check_report_resp__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Srv__CheckReportResp *)
-     protobuf_c_message_unpack (&srv__check_report_resp__descriptor,
-                                allocator, len, data);
-}
-void   srv__check_report_resp__free_unpacked
-                     (Srv__CheckReportResp *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &srv__check_report_resp__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
 void   srv__list_pools_req__init
                      (Srv__ListPoolsReq         *message)
 {
@@ -789,7 +699,7 @@ static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[9
     offsetof(Srv__NotifyReadyReq, secondarynctxs),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -897,7 +807,7 @@ static const ProtobufCFieldDescriptor srv__get_pool_svc_resp__field_descriptors[
     offsetof(Srv__GetPoolSvcResp, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -998,7 +908,7 @@ static const ProtobufCFieldDescriptor srv__pool_find_by_label_resp__field_descri
     offsetof(Srv__PoolFindByLabelResp, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1080,7 +990,7 @@ static const ProtobufCFieldDescriptor srv__check_list_pool_resp__one_pool__field
     offsetof(Srv__CheckListPoolResp__OnePool, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1207,7 +1117,7 @@ static const ProtobufCFieldDescriptor srv__check_reg_pool_req__field_descriptors
     offsetof(Srv__CheckRegPoolReq, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -1364,82 +1274,6 @@ const ProtobufCMessageDescriptor srv__check_dereg_pool_resp__descriptor =
   (ProtobufCMessageInit) srv__check_dereg_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor srv__check_report_req__field_descriptors[1] =
-{
-  {
-    "report",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, report),
-    &chk__check_report__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned srv__check_report_req__field_indices_by_name[] = {
-  0,   /* field[0] = report */
-};
-static const ProtobufCIntRange srv__check_report_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 1 }
-};
-const ProtobufCMessageDescriptor srv__check_report_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "srv.CheckReportReq",
-  "CheckReportReq",
-  "Srv__CheckReportReq",
-  "srv",
-  sizeof(Srv__CheckReportReq),
-  1,
-  srv__check_report_req__field_descriptors,
-  srv__check_report_req__field_indices_by_name,
-  1,  srv__check_report_req__number_ranges,
-  (ProtobufCMessageInit) srv__check_report_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor srv__check_report_resp__field_descriptors[1] =
-{
-  {
-    "status",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportResp, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned srv__check_report_resp__field_indices_by_name[] = {
-  0,   /* field[0] = status */
-};
-static const ProtobufCIntRange srv__check_report_resp__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 1 }
-};
-const ProtobufCMessageDescriptor srv__check_report_resp__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "srv.CheckReportResp",
-  "CheckReportResp",
-  "Srv__CheckReportResp",
-  "srv",
-  sizeof(Srv__CheckReportResp),
-  1,
-  srv__check_report_resp__field_descriptors,
-  srv__check_report_resp__field_indices_by_name,
-  1,  srv__check_report_resp__number_ranges,
-  (ProtobufCMessageInit) srv__check_report_resp__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
 static const ProtobufCFieldDescriptor srv__list_pools_req__field_descriptors[1] =
 {
   {
@@ -1513,7 +1347,7 @@ static const ProtobufCFieldDescriptor srv__list_pools_resp__pool__field_descript
     offsetof(Srv__ListPoolsResp__Pool, svcreps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
