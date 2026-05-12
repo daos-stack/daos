@@ -87,6 +87,9 @@ class ControlTestBase(TestWithServers):
         Returns:
             tuple: (restarted, final_state) - whether rank restarted and its final state
         """
+        # Make sure we reset the restart state even if the test fails
+        self.register_cleanup(self.reset_engine_restart_state)
+
         self.log_step("Excluding rank %s", rank)
         self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
 
