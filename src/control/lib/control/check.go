@@ -873,3 +873,97 @@ func SystemCheckEngineReport(ctx context.Context, rpcClient UnaryInvoker, req *S
 
 	return resp, nil
 }
+
+// SystemCheckRegPoolReq contains parameters to be passed to SystemCheckRegPool.
+type SystemCheckRegPoolReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckRegPoolReq
+}
+
+// SystemCheckRegPoolResp contains the response from the SystemCheckRegPool RPC.
+type SystemCheckRegPoolResp struct {
+	sharedpb.CheckRegPoolResp
+}
+
+// SystemCheckRegPool registers a pool with the management service for the checker.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckRegPool(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckRegPoolReq) (*SystemCheckRegPoolResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckRegPool(ctx, &req.CheckRegPoolReq)
+	})
+
+	rpcClient.Debugf("DAOS system check register pool request: %s", pbutil.Debug(&req.CheckRegPoolReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckRegPoolResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckRegPoolResp)
+	resp.CheckRegPoolResp = *pbResp
+
+	return resp, nil
+}
+
+// SystemCheckDeregPoolReq contains parameters to be passed to SystemCheckDeregPool.
+type SystemCheckDeregPoolReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckDeregPoolReq
+}
+
+// SystemCheckDeregPoolResp contains the response from the SystemCheckDeregPool RPC.
+type SystemCheckDeregPoolResp struct {
+	sharedpb.CheckDeregPoolResp
+}
+
+// SystemCheckDeregPool de-registers a pool with the management service for the checker.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckDeregPool(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckDeregPoolReq) (*SystemCheckDeregPoolResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckDeregPool(ctx, &req.CheckDeregPoolReq)
+	})
+
+	rpcClient.Debugf("DAOS system check de-register pool request: %s", pbutil.Debug(&req.CheckDeregPoolReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckDeregPoolResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckDeregPoolResp)
+	resp.CheckDeregPoolResp = *pbResp
+
+	return resp, nil
+}

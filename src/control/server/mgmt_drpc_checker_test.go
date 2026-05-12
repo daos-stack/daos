@@ -110,202 +110,175 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 	}
 }
 
-func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
-	existingPool := &system.PoolService{
-		PoolUUID:  uuid.New(),
-		PoolLabel: "test-pool",
-		Replicas:  []ranklist.Rank{0, 1, 2},
-	}
-	otherPool := &system.PoolService{
-		PoolUUID:  uuid.New(),
-		PoolLabel: "test-pool2",
-		Replicas:  []ranklist.Rank{0, 1, 2},
-	}
-	makeReqBytes := func(id, label string, replicas []ranklist.Rank) []byte {
-		req := &sharedpb.CheckRegPoolReq{
-			Uuid:    id,
-			Label:   label,
-			Svcreps: ranklist.RanksToUint32(replicas),
-		}
+func TestServer_srvModule_handleCheckerRegisterPool(t *testing.T) {
+	bytesFromReq := func(t *testing.T, req *sharedpb.CheckRegPoolReq) []byte {
 		b, err := proto.Marshal(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return b
 	}
-	newUUID := uuid.New().String()
+
+	validReq := &sharedpb.CheckRegPoolReq{
+		Seq:     0x1234,
+		Uuid:    uuid.NewString(),
+		Svcreps: []uint32{1, 2},
+	}
 
 	for name, tc := range map[string]struct {
-		req        []byte
-		notReplica bool
-		expResp    *sharedpb.CheckRegPoolResp
-		expErr     error
+		mic      *control.MockInvokerConfig
+		reqBytes []byte
+		expErr   error
+		expResp  *sharedpb.CheckRegPoolResp
 	}{
 		"bad payload": {
-			req:    []byte{'b', 'a', 'd'},
-			expErr: drpc.UnmarshalingPayloadFailure(),
+			reqBytes: []byte{'b', 'a', 'd'},
+			expErr:   drpc.UnmarshalingPayloadFailure(),
 		},
-		"bad uuid": {
-			req:     makeReqBytes("ow", "new", []ranklist.Rank{0}),
-			expResp: &sharedpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
+		"gRPC failure to resp status": {
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			reqBytes: bytesFromReq(t, validReq),
+			expResp: &sharedpb.CheckRegPoolResp{
+				Status: daos.MiscError.Int32(),
+			},
 		},
-		"bad label": {
-			req:     makeReqBytes(newUUID, newUUID, []ranklist.Rank{0}),
-			expResp: &sharedpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
+		"daos status error in resp": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{{
+						Message: &sharedpb.CheckRegPoolResp{
+							Status: daos.MiscError.Int32(),
+						},
+					}},
+				},
+			},
+			reqBytes: bytesFromReq(t, validReq),
+			expResp: &sharedpb.CheckRegPoolResp{
+				Status: daos.MiscError.Int32(),
+			},
 		},
-		"empty label": {
-			req:     makeReqBytes(newUUID, "", []ranklist.Rank{0}),
-			expResp: &sharedpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
-		},
-		"zero svcreps": {
-			req:     makeReqBytes(newUUID, "new", []ranklist.Rank{}),
-			expResp: &sharedpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
-		},
-		"not replica on update": {
-			req:        makeReqBytes(existingPool.PoolUUID.String(), "new-label", []ranklist.Rank{1}),
-			notReplica: true,
-			expResp:    &sharedpb.CheckRegPoolResp{Status: int32(daos.MiscError)},
-		},
-		"not replica on add": {
-			req:        makeReqBytes(newUUID, "new", []ranklist.Rank{0}),
-			notReplica: true,
-			expResp:    &sharedpb.CheckRegPoolResp{Status: int32(daos.MiscError)},
-		},
-		"duplicate label on update": {
-			req:     makeReqBytes(existingPool.PoolUUID.String(), otherPool.PoolLabel, []ranklist.Rank{0}),
-			expResp: &sharedpb.CheckRegPoolResp{Status: int32(daos.Exists)},
-		},
-		"duplicate label on add": {
-			req:     makeReqBytes(newUUID, existingPool.PoolLabel, []ranklist.Rank{0}),
-			expResp: &sharedpb.CheckRegPoolResp{Status: int32(daos.Exists)},
-		},
-		"successful update": {
-			req:     makeReqBytes(existingPool.PoolUUID.String(), "new-label", []ranklist.Rank{1}),
-			expResp: &sharedpb.CheckRegPoolResp{},
-		},
-		"successful add": {
-			req:     makeReqBytes(newUUID, "new", []ranklist.Rank{0}),
-			expResp: &sharedpb.CheckRegPoolResp{},
+		"success": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{{
+						Message: &sharedpb.CheckRegPoolResp{},
+					}},
+				},
+			},
+			reqBytes: bytesFromReq(t, validReq),
+			expResp:  &sharedpb.CheckRegPoolResp{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			parent, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
 
 			mod := mockSrvModule(t, log, 1)
-			if tc.notReplica {
-				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
-			} else {
-				lock, ctx := getPoolLockCtx(t, parent, mod.poolDB, existingPool.PoolUUID)
-				if err := mod.poolDB.AddPoolService(ctx, existingPool); err != nil {
-					t.Fatal(err)
-				}
-				lock.Release()
-				lock, ctx = getPoolLockCtx(t, parent, mod.poolDB, otherPool.PoolUUID)
-				if err := mod.poolDB.AddPoolService(ctx, otherPool); err != nil {
-					t.Fatal(err)
-				}
-				lock.Release()
+			if tc.mic != nil {
+				mod.rpcClient = control.NewMockInvoker(log, tc.mic)
 			}
 
-			gotMsg, gotErr := mod.handleCheckerRegisterPool(parent, tc.req)
-			test.CmpErr(t, tc.expErr, gotErr)
+			respBytes, err := mod.handleCheckerRegisterPool(ctx, tc.reqBytes)
+
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			gotResp := new(sharedpb.CheckRegPoolResp)
-			if err := proto.Unmarshal(gotMsg, gotResp); err != nil {
+			resp := new(sharedpb.CheckRegPoolResp)
+			if err := proto.Unmarshal(respBytes, resp); err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(tc.expResp, gotResp, protocmp.Transform()); diff != "" {
-				t.Fatalf("unexpected response (-want +got):\n%s", diff)
-			}
+
+			test.CmpAny(t, "CheckRegPoolResp", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckRegPoolResp{}))
 		})
 	}
 }
 
-func TestSrvModule_HandleCheckerDeregisterPool(t *testing.T) {
-	existingPool := &system.PoolService{
-		PoolUUID:  uuid.New(),
-		PoolLabel: "test-pool",
-		Replicas:  []ranklist.Rank{0, 1, 2},
-	}
-	makeReqBytes := func(id string) []byte {
-		req := &sharedpb.CheckDeregPoolReq{
-			Uuid: id,
-		}
+func TestServer_srvModule_handleCheckerDeregisterPool(t *testing.T) {
+	bytesFromReq := func(t *testing.T, req *sharedpb.CheckDeregPoolReq) []byte {
 		b, err := proto.Marshal(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return b
 	}
-	unkUUID := uuid.New().String()
+
+	validReq := &sharedpb.CheckDeregPoolReq{
+		Seq:  0x1234,
+		Uuid: uuid.NewString(),
+	}
 
 	for name, tc := range map[string]struct {
-		req        []byte
-		notReplica bool
-		expResp    *sharedpb.CheckDeregPoolResp
-		expErr     error
+		mic      *control.MockInvokerConfig
+		reqBytes []byte
+		expErr   error
+		expResp  *sharedpb.CheckDeregPoolResp
 	}{
 		"bad payload": {
-			req:    []byte{'b', 'a', 'd'},
-			expErr: drpc.UnmarshalingPayloadFailure(),
+			reqBytes: []byte{'b', 'a', 'd'},
+			expErr:   drpc.UnmarshalingPayloadFailure(),
 		},
-		"not replica": {
-			req:        makeReqBytes(existingPool.PoolUUID.String()),
-			notReplica: true,
-			expResp:    &sharedpb.CheckDeregPoolResp{Status: int32(daos.MiscError)},
+		"gRPC failure to resp status": {
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			reqBytes: bytesFromReq(t, validReq),
+			expResp: &sharedpb.CheckDeregPoolResp{
+				Status: daos.MiscError.Int32(),
+			},
 		},
-		"bad uuid": {
-			req:     makeReqBytes("ow"),
-			expResp: &sharedpb.CheckDeregPoolResp{Status: int32(daos.InvalidInput)},
-		},
-		"unknown uuid": {
-			req:     makeReqBytes(unkUUID),
-			expResp: &sharedpb.CheckDeregPoolResp{Status: int32(daos.Nonexistent)},
+		"daos status error in resp": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{{
+						Message: &sharedpb.CheckRegPoolResp{
+							Status: daos.MiscError.Int32(),
+						},
+					}},
+				},
+			},
+			reqBytes: bytesFromReq(t, validReq),
+			expResp: &sharedpb.CheckDeregPoolResp{
+				Status: daos.MiscError.Int32(),
+			},
 		},
 		"success": {
-			req:     makeReqBytes(existingPool.PoolUUID.String()),
-			expResp: &sharedpb.CheckDeregPoolResp{},
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: &control.UnaryResponse{
+					Responses: []*control.HostResponse{{
+						Message: &sharedpb.CheckDeregPoolResp{},
+					}},
+				},
+			},
+			reqBytes: bytesFromReq(t, validReq),
+			expResp:  &sharedpb.CheckDeregPoolResp{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			parent, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
 
 			mod := mockSrvModule(t, log, 1)
-			if tc.notReplica {
-				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
-			} else {
-				lock, ctx := getPoolLockCtx(t, parent, mod.poolDB, existingPool.PoolUUID)
-				if err := mod.poolDB.AddPoolService(ctx, existingPool); err != nil {
-					t.Fatal(err)
-				}
-				lock.Release()
+			if tc.mic != nil {
+				mod.rpcClient = control.NewMockInvoker(log, tc.mic)
 			}
 
-			ctx := context.Background()
-			gotMsg, gotErr := mod.handleCheckerDeregisterPool(ctx, tc.req)
-			test.CmpErr(t, tc.expErr, gotErr)
+			respBytes, err := mod.handleCheckerDeregisterPool(ctx, tc.reqBytes)
+
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			gotResp := new(sharedpb.CheckDeregPoolResp)
-			if err := proto.Unmarshal(gotMsg, gotResp); err != nil {
+			resp := new(sharedpb.CheckDeregPoolResp)
+			if err := proto.Unmarshal(respBytes, resp); err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(tc.expResp, gotResp, protocmp.Transform()); diff != "" {
-				t.Fatalf("unexpected response (-want +got):\n%s", diff)
-			}
+
+			test.CmpAny(t, "CheckDeregPoolResp", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckDeregPoolResp{}))
 		})
 	}
 }
@@ -443,7 +416,7 @@ func TestServer_srvModule_chkReportErrToDaosStatus(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result := chkReportErrToDaosStatus(tc.in)
+			result := grpcErrToDaosStatus(tc.in)
 
 			test.CmpErr(t, tc.expResult, result)
 		})

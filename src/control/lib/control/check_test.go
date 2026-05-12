@@ -545,3 +545,175 @@ func TestControl_CheckEngineRepair(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_SystemCheckRegPool(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *SystemCheckRegPoolReq
+		expErr  error
+		expResp *SystemCheckRegPoolResp
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"gRPC fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			req:    &SystemCheckRegPoolReq{},
+			expErr: errors.New("MockInvoker error"),
+		},
+		"MS error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Error: errors.New("MockInvoker response error"),
+						},
+					},
+				},
+			},
+			req:    &SystemCheckRegPoolReq{},
+			expErr: errors.New("MockInvoker response error"),
+		},
+		"daos error code": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{{
+						Message: &sharedpb.CheckRegPoolResp{
+							Status: daos.MiscError.Int32(),
+						},
+					}},
+				},
+			},
+			req: &SystemCheckRegPoolReq{},
+			expResp: &SystemCheckRegPoolResp{
+				CheckRegPoolResp: sharedpb.CheckRegPoolResp{
+					Status: daos.MiscError.Int32(),
+				},
+			},
+		},
+		"bad MS response type": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Message: &mgmtpb.CheckStartReq{
+								Sys: "something",
+							},
+						},
+					},
+				},
+			},
+			req:    &SystemCheckRegPoolReq{},
+			expErr: errors.New("unexpected response"),
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{{
+						Message: &sharedpb.CheckRegPoolResp{},
+					}},
+				},
+			},
+			req:     &SystemCheckRegPoolReq{},
+			expResp: &SystemCheckRegPoolResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			invoker := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+			resp, err := SystemCheckRegPool(ctx, invoker, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "response", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckRegPoolResp{}))
+		})
+	}
+}
+
+func TestControl_SystemCheckDeregPool(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *SystemCheckDeregPoolReq
+		expErr  error
+		expResp *SystemCheckDeregPoolResp
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"gRPC fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			req:    &SystemCheckDeregPoolReq{},
+			expErr: errors.New("MockInvoker error"),
+		},
+		"MS error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Error: errors.New("MockInvoker response error"),
+						},
+					},
+				},
+			},
+			req:    &SystemCheckDeregPoolReq{},
+			expErr: errors.New("MockInvoker response error"),
+		},
+		"daos error code": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{{
+						Message: &sharedpb.CheckDeregPoolResp{
+							Status: daos.MiscError.Int32(),
+						},
+					}},
+				},
+			},
+			req: &SystemCheckDeregPoolReq{},
+			expResp: &SystemCheckDeregPoolResp{
+				CheckDeregPoolResp: sharedpb.CheckDeregPoolResp{
+					Status: daos.MiscError.Int32(),
+				},
+			},
+		},
+		"bad MS response type": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Message: &mgmtpb.CheckStartReq{
+								Sys: "something",
+							},
+						},
+					},
+				},
+			},
+			req:    &SystemCheckDeregPoolReq{},
+			expErr: errors.New("unexpected response"),
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{{
+						Message: &sharedpb.CheckDeregPoolResp{},
+					}},
+				},
+			},
+			req:     &SystemCheckDeregPoolReq{},
+			expResp: &SystemCheckDeregPoolResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			invoker := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+			resp, err := SystemCheckDeregPool(ctx, invoker, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "response", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckDeregPoolResp{}))
+		})
+	}
+}

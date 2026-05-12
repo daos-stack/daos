@@ -8,6 +8,7 @@
 package server
 
 import (
+	"context"
 	"net"
 	"sort"
 	"testing"
@@ -1166,6 +1167,22 @@ func TestServer_mgmtSvc_SystemCheckEngineReport(t *testing.T) {
 	}
 }
 
+func createMSMultiInCheckerMode(t *testing.T, log logging.Logger, nr int) *mgmtSvc {
+	svc := newTestMgmtSvc(t, log)
+	for i := 0; i < nr; i++ {
+		svc.sysdb.AddMember(&system.Member{
+			UUID: uuid.New(),
+			Rank: ranklist.Rank(i),
+			Addr: system.MockControlAddr(t, uint32(i)),
+		})
+	}
+	updateTestMemberState(t, svc, system.MemberStateCheckerStarted)
+	if err := svc.enableChecker(); err != nil {
+		t.Fatal(err)
+	}
+	return svc
+}
+
 func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 	const testNumRanks = 5
 	const testSeq = 0x1234
@@ -1189,22 +1206,6 @@ func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 		},
 	}
 
-	createMSMultiInCheckerMode := func(t *testing.T, log logging.Logger) *mgmtSvc {
-		svc := newTestMgmtSvc(t, log)
-		for i := 0; i < testNumRanks; i++ {
-			svc.sysdb.AddMember(&system.Member{
-				UUID: uuid.New(),
-				Rank: ranklist.Rank(i),
-				Addr: system.MockControlAddr(t, uint32(i)),
-			})
-		}
-		updateTestMemberState(t, svc, system.MemberStateCheckerStarted)
-		if err := svc.enableChecker(); err != nil {
-			t.Fatal(err)
-		}
-		return svc
-	}
-
 	for name, tc := range map[string]struct {
 		createMS     func(*testing.T, logging.Logger) *mgmtSvc
 		startFinding *checker.Finding
@@ -1220,7 +1221,7 @@ func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 		},
 		"not leader": {
 			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				svc := createMSMultiInCheckerMode(t, l)
+				svc := createMSMultiInCheckerMode(t, l, testNumRanks)
 				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
 					t.Fatal(err)
 				}
@@ -1256,7 +1257,7 @@ func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 		},
 		"finding has invalid rank": {
 			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				return createMSMultiInCheckerMode(t, l)
+				return createMSMultiInCheckerMode(t, l, testNumRanks)
 			},
 			startFinding: &checker.Finding{
 				CheckReport: chkpb.CheckReport{
@@ -1307,7 +1308,7 @@ func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 
 			if tc.createMS == nil {
 				tc.createMS = func(t *testing.T, l logging.Logger) *mgmtSvc {
-					return createMSMultiInCheckerMode(t, l)
+					return createMSMultiInCheckerMode(t, l, testNumRanks)
 				}
 			}
 			svc := tc.createMS(t, log)
@@ -1346,6 +1347,334 @@ func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 			}
 
 			test.CmpAny(t, "updated finding", tc.expFinding, f, cmpopts.IgnoreUnexported(chkpb.CheckReport{}))
+		})
+	}
+}
+
+func addPS(t *testing.T, ctx context.Context, ms *mgmtSvc, ps *system.PoolService) *mgmtSvc {
+	lock, lockCtx := getPoolLockCtx(t, ctx, ms.sysdb, ps.PoolUUID)
+	if err := ms.sysdb.AddPoolService(lockCtx, ps); err != nil {
+		t.Fatal(err)
+	}
+	lock.Release()
+	return ms
+}
+
+func TestServer_mgmtSvc_SystemCheckRegPool(t *testing.T) {
+	testNumRanks := 5
+	testPoolUUID := uuid.New()
+	testPS := &system.PoolService{
+		PoolUUID:  testPoolUUID,
+		PoolLabel: "test_label",
+		State:     system.PoolServiceStateReady,
+		Replicas:  ranklist.RanksFromUint32([]uint32{3, 5, 6}),
+	}
+	validReq := &sharedpb.CheckRegPoolReq{
+		Seq:     0x1234,
+		Uuid:    testPoolUUID.String(),
+		Label:   "new_label",
+		Svcreps: []uint32{3, 5, 7},
+	}
+
+	for name, tc := range map[string]struct {
+		createMS  func(*testing.T, logging.Logger) *mgmtSvc
+		updateCtx func(*testing.T, context.Context, *mgmtSvc) (context.Context, func())
+		req       *sharedpb.CheckRegPoolReq
+		expErr    error
+		expResp   *sharedpb.CheckRegPoolResp
+		expPS     *system.PoolService
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"not leader": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := createMSMultiInCheckerMode(t, l, testNumRanks)
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req:    validReq,
+			expErr: &system.ErrNotLeader{},
+		},
+		"not checker mode": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, l, testNumRanks, true)
+				return svc
+			},
+			req:    validReq,
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"no pool UUID": {
+			req: &sharedpb.CheckRegPoolReq{
+				Seq:     validReq.Seq,
+				Label:   validReq.Label,
+				Svcreps: validReq.Svcreps,
+			},
+			expErr: daos.InvalidInput,
+		},
+		"invalid pool UUID": {
+			req: &sharedpb.CheckRegPoolReq{
+				Seq:     validReq.Seq,
+				Uuid:    "'Twas brillig and the slithy toves",
+				Label:   validReq.Label,
+				Svcreps: validReq.Svcreps,
+			},
+			expErr: daos.InvalidInput,
+		},
+		"invalid pool label": {
+			req: &sharedpb.CheckRegPoolReq{
+				Seq:     validReq.Seq,
+				Uuid:    validReq.Uuid,
+				Label:   "???????????",
+				Svcreps: validReq.Svcreps,
+			},
+			expErr: daos.InvalidInput,
+		},
+		"nil svc reps": {
+			req: &sharedpb.CheckRegPoolReq{
+				Seq:   validReq.Seq,
+				Uuid:  validReq.Uuid,
+				Label: validReq.Label,
+			},
+			expErr: daos.InvalidInput,
+		},
+		"empty svc reps": {
+			req: &sharedpb.CheckRegPoolReq{
+				Seq:     validReq.Seq,
+				Uuid:    validReq.Uuid,
+				Label:   validReq.Label,
+				Svcreps: []uint32{},
+			},
+			expErr: daos.InvalidInput,
+		},
+		"get pool lock fails": {
+			req: validReq,
+			updateCtx: func(t *testing.T, ctx context.Context, ms *mgmtSvc) (context.Context, func()) {
+				// Holding the lock for another pool UUID in the context will force a failure
+				lock, badCtx := getPoolLockCtx(t, ctx, ms.sysdb, uuid.New())
+				return badCtx, lock.Release
+			},
+			expErr: daos.MiscError,
+		},
+		"register existing pool svc": {
+			req:     validReq,
+			expResp: &sharedpb.CheckRegPoolResp{},
+			expPS: &system.PoolService{
+				PoolUUID:  testPS.PoolUUID,
+				PoolLabel: validReq.Label,
+				State:     system.PoolServiceStateReady,
+				Replicas:  ranklist.RanksFromUint32(validReq.Svcreps),
+			},
+		},
+		"existing pool wants existing label": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				ms := createMSMultiInCheckerMode(t, l, testNumRanks)
+				psList := []*system.PoolService{
+					testPS,
+					{
+						PoolUUID:  uuid.New(),
+						PoolLabel: validReq.Label,
+					},
+				}
+
+				for _, ps := range psList {
+					ms = addPS(t, context.Background(), ms, ps)
+				}
+				return ms
+			},
+			req:    validReq,
+			expErr: daos.Exists,
+			expPS:  testPS, // unchanged
+		},
+		"register new pool svc": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				return createMSMultiInCheckerMode(t, l, testNumRanks)
+			},
+			req:     validReq,
+			expResp: &sharedpb.CheckRegPoolResp{},
+			expPS: &system.PoolService{
+				PoolUUID:  testPS.PoolUUID,
+				PoolLabel: validReq.Label,
+				State:     system.PoolServiceStateReady,
+				Replicas:  ranklist.RanksFromUint32(validReq.Svcreps),
+			},
+		},
+		"new pool wants existing label": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				ms := createMSMultiInCheckerMode(t, l, testNumRanks)
+				ps := &system.PoolService{
+					PoolUUID:  uuid.New(),
+					PoolLabel: validReq.Label,
+				}
+
+				return addPS(t, context.Background(), ms, ps)
+			},
+			req:    validReq,
+			expErr: daos.Exists,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					ms := createMSMultiInCheckerMode(t, l, testNumRanks)
+					return addPS(t, ctx, ms, testPS)
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			if tc.updateCtx != nil {
+				newCtx, cleanup := tc.updateCtx(t, ctx, svc)
+				defer cleanup()
+				ctx = newCtx
+			}
+
+			resp, err := svc.SystemCheckRegPool(ctx, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "CheckRegPoolResp", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckRegPoolResp{}))
+
+			// Check that the requested pool service was updated (or not)
+			if tc.expPS != nil {
+				finalPS, err := svc.sysdb.FindPoolServiceByUUID(tc.expPS.PoolUUID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				test.CmpAny(t, "checking pool service", tc.expPS, finalPS, cmpopts.IgnoreFields(system.PoolService{}, "LastUpdate"))
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_SystemCheckDeregPool(t *testing.T) {
+	testNumRanks := 5
+	testPoolUUID := uuid.New()
+	testPS := &system.PoolService{
+		PoolUUID:  testPoolUUID,
+		PoolLabel: "test_label",
+		State:     system.PoolServiceStateReady,
+		Replicas:  ranklist.RanksFromUint32([]uint32{3, 5, 6}),
+	}
+	validReq := &sharedpb.CheckDeregPoolReq{
+		Seq:  0x5678,
+		Uuid: testPoolUUID.String(),
+	}
+
+	for name, tc := range map[string]struct {
+		createMS      func(*testing.T, logging.Logger) *mgmtSvc
+		updateCtx     func(*testing.T, context.Context, *mgmtSvc) (context.Context, func())
+		req           *sharedpb.CheckDeregPoolReq
+		expErr        error
+		expResp       *sharedpb.CheckDeregPoolResp
+		expPSNotExist bool
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"not leader": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := createMSMultiInCheckerMode(t, l, testNumRanks)
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req:           validReq,
+			expErr:        &system.ErrNotLeader{},
+			expPSNotExist: true, // wasn't created to begin with
+		},
+		"not checker mode": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, l, testNumRanks, true)
+				return svc
+			},
+			req:           validReq,
+			expErr:        checker.FaultCheckerNotEnabled,
+			expPSNotExist: true, // wasn't created to begin with
+		},
+		"no pool UUID": {
+			req: &sharedpb.CheckDeregPoolReq{
+				Seq: validReq.Seq,
+			},
+			expErr: daos.InvalidInput,
+		},
+		"invalid pool UUID": {
+			req: &sharedpb.CheckDeregPoolReq{
+				Seq:  validReq.Seq,
+				Uuid: "did gyre and gimbel in the wabe",
+			},
+			expErr: daos.InvalidInput,
+		},
+		"get pool lock fails": {
+			req: validReq,
+			updateCtx: func(t *testing.T, ctx context.Context, ms *mgmtSvc) (context.Context, func()) {
+				// Holding the lock for another pool UUID in the context will force a failure
+				lock, badCtx := getPoolLockCtx(t, ctx, ms.sysdb, uuid.New())
+				return badCtx, lock.Release
+			},
+			expErr: daos.MiscError,
+		},
+		"pool svc doesn't exist": {
+			req: &sharedpb.CheckDeregPoolReq{
+				Seq:  0x1234,
+				Uuid: uuid.NewString(), // some random UUID
+			},
+			expErr:        daos.Nonexistent,
+			expPSNotExist: true, // requested pool has no service created
+		},
+		"success": {
+			req:           validReq,
+			expResp:       &sharedpb.CheckDeregPoolResp{},
+			expPSNotExist: true, // requested pool svc existed and was removed
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					ms := createMSMultiInCheckerMode(t, l, testNumRanks)
+					return addPS(t, ctx, ms, testPS)
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			if tc.updateCtx != nil {
+				newCtx, cleanup := tc.updateCtx(t, ctx, svc)
+				defer cleanup()
+				ctx = newCtx
+			}
+
+			resp, err := svc.SystemCheckDeregPool(ctx, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "CheckDeregPoolResp", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckDeregPoolResp{}))
+
+			// can stop here for invalid inputs
+			if tc.req == nil {
+				return
+			}
+			testUUID, err := uuid.Parse(tc.req.Uuid)
+			if err != nil {
+				return
+			}
+
+			// Check that the requested pool service was removed (or not)
+			_, err = svc.sysdb.FindPoolServiceByUUID(testUUID)
+			if tc.expPSNotExist {
+				if !system.IsPoolNotFound(err) {
+					t.Fatalf("expected pool not found error, instead got: %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("expected no error, instead got: %v", err)
+			}
 		})
 	}
 }

@@ -91,6 +91,8 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/SystemCheckGetPolicy":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckRepair":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckEngineReport":  {ComponentServer},
+	"/mgmt.MgmtSvc/SystemCheckRegPool":       {ComponentServer},
+	"/mgmt.MgmtSvc/SystemCheckDeregPool":     {ComponentServer},
 	"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},

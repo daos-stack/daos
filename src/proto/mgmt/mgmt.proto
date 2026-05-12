@@ -117,6 +117,10 @@ service MgmtSvc {
 	rpc SystemCheckRepair(CheckActReq) returns (CheckActResp) {}
 	// Report on checker results for an individual rank.
 	rpc SystemCheckEngineReport(shared.CheckReportReq) returns (shared.CheckReportResp) {}
+	// Register a pool with the MS from the check leader.
+	rpc SystemCheckRegPool(shared.CheckRegPoolReq) returns (shared.CheckRegPoolResp) {}
+	// De-register a pool with the MS from the check leader.
+	rpc SystemCheckDeregPool(shared.CheckDeregPoolReq) returns (shared.CheckDeregPoolResp) {}
 	// Set a system attribute or attributes.
 	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
 	// Get a system attribute or attributes.
