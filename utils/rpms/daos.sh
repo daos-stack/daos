@@ -69,9 +69,16 @@ append_install_list "${files[@]}"
 mkdir -p "${tmp}${sysconfdir}/daos/certs"
 install_list+=("${tmp}${sysconfdir}/daos/certs=${sysconfdir}/daos")
 
-EXTRA_OPTS+=("--rpm-attr" "0755,root,root:${sysconfdir}/daos/certs")
+cat << EOF > "${tmp}/post_install_daos"
+#!/bin/bash
+chown root:root ${sysconfdir}/daos/certs
+chmod 0755 ${sysconfdir}/daos/certs
+EOF
+chmod +x "${tmp}/post_install_daos"
+EXTRA_OPTS+=("--after-install" "${tmp}/post_install_daos")
 
 DEPENDS=( "mercury >= ${mercury_version}" )
+DEPENDS+=( "${isal_lib} >= ${isal_version}" )
 DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
 build_package "daos"
 
@@ -157,21 +164,32 @@ if [ ! -d ${daos_log_dir} ]; then
     chmod 775 ${daos_log_dir}
 fi
 EOF
+  chmod +x "${tmp}/pre_install_server"
   EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_server")
 
-cat << EOF  > "${tmp}/post_install_server"
+  cat << EOF  > "${tmp}/post_install_server"
 #!/bin/bash
 set -x
 ldconfig
 systemctl --no-reload preset daos_server.service  &>/dev/null || :
 /usr/lib/systemd/systemd-sysctl 10-daos_server.conf &>/dev/null || :
+chown root:root ${sysconfdir}/daos/daos_server.yml
+chmod 0644 ${sysconfdir}/daos/daos_server.yml
+chown daos_server:daos_server ${sysconfdir}/daos/certs/clients
+chmod 0700 ${sysconfdir}/daos/certs/clients
+chown root:daos_server ${bindir}/daos_server_helper
+chmod 4750 ${bindir}/daos_server_helper
+chown root:daos_server ${bindir}/daos_server
+chmod 2755 ${bindir}/daos_server
 EOF
+  chmod +x "${tmp}/post_install_server"
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_server")
 
-cat << EOF  > "${tmp}/pre_uninstall_server"
+  cat << EOF  > "${tmp}/pre_uninstall_server"
 #!/bin/bash
 systemctl --no-reload disable --now daos_server.service >& /dev/null || :
 EOF
+  chmod +x "${tmp}/pre_uninstall_server"
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
   if [[ "${DISTRO:-el8}" =~ suse ]]; then
@@ -181,12 +199,10 @@ ldconfig
 rm -f "/var/lib/systemd/migrated/daos_server.service" || :
 /usr/bin/systemctl daemon-reload || :
 EOF
+    chmod +x "${tmp}/post_uninstall_server"
     EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_server")
   fi
-  EXTRA_OPTS+=("--rpm-attr" "0644,root,root:${sysconfdir}/daos/daos_server.yml")
-  EXTRA_OPTS+=("--rpm-attr" "0700,daos_server,daos_server:${sysconfdir}/daos/certs/clients")
-  EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_server_helper")
-  EXTRA_OPTS+=("--rpm-attr" "2755,root,daos_server:${bindir}/daos_server")
+
 
   DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${daos_spdk_full}" )
   DEPENDS+=( "${pmemobj_lib} = ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
@@ -399,7 +415,7 @@ TARGET_PATH="${daoshome}/python"
 list_files files "${SL_PREFIX}/lib/daos/python/*"
 append_install_list "${files[@]}"
 
-EXTERNAL_DEPENDS=("${uuid_lib}")
+EXTERNAL_DEPENDS=("${uuid_lib}" "${libasan_lib}")
 DEPENDS=("daos-client = ${VERSION}-${RELEASE}")
 build_package "${daos_dev}"
 
@@ -416,7 +432,13 @@ if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
   list_files files "${SL_PREFIX}/bin/daos_firmware_helper"
   append_install_list "${files[@]}"
 
-  EXTRA_OPTS+=("--rpm-attr" "4750,root,daos_server:${bindir}/daos_firmware_helper")
+cat << EOF > "${tmp}/post_install_firmware"
+#!/bin/bash
+chown root:daos_server ${bindir}/daos_firmware_helper
+chmod 4750 ${bindir}/daos_firmware_helper
+EOF
+  chmod +x "${tmp}/post_install_firmware"
+  EXTRA_OPTS+=("--after-install" "${tmp}/post_install_firmware")
 
   DEPENDS=("daos-server = ${VERSION}-${RELEASE}")
   build_package "daos-firmware"
@@ -432,8 +454,7 @@ DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-# Don't do autoreq, we know we need OpenMPI so add it explicitly
-build_package "daos-client-tests-openmpi" "noautoreq"
+build_package "daos-client-tests-openmpi"
 
 #shim packages
 PACKAGE_TYPE="empty"
