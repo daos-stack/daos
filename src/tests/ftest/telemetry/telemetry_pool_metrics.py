@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -147,7 +148,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             "engine_pool_ops_update",
             "engine_pool_xferred_fetch",
             "engine_pool_xferred_update",
-            "engine_net_req_timeout",
+            "engine_net_cm_rpc_timedout"
             "engine_pool_resent"
         ]
         metrics_init = self.get_metrics(metric_names)
@@ -172,7 +173,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 name, metrics[name], metrics_init[name], metrics_end[name])
 
         # Check if transient networking occurred during the test.
-        timeout_ops = metrics["engine_net_req_timeout"]
+        timeout_ops = metrics["engine_net_cm_rpc_timedout"]
         resent_ops = metrics["engine_pool_resent"]
         if timeout_ops > 0 or resent_ops > 0:
             self.log.info(

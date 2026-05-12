@@ -222,9 +222,9 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 void
 crt_bulk_free_common(struct crt_bulk *bulk)
 {
-	struct crt_context	*ctx;
-	hg_return_t		hg_ret;
- 
+	struct crt_context *ctx;
+	hg_return_t         hg_ret;
+
 	D_ASSERT(bulk != NULL);
 
 	if (bulk->hg_bulk_hdl != HG_BULK_NULL) {
