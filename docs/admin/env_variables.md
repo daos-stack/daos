@@ -55,6 +55,8 @@ Environment variables in this section only apply to the server side.
 |DAOS\_DTX\_BATCHED\_ULT\_MAX|The max count of DTX batched commit ULTs. The valid range is [0, unlimited). 0 means to commit DTX synchronously. The default value is 32.|
 |DAOS\_FORWARD\_NEIGHBOR|Set to enable I/O forwarding on neighbor xstream in the absence of helper threads.|
 |DAOS\_POOL\_RF|Redundancy factor for the pool. The valid range is [0, 4]. The default value is 2.|
+|DAOS\_SPDK\_LOG\_LEVEL|SPDK framework logging level. INTEGER. Valid range [0-4]. 0=DISABLED, 1=ERROR (default), 2=WARN, 3=NOTICE, 4=INFO/DEBUG. Higher levels increase verbosity. Useful for debugging NVMe initialization and SPDK issues. Set in engine config `env_vars` section.|
+|DAOS\_DPDK\_LOG\_LEVEL|DPDK (Data Plane Development Kit) logging level. INTEGER. Valid range [1-8]. 1=EMERG, 2=ALERT, 3=CRIT, 4=ERR (default), 5=WARNING, 6=NOTICE, 7=INFO, 8=DEBUG. Higher levels increase verbosity. Useful for debugging DPDK initialization issues. Set in engine config `env_vars` section.|
 
 ## Server and Client environment variables
 
