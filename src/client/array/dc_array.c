@@ -94,6 +94,12 @@ daos_array_env_init()
 	} else {
 		D_DEBUG(DB_TRACE, "ARRAY List IO limit = %u\n", array_list_io_limit);
 	}
+	array_iod_split = DAOS_ARRAY_IOD_SPLIT;
+	d_getenv_uint("DAOS_ARRAY_IOD_SPLIT", &array_iod_split);
+	if (array_iod_split == 0 || array_iod_split > array_list_io_limit) {
+		array_iod_split = array_list_io_limit;
+	}
+	D_DEBUG(DB_TRACE, "ARRAY IOD split = %u\n", array_iod_split);
 }
 
 static void
