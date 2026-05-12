@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1018,7 +1018,7 @@ cont_iv_capa_refresh_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(arg->pool_uuid, &pool);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1040,7 +1040,7 @@ cont_iv_capa_refresh_ult(void *data)
 	uuid_copy(arg->cont_uuid, iv_entry.cont_uuid);
 out:
 	if (pool != NULL)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 
 	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
 }
@@ -1567,7 +1567,7 @@ cont_iv_prop_fetch_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(arg->pool_uuid, &pool);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1599,7 +1599,7 @@ cont_iv_prop_fetch_ult(void *data)
 
 out:
 	if (pool != NULL)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 	D_FREE(iv_entry);
 	if (prop_fetch != NULL)
 		daos_prop_free(prop_fetch);
