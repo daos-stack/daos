@@ -37,6 +37,7 @@ struct crt_na_config {
 	int32_t		 noc_port;
 	int		 noc_iface_total;
 	int               noc_domain_total;
+	char             *noc_provider;
 	char		*noc_interface;
 	char		*noc_domain;
 	char		*noc_auth_key;
@@ -167,7 +168,7 @@ struct crt_gdata {
 	struct d_tm_node_t	*cg_uri_other;
 	/** Number of cores on a system */
 	long			 cg_num_cores;
-	/** Inflight rpc quota limit */
+	/** In-flight rpc quota limit */
 	uint32_t                 cg_rpc_quota;
 	/** bulk quota limit */
 	uint32_t                 cg_bulk_quota;
