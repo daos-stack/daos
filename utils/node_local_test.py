@@ -6744,18 +6744,14 @@ def run(wf, args):
     run_fi = False
 
     if args.perf_check or fi_test or fi_test_dfuse:
-        fs = subprocess.run([os.path.join(conf['PREFIX'], 'bin', 'fault_status')], check=False)
+        fi_env = os.environ.copy()
+        fi_env['PATH'] = f'{join(conf["PREFIX"], "bin")}:{fi_env["PATH"]}'
+        fs = subprocess.run(['fault_status'], check=False, env=fi_env)
         print(fs)
         if fs.returncode == 0:
             run_fi = True
         else:
-            print("Use fallback on $PATH")
-            fs = subprocess.run(['fault_status'], check=False)
-            print(fs)
-            if fs.returncode == 0:
-                run_fi = True
-            else:
-                print("Unable to detect fault injection feature - skipping FI testing")
+            print("Unable to detect fault injection feature - skipping FI testing")
 
     if run_fi:
         args.server_debug = 'INFO'
