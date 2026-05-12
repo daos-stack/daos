@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,8 +11,6 @@ syntax = "proto3";
 package srv;
 
 option go_package = "github.com/daos-stack/daos/src/control/common/proto/srv";
-
-import "chk/chk.proto";
 
 message NotifyReadyReq {
 	string uri = 1; // Primary CaRT URI
@@ -79,14 +78,6 @@ message CheckDeregPoolReq {
 }
 
 message CheckDeregPoolResp {
-	int32 status = 1; // DAOS error code.
-}
-
-message CheckReportReq {
-	chk.CheckReport report = 1; // Report payload
-}
-
-message CheckReportResp {
 	int32 status = 1; // DAOS error code.
 }
 
