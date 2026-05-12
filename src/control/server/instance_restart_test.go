@@ -488,16 +488,16 @@ func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
 
 	// Verify timer was cleaned up
 	mgr.mu.RLock()
-	_, stillPending := mgr.pendingRestart[testRank]
+	timer, exists = mgr.pendingRestart[testRank]
 	mgr.mu.RUnlock()
-
-	if stillPending {
-		t.Error("expected pending restart to be cleared after execution")
-	}
 
 	// Cleanup
 	if timer != nil {
 		timer.Stop()
+	}
+
+	if exists {
+		t.Error("expected pending restart to be cleared after execution")
 	}
 }
 

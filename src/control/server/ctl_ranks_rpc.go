@@ -221,7 +221,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	// clearly state history for stopped ranks, instances have already been filtered by
+	// clear state history for stopped ranks, instances have already been filtered by
 	// FilterInstancesByRankSet() to match req.GetRanks()
 	clearRankRestartHistory(svc.restartMgr, instances)
 
@@ -338,7 +338,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, err
 	}
 
-	// clearly state history for started ranks, instances have already been filtered by
+	// clear state history for started ranks, instances have already been filtered by
 	// FilterInstancesByRankSet() to match req.GetRanks()
 	clearRankRestartHistory(svc.restartMgr, instances)
 

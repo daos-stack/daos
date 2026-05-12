@@ -121,12 +121,12 @@ func (mgr *engineRestartManager) performRestart(ctx context.Context, rank rankli
 		return
 	}
 
-	mgr.log.Noticef("restarting rank %d", rank)
+	mgr.log.Noticef("restart manager is restarting rank %d", rank)
 	instance.requestStart(ctx)
 
 	// Record restart time and clear pending state on exit (deferred)
 	mgr.recordRestartTime(rank)
-	mgr.log.Noticef("recording rank %d", rank)
+	mgr.log.Debugf("recording rank %d", rank)
 }
 
 // processRestartRequest handles a single restart request with rate limiting.
