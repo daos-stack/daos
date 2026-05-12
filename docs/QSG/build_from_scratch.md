@@ -87,6 +87,11 @@ PATH.
  $ python3 -m pip install -r requirements-build.txt
  ```
 
+**Note:** Starting with SPDK v26.01, the 'uv' Python package manager is required to build SPDK's
+Python modules. This is automatically installed when you run the above `pip install -r requirements-build.txt`
+command. If you encounter "uv: command not found" errors during the build, ensure you have run this
+step or manually install uv with `pip install uv`.
+
 ## Build DAOS
 
 Once all prerequisites installed and the sources are downloaded,
