@@ -49,7 +49,7 @@ Environment variables in this section only apply to the server side.
 |DAOS\_SCHED\_RELAX\_MODE|The mode of CPU relaxing on idle. "disabled":disable relaxing; "net":wait on network request for INTVL; "sleep":sleep for INTVL. STRING. Default to "net"|
 |DAOS\_SCHED\_RELAX\_INTVL|CPU relax interval in milliseconds. INTEGER. Default to 1 ms.|
 |DAOS\_STRICT\_SHUTDOWN|Use the strict mode when shutting down engines. BOOL. Default to 0. In the strict mode, when certain resource leaks are detected, for instance, the engine will raise an assertion failure.|
-|DAOS\_DTX\_AGG\_THD\_CNT|DTX aggregation count threshold. The valid range is [2^20, 2^24]. The default value is 2^19*7.|
+|DAOS\_DTX\_AGG\_THD\_CNT|DTX aggregation count threshold. The valid range is [2^20, 2^24]. The default value is 2^19.|
 |DAOS\_DTX\_AGG\_THD\_AGE|DTX aggregation age threshold in seconds. The valid range is [210, 1830]. The default value is 630.|
 |DAOS\_DTX\_RPC\_HELPER\_THD|DTX RPC helper threshold. The valid range is [18, unlimited). The default value is 513.|
 |DAOS\_DTX\_BATCHED\_ULT\_MAX|The max count of DTX batched commit ULTs. The valid range is [0, unlimited). 0 means to commit DTX synchronously. The default value is 32.|
@@ -80,10 +80,10 @@ Environment variables in this section only apply to the client side.
 
 |Variable    |Description|
 |------------|-----------|
-|D\_LOG\_FILE|DAOS debug logs (both server and client) are written to stdout by default. The debug location can be modified by setting this environment variable ("D\_LOG\_FILE=/tmp/daos_debug.log").|
+|D\_LOG\_FILE|DAOS debug logs (both server and client) are written to stdout by default. The debug location can be modified by setting this environment variable (`D\_LOG\_FILE=/tmp/daos_debug.log`).|
 |D\_LOG\_FILE\_APPEND\_PID|If set and not 0, causes the main PID to be appended at the end of D\_LOG\_FILE path name (both server and client).|
 |D\_LOG\_STDERR\_IN\_LOG|If set and not 0, causes stderr messages to be merged in D\_LOG\_FILE.|
-|D\_LOG\_SIZE|DAOS debug logs (both server and client) have a 1GB file size limit by default. When this limit is reached, the current log file is closed and renamed with a .old suffix, and a new one is opened. This mechanism will repeat each time the limit is reached, meaning that available saved log records could be found in both ${D_LOG_FILE} and last generation of ${D_LOG_FILE}.old files, to a maximum of the most recent 2*D_LOG_SIZE records.  This can be modified by setting this environment variable ("D_LOG_SIZE=536870912"). Sizes can also be specified in human-readable form using `k`, `m`, `g`, `K`, `M`, and `G`. The lower-case specifiers are base-10 multipliers and the upper case specifiers are base-2 multipliers.|
+|D\_LOG\_SIZE|DAOS debug logs (both server and client) have a 1GB file size limit by default. When this limit is reached, the current log file is closed and renamed with a .old suffix, and a new one is opened. This mechanism will repeat each time the limit is reached, meaning that available saved log records could be found in both ${D_LOG_FILE} and last generation of ${D_LOG_FILE}.old files, to a maximum of the most recent `2*D_LOG_SIZE` records.  This can be modified by setting this environment variable ("D_LOG_SIZE=536870912"). Sizes can also be specified in human-readable form using `k`, `m`, `g`, `K`, `M`, and `G`. The lower-case specifiers are base-10 multipliers and the upper case specifiers are base-2 multipliers.|
 |D\_LOG\_FLUSH|Allows to specify a non-default logging level where flushing will occur. By default, only levels above WARN will cause an immediate flush instead of buffering.|
 |D\_LOG\_TRUNCATE|By default log is appended. But if set this variable will cause log to be truncated upon first open and logging start.|
 |DD\_SUBSYS  |Used to specify which subsystems to enable. DD\_SUBSYS can be set to individual subsystems for finer-grained debugging ("DD\_SUBSYS=vos"), multiple facilities ("DD\_SUBSYS=bio,mgmt,misc,mem"), or all facilities ("DD\_SUBSYS=all") which is also the default setting. If a facility is not enabled, then only ERR messages or more severe messages will print.|
