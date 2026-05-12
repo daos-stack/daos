@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -385,6 +385,18 @@ debug_prio_err_load_env(void)
 	if (env == NULL)
 		return;
 
+	/* ERROR can be used as an alias for ERR */
+	if (strncasecmp(env, "ERROR", sizeof("ERROR")) == 0) {
+		d_dbglog_data.dd_prio_err = DLOG_ERR;
+		goto out_env;
+	}
+	/* DBUG can be used as an alias for DEBUG */
+	if (strncasecmp(env, "DBUG", sizeof("DBUG")) == 0) {
+		d_dbglog_data.dd_prio_err = DLOG_DBG;
+		goto out_env;
+	}
+
+	d_dbglog_data.dd_prio_err = 0;
 	for (i = 0; i < NUM_DBG_PRIO_ENTRIES; i++) {
 		if (d_dbg_prio_dict[i].dd_name != NULL &&
 		    strncasecmp(env, d_dbg_prio_dict[i].dd_name,
@@ -396,6 +408,8 @@ debug_prio_err_load_env(void)
 	/* invalid DD_STDERR option */
 	if (d_dbglog_data.dd_prio_err == 0)
 		D_PRINT_ERR("DD_STDERR = %s - invalid option\n", env);
+
+out_env:
 	d_freeenv_str(&env);
 }
 
