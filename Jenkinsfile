@@ -316,9 +316,6 @@ pipeline {
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: false,
                      description: 'Run the Functional on Leap 15 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_sles15_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional on SLES 15 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 test stage')
