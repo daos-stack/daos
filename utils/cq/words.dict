@@ -225,6 +225,7 @@ iface
 indata
 infiniband
 init
+inlining
 inode
 inodes
 interoperability
@@ -529,4 +530,3 @@ xml
 xunit
 yaml
 yamllint
-inlining
