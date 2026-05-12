@@ -34,8 +34,6 @@ from util.yaml_utils import YamlException
 
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 MAX_CI_REPETITIONS = 10
-FIND_PACKAGES = ("daos", "libfabric", "mercury", "ior", "openmpi", "mpich", "mpifileutils",
-                 "mlnx-ofed-basic", "doca-ofed", "bullseye")
 
 
 class LaunchError(Exception):
@@ -45,6 +43,9 @@ class LaunchError(Exception):
 class Launch():
     """Class to launch avocado tests."""
 
+    FIND_PACKAGES = ("daos", "argobots", "libabt", "dpdk", "fuse", "libfabric", "libisa-l",
+                     "libisal", "isa-l", "libpmem", "pmempool", "mercury", "spdk", "mpifileutils",
+                     "mlnx-ofed-basic", "doca-ofed", "openmpi", "mpich", "ior", "mpich", "bullseye")
     RESULTS_DIRS = (
         "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
 
@@ -275,7 +276,7 @@ class Launch():
         # pylint: disable=unsupported-binary-operation
         all_hosts = args.test_servers | args.test_clients | self.local_host
         self.details["installed packages"] = find_packages(
-            logger, all_hosts, f"'^({'|'.join(FIND_PACKAGES)})-'")
+            logger, all_hosts, f"'^({'|'.join(self.FIND_PACKAGES)})-'")
 
         # Setup the test environment
         test_env = TestEnvironment()

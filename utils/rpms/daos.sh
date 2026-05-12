@@ -26,7 +26,6 @@ if [ "$code_coverage" != "false" ]; then
   base_name="${base_name}-bullseye"
 fi
 
-
 VERSION=${daos_version}
 RELEASE=${daos_release}
 LICENSE="BSD-2-Clause-Patent"
@@ -436,9 +435,9 @@ TARGET_PATH="${daoshome}/python"
 list_files files "${SL_PREFIX}/lib/daos/python/*"
 append_install_list "${files[@]}"
 
-EXTERNAL_DEPENDS=("${uuid_lib}")
+EXTERNAL_DEPENDS=("${uuid_lib}" "${libasan_lib}")
 DEPENDS=("${base_name}-client = ${VERSION}-${RELEASE}")
-build_package "${base_name}-devel"
+build_package "${daos_dev//daos/${base_name}}"
 
 if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
   EXTERNAL_DEPENDS=("${hdf5_lib}")
