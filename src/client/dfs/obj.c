@@ -17,6 +17,27 @@
 #include "dfs_internal.h"
 
 static int
+open_file_tail(dfs_t *dfs, daos_obj_id_t tail_oid, int daos_mode, daos_size_t chunk_size,
+	       daos_handle_t *tail_oh)
+{
+	int rc;
+
+	if (daos_obj_id_is_nil(tail_oid)) {
+		D_ERROR("Progressive-layout file missing tail oid\n");
+		return EIO;
+	}
+
+	rc = daos_array_open_with_attr(dfs->coh, tail_oid, dfs->th, daos_mode, 1, chunk_size,
+				       tail_oh, NULL);
+	if (rc != 0) {
+		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	return 0;
+}
+
+static int
 check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int mask)
 {
 	mode_t base_mask;
@@ -184,12 +205,30 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 			return rc;
 		oid_cp(&entry->oid, file->oid);
 
+		if (dfs_file_layout_has_tail(dfs->layout_v, file->mode)) {
+			rc = oid_gen(dfs, cid, true, &file->f.tail_oid);
+			if (rc != 0)
+				return rc;
+			oid_cp(&entry->tail_oid, file->f.tail_oid);
+			entry->tail_state = DFS_TAIL_ACTIVE;
+			file->f.has_tail  = true;
+		}
+
 		/** Open the array object for the file */
 		rc = daos_array_open_with_attr(dfs->coh, file->oid, DAOS_TX_NONE, DAOS_OO_RW, 1,
 					       chunk_size, &file->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n", DP_RC(rc));
 			return daos_der2errno(rc);
+		}
+
+		if (file->f.has_tail) {
+			rc = open_file_tail(dfs, file->f.tail_oid, DAOS_OO_RW, chunk_size,
+					    &file->f.tail_oh);
+			if (rc != 0) {
+				daos_array_close(file->oh, NULL);
+				return rc;
+			}
 		}
 
 		/** Create and insert entry in parent dir object. */
@@ -207,6 +246,13 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 			int rc2;
 
 			/** just try fetching entry to open the file */
+			if (file->f.has_tail) {
+				rc2 = daos_array_close(file->f.tail_oh, NULL);
+				if (rc2)
+					D_ERROR("daos_array_close() failed " DF_RC "\n",
+						DP_RC(rc2));
+				file->f.tail_oh.cookie = 0;
+			}
 			rc2 = daos_array_close(file->oh, NULL);
 			if (rc2) {
 				D_ERROR("daos_array_close() failed " DF_RC "\n", DP_RC(rc2));
@@ -215,6 +261,13 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		} else if (rc) {
 			int rc2;
 
+			if (file->f.has_tail) {
+				rc2 = daos_array_close(file->f.tail_oh, NULL);
+				if (rc2)
+					D_ERROR("daos_array_close() failed " DF_RC "\n",
+						DP_RC(rc2));
+				file->f.tail_oh.cookie = 0;
+			}
 			rc2 = daos_array_close(file->oh, NULL);
 			if (rc2)
 				D_ERROR("daos_array_close() failed " DF_RC "\n", DP_RC(rc2));
@@ -258,21 +311,34 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		return daos_der2errno(rc);
 	}
 
-	if (flags & O_TRUNC) {
-		rc = daos_array_set_size(file->oh, DAOS_TX_NONE, 0, NULL);
-		if (rc) {
-			D_ERROR("Failed to truncate file " DF_RC "\n", DP_RC(rc));
+	file->f.has_tail = dfs_entry_has_tail(dfs->layout_v, entry);
+	if (file->f.has_tail) {
+		oid_cp(&file->f.tail_oid, entry->tail_oid);
+		rc = open_file_tail(dfs, file->f.tail_oid, daos_mode, entry->chunk_size,
+				    &file->f.tail_oh);
+		if (rc != 0) {
 			daos_array_close(file->oh, NULL);
-			return daos_der2errno(rc);
+			return rc;
+		}
+	}
+
+	if (flags & O_TRUNC) {
+		rc = file_truncate_zero(file, DAOS_TX_NONE);
+		if (rc) {
+			if (file->f.has_tail)
+				daos_array_close(file->f.tail_oh, NULL);
+			daos_array_close(file->oh, NULL);
+			return rc;
 		}
 		if (size)
 			*size = 0;
 	} else if (size) {
-		rc = daos_array_get_size(file->oh, dfs->th, size, NULL);
+		rc = dfs_get_size(dfs, file, size);
 		if (rc != 0) {
-			D_ERROR("daos_array_get_size() failed (%d)\n", rc);
+			if (file->f.has_tail)
+				daos_array_close(file->f.tail_oh, NULL);
 			daos_array_close(file->oh, NULL);
-			return daos_der2errno(rc);
+			return rc;
 		}
 	}
 	oid_cp(&file->oid, entry->oid);
@@ -501,7 +567,9 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		break;
 	case S_IFREG: {
 		d_iov_t ghdl = {NULL, 0, 0};
+		d_iov_t tail_ghdl = {NULL, 0, 0};
 		char   *buf  = NULL;
+		char   *tail_buf  = NULL;
 
 		rc = daos_array_local2global(obj->oh, &ghdl);
 		if (rc)
@@ -521,8 +589,34 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		if (rc)
 			D_GOTO(out_free, rc = daos_der2errno(rc));
 
+		new_obj->f.has_tail = obj->f.has_tail;
+		if (obj->f.has_tail) {
+			oid_cp(&new_obj->f.tail_oid, obj->f.tail_oid);
+			rc = daos_array_local2global(obj->f.tail_oh, &tail_ghdl);
+			if (rc)
+				D_GOTO(out_free, rc = daos_der2errno(rc));
+
+			D_ALLOC(tail_buf, tail_ghdl.iov_buf_len);
+			if (tail_buf == NULL)
+				D_GOTO(out_free, rc = ENOMEM);
+
+			tail_ghdl.iov_buf = tail_buf;
+			tail_ghdl.iov_len = tail_ghdl.iov_buf_len;
+			rc                = daos_array_local2global(obj->f.tail_oh, &tail_ghdl);
+			if (rc)
+				D_GOTO(out_tail_free, rc = daos_der2errno(rc));
+
+			rc = daos_array_global2local(dfs->coh, tail_ghdl, daos_mode,
+						     &new_obj->f.tail_oh);
+			if (rc)
+				D_GOTO(out_tail_free, rc = daos_der2errno(rc));
+		}
+
 		D_FREE(buf);
+		D_FREE(tail_buf);
 		break;
+out_tail_free:
+		D_FREE(tail_buf);
 out_free:
 		D_FREE(buf);
 		if (rc)
@@ -551,6 +645,15 @@ out_free:
 	return 0;
 
 err:
+	if (S_ISREG(obj->mode)) {
+		if (daos_handle_is_valid(new_obj->f.tail_oh))
+			daos_array_close(new_obj->f.tail_oh, NULL);
+		if (daos_handle_is_valid(new_obj->oh))
+			daos_array_close(new_obj->oh, NULL);
+	} else if (S_ISDIR(obj->mode)) {
+		if (daos_handle_is_valid(new_obj->oh))
+			daos_obj_close(new_obj->oh, NULL);
+	}
 	D_FREE(new_obj);
 	return rc;
 }
@@ -560,7 +663,9 @@ struct dfs_obj_glob {
 	uint32_t      magic;
 	uint32_t      flags;
 	mode_t        mode;
+	uint8_t       has_tail;
 	daos_obj_id_t oid;
+	daos_obj_id_t tail_oid;
 	daos_obj_id_t parent_oid;
 	daos_size_t   chunk_size;
 	uuid_t        cont_uuid;
@@ -584,6 +689,8 @@ swap_obj_glob(struct dfs_obj_glob *array_glob)
 	D_SWAP32S(&array_glob->flags);
 	D_SWAP64S(&array_glob->oid.hi);
 	D_SWAP64S(&array_glob->oid.lo);
+	D_SWAP64S(&array_glob->tail_oid.hi);
+	D_SWAP64S(&array_glob->tail_oid.lo);
 	D_SWAP64S(&array_glob->parent_oid.hi);
 	D_SWAP64S(&array_glob->parent_oid.lo);
 	D_SWAP64S(&array_glob->chunk_size);
@@ -642,7 +749,9 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	obj_glob->magic = DFS_OBJ_GLOB_MAGIC;
 	obj_glob->mode  = obj->mode;
 	obj_glob->flags = obj->flags;
+	obj_glob->has_tail = obj->f.has_tail;
 	oid_cp(&obj_glob->oid, obj->oid);
+	oid_cp(&obj_glob->tail_oid, obj->f.tail_oid);
 	oid_cp(&obj_glob->parent_oid, obj->parent_oid);
 	uuid_copy(obj_glob->coh_uuid, coh_uuid);
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
@@ -703,12 +812,14 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 		return ENOMEM;
 
 	oid_cp(&obj->oid, obj_glob->oid);
+	oid_cp(&obj->f.tail_oid, obj_glob->tail_oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
 	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME);
 	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode               = obj_glob->mode;
 	obj->dfs                = dfs;
 	obj->flags              = flags ? flags : obj_glob->flags;
+	obj->f.has_tail         = dfs_file_layout_has_tail(dfs->layout_v, obj->mode);
 
 	daos_mode = get_daos_obj_mode(obj->flags);
 	if (daos_mode == -1) {
@@ -735,6 +846,16 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 		return daos_der2errno(rc);
 	}
 
+	if (obj->f.has_tail) {
+		rc = open_file_tail(dfs, obj->f.tail_oid, daos_mode, obj_glob->chunk_size,
+				    &obj->f.tail_oh);
+		if (rc) {
+			daos_array_close(obj->oh, NULL);
+			D_FREE(obj);
+			return rc;
+		}
+	}
+
 	*_obj = obj;
 out:
 	return rc;
@@ -744,6 +865,7 @@ int
 dfs_release(dfs_obj_t *obj)
 {
 	int rc = 0;
+	int rc2;
 
 	if (obj == NULL)
 		return EINVAL;
@@ -753,7 +875,11 @@ dfs_release(dfs_obj_t *obj)
 		rc = daos_obj_close(obj->oh, NULL);
 		break;
 	case S_IFREG:
-		rc = daos_array_close(obj->oh, NULL);
+		if (obj->f.has_tail)
+			rc = daos_array_close(obj->f.tail_oh, NULL);
+		rc2 = daos_array_close(obj->oh, NULL);
+		if (rc == 0)
+			rc = rc2;
 		break;
 	case S_IFLNK:
 		D_FREE(obj->value);
@@ -868,6 +994,7 @@ struct statx_op_args {
 	d_iov_t            sg_iovs[INODE_AKEYS];
 	struct dfs_entry   entry;
 	daos_array_stbuf_t array_stbuf;
+	daos_array_stbuf_t tail_array_stbuf;
 };
 
 int
@@ -887,6 +1014,12 @@ ostatx_cb(tse_task_t *task, void *data)
 	if (args->obj->oid.hi != op_args->entry.oid.hi ||
 	    args->obj->oid.lo != op_args->entry.oid.lo)
 		D_GOTO(out, rc = -DER_ENOENT);
+
+	if (S_ISREG(args->obj->mode) && args->obj->f.has_tail) {
+		op_args->array_stbuf.st_size += op_args->tail_array_stbuf.st_size;
+		if (op_args->tail_array_stbuf.st_max_epoch > op_args->array_stbuf.st_max_epoch)
+			op_args->array_stbuf.st_max_epoch = op_args->tail_array_stbuf.st_max_epoch;
+	}
 
 	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf,
 				NULL);
@@ -934,8 +1067,10 @@ statx_task(tse_task_t *task)
 	tse_task_t            *fetch_task;
 	daos_obj_fetch_t      *fetch_arg;
 	tse_task_t            *stat_task;
+	tse_task_t            *tail_stat_task = NULL;
 	tse_sched_t           *sched     = tse_task2sched(task);
 	bool                   need_stat = false;
+	bool                   need_tail_stat = false;
 	int                    i;
 	int                    rc;
 
@@ -957,7 +1092,7 @@ statx_task(tse_task_t *task)
 	d_iov_set(&op_args->iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	op_args->iod.iod_nr    = 1;
 	op_args->recx.rx_idx   = 0;
-	op_args->recx.rx_nr    = END_IDX;
+	op_args->recx.rx_nr    = dfs_inode_record_size(args->dfs->layout_v);
 	op_args->iod.iod_recxs = &op_args->recx;
 	op_args->iod.iod_type  = DAOS_IOD_ARRAY;
 	op_args->iod.iod_size  = 1;
@@ -974,6 +1109,10 @@ statx_task(tse_task_t *task)
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.gid, sizeof(gid_t));
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.value_len, sizeof(daos_size_t));
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.obj_hlc, sizeof(uint64_t));
+	if (args->dfs->layout_v >= DFS_PL_LAYOUT_VERSION) {
+		d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.tail_oid, sizeof(daos_obj_id_t));
+		d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.tail_state, sizeof(uint8_t));
+	}
 	op_args->sgl.sg_nr     = i;
 	op_args->sgl.sg_nr_out = 0;
 	op_args->sgl.sg_iovs   = op_args->sg_iovs;
@@ -1002,6 +1141,20 @@ statx_task(tse_task_t *task)
 		stat_arg->th    = args->dfs->th;
 		stat_arg->stbuf = &op_args->array_stbuf;
 		need_stat       = true;
+
+		if (args->obj->f.has_tail) {
+			rc = daos_task_create(DAOS_OPC_ARRAY_STAT, sched, 0, NULL, &tail_stat_task);
+			if (rc != 0) {
+				D_ERROR("daos_task_create() failed: " DF_RC "\n", DP_RC(rc));
+				D_GOTO(err2_out, rc);
+			}
+
+			stat_arg        = daos_task_get_args(tail_stat_task);
+			stat_arg->oh    = args->obj->f.tail_oh;
+			stat_arg->th    = args->dfs->th;
+			stat_arg->stbuf = &op_args->tail_array_stbuf;
+			need_tail_stat  = true;
+		}
 	} else if (S_ISDIR(args->obj->mode)) {
 		daos_obj_query_key_t *stat_arg;
 
@@ -1036,6 +1189,14 @@ statx_task(tse_task_t *task)
 			D_GOTO(err1_out, rc);
 		}
 	}
+	if (need_tail_stat) {
+		rc = tse_task_register_deps(task, 1, &tail_stat_task);
+		if (rc) {
+			D_ERROR("tse_task_register_deps() failed: " DF_RC "\n", DP_RC(rc));
+			tse_task_complete(tail_stat_task, rc);
+			D_GOTO(err1_out, rc);
+		}
+	}
 	rc = tse_task_register_comp_cb(task, ostatx_cb, &op_args, sizeof(op_args));
 	if (rc != 0) {
 		D_ERROR("tse_task_register_comp_cb() failed: " DF_RC "\n", DP_RC(rc));
@@ -1045,8 +1206,12 @@ statx_task(tse_task_t *task)
 	tse_task_schedule(fetch_task, true);
 	if (need_stat)
 		tse_task_schedule(stat_task, true);
+	if (need_tail_stat)
+		tse_task_schedule(tail_stat_task, true);
 	return rc;
 err3_out:
+	if (need_tail_stat)
+		tse_task_complete(tail_stat_task, rc);
 	if (need_stat)
 		tse_task_complete(stat_task, rc);
 err2_out:

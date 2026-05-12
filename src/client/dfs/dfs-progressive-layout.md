@@ -1,9 +1,5 @@
 # DFS Progressive File Layout Design
 
-## Status
-
-Draft proposal for discussion.
-
 ## Problem Statement
 
 DFS currently stores each regular file as one DAOS array object. The object class is selected when the object ID is generated and is effectively fixed for that file object. This gives predictable behavior, but creates a trade-off:
