@@ -33,7 +33,7 @@ var File_mgmt_mgmt_proto protoreflect.FileDescriptor
 
 const file_mgmt_mgmt_proto_rawDesc = "" +
 	"\n" +
-	"\x0fmgmt/mgmt.proto\x12\x04mgmt\x1a\x12shared/event.proto\x1a\x19shared/check_engine.proto\x1a\x0fmgmt/pool.proto\x1a\x10mgmt/check.proto\x1a\x0fmgmt/cont.proto\x1a\x0emgmt/svc.proto\x1a\x0emgmt/acl.proto\x1a\x11mgmt/system.proto\x1a\rchk/chk.proto\x1a\x10chk/faults.proto2\xe5\x18\n" +
+	"\x0fmgmt/mgmt.proto\x12\x04mgmt\x1a\x12shared/event.proto\x1a\x19shared/check_engine.proto\x1a\x0fmgmt/pool.proto\x1a\x10mgmt/check.proto\x1a\x0fmgmt/cont.proto\x1a\x0emgmt/svc.proto\x1a\x0emgmt/acl.proto\x1a\x11mgmt/system.proto\x1a\rchk/chk.proto\x1a\x10chk/faults.proto2\x81\x1a\n" +
 	"\aMgmtSvc\x12'\n" +
 	"\x04Join\x12\r.mgmt.JoinReq\x1a\x0e.mgmt.JoinResp\"\x00\x12C\n" +
 	"\fClusterEvent\x12\x17.shared.ClusterEventReq\x1a\x18.shared.ClusterEventResp\"\x00\x12<\n" +
@@ -82,7 +82,9 @@ const file_mgmt_mgmt_proto_rawDesc = "" +
 	"\x14SystemCheckSetPolicy\x12\x17.mgmt.CheckSetPolicyReq\x1a\x0e.mgmt.DaosResp\"\x00\x12K\n" +
 	"\x14SystemCheckGetPolicy\x12\x17.mgmt.CheckGetPolicyReq\x1a\x18.mgmt.CheckGetPolicyResp\"\x00\x12<\n" +
 	"\x11SystemCheckRepair\x12\x11.mgmt.CheckActReq\x1a\x12.mgmt.CheckActResp\"\x00\x12L\n" +
-	"\x17SystemCheckEngineReport\x12\x16.shared.CheckReportReq\x1a\x17.shared.CheckReportResp\"\x00\x129\n" +
+	"\x17SystemCheckEngineReport\x12\x16.shared.CheckReportReq\x1a\x17.shared.CheckReportResp\"\x00\x12I\n" +
+	"\x12SystemCheckRegPool\x12\x17.shared.CheckRegPoolReq\x1a\x18.shared.CheckRegPoolResp\"\x00\x12O\n" +
+	"\x14SystemCheckDeregPool\x12\x19.shared.CheckDeregPoolReq\x1a\x1a.shared.CheckDeregPoolResp\"\x00\x129\n" +
 	"\rSystemSetAttr\x12\x16.mgmt.SystemSetAttrReq\x1a\x0e.mgmt.DaosResp\"\x00\x12B\n" +
 	"\rSystemGetAttr\x12\x16.mgmt.SystemGetAttrReq\x1a\x17.mgmt.SystemGetAttrResp\"\x00\x129\n" +
 	"\rSystemSetProp\x12\x16.mgmt.SystemSetPropReq\x1a\x0e.mgmt.DaosResp\"\x00\x12B\n" +
@@ -94,90 +96,94 @@ const file_mgmt_mgmt_proto_rawDesc = "" +
 	".chk.Fault\x1a\x0e.mgmt.DaosResp\"\x00B:Z8github.com/daos-stack/daos/src/control/common/proto/mgmtb\x06proto3"
 
 var file_mgmt_mgmt_proto_goTypes = []any{
-	(*JoinReq)(nil),                 // 0: mgmt.JoinReq
-	(*shared.ClusterEventReq)(nil),  // 1: shared.ClusterEventReq
-	(*LeaderQueryReq)(nil),          // 2: mgmt.LeaderQueryReq
-	(*PoolCreateReq)(nil),           // 3: mgmt.PoolCreateReq
-	(*PoolDestroyReq)(nil),          // 4: mgmt.PoolDestroyReq
-	(*PoolEvictReq)(nil),            // 5: mgmt.PoolEvictReq
-	(*PoolExcludeReq)(nil),          // 6: mgmt.PoolExcludeReq
-	(*PoolDrainReq)(nil),            // 7: mgmt.PoolDrainReq
-	(*PoolExtendReq)(nil),           // 8: mgmt.PoolExtendReq
-	(*PoolReintReq)(nil),            // 9: mgmt.PoolReintReq
-	(*PoolQueryReq)(nil),            // 10: mgmt.PoolQueryReq
-	(*PoolQueryTargetReq)(nil),      // 11: mgmt.PoolQueryTargetReq
-	(*PoolSetPropReq)(nil),          // 12: mgmt.PoolSetPropReq
-	(*PoolGetPropReq)(nil),          // 13: mgmt.PoolGetPropReq
-	(*GetACLReq)(nil),               // 14: mgmt.GetACLReq
-	(*ModifyACLReq)(nil),            // 15: mgmt.ModifyACLReq
-	(*DeleteACLReq)(nil),            // 16: mgmt.DeleteACLReq
-	(*PoolUpgradeReq)(nil),          // 17: mgmt.PoolUpgradeReq
-	(*PoolRebuildStartReq)(nil),     // 18: mgmt.PoolRebuildStartReq
-	(*PoolRebuildStopReq)(nil),      // 19: mgmt.PoolRebuildStopReq
-	(*PoolSelfHealEvalReq)(nil),     // 20: mgmt.PoolSelfHealEvalReq
-	(*GetAttachInfoReq)(nil),        // 21: mgmt.GetAttachInfoReq
-	(*ListPoolsReq)(nil),            // 22: mgmt.ListPoolsReq
-	(*ListContReq)(nil),             // 23: mgmt.ListContReq
-	(*ContSetOwnerReq)(nil),         // 24: mgmt.ContSetOwnerReq
-	(*SystemQueryReq)(nil),          // 25: mgmt.SystemQueryReq
-	(*SystemStopReq)(nil),           // 26: mgmt.SystemStopReq
-	(*SystemStartReq)(nil),          // 27: mgmt.SystemStartReq
-	(*SystemExcludeReq)(nil),        // 28: mgmt.SystemExcludeReq
-	(*SystemDrainReq)(nil),          // 29: mgmt.SystemDrainReq
-	(*SystemRebuildManageReq)(nil),  // 30: mgmt.SystemRebuildManageReq
-	(*SystemSelfHealEvalReq)(nil),   // 31: mgmt.SystemSelfHealEvalReq
-	(*SystemEraseReq)(nil),          // 32: mgmt.SystemEraseReq
-	(*SystemCleanupReq)(nil),        // 33: mgmt.SystemCleanupReq
-	(*CheckEnableReq)(nil),          // 34: mgmt.CheckEnableReq
-	(*CheckDisableReq)(nil),         // 35: mgmt.CheckDisableReq
-	(*CheckStartReq)(nil),           // 36: mgmt.CheckStartReq
-	(*CheckStopReq)(nil),            // 37: mgmt.CheckStopReq
-	(*CheckQueryReq)(nil),           // 38: mgmt.CheckQueryReq
-	(*CheckSetPolicyReq)(nil),       // 39: mgmt.CheckSetPolicyReq
-	(*CheckGetPolicyReq)(nil),       // 40: mgmt.CheckGetPolicyReq
-	(*CheckActReq)(nil),             // 41: mgmt.CheckActReq
-	(*shared.CheckReportReq)(nil),   // 42: shared.CheckReportReq
-	(*SystemSetAttrReq)(nil),        // 43: mgmt.SystemSetAttrReq
-	(*SystemGetAttrReq)(nil),        // 44: mgmt.SystemGetAttrReq
-	(*SystemSetPropReq)(nil),        // 45: mgmt.SystemSetPropReq
-	(*SystemGetPropReq)(nil),        // 46: mgmt.SystemGetPropReq
-	(*chk.CheckReport)(nil),         // 47: chk.CheckReport
-	(*chk.Fault)(nil),               // 48: chk.Fault
-	(*JoinResp)(nil),                // 49: mgmt.JoinResp
-	(*shared.ClusterEventResp)(nil), // 50: shared.ClusterEventResp
-	(*LeaderQueryResp)(nil),         // 51: mgmt.LeaderQueryResp
-	(*PoolCreateResp)(nil),          // 52: mgmt.PoolCreateResp
-	(*PoolDestroyResp)(nil),         // 53: mgmt.PoolDestroyResp
-	(*PoolEvictResp)(nil),           // 54: mgmt.PoolEvictResp
-	(*PoolExcludeResp)(nil),         // 55: mgmt.PoolExcludeResp
-	(*PoolDrainResp)(nil),           // 56: mgmt.PoolDrainResp
-	(*PoolExtendResp)(nil),          // 57: mgmt.PoolExtendResp
-	(*PoolReintResp)(nil),           // 58: mgmt.PoolReintResp
-	(*PoolQueryResp)(nil),           // 59: mgmt.PoolQueryResp
-	(*PoolQueryTargetResp)(nil),     // 60: mgmt.PoolQueryTargetResp
-	(*PoolSetPropResp)(nil),         // 61: mgmt.PoolSetPropResp
-	(*PoolGetPropResp)(nil),         // 62: mgmt.PoolGetPropResp
-	(*ACLResp)(nil),                 // 63: mgmt.ACLResp
-	(*DaosResp)(nil),                // 64: mgmt.DaosResp
-	(*GetAttachInfoResp)(nil),       // 65: mgmt.GetAttachInfoResp
-	(*ListPoolsResp)(nil),           // 66: mgmt.ListPoolsResp
-	(*ListContResp)(nil),            // 67: mgmt.ListContResp
-	(*SystemQueryResp)(nil),         // 68: mgmt.SystemQueryResp
-	(*SystemStopResp)(nil),          // 69: mgmt.SystemStopResp
-	(*SystemStartResp)(nil),         // 70: mgmt.SystemStartResp
-	(*SystemExcludeResp)(nil),       // 71: mgmt.SystemExcludeResp
-	(*SystemDrainResp)(nil),         // 72: mgmt.SystemDrainResp
-	(*SystemRebuildManageResp)(nil), // 73: mgmt.SystemRebuildManageResp
-	(*SystemEraseResp)(nil),         // 74: mgmt.SystemEraseResp
-	(*SystemCleanupResp)(nil),       // 75: mgmt.SystemCleanupResp
-	(*CheckStartResp)(nil),          // 76: mgmt.CheckStartResp
-	(*CheckStopResp)(nil),           // 77: mgmt.CheckStopResp
-	(*CheckQueryResp)(nil),          // 78: mgmt.CheckQueryResp
-	(*CheckGetPolicyResp)(nil),      // 79: mgmt.CheckGetPolicyResp
-	(*CheckActResp)(nil),            // 80: mgmt.CheckActResp
-	(*shared.CheckReportResp)(nil),  // 81: shared.CheckReportResp
-	(*SystemGetAttrResp)(nil),       // 82: mgmt.SystemGetAttrResp
-	(*SystemGetPropResp)(nil),       // 83: mgmt.SystemGetPropResp
+	(*JoinReq)(nil),                   // 0: mgmt.JoinReq
+	(*shared.ClusterEventReq)(nil),    // 1: shared.ClusterEventReq
+	(*LeaderQueryReq)(nil),            // 2: mgmt.LeaderQueryReq
+	(*PoolCreateReq)(nil),             // 3: mgmt.PoolCreateReq
+	(*PoolDestroyReq)(nil),            // 4: mgmt.PoolDestroyReq
+	(*PoolEvictReq)(nil),              // 5: mgmt.PoolEvictReq
+	(*PoolExcludeReq)(nil),            // 6: mgmt.PoolExcludeReq
+	(*PoolDrainReq)(nil),              // 7: mgmt.PoolDrainReq
+	(*PoolExtendReq)(nil),             // 8: mgmt.PoolExtendReq
+	(*PoolReintReq)(nil),              // 9: mgmt.PoolReintReq
+	(*PoolQueryReq)(nil),              // 10: mgmt.PoolQueryReq
+	(*PoolQueryTargetReq)(nil),        // 11: mgmt.PoolQueryTargetReq
+	(*PoolSetPropReq)(nil),            // 12: mgmt.PoolSetPropReq
+	(*PoolGetPropReq)(nil),            // 13: mgmt.PoolGetPropReq
+	(*GetACLReq)(nil),                 // 14: mgmt.GetACLReq
+	(*ModifyACLReq)(nil),              // 15: mgmt.ModifyACLReq
+	(*DeleteACLReq)(nil),              // 16: mgmt.DeleteACLReq
+	(*PoolUpgradeReq)(nil),            // 17: mgmt.PoolUpgradeReq
+	(*PoolRebuildStartReq)(nil),       // 18: mgmt.PoolRebuildStartReq
+	(*PoolRebuildStopReq)(nil),        // 19: mgmt.PoolRebuildStopReq
+	(*PoolSelfHealEvalReq)(nil),       // 20: mgmt.PoolSelfHealEvalReq
+	(*GetAttachInfoReq)(nil),          // 21: mgmt.GetAttachInfoReq
+	(*ListPoolsReq)(nil),              // 22: mgmt.ListPoolsReq
+	(*ListContReq)(nil),               // 23: mgmt.ListContReq
+	(*ContSetOwnerReq)(nil),           // 24: mgmt.ContSetOwnerReq
+	(*SystemQueryReq)(nil),            // 25: mgmt.SystemQueryReq
+	(*SystemStopReq)(nil),             // 26: mgmt.SystemStopReq
+	(*SystemStartReq)(nil),            // 27: mgmt.SystemStartReq
+	(*SystemExcludeReq)(nil),          // 28: mgmt.SystemExcludeReq
+	(*SystemDrainReq)(nil),            // 29: mgmt.SystemDrainReq
+	(*SystemRebuildManageReq)(nil),    // 30: mgmt.SystemRebuildManageReq
+	(*SystemSelfHealEvalReq)(nil),     // 31: mgmt.SystemSelfHealEvalReq
+	(*SystemEraseReq)(nil),            // 32: mgmt.SystemEraseReq
+	(*SystemCleanupReq)(nil),          // 33: mgmt.SystemCleanupReq
+	(*CheckEnableReq)(nil),            // 34: mgmt.CheckEnableReq
+	(*CheckDisableReq)(nil),           // 35: mgmt.CheckDisableReq
+	(*CheckStartReq)(nil),             // 36: mgmt.CheckStartReq
+	(*CheckStopReq)(nil),              // 37: mgmt.CheckStopReq
+	(*CheckQueryReq)(nil),             // 38: mgmt.CheckQueryReq
+	(*CheckSetPolicyReq)(nil),         // 39: mgmt.CheckSetPolicyReq
+	(*CheckGetPolicyReq)(nil),         // 40: mgmt.CheckGetPolicyReq
+	(*CheckActReq)(nil),               // 41: mgmt.CheckActReq
+	(*shared.CheckReportReq)(nil),     // 42: shared.CheckReportReq
+	(*shared.CheckRegPoolReq)(nil),    // 43: shared.CheckRegPoolReq
+	(*shared.CheckDeregPoolReq)(nil),  // 44: shared.CheckDeregPoolReq
+	(*SystemSetAttrReq)(nil),          // 45: mgmt.SystemSetAttrReq
+	(*SystemGetAttrReq)(nil),          // 46: mgmt.SystemGetAttrReq
+	(*SystemSetPropReq)(nil),          // 47: mgmt.SystemSetPropReq
+	(*SystemGetPropReq)(nil),          // 48: mgmt.SystemGetPropReq
+	(*chk.CheckReport)(nil),           // 49: chk.CheckReport
+	(*chk.Fault)(nil),                 // 50: chk.Fault
+	(*JoinResp)(nil),                  // 51: mgmt.JoinResp
+	(*shared.ClusterEventResp)(nil),   // 52: shared.ClusterEventResp
+	(*LeaderQueryResp)(nil),           // 53: mgmt.LeaderQueryResp
+	(*PoolCreateResp)(nil),            // 54: mgmt.PoolCreateResp
+	(*PoolDestroyResp)(nil),           // 55: mgmt.PoolDestroyResp
+	(*PoolEvictResp)(nil),             // 56: mgmt.PoolEvictResp
+	(*PoolExcludeResp)(nil),           // 57: mgmt.PoolExcludeResp
+	(*PoolDrainResp)(nil),             // 58: mgmt.PoolDrainResp
+	(*PoolExtendResp)(nil),            // 59: mgmt.PoolExtendResp
+	(*PoolReintResp)(nil),             // 60: mgmt.PoolReintResp
+	(*PoolQueryResp)(nil),             // 61: mgmt.PoolQueryResp
+	(*PoolQueryTargetResp)(nil),       // 62: mgmt.PoolQueryTargetResp
+	(*PoolSetPropResp)(nil),           // 63: mgmt.PoolSetPropResp
+	(*PoolGetPropResp)(nil),           // 64: mgmt.PoolGetPropResp
+	(*ACLResp)(nil),                   // 65: mgmt.ACLResp
+	(*DaosResp)(nil),                  // 66: mgmt.DaosResp
+	(*GetAttachInfoResp)(nil),         // 67: mgmt.GetAttachInfoResp
+	(*ListPoolsResp)(nil),             // 68: mgmt.ListPoolsResp
+	(*ListContResp)(nil),              // 69: mgmt.ListContResp
+	(*SystemQueryResp)(nil),           // 70: mgmt.SystemQueryResp
+	(*SystemStopResp)(nil),            // 71: mgmt.SystemStopResp
+	(*SystemStartResp)(nil),           // 72: mgmt.SystemStartResp
+	(*SystemExcludeResp)(nil),         // 73: mgmt.SystemExcludeResp
+	(*SystemDrainResp)(nil),           // 74: mgmt.SystemDrainResp
+	(*SystemRebuildManageResp)(nil),   // 75: mgmt.SystemRebuildManageResp
+	(*SystemEraseResp)(nil),           // 76: mgmt.SystemEraseResp
+	(*SystemCleanupResp)(nil),         // 77: mgmt.SystemCleanupResp
+	(*CheckStartResp)(nil),            // 78: mgmt.CheckStartResp
+	(*CheckStopResp)(nil),             // 79: mgmt.CheckStopResp
+	(*CheckQueryResp)(nil),            // 80: mgmt.CheckQueryResp
+	(*CheckGetPolicyResp)(nil),        // 81: mgmt.CheckGetPolicyResp
+	(*CheckActResp)(nil),              // 82: mgmt.CheckActResp
+	(*shared.CheckReportResp)(nil),    // 83: shared.CheckReportResp
+	(*shared.CheckRegPoolResp)(nil),   // 84: shared.CheckRegPoolResp
+	(*shared.CheckDeregPoolResp)(nil), // 85: shared.CheckDeregPoolResp
+	(*SystemGetAttrResp)(nil),         // 86: mgmt.SystemGetAttrResp
+	(*SystemGetPropResp)(nil),         // 87: mgmt.SystemGetPropResp
 }
 var file_mgmt_mgmt_proto_depIdxs = []int32{
 	0,  // 0: mgmt.MgmtSvc.Join:input_type -> mgmt.JoinReq
@@ -224,66 +230,70 @@ var file_mgmt_mgmt_proto_depIdxs = []int32{
 	40, // 41: mgmt.MgmtSvc.SystemCheckGetPolicy:input_type -> mgmt.CheckGetPolicyReq
 	41, // 42: mgmt.MgmtSvc.SystemCheckRepair:input_type -> mgmt.CheckActReq
 	42, // 43: mgmt.MgmtSvc.SystemCheckEngineReport:input_type -> shared.CheckReportReq
-	43, // 44: mgmt.MgmtSvc.SystemSetAttr:input_type -> mgmt.SystemSetAttrReq
-	44, // 45: mgmt.MgmtSvc.SystemGetAttr:input_type -> mgmt.SystemGetAttrReq
-	45, // 46: mgmt.MgmtSvc.SystemSetProp:input_type -> mgmt.SystemSetPropReq
-	46, // 47: mgmt.MgmtSvc.SystemGetProp:input_type -> mgmt.SystemGetPropReq
-	47, // 48: mgmt.MgmtSvc.FaultInjectReport:input_type -> chk.CheckReport
-	48, // 49: mgmt.MgmtSvc.FaultInjectPoolFault:input_type -> chk.Fault
-	48, // 50: mgmt.MgmtSvc.FaultInjectMgmtPoolFault:input_type -> chk.Fault
-	49, // 51: mgmt.MgmtSvc.Join:output_type -> mgmt.JoinResp
-	50, // 52: mgmt.MgmtSvc.ClusterEvent:output_type -> shared.ClusterEventResp
-	51, // 53: mgmt.MgmtSvc.LeaderQuery:output_type -> mgmt.LeaderQueryResp
-	52, // 54: mgmt.MgmtSvc.PoolCreate:output_type -> mgmt.PoolCreateResp
-	53, // 55: mgmt.MgmtSvc.PoolDestroy:output_type -> mgmt.PoolDestroyResp
-	54, // 56: mgmt.MgmtSvc.PoolEvict:output_type -> mgmt.PoolEvictResp
-	55, // 57: mgmt.MgmtSvc.PoolExclude:output_type -> mgmt.PoolExcludeResp
-	56, // 58: mgmt.MgmtSvc.PoolDrain:output_type -> mgmt.PoolDrainResp
-	57, // 59: mgmt.MgmtSvc.PoolExtend:output_type -> mgmt.PoolExtendResp
-	58, // 60: mgmt.MgmtSvc.PoolReintegrate:output_type -> mgmt.PoolReintResp
-	59, // 61: mgmt.MgmtSvc.PoolQuery:output_type -> mgmt.PoolQueryResp
-	60, // 62: mgmt.MgmtSvc.PoolQueryTarget:output_type -> mgmt.PoolQueryTargetResp
-	61, // 63: mgmt.MgmtSvc.PoolSetProp:output_type -> mgmt.PoolSetPropResp
-	62, // 64: mgmt.MgmtSvc.PoolGetProp:output_type -> mgmt.PoolGetPropResp
-	63, // 65: mgmt.MgmtSvc.PoolGetACL:output_type -> mgmt.ACLResp
-	63, // 66: mgmt.MgmtSvc.PoolOverwriteACL:output_type -> mgmt.ACLResp
-	63, // 67: mgmt.MgmtSvc.PoolUpdateACL:output_type -> mgmt.ACLResp
-	63, // 68: mgmt.MgmtSvc.PoolDeleteACL:output_type -> mgmt.ACLResp
-	64, // 69: mgmt.MgmtSvc.PoolUpgrade:output_type -> mgmt.DaosResp
-	64, // 70: mgmt.MgmtSvc.PoolRebuildStart:output_type -> mgmt.DaosResp
-	64, // 71: mgmt.MgmtSvc.PoolRebuildStop:output_type -> mgmt.DaosResp
-	64, // 72: mgmt.MgmtSvc.PoolSelfHealEval:output_type -> mgmt.DaosResp
-	65, // 73: mgmt.MgmtSvc.GetAttachInfo:output_type -> mgmt.GetAttachInfoResp
-	66, // 74: mgmt.MgmtSvc.ListPools:output_type -> mgmt.ListPoolsResp
-	67, // 75: mgmt.MgmtSvc.ListContainers:output_type -> mgmt.ListContResp
-	64, // 76: mgmt.MgmtSvc.ContSetOwner:output_type -> mgmt.DaosResp
-	68, // 77: mgmt.MgmtSvc.SystemQuery:output_type -> mgmt.SystemQueryResp
-	69, // 78: mgmt.MgmtSvc.SystemStop:output_type -> mgmt.SystemStopResp
-	70, // 79: mgmt.MgmtSvc.SystemStart:output_type -> mgmt.SystemStartResp
-	71, // 80: mgmt.MgmtSvc.SystemExclude:output_type -> mgmt.SystemExcludeResp
-	72, // 81: mgmt.MgmtSvc.SystemDrain:output_type -> mgmt.SystemDrainResp
-	73, // 82: mgmt.MgmtSvc.SystemRebuildManage:output_type -> mgmt.SystemRebuildManageResp
-	64, // 83: mgmt.MgmtSvc.SystemSelfHealEval:output_type -> mgmt.DaosResp
-	74, // 84: mgmt.MgmtSvc.SystemErase:output_type -> mgmt.SystemEraseResp
-	75, // 85: mgmt.MgmtSvc.SystemCleanup:output_type -> mgmt.SystemCleanupResp
-	64, // 86: mgmt.MgmtSvc.SystemCheckEnable:output_type -> mgmt.DaosResp
-	64, // 87: mgmt.MgmtSvc.SystemCheckDisable:output_type -> mgmt.DaosResp
-	76, // 88: mgmt.MgmtSvc.SystemCheckStart:output_type -> mgmt.CheckStartResp
-	77, // 89: mgmt.MgmtSvc.SystemCheckStop:output_type -> mgmt.CheckStopResp
-	78, // 90: mgmt.MgmtSvc.SystemCheckQuery:output_type -> mgmt.CheckQueryResp
-	64, // 91: mgmt.MgmtSvc.SystemCheckSetPolicy:output_type -> mgmt.DaosResp
-	79, // 92: mgmt.MgmtSvc.SystemCheckGetPolicy:output_type -> mgmt.CheckGetPolicyResp
-	80, // 93: mgmt.MgmtSvc.SystemCheckRepair:output_type -> mgmt.CheckActResp
-	81, // 94: mgmt.MgmtSvc.SystemCheckEngineReport:output_type -> shared.CheckReportResp
-	64, // 95: mgmt.MgmtSvc.SystemSetAttr:output_type -> mgmt.DaosResp
-	82, // 96: mgmt.MgmtSvc.SystemGetAttr:output_type -> mgmt.SystemGetAttrResp
-	64, // 97: mgmt.MgmtSvc.SystemSetProp:output_type -> mgmt.DaosResp
-	83, // 98: mgmt.MgmtSvc.SystemGetProp:output_type -> mgmt.SystemGetPropResp
-	64, // 99: mgmt.MgmtSvc.FaultInjectReport:output_type -> mgmt.DaosResp
-	64, // 100: mgmt.MgmtSvc.FaultInjectPoolFault:output_type -> mgmt.DaosResp
-	64, // 101: mgmt.MgmtSvc.FaultInjectMgmtPoolFault:output_type -> mgmt.DaosResp
-	51, // [51:102] is the sub-list for method output_type
-	0,  // [0:51] is the sub-list for method input_type
+	43, // 44: mgmt.MgmtSvc.SystemCheckRegPool:input_type -> shared.CheckRegPoolReq
+	44, // 45: mgmt.MgmtSvc.SystemCheckDeregPool:input_type -> shared.CheckDeregPoolReq
+	45, // 46: mgmt.MgmtSvc.SystemSetAttr:input_type -> mgmt.SystemSetAttrReq
+	46, // 47: mgmt.MgmtSvc.SystemGetAttr:input_type -> mgmt.SystemGetAttrReq
+	47, // 48: mgmt.MgmtSvc.SystemSetProp:input_type -> mgmt.SystemSetPropReq
+	48, // 49: mgmt.MgmtSvc.SystemGetProp:input_type -> mgmt.SystemGetPropReq
+	49, // 50: mgmt.MgmtSvc.FaultInjectReport:input_type -> chk.CheckReport
+	50, // 51: mgmt.MgmtSvc.FaultInjectPoolFault:input_type -> chk.Fault
+	50, // 52: mgmt.MgmtSvc.FaultInjectMgmtPoolFault:input_type -> chk.Fault
+	51, // 53: mgmt.MgmtSvc.Join:output_type -> mgmt.JoinResp
+	52, // 54: mgmt.MgmtSvc.ClusterEvent:output_type -> shared.ClusterEventResp
+	53, // 55: mgmt.MgmtSvc.LeaderQuery:output_type -> mgmt.LeaderQueryResp
+	54, // 56: mgmt.MgmtSvc.PoolCreate:output_type -> mgmt.PoolCreateResp
+	55, // 57: mgmt.MgmtSvc.PoolDestroy:output_type -> mgmt.PoolDestroyResp
+	56, // 58: mgmt.MgmtSvc.PoolEvict:output_type -> mgmt.PoolEvictResp
+	57, // 59: mgmt.MgmtSvc.PoolExclude:output_type -> mgmt.PoolExcludeResp
+	58, // 60: mgmt.MgmtSvc.PoolDrain:output_type -> mgmt.PoolDrainResp
+	59, // 61: mgmt.MgmtSvc.PoolExtend:output_type -> mgmt.PoolExtendResp
+	60, // 62: mgmt.MgmtSvc.PoolReintegrate:output_type -> mgmt.PoolReintResp
+	61, // 63: mgmt.MgmtSvc.PoolQuery:output_type -> mgmt.PoolQueryResp
+	62, // 64: mgmt.MgmtSvc.PoolQueryTarget:output_type -> mgmt.PoolQueryTargetResp
+	63, // 65: mgmt.MgmtSvc.PoolSetProp:output_type -> mgmt.PoolSetPropResp
+	64, // 66: mgmt.MgmtSvc.PoolGetProp:output_type -> mgmt.PoolGetPropResp
+	65, // 67: mgmt.MgmtSvc.PoolGetACL:output_type -> mgmt.ACLResp
+	65, // 68: mgmt.MgmtSvc.PoolOverwriteACL:output_type -> mgmt.ACLResp
+	65, // 69: mgmt.MgmtSvc.PoolUpdateACL:output_type -> mgmt.ACLResp
+	65, // 70: mgmt.MgmtSvc.PoolDeleteACL:output_type -> mgmt.ACLResp
+	66, // 71: mgmt.MgmtSvc.PoolUpgrade:output_type -> mgmt.DaosResp
+	66, // 72: mgmt.MgmtSvc.PoolRebuildStart:output_type -> mgmt.DaosResp
+	66, // 73: mgmt.MgmtSvc.PoolRebuildStop:output_type -> mgmt.DaosResp
+	66, // 74: mgmt.MgmtSvc.PoolSelfHealEval:output_type -> mgmt.DaosResp
+	67, // 75: mgmt.MgmtSvc.GetAttachInfo:output_type -> mgmt.GetAttachInfoResp
+	68, // 76: mgmt.MgmtSvc.ListPools:output_type -> mgmt.ListPoolsResp
+	69, // 77: mgmt.MgmtSvc.ListContainers:output_type -> mgmt.ListContResp
+	66, // 78: mgmt.MgmtSvc.ContSetOwner:output_type -> mgmt.DaosResp
+	70, // 79: mgmt.MgmtSvc.SystemQuery:output_type -> mgmt.SystemQueryResp
+	71, // 80: mgmt.MgmtSvc.SystemStop:output_type -> mgmt.SystemStopResp
+	72, // 81: mgmt.MgmtSvc.SystemStart:output_type -> mgmt.SystemStartResp
+	73, // 82: mgmt.MgmtSvc.SystemExclude:output_type -> mgmt.SystemExcludeResp
+	74, // 83: mgmt.MgmtSvc.SystemDrain:output_type -> mgmt.SystemDrainResp
+	75, // 84: mgmt.MgmtSvc.SystemRebuildManage:output_type -> mgmt.SystemRebuildManageResp
+	66, // 85: mgmt.MgmtSvc.SystemSelfHealEval:output_type -> mgmt.DaosResp
+	76, // 86: mgmt.MgmtSvc.SystemErase:output_type -> mgmt.SystemEraseResp
+	77, // 87: mgmt.MgmtSvc.SystemCleanup:output_type -> mgmt.SystemCleanupResp
+	66, // 88: mgmt.MgmtSvc.SystemCheckEnable:output_type -> mgmt.DaosResp
+	66, // 89: mgmt.MgmtSvc.SystemCheckDisable:output_type -> mgmt.DaosResp
+	78, // 90: mgmt.MgmtSvc.SystemCheckStart:output_type -> mgmt.CheckStartResp
+	79, // 91: mgmt.MgmtSvc.SystemCheckStop:output_type -> mgmt.CheckStopResp
+	80, // 92: mgmt.MgmtSvc.SystemCheckQuery:output_type -> mgmt.CheckQueryResp
+	66, // 93: mgmt.MgmtSvc.SystemCheckSetPolicy:output_type -> mgmt.DaosResp
+	81, // 94: mgmt.MgmtSvc.SystemCheckGetPolicy:output_type -> mgmt.CheckGetPolicyResp
+	82, // 95: mgmt.MgmtSvc.SystemCheckRepair:output_type -> mgmt.CheckActResp
+	83, // 96: mgmt.MgmtSvc.SystemCheckEngineReport:output_type -> shared.CheckReportResp
+	84, // 97: mgmt.MgmtSvc.SystemCheckRegPool:output_type -> shared.CheckRegPoolResp
+	85, // 98: mgmt.MgmtSvc.SystemCheckDeregPool:output_type -> shared.CheckDeregPoolResp
+	66, // 99: mgmt.MgmtSvc.SystemSetAttr:output_type -> mgmt.DaosResp
+	86, // 100: mgmt.MgmtSvc.SystemGetAttr:output_type -> mgmt.SystemGetAttrResp
+	66, // 101: mgmt.MgmtSvc.SystemSetProp:output_type -> mgmt.DaosResp
+	87, // 102: mgmt.MgmtSvc.SystemGetProp:output_type -> mgmt.SystemGetPropResp
+	66, // 103: mgmt.MgmtSvc.FaultInjectReport:output_type -> mgmt.DaosResp
+	66, // 104: mgmt.MgmtSvc.FaultInjectPoolFault:output_type -> mgmt.DaosResp
+	66, // 105: mgmt.MgmtSvc.FaultInjectMgmtPoolFault:output_type -> mgmt.DaosResp
+	53, // [53:106] is the sub-list for method output_type
+	0,  // [0:53] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
