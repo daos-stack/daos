@@ -10,10 +10,7 @@ server_config:
       log_file: daos_server0.log
       targets: 4
       nr_xs_helpers: 0
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos0
+      storage: auto
     1:
       log_file: daos_server1.log
       targets: 4
