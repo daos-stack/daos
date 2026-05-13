@@ -18,18 +18,6 @@ class EngineAutoRestartTest(ControlTestBase):
     :avocado: recursive
     """
 
-    def tearDown(self):
-        """Clean up after each test method."""
-        # Reset restart state for next test method
-        # This ensures clean state between sequential tests
-        try:
-            self.reset_engine_restart_state()
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            self.log.error("Failed to reset engine restart state: %s", error)
-            self.fail("tearDown failed to reset engine restart state: {}".format(error))
-        finally:
-            super().tearDown()
-
     def test_auto_restart_basic(self):
         """Test basic automatic engine restart after self-termination.
 
