@@ -60,7 +60,7 @@ class EngineAutoRestartDisabled(ControlTestBase):
 
         # Manually start the rank
         self.log_step("Manually starting rank {test_rank}")
-        self.dmg.system_start(ranks=f"{test_rank}")
+        self.dmg.system_start(ranks=test_rank)
 
         # Verify manual start succeeds
         failed_ranks = self.server_managers[0].check_rank_state(
