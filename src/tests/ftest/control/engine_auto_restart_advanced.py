@@ -18,6 +18,13 @@ class EngineAutoRestartAdvanced(ControlTestBase):
     :avocado: recursive
     """
 
+    def setUp(self):
+        """Set up for engine_auto_restart_advanced tests"""
+        super().setUp()
+
+        # Make sure we reset the restart state even if the test fails
+        self.register_cleanup(self.reset_engine_restart_state)
+
     def wait_for_rank_state(self, rank, expected_state, timeout=30, check_interval=2):
         """Wait for a rank to reach expected state.
 
@@ -78,7 +85,7 @@ class EngineAutoRestartAdvanced(ControlTestBase):
 
         test_rank = self.random.choice(all_ranks)
 
-        self.log_step("Step 1: Automatic restart of rank %s", test_rank)
+        self.log_step(f"Automatic restart of rank {test_rank}")
 
         # Get initial incarnation
         initial_incarnation = self.get_rank_incarnation(test_rank)
@@ -100,19 +107,19 @@ class EngineAutoRestartAdvanced(ControlTestBase):
                       first_restart_time, initial_incarnation, first_restart_incarnation)
 
         # Second exclusion - should be deferred due to rate-limiting
-        self.log_step("Step 2: Second exclusion of rank %s (should be deferred)", test_rank)
+        self.log_step(f"Second exclusion of rank {test_rank} (should be deferred)")
 
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank,
                                                                     timeout=10)
 
         if restarted:
-            self.fail("Rank %s unexpectedly restarted. Final state: %s" % (test_rank, final_state))
+            self.fail(f"Rank {test_rank} unexpectedly restarted. Final state: {final_state}")
 
         self.log.info("Confirmed: Restart is deferred (rank still in excluded state)")
 
         # Wait for deferred restart to execute (after delay expires), add buffer
         wait_time = expected_delay + 5
-        self.log_step("Step 3: Waiting %ss for deferred restart to execute", wait_time)
+        self.log_step(f"Waiting {wait_time}s for deferred restart to execute")
 
         if not self.wait_for_rank_state(test_rank, "joined", timeout=wait_time):
             self.fail(f"Rank {test_rank} did not restart after rate-limit delay")
@@ -125,7 +132,7 @@ class EngineAutoRestartAdvanced(ControlTestBase):
                       f"After first: {first_restart_incarnation}, "
                       f"After deferred: {deferred_restart_incarnation}")
 
-        self.log_step("Step 4: Measure time between initial and deferred restarts")
+        self.log_step("Measure time between initial and deferred restarts")
         deferred_restart_time = time.time()
         actual_delay = deferred_restart_time - first_restart_time
 
@@ -134,7 +141,7 @@ class EngineAutoRestartAdvanced(ControlTestBase):
                       actual_delay, expected_delay,
                       first_restart_incarnation, deferred_restart_incarnation)
 
-        self.log_step("Step 5: Verify delay was approximately correct (80%% to 120%% of expected)")
+        self.log_step("Verify delay was approximately correct (80%% to 120%% of expected)")
         min_delay = expected_delay * 0.8
         max_delay = expected_delay * 1.2
 

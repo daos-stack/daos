@@ -19,6 +19,13 @@ class EngineAutoRestartDisabled(ControlTestBase):
     :avocado: recursive
     """
 
+    def setUp(self):
+        """Set up for engine_auto_restart_disabled tests"""
+        super().setUp()
+
+        # Make sure we reset the restart state even if the test fails
+        self.register_cleanup(self.reset_engine_restart_state)
+
     def test_no_restart_when_disabled(self):
         """Test that engines do not automatically restart when feature is disabled.
 
@@ -42,24 +49,24 @@ class EngineAutoRestartDisabled(ControlTestBase):
 
         test_rank = self.random.choice(all_ranks)
 
-        self.log_step("Step 1: Excluding rank %s (auto-restart is DISABLED)", test_rank)
+        self.log_step("Excluding rank {test_rank} (auto-restart is DISABLED)")
 
         restarted, _ = self.exclude_rank_and_wait_restart(test_rank, timeout=35)
 
         if restarted:
-            self.fail("Rank %s unexpectedly restarted when auto-restart disabled!" % test_rank)
+            self.fail("Rank {test_rank} unexpectedly restarted when auto-restart disabled!")
 
         self.log.info("Confirmed: Rank %s did NOT automatically restart (as expected)", test_rank)
 
-        # Step 4: Manually start the rank
-        self.log_step("Step 2: Manually starting rank %s", test_rank)
+        # Manually start the rank
+        self.log_step("Manually starting rank {test_rank}")
         self.dmg.system_start(ranks=f"{test_rank}")
 
         # Verify manual start succeeds
         failed_ranks = self.server_managers[0].check_rank_state(
             ranks=[test_rank], valid_states=["joined"], max_checks=15)
         if failed_ranks:
-            self.fail("Manual start of rank %s failed" % test_rank)
+            self.fail(f"Manual start of rank {test_rank} failed")
 
         self.log.info("SUCCESS: Rank %s stayed excluded when auto-restart disabled, and manual "
                       "start succeeded", test_rank)
@@ -89,26 +96,26 @@ class EngineAutoRestartDisabled(ControlTestBase):
         num_to_test = max(2, len(all_ranks) // 2)
         test_ranks = self.random.sample(all_ranks, num_to_test)
 
-        self.log_step("Step 1: Excluding %s ranks: %s", (num_to_test, test_ranks))
+        self.log_step("Excluding {num_to_test} ranks: {test_ranks}")
 
         for rank in test_ranks:
             self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
             time.sleep(1)  # Small delay between exclusions
 
-        # Step 2: Verify all reach adminexcluded state
-        self.log_step("Step 2: Verifying all ranks get excluded from system")
+        # Verify all reach adminexcluded state
+        self.log_step("Verifying all ranks get excluded from system")
         time.sleep(10)
 
         for rank in test_ranks:
             failed = self.server_managers[0].check_rank_state(
                 ranks=[rank], valid_states=["adminexcluded"], max_checks=5)
             if failed:
-                self.fail("Rank %s did not get excluded from system" % rank)
+                self.fail("Rank {rank} did not get excluded from system")
             self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
 
-        # Step 3: Wait and verify none restart
+        # Wait and verify none restart
         wait_time = 20
-        self.log_step("Step 3: Waiting %ss to verify no automatic restarts", wait_time)
+        self.log_step("Waiting {wait_time}s to verify no automatic restarts")
         time.sleep(wait_time)
 
         errors = []
@@ -116,29 +123,28 @@ class EngineAutoRestartDisabled(ControlTestBase):
             failed = self.server_managers[0].check_rank_state(
                 ranks=[rank], valid_states=["excluded"], max_checks=1)
             if failed:
-                errors.append("Rank %s unexpectedly restarted when auto-restart disabled"
-                              % rank)
+                errors.append("Rank {rank} unexpectedly restarted when auto-restart disabled")
 
         if errors:
             self.fail("\n".join(errors))
 
         self.log.info("Confirmed: None of %s automatically restarted", test_ranks)
 
-        # Step 4: Manually restart all
-        self.log_step("Step 4: Manually restart ranks")
+        # Manually restart all
+        self.log_step("Manually restart ranks")
 
         for rank in test_ranks:
             self.dmg.system_start(ranks=f"{rank}")
 
-        # Step 5: Verify all rejoin
-        self.log_step("Step 5: Verifying all ranks successfully rejoin")
+        # Verify all rejoin
+        self.log_step("Verifying all ranks successfully rejoin")
         time.sleep(10)
 
         for rank in test_ranks:
             failed = self.server_managers[0].check_rank_state(
                 ranks=[rank], valid_states=["joined"], max_checks=10)
             if failed:
-                errors.append("Manual restart of rank %s failed" % rank)
+                errors.append(f"Manual restart of rank {rank} failed")
 
         report_errors(test=self, errors=errors)
 

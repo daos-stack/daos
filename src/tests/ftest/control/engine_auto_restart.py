@@ -18,6 +18,13 @@ class EngineAutoRestartTest(ControlTestBase):
     :avocado: recursive
     """
 
+    def setUp(self):
+        """Set up for engine_auto_restart tests"""
+        super().setUp()
+
+        # Make sure we reset the restart state even if the test fails
+        self.register_cleanup(self.reset_engine_restart_state)
+
     def test_auto_restart_basic(self):
         """Test basic automatic engine restart after self-termination.
 
@@ -37,7 +44,7 @@ class EngineAutoRestartTest(ControlTestBase):
 
         test_rank = self.random.choice(all_ranks)
 
-        self.log_step("testing automatic restart of rank %s", test_rank)
+        self.log_step(f"testing automatic restart of rank {test_rank}")
 
         # get initial incarnation number
         initial_incarnation = self.get_rank_incarnation(test_rank)
@@ -93,20 +100,17 @@ class EngineAutoRestartTest(ControlTestBase):
             time.sleep(1)  # small delay between exclusions
             self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
 
-        # Step 3: Wait and verify all restart
+        # Wait and verify all restart
         wait_time = 35
-
-        self.log_step("Step 3: Waiting %ss to verify all automatically restart", wait_time)
-        time.sleep(wait_time)
+        self.log_step(f"Waiting {wait_time}s to verify all automatically restart")
 
         errors = []
         end_incs = []
         for rank in test_ranks:
             failed = self.server_managers[0].check_rank_state(
-                ranks=[rank], valid_states=["joined"], max_checks=1)
+                ranks=[rank], valid_states=["joined"], max_checks=wait_time)
             if failed:
-                errors.append("Rank %s unexpectedly not restarted when auto-restart enabled"
-                              % rank)
+                errors.append(f"Rank {rank} unexpectedly not restarted when auto-restart enabled")
             end_incarnation = self.get_rank_incarnation(rank)
             end_incs.append(end_incarnation)
 
@@ -147,11 +151,11 @@ class EngineAutoRestartTest(ControlTestBase):
             self.fail("Test requires at least 4 ranks")
 
         # Create pool first
-        self.add_pool(connect=False)
+        pool = self.get_pool(connect=False)
 
         test_rank = all_ranks[-1]
 
-        self.log_step("Excluding non-service rank %s while pool is active", test_rank)
+        self.log_step(f"Excluding non-service rank {test_rank} while pool is active")
 
         # Get initial incarnation
         initial_incarnation = self.get_rank_incarnation(test_rank)
@@ -169,7 +173,7 @@ class EngineAutoRestartTest(ControlTestBase):
 
         # Verify pool is still accessible
         self.log_step("Verifying pool is still accessible after rank restart")
-        self.pool.query()
+        pool.query()
 
         self.log.info("SUCCESS: Rank %s restarted (incarnation %s -> %s) and pool remains "
                       "accessible", test_rank, initial_incarnation, final_incarnation)

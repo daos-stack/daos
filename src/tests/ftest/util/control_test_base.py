@@ -8,6 +8,7 @@ import time
 
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
+from exception_utils import CommandFailure
 
 
 class ControlTestBase(TestWithServers):
@@ -66,16 +67,15 @@ class ControlTestBase(TestWithServers):
         Returns:
             str: Current state of the rank
         """
-        data = self.dmg.system_query(ranks="%s" % rank)
+        data = self.dmg.system_query(ranks=f"{rank}")
         if data["status"] != 0:
-            self.fail("Cmd dmg system query failed")
+            raise CommandFailure("dmg system query failed")
         if "response" in data and "members" in data["response"]:
             if data["response"]["members"] is None:
-                self.fail("No members returned from dmg system query")
+                raise CommandFailure("No members returned from dmg system query")
             for member in data["response"]["members"]:
                 return member["state"].lower()
-        self.fail("No member state returned from dmg system query")
-        return None
+        raise CommandFailure("No member state returned from dmg system query")
 
     def exclude_rank_and_wait_restart(self, rank, timeout=30):
         """Exclude a rank and wait for it to self-terminate and potentially restart.
@@ -87,36 +87,33 @@ class ControlTestBase(TestWithServers):
         Returns:
             tuple: (restarted, final_state) - whether rank restarted and its final state
         """
-        # Make sure we reset the restart state even if the test fails
-        self.register_cleanup(self.reset_engine_restart_state)
-
-        self.log_step("Excluding rank %s", rank)
+        self.log_step(f"Excluding rank {rank}")
         self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
 
         # Wait for rank to self-terminate (should go to AdminExcluded state)
-        self.log_step("Waiting for rank %s to self-terminate", rank)
+        self.log_step(f"Waiting for rank {rank} to self-terminate")
         time.sleep(2)
 
         # Check if rank is adminexcluded
         failed_ranks = self.server_managers[0].check_rank_state(
             ranks=[rank], valid_states=["adminexcluded"], max_checks=10)
         if failed_ranks:
-            self.fail("Rank %s did not reach AdminExcluded state after exclusion" % rank)
+            self.fail(f"Rank {rank} did not reach AdminExcluded state after exclusion")
 
         # After triggering rank exclusion with dmg system exclude, clear
         # AdminExcluded state so rank can join on auto-restart. This enables
         # mimic of rank exclusion via SWIM inactivity detection.
-        self.log_step("Clearing AdminExcluded state for rank %s", rank)
+        self.log_step(f"Clearing AdminExcluded state for rank {rank}")
         self.dmg.system_clear_exclude(ranks=[rank], rank_hosts=None)
 
         # Check if rank is excluded
         failed_ranks = self.server_managers[0].check_rank_state(
             ranks=[rank], valid_states=["excluded"], max_checks=10)
         if failed_ranks:
-            self.fail("Rank %s did not reach Excluded state after clear-excluded" % rank)
+            self.fail(f"Rank {rank} did not reach Excluded state after clear-excluded")
 
         # Wait for automatic restart (rank should go to Joined state)
-        self.log_step("Waiting for rank %s to automatically restart", rank)
+        self.log_step(f"Waiting for rank {rank} to automatically restart")
         start_time = time.time()
         restarted = False
 
@@ -156,16 +153,16 @@ class ControlTestBase(TestWithServers):
         data = self.dmg.system_query(ranks=f"{rank}")
         if data.get("status") != 0:
             self.log.error("dmg system query failed for rank %s", rank)
-            raise Exception("dmg system query failed")
+            raise CommandFailure("dmg system query failed")
 
         if "response" not in data or "members" not in data["response"]:
             self.log.error("Invalid response from dmg system query for rank %s", rank)
-            raise Exception("dmg system query invalid response")
+            raise CommandFailure("dmg system query invalid response")
 
         members = data["response"]["members"]
         if not members:
             self.log.error("No members returned from dmg system query for rank %s", rank)
-            raise Exception("dmg system query no members")
+            raise CommandFailure("dmg system query no members")
 
         for member in members:
             if member.get("rank") == rank:
@@ -174,10 +171,10 @@ class ControlTestBase(TestWithServers):
                     self.log.debug("Rank %s incarnation: %s", rank, incarnation)
                     return incarnation
                 self.log.error("No incarnation field for rank %s", rank)
-                raise Exception("dmg system query no incarnation for member")
+                raise CommandFailure("dmg system query no incarnation for member")
 
         self.log.error("Rank %s not found in system query response", rank)
-        raise Exception("dmg system query no matching member")
+        raise CommandFailure("dmg system query no matching member")
 
     def reset_engine_restart_state(self):
         """Reset engine auto-restart state between tests.
@@ -206,7 +203,6 @@ class ControlTestBase(TestWithServers):
         """
         self.log.info("Restarting servers to reset engine restart manager state")
         self.server_managers[0].system_stop()
-        time.sleep(2)
         self.server_managers[0].system_start()
 
         # Wait for all ranks to join
