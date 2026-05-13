@@ -141,16 +141,14 @@ class EngineAutoRestartAdvanced(ControlTestBase):
                       actual_delay, expected_delay,
                       first_restart_incarnation, deferred_restart_incarnation)
 
-        self.log_step("Verify delay was approximately correct (80%% to 120%% of expected)")
+        self.log_step("Verify delay was approximately correct (80%% to 200%% of expected)")
         min_delay = expected_delay * 0.8
-        max_delay = expected_delay * 1.2
+        max_delay = expected_delay * 2.0
 
         if actual_delay < min_delay:
             self.fail(f"Restart too early: {actual_delay:.1f}s < {min_delay:.1f}s")
         elif actual_delay > max_delay:
-            self.log.warning("Restart delayed beyond expected: %.1fs > %.1fs "
-                             "(may be acceptable depending on system load)",
-                             actual_delay, max_delay)
+            self.fail(f"Restart too late: {actual_delay:.1f}s > {max_delay:.1f}s")
         else:
             self.log.info("SUCCESS: Restart delay within expected range [%.1fs, %.1fs]",
                           min_delay, max_delay)
