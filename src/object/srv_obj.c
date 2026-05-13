@@ -3671,7 +3671,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		oeo->oeo_num = enum_arg.kds_len;
 		if (oeo->oeo_sgl.sg_iovs != NULL)
 			oeo->oeo_size = oeo->oeo_sgl.sg_iovs[0].iov_len;
-		oeo->oeo_csum_iov = enum_arg.csum_iov;
+		oeo->oeo_csum_iov = enum_arg.oea_csum_iov;
 	}
 
 	rc = obj_enum_reply_bulk(rpc);
