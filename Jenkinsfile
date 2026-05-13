@@ -19,6 +19,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/sles15sp7_fix') _
 
 // The trusted-pipeline-lib daosLatestVersion() method will convert this into a number
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -350,7 +351,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional on Leap 15 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
@@ -938,6 +939,30 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Leap 15')
+                stage('Functional on SLES 15') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('Leap15')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                    ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'sles15.7'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } // post
+                } // stage('Functional on SLES 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
