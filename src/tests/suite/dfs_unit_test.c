@@ -3562,7 +3562,7 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 }
 
 /*
- * Tests for GIT (Global Index Table) internal functions.
+ * Tests for GIT (Global Inode Table) internal functions.
  *
  * dfs_mt->git_oh is a plain KV object opened during mount.  All four tests
  * use synthetic OIDs as dkeys so they are self-contained and do not interfere
@@ -3682,9 +3682,8 @@ dfs_test_git_update_link_cnt(void **state)
 	assert_int_equal(rc, 0);
 
 	/* increment: 2 -> 3 */
-	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry, 1);
+	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry.oid, entry.link_cnt + 1);
 	assert_int_equal(rc, 0);
-	assert_int_equal(entry.link_cnt, 3);
 
 	rc = git_fetch_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, &fetched, 0, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
@@ -3692,19 +3691,18 @@ dfs_test_git_update_link_cnt(void **state)
 	print_message("git_update_link_cnt increment (2->3): OK\n");
 
 	/* decrement: 3 -> 2 */
-	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry, -1);
+	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry.oid, fetched.link_cnt - 1);
 	assert_int_equal(rc, 0);
-	assert_int_equal(entry.link_cnt, 2);
 
 	rc = git_fetch_entry(dfs_mt->git_oh, DAOS_TX_NONE, &oid, &fetched, 0, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(fetched.link_cnt, 2);
 	print_message("git_update_link_cnt decrement (3->2): OK\n");
 
-	/* underflow guard: delta=-5 on link_cnt=2 must return EINVAL */
-	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry, -5);
+	/* zero-value guard: link_cnt=0 must return EINVAL */
+	rc = git_update_link_cnt(dfs_mt->git_oh, DAOS_TX_NONE, &entry.oid, 0);
 	assert_int_equal(rc, EINVAL);
-	print_message("git_update_link_cnt underflow guard: OK\n");
+	print_message("git_update_link_cnt zero-value guard: OK\n");
 }
 
 /*

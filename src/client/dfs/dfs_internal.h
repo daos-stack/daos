@@ -78,11 +78,11 @@
 #define GID_IDX            (UID_IDX + sizeof(uid_t))
 #define SIZE_IDX           (GID_IDX + sizeof(gid_t))
 #define HLC_IDX            (SIZE_IDX + sizeof(daos_size_t))
-#define END_IDX            (HLC_IDX + sizeof(uint64_t))
+#define END_L3_IDX             (HLC_IDX + sizeof(uint64_t))
 
-/** GIT (Global Index Table) inode layout extends the base inode with link_cnt */
-#define LINK_CNT_IDX           END_IDX
-#define END_GIT_IDX            (LINK_CNT_IDX + sizeof(uint64_t))
+/** GIT (Global Inode Table) layout extends the base inode with link_cnt */
+#define LINK_CNT_IDX           END_L3_IDX
+#define END_IDX                (LINK_CNT_IDX + sizeof(uint64_t))
 
 /*
  * END IDX for layout V2 (2.0) is at the current offset where we store the mtime nsec, but also need
@@ -184,7 +184,7 @@ struct dfs {
 	daos_obj_id_t        super_oid;
 	/** Open object handle of SB */
 	daos_handle_t        super_oh;
-	/** Global Index Table object OID */
+	/** Global Inode Table object OID */
 	daos_obj_id_t        git_oid;
 	/** Open object handle of GIT */
 	daos_handle_t        git_oh;
@@ -428,7 +428,6 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 int
 remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name, size_t len,
 	     struct dfs_entry entry);
-/** GIT (Global Index Table) entry operations */
 int
 git_fetch_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, struct dfs_entry *entry,
 		int xnr, char *xnames[], void *xvals[], daos_size_t *xsizes);
@@ -436,7 +435,7 @@ int
 git_insert_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t flags,
 		 struct dfs_entry *entry);
 int
-git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, struct dfs_entry *entry, int delta);
+git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t value);
 int
 git_copy_xattr(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *dst_oid, daos_handle_t src_oh,
 	       const char *src_name);

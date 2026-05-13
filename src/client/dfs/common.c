@@ -122,23 +122,24 @@ out:
 
 /*
  * Shared fetch helper for fetch_entry() and git_fetch_entry().
- * include_link_cnt=true extends the recx to cover the GIT link_cnt field.
+ * is_git_entry=true extends the recx to cover the GIT link_cnt field.
+ * fetch_sym=true additionally fetches the symlink value for symlink entries.
  */
 static int
-fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool include_link_cnt,
-		   bool *exists, struct dfs_entry *entry, int xnr, char *xnames[], void *xvals[],
-		   daos_size_t *xsizes)
+fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool is_git_entry,
+		   bool fetch_sym, bool *exists, struct dfs_entry *entry, int xnr, char *xnames[],
+		   void *xvals[], daos_size_t *xsizes)
 {
 	d_sg_list_t  l_sgl, *sgl;
 	d_iov_t      sg_iovs[INODE_AKEYS];
 	daos_iod_t   l_iod, *iod;
 	daos_recx_t  recx;
-	unsigned int i;
+	int          i;
 	char       **pxnames = NULL;
 	d_iov_t     *sg_iovx = NULL;
 	d_sg_list_t *sgls    = NULL;
 	daos_iod_t  *iods    = NULL;
-	int          rc      = 0;
+	int          rc;
 
 	if (xnr) {
 		D_ALLOC_ARRAY(pxnames, xnr);
@@ -157,7 +158,7 @@ fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool in
 		if (iods == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
-		for (i = 0; i < (unsigned int)xnr; i++) {
+		for (i = 0; i < xnr; i++) {
 			pxnames[i] = concat("x:", xnames[i]);
 			if (pxnames[i] == NULL)
 				D_GOTO(out, rc = ENOMEM);
@@ -184,7 +185,7 @@ fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool in
 	d_iov_set(&iod->iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod->iod_nr    = 1;
 	recx.rx_idx    = 0;
-	recx.rx_nr     = include_link_cnt ? END_GIT_IDX : END_IDX;
+	recx.rx_nr     = is_git_entry ? END_IDX : END_L3_IDX;
 	iod->iod_recxs = &recx;
 	iod->iod_type  = DAOS_IOD_ARRAY;
 	iod->iod_size  = 1;
@@ -202,7 +203,7 @@ fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool in
 	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
 	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
-	if (include_link_cnt)
+	if (is_git_entry)
 		d_iov_set(&sg_iovs[i++], &entry->link_cnt, sizeof(uint64_t));
 
 	sgl->sg_nr     = i;
@@ -215,18 +216,66 @@ fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool in
 		*exists = false;
 		D_GOTO(out, rc = 0);
 	} else if (rc) {
-		D_ERROR("Failed to fetch entry " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
-	for (i = 0; i < (unsigned int)xnr; i++)
+	for (i = 0; i < xnr; i++)
 		xsizes[i] = iods[i].iod_size;
 
-	*exists = (sgl->sg_nr_out != 0);
+	if (is_git_entry && (S_ISLNK(entry->mode) || S_ISDIR(entry->mode)))
+		D_GOTO(out, rc = EIO);
+
+	if (fetch_sym && S_ISLNK(entry->mode)) {
+		char       *value;
+		daos_size_t val_len;
+
+		/** symlink is empty */
+		if (entry->value_len == 0)
+			D_GOTO(out, rc = EIO);
+		val_len = entry->value_len;
+		D_ALLOC(value, val_len + 1);
+		if (value == NULL)
+			D_GOTO(out, rc = ENOMEM);
+
+		d_iov_set(&iod->iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
+		iod->iod_nr    = 1;
+		iod->iod_recxs = NULL;
+		iod->iod_type  = DAOS_IOD_SINGLE;
+		iod->iod_size  = DAOS_REC_ANY;
+
+		d_iov_set(&sg_iovs[0], value, val_len);
+		sgl->sg_nr     = 1;
+		sgl->sg_nr_out = 0;
+		sgl->sg_iovs   = sg_iovs;
+
+		rc = daos_obj_fetch(oh, th, DAOS_COND_DKEY_FETCH, dkey, 1, iod, sgl, NULL, NULL);
+		if (rc) {
+			D_FREE(value);
+			if (rc == -DER_NONEXIST) {
+				*exists = false;
+				D_GOTO(out, rc = 0);
+			}
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		/** make sure that the akey value size matches what is in the inode */
+		if (iod->iod_size != val_len) {
+			D_ERROR("Symlink value length inconsistent with inode data\n");
+			D_FREE(value);
+			D_GOTO(out, rc = EIO);
+		}
+		value[val_len] = 0;
+		entry->value   = value;
+	}
+
+	if (sgl->sg_nr_out == 0)
+		*exists = false;
+	else
+		*exists = true;
 out:
 	if (xnr) {
 		if (pxnames) {
-			for (i = 0; i < (unsigned int)xnr; i++)
+			for (i = 0; i < xnr; i++)
 				D_FREE(pxnames[i]);
 			D_FREE(pxnames);
 		}
@@ -242,10 +291,8 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	    bool fetch_sym, bool *exists, struct dfs_entry *entry, int xnr, char *xnames[],
 	    void *xvals[], daos_size_t *xsizes)
 {
-	daos_iod_t  iod;
-	d_sg_list_t sgl;
-	daos_key_t  dkey;
-	int         rc;
+	daos_key_t dkey;
+	int        rc;
 
 	D_ASSERT(name);
 
@@ -255,60 +302,11 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 
 	d_iov_set(&dkey, (void *)name, len);
 
-	rc = fetch_entry_common(oh, th, &dkey, false, exists, entry, xnr, xnames, xvals, xsizes);
-	if (rc)
+	rc = fetch_entry_common(oh, th, &dkey, false, fetch_sym, exists, entry, xnr, xnames, xvals,
+				xsizes);
+	if (rc) {
+		D_ERROR("Failed to fetch entry %s " DF_RC "\n", name, DP_RC(rc));
 		return rc;
-
-	if (*exists && fetch_sym && S_ISLNK(entry->mode)) {
-		char       *value;
-		daos_size_t val_len;
-		d_iov_t     slink_iov;
-
-		/** symlink is empty */
-		if (entry->value_len == 0)
-			return EIO;
-		val_len = entry->value_len;
-		D_ALLOC(value, val_len + 1);
-		if (value == NULL)
-			return ENOMEM;
-
-		d_iov_set(&iod.iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
-		iod.iod_nr    = 1;
-		iod.iod_recxs = NULL;
-		iod.iod_type  = DAOS_IOD_SINGLE;
-		iod.iod_size  = DAOS_REC_ANY;
-
-		d_iov_set(&slink_iov, value, val_len);
-		sgl.sg_nr     = 1;
-		sgl.sg_nr_out = 0;
-		sgl.sg_iovs   = &slink_iov;
-
-		rc = daos_obj_fetch(oh, th, DAOS_COND_DKEY_FETCH, &dkey, 1, &iod, &sgl, NULL, NULL);
-		if (rc) {
-			D_FREE(value);
-			if (rc == -DER_NONEXIST) {
-				*exists = false;
-				return 0;
-			}
-			D_ERROR("Failed to fetch entry %s " DF_RC "\n", name, DP_RC(rc));
-			return daos_der2errno(rc);
-		}
-
-		/** make sure that the akey value size matches what is in the inode */
-		if (iod.iod_size != val_len) {
-			D_ERROR("Symlink value length inconsistent with inode data\n");
-			D_FREE(value);
-			return EIO;
-		}
-		value[val_len] = 0;
-
-		if (entry->value_len != 0) {
-			entry->value = value;
-		} else {
-			D_ERROR("Failed to load value for symlink\n");
-			D_FREE(value);
-			return EIO;
-		}
 	}
 
 	if (*exists)
@@ -351,11 +349,11 @@ punch_entry:
 
 /*
  * Shared insert helper for insert_entry() and git_insert_entry().
- * include_link_cnt=true extends the recx to cover the GIT link_cnt field.
- * Symlink akey is only written when include_link_cnt is false.
+ * is_git_entry=true extends the recx to cover the GIT link_cnt field.
+ * Symlink akey is only written when is_git_entry is false.
  */
 static int
-insert_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool include_link_cnt,
+insert_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool is_git_entry,
 		    uint64_t flags, struct dfs_entry *entry)
 {
 	d_sg_list_t  sgls[2];
@@ -367,10 +365,15 @@ insert_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool i
 	unsigned int nr_iods;
 	int          rc;
 
+	if (is_git_entry && (S_ISLNK(entry->mode) || S_ISDIR(entry->mode))) {
+		D_ERROR("GIT entry OID " DF_OID ": is not a regular file\n", DP_OID(entry->oid));
+		return EIO;
+	}
+
 	d_iov_set(&iods[0].iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iods[0].iod_nr    = 1;
 	recx.rx_idx       = 0;
-	recx.rx_nr        = include_link_cnt ? END_GIT_IDX : END_IDX;
+	recx.rx_nr        = is_git_entry ? END_IDX : END_L3_IDX;
 	iods[0].iod_recxs = &recx;
 	iods[0].iod_type  = DAOS_IOD_ARRAY;
 	iods[0].iod_size  = 1;
@@ -389,11 +392,11 @@ insert_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool i
 	/** Add file size / symlink length. for now, file size cached in the entry is 0. */
 	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
-	if (include_link_cnt)
+	if (is_git_entry)
 		d_iov_set(&sg_iovs[i++], &entry->link_cnt, sizeof(uint64_t));
 
 	/** add the symlink as a separate akey (dentry only, never in GIT) */
-	if (!include_link_cnt && S_ISLNK(entry->mode)) {
+	if (S_ISLNK(entry->mode)) {
 		nr_iods = 2;
 		d_iov_set(&iods[1].iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
 		iods[1].iod_nr    = 1;
@@ -414,12 +417,8 @@ insert_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool i
 	sgls[0].sg_iovs   = sg_iovs;
 
 	rc = daos_obj_update(oh, th, flags, dkey, nr_iods, iods, sgls, NULL);
-	if (rc) {
-		/** don't log error if conditional failed */
-		if (rc != -DER_EXIST && rc != -DER_NO_PERM)
-			D_ERROR("Failed to insert entry, " DF_RC "\n", DP_RC(rc));
+	if (rc)
 		return daos_der2errno(rc);
-	}
 	return 0;
 }
 
@@ -428,9 +427,14 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	     uint64_t flags, struct dfs_entry *entry)
 {
 	daos_key_t dkey;
+	int        rc;
 
 	d_iov_set(&dkey, (void *)name, len);
-	return insert_entry_common(oh, th, &dkey, false, flags, entry);
+	rc = insert_entry_common(oh, th, &dkey, false, flags, entry);
+	/** don't log error if conditional failed */
+	if (rc && rc != EEXIST && rc != EPERM)
+		D_ERROR("Failed to fetch entry %s " DF_RC "\n", name, DP_RC(rc));
+	return rc;
 }
 
 int
@@ -445,14 +449,15 @@ git_fetch_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, stru
 		return EINVAL;
 
 	d_iov_set(&dkey, oid, sizeof(daos_obj_id_t));
-	rc =
-	    fetch_entry_common(git_oh, th, &dkey, true, &exists, entry, xnr, xnames, xvals, xsizes);
-	if (rc)
+	rc = fetch_entry_common(git_oh, th, &dkey, true, false, &exists, entry, xnr, xnames, xvals,
+				xsizes);
+	if (rc) {
+		D_ERROR("Failed to fetch GIT entry for OID " DF_OID " " DF_RC "\n", DP_OID(*oid),
+			DP_RC(rc));
 		return rc;
-	if (!exists) {
-		D_ERROR("Entry not found in GIT\n");
-		return ENOENT;
 	}
+	if (!exists)
+		return ENOENT;
 	return 0;
 }
 
@@ -461,17 +466,22 @@ git_insert_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uin
 		 struct dfs_entry *entry)
 {
 	daos_key_t dkey;
+	int        rc;
 
 	if (oid == NULL || entry == NULL)
 		return EINVAL;
-	D_ASSERT(!S_ISLNK(entry->mode));
 
 	d_iov_set(&dkey, oid, sizeof(daos_obj_id_t));
-	return insert_entry_common(git_oh, th, &dkey, true, flags, entry);
+	rc = insert_entry_common(git_oh, th, &dkey, true, flags, entry);
+	/** don't log error if conditional failed */
+	if (rc && rc != EEXIST && rc != EPERM)
+		D_ERROR("Failed to insert GIT entry for OID " DF_OID " " DF_RC "\n", DP_OID(*oid),
+			DP_RC(rc));
+	return rc;
 }
 
 int
-git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, struct dfs_entry *entry, int delta)
+git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t value)
 {
 	daos_key_t      dkey;
 	d_sg_list_t     sgl;
@@ -481,38 +491,31 @@ git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, struct dfs_entry *en
 	struct timespec now;
 	int             rc;
 
-	if (entry == NULL)
-		return EINVAL;
-
-	if (delta < 0 && entry->link_cnt < (uint64_t)(-delta)) {
-		D_ERROR("link_cnt underflow: link_cnt=%lu, delta=%d\n", entry->link_cnt, delta);
+	if (value == 0) {
+		D_ERROR("link_cnt cannot be zero for OID " DF_OID "\n", DP_OID(*oid));
 		return EINVAL;
 	}
-
-	entry->link_cnt += delta;
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
 		return errno;
-	entry->ctime      = now.tv_sec;
-	entry->ctime_nano = now.tv_nsec;
 
-	d_iov_set(&dkey, &entry->oid, sizeof(daos_obj_id_t));
+	d_iov_set(&dkey, oid, sizeof(daos_obj_id_t));
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod.iod_nr      = 3;
-	recxs[0].rx_idx = LINK_CNT_IDX;
+	recxs[0].rx_idx = CTIME_IDX;
 	recxs[0].rx_nr  = sizeof(uint64_t);
-	recxs[1].rx_idx = CTIME_IDX;
+	recxs[1].rx_idx = CTIME_NSEC_IDX;
 	recxs[1].rx_nr  = sizeof(uint64_t);
-	recxs[2].rx_idx = CTIME_NSEC_IDX;
+	recxs[2].rx_idx = LINK_CNT_IDX;
 	recxs[2].rx_nr  = sizeof(uint64_t);
 	iod.iod_recxs   = recxs;
 	iod.iod_type    = DAOS_IOD_ARRAY;
 	iod.iod_size    = 1;
 
-	d_iov_set(&sg_iovs[0], &entry->link_cnt, sizeof(uint64_t));
-	d_iov_set(&sg_iovs[1], &entry->ctime, sizeof(uint64_t));
-	d_iov_set(&sg_iovs[2], &entry->ctime_nano, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[0], &now.tv_sec, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[1], &now.tv_nsec, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[2], &value, sizeof(uint64_t));
 	sgl.sg_nr     = 3;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = sg_iovs;

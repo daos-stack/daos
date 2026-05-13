@@ -49,7 +49,10 @@
 #define GID_IDX		(UID_IDX + sizeof(uid_t))
 #define SIZE_IDX	(GID_IDX + sizeof(gid_t))
 #define HLC_IDX		(SIZE_IDX + sizeof(daos_size_t))
-#define END_IDX		(HLC_IDX + sizeof(uint64_t))
+#define END_L3_IDX      (HLC_IDX + sizeof(uint64_t))
+/** GIT (Global Inode Table) layout extends the base inode with link_cnt */
+#define LINK_CNT_IDX    END_L3_IDX
+#define END_IDX         (LINK_CNT_IDX + sizeof(uint64_t))
 
 enum {
 	PUNCH_SB,
