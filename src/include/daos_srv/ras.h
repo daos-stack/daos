@@ -14,7 +14,6 @@
 
 #include <daos_types.h>
 #include <daos/object.h>
-#include <daos_srv/daos_chk.h>
 
 #define DAOS_RAS_STR_FIELD_SIZE 128
 #define DAOS_RAS_ID_FIELD_SIZE 64
@@ -250,53 +249,5 @@ ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation);
  */
 int
 ds_notify_rank_self_terminated(d_rank_t rank, uint64_t incarnation);
-
-/**
- * List all the known pools from control plane (MS).
- *
- * \param[out] clp	The pools list.
- *
- * \retval		Positive value for the conut of pools.
- *			Negative value if error.
- */
-int
-ds_chk_listpool_upcall(struct chk_list_pool **clp);
-
-/**
- * Register the pool to control plane (MS).
- *
- * \param[in] seq	DAOS Check event sequence, unique for the instance.
- * \param[in] uuid	The pool uuid.
- * \param[in] label	The pool label, optional.
- * \param[in] svcreps	Ranks for the pool service.
- *
- * \retval		Zero on success, non-zero otherwise.
- */
-int
-ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svcreps);
-
-/**
- * Deregister the pool from control plane (MS).
- *
- * \param[in] seq	DAOS Check event sequence, unique for the instance.
- * \param[in] uuid	The pool uuid.
- *
- * \retval		Zero on success, non-zero otherwise.
- */
-int
-ds_chk_deregpool_upcall(uint64_t seq, uuid_t uuid);
-
-/**
- * Report inconsistency to control plane (MS).
- *
- * \param[in] rpt	The pointer to Chk__CheckReport.
- *
- * \retval		Zero on success, non-zero otherwise.
- */
-int
-ds_chk_report_upcall(void *rpt);
-
-void
-ds_chk_free_pool_list(struct chk_list_pool *clp, uint32_t nr);
 
 #endif /* __DAOS_RAS_H_ */
