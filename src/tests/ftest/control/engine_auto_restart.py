@@ -88,7 +88,7 @@ class EngineAutoRestartTest(ControlTestBase):
         num_to_test = max(2, len(all_ranks) // 2)
         test_ranks = self.random.sample(all_ranks, num_to_test)
 
-        self.log_step("Step 1: Excluding %s ranks: %s", (num_to_test, test_ranks))
+        self.log_step(f"Exclude {num_to_test} ranks: {test_ranks}")
 
         incs = []
         for rank in test_ranks:
