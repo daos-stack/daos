@@ -134,7 +134,7 @@ class EngineAutoRestartDisabled(ControlTestBase):
         self.log_step("Manually restart ranks")
 
         for rank in test_ranks:
-            self.dmg.system_start(ranks=f"{rank}")
+            self.dmg.system_start(ranks=rank)
 
         # Verify all rejoin
         self.log_step("Verifying all ranks successfully rejoin")
