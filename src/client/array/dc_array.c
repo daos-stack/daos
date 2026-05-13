@@ -1118,9 +1118,9 @@ iod_split(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size, daos_s
 		rgs_sz += spl_sz * cell_size; /* iod size running total */
 
 		/* stuff sgl split */
-		ix   = 0;
-		bptr = (char *)sgl->sg_iovs[sgl_ix].iov_buf + boff;
+		ix = 0;
 		do {
+			bptr = (char *)sgl->sg_iovs[sgl_ix].iov_buf + boff;
 			len = sgl->sg_iovs[sgl_ix].iov_len - boff;
 			sgl_sz += len; /* sgl size running total */
 			split->sgl_v[spl_ix].sg_iovs[ix].iov_buf     = bptr;
