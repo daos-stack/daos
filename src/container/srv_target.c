@@ -1531,9 +1531,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 			bool *started, struct ds_cont_child **cont_out)
 {
 	struct ds_pool_child *pool_child;
-	uint64_t              sched_seq1;
-	uint64_t              sched_seq2 = 0;
-	bool                  destroy    = true;
+	bool                  destroy = true;
 	int                   rc;
 
 	pool_child = ds_pool_child_lookup(pool_uuid);
@@ -1555,20 +1553,15 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 		return rc;
 	}
 
-	sched_seq1 = sched_cur_seq();
-
 	/* Hold sp_recov_lock to control the race with recovering container for pool. */
-	if (!locked) {
+	if (!locked)
 		ABT_rwlock_rdlock(pool_child->spc_pool->sp_recov_lock);
-		sched_seq2 = sched_cur_seq();
-	}
 
 	D_DEBUG(DB_MD, DF_CONT": creating new vos container\n",
 		DP_CONT(pool_uuid, cont_uuid));
 
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
 	if (unlikely(rc == -DER_EXIST && !locked)) {
-		D_ASSERT(sched_seq1 != sched_seq2);
 		rc      = 0;
 		destroy = false;
 	}
