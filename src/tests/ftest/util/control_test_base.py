@@ -148,42 +148,36 @@ class ControlTestBase(TestWithServers):
             rank (int): Rank number
 
         Returns:
-            int: Current incarnation number of the rank, or None if not found
+            int: Current incarnation number of the rank
 
         Raises:
-            None - logs error and returns None on failure
+            Logs error and raises exception on failure
         """
-        try:
-            data = self.dmg.system_query(ranks=f"{rank}")
-            if data.get("status") != 0:
-                self.log.error("dmg system query failed for rank %s", rank)
-                return None
+        data = self.dmg.system_query(ranks=f"{rank}")
+        if data.get("status") != 0:
+            self.log.error("dmg system query failed for rank %s", rank)
+            raise Exception("dmg system query failed")
 
-            if "response" not in data or "members" not in data["response"]:
-                self.log.error("Invalid response from dmg system query for rank %s", rank)
-                return None
+        if "response" not in data or "members" not in data["response"]:
+            self.log.error("Invalid response from dmg system query for rank %s", rank)
+            raise Exception("dmg system query invalid response")
 
-            members = data["response"]["members"]
-            if not members:
-                self.log.error("No members returned from dmg system query for rank %s", rank)
-                return None
+        members = data["response"]["members"]
+        if not members:
+            self.log.error("No members returned from dmg system query for rank %s", rank)
+            raise Exception("dmg system query no members")
 
-            for member in members:
-                if member.get("rank") == rank:
-                    incarnation = member.get("incarnation")
-                    if incarnation is not None:
-                        self.log.debug("Rank %s incarnation: %s", rank, incarnation)
-                        return incarnation
-                    self.log.error("No incarnation field for rank %s", rank)
-                    return None
+        for member in members:
+            if member.get("rank") == rank:
+                incarnation = member.get("incarnation")
+                if incarnation is not None:
+                    self.log.debug("Rank %s incarnation: %s", rank, incarnation)
+                    return incarnation
+                self.log.error("No incarnation field for rank %s", rank)
+                raise Exception("dmg system query no incarnation for member")
 
-            self.log.error("Rank %s not found in system query response", rank)
-            return None
-
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            # Catch all exceptions to prevent test framework crashes during rank queries
-            self.log.error("Exception getting incarnation for rank %s: %s", rank, error)
-            return None
+        self.log.error("Rank %s not found in system query response", rank)
+        raise Exception("dmg system query no matching member")
 
     def reset_engine_restart_state(self):
         """Reset engine auto-restart state between tests.
@@ -205,9 +199,6 @@ class ControlTestBase(TestWithServers):
             Should be called in tearDown() of test classes that use engine restart
             functionality. If this method fails, tearDown() should fail the test
             to prevent subsequent tests from running with contaminated state.
-
-        Raises:
-            Exception: If server stop/start fails or ranks fail to rejoin
 
         Note:
             This operation adds ~5-10 seconds per test due to server restart overhead,

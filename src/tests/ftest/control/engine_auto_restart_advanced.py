@@ -74,7 +74,7 @@ class EngineAutoRestartAdvanced(ControlTestBase):
 
         all_ranks = self.get_all_ranks()
         if len(all_ranks) < 2:
-            self.skipTest("Test requires at least 2 ranks")
+            self.fail("Test requires at least 2 ranks")
 
         test_rank = self.random.choice(all_ranks)
 
@@ -82,19 +82,14 @@ class EngineAutoRestartAdvanced(ControlTestBase):
 
         # Get initial incarnation
         initial_incarnation = self.get_rank_incarnation(test_rank)
-        if initial_incarnation is None:
-            self.fail(f"Failed to get initial incarnation for rank {test_rank}")
 
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
-
         if not restarted:
             self.fail(f"Rank {test_rank} did not automatically restart. "
                       f"Final state: {final_state}")
 
         # Verify incarnation increased
         first_restart_incarnation = self.get_rank_incarnation(test_rank)
-        if first_restart_incarnation is None:
-            self.fail(f"Failed to get incarnation after first restart for rank {test_rank}")
 
         if first_restart_incarnation <= initial_incarnation:
             self.fail(f"Rank {test_rank} incarnation did not increase after first restart. "
@@ -124,8 +119,6 @@ class EngineAutoRestartAdvanced(ControlTestBase):
 
         # Verify incarnation increased again after deferred restart
         deferred_restart_incarnation = self.get_rank_incarnation(test_rank)
-        if deferred_restart_incarnation is None:
-            self.fail(f"Failed to get incarnation after deferred restart for rank {test_rank}")
 
         if deferred_restart_incarnation <= first_restart_incarnation:
             self.fail(f"Rank {test_rank} incarnation did not increase after deferred restart. "

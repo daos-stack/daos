@@ -33,7 +33,7 @@ class EngineAutoRestartTest(ControlTestBase):
         """
         all_ranks = self.get_all_ranks()
         if len(all_ranks) < 2:
-            self.skipTest("Test requires at least 2 ranks")
+            self.fail("Test requires at least 2 ranks")
 
         test_rank = self.random.choice(all_ranks)
 
@@ -41,21 +41,16 @@ class EngineAutoRestartTest(ControlTestBase):
 
         # get initial incarnation number
         initial_incarnation = self.get_rank_incarnation(test_rank)
-        if initial_incarnation is None:
-            self.fail(f"failed to get initial incarnation for rank {test_rank}")
 
         self.log.info("rank %s initial incarnation: %s", test_rank, initial_incarnation)
 
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
-
         if not restarted:
             self.fail(f"rank {test_rank} did not automatically restart. "
                       f"final state: {final_state}")
 
         # verify incarnation increased after restart
         final_incarnation = self.get_rank_incarnation(test_rank)
-        if final_incarnation is None:
-            self.fail(f"failed to get final incarnation for rank {test_rank}")
 
         self.log.info("rank %s final incarnation: %s", test_rank, final_incarnation)
 
@@ -82,7 +77,7 @@ class EngineAutoRestartTest(ControlTestBase):
         """
         all_ranks = self.get_all_ranks()
         if len(all_ranks) < 3:
-            self.skipTest("Test requires at least 3 ranks")
+            self.fail("Test requires at least 3 ranks")
 
         # Exclude half the ranks
         num_to_test = max(2, len(all_ranks) // 2)
@@ -93,8 +88,6 @@ class EngineAutoRestartTest(ControlTestBase):
         incs = []
         for rank in test_ranks:
             initial_incarnation = self.get_rank_incarnation(rank)
-            if initial_incarnation is None:
-                self.fail(f"failed to get initial incarnation for rank {rank}")
             incs.append(initial_incarnation)
             self.dmg.system_exclude(ranks=[rank], rank_hosts=None)
             time.sleep(1)  # small delay between exclusions
@@ -115,8 +108,6 @@ class EngineAutoRestartTest(ControlTestBase):
                 errors.append("Rank %s unexpectedly not restarted when auto-restart enabled"
                               % rank)
             end_incarnation = self.get_rank_incarnation(rank)
-            if end_incarnation is None:
-                self.fail(f"failed to get end incarnation for rank {rank}")
             end_incs.append(end_incarnation)
 
         if errors:
@@ -153,7 +144,7 @@ class EngineAutoRestartTest(ControlTestBase):
         """
         all_ranks = self.get_all_ranks()
         if len(all_ranks) < 4:
-            self.skipTest("Test requires at least 4 ranks")
+            self.fail("Test requires at least 4 ranks")
 
         # Create pool first
         self.add_pool(connect=False)
@@ -164,18 +155,13 @@ class EngineAutoRestartTest(ControlTestBase):
 
         # Get initial incarnation
         initial_incarnation = self.get_rank_incarnation(test_rank)
-        if initial_incarnation is None:
-            self.fail(f"Failed to get initial incarnation for rank {test_rank}")
 
         restarted, final_state = self.exclude_rank_and_wait_restart(test_rank)
-
         if not restarted:
             self.fail(f"Rank {test_rank} did not restart. State: {final_state}")
 
         # Verify incarnation increased
         final_incarnation = self.get_rank_incarnation(test_rank)
-        if final_incarnation is None:
-            self.fail(f"Failed to get final incarnation for rank {test_rank}")
 
         if final_incarnation <= initial_incarnation:
             self.fail(f"Rank {test_rank} incarnation did not increase. "

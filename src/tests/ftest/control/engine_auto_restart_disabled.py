@@ -38,7 +38,7 @@ class EngineAutoRestartDisabled(ControlTestBase):
         """
         all_ranks = self.get_all_ranks()
         if len(all_ranks) < 2:
-            self.skipTest("Test requires at least 2 ranks")
+            self.fail("Test requires at least 2 ranks")
 
         test_rank = self.random.choice(all_ranks)
 
@@ -83,7 +83,7 @@ class EngineAutoRestartDisabled(ControlTestBase):
         """
         all_ranks = self.get_all_ranks()
         if len(all_ranks) < 3:
-            self.skipTest("Test requires at least 3 ranks")
+            self.fail("Test requires at least 3 ranks")
 
         # Exclude half the ranks
         num_to_test = max(2, len(all_ranks) // 2)
