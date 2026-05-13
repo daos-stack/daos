@@ -15,6 +15,8 @@
  */
 #define D_LOGFAC	DD_FAC(client)
 
+/* Only for test. */
+
 #include "client_internal.h"
 #include <daos/mgmt.h>
 #include <daos/rpc.h>
