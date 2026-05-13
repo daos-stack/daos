@@ -381,21 +381,7 @@ pipeline {
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
-        booleanParam(name: 'CI_cb_md_on_ssd_TEST',
-                     defaultValue: true,
-                     description: 'Run all Cluster Box MD on SSD test stages')
-        booleanParam(name: 'CI_cb_md_on_ssd_ec_TEST',
-                     defaultValue: true,
-                     description: 'Run the Cluster Box MD on SSD EC test stage')
-        booleanParam(name: 'CI_cb_md_on_ssd_rebuild_TEST',
-                     defaultValue: true,
-                     description: 'Run the Cluster Box MD on SSD Rebuild test stage')
-        booleanParam(name: 'CI_cb_md_on_ssd_daos_test_TEST',
-                     defaultValue: true,
-                     description: 'Run the Cluster Box MD on SSD DAOS Test test stage')
-        booleanParam(name: 'CI_cb_md_on_ssd_ftest_TEST',
-                     defaultValue: true,
-                     description: 'Run the Cluster Box MD on SSD FTest test stage')
+
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -1231,14 +1217,14 @@ pipeline {
                         )
 
                     List<Map> clusterBoxStages = [
-                        [name: 'EC',         tag: 'stage_daos_test_ec',      pragma_suffix: '-cb-md-on-ssd-ec'],
-                        [name: 'Rebuild',    tag: 'stage_daos_test_rebuild', pragma_suffix: '-cb-md-on-ssd-rebuild'],
-                        [name: 'DAOS Test',  tag: 'stage_daos_test',         pragma_suffix: '-cb-md-on-ssd-daos-test'],
-                        [name: 'FTest',      tag: 'stage_ftest',             pragma_suffix: '-cb-md-on-ssd-ftest'],
+                        [name: 'daos_test EC',      tag: 'stage_daos_test_ec',      pragma_suffix: '-cb-md-on-ssd-ec'],
+                        [name: 'daos_test Rebuild', tag: 'stage_daos_test_rebuild', pragma_suffix: '-cb-md-on-ssd-rebuild'],
+                        [name: 'daos_test Other',   tag: 'stage_daos_test',         pragma_suffix: '-cb-md-on-ssd-daos-test'],
+                        [name: 'FTest',             tag: 'stage_ftest',             pragma_suffix: '-cb-md-on-ssd-ftest'],
                     ]
 
                     clusterBoxStages.each { cfg ->
-                        String stageKey = "${cfg.name} CB MDonSSD"
+                        String stageKey = "Functional Cluster Box ${cfg.name}"
                         hwStages[stageKey] = getFunctionalTestStage(
                             name: stageKey,
                             pragma_suffix: cfg.pragma_suffix,
