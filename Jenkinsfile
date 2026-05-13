@@ -1171,7 +1171,7 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7',
-                             node_count: 5
+                            node_count: 5
                      )
                      hwStages['Functional Hardware Medium VMD'] = getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',

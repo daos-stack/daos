@@ -8,6 +8,7 @@
   Generate default commit pragmas.
 """
 
+import ast
 import importlib.util
 import os
 import re
@@ -145,12 +146,75 @@ def read_commit_pragma_mapping():
     return config
 
 
-def __get_test_tag(commit_pragma_mapping, paths, default='pr'):
+def _strip_docstrings(tree):
+    """Remove docstring nodes from an AST tree.
+
+    This modifies the tree in place, replacing docstring nodes with ``ast.Pass()``.
+
+    Args:
+        tree (ast.AST): the AST tree to modify
+
+    Returns:
+        ast.AST: the modified tree
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module)):
+            if (node.body
+                    and isinstance(node.body[0], ast.Expr)
+                    and isinstance(node.body[0].value, ast.Constant)
+                    and isinstance(node.body[0].value.value, str)):
+                node.body[0] = ast.Pass()
+    return tree
+
+
+def _has_code_changes(path, target):
+    """Check if a Python file has changes beyond comments and docstrings.
+
+    Uses AST comparison to determine if actual executable code was modified.
+    Comments are inherently ignored by the AST parser, and docstrings are
+    explicitly stripped before comparison.
+
+    Args:
+        path (str): absolute path to the file
+        target (str): git commit to compare against
+
+    Returns:
+        bool: True if code changes exist, False if only comments/docstrings changed
+    """
+    git_root = git_root_dir()
+    rel_path = os.path.relpath(path, git_root)
+
+    # Get old content from git
+    result = subprocess.run(
+        ['git', 'show', f'{target}:{rel_path}'],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=git_root)
+    if result.returncode != 0:
+        return True  # New file or not in git
+
+    old_content = result.stdout.decode()
+
+    # Get new content from disk
+    try:
+        with open(path) as f:
+            new_content = f.read()
+    except FileNotFoundError:
+        return True  # Deleted file
+
+    try:
+        old_tree = _strip_docstrings(ast.parse(old_content))
+        new_tree = _strip_docstrings(ast.parse(new_content))
+        return ast.dump(old_tree) != ast.dump(new_tree)
+    except SyntaxError:
+        return True  # Can't parse, assume code changed
+
+
+def __get_test_tag(commit_pragma_mapping, paths, target=None, default='pr'):
     """Get the Test-tag pragma.
 
     Args:
         commit_pragma_mapping (dict): full commit pragma mapping config
         paths (list): paths to get tags for
+        target (str): git commit to compare against for detecting code vs comment changes
         default (str): default tag to use if a path does not have a test-tag config
 
     Returns:
@@ -172,12 +236,17 @@ def __get_test_tag(commit_pragma_mapping, paths, default='pr'):
                     }
                 _handler = test_tag_config['handler']
                 if _handler == 'FtestTagMap':
-                    # Special ftest handling
-                    try:
-                        all_tags.update(ftest_tag_map.minimal_tags(path))
-                    except KeyError:
-                        # Use default from config
+                    # Special ftest handling - only use class-level tags if
+                    # actual code was changed, not just comments or docstrings
+                    # (e.g. avocado tag changes)
+                    if target and not _has_code_changes(path, target):
                         all_tags.update(test_tag_config['tags'].split(' '))
+                    else:
+                        try:
+                            all_tags.update(ftest_tag_map.minimal_tags(path))
+                        except KeyError:
+                            # Use default from config
+                            all_tags.update(test_tag_config['tags'].split(' '))
                 elif _handler == 'direct':
                     # Use direct tags from config
                     all_tags.update(test_tag_config['tags'].split(' '))
@@ -251,7 +320,7 @@ def gen_commit_pragmas(target):
 
     commit_pragma_mapping = read_commit_pragma_mapping()
 
-    test_tag = __get_test_tag(commit_pragma_mapping, modified_files)
+    test_tag = __get_test_tag(commit_pragma_mapping, modified_files, target=target)
     if test_tag:
         pragmas['Test-tag'] = test_tag
 
