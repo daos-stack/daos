@@ -49,6 +49,6 @@ sudo mount -t tmpfs -o size=4g tmpfs nlt_logs
 sudo chown jenkins:jenkins nlt_logs
 
 TMPDIR="$(pwd)/nlt_logs" \
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
-NO_PROXY="${DAOS_NO_PROXY:-}" \
-exec ./utils/node_local_test.py "$@"
+    HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+    NO_PROXY="${DAOS_NO_PROXY:-}" \
+    exec ./utils/node_local_test.py "$@"
