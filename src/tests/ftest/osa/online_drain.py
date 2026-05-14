@@ -120,7 +120,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_with_csum
-        :avocado: tags=OSAOnlineDrain,test_osa_online_drain
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain,stage_ftest
         """
         self.log.info("Online Drain : With Checksum")
         ranks = self.get_random_test_ranks()
@@ -135,7 +135,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium
         :avocado: tags=osa
         :avocado: tags=osa_drain,online_drain,online_drain_without_csum
-        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_no_csum
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_no_csum,stage_ftest
         """
         self.log.info("Online Drain : No Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -152,7 +152,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_oclass
-        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_oclass
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_oclass,stage_ftest
         """
         self.log.info("Online Drain : Oclass")
         ranks = self.get_random_test_ranks()
@@ -168,7 +168,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_with_aggregation
-        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_aggregation
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_aggregation,stage_ftest
         """
         self.log.info("Online Drain : Aggregation")
         self.test_during_aggregation = self.params.get("test_with_aggregation",
@@ -177,15 +177,19 @@ class OSAOnlineDrain(OSAUtils):
         self.run_online_drain_test(num_pool=1, ranks=ranks)
 
     def test_osa_online_drain_mdtest(self):
-        """Test ID: DAOS-4750
+        """
+
+Test ID: DAOS-4750
         Test Description: Validate Online drain with mdtest
         running during the testing.
 
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_mdtest
-        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_mdtest
+:avocado: tags=all,pr,daily_regression
+:avocado: tags=hw,medium
+:avocado: tags=osa,checksum
+:avocado: tags=osa_drain,online_drain,online_drain_mdtest
+:avocado: tags=OSAOnlineDrain,test_osa_online_drain_mdtest,stage_ftest
+        
+        
         """
         self.log.info("Online Drain : With Mdtest")
         ranks = self.get_random_test_ranks()

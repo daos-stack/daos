@@ -22,16 +22,18 @@ class StorageTiers(TestWithServers):
     """
 
     def test_tiers(self):
-        """JIRA ID: DAOS-1525.
+        """
+JIRA ID: DAOS-1525.
 
         Test Description:
             Verify storage tiers are correctly obtained from the test yaml file.
             Does not test or rely on actual hardware being present.
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=server,storage,storage_tiers
-        :avocado: tags=StorageTiers,test_tiers
+        :avocado: tags=StorageTiers,test_tiers,stage_ftest
+        
         """
         expected = []
         for engine in range(2):

@@ -55,7 +55,7 @@ class DaosAggregationBasic(IorTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=aggregation,daosio,ior
-        :avocado: tags=DaosAggregationBasic,test_basic_aggregation
+        :avocado: tags=DaosAggregationBasic,test_basic_aggregation,stage_ftest
         """
         # Create pool and container
         self.update_ior_cmd_with_pool()

@@ -18,7 +18,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/speed_of_ci') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -381,6 +381,7 @@ pipeline {
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
+
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -533,7 +534,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: false,
                                                                 parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
+                                                " -t ${sanitized_JOB_NAME()}-b${env.BUILD_NUMBER}-el8 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
@@ -586,7 +587,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: false,
                                                                 parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el9 " +
+                                                " -t ${sanitized_JOB_NAME()}-b${env.BUILD_NUMBER}-el9 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
@@ -641,7 +642,7 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
+                                                " -t ${sanitized_JOB_NAME()}-b${env.BUILD_NUMBER}-leap15" +
                                                 ' --build-arg POINT_RELEASE=.6 '
                         }
                     }
@@ -679,7 +680,7 @@ pipeline {
                 }
             }
         }
-        stage('Unit Tests') {
+        stage('Tests') {
             when {
                 beforeAgent true
                 expression { !skipStage() }
@@ -826,16 +827,6 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck')
-            }
-        }
-        stage('Test') {
-            when {
-                beforeAgent true
-                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
-                // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
-            }
-            parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
@@ -1137,9 +1128,10 @@ pipeline {
                 expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
             }
             steps {
-                script {
-                    parallel(
-                        'Functional Hardware Medium': getFunctionalTestStage(
+                 script {
+                    Map hwStages = [:]
+
+                    hwStages['Functional Hardware Medium'] = getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
@@ -1150,22 +1142,24 @@ pipeline {
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+                            image_version: 'el9.7',
+                            node_count: 5
+                        )
+                    hwStages['Functional Hardware Medium MD on SSD'] = getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium VMD': getFunctionalTestStage(
+                            image_version: 'el9.7',
+                            node_count: 5
+                     )
+                     hwStages['Functional Hardware Medium VMD'] = getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
@@ -1177,23 +1171,10 @@ pipeline {
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                            image_version: 'el9.7',
+                            node_count: 5
+                        )
+                    hwStages['Functional Hardware Medium Verbs Provider MD on SSD'] = getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
@@ -1205,23 +1186,10 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            pragma_suffix: '-hw-medium-ucx-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Large': getFunctionalTestStage(
+                            image_version: 'el9.7',
+                            node_count: 5
+                        )
+                        hwStages['Functional Hardware Large'] = getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
@@ -1233,8 +1201,8 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
+                        )
+                        hwStages['Functional Hardware Large MD on SSD'] = getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
@@ -1246,8 +1214,34 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
-                        ),
-                    )
+                        )
+
+                    List<Map> clusterBoxStages = [
+                        [name: 'daos_test EC',      tag: 'stage_daos_test_ec',      pragma_suffix: '-cb-md-on-ssd-ec'],
+                        [name: 'daos_test Rebuild', tag: 'stage_daos_test_rebuild', pragma_suffix: '-cb-md-on-ssd-rebuild'],
+                        [name: 'daos_test Other',   tag: 'stage_daos_test',         pragma_suffix: '-cb-md-on-ssd-daos-test'],
+                        [name: 'FTest',             tag: 'stage_ftest',             pragma_suffix: '-cb-md-on-ssd-ftest'],
+                    ]
+
+                    clusterBoxStages.each { cfg ->
+                        String stageKey = "Functional Cluster Box ${cfg.name}"
+                        hwStages[stageKey] = getFunctionalTestStage(
+                            name: stageKey,
+                            pragma_suffix: cfg.pragma_suffix,
+                            label: 'cluster_box',
+                            next_version: next_version(),
+                            stage_tags: "cb,medium,${cfg.tag}",
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            image_version: 'el9.7',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        )
+                    }
+
+                    parallel(hwStages)
                 }
             }
         } // stage('Test Hardware')

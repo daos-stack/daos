@@ -17,7 +17,9 @@ class AggregationPunching(MdtestBase):
     """
 
     def test_aggregation_punching(self):
-        """Jira ID: DAOS-3443
+        """
+
+Jira ID: DAOS-3443
 
         Test Description:
             Test the aggregation feature after punching records.
@@ -27,10 +29,12 @@ class AggregationPunching(MdtestBase):
             Create a POSIX container and run mdtest
             Enable the aggregation run and verify the space is reclaimed.
 
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=aggregation,mdtest,mdtest
-        :avocado: tags=AggregationPunching,aggregatepunching,test_aggregation_punching
+:avocado: tags=all,pr,daily_regression
+:avocado: tags=cb,medium
+:avocado: tags=aggregation,mdtest
+:avocado: tags=AggregationPunching,aggregatepunching,test_aggregation_punching,stage_ftest
+        
+        
         """
         if self.pool is None:
             self.add_pool(connect=False)

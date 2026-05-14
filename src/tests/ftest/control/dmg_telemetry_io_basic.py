@@ -76,15 +76,17 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
                 metrics_data[key])
 
     def test_io_telemetry_metrics_basic(self):
-        """JIRA ID: DAOS-5241
+        """
+JIRA ID: DAOS-5241
 
             Create files of 500M and 1M with transfer size 1M to verify the
             DAOS engine IO telemetry basic metrics infrastructure.
 
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control,telemetry,basic
-        :avocado: tags=TestWithTelemetryIOBasic,test_io_telemetry_metrics_basic
+            :avocado: tags=all,pr,daily_regression
+            :avocado: tags=cb,medium
+            :avocado: tags=control,telemetry,basic
+            :avocado: tags=TestWithTelemetryIOBasic,test_io_telemetry_metrics_basic,stage_ftest
+        
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")

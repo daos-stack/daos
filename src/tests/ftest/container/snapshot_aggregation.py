@@ -35,7 +35,8 @@ class SnapshotAggregation(IorTestBase):
                     })
 
     def test_snapshot_aggregation(self):
-        """JIRA ID: DAOS-3751.
+        """
+JIRA ID: DAOS-3751.
 
         Test Description:
             Verify snapshot aggregation with 2 servers and 6 clients (CI limit).
@@ -46,7 +47,8 @@ class SnapshotAggregation(IorTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=container,snap
-        :avocado: tags=SnapshotAggregation,test_snapshot_aggregation
+        :avocado: tags=SnapshotAggregation,test_snapshot_aggregation,stage_ftest
+        
         """
         # Create a pool and a container that spans the 2 servers.
         self.update_ior_cmd_with_pool()

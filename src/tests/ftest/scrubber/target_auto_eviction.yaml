@@ -8,6 +8,7 @@ setup:
   start_servers_once: false
 
 server_config:
+  system_ram_reserved: 16
   name: daos_server
   engines_per_host: 2
   engines:

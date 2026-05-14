@@ -60,7 +60,8 @@ class PoolCreateTests(TestWithServers):
         check_pool_creation(self, [pool], 120)
 
     def test_create_no_space_loop(self):
-        """JIRA ID: DAOS-3728.
+        """
+JIRA ID: DAOS-3728.
 
         Test Description:
             Create a pool using most of the capacity of one server on only one
@@ -75,6 +76,7 @@ class PoolCreateTests(TestWithServers):
         :avocado: tags=hw,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateTests,test_create_no_space_loop
+        
         """
         # Define three pools to create:
         #   - one pool using almost all of the available capacity of one server

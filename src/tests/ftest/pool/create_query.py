@@ -24,7 +24,8 @@ class PoolCreateQueryTests(TestWithServers):
         super().setUp()
 
     def test_create_and_query(self):
-        """JIRA ID: DAOS-10339
+        """
+JIRA ID: DAOS-10339
 
         Test Description:
             Create a pool and check that the size of the response is close enough to the requested
@@ -32,9 +33,10 @@ class PoolCreateQueryTests(TestWithServers):
             pool create.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=pool
-        :avocado: tags=PoolCreateQueryTests,test_create_and_query
+        :avocado: tags=PoolCreateQueryTests,test_create_and_query,stage_ftest
+        
         """
         # Create pool
         pool = add_pool(self)

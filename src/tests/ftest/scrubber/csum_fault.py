@@ -16,15 +16,19 @@ class TestWithScrubberFault(TestWithScrubber):
     :avocado: recursive
     """
     def test_scrubber_csum_fault(self):
-        """JIRA ID: DAOS-7333
+        """
+
+JIRA ID: DAOS-7333
 
             1. Create checksum faults and see
             whether scrubber finds them.
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=scrubber,faults
-        :avocado: tags=TestWithScrubberFault,test_scrubber_csum_fault
+:avocado: tags=all,pr,daily_regression
+:avocado: tags=hw,medium
+:avocado: tags=scrubber,faults
+:avocado: tags=TestWithScrubberFault,test_scrubber_csum_fault,stage_ftest
 
+        
+        
         """
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
