@@ -723,7 +723,8 @@ pipeline {
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
+                                     image_version: 'el9.7',
+                                     prov_env_vars: 'VM_CPUS=14'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
@@ -972,7 +973,8 @@ pipeline {
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
-                                     image_version: 'el9.7'))
+                                     image_version: 'el9.7',
+                                     prov_env_vars: 'VM_CPUS=14'))
                     }
                     post {
                         always {
