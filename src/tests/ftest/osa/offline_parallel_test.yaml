@@ -67,8 +67,6 @@ mdtest:
     np: 2
   num_of_files_dirs: 100
   test_dir: "/"
-  iteration: 1
-  dfs_destroy: false
   dfs_oclass: RP_2G8
   dfs_dir_oclass: RP_2G8
   manager: "MPICH"
