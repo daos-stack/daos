@@ -553,7 +553,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.5') {
+                stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1137,7 +1137,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on Leap 15.5')
+                } // stage('Test RPMs on Leap 15.4')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
