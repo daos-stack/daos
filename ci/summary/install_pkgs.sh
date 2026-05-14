@@ -27,9 +27,12 @@ done
 
 env | sort -n
 
+# Run the remainder of the script as root to be able to install packages
+exec sudo -- "$0" "$@"
+
 # Add the repo for packages built by CI
 add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}" "true"
 
 # Install bullseye
 bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"
-sudo dnf install --allowerasing -y "${bullseye_pkg}" || echo "${bullseye_pkg} not available"
+dnf install --allowerasing -y "${bullseye_pkg}" || echo "${bullseye_pkg} not available"
