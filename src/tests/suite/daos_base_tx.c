@@ -1024,6 +1024,197 @@ dtx_23(void **state)
 	ioreq_fini(&req);
 }
 
+#define TSIZE 8
+#define CONTS 5
+
+static void
+dtx_24(void **state)
+{
+	test_arg_t   *arg         = *state;
+	const char   *dkey        = dts_dtx_dkey;
+	char          akey[TSIZE] = {0};
+	char          wbuf[TSIZE];
+	char          rbuf[TSIZE];
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	char          i;
+	char          j;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX24: DTX commit under space pressure with single container\n");
+
+	if (!test_runable(arg, dts_dtx_replica_cnt))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	print_message("Filling DTX committed table...\n");
+
+	for (i = 'a'; i <= 'z'; i++) {
+		snprintf(akey, TSIZE, "akey-%c", i);
+		for (j = 'A'; j <= 'Z'; j++) {
+			memset(wbuf, j, TSIZE);
+			insert_single(dkey, akey, (j - 'A') * TSIZE, wbuf, TSIZE, DAOS_TX_NONE,
+				      &req);
+		}
+	}
+
+	/* Wait for batched commit. */
+	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
+
+	/* Simulate DER_NOSPACE when DTX commit via DAOS_DTX_NOSPACE_NOREFRESH. */
+	dtx_set_fail_loc(arg, DAOS_DTX_NOSPACE_NOREFRESH | DAOS_FAIL_ALWAYS);
+
+	print_message("Writing more after space pressure...\n");
+
+	for (i = 'N'; i <= 'Z'; i++) {
+		snprintf(akey, TSIZE, "akey-%c", i);
+		for (j = 'a'; j <= 'm'; j++) {
+			memset(wbuf, j, TSIZE);
+			insert_single(dkey, akey, (j - 'a') * TSIZE, wbuf, TSIZE, DAOS_TX_NONE,
+				      &req);
+		}
+	}
+
+	/* Wait for batched commit. */
+	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
+
+	print_message("Verifying all written data...\n");
+
+	/*
+	 * DAOS_DTX_NOSPACE_NOREFRESH will prevent DTX refresh. If former batched commit failed
+	 * to commit some DTX because of simulated space exhaustion, then related lookup will
+	 * return IO failure and the fetch result will be different from former write one.
+	 */
+	for (i = 'N'; i <= 'Z'; i++) {
+		snprintf(akey, TSIZE, "akey-%c", i);
+		for (j = 'a'; j <= 'm'; j++) {
+			memset(wbuf, j, TSIZE);
+			lookup_single(dkey, akey, (j - 'a') * TSIZE, rbuf, TSIZE, DAOS_TX_NONE,
+				      &req);
+			assert_memory_equal(wbuf, rbuf, TSIZE);
+		}
+	}
+
+	dtx_set_fail_loc(arg, 0);
+	ioreq_fini(&req);
+}
+
+static void
+dtx_25(void **state)
+{
+	test_arg_t      *arg          = *state;
+	struct test_cont conts[CONTS] = {0};
+	daos_obj_id_t    oids[CONTS]  = {0};
+	struct ioreq     reqs[CONTS]  = {0};
+	char             dkey[TSIZE]  = {0};
+	char             akey[TSIZE]  = {0};
+	char             wbuf[TSIZE];
+	char             rbuf[TSIZE];
+	daos_prop_t     *redun_prop;
+	int              rc;
+	int              m;
+	char             n;
+	char             i;
+	char             j;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX25: DTX commit under space pressure with multiple containers\n");
+
+	if (!test_runable(arg, 3))
+		return;
+
+	redun_prop = daos_prop_alloc(1);
+	assert_non_null(redun_prop);
+
+	redun_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	redun_prop->dpp_entries[0].dpe_val  = DAOS_PROP_CO_REDUN_RANK;
+
+	for (m = 0; m < CONTS; m++) {
+		rc = daos_cont_create(arg->pool.poh, &conts[m].uuid, redun_prop, NULL);
+		assert_rc_equal(rc, 0);
+
+		uuid_unparse_lower(conts[m].uuid, conts[m].label);
+		rc = daos_cont_open(arg->pool.poh, conts[m].label, DAOS_COO_RW, &conts[m].coh, NULL,
+				    NULL);
+		assert_rc_equal(rc, 0);
+
+		oids[m] = daos_test_oid_gen(conts[m].coh, OC_RP_3GX, 0, 0, arg->myrank);
+		ioreq_init(&reqs[m], conts[m].coh, oids[m], DAOS_IOD_ARRAY, arg);
+
+		print_message("Filling DTX committed table for the container " DF_UUID "\n",
+			      DP_UUID(conts[m].uuid));
+
+		for (n = '0'; n < '4'; n++) {
+			snprintf(dkey, TSIZE, "dkey-%c", n);
+			for (i = 'a'; i <= 'm'; i++) {
+				snprintf(akey, TSIZE, "akey-%c", i);
+				for (j = 'A'; j <= 'Z'; j++) {
+					memset(wbuf, j, TSIZE);
+					insert_single(dkey, akey, (j - 'A') * TSIZE, wbuf, TSIZE,
+						      DAOS_TX_NONE, &reqs[m]);
+				}
+			}
+		}
+	}
+
+	/* Wait for batched commit. */
+	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
+
+	/* Simulate DER_NOSPACE when DTX commit via DAOS_DTX_NOSPACE_NOREFRESH. */
+	dtx_set_fail_loc(arg, DAOS_DTX_NOSPACE_NOREFRESH | DAOS_FAIL_ALWAYS);
+
+	for (m = 0; m < CONTS; m++) {
+		print_message("Writing more to cont " DF_UUID " after space pressure...\n",
+			      DP_UUID(conts[m].uuid));
+
+		for (i = 'N'; i <= 'Z'; i++) {
+			snprintf(akey, TSIZE, "akey-%c", i);
+			for (j = 'a'; j <= 'm'; j++) {
+				memset(wbuf, j, TSIZE);
+				insert_single(dkey, akey, (j - 'a') * TSIZE, wbuf, TSIZE,
+					      DAOS_TX_NONE, &reqs[m]);
+			}
+		}
+	}
+
+	/* Wait for batched commit. */
+	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
+
+	print_message("Verifying all written data...\n");
+
+	/*
+	 * DAOS_DTX_NOSPACE_NOREFRESH will prevent DTX refresh. If former batched commit failed
+	 * to commit some DTX because of simulated space exhaustion, then related lookup will
+	 * return IO failure and the fetch result will be different from former write one.
+	 */
+	for (m = 0; m < CONTS; m++) {
+		for (i = 'N'; i <= 'Z'; i++) {
+			snprintf(akey, TSIZE, "akey-%c", i);
+			for (j = 'a'; j <= 'm'; j++) {
+				memset(wbuf, j, TSIZE);
+				lookup_single(dkey, akey, (j - 'a') * TSIZE, rbuf, TSIZE,
+					      DAOS_TX_NONE, &reqs[m]);
+				assert_memory_equal(wbuf, rbuf, TSIZE);
+			}
+		}
+	}
+
+	daos_prop_free(redun_prop);
+	dtx_set_fail_loc(arg, 0);
+
+	for (m = 0; m < CONTS; m++) {
+		ioreq_fini(&reqs[m]);
+		if (daos_handle_is_valid(conts[m].coh))
+			daos_cont_close(conts[m].coh, NULL);
+		if (daos_is_valid_uuid_string(conts[m].label, UUID_SST_NONE))
+			daos_cont_destroy(arg->pool.poh, conts[m].label, 0, NULL);
+	}
+}
+
 static int
 dtx_base_rf0_setup(void **state)
 {
@@ -1092,6 +1283,10 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_22, NULL, test_case_teardown},
 	{"DTX23: Resend with lost reply from non-leader",
 	 dtx_23, NULL, test_case_teardown},
+	{"DTX24: DTX under space pressure with single container",
+	 dtx_24, NULL, test_case_teardown},
+	{"DTX25: DTX under space pressure with multiple containers",
+	 dtx_25, NULL, test_case_teardown},
 };
 /* clang-format on */
 

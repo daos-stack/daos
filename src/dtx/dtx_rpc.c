@@ -878,11 +878,13 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 		}
 
 		/*
-		 * Some DTX entries may have been committed on some participants. Then mark all
-		 * the DTX entries (in the dtis) as "PARTIAL_COMMITTED" and re-commit them later.
-		 * It is harmless to re-commit the DTX that has ever been committed.
+		 * Some DTX entries may have been committed on parts of (remote) participants.
+		 * It is no way to revert related partially committed DTX entries since we do
+		 * not know whether someone has already read related data for those partially
+		 * committed DTX entries. Then let's mark all the DTX entries in the @dtis as
+		 * "PARTIAL_COMMITTED" and re-commit them later. It is safe to re-commit them.
 		 */
-		rc1 = vos_dtx_commit(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
+		rc1 = dtx_commit_large(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
 		if (rc1 > 0) {
 			dra->dra_committed += rc1;
 			rc1 = 0;
