@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -77,6 +77,18 @@ daos_prop_has_ptr(struct daos_prop_entry *entry)
 	return false;
 }
 
+bool
+daos_prop_has_byteval(struct daos_prop_entry *entry)
+{
+	switch (entry->dpe_type) {
+	/*
+	 * e.g. DAOS_PROP_PO_POOL_CA (DAOS-18783)
+	 */
+	default:
+		return false;
+	}
+}
+
 static void
 daos_prop_entry_free_value(struct daos_prop_entry *entry)
 {
@@ -89,6 +101,16 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	if (daos_prop_has_str(entry)) {
 		if (entry->dpe_str) {
 			D_FREE(entry->dpe_str);
+		}
+		return;
+	}
+
+	if (daos_prop_has_byteval(entry)) {
+		struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+		if (bv != NULL) {
+			D_FREE(bv->dpb_data);
+			D_FREE(entry->dpe_val_ptr);
 		}
 		return;
 	}
@@ -592,6 +614,10 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 
 	entry_dup->dpe_type = entry->dpe_type;
 	entry_dup->dpe_flags = entry->dpe_flags;
+
+	if (daos_prop_has_byteval(entry))
+		return daos_prop_entry_dup_byteval(entry_dup, entry);
+
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_LABEL:
 	case DAOS_PROP_CO_LABEL:
@@ -749,6 +775,53 @@ daos_prop_set_ptr(daos_prop_t *prop, uint32_t type, const void *ptr, daos_size_t
 		return -DER_NONEXIST;
 
 	return daos_prop_entry_set_ptr(entry, ptr, size);
+}
+
+int
+daos_prop_set_byteval(daos_prop_t *prop, uint32_t type, const void *data, size_t len)
+{
+	struct daos_prop_entry *entry;
+
+	entry = daos_prop_entry_get(prop, type);
+	if (entry == NULL)
+		return -DER_NONEXIST;
+
+	return daos_prop_entry_set_byteval(entry, data, len);
+}
+
+int
+daos_prop_entry_set_byteval(struct daos_prop_entry *entry, const void *data, size_t len)
+{
+	struct daos_prop_byteval *bv;
+
+	if (entry == NULL)
+		return -DER_INVAL;
+	if (!daos_prop_has_byteval(entry)) {
+		D_ERROR("Entry type %d does not expect a byteval\n", entry->dpe_type);
+		return -DER_INVAL;
+	}
+
+	if (entry->dpe_val_ptr != NULL) {
+		bv = entry->dpe_val_ptr;
+		D_FREE(bv->dpb_data);
+		D_FREE(entry->dpe_val_ptr);
+	}
+
+	if (data == NULL || len == 0)
+		return 0;
+
+	D_ALLOC_PTR(bv);
+	if (bv == NULL)
+		return -DER_NOMEM;
+	D_ALLOC(bv->dpb_data, len);
+	if (bv->dpb_data == NULL) {
+		D_FREE(bv);
+		return -DER_NOMEM;
+	}
+	memcpy(bv->dpb_data, data, len);
+	bv->dpb_len        = len;
+	entry->dpe_val_ptr = bv;
+	return 0;
 }
 
 int
@@ -964,6 +1037,23 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
 
 	memcpy(entry_dst->dpe_val_ptr, entry_src->dpe_val_ptr, len);
 	return 0;
+}
+
+int
+daos_prop_entry_dup_byteval(struct daos_prop_entry *entry_dst, struct daos_prop_entry *entry_src)
+{
+	struct daos_prop_byteval *src_bv;
+
+	D_ASSERT(entry_src != NULL);
+	D_ASSERT(entry_dst != NULL);
+
+	src_bv = entry_src->dpe_val_ptr;
+	if (src_bv == NULL || src_bv->dpb_data == NULL || src_bv->dpb_len == 0) {
+		entry_dst->dpe_val_ptr = NULL;
+		return 0;
+	}
+
+	return daos_prop_entry_set_byteval(entry_dst, src_bv->dpb_data, src_bv->dpb_len);
 }
 
 int
