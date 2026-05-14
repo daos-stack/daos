@@ -137,29 +137,26 @@ struct crt_hg_metrics {
 
 /* For multi progress on single context */
 struct crt_hg_progress_multi {
-	pthread_cond_t  cond;  /* Cond */
-	pthread_mutex_t mutex; /* Mutex */
-	atomic_uint     count; /* Count */
+	pthread_cond_t  cond;
+	pthread_mutex_t mutex;
+	atomic_uint     count; /* Number of threads waiting in progress */
 };
 
 /** HG context */
 struct crt_hg_context {
-	/* Flag indicating whether hg class is shared; true for SEP mode */
-	bool                         chc_shared_hg_class;
-	hg_class_t                  *chc_hgcla;              /* HG class */
-	hg_context_t                *chc_hgctx;              /* HG context */
-	hg_class_t                  *chc_bulkcla;            /* bulk class */
-	hg_context_t                *chc_bulkctx;            /* bulk context */
-	struct crt_hg_pool           chc_hg_pool;            /* HG handle pool */
-	int                          chc_provider;           /* provider */
-	bool                         chc_thread_mode_single; /* thread safety */
-	uint64_t                     chc_diag_pub_ts;        /* time of last diagnostics pub */
-	struct crt_hg_metrics        chc_metrics;            /* HG metrics */
-	int                          chc_epfd;               /* epoll fd */
-	struct crt_hg_progress_multi chc_progress_multi;     /* multi progress */
-	struct timespec              spin_deadline;          /* deadline for spin loop */
-	unsigned int                 spindown_ms;            /* progress spindown time in ms */
-	bool                         spin_flag;              /* flag to indicate if in spin loop */
+	struct crt_hg_pool           chc_hg_pool;         /* HG handle pool */
+	struct crt_hg_metrics        chc_metrics;         /* HG metrics */
+	struct crt_hg_progress_multi chc_progress_multi;  /* multi progress */
+	hg_class_t                  *chc_hgcla;           /* HG class */
+	hg_context_t                *chc_hgctx;           /* HG context */
+	uint64_t                     chc_diag_pub_ts;     /* time of last diagnostics pub */
+	int                          chc_provider;        /* provider */
+	int                          chc_epfd;            /* epoll fd */
+	struct timespec              chc_spin_deadline;   /* deadline for spin loop */
+	unsigned int                 chc_spindown_ms;     /* progress spindown time in ms */
+	bool                         chc_spin_flag;       /* true if in spin loop for spindown ms */
+	bool                         chc_shared_hg_class; /* shared class for SEP mode */
+	bool                         chc_thread_mode_single; /* relax thread safety */
 };
 
 /* crt_hg.c */

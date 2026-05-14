@@ -1856,7 +1856,11 @@ crt_progress_event(struct crt_context *ctx, int64_t timeout_us)
 		timeout_us = ctx->cc_prog_cb(ctx, timeout_us, ctx->cc_prog_cb_arg);
 
 	if (timeout_us > 0) {
-		d_gettime_coarse(&now);
+		rc = d_gettime_coarse(&now);
+		if (rc != 0) {
+			D_ERROR("d_gettime_coarse() failed, rc: %d.\n", rc);
+			return rc;
+		}
 		deadline_p = &now;
 		d_timeinc(deadline_p, (uint64_t)(timeout_us * 1000));
 	} else
@@ -2000,7 +2004,11 @@ crt_progress_event_cond(struct crt_context *ctx, int64_t timeout_us, crt_progres
 		else
 			progress_timeout = timeout_us;
 
-		d_gettime_coarse(&now);
+		rc = d_gettime_coarse(&now);
+		if (rc != 0) {
+			D_ERROR("d_gettime_coarse() failed, rc: %d.\n", rc);
+			return rc;
+		}
 		deadline = now;
 		d_timeinc(&deadline, (uint64_t)(timeout_us * 1000));
 	}
