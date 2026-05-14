@@ -6745,7 +6745,7 @@ def run(wf, args):
 
     if args.perf_check or fi_test or fi_test_dfuse:
         fi_env = os.environ.copy()
-        fi_env['PATH'] = f'{join(conf["PREFIX"], "bin")}:{fi_env["PATH"]}'
+        fi_env['PATH'] = f'{conf["PREFIX"]}/bin:{fi_env["PATH"]}'
         fs = subprocess.run(['fault_status'], check=False, env=fi_env)
         print(fs)
         if fs.returncode == 0:
