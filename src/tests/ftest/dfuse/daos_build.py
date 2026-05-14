@@ -238,7 +238,7 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfs,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb,stage_ftest
         """
