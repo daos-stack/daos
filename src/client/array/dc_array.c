@@ -1109,6 +1109,7 @@ iod_split(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size, daos_s
 
 	/* Fill up sgl batches to fulfill iod splits */
 	sgl_ix = 0;
+	boff   = 0;
 	for (spl_ix = 0; spl_ix < split->cnt; spl_ix++) {
 		/* Calculate each split's byte size */
 		spl_sz = 0;
@@ -1116,16 +1117,28 @@ iod_split(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size, daos_s
 			spl_sz += split->iod_v[spl_ix].arr_rgs[ix].rg_len;
 		split->nrec[spl_ix] = spl_sz;
 		rgs_sz += spl_sz * cell_size; /* iod size running total */
-
 		/* stuff sgl split */
 		ix = 0;
 		do {
+			len  = sgl->sg_iovs[sgl_ix].iov_len - boff;
 			bptr = (char *)sgl->sg_iovs[sgl_ix].iov_buf + boff;
-			len = sgl->sg_iovs[sgl_ix].iov_len - boff;
-			sgl_sz += len; /* sgl size running total */
-			split->sgl_v[spl_ix].sg_iovs[ix].iov_buf     = bptr;
-			split->sgl_v[spl_ix].sg_iovs[ix].iov_len     = len;
-			split->sgl_v[spl_ix].sg_iovs[ix].iov_buf_len = len;
+			split->sgl_v[spl_ix].sg_iovs[ix].iov_buf = bptr;
+			if (len <= spl_sz) {
+				/* the rest of this sgl segment fits in current iod split */
+				split->sgl_v[spl_ix].sg_iovs[ix].iov_len     = len;
+				split->sgl_v[spl_ix].sg_iovs[ix].iov_buf_len = len;
+				sgl_ix++;
+				boff = 0;
+				sgl_sz += len;
+			} else {
+				/* currentt sgl segment is larger than the remaining split size */
+				tail                                         = len - spl_sz;
+				split->sgl_v[spl_ix].sg_iovs[ix].iov_len     = spl_sz;
+				split->sgl_v[spl_ix].sg_iovs[ix].iov_buf_len = spl_sz;
+				boff += spl_sz;
+				sgl_sz += spl_sz;
+			}
+			spl_sz -= split->sgl_v[spl_ix].sg_iovs[ix].iov_len;
 			ix++;
 			if (ix == split->sgl_v[spl_ix].sg_nr) {
 				d_iov_t *new;
@@ -1137,20 +1150,9 @@ iod_split(daos_array_iod_t *iod, d_sg_list_t *sgl, daos_size_t cell_size, daos_s
 				split->sgl_v[spl_ix].sg_iovs = new;
 				split->sgl_v[spl_ix].sg_nr   = n;
 			}
-			if (len <= spl_sz) {
-				/* sgl segment fits completely in current iod split */
-				boff = 0;
-				sgl_ix++;
-			} else {
-				/* sgl segment is larger than the tail of current iod split */
-				boff = len;
-				break;
-			}
-			spl_sz -= len;
 		} while (spl_sz);
 		split->sgl_v[spl_ix].sg_nr = ix; /* update sgl split to correct count */
 	}
-
 	if (sgl_sz != rgs_sz)
 		goto len_err; /* all this hard work for nothing :( */
 
