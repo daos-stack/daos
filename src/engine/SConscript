@@ -27,7 +27,7 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-    sources = ['drpc_client.c', 'drpc_ras.c',
+    sources = ['drpc_client.c', 'drpc_ras.c', 'drpc_chk.c',
                'drpc_handler.c', 'drpc_listener.c',
                'drpc_progress.c', 'init.c', 'module.c',
                'srv_cli.c', 'profile.c', 'rpc.c',
