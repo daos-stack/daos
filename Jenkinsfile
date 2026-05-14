@@ -1610,7 +1610,7 @@ pipeline {
                                              ' --build-arg COMPILER=covc' +
                                              ' --build-arg CODE_COVERAGE=true' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
-                            installScript: './ci/summary/install_pkgs.sh',
+                            installScript: 'sudo ./ci/summary/install_pkgs.sh',
                             runScriptArgs: [
                                 label: 'Generate Bullseye Report',
                                 script: 'ci/summary/bullseye_report.sh',
