@@ -45,17 +45,10 @@ sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
 mkdir -p nlt_logs
-avail_line=$(grep '^MemAvailable:' /proc/meminfo)
-avail_mem_kib=${avail_line//[^0-9]/}
-if [ "$avail_mem_kib" -lt $((4 * 1024 * 1024)) ]; then
-    echo "ERROR: Less than 4GiB RAM available for nlt_logs tmpfs (${avail_mem_kib} KiB)" >&2
-    exit 1
-fi
 sudo mount -t tmpfs -o size=4g tmpfs nlt_logs
 sudo chown jenkins:jenkins nlt_logs
 
-exec env \
-    TMPDIR="$(pwd)/nlt_logs" \
-    HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
-    NO_PROXY="${DAOS_NO_PROXY:-}" \
-    ./utils/node_local_test.py "$@"
+TMPDIR="$(pwd)/nlt_logs" \
+HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+NO_PROXY="${DAOS_NO_PROXY:-}" \
+exec ./utils/node_local_test.py "$@"
