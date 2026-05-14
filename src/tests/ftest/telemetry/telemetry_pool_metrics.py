@@ -148,7 +148,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             "engine_pool_ops_update",
             "engine_pool_xferred_fetch",
             "engine_pool_xferred_update",
-            "engine_net_cm_rpc_timedout"
+            "engine_net_cm_rpc_timedout",
             "engine_pool_resent"
         ]
         metrics_init = self.get_metrics(metric_names)
