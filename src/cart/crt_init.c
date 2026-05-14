@@ -98,9 +98,10 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("auth_key    = %s\n", opt->cio_auth_key);
 	D_INFO("ep_credits  = %d\n", opt->cio_ep_credits);
 	D_INFO("Flags: fault_inject = %d, use_sensors = %d, thread_mode_single = %d, "
-	       "progress_busy = %d, mem_device = %d\n",
+	       "progress_busy = %d, progress_legacy = %d, mem_device = %d\n",
 	       opt->cio_fault_inject, opt->cio_use_sensors, opt->cio_thread_mode_single,
-	       opt->cio_progress_busy, opt->cio_mem_device);
+	       opt->cio_progress_busy, opt->cio_progress_legacy, opt->cio_mem_device);
+	D_INFO("progress_spindown = %u ms\n", opt->cio_progress_spindown);
 
 	if (opt->cio_use_expected_size)
 		D_INFO("max_expected_size = %d\n", opt->cio_max_expected_size);

@@ -14,6 +14,7 @@
 
 #include "crt_utils.h"
 #include "test_group_np_common.h"
+#include "test_group_np_common_cli.h"
 
 #define NUM_ATTACH_RETRIES	10
 #define TEST_NO_TIMEOUT_BASE    0x010000000
@@ -131,16 +132,7 @@ test_run(void)
 			server_ep.ep_grp = grp;
 			server_ep.ep_rank = rank;
 
-			rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-					    TEST_OPC_SHUTDOWN, &rpc_req);
-			D_ASSERTF(rc == 0 && rpc_req != NULL,
-				  "crt_req_create() failed. "
-				  "rc: %d, rpc_req: %p\n", rc, rpc_req);
-			rc = crt_req_send(rpc_req, client_cb_common, NULL);
-			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
-				  rc);
-
-			crtu_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+			send_rpc_shutdown(server_ep, rpc_req);
 		}
 	}
 

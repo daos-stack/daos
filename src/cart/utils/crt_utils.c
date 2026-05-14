@@ -46,7 +46,7 @@ crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.is_server		= is_server;
 	opts.num_attach_retries	= num_attach_retries;
 	opts.assert_on_error	= assert_on_error;
-	opts.shutdown		= 0;
+	atomic_init(&opts.shutdown, 0);
 	opts.is_swim_enabled	= false;
 	opts.use_daos_agent_env	= false;
 
@@ -81,7 +81,7 @@ crtu_set_shutdown_delay(int delay_sec)
 void
 crtu_progress_stop(void)
 {
-	opts.shutdown = 1;
+	atomic_store(&opts.shutdown, 1);
 }
 
 /* Write a completion file to signal graceful server shutdown */
@@ -122,7 +122,7 @@ crtu_progress_fn(void *data)
 		assert(0);
 	}
 
-	while (opts.shutdown == 0)
+	while (atomic_load(&opts.shutdown) == 0)
 		crt_progress(*p_ctx, 1000);
 
 	if (opts.is_server) {
