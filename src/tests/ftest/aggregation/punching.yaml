@@ -27,7 +27,6 @@ mdtest:
   client_processes:
     np: 2
   test_dir: "/"
-  dfs_destroy: false
   iteration: 1
   manager: "MPICH"
   mdtest_params:
