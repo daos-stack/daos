@@ -310,6 +310,28 @@
 #telemetry_port: 9191
 #
 #
+## Disable automatic restart of engines that self-terminate.
+#
+## When an excluded engine self-terminates, the control plane automatically restarts it
+## by default. Set this option to true to disable automatic restarts entirely.
+#
+## default: false
+#disable_engine_auto_restart: true
+#
+#
+## Minimum delay (in seconds) between automatic restarts of the same rank.
+#
+## When an excluded engine self-terminates, the control plane automatically restarts it
+## after a configurable delay to prevent rapid restart loops. This setting specifies the
+## minimum time that must elapse after restarting a rank before it can be automatically
+## restarted again. If a self-termination event occurs before this delay expires, a
+## deferred restart is scheduled that will automatically trigger when the delay period
+## ends. Multiple events during the delay result in only one deferred restart.
+#
+## default: 300 (5 minutes)
+#engine_auto_restart_min_delay: 120
+#
+#
 ## If desired, a set of client-side environment variables may be
 ## defined here. Note that these are intended to be defaults and
 ## may be overridden by manually-set environment variables when

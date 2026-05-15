@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -944,4 +945,11 @@ func MockHostFabricMap(t *testing.T, scans ...*MockFabricScan) HostFabricMap {
 	}
 
 	return hfm
+}
+
+// MockEventLogger returns EventLogger reference that has no syslog handlers registered.
+func MockEventLogger(logBasic logging.Logger) *EventLogger {
+	return &EventLogger{
+		log: logBasic,
+	}
 }
