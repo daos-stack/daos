@@ -720,7 +720,7 @@ pipeline {
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
                                                   ' --class-name nlt all',
-                                     with_valgrind: 'memcheck'
+                                     with_valgrind: 'memcheck',
                                      valgrind_pattern: '*memcheck.xml',
                                      always_script: 'ci/unit/test_nlt_post.sh',
                                      testResults: 'nlt-junit.xml',
