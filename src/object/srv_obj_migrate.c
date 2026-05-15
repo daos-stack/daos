@@ -1529,6 +1529,8 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
 	D_ASSERT(iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
+
+again:
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, update_eph, VOS_OF_REBUILD,
 			      &mrone->mo_dkey, iod_num, iods, mrone->mo_iods_csums,
 			      0, &ioh, NULL);
@@ -1645,6 +1647,13 @@ end:
 	daos_iov_free(&csum_iov);
 	if (rc == 0)
 		rc = rc1;
+
+	if (rc == -DER_AGAIN) {
+		D_WARN(DF_RB ": migrating dkey " DF_KEY " need to retry\n", DP_RB_MRO(mrone),
+		       DP_KEY(&mrone->mo_dkey));
+		ABT_thread_yield();
+		goto again;
+	}
 
 	if (rc)
 		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate error", DP_RB_MRO(mrone),
