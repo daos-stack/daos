@@ -339,9 +339,28 @@ if [ "$result" -ne 0 ]; then
 fi
 
 set -x
-if [ -n "$FIRST_NODE" ] && ! grep /mnt/share /proc/mounts; then
+if [ -n "$FIRST_NODE" ] && ! grep -qs ' /mnt/share ' /proc/mounts; then
     mkdir -p /mnt/share
-    mount "$FIRST_NODE":/export/share /mnt/share
+    # Retry the NFS mount to handle the case where the NFS server on
+    # FIRST_NODE has not fully registered its exports yet.
+    nfs_mounted=false
+    for attempt in $(seq 1 3); do
+        if mount "$FIRST_NODE":/export/share /mnt/share; then
+            nfs_mounted=true
+            break
+        fi
+        echo "NFS mount attempt $attempt failed, retrying in 5s..."
+        sleep 5
+    done
+    if ! "$nfs_mounted"; then
+        echo "ERROR: NFS mount failed after $attempt attempts:"
+        echo "  $FIRST_NODE:/export/share -> /mnt/share"
+        echo "Exports advertised by $FIRST_NODE:"
+        showmount -e "$FIRST_NODE" || true
+        echo "DNS/hosts resolution for $FIRST_NODE:"
+        getent hosts "$FIRST_NODE" || true
+        exit 32
+    fi
 fi
 
 # The package name defaults to "(root)" unless there is a dot in the
