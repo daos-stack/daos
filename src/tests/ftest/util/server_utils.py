@@ -669,9 +669,7 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
-        # be further investigated.
-        self.dmg.storage_format(timeout=self.storage_format_timeout.value)
+        self.storage_format()
 
         # Wait for all the engines to start
         self.detect_engine_start()
@@ -1001,6 +999,23 @@ class DaosServerManager(SubprocessManager):
                 "investigate/report.***", regex, detected)
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
+
+    def storage_format(self, **kwargs):
+        """Wrapper for dmg storage format that uses self.storage_format_timeout.
+
+        Args:
+            kwargs (dict): keyword args for DmgCommand.storage_format
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage format command fails.
+        """
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = self.storage_format_timeout.value
+        return self.dmg.storage_format(**kwargs)
 
     @fail_on(CommandFailure)
     def system_exclude(self, ranks, copy=False, rank_hosts=None):
