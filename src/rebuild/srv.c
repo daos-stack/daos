@@ -425,6 +425,13 @@ rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen)
 	return found;
 }
 
+/*
+ * Number of seconds without a rebuild IV heartbeat before we consider a rank's
+ * RPT dead and abort rebuild.  Each rank sends IV every RBLD_CHECK_INTV (2s),
+ * so this is ~300 missed heartbeats — clearly the rank's rebuild task is gone.
+ */
+#define RBLD_STALE_RANK_TIMEOUT 600 /* seconds */
+
 static void
 update_and_warn_for_slow_engines(struct rebuild_global_pool_tracker *rgt)
 {
@@ -454,6 +461,24 @@ update_and_warn_for_slow_engines(struct rebuild_global_pool_tracker *rgt)
 				pull_ct++;
 				continue;
 			}
+		}
+
+		/*
+		 * If a rank has sent at least one IV (last_update > 0) but
+		 * has gone silent for RBLD_STALE_RANK_TIMEOUT seconds, its
+		 * rebuild task (RPT) is gone — most likely the rank restarted.
+		 * Abort so rebuild can be re-triggered with the updated state.
+		 */
+		if (rgt->rgt_servers[i].last_update > 0 && !rgt->rgt_servers[i].pull_done &&
+		    tu >= RBLD_STALE_RANK_TIMEOUT) {
+			D_WARN(DF_RB ": rank %u has not sent rebuild IV for"
+				     " %.1f seconds (threshold %d s), rank may have"
+				     " restarted, aborting rebuild\n",
+			       DP_RB_RGT(rgt), r, tu, RBLD_STALE_RANK_TIMEOUT);
+			rgt->rgt_status.rs_errno     = -DER_STALE;
+			rgt->rgt_abort               = 1;
+			rgt->rgt_status.rs_fail_rank = r;
+			return;
 		}
 
 		if (!do_warn)
@@ -788,6 +813,15 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 /*
  * Restart rebuild if \a rank's rebuild not finished.
  * Only used for massive failure recovery case, see pool_restart_rebuild_if_rank_wip().
+ *
+ * Note: we no longer abort rebuild here based on a CRT_EVT_ALIVE event, because
+ * ALIVE can be triggered by a SWIM SUSPECT->ALIVE refutation (rank alive, RPT intact)
+ * as well as by a true rank restart.  The two are indistinguishable at ALIVE time.
+ *
+ * Instead, abort is handled by update_and_warn_for_slow_engines(), which detects
+ * that a rank has stopped sending rebuild IV heartbeats for longer than
+ * RBLD_STALE_RANK_TIMEOUT seconds — a reliable indicator that the rank's RPT
+ * is gone (restarted).
  */
 void
 ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank)
@@ -799,29 +833,16 @@ ds_rebuild_restart_if_rank_wip(uuid_t pool_uuid, d_rank_t rank)
 	if (rgt == NULL)
 		return;
 
-	if (rgt->rgt_status.rs_state != DRS_IN_PROGRESS) {
-		rgt_put(rgt);
-		return;
-	}
-
 	for (i = 0; i < rgt->rgt_servers_number; i++) {
 		if (rgt->rgt_servers[i].rank == rank) {
-			if (!rgt->rgt_servers[i].pull_done) {
-				rgt->rgt_status.rs_errno = -DER_STALE;
-				rgt->rgt_abort = 1;
-				rgt->rgt_status.rs_fail_rank = rank;
-				D_INFO(DF_RB ": abort rebuild because rank %d WIP\n",
-				       DP_RB_RGT(rgt), rank);
-			}
-			rgt_put(rgt);
-			return;
+			D_INFO(DF_RB ": rank %d got CRT_EVT_ALIVE, pull_done=%d"
+				     " (stale rank detection deferred to IV timeout)\n",
+			       DP_RB_RGT(rgt), rank, rgt->rgt_servers[i].pull_done);
+			break;
 		}
 	}
 
-	D_INFO(DF_RB ": rank %d not in rgt_servers,  rgt_servers_number %d\n",
-	       DP_RB_RGT(rgt), rank, rgt->rgt_servers_number);
 	rgt_put(rgt);
-	return;
 }
 
 /* TODO: Add something about what the current operation is for output status */
