@@ -988,6 +988,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
+                                         with_valgrind: '',
                                          FI: true
                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
                                                       scm: 'daos-stack/daos',
