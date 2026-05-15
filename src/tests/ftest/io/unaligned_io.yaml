@@ -19,7 +19,6 @@ server_config:
         - DAOS_MD_CAP=1024
         - DD_MASK=mgmt,md,any
         - D_LOG_FILE_APPEND_PID=1
-        - COVFILE=/tmp/test.cov
       storage: auto
     1:
       targets: 8
@@ -33,7 +32,6 @@ server_config:
         - DAOS_MD_CAP=1024
         - DD_MASK=mgmt,md,any
         - D_LOG_FILE_APPEND_PID=1
-        - COVFILE=/tmp/test.cov
       storage: auto
 
 pool:

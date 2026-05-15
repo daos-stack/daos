@@ -117,7 +117,7 @@ class NLTConf():
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
         if args.class_name:
-            self.tmp_dir = join('nlt_logs', args.class_name)
+            self.tmp_dir = join(args.log_base_dir, args.class_name)
             if os.path.exists(self.tmp_dir):
                 for old_file in os.listdir(self.tmp_dir):
                     os.unlink(join(self.tmp_dir, old_file))
@@ -445,6 +445,11 @@ def get_base_env(clean=False):
     no_proxy = os.environ.get('NO_PROXY')
     if no_proxy:
         env['NO_PROXY'] = no_proxy
+
+    # If set, retain the COVFILE for bullseye code coverage
+    covfile = os.environ.get('COVFILE')
+    if covfile:
+        env['COVFILE'] = covfile
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
@@ -6867,6 +6872,7 @@ def main():
     parser.add_argument('--exclude-test', action='append',
                         help='space separated list of tests to exclude')
     parser.add_argument('--valgrind_verbose', action='store_true', help='Use --verbose w/ valgrind')
+    parser.add_argument('--log-base-dir', default='nlt_logs', help='Base directory for log files')
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
 

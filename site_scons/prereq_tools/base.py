@@ -512,7 +512,7 @@ class PreReqComponent():
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
                               ['default', 'dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('COMPILER', "Set the compiler family to use", 'gcc',
-                              ['gcc', 'covc', 'clang'], ignorecase=2))
+                              ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
@@ -679,33 +679,31 @@ class PreReqComponent():
                 os.remove(covfile)
             commands = [['$COV01', '-1'],
                         ['$COV01', '-s'],
-                        ['$CVS', '--add', '!**/src/cart/test/utest/'],
-                        ['$CVS', '--add', '!**/src/common/tests/'],
-                        ['$CVS', '--add', '!**/src/gurt/tests/'],
-                        ['$CVS', '--add', '!**/src/iosrv/tests/'],
-                        ['$CVS', '--add', '!**/src/mgmt/tests/'],
-                        ['$CVS', '--add', '!**/src/object/tests/'],
-                        ['$CVS', '--add', '!**/src/placement/tests/'],
-                        ['$CVS', '--add', '!**/src/rdb/tests/'],
-                        ['$CVS', '--add', '!**/src/security/tests/'],
-                        ['$CVS', '--add', '!**/src/utils/self_test/'],
-                        ['$CVS', '--add', '!**/src/utils/ctl/'],
-                        ['$CVS', '--add', '!**/src/vea/tests/'],
-                        ['$CVS', '--add', '!**/src/vos/tests/'],
-                        ['$CVS', '--add', '!**/src/engine/tests/'],
                         ['$CVS', '--add', '!**/src/tests/'],
                         ['$CVS', '--add', '!**/src/bio/smd/tests/'],
                         ['$CVS', '--add', '!**/src/cart/crt_self_test.h'],
                         ['$CVS', '--add', '!**/src/cart/crt_self_test_client.c'],
                         ['$CVS', '--add', '!**/src/cart/crt_self_test_service.c'],
                         ['$CVS', '--add', '!**/src/client/api/tests/'],
-                        ['$CVS', '--add', '!**/src/client/dfuse/test/'],
-                        ['$CVS', '--add', '!**/src/gurt/examples/'],
-                        ['$CVS', '--add', '!**/src/utils/crt_launch/'],
-                        ['$CVS', '--add', '!**/src/utils/daos_autotest.c'],
-                        ['$CVS', '--add', '!**/src/placement/ring_map.c'],
+                        ['$CVS', '--add', '!**/src/common/tests/'],
                         ['$CVS', '--add', '!**/src/common/tests_dmg_helpers.c'],
-                        ['$CVS', '--add', '!**/src/common/tests_lib.c']]
+                        ['$CVS', '--add', '!**/src/common/tests_lib.c'],
+                        ['$CVS', '--add', '!**/src/dtx/tests/'],
+                        ['$CVS', '--add', '!**/src/engine/tests/'],
+                        ['$CVS', '--add', '!**/src/gurt/examples/'],
+                        ['$CVS', '--add', '!**/src/gurt/tests/'],
+                        ['$CVS', '--add', '!**/src/mgmt/tests/'],
+                        ['$CVS', '--add', '!**/src/object/tests/'],
+                        ['$CVS', '--add', '!**/src/placement/ring_map.c'],
+                        ['$CVS', '--add', '!**/src/placement/tests/'],
+                        ['$CVS', '--add', '!**/src/rdb/tests/'],
+                        ['$CVS', '--add', '!**/src/security/tests/'],
+                        ['$CVS', '--add', '!**/src/utils/daos_autotest.c'],
+                        ['$CVS', '--add', '!**/src/utils/crt_launch/'],
+                        ['$CVS', '--add', '!**/src/utils/ctl/'],
+                        ['$CVS', '--add', '!**/src/utils/self_test/'],
+                        ['$CVS', '--add', '!**/src/vea/tests/'],
+                        ['$CVS', '--add', '!**/src/vos/tests/']]
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -61,6 +61,9 @@ class ExecutableCommand(CommandWithParameters):
         self.output_check = "both"
         self.verbose = True
         self.env = EnvironmentVariables()
+        _cov_file = os.path.join(os.sep, "tmp", "test.cov")
+        if os.path.exists(_cov_file):
+            self.env["COVFILE"] = _cov_file
 
         # User to run the command as. "root" is equivalent to sudo
         self.run_user = run_user

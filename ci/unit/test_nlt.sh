@@ -3,7 +3,7 @@
 # This is the script used for running utils/node_local_test.py (NLT)
 set -uex
 
-rm -rf nlt_logs
+rm -rf nlt_logs nlt_bullseye_logs
 
 # Remove any logs from a previous run
 rm -rf dnt.*.memcheck.xml vm_test/

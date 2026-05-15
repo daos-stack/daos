@@ -60,13 +60,40 @@ add_repo() {
     fi
 }
 
+add_inst_repo() {
+    local repo="$1"
+    local branch="$2"
+    local build_number="$3"
+    local bullseye="${4:-false}"
+    local sudo="${5:-false}"
+    local dnf_cmd="dnf -y"
+    local repo_base="${ARTIFACTS_URL:-${JENKINS_URL}job/}daos-stack/job/${repo}/job/${branch//\//%252F}/${build_number}/artifact/artifacts"
+    local repo_url="${repo_base}/$DISTRO_NAME/"
+    if [ "$bullseye" = true ]; then
+        repo_url="${repo_base}/${DISTRO_NAME}-bullseye/"
+    fi
+    if [ "$sudo" = true ]; then
+        dnf_cmd="sudo dnf -y"
+    fi
+    "${dnf_cmd}" -y config-manager --add-repo="$repo_url"
+    repo="$(url_to_repo "$repo_url")"
+    # PR-repos: should always be able to upgrade modular packages
+    "${dnf_cmd}" config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
+    disable_gpg_check "$repo_url" "$sudo"
+}
+
 disable_gpg_check() {
     local url="$1"
+    local sudo="${2:-false}"
+    local dnf_cmd="dnf -y"
+    if [ "$sudo" = true ]; then
+        dnf_cmd="sudo dnf -y"
+    fi
 
     repo="$(url_to_repo "$url")"
     # bug in EL7 DNF: this needs to be enabled before it can be disabled
-    dnf -y config-manager --save --setopt="$repo".gpgcheck=1
-    dnf -y config-manager --save --setopt="$repo".gpgcheck=0
+    "${dnf_cmd}" config-manager --save --setopt="$repo".gpgcheck=1
+    "${dnf_cmd}" config-manager --save --setopt="$repo".gpgcheck=0
     # but even that seems to be not enough, so just brute-force it
     if [ -d /etc/yum.repos.d ] &&
        ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
@@ -304,6 +331,8 @@ update_repos() {
 }
 
 post_provision_config_nodes() {
+    local bullseye="${1:-false}"
+
     # shellcheck disable=SC2154
     if ! update_repos "$DISTRO_NAME"; then
         # need to use the image supplied repos
@@ -379,16 +408,7 @@ post_provision_config_nodes() {
                 branch="${branch%:*}"
             fi
         fi
-        local subdir
-        if ! $COVFN_DISABLED; then
-            subdir="bullseye/"
-        fi
-        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/"${subdir:-}"$DISTRO_NAME/
-        dnf -y config-manager --add-repo="$repo_url"
-        repo="$(url_to_repo "$repo_url")"
-        # PR-repos: should always be able to upgrade modular packages
-        dnf -y config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
-        disable_gpg_check "$repo_url"
+        add_inst_repo "${repo}" "${branch}" "${build_number}" "${bullseye}"
     done
 
     # start with everything fully up-to-date
