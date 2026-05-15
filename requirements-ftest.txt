@@ -5,3 +5,4 @@ clustershell
 paramiko
 distro
 torch
+mpi4py
