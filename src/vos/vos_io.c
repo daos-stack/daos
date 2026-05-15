@@ -2227,7 +2227,19 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	if (rc == -DER_NOSPACE) {
 		now = daos_gettime_coarse();
 		if (now - ioc->ic_cont->vc_io_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
-			D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n", size, DP_RC(rc));
+			struct vos_pool_space vps = {0};
+			int                   qrc;
+
+			qrc = vos_space_query(vos_cont2pool(ioc->ic_cont), &vps, false);
+			if (qrc == 0)
+				D_ERROR("Reserve " DF_U64 " from NVMe failed (nvme_free:" DF_U64
+					" nvme_tot:" DF_U64 " nvme_sys:" DF_U64 "). " DF_RC "\n",
+					size, NVME_FREE(&vps), NVME_TOTAL(&vps), NVME_SYS(&vps),
+					DP_RC(rc));
+			else
+				D_ERROR("Reserve " DF_U64 " from NVMe failed. " DF_RC
+					" (space query also failed: " DF_RC ")\n",
+					size, DP_RC(rc), DP_RC(qrc));
 			ioc->ic_cont->vc_io_nospc_ts = now;
 		}
 	} else if (rc) {
