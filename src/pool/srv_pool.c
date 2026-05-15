@@ -7583,7 +7583,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * Do not change the pool map if the `pw_rf` is broken or is about to break,
 	 * unless the force option is given.
 	 */
-	if (!(flags & POOL_TGT_UPDATE_SKIP_RF_CHECK) && opc == MAP_EXCLUDE) {
+	if (!(flags & POOL_TGT_UPDATE_SKIP_RF_CHECK) && opc == MAP_EXCLUDE &&
+	    !DAOS_FAIL_CHECK(DAOS_POOL_TGT_UPDATE_SKIP_RF_CHECK)) {
 		int failed_cnt;
 
 		rc = pool_map_update_failed_cnt(map);
