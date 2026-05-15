@@ -608,6 +608,17 @@ enum {
 	VOS_AGG_FL_FORCE_MERGE	= (1UL << 1),	/* Merge all coalesce-able EV records */
 };
 
+/** Output flags reported by vos_aggregate_obj() to its caller. */
+enum {
+	/**
+	 * Uncommitted DTX(s) prevented (a portion of) the per-object aggregation
+	 * pass from completing. The caller MUST NOT advance the container
+	 * highest-aggregated-epoch barrier (cd_hae) for the current epoch range
+	 * until those DTXs settle, otherwise data could be silently lost.
+	 */
+	VOS_AGG_OUT_IN_PROGRESS	= (1UL << 0),
+};
+
 /**
  * Aggregates all epochs within the epoch range \a epr.
  * Data in all these epochs will be aggregated to the last epoch
@@ -625,6 +636,58 @@ enum {
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
+
+/**
+ * Aggregate a single object within the epoch range \a epr.
+ *
+ * Behaves like vos_aggregate() but is scoped to one object ID instead of
+ * iterating every object in the container. This entry point is intended for
+ * external aggregation drivers: a caller (e.g. the container server) iterates
+ * objects within a container itself and dispatches per-object aggregation
+ * through this API, optionally placing each call into a separate ULT.
+ *
+ * Unlike vos_aggregate(), this function does NOT advance the container
+ * highest-aggregated-epoch (cd_hae). The caller is responsible for advancing
+ * the container barrier (via vos_aggregate_advance_hae()) once all objects in
+ * the epoch range have been processed and \a out_flags reports no
+ * VOS_AGG_OUT_IN_PROGRESS for any of them.
+ *
+ * \param coh         [IN]   Container open handle
+ * \param oid         [IN]   Object ID to aggregate
+ * \param epr         [IN]   The epoch range of aggregation
+ * \param yield_func  [IN]   Pointer to customized yield function
+ * \param yield_arg   [IN]   Argument of yield function
+ * \param flags       [IN]   Aggregation flags (see VOS_AGG_FL_*)
+ * \param out_flags   [OUT]  Optional. If non-NULL, OR'ed with VOS_AGG_OUT_*
+ *                           bits describing notable conditions encountered
+ *                           during the pass (e.g. uncommitted DTXs blocked
+ *                           aggregation).
+ *
+ * \return            Zero on success, negative value if error.
+ */
+int
+vos_aggregate_obj(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+		  int (*yield_func)(void *arg), void *yield_arg, uint32_t flags,
+		  unsigned int *out_flags);
+
+/**
+ * Advance the container highest-aggregated-epoch barrier (cd_hae).
+ *
+ * This is the companion of vos_aggregate_obj() for external drivers: once a
+ * caller has driven per-object aggregation across an epoch range and observed
+ * no VOS_AGG_OUT_IN_PROGRESS, it calls this API to commit the new barrier so
+ * subsequent operations (e.g. snapshot deletion accounting, scrubbing) see the
+ * advanced epoch.
+ *
+ * cd_hae moves monotonically: calls with \a epoch <= current cd_hae are no-ops.
+ *
+ * \param coh   [IN]   Container open handle
+ * \param epoch [IN]   The new highest aggregated epoch.
+ *
+ * \return     Zero on success, negative value if error.
+ */
+int
+vos_aggregate_advance_hae(daos_handle_t coh, daos_epoch_t epoch);
 
 /**
  * Round up the scm and meta sizes to match the backend requirement.
