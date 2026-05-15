@@ -100,6 +100,10 @@ Refer to the example configuration file
 [daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 for latest information and examples.
 
+When intentionally running DAOS without bdevs/NVMe, administrators should also set
+`disable_hugepages: true` in the server configuration file to avoid allocating unnecessary
+hugepages, as hugepages are required for SPDK NVMe device access.
+
 #### MD-on-SSD Configuration
 
 To enable MD-on-SSD, the Control-Plane-Metadata (`control_metadata`) global section of the
