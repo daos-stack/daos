@@ -6,9 +6,14 @@
 set -uex
 
 id
+if [ "$(id -u)" = "0" ]; then
+    echo "Should not be run as root"
+    exit 1
+fi
 
 # Distro name for the repository path for accessing packages built by CI
 export DISTRO_NAME="${1:-el9}"
+code_coverage="${2:-false}"
 
 # Import provisioning functions to add the repo
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -24,7 +29,7 @@ done
 env | sort -n
 
 # Add the repo for packages built by CI
-add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}" "true"
+add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}" "${code_coverage}" "true"
 
 # Install bullseye
 bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"
