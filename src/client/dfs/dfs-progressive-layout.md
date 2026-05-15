@@ -60,10 +60,17 @@ The 1000-target threshold is an initial value and should be validated with perfo
 
 ### 2) Head EC data/parity selection
 
+Progressive layout is only enabled for the default file-oclass path.
+
+If the user explicitly selects a file object class through container create parameters,
+directory settings, or the DFS API, use that class directly and do not apply progressive
+layout for that file.
+
 When progressive layout is enabled:
 
 - Select head EC data/parity using the same RF/domain logic as dc_set_oclass().
 - Keep this behavior aligned with existing DAOS defaults for array objects.
+- Use the default DAOS GX class for the tail object.
 - On large systems with many fault domains and targets, EC16P3 is commonly selected by this logic.
 
 Only the redundancy group count (G value) and split_off are introduced as additional policy choices here.
@@ -72,7 +79,7 @@ Only the redundancy group count (G value) and split_off are introduced as additi
 
 Choose a fixed head group count from this set (the predefined group number values for object classes):
 
-- {1, 2, 3, 4, 6, 8, 12, 16, 32}
+- {1, 2, 4, 6, 8, 12, 16, 32}
 
 Inputs:
 
