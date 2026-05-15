@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,6 +28,8 @@ extern "C" {
 #define DAOS_ARRAY_LIST_IO_LIMIT 16384
 /** Tiny recx limit (in bytes) in the array IODs where the list limit is high */
 #define DAOS_ARRAY_RG_LEN_THD    16
+/** array iod split size */
+#define DAOS_ARRAY_IOD_SPLIT     4096
 
 /** Range of contiguous records */
 typedef struct {
