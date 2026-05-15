@@ -720,6 +720,10 @@ pipeline {
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
                                                   ' --class-name nlt all',
+                                     with_valgrind: 'memcheck'
+                                     valgrind_pattern: '*memcheck.xml',
+                                     always_script: 'ci/unit/test_nlt_post.sh',
+                                     testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9'),
@@ -734,8 +738,9 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'nlt-memcheck'
+                                         valgrind_stash: 'nlt-memcheck',
+                                         valgrind_pattern: '*memcheck.xml',
+                                         NLT: true
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -970,6 +975,9 @@ pipeline {
                                                   ' --log-usage-import nltr.json' +
                                                   ' --log-usage-save nltr.xml' +
                                                   ' --class-name fault-injection fi',
+                                     with_valgrind: '',
+                                     always_script: 'ci/unit/test_nlt_post.sh',
+                                     testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
@@ -980,7 +988,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh'
+                                         FI: true
                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
                                                       scm: 'daos-stack/daos',
                                                       requiredResult: hudson.model.Result.UNSTABLE
