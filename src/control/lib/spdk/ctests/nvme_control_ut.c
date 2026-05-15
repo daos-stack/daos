@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,7 +97,7 @@ mock_spdk_nvme_ctrlr_get_pci_device(struct spdk_nvme_ctrlr *ctrlr)
 }
 
 static int
-mock_spdk_pci_device_get_socket_id(struct spdk_pci_device *dev)
+mock_spdk_pci_device_get_numa_id(struct spdk_pci_device *dev)
 {
 	(void)dev;
 	return 1;
@@ -217,7 +217,7 @@ test_collect(void **state)
 
 	assert_null(test_ret->ctrlrs);
 	_collect(test_ret, &mock_copy_ctrlr_data, &mock_spdk_nvme_ctrlr_get_pci_device,
-		 &mock_spdk_pci_device_get_socket_id, &mock_spdk_pci_device_get_type);
+		 &mock_spdk_pci_device_get_numa_id, &mock_spdk_pci_device_get_type);
 
 	if (test_ret->rc != 0)
 		fprintf(stderr, "collect err: %s\n", test_ret->info);
