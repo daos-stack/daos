@@ -13,6 +13,7 @@
 #include <daos/container.h>
 #include <daos/event.h>
 #include <daos/object.h>
+#include <daos/pool.h>
 
 #include "dfs_internal.h"
 
@@ -32,6 +33,118 @@ open_file_tail(dfs_t *dfs, daos_obj_id_t tail_oid, int daos_mode, daos_size_t ch
 	if (rc != 0) {
 		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
+	}
+
+	return 0;
+}
+
+/* Pick the compact head class by keeping the tail redundancy family and reducing group count. */
+static daos_oclass_id_t
+file_head_oclass(daos_oclass_id_t tail_cid, uint32_t max_groups)
+{
+	static const uint32_t head_groups[] = {32, 16, 12, 8, 6, 4, 2, 1};
+	enum daos_obj_redun   ord;
+	uint32_t              group_nr;
+	int                   i;
+
+	if (max_groups == 0)
+		return OC_UNKNOWN;
+
+	/*
+	 * Bias the head toward a compact layout by starting from one eighth of the maximum scalable
+	 * group count of the default tail class. This keeps the head materially smaller than the
+	 * tail while still allowing it to grow with larger systems.
+	 */
+	group_nr = max_groups / 8;
+	/*
+	 * The compact head policy is bounded to the predefined non-GX class set we support here, so
+	 * clamp the computed target into that range before snapping it to an actual class.
+	 */
+	group_nr = min(max(group_nr, 1U), 32U);
+	/*
+	 * DAOS only provides explicit classes for a fixed set of group counts. Pick the largest
+	 * supported count that does not exceed the compact target so we preserve the intended
+	 * compactness without inventing an unsupported class id.
+	 */
+	for (i = 0; i < ARRAY_SIZE(head_groups); i++) {
+		if (head_groups[i] <= group_nr)
+			return OBJ_CLASS_DEF(tail_cid >> OC_REDUN_SHIFT, head_groups[i]);
+	}
+
+	ord = tail_cid >> OC_REDUN_SHIFT;
+	return OBJ_CLASS_DEF(ord, 1);
+}
+
+/* Resolve file head/tail oclasses, applying PL only when no explicit file class was selected. */
+static int
+file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_oclass_id_t *head_cid,
+	      daos_oclass_id_t *tail_cid, bool *has_tail)
+{
+	daos_pool_info_t         pool_info = {0};
+	struct daos_oclass_attr *tail_attr;
+	uint32_t                 max_groups;
+	int                      rc;
+
+	if (head_cid == NULL || tail_cid == NULL || has_tail == NULL)
+		return EINVAL;
+
+	if (cid == 0) {
+		/* Respect explicit file-class choices before considering progressive layout
+		 * defaults. */
+		if (parent->d.oclass == 0)
+			cid = dfs->attr.da_file_oclass_id;
+		else
+			cid = parent->d.oclass;
+	}
+
+	*head_cid = cid;
+	*tail_cid = OC_UNKNOWN;
+	*has_tail = false;
+
+	if (cid != 0 || !dfs_file_layout_has_tail(dfs->layout_v, S_IFREG))
+		return 0;
+
+	rc = daos_pool_query(dfs->poh, NULL, &pool_info, NULL, NULL);
+	if (rc != 0) {
+		D_ERROR("daos_pool_query() failed " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	if (pool_info.pi_ntargets < 1000)
+		return 0;
+
+	/* Use the default DAOS file class as the wide tail and derive the compact head from it. */
+	rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, dfs->file_oclass_hint, 0, tail_cid);
+	if (rc != 0) {
+		D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	tail_attr = daos_oclass_id2attr(*tail_cid, &max_groups);
+	if (tail_attr == NULL)
+		return EINVAL;
+
+	if (max_groups == 0)
+		goto out;
+
+	/* Keep the tail redundancy family and only compact the head by reducing its group count. */
+	*head_cid = file_head_oclass(*tail_cid, max_groups);
+	if (*head_cid == OC_UNKNOWN)
+		goto out;
+
+	*has_tail = true;
+
+out:
+	if (*has_tail) {
+		char head_oclass_name[MAX_OBJ_CLASS_NAME_LEN] = "unknown";
+		char tail_oclass_name[MAX_OBJ_CLASS_NAME_LEN] = "none";
+
+		if (daos_oclass_id2name(*head_cid, head_oclass_name) != 0)
+			snprintf(head_oclass_name, sizeof(head_oclass_name), "%u", *head_cid);
+		if (daos_oclass_id2name(*tail_cid, tail_oclass_name) != 0)
+			snprintf(tail_oclass_name, sizeof(tail_oclass_name), "%u", *tail_cid);
+		D_DEBUG(DB_TRACE, "file create oclass selection: head=%s(%u), tail=%s(%u)\n",
+			head_oclass_name, *head_cid, tail_oclass_name, *tail_cid);
 	}
 
 	return 0;
@@ -168,6 +281,7 @@ static int
 open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
 	  struct dfs_entry *entry, daos_size_t *size, size_t len, dfs_obj_t *file)
 {
+	daos_oclass_id_t tail_cid = OC_UNKNOWN;
 	bool exists;
 	int  daos_mode;
 	bool oexcl  = flags & O_EXCL;
@@ -183,13 +297,9 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		 * - Without O_EXCL we can just open the file.
 		 */
 
-		/** set oclass for file. order: API, parent dir, cont default */
-		if (cid == 0) {
-			if (parent->d.oclass == 0)
-				cid = dfs->attr.da_file_oclass_id;
-			else
-				cid = parent->d.oclass;
-		}
+		rc = file_oclasses(dfs, parent, cid, &cid, &tail_cid, &file->f.has_tail);
+		if (rc != 0)
+			return rc;
 
 		/** same logic for chunk size */
 		if (chunk_size == 0) {
@@ -204,9 +314,13 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		if (rc != 0)
 			return rc;
 		oid_cp(&entry->oid, file->oid);
+		entry->oclass     = cid;
+		entry->tail_oid   = DAOS_OBJ_NIL;
+		entry->tail_state = DFS_TAIL_NONE;
+		file->f.tail_oid  = DAOS_OBJ_NIL;
 
-		if (dfs_file_layout_has_tail(dfs->layout_v, file->mode)) {
-			rc = oid_gen(dfs, cid, true, &file->f.tail_oid);
+		if (file->f.has_tail) {
+			rc = oid_gen(dfs, tail_cid, true, &file->f.tail_oid);
 			if (rc != 0)
 				return rc;
 			oid_cp(&entry->tail_oid, file->f.tail_oid);
@@ -819,7 +933,8 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	obj->mode               = obj_glob->mode;
 	obj->dfs                = dfs;
 	obj->flags              = flags ? flags : obj_glob->flags;
-	obj->f.has_tail         = dfs_file_layout_has_tail(dfs->layout_v, obj->mode);
+	obj->f.has_tail         = dfs_file_layout_has_tail(dfs->layout_v, obj->mode) &&
+			  !daos_obj_id_is_nil(obj->f.tail_oid);
 
 	daos_mode = get_daos_obj_mode(obj->flags);
 	if (daos_mode == -1) {
