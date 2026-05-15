@@ -83,6 +83,8 @@ nav:
       - 'System Deployment': 'admin/deployment.md'
       - 'System Administration': 'admin/administration.md'
       - 'Pool Operations': 'admin/pool_operations.md'
+      - 'Detailed Pool Operations: Self-Healing Configuration': 'admin/self_healing.md'
+      - 'Detailed Pool Operations: Interactive Rebuild Controls': 'admin/rebuild_controls.md'
       - 'Tiering and Unified Namespace': 'admin/tiering_uns.md'
       - 'Performance Tuning': 'admin/performance_tuning.md'
       - 'Troubleshooting': 'admin/troubleshooting.md'
