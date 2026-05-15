@@ -24,7 +24,7 @@
 
 Name:          daos
 Version:       2.9.100
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -583,6 +583,9 @@ fi
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 %{_bindir}/crt_launch
+%{_bindir}/crt_perf_server
+%{_bindir}/crt_rate
+%{_bindir}/crt_bw*
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
