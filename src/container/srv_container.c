@@ -4831,6 +4831,7 @@ out:
 /* argument type for callback function to filter containers */
 struct filter_cont_iter_args {
 	uuid_t				 pool_uuid;
+	uint8_t                          cont_proto_ver;
 
 	/* Filter criteria specification */
 	daos_pool_cont_filter_t		*filt;
@@ -4857,11 +4858,6 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	bool				 filt_match = false;
 	int				 rc;
 	(void)val;
-	uint8_t proto_ver;
-
-	rc = ds_cont_rpc_protocol(&proto_ver);
-	if (rc)
-		return rc;
 
 	if (key->iov_len != sizeof(uuid_t)) {
 		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
@@ -4908,9 +4904,7 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	ap->ncont++;
 	uuid_copy(pcinfo->pci_id.pci_uuid, cont_uuid);
 
-	/* TODO: Specify client cont_proto_version. This is invoked from a pool client RPC */
-	rc = cont_info_read(ap->tx, cont, proto_ver /* engine protocol version */,
-			    &pcinfo->pci_cinfo);
+	rc = cont_info_read(ap->tx, cont, ap->cont_proto_ver, &pcinfo->pci_cinfo);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": read container info failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
@@ -4950,7 +4944,7 @@ out_cont:
  *				(number of items populated in conts[]).
  */
 int
-ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
+ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt, uint8_t cont_proto_ver,
 	       struct daos_pool_cont_info2 **conts, uint64_t *ncont)
 {
 	int				 rc;
@@ -4962,6 +4956,7 @@ ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 	*ncont = 0;
 
 	uuid_copy(args.pool_uuid, pool_uuid);
+	args.cont_proto_ver = cont_proto_ver;
 	args.filt = filt;
 	args.ncont = 0;			/* number of containers in the pool */
 	args.conts_len = 0;		/* allocated length of conts[] */
@@ -6180,11 +6175,6 @@ ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks
 	struct dss_module_info      *info = dss_get_module_info();
 	crt_rpc_t                   *rpc;
 	struct cont_prop_set_v8_out *out;
-	uint8_t                      cont_ver;
-
-	rc = ds_cont_rpc_protocol(&cont_ver);
-	if (rc)
-		return rc;
 
 	D_DEBUG(DB_MGMT, DF_UUID "/%s: Setting container prop\n", DP_UUID(pool_uuid), cont_id);
 
@@ -6259,14 +6249,10 @@ ds_cont_set_prop_srv_handler(crt_rpc_t *rpc)
 	char                         cont_id[DAOS_PROP_MAX_LABEL_BUF_LEN] = {0};
 	daos_prop_t                 *prop;
 	struct cont                 *cont;
-	uint8_t                      cont_ver;
-
-	rc = ds_cont_rpc_protocol(&cont_ver);
-	if (rc)
-		D_GOTO(out, rc);
 	/*
 	 * Server RPCs don't have pool or container handles. Just need the pool
-	 * and container IDs.
+	 * and container IDs. The request layout is determined by the sender's
+	 * RPC opcode version; cont_prop_set_in_get_data() uses rpc->cr_opc.
 	 */
 	cont_prop_set_in_get_data(rpc, &prop, &pool_uuid, &cont_uuid, &cont_label);
 	if (opc == CONT_PROP_SET_BYLABEL)
