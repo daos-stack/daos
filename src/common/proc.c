@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -106,6 +107,45 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 		} else if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST) {
 			rc = crt_proc_d_rank_list_t(proc, proc_op,
 					(d_rank_list_t **)&entry->dpe_val_ptr);
+		} else if (entry->dpe_type == DAOS_PROP_PO_POOL_CA ||
+			   entry->dpe_type == DAOS_PROP_PO_CERT_WATERMARKS) {
+			struct daos_prop_byteval *bv;
+			uint64_t                  len = 0;
+
+			if (FREEING(proc_op)) {
+				if (entry->dpe_val_ptr) {
+					bv = entry->dpe_val_ptr;
+					D_FREE(bv->dpb_data);
+					D_FREE(entry->dpe_val_ptr);
+				}
+				break;
+			}
+			if (ENCODING(proc_op) && entry->dpe_val_ptr) {
+				bv  = entry->dpe_val_ptr;
+				len = bv->dpb_len;
+			}
+			rc = crt_proc_uint64_t(proc, proc_op, &len);
+			if (rc)
+				break;
+			if (DECODING(proc_op) && len > 0) {
+				D_ALLOC_PTR(bv);
+				if (bv == NULL) {
+					rc = -DER_NOMEM;
+					break;
+				}
+				D_ALLOC(bv->dpb_data, len);
+				if (bv->dpb_data == NULL) {
+					D_FREE(bv);
+					rc = -DER_NOMEM;
+					break;
+				}
+				bv->dpb_len        = len;
+				entry->dpe_val_ptr = bv;
+			}
+			if (len > 0) {
+				bv = entry->dpe_val_ptr;
+				rc = crt_proc_memcpy(proc, proc_op, bv->dpb_data, len);
+			}
 		} else if (entry->dpe_type == DAOS_PROP_CO_ROOTS) {
 			struct daos_prop_co_roots *roots;
 

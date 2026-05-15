@@ -182,6 +182,9 @@ static struct daos_rpc_handler pool_handlers_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
 static struct daos_rpc_handler pool_handlers_v7[] = {POOL_PROTO_CLI_RPC_LIST(7)
 							 POOL_PROTO_SRV_RPC_LIST(7)};
 
+static struct daos_rpc_handler pool_handlers_v8[] = {POOL_PROTO_CLI_RPC_LIST(8)
+							 POOL_PROTO_SRV_RPC_LIST(8)};
+
 #undef X
 
 static void *
@@ -242,14 +245,14 @@ struct dss_module pool_module = {
     .sm_name        = "pool",
     .sm_mod_id      = DAOS_POOL_MODULE,
     .sm_ver         = DAOS_POOL_VERSION,
-    .sm_proto_count = 2,
+    .sm_proto_count = 3,
     .sm_init        = init,
     .sm_fini        = fini,
     .sm_setup       = setup,
     .sm_cleanup     = cleanup,
-    .sm_proto_fmt   = {&pool_proto_fmt_v6, &pool_proto_fmt_v7},
-    .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
-    .sm_handlers    = {pool_handlers_v6, pool_handlers_v7},
+    .sm_proto_fmt   = {&pool_proto_fmt_v6, &pool_proto_fmt_v7, &pool_proto_fmt_v8},
+    .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
+    .sm_handlers    = {pool_handlers_v6, pool_handlers_v7, pool_handlers_v8},
     .sm_key         = &pool_module_key,
     .sm_metrics     = &pool_metrics,
 };

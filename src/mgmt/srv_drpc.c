@@ -274,8 +274,9 @@ conv_req_props(daos_prop_t **out_prop, bool set_props,
 				D_GOTO(out, rc = -DER_PROTO);
 			}
 
-			D_STRNDUP(entry->dpe_str, req_props[i]->strval,
-				DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(entry->dpe_str,
+				  req_props[i]->strval,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			break;
@@ -1224,6 +1225,21 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 					D_GOTO(out, rc);
 				resp_props[j]->value_case =
 					MGMT__POOL_PROPERTY__VALUE_STRVAL;
+				break;
+			case DAOS_PROP_PO_POOL_CA:
+			case DAOS_PROP_PO_CERT_WATERMARKS:
+				resp_props[j]->value_case =
+					MGMT__POOL_PROPERTY__VALUE_BYTEVAL;
+				if (entry->dpe_val_ptr != NULL) {
+					struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+					resp_props[j]->byteval.len = bv->dpb_len;
+					D_ALLOC(resp_props[j]->byteval.data, bv->dpb_len);
+					if (resp_props[j]->byteval.data == NULL)
+						D_GOTO(out, rc = -DER_NOMEM);
+					memcpy(resp_props[j]->byteval.data, bv->dpb_data,
+					       bv->dpb_len);
+				}
 				break;
 			default:
 				D_ERROR("pointer-value props not supported\n");

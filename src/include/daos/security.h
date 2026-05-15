@@ -40,6 +40,26 @@ struct d_ownership {
 int dc_sec_request_creds(d_iov_t *creds);
 
 /**
+ * Request security credentials with per-pool node certificate.
+ *
+ * Like dc_sec_request_creds(), but also requests a per-pool node certificate
+ * and proof-of-possession from the agent. Used by pool connect to support
+ * per-pool node certificate authentication.
+ *
+ * \param[out]	creds		Returned security credentials for current user.
+ * \param[in]	pool_uuid	Pool UUID.
+ * \param[in]	handle_uuid	Pool handle UUID for PoP binding.
+ * \param[out]	node_cert	Returned PEM node certificate (may be empty).
+ * \param[out]	node_cert_pop	Returned PoP signature + payload (may be empty).
+ *
+ * \return	Same as dc_sec_request_creds().
+ */
+int dc_sec_request_pool_creds(d_iov_t *creds, uuid_t pool_uuid,
+			      uuid_t handle_uuid, d_iov_t *node_cert,
+			      d_iov_t *node_cert_pop,
+			      d_iov_t *node_cert_payload);
+
+/**
  * Request a user's permissions for a specific pool.
  *
  * \param[in]	pool_prop	Pool property containing pool ACL and owner/group

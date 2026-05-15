@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,6 +88,8 @@ extern d_iov_t ds_pool_prop_svc_ops_age;        /* uint32_t */
 extern d_iov_t ds_pool_prop_srv_handle;         /* uuid_t */
 extern d_iov_t ds_pool_prop_srv_cont_handle;    /* uuid_t */
 extern d_iov_t ds_pool_prop_recov_cont;         /* uint32_t */
+extern d_iov_t ds_pool_prop_pool_ca;		/* string (PEM) */
+extern d_iov_t ds_pool_prop_cert_watermarks;    /* string (JSON blob, opaque to the engine) */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*

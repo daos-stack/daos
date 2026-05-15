@@ -103,17 +103,21 @@ func convertPoolProps(in []*daos.PoolProperty, setProp bool) ([]*mgmtpb.PoolProp
 			Number: prop.Number,
 		}
 
-		// Perform one last set of validations, belt-and-suspenders
-		// to guard against a manually-created request with bad
-		// properties.
+		// Validate properties that are in the property map.
+		// Properties not in the map (e.g. pool_ca, cert_watermarks)
+		// are managed via dedicated API methods and bypass validation.
 		p, err := allProps.GetProperty(prop.Name)
 		if err != nil {
-			return nil, err
+			// Property not in map — pass through if it has a number.
+			if prop.Number == 0 {
+				return nil, err
+			}
+			if byteVal, err := prop.Value.GetBytes(); err == nil {
+				out[i].SetValueBytes(byteVal)
+			}
+			continue
 		}
 		if byteVal, err := prop.Value.GetBytes(); err == nil {
-			// Byte values bypass the string round-trip validation
-			// below because base64-encoding and re-parsing would
-			// fail for properties without a byte-aware handler.
 			out[i].SetValueBytes(byteVal)
 			continue
 		}
@@ -436,6 +440,7 @@ type PoolEvictReq struct {
 	poolRequest
 	ID      string
 	Handles []string
+	Machine string // Optional: evict handles for a specific machine only
 }
 
 // PoolEvict performs a pool connection evict operation on a DAOS Management Server instance.
@@ -444,6 +449,7 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 		Sys:     req.getSystem(rpcClient),
 		Id:      req.ID,
 		Handles: req.Handles,
+		Machine: req.Machine,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, pbReq)

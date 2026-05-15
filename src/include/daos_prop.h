@@ -140,6 +140,23 @@ enum daos_pool_props {
 	DAOS_PROP_PO_SVC_OPS_ENABLED,
 	/** Metadata duplicate operations SVC_OPS KVS max entry age (seconds), default 300 */
 	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
+	/**
+	 * Pool node certificate CA.
+	 * PEM-encoded intermediate CA certificate for per-pool node authentication.
+	 * When set, only nodes with a certificate signed by this CA can connect.
+	 * default = empty (no node certificate required)
+	 */
+	DAOS_PROP_PO_POOL_CA,
+	/**
+	 * Per-CN certificate revocation watermarks.
+	 * Opaque JSON blob of the form {"<cn>": "<rfc3339>"} managed by the
+	 * control plane. Consulted during node certificate validation: a cert
+	 * whose NotBefore is strictly less than the watermark for its CN is
+	 * rejected. The engine stores and ships the blob verbatim; all parsing
+	 * and comparisons happen in the control plane.
+	 * default = empty (no revocations)
+	 */
+	DAOS_PROP_PO_CERT_WATERMARKS,
 	DAOS_PROP_PO_MAX,
 };
 

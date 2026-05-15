@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package security
 
 import (
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -24,7 +26,62 @@ const (
 	MaxGroupKeyPerm    os.FileMode = 0440
 	MaxCertPerm        os.FileMode = 0664
 	MaxDirPerm         os.FileMode = 0750
+
+	// CertCNPrefixNode identifies a node-scoped pool certificate.
+	// The agent validates that the CN suffix matches the local hostname.
+	CertCNPrefixNode = "node:"
+	// CertCNPrefixTenant identifies a tenant-scoped pool certificate.
+	// The same key is shared across all nodes belonging to the tenant.
+	CertCNPrefixTenant = "tenant:"
+	// CertCNSuffixMaxLen is the maximum permitted length of the portion
+	// of a pool cert CN that follows the "node:" or "tenant:" prefix.
+	// 253 matches the RFC 1035 maximum total length of a DNS name, which
+	// is the most permissive of the identifier formats we expect here
+	// (hostnames, FQDNs, short tenant names).
+	CertCNSuffixMaxLen = 253
 )
+
+// ValidatePoolCertCN parses a full pool cert CN ("node:<suffix>" or
+// "tenant:<suffix>") and returns the prefix and suffix on success.
+//
+// The suffix is restricted to DNS-compatible characters: ASCII alnum,
+// dot, hyphen, and underscore. This catches typos and hostile values
+// (embedded newlines, null bytes, shell metacharacters) before a CN
+// ever reaches the cert-generation or watermark paths, where weird
+// bytes could cause confusion between "what the agent compares" and
+// "what the server stores."
+func ValidatePoolCertCN(cn string) (prefix, suffix string, err error) {
+	switch {
+	case strings.HasPrefix(cn, CertCNPrefixNode):
+		prefix = CertCNPrefixNode
+	case strings.HasPrefix(cn, CertCNPrefixTenant):
+		prefix = CertCNPrefixTenant
+	default:
+		return "", "", fmt.Errorf("CN %q must start with %q or %q",
+			cn, CertCNPrefixNode, CertCNPrefixTenant)
+	}
+	suffix = cn[len(prefix):]
+	if suffix == "" {
+		return "", "", fmt.Errorf("CN %q has empty suffix", cn)
+	}
+	if len(suffix) > CertCNSuffixMaxLen {
+		return "", "", fmt.Errorf("CN suffix %q exceeds max length %d",
+			suffix, CertCNSuffixMaxLen)
+	}
+	for i := 0; i < len(suffix); i++ {
+		c := suffix[i]
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+		case c == '.' || c == '-' || c == '_':
+		default:
+			return "", "", fmt.Errorf("CN suffix %q contains disallowed character %q",
+				suffix, c)
+		}
+	}
+	return prefix, suffix, nil
+}
 
 type badPermsError struct {
 	filename string
@@ -193,8 +250,9 @@ func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err == nil {
 		switch key := key.(type) {
-		// TODO: Support key types other than RSA
 		case *rsa.PrivateKey:
+			return key, nil
+		case *ecdsa.PrivateKey:
 			return key, nil
 		default:
 			return nil, fmt.Errorf("%s contains an unsupported private key type",

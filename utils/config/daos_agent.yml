@@ -183,3 +183,8 @@
 #  -
 #    iface: ib3
 #    domain: mlx5_3
+
+## Directory containing per-pool node certificates.
+## Agent looks for <pool_uuid>.crt and <pool_uuid>.key in this directory.
+## Default: /etc/daos/certs/<system_name>/node_certs/
+#node_cert_dir: /etc/daos/certs/daos_server/node_certs/

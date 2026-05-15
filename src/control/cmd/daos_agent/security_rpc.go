@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/cache"
@@ -48,6 +49,7 @@ type (
 	securityConfig struct {
 		credentials *security.CredentialConfig
 		transport   *security.TransportConfig
+		nodeCertDir string
 	}
 
 	// SecurityModule is the security drpc module struct
@@ -165,12 +167,22 @@ func (m *SecurityModule) HandleCall(ctx context.Context, session *drpc.Session, 
 		return nil, drpc.UnknownMethodFailure()
 	}
 
-	return m.getCredential(ctx, session)
+	var req auth.GetCredReq
+	if len(body) > 0 {
+		if err := proto.Unmarshal(body, &req); err != nil {
+			m.log.Errorf("failed to unmarshal GetCredReq: %s", err)
+			// Fall through with empty req for backward compat
+		}
+	}
+
+	return m.getCredential(ctx, session, req.GetPoolId(), req.GetHandleUuid())
 }
 
-// getCredentials generates a signed user credential based on the data attached to
-// the Unix Domain Socket.
-func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Session) ([]byte, error) {
+// getCredential generates a signed user credential based on the data attached to
+// the Unix Domain Socket. If poolID is non-empty and pool node cert dir is
+// configured, also looks up a node certificate for the pool and signs a
+// proof-of-possession payload.
+func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Session, poolID string, handleUUID []byte) ([]byte, error) {
 	if session == nil {
 		return nil, drpc.NewFailureWithMessage("session is nil")
 	}
@@ -220,6 +232,23 @@ func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Sessio
 	}
 
 	resp := &auth.GetCredResp{Cred: cred}
+
+	// If pool ID provided and cert dir configured, look up node cert and sign PoP
+	if poolID != "" && m.config.nodeCertDir != "" {
+		cached, certPEM, pop, payload, err := getNodeCertAndPoPWithMeta(m.log, m.config.nodeCertDir, poolID, handleUUID)
+		if err != nil {
+			// Log but don't fail — server decides if cert is required
+			m.log.Tracef("no node cert for pool %s: %s", poolID, err)
+		} else {
+			m.log.Tracef("attaching node cert for pool %s (CN=%s, expires=%s, %d bytes PoP)",
+				poolID, cached.cert.Subject.CommonName,
+				cached.cert.NotAfter.Format("2006-01-02"), len(pop))
+			resp.NodeCert = certPEM
+			resp.NodeCertPop = pop
+			resp.NodeCertPayload = payload
+		}
+	}
+
 	return drpc.Marshal(resp)
 }
 

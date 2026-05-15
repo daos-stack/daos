@@ -21,10 +21,15 @@
 #include "acl.h"
 
 /* Prototypes for static helper functions */
-static int request_credentials_via_drpc(Drpc__Response **response);
+static int request_credentials_via_drpc(uuid_t pool_uuid, uuid_t handle_uuid,
+					Drpc__Response **response);
 static int process_credential_response(Drpc__Response *response,
-				       d_iov_t *creds);
-static int get_cred_from_response(Drpc__Response *response, d_iov_t *cred);
+				       d_iov_t *creds, d_iov_t *node_cert,
+				       d_iov_t *node_cert_pop,
+				       d_iov_t *node_cert_payload);
+static int get_cred_from_response(Drpc__Response *response, d_iov_t *cred,
+				  d_iov_t *node_cert, d_iov_t *node_cert_pop,
+				  d_iov_t *node_cert_payload);
 
 int
 dc_sec_request_creds(d_iov_t *creds)
@@ -32,28 +37,55 @@ dc_sec_request_creds(d_iov_t *creds)
 	Drpc__Response	*response = NULL;
 	int		rc;
 
-	if (creds == NULL) {
+	if (creds == NULL)
 		return -DER_INVAL;
-	}
 
-	rc = request_credentials_via_drpc(&response);
+	rc = request_credentials_via_drpc(NULL, NULL, &response);
 	if (rc != DER_SUCCESS) {
 		drpc_response_free(response);
 		return rc;
 	}
 
-	rc = process_credential_response(response, creds);
+	rc = process_credential_response(response, creds, NULL, NULL, NULL);
+
+	drpc_response_free(response);
+	return rc;
+}
+
+int
+dc_sec_request_pool_creds(d_iov_t *creds, uuid_t pool_uuid,
+			  uuid_t handle_uuid, d_iov_t *node_cert,
+			  d_iov_t *node_cert_pop, d_iov_t *node_cert_payload)
+{
+	Drpc__Response	*response = NULL;
+	int		rc;
+
+	if (creds == NULL)
+		return -DER_INVAL;
+
+	rc = request_credentials_via_drpc(pool_uuid, handle_uuid, &response);
+	if (rc != DER_SUCCESS) {
+		drpc_response_free(response);
+		return rc;
+	}
+
+	rc = process_credential_response(response, creds, node_cert,
+					 node_cert_pop, node_cert_payload);
 
 	drpc_response_free(response);
 	return rc;
 }
 
 static int
-request_credentials_via_drpc(Drpc__Response **response)
+request_credentials_via_drpc(uuid_t pool_uuid, uuid_t handle_uuid,
+			     Drpc__Response **response)
 {
-	Drpc__Call	*request;
-	struct drpc	*agent_socket;
-	int		rc;
+	Drpc__Call		*request;
+	struct drpc		*agent_socket;
+	Auth__GetCredReq	req = AUTH__GET_CRED_REQ__INIT;
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	size_t			req_len;
+	int			rc;
 
 	if (dc_agent_sockpath == NULL) {
 		D_ERROR("DAOS Socket Path is Uninitialized\n");
@@ -76,6 +108,26 @@ request_credentials_via_drpc(Drpc__Response **response)
 		return rc;
 	}
 
+	/* Pack GetCredReq with pool context if provided */
+	if (pool_uuid != NULL) {
+		uuid_unparse_lower(pool_uuid, uuid_str);
+		req.pool_id = uuid_str;
+	}
+	if (handle_uuid != NULL) {
+		req.handle_uuid.data = (uint8_t *)handle_uuid;
+		req.handle_uuid.len = sizeof(uuid_t);
+	}
+
+	req_len = auth__get_cred_req__get_packed_size(&req);
+	D_ALLOC(request->body.data, req_len);
+	if (request->body.data == NULL) {
+		drpc_call_free(request);
+		drpc_close(agent_socket);
+		return -DER_NOMEM;
+	}
+	request->body.len = req_len;
+	auth__get_cred_req__pack(&req, request->body.data);
+
 	rc = drpc_call(agent_socket, R_SYNC, request, response);
 
 	drpc_close(agent_socket);
@@ -84,7 +136,9 @@ request_credentials_via_drpc(Drpc__Response **response)
 }
 
 static int
-process_credential_response(Drpc__Response *response, d_iov_t *creds)
+process_credential_response(Drpc__Response *response, d_iov_t *creds,
+			    d_iov_t *node_cert, d_iov_t *node_cert_pop,
+			    d_iov_t *node_cert_payload)
 {
 	if (response == NULL) {
 		D_ERROR("Response was null\n");
@@ -98,7 +152,8 @@ process_credential_response(Drpc__Response *response, d_iov_t *creds)
 		return -DER_MISC;
 	}
 
-	return get_cred_from_response(response, creds);
+	return get_cred_from_response(response, creds, node_cert,
+				      node_cert_pop, node_cert_payload);
 }
 
 static int
@@ -119,7 +174,9 @@ auth_cred_to_iov(Auth__Credential *cred, d_iov_t *iov)
 }
 
 static int
-get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
+get_cred_from_response(Drpc__Response *response, d_iov_t *cred,
+		       d_iov_t *node_cert, d_iov_t *node_cert_pop,
+		       d_iov_t *node_cert_payload)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int			rc = 0;
@@ -158,6 +215,42 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 	}
 
 	rc = auth_cred_to_iov(cred_resp->cred, cred);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Extract node certificate and PoP if present */
+	if (node_cert != NULL && cred_resp->node_cert.len > 0) {
+		D_ALLOC(node_cert->iov_buf, cred_resp->node_cert.len);
+		if (node_cert->iov_buf == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		memcpy(node_cert->iov_buf, cred_resp->node_cert.data,
+		       cred_resp->node_cert.len);
+		node_cert->iov_buf_len = cred_resp->node_cert.len;
+		node_cert->iov_len = cred_resp->node_cert.len;
+	}
+
+	if (node_cert_pop != NULL && cred_resp->node_cert_pop.len > 0) {
+		D_ALLOC(node_cert_pop->iov_buf, cred_resp->node_cert_pop.len);
+		if (node_cert_pop->iov_buf == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		memcpy(node_cert_pop->iov_buf,
+		       cred_resp->node_cert_pop.data,
+		       cred_resp->node_cert_pop.len);
+		node_cert_pop->iov_buf_len = cred_resp->node_cert_pop.len;
+		node_cert_pop->iov_len = cred_resp->node_cert_pop.len;
+	}
+
+	if (node_cert_payload != NULL && cred_resp->node_cert_payload.len > 0) {
+		D_ALLOC(node_cert_payload->iov_buf,
+			cred_resp->node_cert_payload.len);
+		if (node_cert_payload->iov_buf == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		memcpy(node_cert_payload->iov_buf,
+		       cred_resp->node_cert_payload.data,
+		       cred_resp->node_cert_payload.len);
+		node_cert_payload->iov_buf_len = cred_resp->node_cert_payload.len;
+		node_cert_payload->iov_len = cred_resp->node_cert_payload.len;
+	}
 
 	/* If present clear out the verifier (the secret part) */
 	verifier = cred_resp->cred->verifier;

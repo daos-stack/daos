@@ -52,6 +52,12 @@ typedef struct _Mgmt__PoolQueryTargetResp Mgmt__PoolQueryTargetResp;
 typedef struct _Mgmt__PoolRebuildStartReq Mgmt__PoolRebuildStartReq;
 typedef struct _Mgmt__PoolRebuildStopReq Mgmt__PoolRebuildStopReq;
 typedef struct _Mgmt__PoolSelfHealEvalReq Mgmt__PoolSelfHealEvalReq;
+typedef struct _Mgmt__PoolAddCAReq Mgmt__PoolAddCAReq;
+typedef struct _Mgmt__PoolAddCAResp Mgmt__PoolAddCAResp;
+typedef struct _Mgmt__PoolRemoveCAReq Mgmt__PoolRemoveCAReq;
+typedef struct _Mgmt__PoolRemoveCAResp Mgmt__PoolRemoveCAResp;
+typedef struct _Mgmt__PoolRevokeClientReq Mgmt__PoolRevokeClientReq;
+typedef struct _Mgmt__PoolRevokeClientResp Mgmt__PoolRevokeClientResp;
 
 
 /* --- enums --- */
@@ -1240,6 +1246,163 @@ struct  _Mgmt__PoolSelfHealEvalReq
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
+/*
+ * PoolAddCAReq appends a PEM-encoded intermediate CA certificate to the
+ * pool's CA bundle (DAOS_PROP_PO_POOL_CA). The server performs the
+ * read-modify-write under the pool lock so the bundle cannot be set
+ * directly via the generic PoolSetProp RPC.
+ */
+struct  _Mgmt__PoolAddCAReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * pool UUID or label
+   */
+  char *id;
+  /*
+   * PEM-encoded CA cert to append to the bundle
+   */
+  ProtobufCBinaryData cert_pem;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+};
+#define MGMT__POOL_ADD_CAREQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_add_careq__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, {0,NULL}, 0,NULL }
+
+
+/*
+ * PoolAddCAResp is the result of a PoolAddCA operation.
+ */
+struct  _Mgmt__PoolAddCAResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+};
+#define MGMT__POOL_ADD_CARESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_add_caresp__descriptor) \
+    , 0 }
+
+
+/*
+ * PoolRemoveCAReq removes CA certificates from the pool's CA bundle.
+ * If 'all' is true, the bundle is cleared (disabling cert auth); otherwise
+ * fingerprint must name a SHA-256 hex digest matching exactly one CA.
+ */
+struct  _Mgmt__PoolRemoveCAReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * pool UUID or label
+   */
+  char *id;
+  /*
+   * hex-encoded SHA-256 of CA cert to remove
+   */
+  char *fingerprint;
+  /*
+   * if true, remove every CA in the bundle
+   */
+  protobuf_c_boolean all;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+};
+#define MGMT__POOL_REMOVE_CAREQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_remove_careq__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL }
+
+
+/*
+ * PoolRemoveCAResp is the result of a PoolRemoveCA operation.
+ */
+struct  _Mgmt__PoolRemoveCAResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * number of CAs removed from the bundle
+   */
+  int32_t certs_removed;
+};
+#define MGMT__POOL_REMOVE_CARESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_remove_caresp__descriptor) \
+    , 0, 0 }
+
+
+/*
+ * PoolRevokeClientReq atomically advances the per-CN revocation
+ * watermark for the given pool and returns the committed watermark.
+ * The caller binds the returned timestamp into the NotBefore of the
+ * replacement cert it issues. Monotonicity of DAOS_PROP_PO_CERT_WATERMARKS
+ * is enforced in the server-side handler, not the client library.
+ */
+struct  _Mgmt__PoolRevokeClientReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * pool UUID or label
+   */
+  char *id;
+  /*
+   * full CN including the node: or tenant: prefix
+   */
+  char *cn;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+};
+#define MGMT__POOL_REVOKE_CLIENT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_revoke_client_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+
+
+/*
+ * PoolRevokeClientResp carries the committed watermark for the target CN.
+ */
+struct  _Mgmt__PoolRevokeClientResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * RFC3339 UTC watermark now in effect for the revoked CN. Certs whose
+   * NotBefore is strictly less than this timestamp are refused.
+   */
+  char *watermark_rfc3339;
+};
+#define MGMT__POOL_REVOKE_CLIENT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_revoke_client_resp__descriptor) \
+    , 0, (char *)protobuf_c_empty_string }
+
+
 /* Mgmt__PoolCreateReq methods */
 void   mgmt__pool_create_req__init
                      (Mgmt__PoolCreateReq         *message);
@@ -1911,6 +2074,120 @@ Mgmt__PoolSelfHealEvalReq *
 void   mgmt__pool_self_heal_eval_req__free_unpacked
                      (Mgmt__PoolSelfHealEvalReq *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PoolAddCAReq methods */
+void   mgmt__pool_add_careq__init
+                     (Mgmt__PoolAddCAReq         *message);
+size_t mgmt__pool_add_careq__get_packed_size
+                     (const Mgmt__PoolAddCAReq   *message);
+size_t mgmt__pool_add_careq__pack
+                     (const Mgmt__PoolAddCAReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_add_careq__pack_to_buffer
+                     (const Mgmt__PoolAddCAReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolAddCAReq *
+       mgmt__pool_add_careq__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_add_careq__free_unpacked
+                     (Mgmt__PoolAddCAReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolAddCAResp methods */
+void   mgmt__pool_add_caresp__init
+                     (Mgmt__PoolAddCAResp         *message);
+size_t mgmt__pool_add_caresp__get_packed_size
+                     (const Mgmt__PoolAddCAResp   *message);
+size_t mgmt__pool_add_caresp__pack
+                     (const Mgmt__PoolAddCAResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_add_caresp__pack_to_buffer
+                     (const Mgmt__PoolAddCAResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolAddCAResp *
+       mgmt__pool_add_caresp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_add_caresp__free_unpacked
+                     (Mgmt__PoolAddCAResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolRemoveCAReq methods */
+void   mgmt__pool_remove_careq__init
+                     (Mgmt__PoolRemoveCAReq         *message);
+size_t mgmt__pool_remove_careq__get_packed_size
+                     (const Mgmt__PoolRemoveCAReq   *message);
+size_t mgmt__pool_remove_careq__pack
+                     (const Mgmt__PoolRemoveCAReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_remove_careq__pack_to_buffer
+                     (const Mgmt__PoolRemoveCAReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolRemoveCAReq *
+       mgmt__pool_remove_careq__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_remove_careq__free_unpacked
+                     (Mgmt__PoolRemoveCAReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolRemoveCAResp methods */
+void   mgmt__pool_remove_caresp__init
+                     (Mgmt__PoolRemoveCAResp         *message);
+size_t mgmt__pool_remove_caresp__get_packed_size
+                     (const Mgmt__PoolRemoveCAResp   *message);
+size_t mgmt__pool_remove_caresp__pack
+                     (const Mgmt__PoolRemoveCAResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_remove_caresp__pack_to_buffer
+                     (const Mgmt__PoolRemoveCAResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolRemoveCAResp *
+       mgmt__pool_remove_caresp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_remove_caresp__free_unpacked
+                     (Mgmt__PoolRemoveCAResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolRevokeClientReq methods */
+void   mgmt__pool_revoke_client_req__init
+                     (Mgmt__PoolRevokeClientReq         *message);
+size_t mgmt__pool_revoke_client_req__get_packed_size
+                     (const Mgmt__PoolRevokeClientReq   *message);
+size_t mgmt__pool_revoke_client_req__pack
+                     (const Mgmt__PoolRevokeClientReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_revoke_client_req__pack_to_buffer
+                     (const Mgmt__PoolRevokeClientReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolRevokeClientReq *
+       mgmt__pool_revoke_client_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_revoke_client_req__free_unpacked
+                     (Mgmt__PoolRevokeClientReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolRevokeClientResp methods */
+void   mgmt__pool_revoke_client_resp__init
+                     (Mgmt__PoolRevokeClientResp         *message);
+size_t mgmt__pool_revoke_client_resp__get_packed_size
+                     (const Mgmt__PoolRevokeClientResp   *message);
+size_t mgmt__pool_revoke_client_resp__pack
+                     (const Mgmt__PoolRevokeClientResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_revoke_client_resp__pack_to_buffer
+                     (const Mgmt__PoolRevokeClientResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolRevokeClientResp *
+       mgmt__pool_revoke_client_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_revoke_client_resp__free_unpacked
+                     (Mgmt__PoolRevokeClientResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__PoolCreateReq_Closure)
@@ -2024,6 +2301,24 @@ typedef void (*Mgmt__PoolRebuildStopReq_Closure)
 typedef void (*Mgmt__PoolSelfHealEvalReq_Closure)
                  (const Mgmt__PoolSelfHealEvalReq *message,
                   void *closure_data);
+typedef void (*Mgmt__PoolAddCAReq_Closure)
+                 (const Mgmt__PoolAddCAReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolAddCAResp_Closure)
+                 (const Mgmt__PoolAddCAResp *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolRemoveCAReq_Closure)
+                 (const Mgmt__PoolRemoveCAReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolRemoveCAResp_Closure)
+                 (const Mgmt__PoolRemoveCAResp *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolRevokeClientReq_Closure)
+                 (const Mgmt__PoolRevokeClientReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolRevokeClientResp_Closure)
+                 (const Mgmt__PoolRevokeClientResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -2071,6 +2366,12 @@ extern const ProtobufCMessageDescriptor mgmt__pool_query_target_resp__descriptor
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_start_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_rebuild_stop_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_self_heal_eval_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_add_careq__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_add_caresp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_remove_careq__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_remove_caresp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_revoke_client_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_revoke_client_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 
