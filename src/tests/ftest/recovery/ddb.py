@@ -146,7 +146,6 @@ class DdbTest(TestWithServers):
 
         Returns:
             DdbCommand: DdbCommand object created based on the environment.
-
         """
         if md_on_ssd:
             vos_path = '""'
@@ -162,7 +161,7 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
-            self.run_cmd_check_result(command=f"mkdir {self.daos_load_path}")
+            self.run_cmd_check_result(command=f"mkdir -p {self.daos_load_path}")
 
             self.log_step(f"MD-on-SSD: Load pool dir to {self.daos_load_path}")
             db_path = os.path.join(self.log_dir, "control_metadata", "daos_control", "engine0")
