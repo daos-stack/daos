@@ -20,6 +20,7 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
+        - ABT_THREAD_STACKSIZE=32768
       storage: auto
 
     1:
@@ -35,6 +36,7 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
+        - ABT_THREAD_STACKSIZE=32768
       storage: auto
 
   transport_config:
