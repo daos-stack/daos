@@ -21,6 +21,7 @@ dnf --nodocs install ${dnf_install_args} \
     clang \
     clang-tools-extra \
     cmake \
+    compiler-rt \
     createrepo \
     CUnit-devel \
     daxctl-devel \
