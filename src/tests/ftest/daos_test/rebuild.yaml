@@ -126,7 +126,7 @@ daos_tests:
     test_rebuild_29: -s5 -u subtests="29"
     test_rebuild_30: -s5 -u subtests="30"
     test_rebuild_31: -s5 -u subtests="31"
-    test_rebuild_32: -s5 -u subtests="32"
+    test_rebuild_32: -s7 -u subtests="32"
     test_rebuild_33: -s5 -u subtests="33"
     test_rebuild_34: -s5 -u subtests="34"
     test_rebuild_35: -s5 -u subtests="35"
