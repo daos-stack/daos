@@ -216,6 +216,12 @@ fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool is
 		*exists = false;
 		D_GOTO(out, rc = 0);
 	} else if (rc) {
+		if (is_git_entry)
+			D_ERROR("Failed to fetch GIT entry for OID " DF_OID " " DF_RC "\n",
+				DP_OID(*(daos_obj_id_t *)dkey->iov_buf), DP_RC(rc));
+		else
+			D_ERROR("Failed to fetch entry %s " DF_RC "\n", (const char *)dkey->iov_buf,
+				DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -304,10 +310,8 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 
 	rc = fetch_entry_common(oh, th, &dkey, false, fetch_sym, exists, entry, xnr, xnames, xvals,
 				xsizes);
-	if (rc) {
-		D_ERROR("Failed to fetch entry %s " DF_RC "\n", name, DP_RC(rc));
+	if (rc)
 		return rc;
-	}
 
 	if (*exists)
 		entry->link_cnt = 1;
@@ -417,8 +421,18 @@ insert_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool i
 	sgls[0].sg_iovs   = sg_iovs;
 
 	rc = daos_obj_update(oh, th, flags, dkey, nr_iods, iods, sgls, NULL);
-	if (rc)
+	if (rc) {
+		/** don't log error if conditional failed */
+		if (rc != -DER_EXIST && rc != -DER_NO_PERM) {
+			if (is_git_entry)
+				D_ERROR("Failed to insert GIT entry for OID " DF_OID " " DF_RC "\n",
+					DP_OID(*(daos_obj_id_t *)dkey->iov_buf), DP_RC(rc));
+			else
+				D_ERROR("Failed to insert entry %s " DF_RC "\n",
+					(const char *)dkey->iov_buf, DP_RC(rc));
+		}
 		return daos_der2errno(rc);
+	}
 	return 0;
 }
 
@@ -427,14 +441,9 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	     uint64_t flags, struct dfs_entry *entry)
 {
 	daos_key_t dkey;
-	int        rc;
 
 	d_iov_set(&dkey, (void *)name, len);
-	rc = insert_entry_common(oh, th, &dkey, false, flags, entry);
-	/** don't log error if conditional failed */
-	if (rc && rc != EEXIST && rc != EPERM)
-		D_ERROR("Failed to fetch entry %s " DF_RC "\n", name, DP_RC(rc));
-	return rc;
+	return insert_entry_common(oh, th, &dkey, false, flags, entry);
 }
 
 int
@@ -451,11 +460,8 @@ git_fetch_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, stru
 	d_iov_set(&dkey, oid, sizeof(daos_obj_id_t));
 	rc = fetch_entry_common(git_oh, th, &dkey, true, false, &exists, entry, xnr, xnames, xvals,
 				xsizes);
-	if (rc) {
-		D_ERROR("Failed to fetch GIT entry for OID " DF_OID " " DF_RC "\n", DP_OID(*oid),
-			DP_RC(rc));
+	if (rc)
 		return rc;
-	}
 	if (!exists)
 		return ENOENT;
 	return 0;
@@ -466,18 +472,12 @@ git_insert_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uin
 		 struct dfs_entry *entry)
 {
 	daos_key_t dkey;
-	int        rc;
 
 	if (oid == NULL || entry == NULL)
 		return EINVAL;
 
 	d_iov_set(&dkey, oid, sizeof(daos_obj_id_t));
-	rc = insert_entry_common(git_oh, th, &dkey, true, flags, entry);
-	/** don't log error if conditional failed */
-	if (rc && rc != EEXIST && rc != EPERM)
-		D_ERROR("Failed to insert GIT entry for OID " DF_OID " " DF_RC "\n", DP_OID(*oid),
-			DP_RC(rc));
-	return rc;
+	return insert_entry_common(git_oh, th, &dkey, true, flags, entry);
 }
 
 int
