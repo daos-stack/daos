@@ -24,6 +24,7 @@
 #include <spdk/rpc.h>
 #include <spdk/file.h>
 #include <spdk/env_dpdk.h>
+#include <spdk/version.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
@@ -218,6 +219,8 @@ bio_spdk_env_init(void)
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+
+	D_INFO("Initialized " SPDK_VERSION_STRING "\n");
 
 	spdk_unaffinitize_thread();
 

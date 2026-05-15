@@ -4,3 +4,4 @@ meson
 distro
 pyelftools
 uv
+hatchling
