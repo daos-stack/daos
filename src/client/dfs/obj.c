@@ -957,7 +957,7 @@ statx_task(tse_task_t *task)
 	d_iov_set(&op_args->iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	op_args->iod.iod_nr    = 1;
 	op_args->recx.rx_idx   = 0;
-	op_args->recx.rx_nr    = END_IDX;
+	op_args->recx.rx_nr    = END_L3_IDX;
 	op_args->iod.iod_recxs = &op_args->recx;
 	op_args->iod.iod_type  = DAOS_IOD_ARRAY;
 	op_args->iod.iod_size  = 1;

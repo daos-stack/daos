@@ -722,7 +722,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 		dfs->root_stbuf.st_atim.tv_nsec = root_dir.mtime_nano;
 	}
 
-	/** Open Global Index Table object */
+	/** Open Global Inode Table object */
 	if (!daos_obj_id_is_nil(dfs->git_oid)) {
 		rc = daos_obj_open(dfs->coh, dfs->git_oid, omode, &dfs->git_oh, NULL);
 		if (rc) {
@@ -1201,7 +1201,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
-	/* Open GIT (Global Index Table) Object */
+	/* Open GIT (Global Inode Table) Object */
 	if (!daos_obj_id_is_nil(dfs->git_oid)) {
 		rc = daos_obj_open(coh, dfs->git_oid, obj_mode, &dfs->git_oh, NULL);
 		if (rc) {
