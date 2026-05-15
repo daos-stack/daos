@@ -26,7 +26,7 @@ class DaosBuildVM(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfuse,ioil
+        :avocado: tags=build,daosio,dfuse,ioil
         :avocado: tags=DaosBuildVM,test_dfuse_daos_build_wt_il
         """
         run_build_test(self, "writethrough", il_lib='libioil.so', run_on_vms=True)
@@ -42,7 +42,7 @@ class DaosBuildVM(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfuse,pil4dfs
+        :avocado: tags=build,daosio,dfuse,pil4dfs
         :avocado: tags=DaosBuildVM,test_dfuse_daos_build_wt_pil4dfs
         """
         run_build_test(self, "nocache", il_lib='libpil4dfs.so', run_on_vms=True)
