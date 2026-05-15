@@ -34,10 +34,9 @@ set_lib_name() {
 }
 
 distro_name=".${DISTRO:-el8}"
-daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
+daos_version=2.7.104
 export daos_version
-daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
-  sed 's/^Release: *//' | sed 's/%.*//')${DAOS_RELVAL:-}${distro_name}"
+daos_release="1${DAOS_RELVAL:-}${distro_name}"
 export daos_release
 
 export libfabric_min_version="1.20"

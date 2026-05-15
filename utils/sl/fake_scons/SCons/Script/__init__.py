@@ -1,6 +1,6 @@
 """Fake scons environment shutting up pylint on SCons files"""
 # Copyright 2016-2023 Intel Corporation
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -540,7 +540,6 @@ def Depends(*_args, **_kw):
     """Fake Depends"""
 
 
-COMMAND_LINE_TARGETS = []
 BUILD_TARGETS = []
 DEFAULT_TARGETS = []
 
@@ -569,6 +568,5 @@ __all__ = ['DefaultEnvironment',
            'Builder',
            'AddOption',
            'VariantDir',
-           'COMMAND_LINE_TARGETS',
            'BUILD_TARGETS',
            'DEFAULT_TARGETS']
