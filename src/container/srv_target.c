@@ -2542,15 +2542,20 @@ out:
 void
 ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 {
-	struct cont_op_in	*in = crt_req_get(rpc);
-	struct cont_op_out	*out = crt_reply_get(rpc);
-	struct ds_pool_hdl	*pool_hdl;
-	crt_opcode_t		opc = opc_get(rpc->cr_opc);
-	int			rc;
+	struct cont_op_in  *in  = crt_req_get(rpc);
+	struct cont_op_out *out = crt_reply_get(rpc);
+	uuid_t              pool_uuid;
+	struct ds_pool_hdl *pool_hdl;
+	crt_opcode_t        opc = opc_get(rpc->cr_opc);
+	int                 rc;
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	cont_op_in_get_pool_uuid(rpc, pool_uuid);
+	rc = ds_pool_hdl_lookup(pool_uuid, in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_CONT ": failed to lookup pool handle: " DF_RC "\n",
+			DP_CONT(pool_uuid, in->ci_uuid), DP_RC(rc));
+		goto out;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
