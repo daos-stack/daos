@@ -1,0 +1,42 @@
+hosts:
+  test_servers: 7
+  test_clients: 1
+
+timeout: 600
+
+server_config:
+  name: daos_server
+  crt_timeout: 10
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 2
+      nr_xs_helpers: 0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+
+pool:
+  size: 20G
+  pool_query_timeout: 30
+  properties: rd_fac:3
+
+container:
+  type: POSIX
+  properties: rd_fac:3
+  oclass: EC_4P3GX
+
+e3sm_io:
+  client_processes:
+    ppn: 16
+  verbose: True
+  num_steps: 1
+  output_file: can_I_out.h5
+  api: hdf5
+  strategy: canonical
+  keep_output: true
