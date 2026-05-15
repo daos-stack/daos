@@ -13,24 +13,17 @@ server_config:
       nr_xs_helpers: 1
       log_file: daos_server0.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       log_file: daos_server1.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
+      storage: auto
 
 pool:
-  scm_size: 500G
+  size: 100%
+  mem_ratio: 17
 
 container:
   type: POSIX
