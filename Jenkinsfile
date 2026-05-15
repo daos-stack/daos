@@ -158,7 +158,7 @@ void rpm_test_post(String stageName, String node) {
        script: 'hostname; ssh -i ci_key jenkins@' + firstNode +
                ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
                'scp -i ci_key jenkins@' + firstNode +
-               ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
+               ':/tmp/{{libdaos_control,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
                stageName + '/"'
     archiveArtifacts artifacts: env.STAGE_NAME + '/**'
     job_status_update()
@@ -757,7 +757,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_logs/', 'nlt_memcheck_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'nlt-memcheck'

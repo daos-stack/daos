@@ -368,7 +368,8 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 TARGET_PATH="${libdir}"
-list_files files "${SL_PREFIX}/lib64/libdaos_tests.so" \
+list_files files "${SL_PREFIX}/lib64/libdaos_control.so" \
+                 "${SL_PREFIX}/lib64/libdaos_tests.so" \
                  "${SL_PREFIX}/lib64/libdpar.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"

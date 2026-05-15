@@ -101,6 +101,7 @@ bytearray
 cancelled
 cd
 centric
+cgo
 chdir
 checksum
 chgrp
@@ -422,6 +423,7 @@ slurmctld
 spdk
 squeue
 src
+srcnode
 srun
 ssd
 ssds
@@ -431,6 +433,8 @@ statvfs
 stddev
 stderr
 stdin
+stdint
+stdlib
 stdout
 str
 stripesize
