@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,7 +61,7 @@ get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layou
 	   struct pool_target **target, struct pool_domain **dom, uint64_t key, uint8_t *dom_used,
 	   uint8_t *dom_full, uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real,
 	   uint8_t *tgts_used, int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
-	   pool_comp_type_t fdom_lvl, uint32_t grp_size, uint32_t *spare_left, bool *spare_avail);
+	   pool_comp_type_t fdom_lvl, uint32_t grp_siz);
 
 static inline uint64_t
 jm_crc(uint64_t val0, uint64_t val1, uint64_t val2)
