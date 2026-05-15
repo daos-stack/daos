@@ -225,7 +225,7 @@ Test ID: DAOS-6748.
         Test Description: Validate Offline Reintegration with server stop
 
 :avocado: tags=all,pr,full_regression
-:avocado: tags=cb,medium
+:avocado: tags=hw,medium
 :avocado: tags=osa,checksum,offline_reintegration,ior
 :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegration_server_stop,stage_ftest
         
