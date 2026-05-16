@@ -2527,16 +2527,17 @@ failed:
 void
 ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 {
-	struct obj_ec_rep_in	*oer = crt_req_get(rpc);
-	struct obj_ec_rep_out	*oero = crt_reply_get(rpc);
-	daos_key_t		*dkey;
-	daos_iod_t		*iod;
-	struct dcs_iod_csums	*iod_csums;
-	struct bio_desc		*biod;
-	daos_recx_t		 recx = { 0 };
-	struct obj_io_context	 ioc;
-	daos_handle_t		 ioh = DAOS_HDL_INVAL;
-	int			 rc;
+	struct obj_ec_rep_in  *oer  = crt_req_get(rpc);
+	struct obj_ec_rep_out *oero = crt_reply_get(rpc);
+	daos_key_t            *dkey;
+	daos_iod_t            *iod;
+	struct dcs_iod_csums  *iod_csums;
+	struct bio_desc       *biod;
+	daos_recx_t            recx = {0};
+	struct obj_io_context  ioc  = {0};
+	daos_handle_t          ioh  = DAOS_HDL_INVAL;
+	uint64_t               ts   = daos_gettime_coarse();
+	int                    rc;
 
 	D_ASSERT(oer != NULL);
 	D_ASSERT(oero != NULL);
@@ -2559,6 +2560,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
+
+again:
 	if (iod->iod_nr == 0) /* nothing to replicate, directly remove parity */
 		goto remove_parity;
 	iod_csums = oer->er_iod_csums.ca_arrays;
@@ -2589,6 +2592,19 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 end:
 	rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, &ioc.ioc_io_size, NULL);
 	if (rc) {
+		if (rc == -DER_AGAIN) {
+			uint64_t now = daos_gettime_coarse();
+
+			if (now - ts > 30) {
+				D_WARN("Temp conflict on obj " DF_UOID ", will retry.\n",
+				       DP_UOID(oer->er_oid));
+				ts = now;
+			}
+
+			ABT_thread_yield();
+			goto again;
+		}
+
 		D_ERROR(DF_UOID " vos_update_end failed: " DF_RC "\n", DP_UOID(oer->er_oid),
 			DP_RC(rc));
 		goto out_agg;
@@ -2598,6 +2614,19 @@ remove_parity:
 	recx.rx_idx = (oer->er_stripenum * recx.rx_nr) | PARITY_INDICATOR;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
 				  &iod->iod_name, &recx);
+	if (rc == -DER_AGAIN) {
+		uint64_t now = daos_gettime_coarse();
+
+		if (now - ts > 30) {
+			D_WARN("Temp conflict on obj " DF_UOID ", will retry.\n",
+			       DP_UOID(oer->er_oid));
+			ts = now;
+		}
+
+		ABT_thread_yield();
+		goto again;
+	}
+
 out_agg:
 	ioc.ioc_coc->sc_ec_agg_updates--;
 out:
@@ -2608,19 +2637,19 @@ out:
 void
 ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 {
-	struct obj_ec_agg_in	*oea = crt_req_get(rpc);
-	struct obj_ec_agg_out	*oeao = crt_reply_get(rpc);
-	daos_key_t		*dkey;
-	struct bio_desc		*biod;
-	daos_iod_t		*iod = &oea->ea_iod;
-	struct dcs_iod_csums	*iod_csums = oea->ea_iod_csums.ca_arrays;
-
-	crt_bulk_t		 parity_bulk = oea->ea_bulk;
-	daos_recx_t		 recx = { 0 };
-	struct obj_io_context	 ioc;
-	daos_handle_t		 ioh = DAOS_HDL_INVAL;
-	int			 rc;
-	int			 rc1;
+	struct obj_ec_agg_in  *oea  = crt_req_get(rpc);
+	struct obj_ec_agg_out *oeao = crt_reply_get(rpc);
+	daos_key_t            *dkey;
+	struct bio_desc       *biod;
+	daos_iod_t            *iod         = &oea->ea_iod;
+	struct dcs_iod_csums  *iod_csums   = oea->ea_iod_csums.ca_arrays;
+	crt_bulk_t             parity_bulk = oea->ea_bulk;
+	daos_recx_t            recx        = {0};
+	struct obj_io_context  ioc         = {0};
+	daos_handle_t          ioh         = DAOS_HDL_INVAL;
+	uint64_t               ts          = daos_gettime_coarse();
+	int                    rc;
+	int                    rc1;
 
 	D_ASSERT(oea != NULL);
 	D_ASSERT(oeao != NULL);
@@ -2642,6 +2671,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oea->ea_dkey;
+
+again:
 	if (parity_bulk != CRT_BULK_NULL) {
 		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid, oea->ea_epoch_range.epr_hi,
 				      VOS_OF_REBUILD | VOS_OF_CRIT, dkey, 1, iod, iod_csums, 0,
@@ -2672,6 +2703,19 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 end:
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, &ioc.ioc_io_size, NULL);
 		if (rc) {
+			if (rc == -DER_AGAIN) {
+				uint64_t now = daos_gettime_coarse();
+
+				if (now - ts > 30) {
+					D_WARN("Temp conflict on obj " DF_UOID ", will retry.\n",
+					       DP_UOID(oea->ea_oid));
+					ts = now;
+				}
+
+				ABT_thread_yield();
+				goto again;
+			}
+
 			if (rc == -DER_NO_PERM) {
 				/* Parity already exists, May need a
 				 * different error code.
@@ -2696,6 +2740,19 @@ end:
 	rc1 = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
+	if (rc1 == -DER_AGAIN) {
+		uint64_t now = daos_gettime_coarse();
+
+		if (now - ts > 30) {
+			D_WARN("Temp conflict on obj " DF_UOID ", will retry.\n",
+			       DP_UOID(oea->ea_oid));
+			ts = now;
+		}
+
+		ABT_thread_yield();
+		goto again;
+	}
+
 	if (rc1)
 		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 			DP_RC(rc1));
@@ -2790,18 +2847,18 @@ out:
 void
 ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 {
-	struct obj_rw_in		*orw = crt_req_get(rpc);
-	struct obj_rw_out		*orwo = crt_reply_get(rpc);
-	daos_key_t			*dkey = &orw->orw_dkey;
-	struct obj_io_context		 ioc;
-	struct dtx_handle               *dth = NULL;
-	struct dtx_memberships		*mbs = NULL;
-	struct daos_shard_tgt		*tgts = NULL;
-	uint32_t			 tgt_cnt;
-	uint32_t			 opc = opc_get(rpc->cr_opc);
-	uint32_t			 dtx_flags = 0;
-	struct dtx_epoch		 epoch;
-	int				 rc;
+	struct obj_rw_in       *orw  = crt_req_get(rpc);
+	struct obj_rw_out      *orwo = crt_reply_get(rpc);
+	daos_key_t             *dkey = &orw->orw_dkey;
+	struct obj_io_context   ioc  = {0};
+	struct dtx_handle      *dth  = NULL;
+	struct dtx_memberships *mbs  = NULL;
+	struct daos_shard_tgt  *tgts = NULL;
+	uint32_t                tgt_cnt;
+	uint32_t                opc       = opc_get(rpc->cr_opc);
+	uint32_t                dtx_flags = 0;
+	struct dtx_epoch        epoch;
+	int                     rc;
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
@@ -3239,11 +3296,11 @@ again:
 		d_tm_inc_counter(opm->opm_update_restart, 1);
 		goto again;
 	case -DER_AGAIN:
+		ABT_thread_yield();
 		need_abort = true;
 		exec_arg.flags |= ORF_RESEND;
 		flags = ORF_RESEND;
 		d_tm_inc_counter(opm->opm_update_retry, 1);
-		ABT_thread_yield();
 		goto again;
 	default:
 		break;
@@ -3561,14 +3618,14 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 void
 ds_obj_enum_handler(crt_rpc_t *rpc)
 {
-	struct ds_obj_enum_arg	enum_arg = { 0 };
-	struct vos_iter_anchors	*anchors = NULL;
-	struct obj_key_enum_in	*oei;
-	struct obj_key_enum_out	*oeo;
-	struct obj_io_context	ioc;
-	daos_epoch_t		epoch = 0;
-	int			opc = opc_get(rpc->cr_opc);
-	int			rc = 0;
+	struct ds_obj_enum_arg   enum_arg = {0};
+	struct vos_iter_anchors *anchors  = NULL;
+	struct obj_key_enum_in  *oei;
+	struct obj_key_enum_out *oeo;
+	struct obj_io_context    ioc   = {0};
+	daos_epoch_t             epoch = 0;
+	int                      opc   = opc_get(rpc->cr_opc);
+	int                      rc    = 0;
 
 	oei = crt_req_get(rpc);
 	D_ASSERT(oei != NULL);
@@ -4139,10 +4196,10 @@ again:
 		flags = ORF_RESEND;
 		goto again;
 	case -DER_AGAIN:
+		ABT_thread_yield();
 		need_abort = true;
 		exec_arg.flags |= ORF_RESEND;
 		flags = ORF_RESEND;
-		ABT_thread_yield();
 		goto again;
 	default:
 		break;
@@ -4433,11 +4490,11 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 void
 ds_obj_sync_handler(crt_rpc_t *rpc)
 {
-	struct obj_sync_in	*osi;
-	struct obj_sync_out	*oso;
-	struct obj_io_context	 ioc;
-	daos_epoch_t		 epoch = d_hlc_get();
-	int			 rc;
+	struct obj_sync_in   *osi;
+	struct obj_sync_out  *oso;
+	struct obj_io_context ioc   = {0};
+	daos_epoch_t          epoch = d_hlc_get();
+	int                   rc;
 
 	osi = crt_req_get(rpc);
 	D_ASSERT(osi != NULL);
@@ -5565,18 +5622,18 @@ out:
 void
 ds_obj_cpd_handler(crt_rpc_t *rpc)
 {
-	struct obj_cpd_in	*oci = crt_req_get(rpc);
-	struct obj_cpd_out	*oco = crt_reply_get(rpc);
-	struct daos_cpd_args	*dcas = NULL;
-	struct obj_io_context	 ioc;
-	ABT_future		 future = ABT_FUTURE_NULL;
-	struct daos_cpd_bulk   **dcbs = NULL;
-	uint32_t		 dcb_nr = 0;
-	int			 tx_count = oci->oci_sub_heads.ca_count;
-	int			 rc = 0;
-	int			 i;
-	int			 j;
-	bool			 leader;
+	struct obj_cpd_in     *oci      = crt_req_get(rpc);
+	struct obj_cpd_out    *oco      = crt_reply_get(rpc);
+	struct daos_cpd_args  *dcas     = NULL;
+	struct obj_io_context  ioc      = {0};
+	ABT_future             future   = ABT_FUTURE_NULL;
+	struct daos_cpd_bulk **dcbs     = NULL;
+	uint32_t               dcb_nr   = 0;
+	int                    tx_count = oci->oci_sub_heads.ca_count;
+	int                    rc       = 0;
+	int                    i;
+	int                    j;
+	bool                   leader;
 
 	D_ASSERT(oci != NULL);
 
@@ -5729,11 +5786,11 @@ reply:
 void
 ds_obj_key2anchor_handler(crt_rpc_t *rpc)
 {
-	struct obj_key2anchor_in	*oki;
-	struct obj_key2anchor_out	*oko;
-	struct obj_io_context		ioc;
-	daos_key_t			*akey = NULL;
-	int				rc = 0;
+	struct obj_key2anchor_in  *oki;
+	struct obj_key2anchor_out *oko;
+	struct obj_io_context      ioc  = {0};
+	daos_key_t                *akey = NULL;
+	int                        rc   = 0;
 
 	oki = crt_req_get(rpc);
 	D_ASSERT(oki != NULL);
@@ -5911,10 +5968,10 @@ again:
 		flags = ORF_RESEND;
 		goto again;
 	case -DER_AGAIN:
+		ABT_thread_yield();
 		need_abort = true;
 		exec_arg.flags |= ORF_RESEND;
 		flags = ORF_RESEND;
-		ABT_thread_yield();
 		goto again;
 	default:
 		break;
