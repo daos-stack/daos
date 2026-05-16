@@ -2569,10 +2569,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	D_ASSERT(ioc->ic_obj != NULL);
 	if (unlikely(vos_obj_is_evicted(ioc->ic_obj))) {
-		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted during update, need to restart TX.\n",
+		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted during update, need to retry.\n",
 			DP_UOID(ioc->ic_oid));
 
-		D_GOTO(abort, err = -DER_TX_RESTART);
+		D_GOTO(abort, err = -DER_AGAIN);
 	}
 
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
