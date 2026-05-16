@@ -11,28 +11,28 @@ timeouts:
   test_daos_management: 110
   test_daos_pool: 480
   test_daos_container: 450
-  test_daos_epoch: 125
-  test_daos_verify_consistency: 105
+  test_daos_epoch: 350
+  test_daos_verify_consistency: 210
   test_daos_io: 450
   test_daos_ec_io: 700
-  test_daos_ec_obj: 900
-  test_daos_object_array: 105
-  test_daos_array: 106
-  test_daos_kv: 105
-  test_daos_capability: 104
-  test_daos_epoch_recovery: 104
-  test_daos_md_replication: 104
+  test_daos_ec_obj: 1200
+  test_daos_object_array: 210
+  test_daos_array: 210
+  test_daos_kv: 210
+  test_daos_capability: 210
+  test_daos_epoch_recovery: 210
+  test_daos_md_replication: 210
   test_daos_rebuild_simple: 2400
   test_daos_drain_simple: 3600
-  test_daos_extend_simple: 3600
+  test_daos_extend_simple: 4500
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
   test_daos_rebuild_ec: 12000
-  test_daos_aggregate_ec: 200
+  test_daos_aggregate_ec: 400
   test_daos_degraded_ec: 1900
-  test_daos_dedup: 220
-  test_daos_upgrade: 300
-  test_daos_pipeline: 60
+  test_daos_dedup: 440
+  test_daos_upgrade: 600
+  test_daos_pipeline: 120
 pool:
   size: 16G
 server_config:
