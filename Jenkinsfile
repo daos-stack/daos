@@ -958,7 +958,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('NLT Fault injection testing') {
+                stage('Fault injection testing') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -998,7 +998,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('NLT Fault injection testing')
+                } // stage('Fault injection testing')
                 stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
