@@ -69,10 +69,10 @@ add_inst_repo() {
     local dnf_cmd="dnf -y"
     local repo_base="${ARTIFACTS_URL:-${JENKINS_URL}job/}daos-stack/job/${repo}/job/${branch//\//%252F}/${build_number}/artifact/artifacts"
     local repo_url="${repo_base}/$DISTRO_NAME/"
-    if [ "$bullseye" = true ]; then
+    if [[ "$bullseye" == "true" ]]; then
         repo_url="${repo_base}/${DISTRO_NAME}-bullseye/"
     fi
-    if [ "$sudo" = true ]; then
+    if [[ "$sudo" == "true" ]]; then
         dnf_cmd="sudo dnf -y"
     fi
     "${dnf_cmd}" -y config-manager --add-repo="$repo_url"
@@ -86,7 +86,7 @@ disable_gpg_check() {
     local url="$1"
     local sudo="${2:-false}"
     local dnf_cmd="dnf -y"
-    if [ "$sudo" = true ]; then
+    if [[ "$sudo" == "true" ]]; then
         dnf_cmd="sudo dnf -y"
     fi
 
