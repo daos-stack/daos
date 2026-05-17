@@ -417,14 +417,44 @@ pipeline {
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
+        booleanParam(name: 'CI_BUILD_EL8', defaultValue: true, description: 'Whether or not to build and test on EL 8')
+        booleanParam(name: 'CI_BUILD_EL9', defaultValue: true, description: 'Whether or not to build and test on EL 9')
+        booleanParam(name: 'CI_BUILD_LEAP15', defaultValue: true, description: 'Whether or not to build and test on Leap 15')
     }
 
     stages {
-        stage('Set Description') {
-            steps {
-                script {
-                    if (params.CI_BUILD_DESCRIPTION) {
-                        buildDescription params.CI_BUILD_DESCRIPTION
+        stage('Setup') {
+            parallel {
+                stage('Set Description') {
+                    steps {
+                        script {
+                            if (params.CI_BUILD_DESCRIPTION) {
+                                buildDescription params.CI_BUILD_DESCRIPTION
+                            }
+                        }
+                    }
+                }
+                stage('Update Parameters with Commit Pragmas') {
+                    steps {
+                        script {
+                            println('Original parameters:')
+                            println("CI_BUILD_EL8: ${params.CI_BUILD_EL8}")
+                            println("CI_BUILD_EL9: ${params.CI_BUILD_EL9}")
+                            println("CI_BUILD_LEAP15: ${params.CI_BUILD_LEAP15}")
+                            if (cachedCommitPragma("Skip-build-el8", false).toLowerCase() == 'true') {
+                                params.CI_BUILD_EL8 = false
+                            }
+                            if (cachedCommitPragma("Skip-build-el9", false).toLowerCase() == 'true') {
+                                params.CI_BUILD_EL9 = false
+                            }
+                            if (cachedCommitPragma("Skip-build-leap15", false).toLowerCase() == 'true') {
+                                params.CI_BUILD_LEAP15 = false
+                            }
+                            println('Updated parameters based on commit pragmas:')
+                            println("CI_BUILD_EL8: ${params.CI_BUILD_EL8}")
+                            println("CI_BUILD_EL9: ${params.CI_BUILD_EL9}")
+                            println("CI_BUILD_LEAP15: ${params.CI_BUILD_LEAP15}")
+                        }
                     }
                 }
             }
