@@ -20,7 +20,7 @@ from run_utils import command_as_user, get_clush_command, run_remote
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,
                    base_akey, base_data):
-    """Insert objects, dkeys, akeys, and data into the container.
+    """Insert objects, dkeys, akeys, and data into the container
 
     Args:
         context (DaosContext):
