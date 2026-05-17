@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -80,5 +81,7 @@ crt_trigger_hlc_error_cb(void);
 void
 crt_trigger_event_cbs(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		      enum crt_event_type type);
+char *
+crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv);
 
 #endif /* __CRT_INTERNAL_FNS_H__ */
