@@ -45,42 +45,6 @@ message PoolFindByLabelResp {
 	repeated uint32 svcreps = 3; // Pool service replica ranks
 }
 
-// List all the known pools from MS.
-message CheckListPoolReq {
-}
-
-message CheckListPoolResp {
-	message OnePool {
-		string uuid = 1; // Pool UUID.
-		string label = 2; // Pool label.
-		repeated uint32 svcreps = 3; // Pool service replica ranks.
-	}
-	int32 status = 1; // DAOS error code.
-	repeated OnePool pools = 2; // The list of pools.
-}
-
-// Register pool to MS.
-message CheckRegPoolReq {
-	uint64 seq = 1; // DAOS Check event sequence, unique for the instance.
-	string uuid = 2; // Pool UUID.
-	string label = 3; // Pool label.
-	repeated uint32 svcreps = 4; // Pool service replica ranks.
-}
-
-message CheckRegPoolResp {
-	int32 status = 1; // DAOS error code.
-}
-
-// Deregister pool from MS.
-message CheckDeregPoolReq {
-	uint64 seq = 1; // DAOS Check event sequence, unique for the instance.
-	string uuid = 2; // The pool to be deregistered.
-}
-
-message CheckDeregPoolResp {
-	int32 status = 1; // DAOS error code.
-}
-
 message ListPoolsReq
 {
 	bool include_all = 1; // Include all pools in response, regardless of state

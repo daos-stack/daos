@@ -2093,14 +2093,18 @@ obj_local_rw_internal_wrap(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dt
 static int
 obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 {
-	struct obj_rw_in        *orw = crt_req_get(rpc);
-	struct dtx_share_peer	*dsp;
-	uint32_t		 retry = 0;
-	int			 rc;
+	struct obj_rw_in      *orw = crt_req_get(rpc);
+	struct dtx_share_peer *dsp;
+	uint32_t               retry = 0;
+	uint32_t               opc   = opc_get(rpc->cr_opc);
+	int                    rc;
 
 again:
 	rc = obj_local_rw_internal_wrap(rpc, ioc, dth);
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+		if (opc == DAOS_OBJ_RPC_FETCH && DAOS_FAIL_CHECK(DAOS_DTX_NOSPACE_NOREFRESH))
+			return -DER_NONEXIST;
+
 		if (++retry < 3) {
 			rc = dtx_refresh(dth, ioc->ioc_coc);
 			if (rc == 0)
@@ -3167,7 +3171,7 @@ again:
 	 */
 	D_FREE(dti_cos);
 	dti_cos_cnt = dtx_cos_get_piggyback(ioc.ioc_coc, &orw->orw_oid, orw->orw_dkey_hash,
-					    DTX_THRESHOLD_COUNT, &dti_cos);
+					    DTX_PIGGYBACK_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
 
@@ -4073,7 +4077,7 @@ again:
 	 */
 	D_FREE(dti_cos);
 	dti_cos_cnt = dtx_cos_get_piggyback(ioc.ioc_coc, &opi->opi_oid, opi->opi_dkey_hash,
-					    DTX_THRESHOLD_COUNT, &dti_cos);
+					    DTX_PIGGYBACK_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
 

@@ -282,6 +282,12 @@ conv_req_props(daos_prop_t **out_prop, bool set_props,
 		case MGMT__POOL_PROPERTY__VALUE_NUMVAL:
 			entry->dpe_val = req_props[i]->numval;
 			break;
+		case MGMT__POOL_PROPERTY__VALUE_BYTEVAL:
+			rc = daos_prop_entry_set_byteval(entry, req_props[i]->byteval.data,
+							 req_props[i]->byteval.len);
+			if (rc != 0)
+				D_GOTO(out, rc);
+			break;
 		default:
 			D_ERROR("Pool property request with no value (%d)\n",
 				req_props[i]->value_case);
@@ -1149,6 +1155,8 @@ free_response_props(Mgmt__PoolProperty **props, size_t n_props)
 	for (i = 0; i < n_props; i++) {
 		if (props[i]->value_case == MGMT__POOL_PROPERTY__VALUE_STRVAL)
 			D_FREE(props[i]->strval);
+		else if (props[i]->value_case == MGMT__POOL_PROPERTY__VALUE_BYTEVAL)
+			D_FREE(props[i]->byteval.data);
 		D_FREE(props[i]);
 	}
 
