@@ -441,13 +441,13 @@ pipeline {
                             println("CI_BUILD_EL8: ${params.CI_BUILD_EL8}")
                             println("CI_BUILD_EL9: ${params.CI_BUILD_EL9}")
                             println("CI_BUILD_LEAP15: ${params.CI_BUILD_LEAP15}")
-                            if (cachedCommitPragma("Skip-build-el8", false).toLowerCase() == 'true') {
+                            if (cachedCommitPragma("Skip-build-el8", 'false').toLowerCase() == 'true') {
                                 params.CI_BUILD_EL8 = false
                             }
-                            if (cachedCommitPragma("Skip-build-el9", false).toLowerCase() == 'true') {
+                            if (cachedCommitPragma("Skip-build-el9", 'false').toLowerCase() == 'true') {
                                 params.CI_BUILD_EL9 = false
                             }
-                            if (cachedCommitPragma("Skip-build-leap15", false).toLowerCase() == 'true') {
+                            if (cachedCommitPragma("Skip-build-leap15", 'false').toLowerCase() == 'true') {
                                 params.CI_BUILD_LEAP15 = false
                             }
                             println('Updated parameters based on commit pragmas:')
