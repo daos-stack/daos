@@ -37,6 +37,7 @@ apt-get install ${apt_get_install_args} \
     libcunit1-dev \
     libdaxctl-dev \
     libfuse3-dev \
+    libgoogle-perftools-dev \
     libhwloc-dev \
     libibverbs-dev \
     libjson-c-dev \
