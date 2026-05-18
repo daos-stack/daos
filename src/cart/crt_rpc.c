@@ -1707,6 +1707,9 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	rpc_priv->crp_pub.cr_opc = opc;
 	rpc_priv->crp_pub.cr_ctx = crt_ctx;
 
+	if (rpc_priv->crp_forward)
+		CRT_METRIC_INC(ctx, CM_RPC_FWD);
+
 	crt_rpc_inout_buff_init(rpc_priv);
 
 	/* server timeout set based on header unpack info. see crt_hg_process_header() */
