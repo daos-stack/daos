@@ -157,9 +157,11 @@ class DaosServerManager(SubprocessManager):
         """Get the rank and host pairing for all of the engines.
 
         Returns:
-            dict: rank key with host value
+            dict: rank key with host value, or empty dict if not initialized
 
         """
+        if self._expected_states is None:
+            return {}
         return {rank: value["host"] for rank, value in self._expected_states.items()}
 
     @property

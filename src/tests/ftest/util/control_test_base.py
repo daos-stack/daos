@@ -54,9 +54,13 @@ class ControlTestBase(TestWithServers):
         """Get list of all ranks in the system.
 
         Returns:
-            list: List of all rank numbers
+            list: List of all rank numbers, or empty list if none available
         """
-        return list(self.server_managers[0].ranks.keys())
+        ranks_dict = self.server_managers[0].ranks
+        if not ranks_dict:  # Handles None or empty dict
+            self.log.warning("No ranks available (servers not initialized or no ranks present)")
+            return []
+        return list(ranks_dict.keys())
 
     def get_rank_state(self, rank):
         """Get the state of a rank.
@@ -202,11 +206,17 @@ class ControlTestBase(TestWithServers):
             but is necessary to ensure test isolation and reliable results.
         """
         self.log.info("Restarting servers to reset engine restart manager state")
+
+        # Check if servers have ranks to reset
+        all_ranks = self.get_all_ranks()
+        if not all_ranks:
+            self.log.warning("No ranks to reset - skipping engine restart state reset")
+            return
+
         self.server_managers[0].system_stop()
         self.server_managers[0].system_start()
 
         # Wait for all ranks to join
-        all_ranks = self.get_all_ranks()
         failed_ranks = self.server_managers[0].check_rank_state(
             ranks=all_ranks, valid_states=["joined"], max_checks=30)
         if failed_ranks:
