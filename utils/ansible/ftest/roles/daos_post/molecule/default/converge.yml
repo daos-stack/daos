@@ -1,0 +1,32 @@
+- hosts: all
+  gather_facts: true
+  vars:
+    daos_python_version: python3
+    daos_repo_dir: /tmp/daos-molecule
+  tasks:
+    - name: Create mock requirements-ftest.txt on the controller
+      delegate_to: localhost
+      run_once: true
+      copy:
+        dest: /tmp/daos-molecule/requirements-ftest.txt
+        content: |
+          # mock requirements for molecule test
+          distro
+        mode: '0644'
+
+    - name: Install pip for python3
+      become: true
+      dnf:
+        name: python3-pip
+        state: present
+
+    - name: Copy Python ftest requirements to host
+      copy:
+        src: "{{ daos_repo_dir }}/requirements-ftest.txt"
+        dest: /tmp/daos-requirements-ftest.txt
+
+    - name: Install Python ftest requirements (system-level in molecule)
+      become: true
+      pip:
+        requirements: /tmp/daos-requirements-ftest.txt
+        executable: /usr/bin/pip3

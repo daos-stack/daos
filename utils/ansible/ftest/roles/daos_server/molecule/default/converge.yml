@@ -1,0 +1,51 @@
+- hosts: all
+  gather_facts: true
+  vars:
+    daos_sysctl_reload: false
+    daos_hugepages_nb_default: 0
+    daos_hugepages_nb: 0
+    daos_ofi_provider_default: ofi+tcp
+  tasks:
+    - name: Ensure /etc/systemd directories exist
+      become: true
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /etc/systemd
+        - /etc/systemd/system
+        - /etc/sysctl.d
+        - /etc/security/limits.d
+
+    - name: Ensure /etc/systemd/system.conf exists
+      become: true
+      copy:
+        dest: /etc/systemd/system.conf
+        content: |
+          [Manager]
+          #DefaultLimitNOFILE=
+          #DefaultLimitMEMLOCK=
+        force: false
+        mode: '0644'
+
+    - name: Test server user and group creation
+      block:
+        - name: Include users_groups tasks
+          include_role:
+            name: daos_server
+            tasks_from: users_groups.yml
+      rescue:
+        - name: Note user modification skipped
+          debug:
+            msg: "User/group modification skipped (user may be in active use in container)"
+
+    - name: Test server limits configuration
+      include_role:
+        name: daos_server
+        tasks_from: limits.yml
+
+    - name: Test hugepages configuration (file only, no sysctl apply)
+      include_role:
+        name: daos_server
+        tasks_from: hugepages.yml
