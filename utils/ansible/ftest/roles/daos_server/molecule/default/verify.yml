@@ -38,3 +38,48 @@
       register: hugepages_conf
     - assert:
         that: hugepages_conf.stat.exists
+
+    - name: Read hugepages sysctl config
+      slurp:
+        src: /etc/sysctl.d/50-hugepages.conf
+      register: hugepages_sysctl
+    - name: Verify vm.nr_hugepages is set in sysctl file
+      assert:
+        that: "'vm.nr_hugepages' in (hugepages_sysctl.content | b64decode)"
+        fail_msg: "vm.nr_hugepages not found in /etc/sysctl.d/50-hugepages.conf"
+
+    # GRUB / bootloader verification (Debian path tested via os_family override)
+    - name: Read /etc/default/grub written by converge GRUB test
+      slurp:
+        src: /etc/default/grub
+      register: grub_file
+
+    - name: Verify hugepages= is present in GRUB_CMDLINE_LINUX
+      assert:
+        that: >-
+          (grub_file.content | b64decode
+           | regex_search('GRUB_CMDLINE_LINUX="[^"]*hugepages=[0-9]+')) is not none
+        fail_msg: "hugepages= not found in GRUB_CMDLINE_LINUX in /etc/default/grub"
+
+    - name: Verify hugepagesz=2M is present in GRUB_CMDLINE_LINUX
+      assert:
+        that: >-
+          (grub_file.content | b64decode
+           | regex_search('GRUB_CMDLINE_LINUX="[^"]*hugepagesz=2M')) is not none
+        fail_msg: "hugepagesz=2M not found in GRUB_CMDLINE_LINUX in /etc/default/grub"
+
+    - name: Verify default_hugepagesz=2M is present in GRUB_CMDLINE_LINUX
+      assert:
+        that: >-
+          (grub_file.content | b64decode
+           | regex_search('GRUB_CMDLINE_LINUX="[^"]*default_hugepagesz=2M')) is not none
+        fail_msg: "default_hugepagesz=2M not found in GRUB_CMDLINE_LINUX"
+
+    - name: Verify hugepages= appears only once (idempotency check)
+      assert:
+        that: >-
+          (grub_file.content | b64decode
+           | regex_findall('hugepages=[0-9]+') | length) == 1
+        fail_msg: >-
+          hugepages= appears more than once in /etc/default/grub —
+          idempotency failure (run twice and got duplicate entries)

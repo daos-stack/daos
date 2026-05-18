@@ -1,7 +1,11 @@
 # yamllint disable rule:line-length
 - name: Compute hugepages count from CPU topology
   set_fact:
-    daos_hugepages_computed: "{{ ansible_processor_cores | int * ansible_processor_count | int * 512 }}"
+    # Reserve daos_hugepages_multiplier hugepages per physical core.
+    # Default (1024): 512 for VOS engine targets + 512 for sys-xstreams
+    # (sys-xstreams are required for MD-on-SSD and consume their own pool).
+    # Set daos_hugepages_multiplier: 512 in inventory for PMEM-only nodes.
+    daos_hugepages_computed: "{{ ansible_processor_cores | int * ansible_processor_count | int * daos_hugepages_multiplier | int }}"
   when: daos_hugepages_nb | default(daos_hugepages_nb_default) | int == 0
 
 - name: Set hugepages count fact
@@ -11,13 +15,122 @@
          if daos_hugepages_nb | default(daos_hugepages_nb_default) | int != 0
          else daos_hugepages_computed }}
 
-- name: Configure hugepages sysctl parameter
+# ---------------------------------------------------------------------------
+# Phase 1 - sysctl (runtime, immediate effect, may suffer fragmentation)
+#
+# Provides hugepages immediately without a reboot.  Memory may already be
+# fragmented so the kernel might silently allocate fewer pages than
+# requested.  Phase 2 (GRUB) reserves them at boot time to avoid this.
+# ---------------------------------------------------------------------------
+
+- name: Configure hugepages via sysctl (runtime)
   become: true
   sysctl:
     name: vm.nr_hugepages
     value: "{{ daos_hugepages_nb_effective }}"
     sysctl_file: /etc/sysctl.d/50-hugepages.conf
     reload: "{{ daos_sysctl_reload | default(true) }}"
+
+# ---------------------------------------------------------------------------
+# Phase 2 - GRUB / bootloader (persistent, fragmentation-free on next boot)
+#
+# Adds "default_hugepagesz=2M hugepagesz=2M hugepages=N" to the kernel
+# cmdline so the kernel reserves pages before any userspace allocations.
+# A reboot is required; a warning is printed when the running kernel does
+# not yet reflect the configured value.
+#
+# Set daos_grub_update_enabled: false to skip this phase (e.g. in CI
+# containers without a real bootloader).
+# ---------------------------------------------------------------------------
+
+- name: Initialize current bootloader hugepages tracking variable
+  set_fact:
+    _daos_grub_hugepages_current: '0'
+
+# RHEL / Rocky: grubby transparently handles BLS entries, UEFI and BIOS.
+- name: Read current bootloader hugepages args (RHEL/grubby)
+  become: true
+  command: grubby --info=DEFAULT
+  register: _daos_grubby_info
+  changed_when: false
+  failed_when: false
+  when:
+    - ansible_os_family == 'RedHat'
+    - daos_grub_update_enabled | default(true) | bool
+
+- name: Parse current bootloader hugepages count (RHEL)
+  set_fact:
+    _daos_grub_hugepages_current: >-
+      {{ (_daos_grubby_info.stdout | regex_search('\bhugepages=([0-9]+)', '\1'))
+         | default(['0'], true) | first }}
+  when:
+    - ansible_os_family == 'RedHat'
+    - daos_grub_update_enabled | default(true) | bool
+    - _daos_grubby_info.rc is defined
+    - _daos_grubby_info.rc == 0
+
+- name: Update hugepages in bootloader entries (RHEL/grubby)
+  become: true
+  command: >-
+    grubby --update-kernel=ALL
+    --remove-args="hugepages hugepagesz default_hugepagesz"
+    --args="default_hugepagesz=2M hugepagesz=2M hugepages={{ daos_hugepages_nb_effective }}"
+  when:
+    - ansible_os_family == 'RedHat'
+    - daos_grub_update_enabled | default(true) | bool
+    - _daos_grubby_info.rc is defined
+    - _daos_grubby_info.rc == 0
+    - _daos_grub_hugepages_current | int != daos_hugepages_nb_effective | int
+
+# Debian / Ubuntu: edit /etc/default/grub and regenerate bootloader config.
+- name: Read /etc/default/grub (Debian)
+  slurp:
+    src: /etc/default/grub
+  register: _daos_grub_defaults
+  failed_when: false
+  when:
+    - ansible_os_family == 'Debian'
+    - daos_grub_update_enabled | default(true) | bool
+
+- name: Parse current bootloader hugepages count (Debian)
+  set_fact:
+    _daos_grub_hugepages_current: >-
+      {{ (_daos_grub_defaults.content | b64decode
+          | regex_search('GRUB_CMDLINE_LINUX(?:_DEFAULT)?="[^"]*\bhugepages=([0-9]+)\b', '\1'))
+         | default(['0'], true) | first }}
+  when:
+    - ansible_os_family == 'Debian'
+    - daos_grub_update_enabled | default(true) | bool
+    - not (_daos_grub_defaults.failed | default(false))
+
+- name: Update hugepages params in /etc/default/grub (Debian)
+  become: true
+  shell: |
+    set -euo pipefail
+    grub=/etc/default/grub
+    cp --backup=numbered "$grub" "$grub.bak"
+    sed -E -i \
+      -e 's/\bhugepages=[0-9]+\b//g' \
+      -e 's/\bhugepagesz=[^ "]+//g' \
+      -e 's/\bdefault_hugepagesz=[^ "]+//g' \
+      "$grub"
+    sed -E -i 's/( ){2,}/ /g; s/=" /="/g; s/ "/"/' "$grub"
+    sed -E -i \
+      's|^(GRUB_CMDLINE_LINUX=")|\1default_hugepagesz=2M hugepagesz=2M hugepages={{ daos_hugepages_nb_effective }} |' \
+      "$grub"
+  args:
+    executable: /bin/bash
+  changed_when: true
+  when:
+    - ansible_os_family == 'Debian'
+    - daos_grub_update_enabled | default(true) | bool
+    - not (_daos_grub_defaults.failed | default(false))
+    - _daos_grub_hugepages_current | int != daos_hugepages_nb_effective | int
+  notify: Update Debian GRUB config
+
+# ---------------------------------------------------------------------------
+# Phase 3 - Disable Transparent Huge Pages (THP) via systemd service
+# ---------------------------------------------------------------------------
 
 - name: Deploy disable-transparent-huge-pages systemd service
   become: true
@@ -36,3 +149,33 @@
     enabled: true
     state: started
   when: ansible_service_mgr == 'systemd'
+
+# ---------------------------------------------------------------------------
+# Phase 4 - Reboot warning
+#
+# Print a warning whenever the GRUB phase is active but the running kernel
+# was not started with the correct hugepages parameter.  This is the normal
+# state before the first reboot after a GRUB/grubby update.
+# ---------------------------------------------------------------------------
+
+- name: Read running kernel cmdline
+  slurp:
+    src: /proc/cmdline
+  register: _daos_proc_cmdline
+  when: daos_grub_update_enabled | default(true) | bool
+
+- name: Warn that a reboot is required for GRUB hugepages to take effect
+  debug:
+    msg: >-
+      *** REBOOT REQUIRED ***
+      The GRUB bootloader has been configured with
+      hugepages={{ daos_hugepages_nb_effective }}
+      ({{ daos_hugepages_nb_effective | int * 2 }} MB reserved at boot time).
+      The running kernel was NOT started with this parameter yet.
+      Sysctl has set vm.nr_hugepages at runtime, but memory fragmentation
+      may prevent the full reservation from being satisfied.
+      Reboot the node to activate fragmentation-free hugepages reservation.
+  when:
+    - daos_grub_update_enabled | default(true) | bool
+    - "'hugepages=' + (daos_hugepages_nb_effective | string) not in
+      (_daos_proc_cmdline.content | b64decode)"
