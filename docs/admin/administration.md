@@ -146,18 +146,21 @@ Help Options:
 
 If an arg is not passed, then that logging parameter for each engine process is reset to the
 values set in the server config file that was used when starting `daos_server`.
+
 - `--masks` will be reset to the value of the engine config `log_mask` parameter.
-- `--streams` will be reset to the `env_vars` `DD_MASK` environment variable value or to an empty
-string if not set.
-- `--subsystems` will be reset to the `env_vars` `DD_SUBSYS` environment variable value or to an
-empty string if not set.
+- `--streams` will be reset to the `env_vars` `DD_MASK` environment variable value
+  or to an empty string if not set.
+- `--subsystems` will be reset to the `env_vars` `DD_SUBSYS` environment variable value
+  or to an empty string if not set.
 
 Example usage:
+
 ```
 dmg server set-logmasks -m DEBUG,MEM=ERR -d mgmt,md -s server,mgmt,bio,common
 ```
 
 This example would be a runtime equivalent to setting the following in the server config file:
+
 ```
 ...
 engines:
@@ -174,7 +177,7 @@ example given above.
 
 For more information on the usage of masks (`D_LOG_MASK`), streams (`DD_MASK`) and subsystems
 (`DD_SUBSYS`) parameters refer to the
-[`Debugging System`](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system) section.
+[Debugging System](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system) section.
 
 ## System Monitoring
 
@@ -292,6 +295,7 @@ prometheus --config-file=$HOME/.prometheus.yml
 ## Storage Operations
 
 Storage subcommands can be used to operate on host storage.
+
 ```bash
 $ dmg storage --help
 Usage:
@@ -310,6 +314,7 @@ Available commands:
 
 Storage query subcommands can be used to get detailed information about how DAOS
 is using host storage.
+
 ```bash
 $ dmg storage query --help
 Usage:
@@ -329,6 +334,7 @@ To query SCM and NVMe storage space usage and show how much space is available t
 create new DAOS pools with, run the following command:
 
 - Query Per-Server Space Utilization:
+
 ```bash
 $ dmg storage query usage --help
 Usage:
@@ -341,6 +347,7 @@ The command output shows online DAOS storage utilization, only including storage
 statistics for devices that have been formatted by DAOS control-plane and assigned
 to a currently running rank of the DAOS system. This represents the storage that
 can host DAOS pools.
+
 ```bash
 $ dmg storage query usage
 Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
@@ -351,11 +358,11 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://docs.daos.io/v2.6/admin/pool_operations/#pool-creationdestroy)
+[dmg pool create](https://docs.daos.io/v2.6/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
 
@@ -373,6 +380,7 @@ overhead).
 Useful admin dmg commands to query NVMe SSD health:
 
 - Query Per-Server Metadata:
+
 ```bash
 $ dmg storage query list-devices --help
 Usage:
@@ -388,6 +396,7 @@ Usage:
       -u, --uuid=         Device UUID (all devices if blank)
       -e, --show-evicted  Show only evicted faulty devices
 ```
+
 ```bash
 $ dmg storage query list-pools --help
 Usage:
@@ -406,10 +415,11 @@ stored SMD device and pool tables, respectively. The device table maps the inter
 device UUID to attached VOS target IDs. The rank number of the server where the device
 is located is also listed, along with the current device state. The current device
 states are the following:
-  - NORMAL: a fully functional device in-use by DAOS
-  - EVICTED: the device is no longer in-use by DAOS
-  - UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
-  - NEW: the device is plugged and available and not currently in-use by DAOS
+
+- NORMAL: a fully functional device in-use by DAOS
+- EVICTED: the device is no longer in-use by DAOS
+- UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
+- NEW: the device is plugged and available and not currently in-use by DAOS
 
 To list only devices in the EVICTED state, use the (--show-evicted|-e) option to the
 list-devices command.
@@ -423,6 +433,7 @@ are both VMD devices with transport addresses in the BDF format behind the VMD a
 The pool table maps the DAOS pool UUID to attached VOS target IDs and will list all
 of the server ranks that the pool is distributed on. With the additional verbose flag,
 the mapping of SPDK blob IDs to VOS target IDs will also be displayed.
+
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-devices
 -------
@@ -440,6 +451,7 @@ boro-11
     UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be [TrAddr:5d0505:03:00.0]
       Targets:[1 3] Rank:1 State:NORMAL LED:OFF
 ```
+
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-pools
 -------
@@ -462,6 +474,7 @@ boro-11
 ```
 
 - Query Storage Device Health Data:
+
 ```bash
 $ dmg storage query list-devices --health --help
 Usage:
@@ -477,6 +490,7 @@ Usage:
       -u, --uuid=         Device UUID (all devices if blank)
       -e, --show-evicted  Show only evicted faulty devices
 ```
+
 ```bash
 $ dmg storage scan --nvme-health --help
 Usage:
@@ -502,6 +516,7 @@ Note: A reasonable timed workload > 60 min must be ran for the SMART stats to re
 (Raw values are 65535).
 Media wear percentage can be calculated by dividing by 1024 to find the percentage of the
 maximum rated cycles.
+
 ```bash
 $ dmg -l boro-11 storage query list-devices --health --uuid=d5ec1227-6f39-40db-a1f6-70245aa079f1
 -------
@@ -552,8 +567,8 @@ boro-11
         PLL Lock Loss Count:0
         NAND Bytes Written:244081
         Host Bytes Written:52114
-
 ```
+
 #### Exclusion and Hotplug
 
 - Automatic exclusion of an NVMe SSD:
@@ -610,6 +625,7 @@ applied:
 ```
 
 - Manually exclude an NVMe SSD:
+
 ```bash
 $ dmg storage set nvme-faulty --help
 Usage:
@@ -625,6 +641,7 @@ Usage:
 
 To manually evict an NVMe SSD (auto eviction is covered later in this section),
 the device state needs to be set faulty by running the following command:
+
 ```bash
 $ dmg storage set nvme-faulty --host=boro-11 --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: This command will permanently mark the device as unusable!
@@ -632,6 +649,7 @@ Are you sure you want to continue? (yes/no)
 yes
 set-faulty operation performed successfully on the following host: boro-11:10001
 ```
+
 The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
 faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
 The SSD will remain evicted until device replacement occurs.
@@ -642,15 +660,11 @@ This LED activity visually indicates a fault and that the device needs to be rep
 longer in use by DAOS.
 The LED of the VMD device will remain in this state until replaced by a new device.
 
-!!! note
-    Full NVMe hot plug capability will be available and supported in DAOS 2.6 release.
-    Use is currently intended for testing only and is not supported for production.
+If VMD is not enabled, then in order to use a newly added (hot-inserted) SSD it needs to be
+unbound from the kernel driver and bound instead to a user-space driver so that the device can be
+used with DAOS. To rebind an SSD on a single host, run the following command (replace SSD PCI
+address and hostname with appropriate values):
 
-- To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
-and bound instead to a user-space driver so that the device can be used with DAOS.
-
-To rebind a SSD on a single host, run the following command (replace SSD PCI address and
-hostname with appropriate values):
 ```bash
 $ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
 Command completed successfully
@@ -679,6 +693,7 @@ The device will now be registered in the engine's persistent NVMe config so that
 the newly added SSD will be used.
 
 - Replace an excluded SSD with a New Device:
+
 ```bash
 $ dmg storage replace nvme --help
 Usage:
@@ -694,10 +709,12 @@ Usage:
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
 DAOS, run the following command:
+
 ```bash
 $ dmg storage replace nvme --host=boro-11 --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
 dev-replace operation performed successfully on the following host: boro-11:10001
 ```
+
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
 
@@ -706,11 +723,13 @@ The new device will transition from a "NEW" state to a "NORMAL" state (shown abo
 In order to reuse a device that was previously set as FAULTY and evicted from the DAOS
 system, an admin can run the following command (setting the old device UUID to be the
 new device UUID):
+
 ```bash
 $ dmg storage replace nvme --host=boro-11 ---old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: Attempting to reuse a previously set FAULTY device!
 dev-replace operation performed successfully on the following host: boro-11:10001
 ```
+
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
 be for testing or for accidental device eviction.
@@ -724,6 +743,7 @@ The feature supports two LED device events: locating a healthy device and locati
 an evicted device.
 
 - Locate a Healthy SSD:
+
 ```bash
 $ dmg storage led identify --help
 Usage:
@@ -741,6 +761,7 @@ Usage:
 
 To identify a single SSD, any of the Device-UUIDs can be used which can be found from
 output of the `dmg storage query list-devices` command:
+
 ```bash
 $ dmg -l boro-11 storage led identify 6fccb374-413b-441a-bfbe-860099ac5e8d
 ---------
@@ -753,6 +774,7 @@ boro-11
 The SSD PCI address can also be used in the command to identify a SSD. The PCI address
 should refer to a VMD backing device and can be found from either `dmg storage scan -v`
 or `dmg storage query list-devices` commands:
+
 ```bash
 $ dmg -l boro-11 storage led identify 850505:0b:00.0
 ---------
@@ -764,6 +786,7 @@ boro-11
 
 To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI addresses,
 adding custom timeout of 5 minutes for LED identification (time to flash LED for):
+
 ```bash
 $ dmg -l boro-11 storage led identify --timeout 5 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
@@ -801,6 +824,7 @@ no positional arguments are supplied.
 
 To verify the LED state of SSDs the following command can be used in a similar way to the identify
 command:
+
 ```bash
 $ dmg -l boro-11 storage led check 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
@@ -840,15 +864,16 @@ removed and storage wiped.
 System commands will be handled by a DAOS Server acting as access point and
 listening on the address specified in the DMG config file "hostlist" parameter.
 See
-[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+[daos\_control.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
 for details.
 
 At least one of the addresses in the hostlist parameters should match one of the
-"access point" addresses specified in the server config file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+`access point` addresses specified in the server config file
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 that is supplied when starting `daos_server` instances.
 
 - Commands used to manage a DAOS System:
+
 ```bash
 $ dmg system --help
 Usage:
@@ -872,6 +897,7 @@ The system membership refers to the DAOS engine processes that have registered,
 or joined, a specific DAOS system.
 
 - Query System Membership:
+
 ```bash
 $ dmg system query --help
 Usage:
@@ -900,8 +926,9 @@ from the pools it hosted, please check the pool operation section on how to
 reintegrate an excluded engine.
 
 After one or more DAOS engines being excluded, the DAOS agent cache needs to be
-refreshed.  For detailed information, please refer to the [1][System Deployment
-documentation].  Before refreshing the DAOS Agent cache, it should be checked
+refreshed.  For detailed information, please refer to the
+[1][System Deployment documentation].
+Before refreshing the DAOS Agent cache, it should be checked
 that the exclusion information has been spread to the Management Service leader.
 This could be done using the `dump-attachinfo` sub-command of the `daos_agent`
 executable:
@@ -923,12 +950,12 @@ transport_config:
 log_file: /tmp/daos_agent-tmp.log
 ```
 
-
 ### Shutdown
 
 When up and running, the entire system can be shutdown.
 
 - Stop a System:
+
 ```bash
 $ dmg system stop --help
 Usage:
@@ -969,6 +996,7 @@ This is useful to stop (and restart) misbehaving engines.
 The system can be started backup after a controlled shutdown.
 
 - Start a System:
+
 ```bash
 $ dmg system start --help
 Usage:
@@ -998,15 +1026,17 @@ be reintegrated. Please see the pool operation section for more information.
 
 To reformat the system after a controlled shutdown, run the command:
 
-`$ dmg storage format --force`
+```
+$ dmg storage format --force
+```
 
-- `--force` flag indicates that a (re)format operation should be
-performed disregarding existing filesystems
-- if no record of previously running ranks can be found, reformat is
-performed on the hosts that are specified in the `daos_control.yml`
-config file's `hostlist` parameter.
-- if system membership has records of previously running ranks, storage
-allocated to those ranks will be formatted
+- The `--force` flag indicates that a (re)format operation should be
+  performed disregarding existing filesystems
+- If no record of previously running ranks can be found, reformat is
+  performed on the hosts that are specified in the `daos_control.yml`
+  config file's `hostlist` parameter.
+- If system membership has records of previously running ranks, storage
+  allocated to those ranks will be formatted
 
 The output table will indicate action and result.
 
@@ -1028,7 +1058,6 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
     ```
     Then restart DAOS Servers and format.
 
-
 ### Storage Format Replace
 
 If storage metadata for a rank is lost, for example after losing PMem contents after NVDIMM failure,
@@ -1037,6 +1066,7 @@ the storage server has not changed the old rank can be "reused" by formatting us
 `dmg storage format --replace` option.
 
 An examples workflow would be:
+
 - `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
 - `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
 - After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
@@ -1065,7 +1095,6 @@ formatted again by running `dmg storage format`.
     `daos_server scm reset` which will completely reset the PMem.
     A reboot will be required to finalize the change of the PMem
     allocation goals.
-
 
 ### System Extension
 
@@ -1107,12 +1136,13 @@ The DAOS Management Service (MS) runs on a selected subset of `daos_server` node
 An administrator may add or remove hosts from the MS replica list.
 
 1. Stop I/O and safely shut down all `daos_server` and `daos_agent` processes.
-2. Update the `mgmt_svc_replicas` list in the `daos_server` configuration file.
+2. Update the `access_points` list in the `daos_server` configuration file.
 3. Update the `access_points` list in the `daos_agent` configuration file.
 4. Update `hostlist` in the `dmg` configuration file, if applicable.
 5. Restart all `daos_server` and `daos_agent` processes.
 
 To verify that the updated MS replicas came up correctly:
+
 1. Use the `dmg system query` command to check that all expected ranks have come up in the Joined state.
    The command should not time out.
 2. Use the `dmg system leader-query` to ensure a leader election has completed.
@@ -1121,8 +1151,7 @@ To verify that the updated MS replicas came up correctly:
     When removing or replacing MS replicas, do *not* replace all old replicas with
     new ones.
     At least one old replica must remain in the list to act as a data source for
-    the new replicas. 
-
+    the new replicas.
 
 ## Software Upgrade
 
@@ -1154,7 +1183,7 @@ The following table is intended to visually depict the interoperability
 policies for all major components in a DAOS system.
 
 
-||Server<br>(daos_server)|Engine<br>(daos_engine)|Agent<br>(daos_agent)|Client<br>(libdaos)|Admin<br>(dmg)|
+||Server<br>(daos\_server)|Engine<br>(daos\_engine)|Agent<br>(daos\_agent)|Client<br>(libdaos)|Admin<br>(dmg)|
 |:---|:---:|:---:|:---:|:---:|:---:|
 |Server|x.y.z|x.y.z|x.(y±1)|n/a|x.y|
 |Engine|x.y.z|x.y.z|n/a|x.(y±1)|n/a|
@@ -1163,14 +1192,16 @@ policies for all major components in a DAOS system.
 |Admin|x.y|n/a|n/a|n/a|n/a|
 
 Key:
-  * x.y.z: Major.Minor.Patch must be equal
-  * x.y: Major.Minor must be equal
-  * x.(y±1): Major must be equal, Minor must be equal or -1/+1 release version
-  * n/a: Components do not communicate
+
+* x.y.z: Major.Minor.Patch must be equal
+* x.y: Major.Minor must be equal
+* x.(y±1): Major must be equal, Minor must be equal or -1/+1 release version
+* n/a: Components do not communicate
 
 Examples:
-  * daos_server 2.4.0 is only compatible with daos_engine 2.4.0
-  * daos_agent 2.6.0 is compatible with daos_server 2.4.0 (2.5 is a development version)
-  * dmg 2.4.1 is compatible with daos_server 2.4.0
+
+* daos\_server 2.4.0 is only compatible with daos\_engine 2.4.0
+* daos\_agent 2.6.0 is compatible with daos\_server 2.4.0 (2.5 is a development version)
+* dmg 2.4.1 is compatible with daos\_server 2.4.0
 
 [1]: <deployment.md#refresh-agent-cache>(Refresh DAOS Agent Cache)
