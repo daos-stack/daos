@@ -148,25 +148,46 @@ lookup_rel_path_loop:
 									: dfs->attr.da_chunk_size,
 						       &obj->oh, NULL);
 			if (rc != 0) {
-				D_ERROR("daos_array_open() Failed (%d)\n", rc);
+				D_ERROR("daos_array_open_with_attr() Failed " DF_RC "\n",
+					DP_RC(rc));
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
-			if (flags & O_TRUNC) {
-				rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
-				if (rc) {
-					DL_ERROR(rc, "Failed to truncate file");
+
+			obj->f.has_tail = dfs_entry_has_tail(dfs->layout_v, &entry);
+			if (obj->f.has_tail) {
+				oid_cp(&obj->f.tail_oid, entry.tail_oid);
+				rc = daos_array_open_with_attr(
+				    dfs->coh, obj->f.tail_oid, dfs->th, daos_mode, 1,
+				    entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size,
+				    &obj->f.tail_oh, NULL);
+				if (rc != 0) {
+					D_ERROR("daos_array_open_with_attr() Failed " DF_RC "\n",
+						DP_RC(rc));
 					daos_array_close(obj->oh, NULL);
 					D_GOTO(err_obj, rc = daos_der2errno(rc));
+				}
+			}
+
+			if (flags & O_TRUNC) {
+				rc = file_truncate_zero(obj, DAOS_TX_NONE);
+				if (rc) {
+					if (obj->f.has_tail)
+						daos_array_close(obj->f.tail_oh, NULL);
+					daos_array_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc);
 				}
 			}
 
 			if (stbuf) {
 				daos_array_stbuf_t array_stbuf = {0};
 
-				rc = daos_array_stat(obj->oh, dfs->th, &array_stbuf, NULL);
+				rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail,
+					       dfs->th, &array_stbuf);
 				if (rc) {
+					if (obj->f.has_tail)
+						daos_array_close(obj->f.tail_oh, NULL);
 					daos_array_close(obj->oh, NULL);
-					D_GOTO(err_obj, rc = daos_der2errno(rc));
+					D_GOTO(err_obj, rc);
 				}
 
 				stbuf->st_size   = array_stbuf.st_size;
@@ -175,6 +196,8 @@ lookup_rel_path_loop:
 				rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf,
 							NULL);
 				if (rc) {
+					if (obj->f.has_tail)
+						daos_array_close(obj->f.tail_oh, NULL);
 					daos_array_close(obj->oh, NULL);
 					D_GOTO(err_obj, rc);
 				}
@@ -455,12 +478,28 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 			D_ERROR("daos_array_open_with_attr() Failed " DF_RC "\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
-		if (flags & O_TRUNC) {
-			rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
-			if (rc) {
-				DL_ERROR(rc, "Failed to truncate file");
+
+		obj->f.has_tail = dfs_entry_has_tail(dfs->layout_v, &entry);
+		if (obj->f.has_tail) {
+			oid_cp(&obj->f.tail_oid, entry.tail_oid);
+			rc = daos_array_open_with_attr(
+			    dfs->coh, obj->f.tail_oid, dfs->th, daos_mode, 1,
+			    entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size,
+			    &obj->f.tail_oh, NULL);
+			if (rc != 0) {
+				D_ERROR("daos_array_open_with_attr() Failed " DF_RC "\n",
+					DP_RC(rc));
 				daos_array_close(obj->oh, NULL);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+		}
+		if (flags & O_TRUNC) {
+			rc = file_truncate_zero(obj, DAOS_TX_NONE);
+			if (rc) {
+				if (obj->f.has_tail)
+					daos_array_close(obj->f.tail_oh, NULL);
+				daos_array_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc);
 			}
 		}
 
@@ -468,10 +507,13 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 		if (stbuf) {
 			daos_array_stbuf_t array_stbuf = {0};
 
-			rc = daos_array_stat(obj->oh, dfs->th, &array_stbuf, NULL);
+			rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail, dfs->th,
+				       &array_stbuf);
 			if (rc) {
+				if (obj->f.has_tail)
+					daos_array_close(obj->f.tail_oh, NULL);
 				daos_array_close(obj->oh, NULL);
-				D_GOTO(err_obj, rc = daos_der2errno(rc));
+				D_GOTO(err_obj, rc);
 			}
 			stbuf->st_size   = array_stbuf.st_size;
 			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;

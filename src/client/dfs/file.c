@@ -15,6 +15,83 @@
 #include "dfs_internal.h"
 
 int
+file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tail, daos_handle_t th,
+	  daos_array_stbuf_t *stbuf)
+{
+	daos_array_stbuf_t tail_stbuf = {0};
+	int                rc;
+
+	rc = daos_array_stat(head_oh, th, stbuf, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	if (!has_tail)
+		return 0;
+
+	if (!daos_handle_is_valid(tail_oh))
+		return EIO;
+
+	rc = daos_array_stat(tail_oh, th, &tail_stbuf, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	stbuf->st_size += tail_stbuf.st_size;
+	if (tail_stbuf.st_max_epoch > stbuf->st_max_epoch)
+		stbuf->st_max_epoch = tail_stbuf.st_max_epoch;
+
+	return 0;
+}
+
+int
+file_stat_by_oid(dfs_t *dfs, daos_obj_id_t head_oid, daos_obj_id_t tail_oid, bool has_tail,
+		 daos_size_t chunk_size, daos_handle_t th, daos_array_stbuf_t *stbuf)
+{
+	daos_handle_t head_oh = DAOS_HDL_INVAL;
+	daos_handle_t tail_oh = DAOS_HDL_INVAL;
+	int           rc;
+
+	rc = daos_array_open_with_attr(dfs->coh, head_oid, th, DAOS_OO_RO, 1,
+				       chunk_size ? chunk_size : dfs->attr.da_chunk_size, &head_oh,
+				       NULL);
+	if (rc) {
+		D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	if (has_tail) {
+		if (daos_obj_id_is_nil(tail_oid)) {
+			rc = EIO;
+			D_GOTO(out, rc);
+		}
+
+		rc = daos_array_open_with_attr(dfs->coh, tail_oid, th, DAOS_OO_RO, 1,
+					       chunk_size ? chunk_size : dfs->attr.da_chunk_size,
+					       &tail_oh, NULL);
+		if (rc) {
+			D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+	}
+
+	rc = file_stat(dfs, head_oh, tail_oh, has_tail, th, stbuf);
+out:
+	if (daos_handle_is_valid(tail_oh)) {
+		int rc2 = daos_array_close(tail_oh, NULL);
+
+		if (rc == 0)
+			rc = daos_der2errno(rc2);
+	}
+	if (daos_handle_is_valid(head_oh)) {
+		int rc2 = daos_array_close(head_oh, NULL);
+
+		if (rc == 0)
+			rc = daos_der2errno(rc2);
+	}
+
+	return rc;
+}
+
+int
 dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh)
 {
 	if (obj == NULL || !S_ISREG(obj->mode))
@@ -146,6 +223,7 @@ dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 {
+	daos_array_stbuf_t stbuf = {0};
 	int rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -155,6 +233,28 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 	if (size == NULL)
 		return EINVAL;
 
-	rc = daos_array_get_size(obj->oh, dfs->th, size, NULL);
+	rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail, dfs->th, &stbuf);
+	if (rc)
+		return rc;
+
+	*size = stbuf.st_size;
+	return 0;
+}
+
+int
+file_truncate_zero(dfs_obj_t *obj, daos_handle_t th)
+{
+	int rc;
+
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+
+	if (obj->f.has_tail) {
+		rc = daos_array_set_size(obj->f.tail_oh, th, 0, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+	}
+
+	rc = daos_array_set_size(obj->oh, th, 0, NULL);
 	return daos_der2errno(rc);
 }
