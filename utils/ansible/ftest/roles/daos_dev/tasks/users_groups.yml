@@ -1,0 +1,13 @@
+- name: Gather NSS user entry for {{ daos_launch_username }}
+  command: "getent passwd {{ daos_launch_username }}"
+  register: daos_launch_user_entry
+  changed_when: false
+  failed_when: daos_launch_user_entry.rc not in [0, 2]
+
+- name: Add {{ daos_launch_username }} to local /etc/passwd
+  become: true
+  lineinfile:
+    path: /etc/passwd
+    line: "{{ daos_launch_user_entry.stdout }}"
+    state: present
+  when: daos_launch_user_entry.rc == 0

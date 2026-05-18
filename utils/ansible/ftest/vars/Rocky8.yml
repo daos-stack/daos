@@ -1,15 +1,14 @@
 # Set of variables for Rocky 8
 # yamllint disable rule:line-length
 
-daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
-
-daos_common_deps:
+daos_base_deps:
   rpms:
     - bash
     - bzip2-devel
     - capstone
     - createrepo
     - dnf-plugins-core
+    - environment-modules
     - gdb
     - glibc
     - iproute
@@ -32,7 +31,6 @@ daos_common_deps:
 
 daos_dev_deps:
   rpms:
-    - daos-raft-devel
     - daxctl-devel
     - gcc-gfortran
     - libaec-devel
@@ -41,11 +39,11 @@ daos_dev_deps:
     - python3.11
     - python3.11-devel
     - python3-clustershell
+    - python3-dnf
     - python3-pip
     - python3-wheel
     - rpmdevtools
     - rpm-build
-    - spdk-devel
 
 daos_client_deps:
   rpms:
@@ -70,8 +68,83 @@ daos_server_deps:
     - lz4-libs
     - ndctl
     - pciutils
-    - spdk-tools
 
 mlnx_deps:
   rpms:
     - mlnx-ofed-all
+
+daos_python_version: python3.11
+
+daos_build_deps:
+  repos:
+    - powertools
+  rpms:
+    - boost-python3-devel
+    - bzip2
+    - capstone-devel
+    - clang
+    - clang-tools-extra
+    - cmake
+    - createrepo
+    - daxctl-devel
+    - diffutils
+    - e2fsprogs
+    - fdupes
+    - file
+    - flex
+    - fuse3
+    - gcc
+    - gcc-c++
+    - git
+    - glibc-langpack-en
+    - golang
+    - graphviz
+    - help2man
+    - hdf5-devel
+    - hwloc-devel
+    - java-1.8.0-openjdk
+    - json-c-devel
+    - libaio-devel
+    - libasan
+    - libcmocka-devel
+    - libevent-devel
+    - libibverbs-devel
+    - libiscsi-devel
+    - libnl3-devel
+    - libpsm2-devel
+    - librdmacm-devel
+    - libtool
+    - libtool-ltdl-devel
+    - libunwind-devel
+    - libuuid-devel
+    - libyaml-devel
+    - lz4-devel
+    - make
+    - maven
+    - nasm
+    - ndctl
+    - ndctl-devel
+    - numactl
+    - numactl-devel
+    - openssl-devel
+    - pandoc
+    - patch
+    - patchelf
+    - pciutils
+    - pciutils-devel
+    - protobuf-c-devel
+    - python3-devel
+    - python3-pip
+    - rpm-build
+    - rubygems
+    - rubygem-json
+    - sg3_utils
+    - squashfs-tools
+    - sudo
+    - valgrind-devel
+    - which
+    - ncurses-devel
+    - yasm
+  rpms_x86_64:
+    - ipmctl
+    - libipmctl-devel

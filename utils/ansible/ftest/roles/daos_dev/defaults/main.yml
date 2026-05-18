@@ -1,0 +1,4 @@
+daos_python_version: python3.11
+daos_sysctl_reload: true
+daos_repo_dir: "{{ playbook_dir }}/../../.."
+daos_goproxy: direct

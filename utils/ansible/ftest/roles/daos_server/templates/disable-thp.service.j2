@@ -1,0 +1,13 @@
+[Unit]
+Description=Disable Transparent Huge Pages
+DefaultDependencies=false
+After=sysinit.target local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c "echo never | tee /sys/kernel/mm/transparent_hugepage/enabled"
+ExecStart=/bin/bash -c "echo never | tee /sys/kernel/mm/transparent_hugepage/defrag"
+
+[Install]
+WantedBy=multi-user.target
