@@ -2567,7 +2567,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
-	D_ASSERT(ioc->ic_obj != NULL);
 	if (ioc->ic_obj == NULL) {
 		err = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_obj);
 		if (err != 0)
