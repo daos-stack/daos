@@ -2,6 +2,14 @@
 
 daos_ofi_provider_default: ofi+tcp
 daos_hugepages_nb_default: 0
+# Hugepages-per-physical-core multiplier used when daos_hugepages_nb is 0.
+# 1024: reserves hugepages for VOS engine targets (512) + sys-xstreams (512),
+#       required for MD-on-SSD.  Set to 512 for PMEM-only setups.
+daos_hugepages_multiplier: 1024
+# Set to false to disable the GRUB/bootloader hugepages update (Phase 2).
+# Useful in CI containers that have no real bootloader (grubby would fail).
+# When false only the sysctl runtime setting (Phase 1) is applied.
+daos_grub_update_enabled: true
 daos_sysctl_reload: true
 daos_repo_dir: "{{ playbook_dir }}/../../.."
 daos_python_version: python3.11
