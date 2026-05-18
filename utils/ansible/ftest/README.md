@@ -81,13 +81,14 @@ scripts/setup-ssh-sudo.sh -i my-inventory.yml -u ansible_user -p user_password -
 
 The script:
 1. Generates an SSH key pair if none exists at `~/.ssh/id_ed25519`.
-2. Copies the public key to each target node for the ansible user using `sshpass`.
-3. Adds the public key to root's `authorized_keys` on each target node.
-4. Creates a passwordless sudoers entry (`/etc/sudoers.d/<user>`) via root SSH.
+2. Sets up SSH key authentication for the ansible user (via `ssh-copy-id` + `sshpass` if `-p` is provided, or `sshpass` alone if `ssh-copy-id` is unavailable).
+3. Adds the public key to root's `authorized_keys` using the first available method in order: direct root key auth → root password via `sshpass` → passwordless user sudo → user sudo with password.
+4. Creates a passwordless sudoers entry (`/etc/sudoers.d/<user>`).
 5. Verifies SSH and `sudo -n` work on every node before exiting.
 
-**Requirements:** `sshpass` and `ssh-copy-id` (both typically available in distro packages).
-`nodeset` from the `clustershell` package is required for nodeset notation (`-w`).
+**Requirements:** `nodeset` from the `clustershell` package is required for nodeset notation (`-w`).
+`sshpass` is optional — it is only needed when the ansible user account is not yet accessible by key
+(step 2) or when a root password is provided for step 3.
 
 If the nodes are already accessible by key and have passwordless sudo configured, this step
 can be skipped.
