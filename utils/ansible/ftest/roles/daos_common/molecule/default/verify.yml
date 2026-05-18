@@ -1,0 +1,55 @@
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check DefaultLimitCORE in system.conf
+      command: grep -q "DefaultLimitCORE=infinity:infinity" /etc/systemd/system.conf
+      changed_when: false
+
+    - name: Check coredumps PAM limits file
+      stat:
+        path: /etc/security/limits.d/daos-coredumps.conf
+      register: coredumps_limits
+    - assert:
+        that: coredumps_limits.stat.exists
+
+    - name: Check coredump systemd config directory
+      stat:
+        path: /etc/systemd/coredump.conf.d/daos-coredumps.conf
+      register: coredump_conf
+    - assert:
+        that: coredump_conf.stat.exists
+
+    - name: Check coredump sysctl config file
+      stat:
+        path: /etc/sysctl.d/daos-coredumps.conf
+      register: coredump_sysctl
+    - assert:
+        that: coredump_sysctl.stat.exists
+
+    # --- Proxy assertions ---
+    # The playbook must not write proxy settings to the system permanently;
+    # proxy is scoped to the playbook run only via environment: at play level.
+    # We check that the specific test proxy URL was NOT written to /etc/environment
+    # (the container may already have system-level proxy settings from the host).
+    - name: Check /etc/environment does not contain the test proxy URL
+      command: grep -i "test-proxy.example.com" /etc/environment
+      register: _env_proxy_check
+      changed_when: false
+      failed_when: false
+
+    - assert:
+        that: _env_proxy_check.rc != 0
+        fail_msg: >-
+          /etc/environment contains the test proxy URL — the role should not
+          write proxy settings permanently to the system.
+
+    - name: Check /etc/profile.d/proxy.sh does not exist
+      stat:
+        path: /etc/profile.d/proxy.sh
+      register: _proxy_sh
+
+    - assert:
+        that: not _proxy_sh.stat.exists
+        fail_msg: >-
+          /etc/profile.d/proxy.sh exists — the proxy.sh.j2 template was
+          removed; no proxy script should be written to /etc/profile.d/.
