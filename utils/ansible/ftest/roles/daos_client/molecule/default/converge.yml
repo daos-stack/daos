@@ -1,0 +1,10 @@
+- hosts: all
+  gather_facts: true
+  vars:
+    daos_runtime_dir: /opt/daos
+    daos_ofi_provider_default: ofi+tcp
+  tasks:
+    - name: Test client user and group creation
+      include_role:
+        name: daos_client
+        tasks_from: users_groups.yml

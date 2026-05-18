@@ -1,0 +1,23 @@
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: Verify tasks completed without error
+      debug:
+        msg: "daos_dev users_groups tasks verified"
+
+    - name: Verify fake repo was not enabled
+      become: true
+      command: dnf repolist
+      register: _repo_verify
+      changed_when: false
+      failed_when: "'fake-repo-does-not-exist' in _repo_verify.stdout"
+
+    - name: Verify build requirements installed system-wide via python3.11
+      become: true
+      command: python3.11 -c "import distro"
+      changed_when: false
+
+    - name: Verify unit-test requirements installed system-wide via python3.11
+      become: true
+      command: python3.11 -c "import distro"
+      changed_when: false

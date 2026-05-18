@@ -1,0 +1,40 @@
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check daos_server group exists
+      getent:
+        database: group
+        key: daos_server
+    - name: Check daos_daemons group exists
+      getent:
+        database: group
+        key: daos_daemons
+    - name: Check daos_metrics group exists
+      getent:
+        database: group
+        key: daos_metrics
+    - name: Check daos_server user exists
+      getent:
+        database: passwd
+        key: daos_server
+
+    - name: Check nofile limits config
+      stat:
+        path: /etc/security/limits.d/daos-nofile.conf
+      register: nofile_conf
+    - assert:
+        that: nofile_conf.stat.exists
+
+    - name: Check memlock limits config
+      stat:
+        path: /etc/security/limits.d/daos-memlock.conf
+      register: memlock_conf
+    - assert:
+        that: memlock_conf.stat.exists
+
+    - name: Check hugepages sysctl config file
+      stat:
+        path: /etc/sysctl.d/50-hugepages.conf
+      register: hugepages_conf
+    - assert:
+        that: hugepages_conf.stat.exists
