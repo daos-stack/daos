@@ -154,7 +154,7 @@ EOF
 
 # Set up the uv (a part of SPDK installer)
 # to use the artifactory as the installation packages source
-mkdir -p /etc/uv
+    mkdir -p /etc/uv
     cat <<EOF > /etc/uv/uv.toml
 index-url = "https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
 native-tls = true
