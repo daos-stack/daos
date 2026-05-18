@@ -1,0 +1,15 @@
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check daos_agent group exists
+      getent:
+        database: group
+        key: daos_agent
+    - name: Check daos_daemons group exists
+      getent:
+        database: group
+        key: daos_daemons
+    - name: Check daos_agent user exists
+      getent:
+        database: passwd
+        key: daos_agent
