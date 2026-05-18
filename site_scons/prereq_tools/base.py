@@ -518,6 +518,8 @@ class PreReqComponent():
         opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
         opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
+        opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
+                              False))
 
         opts.Update(self.__env)
 

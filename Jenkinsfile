@@ -525,6 +525,7 @@ pipeline {
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsArgs()
         HTTPS_PROXY = ''
+        PYTHON_VERSION = '3.11'
     }
 
     options {
@@ -837,6 +838,7 @@ pipeline {
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el8') + '"' +
                                              ' --build-arg POINT_RELEASE=.10 ' +
+                                             " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.el.8 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -861,6 +863,7 @@ pipeline {
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el9') + '"' +
                                              ' --build-arg POINT_RELEASE=.7' +
+                                             " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.el.9 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -885,6 +888,7 @@ pipeline {
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg POINT_RELEASE=.6' +
+                                             " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.leap.15 .',
                             sconsBuildArgs: [
                                 parallel_build: true,
@@ -906,6 +910,7 @@ pipeline {
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el9') + '"' +
                                              ' --build-arg POINT_RELEASE=.7' +
+                                             " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' --build-arg COMPILER=covc' +
                                              ' --build-arg CODE_COVERAGE=true' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
@@ -1305,8 +1310,9 @@ pipeline {
                             label 'docker_runner_fi'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true) +
-                                                ' --build-arg POINT_RELEASE=.7 '
+                                                                deps_build: true) + 
+                                                ' --build-arg POINT_RELEASE=.7 ' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                             args '--tmpfs /mnt/daos_0'
                         }
                     }
@@ -1627,7 +1633,7 @@ pipeline {
                                           'func_hw_large_md_on_ssd_bullseye']
                             ],
                             archiveArtifactsArgs: [
-                                artifacts: 'bullseye_code_coverage_report/*',
+                                artifacts: 'bullseye_code_coverage_report/',
                                 allowEmptyArchive: false
                             ],
                             publishHtmlArgs: [

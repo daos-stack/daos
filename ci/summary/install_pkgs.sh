@@ -33,4 +33,4 @@ add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}" "${code_coverage}" "true
 
 # Install bullseye
 bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"
-dnf install --allowerasing -y "${bullseye_pkg}" || echo "${bullseye_pkg} not available"
+sudo dnf install --allowerasing -y "${bullseye_pkg}"
