@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -81,7 +82,7 @@ class DaosPrivHelperTest(TestWithServers):
 
         # Run format command under non-root user
         self.log_step("Perform SCM format")
-        result = self.server_managers[0].dmg.storage_format()
+        result = self.server_managers[0].storage_format()
         if result is None:
             self.fail("Failed to format storage")
 
