@@ -73,20 +73,11 @@ ddb_pool_is_open(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
-	struct vos_file_parts path_parts = {0};
-	int                   rc;
-
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
-	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
-	if (!SUCCESS(rc))
-		return rc;
-
-	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
-
 	ctx->dc_write_mode = opt->write_mode;
-
-	return dv_pool_open(opt->path, &path_parts, &ctx->dc_poh, 0, ctx->dc_write_mode);
+	DDB_CAN_PROCEED(ctx, opt->db_path);
+	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0, opt->write_mode);
 }
 
 int
@@ -1082,7 +1073,6 @@ feature_write_action(struct feature_options *opt)
 int
 ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 {
-	struct vos_file_parts path_parts = {0};
 	int      rc;
 	uint64_t new_compat_flags;
 	uint64_t new_incompat_flags;
@@ -1101,22 +1091,13 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (feature_write_action(opt) && !ctx->dc_write_mode)
 		return -DER_NO_PERM;
 
-	if (!opt->path || strnlen(opt->path, PATH_MAX) == 0)
-		opt->path = ctx->dc_pool_path;
-
-	if (!opt->db_path || strnlen(opt->db_path, PATH_MAX) == 0)
-		opt->db_path = ctx->dc_db_path;
-
-	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
-	if (!SUCCESS(rc))
-		return rc;
-
-	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
-
-	rc = dv_pool_open(opt->path, &path_parts, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
+	DDB_CAN_PROCEED(ctx, opt->db_path);
+	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
 			  ctx->dc_write_mode);
-	if (rc)
+	if (rc) {
+		ddb_errorf(ctx, "Unable to open VOS pool '%s'\n", opt->path);
 		return rc;
+	}
 	close = true;
 
 skip:
@@ -1160,18 +1141,9 @@ out:
 int
 ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
 {
-	struct vos_file_parts path_parts = {0};
-	int                   rc;
-
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
-	rc = parse_vos_file_parts(opt->path, opt->db_path, &path_parts);
-	if (!SUCCESS(rc))
-		return rc;
-
-	DDB_CAN_PROCEED(ctx, path_parts.vf_db_path);
-
-	return dv_pool_destroy(opt->path, &path_parts);
+	return dv_pool_destroy(opt->path, opt->db_path, ctx);
 }
 
 #define DTI_ALL "all"
@@ -1660,7 +1632,7 @@ ddb_run_dtx_stat(struct ddb_ctx *ctx, struct dtx_stat_options *opt)
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL, dtx_stat_cont_cb,
 				 &args, NULL);
 	} while (rc > 0);
-	ddb_printf(ctx, "DTX entries statistics of the pool %s\n", ctx->dc_pool_path);
+	ddb_print(ctx, "DTX entries statistics of the pool:\n");
 	if (opt->details)
 		rc = dtx_stat_print(ctx, args.cmt_cnt, &args.time_stat, args.aggr_epoch);
 	else

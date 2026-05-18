@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,8 @@
  * CPU schedule efficiency, and so on.
  */
 #define DTX_THRESHOLD_COUNT		(1 << 9)
+
+#define DTX_PIGGYBACK_COUNT             (1 << 6)
 
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10

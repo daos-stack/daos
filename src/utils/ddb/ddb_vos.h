@@ -51,13 +51,26 @@ struct ddb_array {
 	struct dv_indexed_tree_path *ddba_path;
 };
 
-/* Open and close a pool for a ddb_ctx */
+/**
+ * Open a VOS pool file.
+ *
+ * @param path		VOS pool file path in the format "[/dir/]<pool-uuid>/(vos-N|rdb-pool)".
+ * @param db_path	Path to the VOS metadata DB directory (SMD/NVMe). If NULL or empty,
+ *			the DB directory is derived from the leading path component of path.
+ * @param poh		Pool handle set on success.
+ * @param flags		Flags forwarded to vos_pool_open() (e.g. VOS_POF_FOR_FEATURE_FLAG to
+ *			skip VEA load when only reading/writing pool feature flags).
+ * @param write_mode	When false the pool is mapped copy-on-write so that internal PMEMOBJ
+ *			bookkeeping (SDS, ULOG replay) does not persist to the storage medium.
+ * @return		0 on success, negative DER error code otherwise.
+ */
 int
-    dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t *poh,
-		 uint32_t flags, bool write_mode);
-int dv_pool_close(daos_handle_t poh);
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
+	     bool write_mode);
 int
-dv_pool_destroy(const char *path, struct vos_file_parts *path_parts);
+dv_pool_close(daos_handle_t poh);
+int
+dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx);
 
 /* Update vos pool flags */
 int

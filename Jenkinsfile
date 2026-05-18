@@ -202,6 +202,7 @@ pipeline {
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsArgs()
         HTTPS_PROXY = ''
+        PYTHON_VERSION = '3.11'
     }
 
     options {
@@ -505,7 +506,8 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.10 '
+                                                ' --build-arg POINT_RELEASE=.10 ' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -558,7 +560,8 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.7 '
+                                                ' --build-arg POINT_RELEASE=.7' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -609,8 +612,10 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" + 
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg POINT_RELEASE=.6 '
+                                                ' --build-arg POINT_RELEASE=.6' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
