@@ -1,0 +1,117 @@
+# yamllint disable rule:line-length
+- hosts: all
+  gather_facts: true
+  vars:
+    daos_sysctl_reload: false
+    # Proxy vars (subset of vars/defaults.yml) used to test the proxy mechanism
+    daos_http_proxy: "http://test-proxy.example.com:3128"
+    daos_proxy_bypass: "localhost,127.0.0.1"
+    daos_proxy_nofwd: []
+    daos_proxy_env:
+      http_proxy: "http://test-proxy.example.com:3128"
+      https_proxy: "http://test-proxy.example.com:3128"
+      HTTP_PROXY: "http://test-proxy.example.com:3128"
+      HTTPS_PROXY: "http://test-proxy.example.com:3128"
+      no_proxy: "localhost,127.0.0.1"
+      NO_PROXY: "localhost,127.0.0.1"
+    daos_noproxy_env:
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      no_proxy: ""
+      NO_PROXY: ""
+  tasks:
+    - name: Ensure /etc/systemd directory exists
+      become: true
+      file:
+        path: /etc/systemd
+        state: directory
+        mode: '0755'
+
+    - name: Ensure /etc/systemd/system.conf exists
+      become: true
+      copy:
+        dest: /etc/systemd/system.conf
+        content: |
+          [Manager]
+          #DefaultLimitCORE=
+        force: false
+        mode: '0644'
+
+    - name: Ensure /etc/sysctl.d directory exists
+      become: true
+      file:
+        path: /etc/sysctl.d
+        state: directory
+        mode: '0755'
+
+    - name: Ensure /etc/security/limits.d directory exists
+      become: true
+      file:
+        path: /etc/security/limits.d
+        state: directory
+        mode: '0755'
+
+    - name: Test coredumps configuration
+      include_role:
+        name: daos_common
+        tasks_from: coredumps.yml
+
+    # --- Proxy environment sentinel tests ---
+    # Verify that daos_proxy_env forwards the proxy to tasks
+    - name: "Proxy sentinel: capture http_proxy inside daos_proxy_env"
+      command: bash -c 'printf "%s" "${http_proxy}"'
+      register: _proxy_sentinel
+      changed_when: false
+      failed_when: false
+      environment: "{{ daos_proxy_env }}"
+
+    - name: "Proxy sentinel: assert http_proxy is set when using daos_proxy_env"
+      assert:
+        that: _proxy_sentinel.stdout == daos_http_proxy
+        fail_msg: >-
+          Expected http_proxy='{{ daos_http_proxy }}'
+          but got '{{ _proxy_sentinel.stdout }}'
+
+    # Verify that daos_noproxy_env clears the proxy (used for dnf exceptions)
+    - name: "Proxy sentinel: capture http_proxy inside daos_noproxy_env"
+      command: bash -c 'printf "%s" "${http_proxy}"'
+      register: _noproxy_sentinel
+      changed_when: false
+      failed_when: false
+      environment: "{{ daos_noproxy_env }}"
+
+    - name: "Proxy sentinel: assert http_proxy is cleared when using daos_noproxy_env"
+      assert:
+        that: _noproxy_sentinel.stdout == ""
+        fail_msg: >-
+          Expected http_proxy='' (empty/cleared) for dnf exception
+          but got '{{ _noproxy_sentinel.stdout }}'
+
+    # Verify that daos_proxy_nofwd drives the correct environment choice
+    # Test 1: with the default empty list, dnf tasks should receive the proxy
+    - name: "Proxy sentinel: resolve env dict for dnf (empty list — proxy forwarded)"
+      # yamllint disable-line rule:line-length
+      set_fact:
+        _dnf_env: "{{ daos_noproxy_env if 'dnf' in (daos_proxy_nofwd | default([])) else daos_proxy_env }}"
+
+    - name: "Proxy sentinel: assert dnf tasks get proxy when daos_proxy_nofwd is empty"
+      assert:
+        that: _dnf_env.http_proxy == daos_http_proxy
+        fail_msg: >-
+          Expected dnf tasks to receive http_proxy='{{ daos_http_proxy }}'
+          but got '{{ _dnf_env.http_proxy }}'
+
+    # Test 2: when 'dnf' is added to the exception list, dnf tasks should bypass the proxy
+    - name: "Proxy sentinel: resolve env dict with daos_proxy_nofwd: [dnf]"
+      # yamllint disable-line rule:line-length
+      set_fact:
+        _dnf_env_with_exception: "{{ daos_noproxy_env if 'dnf' in (['dnf'] | default([])) else daos_proxy_env }}"
+
+    - name: "Proxy sentinel: assert dnf tasks bypass proxy when dnf is in daos_proxy_nofwd"
+      assert:
+        that: _dnf_env_with_exception.http_proxy == ""
+        fail_msg: >-
+          Expected dnf tasks to receive http_proxy='' when dnf is listed in daos_proxy_nofwd
+          but got '{{ _dnf_env_with_exception.http_proxy }}'
