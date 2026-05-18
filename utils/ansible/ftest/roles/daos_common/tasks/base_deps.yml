@@ -7,6 +7,14 @@
     option: skip_if_unavailable
     value: 'True'
 
+- name: Configure dnf connection timeout
+  become: true
+  community.general.ini_file:
+    path: /etc/dnf/dnf.conf
+    section: main
+    option: timeout
+    value: '10'
+
 - name: Install base OS dependency packages
   become: true
   dnf:
