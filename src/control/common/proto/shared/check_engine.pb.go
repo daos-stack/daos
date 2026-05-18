@@ -124,6 +124,385 @@ func (x *CheckReportResp) GetStatus() int32 {
 	return 0
 }
 
+// List all the known pools from MS.
+type CheckListPoolReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *CheckListPoolReq) Reset() {
+	*x = CheckListPoolReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_shared_check_engine_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckListPoolReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckListPoolReq) ProtoMessage() {}
+
+func (x *CheckListPoolReq) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_check_engine_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckListPoolReq.ProtoReflect.Descriptor instead.
+func (*CheckListPoolReq) Descriptor() ([]byte, []int) {
+	return file_shared_check_engine_proto_rawDescGZIP(), []int{2}
+}
+
+type CheckListPoolResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status int32                        `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"` // DAOS error code.
+	Pools  []*CheckListPoolResp_OnePool `protobuf:"bytes,2,rep,name=pools,proto3" json:"pools,omitempty"`    // The list of pools.
+}
+
+func (x *CheckListPoolResp) Reset() {
+	*x = CheckListPoolResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_shared_check_engine_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckListPoolResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckListPoolResp) ProtoMessage() {}
+
+func (x *CheckListPoolResp) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_check_engine_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckListPoolResp.ProtoReflect.Descriptor instead.
+func (*CheckListPoolResp) Descriptor() ([]byte, []int) {
+	return file_shared_check_engine_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CheckListPoolResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *CheckListPoolResp) GetPools() []*CheckListPoolResp_OnePool {
+	if x != nil {
+		return x.Pools
+	}
+	return nil
+}
+
+// Register pool to MS.
+type CheckRegPoolReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Seq     uint64   `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`                // DAOS Check event sequence, unique for the instance.
+	Uuid    string   `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`               // Pool UUID.
+	Label   string   `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`             // Pool label.
+	Svcreps []uint32 `protobuf:"varint,4,rep,packed,name=svcreps,proto3" json:"svcreps,omitempty"` // Pool service replica ranks.
+}
+
+func (x *CheckRegPoolReq) Reset() {
+	*x = CheckRegPoolReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_shared_check_engine_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckRegPoolReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckRegPoolReq) ProtoMessage() {}
+
+func (x *CheckRegPoolReq) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_check_engine_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckRegPoolReq.ProtoReflect.Descriptor instead.
+func (*CheckRegPoolReq) Descriptor() ([]byte, []int) {
+	return file_shared_check_engine_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CheckRegPoolReq) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *CheckRegPoolReq) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *CheckRegPoolReq) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *CheckRegPoolReq) GetSvcreps() []uint32 {
+	if x != nil {
+		return x.Svcreps
+	}
+	return nil
+}
+
+type CheckRegPoolResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status int32 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"` // DAOS error code.
+}
+
+func (x *CheckRegPoolResp) Reset() {
+	*x = CheckRegPoolResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_shared_check_engine_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckRegPoolResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckRegPoolResp) ProtoMessage() {}
+
+func (x *CheckRegPoolResp) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_check_engine_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckRegPoolResp.ProtoReflect.Descriptor instead.
+func (*CheckRegPoolResp) Descriptor() ([]byte, []int) {
+	return file_shared_check_engine_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CheckRegPoolResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+// Deregister pool from MS.
+type CheckDeregPoolReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Seq  uint64 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`  // DAOS Check event sequence, unique for the instance.
+	Uuid string `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"` // The pool to be deregistered.
+}
+
+func (x *CheckDeregPoolReq) Reset() {
+	*x = CheckDeregPoolReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_shared_check_engine_proto_msgTypes[6]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckDeregPoolReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckDeregPoolReq) ProtoMessage() {}
+
+func (x *CheckDeregPoolReq) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_check_engine_proto_msgTypes[6]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckDeregPoolReq.ProtoReflect.Descriptor instead.
+func (*CheckDeregPoolReq) Descriptor() ([]byte, []int) {
+	return file_shared_check_engine_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CheckDeregPoolReq) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *CheckDeregPoolReq) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type CheckDeregPoolResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status int32 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"` // DAOS error code.
+}
+
+func (x *CheckDeregPoolResp) Reset() {
+	*x = CheckDeregPoolResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_shared_check_engine_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckDeregPoolResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckDeregPoolResp) ProtoMessage() {}
+
+func (x *CheckDeregPoolResp) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_check_engine_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckDeregPoolResp.ProtoReflect.Descriptor instead.
+func (*CheckDeregPoolResp) Descriptor() ([]byte, []int) {
+	return file_shared_check_engine_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CheckDeregPoolResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+type CheckListPoolResp_OnePool struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uuid    string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`               // Pool UUID.
+	Label   string   `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`             // Pool label.
+	Svcreps []uint32 `protobuf:"varint,3,rep,packed,name=svcreps,proto3" json:"svcreps,omitempty"` // Pool service replica ranks.
+}
+
+func (x *CheckListPoolResp_OnePool) Reset() {
+	*x = CheckListPoolResp_OnePool{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_shared_check_engine_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckListPoolResp_OnePool) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckListPoolResp_OnePool) ProtoMessage() {}
+
+func (x *CheckListPoolResp_OnePool) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_check_engine_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckListPoolResp_OnePool.ProtoReflect.Descriptor instead.
+func (*CheckListPoolResp_OnePool) Descriptor() ([]byte, []int) {
+	return file_shared_check_engine_proto_rawDescGZIP(), []int{3, 0}
+}
+
+func (x *CheckListPoolResp_OnePool) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *CheckListPoolResp_OnePool) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *CheckListPoolResp_OnePool) GetSvcreps() []uint32 {
+	if x != nil {
+		return x.Svcreps
+	}
+	return nil
+}
+
 var File_shared_check_engine_proto protoreflect.FileDescriptor
 
 var file_shared_check_engine_proto_rawDesc = []byte{
@@ -136,11 +515,40 @@ var file_shared_check_engine_proto_rawDesc = []byte{
 	0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x52, 0x06, 0x72, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x22, 0x29,
 	0x0a, 0x0f, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x52, 0x65, 0x73,
 	0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28,
-	0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x42, 0x3c, 0x5a, 0x3a, 0x67, 0x69, 0x74,
-	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74, 0x61,
-	0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73, 0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e, 0x74,
-	0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2f, 0x73, 0x68, 0x61, 0x72, 0x65, 0x64, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x12, 0x0a, 0x10, 0x43, 0x68, 0x65,
+	0x63, 0x6b, 0x4c, 0x69, 0x73, 0x74, 0x50, 0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x71, 0x22, 0xb3, 0x01,
+	0x0a, 0x11, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x4c, 0x69, 0x73, 0x74, 0x50, 0x6f, 0x6f, 0x6c, 0x52,
+	0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x37, 0x0a, 0x05, 0x70,
+	0x6f, 0x6f, 0x6c, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x73, 0x68, 0x61,
+	0x72, 0x65, 0x64, 0x2e, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x4c, 0x69, 0x73, 0x74, 0x50, 0x6f, 0x6f,
+	0x6c, 0x52, 0x65, 0x73, 0x70, 0x2e, 0x4f, 0x6e, 0x65, 0x50, 0x6f, 0x6f, 0x6c, 0x52, 0x05, 0x70,
+	0x6f, 0x6f, 0x6c, 0x73, 0x1a, 0x4d, 0x0a, 0x07, 0x4f, 0x6e, 0x65, 0x50, 0x6f, 0x6f, 0x6c, 0x12,
+	0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75,
+	0x75, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x05, 0x6c, 0x61, 0x62, 0x65, 0x6c, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x76, 0x63,
+	0x72, 0x65, 0x70, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0d, 0x52, 0x07, 0x73, 0x76, 0x63, 0x72,
+	0x65, 0x70, 0x73, 0x22, 0x67, 0x0a, 0x0f, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x67, 0x50,
+	0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x65, 0x71, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x04, 0x52, 0x03, 0x73, 0x65, 0x71, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x14, 0x0a, 0x05,
+	0x6c, 0x61, 0x62, 0x65, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6c, 0x61, 0x62,
+	0x65, 0x6c, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x76, 0x63, 0x72, 0x65, 0x70, 0x73, 0x18, 0x04, 0x20,
+	0x03, 0x28, 0x0d, 0x52, 0x07, 0x73, 0x76, 0x63, 0x72, 0x65, 0x70, 0x73, 0x22, 0x2a, 0x0a, 0x10,
+	0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x67, 0x50, 0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x73, 0x70,
+	0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05,
+	0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x39, 0x0a, 0x11, 0x43, 0x68, 0x65, 0x63,
+	0x6b, 0x44, 0x65, 0x72, 0x65, 0x67, 0x50, 0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a,
+	0x03, 0x73, 0x65, 0x71, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x73, 0x65, 0x71, 0x12,
+	0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75,
+	0x75, 0x69, 0x64, 0x22, 0x2c, 0x0a, 0x12, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x44, 0x65, 0x72, 0x65,
+	0x67, 0x50, 0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61,
+	0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75,
+	0x73, 0x42, 0x3c, 0x5a, 0x3a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
+	0x64, 0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f,
+	0x73, 0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d,
+	0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x73, 0x68, 0x61, 0x72, 0x65, 0x64, 0x62,
+	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -155,19 +563,27 @@ func file_shared_check_engine_proto_rawDescGZIP() []byte {
 	return file_shared_check_engine_proto_rawDescData
 }
 
-var file_shared_check_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_shared_check_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_shared_check_engine_proto_goTypes = []interface{}{
-	(*CheckReportReq)(nil),  // 0: shared.CheckReportReq
-	(*CheckReportResp)(nil), // 1: shared.CheckReportResp
-	(*chk.CheckReport)(nil), // 2: chk.CheckReport
+	(*CheckReportReq)(nil),            // 0: shared.CheckReportReq
+	(*CheckReportResp)(nil),           // 1: shared.CheckReportResp
+	(*CheckListPoolReq)(nil),          // 2: shared.CheckListPoolReq
+	(*CheckListPoolResp)(nil),         // 3: shared.CheckListPoolResp
+	(*CheckRegPoolReq)(nil),           // 4: shared.CheckRegPoolReq
+	(*CheckRegPoolResp)(nil),          // 5: shared.CheckRegPoolResp
+	(*CheckDeregPoolReq)(nil),         // 6: shared.CheckDeregPoolReq
+	(*CheckDeregPoolResp)(nil),        // 7: shared.CheckDeregPoolResp
+	(*CheckListPoolResp_OnePool)(nil), // 8: shared.CheckListPoolResp.OnePool
+	(*chk.CheckReport)(nil),           // 9: chk.CheckReport
 }
 var file_shared_check_engine_proto_depIdxs = []int32{
-	2, // 0: shared.CheckReportReq.report:type_name -> chk.CheckReport
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	9, // 0: shared.CheckReportReq.report:type_name -> chk.CheckReport
+	8, // 1: shared.CheckListPoolResp.pools:type_name -> shared.CheckListPoolResp.OnePool
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_shared_check_engine_proto_init() }
@@ -200,6 +616,90 @@ func file_shared_check_engine_proto_init() {
 				return nil
 			}
 		}
+		file_shared_check_engine_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckListPoolReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_shared_check_engine_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckListPoolResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_shared_check_engine_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckRegPoolReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_shared_check_engine_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckRegPoolResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_shared_check_engine_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckDeregPoolReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_shared_check_engine_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckDeregPoolResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_shared_check_engine_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckListPoolResp_OnePool); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -207,7 +707,7 @@ func file_shared_check_engine_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_shared_check_engine_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

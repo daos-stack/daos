@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2312,8 +2312,8 @@ rdb_raft_append_apply_cfg(struct rdb *db, raft_logtype_e type, rdb_replica_id_t 
 	int         rc;
 
 	D_ASSERTF(raft_entry_is_cfg_change(&entry), "invalid type: %d\n", type);
-	D_DEBUG(DB_MD, DF_DB ": %s " RDB_F_RID "\n", DP_DB(db), rdb_raft_entry_type_str(type),
-		RDB_P_RID(id));
+	D_INFO(DF_DB ": %s " RDB_F_RID "\n", DP_DB(db), rdb_raft_entry_type_str(type),
+	       RDB_P_RID(id));
 
 	if (db->d_version >= RDB_LAYOUT_VERSION_REPLICA_ID) {
 		entry.data.buf = &id;

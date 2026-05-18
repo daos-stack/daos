@@ -15,7 +15,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
-	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
@@ -27,13 +26,13 @@ import (
 
 func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (out []byte, outErr error) {
 	// TODO: Remove if we never add request fields?
-	req := new(srvpb.CheckListPoolReq)
+	req := new(sharedpb.CheckListPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerListPools: %+v", req)
 
-	resp := new(srvpb.CheckListPoolResp)
+	resp := new(sharedpb.CheckListPoolResp)
 	defer func() {
 		mod.log.Debugf("CheckerListPools resp: %+v", resp)
 		out, outErr = proto.Marshal(resp)
@@ -47,7 +46,7 @@ func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (ou
 	}
 
 	for _, ps := range pools {
-		resp.Pools = append(resp.Pools, &srvpb.CheckListPoolResp_OnePool{
+		resp.Pools = append(resp.Pools, &sharedpb.CheckListPoolResp_OnePool{
 			Uuid:    ps.PoolUUID.String(),
 			Label:   ps.PoolLabel,
 			Svcreps: ranklist.RanksToUint32(ps.Replicas),
@@ -58,13 +57,13 @@ func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (ou
 }
 
 func (mod *srvModule) handleCheckerRegisterPool(parent context.Context, reqb []byte) (out []byte, outErr error) {
-	req := new(srvpb.CheckRegPoolReq)
+	req := new(sharedpb.CheckRegPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerRegisterPool: %+v", req)
 
-	resp := new(srvpb.CheckRegPoolResp)
+	resp := new(sharedpb.CheckRegPoolResp)
 	defer func() {
 		mod.log.Debugf("CheckerRegisterPool resp: %+v", resp)
 		out, outErr = proto.Marshal(resp)
@@ -147,13 +146,13 @@ func (mod *srvModule) handleCheckerRegisterPool(parent context.Context, reqb []b
 }
 
 func (mod *srvModule) handleCheckerDeregisterPool(parent context.Context, reqb []byte) (out []byte, outErr error) {
-	req := new(srvpb.CheckDeregPoolReq)
+	req := new(sharedpb.CheckDeregPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerDeregisterPool: %+v", req)
 
-	resp := new(srvpb.CheckDeregPoolResp)
+	resp := new(sharedpb.CheckDeregPoolResp)
 	defer func() {
 		mod.log.Debugf("CheckerDeregisterPool resp: %+v", resp)
 		out, outErr = proto.Marshal(resp)
