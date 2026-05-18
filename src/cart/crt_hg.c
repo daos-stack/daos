@@ -1180,6 +1180,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_hg_hdl = hg_hdl;
 	rpc_tmp.crp_pub.cr_ctx = crt_ctx;
 
+	CRT_METRIC_INC(crt_ctx, CM_RPC_RECV);
+
 	rc = crt_hg_unpack_header(hg_hdl, &rpc_tmp, &proc);
 	if (unlikely(rc != 0)) {
 		D_ERROR("crt_hg_unpack_header failed, rc: %d.\n", rc);
@@ -1585,8 +1587,8 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	 * see CART-146 for details
 	 */
 	if (hg_ret != HG_SUCCESS)
-		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x.\n",
-		       DP_HG_RC(hg_ret), opc);
+		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x from %s\n", DP_HG_RC(hg_ret), opc,
+		       crt_rpc_priv_get_origin_addr(rpc_priv));
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
 	RPC_DECREF(rpc_priv);
@@ -1597,22 +1599,28 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 int
 crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	hg_ret;
-	int		rc = 0;
+	struct crt_context *crt_ctx;
+	hg_return_t         hg_ret;
+	int                 rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	/* corresponds to decref in crt_hg_reply_send_cb */
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
 	if (hg_ret != HG_SUCCESS) {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLY_FAILED);
 		RPC_ERROR(rpc_priv, "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
+
+	CRT_METRIC_INC(crt_ctx, CM_RPC_REPLIED);
 
 	/* Release input buffer */
 	if (rpc_priv->crp_release_input_early && !rpc_priv->crp_forward) {
@@ -1631,8 +1639,11 @@ out:
 void
 crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 {
-	void	*hg_out_struct;
-	int	 hg_ret;
+	struct crt_context *crt_ctx;
+	void               *hg_out_struct;
+	int                 hg_ret;
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(error_code != 0);
@@ -1641,10 +1652,12 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	rpc_priv->crp_reply_hdr.cch_rc = error_code;
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLY_FAILED);
 		RPC_ERROR(rpc_priv,
 			  "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
 	} else {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLIED);
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Sent CART level error message back to client. error_code: %d\n",
 			  error_code);
@@ -2009,4 +2022,41 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 
 out:
 	return rc;
+}
+
+char *
+crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv)
+{
+	const struct hg_info *hg_info;
+	char                  addr[48];
+	hg_size_t             addr_size = 48;
+	int                   rc;
+
+	if (rpc_priv->crp_orig_uri != NULL)
+		return rpc_priv->crp_orig_uri;
+
+	hg_info = HG_Get_info(rpc_priv->crp_hg_hdl);
+	if (hg_info == NULL)
+		return "NOINFO";
+
+	rc = HG_Addr_to_string(hg_info->hg_class, addr, (hg_size_t *)&addr_size, hg_info->addr);
+	if (rc != 0)
+		return "NONE";
+
+	D_ALLOC(rpc_priv->crp_orig_uri, addr_size);
+	if (rpc_priv->crp_orig_uri == NULL)
+		return "NOMEM";
+
+	memcpy(rpc_priv->crp_orig_uri, addr, addr_size);
+
+	return rpc_priv->crp_orig_uri;
+}
+
+char *
+crt_req_origin_addr_get(crt_rpc_t *rpc_pub)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
+	return crt_rpc_priv_get_origin_addr(rpc_priv);
 }

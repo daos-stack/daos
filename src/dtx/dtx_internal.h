@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,7 +101,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
 CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
+#define DTX_YIELD_CYCLE         DTX_PIGGYBACK_COUNT
 
 /* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
@@ -263,6 +263,7 @@ extern btr_ops_t dtx_btr_cos_ops;
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
+int dtx_commit_large(daos_handle_t coh, struct dtx_id *dtis, int cnt, bool keep_act, bool *rm_cos);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
 void dtx_merge_check_result(int *tgt, int src);

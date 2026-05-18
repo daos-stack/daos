@@ -14,12 +14,10 @@ import (
 	"unsafe"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 /*
  #cgo CFLAGS: -I${SRCDIR}/../../../utils/ddb/
- #cgo LDFLAGS: -lddb -lgurt
 
  #include <ddb.h>
  #include <daos_errno.h>
@@ -37,46 +35,39 @@ func freeString(s *C.char) {
 	C.free(unsafe.Pointer(s))
 }
 
-func SetCString(out **C.char, s string) func() {
-	cstr := C.CString(s)
-	*out = cstr
-
-	return func() {
-		C.free(unsafe.Pointer(cstr))
-	}
+// DdbContext wraps the C ddb_ctx structure and provides Go methods for all ddb operations.
+type DdbContext struct {
+	ctx C.struct_ddb_ctx
 }
 
-// InitDdb initializes the ddb context and returns a closure to finalize it.
-func InitDdb(log *logging.LeveledLogger) (*DdbContext, func(), error) {
+// Init initializes the ddb context and returns a cleanup function that must be
+// called when done.
+func (ctx *DdbContext) Init() (func(), error) {
 	// Must lock to OS thread because vos init/fini uses ABT init and finalize which must be called on the same thread
 	runtime.LockOSThread()
 
-	if err := daosError(C.ddb_init()); err != nil {
+	if err := daosError(ddb_init()); err != nil {
 		runtime.UnlockOSThread()
-		return nil, nil, err
+		return nil, err
 	}
 
-	ctx := &DdbContext{}
-	C.ddb_ctx_init(&ctx.ctx) // Initialize with ctx default values
-	ctx.log = log
+	ddb_ctx_init(&ctx.ctx) // Initialize with ctx default values
 
-	return ctx, func() {
-		C.ddb_fini()
+	return func() {
+		ddb_fini()
 		runtime.UnlockOSThread()
 	}, nil
 }
 
-// DdbContext structure for wrapping the C code context structure
-type DdbContext struct {
-	ctx C.struct_ddb_ctx
-	log *logging.LeveledLogger
+// PoolIsOpen reports whether a VOS pool is currently open in the context.
+func (ctx *DdbContext) PoolIsOpen() bool {
+	return bool(ddb_pool_is_open(&ctx.ctx))
 }
 
-func ddbPoolIsOpen(ctx *DdbContext) bool {
-	return bool(C.ddb_pool_is_open(&ctx.ctx))
-}
-
-func ddbLs(ctx *DdbContext, path string, recursive bool, details bool) error {
+// Ls lists the contents at the given VOS tree path.
+// When recursive is true, subdirectories are traversed.
+// When details is true, additional metadata is printed for each entry.
+func (ctx *DdbContext) Ls(path string, recursive bool, details bool) error {
 	/* Set up the options */
 	options := C.struct_ls_options{}
 	options.path = C.CString(path)
@@ -84,36 +75,44 @@ func ddbLs(ctx *DdbContext, path string, recursive bool, details bool) error {
 	options.recursive = C.bool(recursive)
 	options.details = C.bool(details)
 	/* Run the c code command */
-	return daosError(C.ddb_run_ls(&ctx.ctx, &options))
+	return daosError(ddb_run_ls(&ctx.ctx, &options))
 }
 
-func ddbOpen(ctx *DdbContext, path string, write_mode bool) error {
+// Open opens the VOS pool file at path using the DAOS management database at dbPath.
+// When writeMode is true, the pool is opened for writing.
+func (ctx *DdbContext) Open(path string, dbPath string, writeMode bool) error {
 	/* Set up the options */
 	options := C.struct_open_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.db_path = ctx.ctx.dc_db_path
-	options.write_mode = C.bool(write_mode)
+	options.db_path = C.CString(dbPath)
+	defer freeString(options.db_path)
+	options.write_mode = C.bool(writeMode)
 	/* Run the c code command */
-	return daosError(C.ddb_run_open(&ctx.ctx, &options))
+	return daosError(ddb_run_open(&ctx.ctx, &options))
 }
 
-func ddbVersion(ctx *DdbContext) error {
+// Version prints the ddb tool version information.
+func (ctx *DdbContext) Version() error {
 	/* Run the c code command */
-	return daosError(C.ddb_run_version(&ctx.ctx))
+	return daosError(ddb_run_version(&ctx.ctx))
 }
 
-func ddbClose(ctx *DdbContext) error {
+// Close closes the currently opened VOS pool.
+func (ctx *DdbContext) Close() error {
 	/* Run the c code command */
-	return daosError(C.ddb_run_close(&ctx.ctx))
+	return daosError(ddb_run_close(&ctx.ctx))
 }
 
-func ddbSuperblockDump(ctx *DdbContext) error {
+// SuperblockDump prints the VOS pool superblock information.
+func (ctx *DdbContext) SuperblockDump() error {
 	/* Run the c code command */
-	return daosError(C.ddb_run_superblock_dump(&ctx.ctx))
+	return daosError(ddb_run_superblock_dump(&ctx.ctx))
 }
 
-func ddbValueDump(ctx *DdbContext, path string, dst string) error {
+// ValueDump dumps the value at the given VOS tree path.
+// If dst is non-empty, the value is written to that file instead of stdout.
+func (ctx *DdbContext) ValueDump(path string, dst string) error {
 	/* Set up the options */
 	options := C.struct_value_dump_options{}
 	options.path = C.CString(path)
@@ -121,19 +120,21 @@ func ddbValueDump(ctx *DdbContext, path string, dst string) error {
 	options.dst = C.CString(dst)
 	defer freeString(options.dst)
 	/* Run the c code command */
-	return daosError(C.ddb_run_value_dump(&ctx.ctx, &options))
+	return daosError(ddb_run_value_dump(&ctx.ctx, &options))
 }
 
-func ddbRm(ctx *DdbContext, path string) error {
+// Rm removes the VOS tree node at the given path.
+func (ctx *DdbContext) Rm(path string) error {
 	/* Set up the options */
 	options := C.struct_rm_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	/* Run the c code command */
-	return daosError(C.ddb_run_rm(&ctx.ctx, &options))
+	return daosError(ddb_run_rm(&ctx.ctx, &options))
 }
 
-func ddbValueLoad(ctx *DdbContext, src string, dst string) error {
+// ValueLoad loads a value from the file at src into the VOS tree at dst.
+func (ctx *DdbContext) ValueLoad(src string, dst string) error {
 	/* Set up the options */
 	options := C.struct_value_load_options{}
 	options.src = C.CString(src)
@@ -141,37 +142,42 @@ func ddbValueLoad(ctx *DdbContext, src string, dst string) error {
 	options.dst = C.CString(dst)
 	defer freeString(options.dst)
 	/* Run the c code command */
-	return daosError(C.ddb_run_value_load(&ctx.ctx, &options))
+	return daosError(ddb_run_value_load(&ctx.ctx, &options))
 }
 
-func ddbIlogDump(ctx *DdbContext, path string) error {
+// IlogDump prints the incarnation log entries at the given VOS tree path.
+func (ctx *DdbContext) IlogDump(path string) error {
 	/* Set up the options */
 	options := C.struct_ilog_dump_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	/* Run the c code command */
-	return daosError(C.ddb_run_ilog_dump(&ctx.ctx, &options))
+	return daosError(ddb_run_ilog_dump(&ctx.ctx, &options))
 }
 
-func ddbIlogCommit(ctx *DdbContext, path string) error {
+// IlogCommit commits the pending incarnation log entries at the given VOS tree path.
+func (ctx *DdbContext) IlogCommit(path string) error {
 	/* Set up the options */
 	options := C.struct_ilog_commit_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	/* Run the c code command */
-	return daosError(C.ddb_run_ilog_commit(&ctx.ctx, &options))
+	return daosError(ddb_run_ilog_commit(&ctx.ctx, &options))
 }
 
-func ddbIlogClear(ctx *DdbContext, path string) error {
+// IlogClear clears the incarnation log entries at the given VOS tree path.
+func (ctx *DdbContext) IlogClear(path string) error {
 	/* Set up the options */
 	options := C.struct_ilog_clear_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	/* Run the c code command */
-	return daosError(C.ddb_run_ilog_clear(&ctx.ctx, &options))
+	return daosError(ddb_run_ilog_clear(&ctx.ctx, &options))
 }
 
-func ddbDtxDump(ctx *DdbContext, path string, active bool, committed bool) error {
+// DtxDump prints DTX records at the given VOS tree path.
+// Pass active or committed to filter the output to the respective DTX table.
+func (ctx *DdbContext) DtxDump(path string, active bool, committed bool) error {
 	/* Set up the options */
 	options := C.struct_dtx_dump_options{}
 	options.path = C.CString(path)
@@ -179,77 +185,87 @@ func ddbDtxDump(ctx *DdbContext, path string, active bool, committed bool) error
 	options.active = C.bool(active)
 	options.committed = C.bool(committed)
 	/* Run the c code command */
-	return daosError(C.ddb_run_dtx_dump(&ctx.ctx, &options))
+	return daosError(ddb_run_dtx_dump(&ctx.ctx, &options))
 }
 
-func ddbDtxCmtClear(ctx *DdbContext, path string) error {
+// DtxCmtClear clears committed DTX entries at the given VOS tree path.
+func (ctx *DdbContext) DtxCmtClear(path string) error {
 	/* Set up the options */
 	options := C.struct_dtx_cmt_clear_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	/* Run the c code command */
-	return daosError(C.ddb_run_dtx_cmt_clear(&ctx.ctx, &options))
+	return daosError(ddb_run_dtx_cmt_clear(&ctx.ctx, &options))
 }
 
-func ddbSmdSync(ctx *DdbContext, nvme_conf string, db_path string) error {
+// SmdSync synchronizes the SMD database with the NVMe configuration in nvmeConf,
+// using the DAOS management database at dbPath.
+func (ctx *DdbContext) SmdSync(nvmeConf string, dbPath string) error {
 	/* Set up the options */
 	options := C.struct_smd_sync_options{}
-	options.nvme_conf = C.CString(nvme_conf)
+	options.nvme_conf = C.CString(nvmeConf)
 	defer freeString(options.nvme_conf)
-	options.db_path = C.CString(db_path)
+	options.db_path = C.CString(dbPath)
 	defer freeString(options.db_path)
 	/* Run the c code command */
-	return daosError(C.ddb_run_smd_sync(&ctx.ctx, &options))
+	return daosError(ddb_run_smd_sync(&ctx.ctx, &options))
 }
 
-func ddbVeaDump(ctx *DdbContext) error {
+// VeaDump prints the VEA (Versioned Extent Allocator) free-extent information.
+func (ctx *DdbContext) VeaDump() error {
 	/* Run the c code command */
-	return daosError(C.ddb_run_vea_dump(&ctx.ctx))
+	return daosError(ddb_run_vea_dump(&ctx.ctx))
 }
 
-func ddbVeaUpdate(ctx *DdbContext, offset string, blk_cnt string) error {
+// VeaUpdate updates the VEA free-extent entry at the given offset with blkCnt blocks.
+func (ctx *DdbContext) VeaUpdate(offset string, blkCnt string) error {
 	/* Set up the options */
 	options := C.struct_vea_update_options{}
 	options.offset = C.CString(offset)
 	defer freeString(options.offset)
-	options.blk_cnt = C.CString(blk_cnt)
+	options.blk_cnt = C.CString(blkCnt)
 	defer freeString(options.blk_cnt)
 	/* Run the c code command */
-	return daosError(C.ddb_run_vea_update(&ctx.ctx, &options))
+	return daosError(ddb_run_vea_update(&ctx.ctx, &options))
 }
 
-func ddbDtxActCommit(ctx *DdbContext, path string, dtx_id string) error {
+// DtxActCommit force-commits the active DTX entry identified by dtxID at the given path.
+func (ctx *DdbContext) DtxActCommit(path string, dtxID string) error {
 	/* Set up the options */
 	options := C.struct_dtx_act_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.dtx_id = C.CString(dtx_id)
+	options.dtx_id = C.CString(dtxID)
 	defer freeString(options.dtx_id)
 	/* Run the c code command */
-	return daosError(C.ddb_run_dtx_act_commit(&ctx.ctx, &options))
+	return daosError(ddb_run_dtx_act_commit(&ctx.ctx, &options))
 }
 
-func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
+// DtxActAbort force-aborts the active DTX entry identified by dtxID at the given path.
+func (ctx *DdbContext) DtxActAbort(path string, dtxID string) error {
 	/* Set up the options */
 	options := C.struct_dtx_act_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.dtx_id = C.CString(dtx_id)
+	options.dtx_id = C.CString(dtxID)
 	defer freeString(options.dtx_id)
 	/* Run the c code command */
-	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
+	return daosError(ddb_run_dtx_act_abort(&ctx.ctx, &options))
 }
 
-func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error {
+// Feature manages VOS pool compat and incompat feature flags at the given path.
+// Pass enable or disable to set or clear the named flags; pass show to list current flags.
+func (ctx *DdbContext) Feature(path, dbPath, enable, disable string, show bool) error {
 	/* Set up the options */
 	options := C.struct_feature_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.db_path = ctx.ctx.dc_db_path
+	options.db_path = C.CString(dbPath)
+	defer freeString(options.db_path)
 	if enable != "" {
 		cEnable := C.CString(enable)
 		defer freeString(cEnable)
-		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, cEnable,
+		err := daosError(ddb_feature_string2flags(&ctx.ctx, cEnable,
 			&options.set_compat_flags, &options.set_incompat_flags))
 		if err != nil {
 			return err
@@ -258,7 +274,7 @@ func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error 
 	if disable != "" {
 		cDisable := C.CString(disable)
 		defer freeString(cDisable)
-		err := daosError(C.ddb_feature_string2flags(&ctx.ctx, cDisable,
+		err := daosError(ddb_feature_string2flags(&ctx.ctx, cDisable,
 			&options.clear_compat_flags, &options.clear_incompat_flags))
 		if err != nil {
 			return err
@@ -266,98 +282,101 @@ func ddbFeature(ctx *DdbContext, path, enable, disable string, show bool) error 
 	}
 	options.show_features = C.bool(show)
 	/* Run the c code command */
-	return daosError(C.ddb_run_feature(&ctx.ctx, &options))
+	return daosError(ddb_run_feature(&ctx.ctx, &options))
 }
 
-func ddbRmPool(ctx *DdbContext, path string) error {
+// RmPool removes the VOS pool file at path, using the DAOS management database at dbPath.
+func (ctx *DdbContext) RmPool(path string, dbPath string) error {
 	/* Set up the options */
 	options := C.struct_rm_pool_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.db_path = ctx.ctx.dc_db_path
+	options.db_path = C.CString(dbPath)
+	defer freeString(options.db_path)
 	/* Run the c code command */
-	return daosError(C.ddb_run_rm_pool(&ctx.ctx, &options))
+	return daosError(ddb_run_rm_pool(&ctx.ctx, &options))
 }
 
-func ddbDtxActDiscardInvalid(ctx *DdbContext, path string, dtx_id string) error {
+// DtxActDiscardInvalid discards the invalid active DTX entry identified by dtxID at the given path.
+func (ctx *DdbContext) DtxActDiscardInvalid(path string, dtxID string) error {
 	/* Set up the options */
 	options := C.struct_dtx_act_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	options.dtx_id = C.CString(dtx_id)
+	options.dtx_id = C.CString(dtxID)
 	defer freeString(options.dtx_id)
 	/* Run the c code command */
-	return daosError(C.ddb_run_dtx_act_discard_invalid(&ctx.ctx, &options))
+	return daosError(ddb_run_dtx_act_discard_invalid(&ctx.ctx, &options))
 }
 
-func ddbDevList(ctx *DdbContext, db_path string) error {
+// DevList lists the SMD devices recorded in the DAOS management database at dbPath.
+func (ctx *DdbContext) DevList(dbPath string) error {
 	/* Set up the options */
 	options := C.struct_dev_list_options{}
-	options.db_path = C.CString(db_path)
+	options.db_path = C.CString(dbPath)
 	defer freeString(options.db_path)
 	/* Run the c code command */
-	return daosError(C.ddb_run_dev_list(&ctx.ctx, &options))
+	return daosError(ddb_run_dev_list(&ctx.ctx, &options))
 }
 
-func ddbDevReplace(ctx *DdbContext, db_path string, old_devid string, new_devid string) error {
+// DevReplace replaces the device with oldDevID by newDevID in the SMD database at dbPath.
+func (ctx *DdbContext) DevReplace(dbPath string, oldDevID string, newDevID string) error {
 	/* Set up the options */
 	options := C.struct_dev_replace_options{}
-	options.db_path = C.CString(db_path)
+	options.db_path = C.CString(dbPath)
 	defer freeString(options.db_path)
-	options.old_devid = C.CString(old_devid)
+	options.old_devid = C.CString(oldDevID)
 	defer freeString(options.old_devid)
-	options.new_devid = C.CString(new_devid)
+	options.new_devid = C.CString(newDevID)
 	defer freeString(options.new_devid)
 	/* Run the c code command */
-	return daosError(C.ddb_run_dev_replace(&ctx.ctx, &options))
+	return daosError(ddb_run_dev_replace(&ctx.ctx, &options))
 }
 
-func ddbDtxStat(ctx *DdbContext, path string, details bool) error {
+// DtxStat prints DTX statistics at the given VOS tree path.
+// When details is true, per-entry statistics are also printed.
+func (ctx *DdbContext) DtxStat(path string, details bool) error {
 	/* Set up the options */
 	options := C.struct_dtx_stat_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	options.details = C.bool(details)
 	/* Run the c code command */
-	return daosError(C.ddb_run_dtx_stat(&ctx.ctx, &options))
+	return daosError(ddb_run_dtx_stat(&ctx.ctx, &options))
 }
 
-func ddbProvMem(ctx *DdbContext, db_path string, tmpfs_mount string, tmpfs_mount_size uint) error {
+// ProvMem provisions MD-on-SSD memory for the pool at dbPath.
+// It mounts a tmpfs at tmpfsMount with size tmpfsMountSize bytes.
+func (ctx *DdbContext) ProvMem(dbPath string, tmpfsMount string, tmpfsMountSize uint) error {
 	/* Set up the options */
 	options := C.struct_prov_mem_options{}
-	options.db_path = C.CString(db_path)
+	options.db_path = C.CString(dbPath)
 	defer freeString(options.db_path)
-	options.tmpfs_mount = C.CString(tmpfs_mount)
+	options.tmpfs_mount = C.CString(tmpfsMount)
 	defer freeString(options.tmpfs_mount)
 
-	options.tmpfs_mount_size = C.uint(tmpfs_mount_size)
+	options.tmpfs_mount_size = C.uint(tmpfsMountSize)
 	/* Run the c code command */
-	return daosError(C.ddb_run_prov_mem(&ctx.ctx, &options))
+	return daosError(ddb_run_prov_mem(&ctx.ctx, &options))
 }
 
-func ddbDtxAggr(ctx *DdbContext, path string, cmt_time uint64, cmt_date string) error {
-	if cmt_time != math.MaxUint64 && cmt_date != "" {
-		ctx.log.Error("'--cmt_time' and '--cmt_date' options are mutually exclusive")
-		return daosError(-C.DER_INVAL)
-	}
-	if cmt_time == math.MaxUint64 && cmt_date == "" {
-		ctx.log.Error("'--cmt_time' or '--cmt_date' option has to be defined")
-		return daosError(-C.DER_INVAL)
-	}
-
+// DtxAggr runs DTX aggregation on the VOS tree at path.
+// Exactly one of cmtTime (a POSIX timestamp) or cmtDate (a date string) must be specified;
+// aggregation discards DTX entries committed before that point in time.
+func (ctx *DdbContext) DtxAggr(path string, cmtTime uint64, cmtDate string) error {
 	/* Set up the options */
 	options := C.struct_dtx_aggr_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
-	if cmt_time != math.MaxUint64 {
+	if cmtTime != math.MaxUint64 {
 		options.format = C.DDB_DTX_AGGR_CMT_TIME
-		options.cmt_time = C.uint64_t(cmt_time)
+		options.cmt_time = C.uint64_t(cmtTime)
 	}
-	if cmt_date != "" {
+	if cmtDate != "" {
 		options.format = C.DDB_DTX_AGGR_CMT_DATE
-		options.cmt_date = C.CString(cmt_date)
+		options.cmt_date = C.CString(cmtDate)
 		defer freeString(options.cmt_date)
 	}
 	/* Run the c code command */
-	return daosError(C.ddb_run_dtx_aggr(&ctx.ctx, &options))
+	return daosError(ddb_run_dtx_aggr(&ctx.ctx, &options))
 }

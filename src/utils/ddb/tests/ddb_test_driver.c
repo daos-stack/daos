@@ -304,8 +304,8 @@ ddb_test_setup_vos(void **state)
 int
 ddb_teardown_vos(void **state)
 {
-	struct dt_vos_pool_ctx		*tctx = *state;
-	struct vos_file_parts            path_parts = {0};
+	struct ddb_ctx                   ctx  = {0};
+	struct dt_vos_pool_ctx          *tctx = *state;
 	int                              rc   = 0;
 
 	if (tctx == NULL) {
@@ -314,8 +314,7 @@ ddb_teardown_vos(void **state)
 	}
 
 	if (tctx->dvt_special_pool_destroy) {
-		assert_success(parse_vos_file_parts(tctx->dvt_pmem_file, NULL, &path_parts));
-		rc = dv_pool_destroy(tctx->dvt_pmem_file, &path_parts);
+		rc = dv_pool_destroy(tctx->dvt_pmem_file, NULL, &ctx);
 	} else {
 		vos_self_init("/mnt/daos", false, 0);
 		assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
