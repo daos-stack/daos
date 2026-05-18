@@ -31,7 +31,6 @@ container:
 mdtest:
   dfs_oclass: S1
   dfs_dir_oclass: SX
-  dfs_destroy: False
   manager: "MPICH"
   ppn: 32
   test_dir: "/"
