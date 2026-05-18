@@ -1,0 +1,6 @@
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check distro package is installed (from mock requirements)
+      command: python3 -c "import distro"
+      changed_when: false

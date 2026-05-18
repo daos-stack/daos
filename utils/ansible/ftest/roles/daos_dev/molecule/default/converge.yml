@@ -1,0 +1,101 @@
+- hosts: all
+  gather_facts: true
+  vars:
+    daos_source_dir: /tmp/daos-src
+    daos_build_dir: /tmp/daos-build
+    daos_launch_username: root
+    daos_runtime_dir: /opt/daos
+    daos_repo_dir: "{{ playbook_dir }}"
+    daos_python_version: python3.11
+    # Proxy vars (subset of vars/defaults.yml) used to test the proxy mechanism.
+    # Use daos_proxy_nofwd: [dnf] so dnf tasks in the block bypass the fake test
+    # proxy (test-proxy.example.com:3128 does not exist). The gem task is outside
+    # the dnf block and inherits the play-level environment (no env set here, so
+    # no proxy for gem either — fpm is pre-installed in the molecule image).
+    daos_http_proxy: "http://test-proxy.example.com:3128"
+    daos_proxy_bypass: "localhost,127.0.0.1"
+    daos_proxy_nofwd:
+      - dnf
+    daos_proxy_env:
+      http_proxy: "http://test-proxy.example.com:3128"
+      https_proxy: "http://test-proxy.example.com:3128"
+      HTTP_PROXY: "http://test-proxy.example.com:3128"
+      HTTPS_PROXY: "http://test-proxy.example.com:3128"
+      no_proxy: "localhost,127.0.0.1"
+      NO_PROXY: "localhost,127.0.0.1"
+    daos_noproxy_env:
+      http_proxy: ""
+      https_proxy: ""
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      no_proxy: ""
+      NO_PROXY: ""
+  tasks:
+    # Simulate the dnf configuration that daos_common applies in the real playbook.
+    # Without this, update_cache: true fails in network-restricted containers when
+    # external repos (e.g. EPEL) are unreachable.
+    - name: Configure dnf to skip unavailable repos and limit timeout
+      become: true
+      community.general.ini_file:
+        path: /etc/dnf/dnf.conf
+        section: main
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - {option: skip_if_unavailable, value: 'True'}
+        - {option: timeout, value: '10'}
+
+    - name: Ensure daos source placeholder exists
+      file:
+        path: /tmp/daos-src/src/control
+        state: directory
+
+    - name: Test launch user provisioning
+      include_role:
+        name: daos_dev
+        tasks_from: users_groups.yml
+
+    - name: "Repo-check test: non-existent repo should warn, not fail"
+      vars:
+        daos_ofi_provider_default: ofi+tcp
+        daos_build_deps:
+          repos:
+            - fake-repo-does-not-exist
+          rpms:
+            - bash
+      include_role:
+        name: daos_dev
+        tasks_from: build_deps.yml
+
+    - name: "Repo-check idempotency: run again to confirm changed=0"
+      vars:
+        daos_ofi_provider_default: ofi+tcp
+        daos_build_deps:
+          repos:
+            - fake-repo-does-not-exist
+          rpms:
+            - bash
+      include_role:
+        name: daos_dev
+        tasks_from: build_deps.yml
+
+    # Install pip for python3.11 before testing pip_deps.yml, mirroring what
+    # daos_post does in the real playbook.
+    - name: Install pip for python3.11
+      become: true
+      dnf:
+        name: python3.11-pip
+        state: present
+
+    # Test only pip_deps.yml (not pip_go_deps.yml) so that go mod download is
+    # never triggered during molecule — it would touch src/control/go.mod on the
+    # Ansible controller, which is outside utils/ansible/ and must not be modified.
+    # The mock requirements-build.txt and requirements-utest.txt in this scenario
+    # directory contain only 'distro', which installs quickly.
+    # daos_proxy_env is cleared so pip can reach PyPI directly from the container.
+    - name: Test pip build and unit-test requirements install
+      vars:
+        daos_proxy_env: {}
+      include_role:
+        name: daos_dev
+        tasks_from: pip_deps.yml
