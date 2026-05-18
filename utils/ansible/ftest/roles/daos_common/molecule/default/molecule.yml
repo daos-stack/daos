@@ -1,0 +1,19 @@
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: "daos-rocky9-common"
+    image: daos/rocky-el9:2.8
+    pre_build_image: true
+    privileged: true
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "${MOLECULE_PROJECT_DIRECTORY}/.."
+    ANSIBLE_FORCE_COLOR: "true"
+    ANSIBLE_REMOTE_TMP: "/tmp"
+  options:
+    v: false
+verifier:
+  name: ansible
