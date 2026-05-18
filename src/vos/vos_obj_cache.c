@@ -561,6 +561,14 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 			return rc;
 		}
 	} else if (likely(intent != DAOS_INTENT_MARK)) {
+		struct vos_obj_df *tmp_df = NULL;
+
+		/* XXX debug */
+		rc = vos_oi_find(cont, obj->obj_id, &tmp_df, NULL);
+		D_ASSERT(rc == 0);
+		D_ASSERT(tmp_df != NULL);
+		D_ASSERT(tmp_df == obj->obj_df);
+
 		vos_ilog_ts_ignore(vos_obj2umm(obj), &obj->obj_df->vo_ilog);
 		rc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog, &obj->obj_id,
 				     sizeof(obj->obj_id));
