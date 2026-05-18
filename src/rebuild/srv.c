@@ -2962,6 +2962,23 @@ rebuild_tgt_status_check_ult(void *arg)
 				status.status = rc;
 			if (rpt->rt_errno == 0)
 				rpt->rt_errno = status.status;
+			/* -DER_SHUTDOWN here means a local component required by the
+			 * rebuild (e.g. the migrate pool TLS or a pool child) is gone
+			 * and won't come back for this rpt. Without exiting the loop,
+			 * this ULT keeps spinning and rebuild_tgt_fini never runs, so
+			 * the rebuild_pool_tls is not destroyed and the next phase
+			 * scan RPC (e.g. RB_OP_FAIL_RECLAIM with the same ver/gen) is
+			 * rejected with -DER_BUSY in rebuild_tgt_scan_handler().
+			 * Force the abort path so the IV update on this iteration
+			 * reports scan_done/pull_done to the leader and the loop
+			 * breaks at the bottom check, allowing rebuild_tgt_fini() to
+			 * release the TLS.
+			 */
+			if (status.status == -DER_SHUTDOWN && !rpt->rt_abort) {
+				D_INFO(DF_RB " local shutdown, aborting status check ULT\n",
+				       DP_RB_RPT(rpt));
+				rpt->rt_abort = 1;
+			}
 		}
 
 		memset(&iv, 0, sizeof(iv));
