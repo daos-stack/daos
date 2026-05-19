@@ -121,7 +121,7 @@ can be checked out.
 In addition, the MkDocs package and plugins need to be installed.
 Running `pip install mike` should install the prerequisite packages.
 
-Depending on the operationg system and Python environment,
+Depending on the operation system and Python environment,
 prerquisite software and the mkdocs plugins may have to be explicitly
 installed. For example, on a Windows laptop running Cygwin:
 
