@@ -3688,21 +3688,29 @@ dfs_teardown(void **state)
 }
 
 int
-run_dfs_unit_test(int rank, int size)
+run_dfs_unit_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	int selected = sub_tests_size;
+
+	if (sub_tests_size == 0) {
+		sub_tests = NULL;
+		selected  = ARRAY_SIZE(dfs_unit_tests);
+	}
 
 	par_barrier(PAR_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
-					 dfs_teardown);
+	rc = run_daos_sub_tests("DAOS_FileSystem_DFS_Unit", dfs_unit_tests,
+				ARRAY_SIZE(dfs_unit_tests), sub_tests, selected, dfs_setup,
+				dfs_teardown);
 	par_barrier(PAR_COMM_WORLD);
 
 	/** run tests again with DTX */
 	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
-	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
-					  dfs_setup, dfs_teardown);
+	rc += run_daos_sub_tests("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
+				 ARRAY_SIZE(dfs_unit_tests), sub_tests, selected, dfs_setup,
+				 dfs_teardown);
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
