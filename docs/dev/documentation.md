@@ -256,7 +256,7 @@ mike list
 ```
 
 It is useful to save the logs from the `mike deploy` invocation.
-These logs will contain warnings about pages that exisit but are not
+These logs will contain warnings about pages that exist but are not
 linked anywhere in the navigation structure, and other issues.
 
 The new website can be tested locally by running `mike serve` on the machine
@@ -268,7 +268,7 @@ The new contents can then be inspected by pointing a browser
 
 Because the version aliases are symlinks, and because the website contents
 consists of thousands of small files, copying it to the actual webserver
-is best done by creating and transfering a tarfile, which can then be
+is best done by creating and transferring a tarfile, which can then be
 un-tarred on the webserver and will keep the symlinks intact.
 
 As a best practice, a new website version is first deployed in a
