@@ -9,6 +9,7 @@ import time
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
+from server_utils_base import ServerFailed
 
 
 class ControlTestBase(TestWithServers):
@@ -204,6 +205,9 @@ class ControlTestBase(TestWithServers):
         Note:
             This operation adds ~5-10 seconds per test due to server restart overhead,
             but is necessary to ensure test isolation and reliable results.
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
         """
         self.log.info("Restarting servers to reset engine restart manager state")
 
@@ -211,13 +215,18 @@ class ControlTestBase(TestWithServers):
         all_ranks = self.get_all_ranks()
         if not all_ranks:
             self.log.warning("No ranks to reset - skipping engine restart state reset")
-            return
+            return []
 
-        self.server_managers[0].system_stop()
-        self.server_managers[0].system_start()
+        try:
+            self.server_managers[0].system_stop()
+            self.server_managers[0].system_start()
+        except ServerFailed as error:
+            return [f"Failed to restart servers for engine restart state reset: {error}"]
 
         # Wait for all ranks to join
         failed_ranks = self.server_managers[0].check_rank_state(
             ranks=all_ranks, valid_states=["joined"], max_checks=30)
         if failed_ranks:
-            self.log.warning("Some ranks failed to rejoin after restart: %s", failed_ranks)
+            return [f"Ranks failed to rejoin after restart: {failed_ranks}"]
+
+        return []
