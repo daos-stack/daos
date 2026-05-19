@@ -303,6 +303,8 @@ enum {
 	VOS_OF_EC = (1 << 19),
 	/** Update from rebuild */
 	VOS_OF_REBUILD = (1 << 20),
+	/* only query for checksums */
+	VOS_OF_FETCH_CSUM = (1 << 21),
 };
 
 enum {
