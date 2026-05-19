@@ -219,9 +219,7 @@ After `release/2.8` has been branched, but before it becomes generally
 available (GA), the website version structure should be updated like this:
 
 ```
-mike delete master
-mike delete v2.7
-mike delete v2.8
+mike delete master # will also delete the v2.7 v2.8 aliases
 
 git checkout master
 rm -rf docs/doxygen/html 2>/dev/null
