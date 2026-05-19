@@ -12,7 +12,6 @@ outside of scons by the clang-format commit hook to check the version.
 """
 import os
 import re
-import shutil
 import subprocess  # nosec
 import sys
 
@@ -31,7 +30,7 @@ def errprint(*args, **kwargs):
 
 
 def _get_version_string():
-    clang_exe = WhereIs('clang-format') or shutil.which('clang-format')
+    clang_exe = WhereIs('clang-format')
     if not clang_exe:
         return None
     try:
