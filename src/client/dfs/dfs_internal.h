@@ -66,8 +66,8 @@
 /** Magic value for serializing / deserializing a DFS object handle */
 #define DFS_OBJ_GLOB_MAGIC 0xdf500b90
 
-/** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS            14
+/** Number of serialized inode record fragments for any object entry */
+#define INODE_AKEYS            15
 #define INODE_AKEY_NAME    "DFS_INODE"
 #define SLINK_AKEY_NAME    "DFS_SLINK"
 #define MODE_IDX           0
@@ -84,7 +84,8 @@
 #define HLC_IDX            (SIZE_IDX + sizeof(daos_size_t))
 #define END_L3_IDX             (HLC_IDX + sizeof(uint64_t))
 #define TAIL_OID_IDX           END_L3_IDX
-#define TAIL_STATE_IDX         (TAIL_OID_IDX + sizeof(daos_obj_id_t))
+#define SPLIT_OFF_IDX          (TAIL_OID_IDX + sizeof(daos_obj_id_t))
+#define TAIL_STATE_IDX         (SPLIT_OFF_IDX + sizeof(daos_size_t))
 #define END_IDX                (TAIL_STATE_IDX + sizeof(uint8_t))
 
 /*
@@ -146,6 +147,8 @@ struct dfs_obj {
 		struct {
 			/** Optional tail array object id for progressive layout */
 			daos_obj_id_t tail_oid;
+			/** Logical file offset where progressive layout switches to tail */
+			daos_size_t   split_off;
 			/** Optional tail array object handle for progressive layout */
 			daos_handle_t tail_oh;
 			/** Whether this open regular file uses progressive layout */
@@ -238,8 +241,10 @@ struct dfs_entry {
 	daos_size_t      chunk_size;
 	/** oclass of file or all files in a dir */
 	daos_oclass_id_t oclass;
-	/** Optional tail object id for progressive-layout regular files */
+	/** Tail object id for progressive-layout regular files */
 	daos_obj_id_t    tail_oid;
+	/** Split point for progressive-layout regular files */
+	daos_size_t      split_off;
 	/** Informational tail state encoded on disk as a single byte */
 	uint8_t          tail_state;
 	/** uid - not enforced at this level. */

@@ -55,6 +55,8 @@ Progressive layout is disabled when the pool does not have enough targets to ben
 
 - If target_nr < 1000, disable progressive layout.
 - In this case, use the default DFS file class behavior (GX-style sharding selected by existing DAOS logic).
+- For testing only, set `DFS_PL_BYPASS_TARGET_LIMIT=1` to bypass the 1000-target gate while keeping the
+  default-selection requirement unchanged.
 
 The 1000-target threshold is an initial value and should be validated with performance and rebuild benchmarks.
 
