@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -553,12 +553,11 @@ probe_from_anchor:
 static struct daos_csummer *
 io_test_init_csummer()
 {
-	enum DAOS_HASH_TYPE	 type = HASH_TYPE_CRC16;
-	size_t			 chunk_size = 1 << 12;
-	struct daos_csummer	*csummer = NULL;
+	enum DAOS_HASH_TYPE  type       = HASH_TYPE_CRC16;
+	size_t               chunk_size = 1 << 12;
+	struct daos_csummer *csummer    = NULL;
 
-	assert_success(daos_csummer_init_with_type(&csummer, type,
-						   chunk_size, 0));
+	assert_success(daos_csummer_init_with_type(&csummer, type, chunk_size, 0));
 
 	return csummer;
 
@@ -2315,9 +2314,9 @@ io_sgl_fetch(void **state)
 	/* Write/Update */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1,
 			    &iod, NULL, &sgl);
+	d_sgl_fini(&sgl, false);
 	if (rc)
 		goto exit;
-	d_sgl_fini(&sgl, false);
 	inc_cntr(arg->ta_flags);
 
 	/* Allocate memory for the scatter-gather list */
