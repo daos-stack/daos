@@ -75,3 +75,18 @@ dnf -y install dnf-plugins-core
 dnf clean all
 
 disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
+
+if [ -n "$REPO_FILE_URL" ]; then
+    trusted_host="${REPO_FILE_URL##*//}"
+    trusted_host="${trusted_host%%/*}"; \
+
+# Setup the PyPi to use the artifactory as the installation packages source
+    cat <<EOF > /etc/pip.conf
+[global]
+    trusted-host = ${trusted_host}
+    index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple
+    progress_bar = off
+    no_color = true
+    quiet = 1
+EOF
+fi

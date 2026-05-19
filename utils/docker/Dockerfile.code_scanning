@@ -1,5 +1,6 @@
 #
-# Copyright 2018-2022, Intel Corporation
+# Copyright 2018-2022 Intel Corporation.
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 #
 # 'recipe' for Docker for code scanning.
 #
@@ -26,8 +27,11 @@ ENV NO_PROXY=${DAOS_NO_PROXY}
 RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
-# script to install OS updates basic tools and daos dependencies
-# COPY ./utils/scripts/install-fedora.sh /tmp/install.sh
+ARG PYTHON_VERSION=3.11
+RUN dnf --nodocs install -y \
+    git \
+    python${PYTHON_VERSION}
+
 # script to setup local repo if available
 COPY ./utils/scripts/helpers/repo-helper-fedora.sh /tmp/repo-helper.sh
 
@@ -35,13 +39,12 @@ RUN chmod +x /tmp/repo-helper.sh &&                 \
     /tmp/repo-helper.sh &&                          \
     rm -f /tmp/repo-helper.sh
 
-# Install Python Bandit scanner.
-# The unset commands are currently needed for the combination of running
-# with a local repository, yet needing a proxy to reach outside repositories.
-# This needs to be moved to a shell script like above in the future to
-# properly only remove the proxy variables only when they need to be removed
-RUN unset HTTPS_PROXY && unset https_proxy && \
-    dnf -y upgrade && dnf -y install bandit && dnf clean all
+# Setup a python venv so that python packages can be installed locally.
+RUN python${PYTHON_VERSION} -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
 
-ARG CB1
-RUN unset HTTPS_PROXY && unset https_proxy && dnf -y upgrade && dnf clean all
+# Install Python Bandit scanner.
+RUN . /home/daos/venv/bin/activate && \
+    python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install bandit
