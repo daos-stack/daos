@@ -728,7 +728,12 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	int				i;
 	int				rc = 0;
 
-	if (rpt->rt_abort || arg->cont_child->sc_stopping) {
+	/* Check rt_finishing to allow rebuild_scan_leader to exit quickly when
+	 * rebuild_tgt_fini() is waiting for the refcount to drop. Without this,
+	 * a stale scan_leader continues scanning all VOS objects indefinitely,
+	 * blocking TLS cleanup and causing retries to fail with -DER_BUSY.
+	 */
+	if (rpt->rt_abort || rpt->rt_finishing || arg->cont_child->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "rebuild is aborted\n");
 		return 1;
 	}
