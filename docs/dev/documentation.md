@@ -281,7 +281,7 @@ export TARFILE="docs-daos-io.tgz"
 
 git checkout github-pages
 
-tar czvf $TAR index.html v?.? latest master
+tar czvf $TAR versions.json index.html v?.? latest master
 
 ssh $WEBSERVER "rm -r docs.daos.io/staging && mkdir docs.daos.io/staging"
 scp R$TARFILE $WEBSERVER:docs.daos.io/staging
