@@ -3719,7 +3719,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 			DP_UUID(tls->mpt_pool_uuid), DP_RC(rc));
 		if (rc == -DER_SHUTDOWN)
 			rc = 0;
-		return rc;
+		D_GOTO(free, rc);
 	}
 
 	arg.yield_freq	= DEFAULT_YIELD_FREQ;
