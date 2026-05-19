@@ -17,6 +17,26 @@
 
 #include "dfs_internal.h"
 
+/* 0.2% per-target budget for data that should remain in the compact head object. */
+#define DFS_PL_HEAD_BUDGET_NUM         2ULL
+/* Denominator for the head budget fraction. */
+#define DFS_PL_HEAD_BUDGET_DEN         1000ULL
+/* Do not switch to the tail before 64 MiB of logical file data. */
+#define DFS_PL_SPLIT_OFF_MIN           (64ULL << 20)
+/* Cap the head region at 64 GiB even on very large systems. */
+#define DFS_PL_SPLIT_OFF_MAX           (64ULL << 30)
+/* Test-only override to bypass the PL target-count gate for default-selection testing. */
+#define DFS_PL_BYPASS_TARGET_LIMIT_ENV "DFS_PL_BYPASS_TARGET_LIMIT"
+
+static bool
+pl_bypass_target_limit(void)
+{
+	bool enabled = false;
+
+	d_getenv_bool(DFS_PL_BYPASS_TARGET_LIMIT_ENV, &enabled);
+	return enabled;
+}
+
 static int
 open_file_tail(dfs_t *dfs, daos_obj_id_t tail_oid, int daos_mode, daos_size_t chunk_size,
 	       daos_handle_t *tail_oh)
@@ -75,17 +95,81 @@ file_head_oclass(daos_oclass_id_t tail_cid, uint32_t max_groups)
 	return OBJ_CLASS_DEF(ord, 1);
 }
 
+/* Derive the split point from the selected head group count and pool budget. */
+static daos_size_t
+file_split_off(const daos_pool_info_t *pool_info, daos_oclass_id_t head_cid,
+	       daos_oclass_id_t tail_cid, daos_size_t chunk_size)
+{
+	struct daos_oclass_attr *head_attr;
+	struct daos_oclass_attr *tail_attr;
+	unsigned __int128        raw_split_off;
+	uint64_t                 target_capacity;
+	uint64_t                 per_target_budget;
+	uint32_t                 head_groups = 0;
+	unsigned int             data_cells;
+	daos_size_t              split_off;
+
+	if (pool_info == NULL || head_cid == OC_UNKNOWN || tail_cid == OC_UNKNOWN ||
+	    chunk_size == 0)
+		return 0;
+
+	/*
+	 * Pool query exposes aggregate pool capacity, so use per-target pool capacity derived from
+	 * the selected media total. This keeps the split point stable for the container rather than
+	 * tied to transient free-space fluctuations.
+	 */
+	if (pool_info->pi_ntargets == 0)
+		return 0;
+	if (pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME] != 0)
+		target_capacity =
+		    pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME] / pool_info->pi_ntargets;
+	else
+		target_capacity =
+		    pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_SCM] / pool_info->pi_ntargets;
+	if (target_capacity == 0)
+		return 0;
+
+	head_attr = daos_oclass_id2attr(head_cid, &head_groups);
+	tail_attr = daos_oclass_id2attr(tail_cid, NULL);
+	if (head_attr == NULL || tail_attr == NULL || head_groups == 0)
+		return 0;
+
+	data_cells = daos_oclass_is_ec(tail_attr) ? tail_attr->u.ec.e_k : 1;
+	if (data_cells == 0)
+		return 0;
+
+	per_target_budget = (target_capacity * DFS_PL_HEAD_BUDGET_NUM) / DFS_PL_HEAD_BUDGET_DEN;
+	if (per_target_budget == 0)
+		return 0;
+
+	raw_split_off = (unsigned __int128)head_groups * data_cells * per_target_budget;
+	if (raw_split_off < DFS_PL_SPLIT_OFF_MIN)
+		split_off = DFS_PL_SPLIT_OFF_MIN;
+	else if (raw_split_off > DFS_PL_SPLIT_OFF_MAX)
+		split_off = DFS_PL_SPLIT_OFF_MAX;
+	else
+		split_off = (daos_size_t)raw_split_off;
+
+	if (split_off % chunk_size != 0)
+		split_off = ((split_off / chunk_size) + 1) * chunk_size;
+
+	return split_off;
+}
+
 /* Resolve file head/tail oclasses, applying PL only when no explicit file class was selected. */
 static int
-file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_oclass_id_t *head_cid,
-	      daos_oclass_id_t *tail_cid, bool *has_tail)
+file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_size_t chunk_size,
+	      daos_oclass_id_t *head_cid, daos_oclass_id_t *tail_cid, daos_size_t *split_off,
+	      bool *has_tail)
 {
 	daos_pool_info_t         pool_info = {0};
 	struct daos_oclass_attr *tail_attr;
+	daos_size_t              local_split_off = 0;
 	uint32_t                 max_groups;
 	int                      rc;
 
-	if (head_cid == NULL || tail_cid == NULL || has_tail == NULL)
+	if (head_cid == NULL || tail_cid == NULL || split_off == NULL || has_tail == NULL ||
+	    chunk_size == 0)
 		return EINVAL;
 
 	if (cid == 0) {
@@ -97,9 +181,10 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_oclass_i
 			cid = parent->d.oclass;
 	}
 
-	*head_cid = cid;
-	*tail_cid = OC_UNKNOWN;
-	*has_tail = false;
+	*head_cid  = cid;
+	*tail_cid  = OC_UNKNOWN;
+	*split_off = 0;
+	*has_tail  = false;
 
 	if (cid != 0 || !dfs_file_layout_has_tail(dfs->layout_v, S_IFREG))
 		return 0;
@@ -110,7 +195,7 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_oclass_i
 		return daos_der2errno(rc);
 	}
 
-	if (pool_info.pi_ntargets < 1000)
+	if (pool_info.pi_ntargets < 1000 && !pl_bypass_target_limit())
 		return 0;
 
 	/* Use the default DAOS file class as the wide tail and derive the compact head from it. */
@@ -132,9 +217,20 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_oclass_i
 	if (*head_cid == OC_UNKNOWN)
 		goto out;
 
-	*has_tail = true;
+	local_split_off = file_split_off(&pool_info, *head_cid, *tail_cid, chunk_size);
+	if (local_split_off == 0)
+		goto out;
+
+	*split_off = local_split_off;
+	*has_tail  = true;
 
 out:
+	if (!*has_tail && *tail_cid != OC_UNKNOWN) {
+		*head_cid  = *tail_cid;
+		*tail_cid  = OC_UNKNOWN;
+		*split_off = 0;
+	}
+
 	if (*has_tail) {
 		char head_oclass_name[MAX_OBJ_CLASS_NAME_LEN] = "unknown";
 		char tail_oclass_name[MAX_OBJ_CLASS_NAME_LEN] = "none";
@@ -143,8 +239,10 @@ out:
 			snprintf(head_oclass_name, sizeof(head_oclass_name), "%u", *head_cid);
 		if (daos_oclass_id2name(*tail_cid, tail_oclass_name) != 0)
 			snprintf(tail_oclass_name, sizeof(tail_oclass_name), "%u", *tail_cid);
-		D_DEBUG(DB_TRACE, "file create oclass selection: head=%s(%u), tail=%s(%u)\n",
-			head_oclass_name, *head_cid, tail_oclass_name, *tail_cid);
+		D_DEBUG(DB_TRACE,
+			"file create oclass selection: head=%s(%u), tail=%s(%u), split_off=" DF_U64
+			"\n",
+			head_oclass_name, *head_cid, tail_oclass_name, *tail_cid, *split_off);
 	}
 
 	return 0;
@@ -207,9 +305,11 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 		return EINVAL;
 
 	info->doi_oid = obj->oid;
+	info->doi_tail_oid  = DAOS_OBJ_NIL;
+	info->doi_split_off = 0;
 
 	switch (obj->mode & S_IFMT) {
-	case S_IFDIR:
+	case S_IFDIR: {
 		/** the oclass of the directory object itself */
 		info->doi_oclass_id = daos_obj_id2class(obj->oid);
 
@@ -224,6 +324,11 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 				else
 					rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0,
 								 0, &info->doi_dir_oclass_id);
+				if (rc) {
+					D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n",
+						DP_RC(rc));
+					return daos_der2errno(rc);
+				}
 			}
 			info->doi_file_oclass_id = obj->d.oclass;
 		} else {
@@ -255,6 +360,7 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 		else
 			info->doi_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 		break;
+	}
 	case S_IFREG: {
 		daos_size_t cell_size;
 
@@ -263,6 +369,10 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 			return daos_der2errno(rc);
 
 		info->doi_oclass_id = daos_obj_id2class(obj->oid);
+		if (obj->f.has_tail) {
+			info->doi_tail_oid  = obj->f.tail_oid;
+			info->doi_split_off = obj->f.split_off;
+		}
 		break;
 	}
 	case S_IFLNK:
@@ -297,10 +407,6 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		 * - Without O_EXCL we can just open the file.
 		 */
 
-		rc = file_oclasses(dfs, parent, cid, &cid, &tail_cid, &file->f.has_tail);
-		if (rc != 0)
-			return rc;
-
 		/** same logic for chunk size */
 		if (chunk_size == 0) {
 			if (parent->d.chunk_size == 0)
@@ -309,6 +415,11 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 				chunk_size = parent->d.chunk_size;
 		}
 
+		rc = file_oclasses(dfs, parent, cid, chunk_size, &cid, &tail_cid,
+				   &file->f.split_off, &file->f.has_tail);
+		if (rc != 0)
+			return rc;
+
 		/** Get new OID for the file */
 		rc = oid_gen(dfs, cid, true, &file->oid);
 		if (rc != 0)
@@ -316,6 +427,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		oid_cp(&entry->oid, file->oid);
 		entry->oclass     = cid;
 		entry->tail_oid   = DAOS_OBJ_NIL;
+		entry->split_off  = 0;
 		entry->tail_state = DFS_TAIL_NONE;
 		file->f.tail_oid  = DAOS_OBJ_NIL;
 
@@ -329,6 +441,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		}
 
 		/** Open the array object for the file */
+		entry->split_off = file->f.split_off;
 		rc = daos_array_open_with_attr(dfs->coh, file->oid, DAOS_TX_NONE, DAOS_OO_RW, 1,
 					       chunk_size, &file->oh, NULL);
 		if (rc != 0) {
@@ -426,6 +539,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 	}
 
 	file->f.has_tail = dfs_entry_has_tail(dfs->layout_v, entry);
+	file->f.split_off = file->f.has_tail ? entry->split_off : 0;
 	if (file->f.has_tail) {
 		oid_cp(&file->f.tail_oid, entry->tail_oid);
 		rc = open_file_tail(dfs, file->f.tail_oid, daos_mode, entry->chunk_size,
@@ -704,6 +818,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 			D_GOTO(out_free, rc = daos_der2errno(rc));
 
 		new_obj->f.has_tail = obj->f.has_tail;
+		new_obj->f.split_off = obj->f.split_off;
 		if (obj->f.has_tail) {
 			oid_cp(&new_obj->f.tail_oid, obj->f.tail_oid);
 			rc = daos_array_local2global(obj->f.tail_oh, &tail_ghdl);
@@ -782,6 +897,7 @@ struct dfs_obj_glob {
 	daos_obj_id_t tail_oid;
 	daos_obj_id_t parent_oid;
 	daos_size_t   chunk_size;
+	daos_size_t   split_off;
 	uuid_t        cont_uuid;
 	uuid_t        coh_uuid;
 	char          name[DFS_MAX_NAME + 1];
@@ -808,6 +924,7 @@ swap_obj_glob(struct dfs_obj_glob *array_glob)
 	D_SWAP64S(&array_glob->parent_oid.hi);
 	D_SWAP64S(&array_glob->parent_oid.lo);
 	D_SWAP64S(&array_glob->chunk_size);
+	D_SWAP64S(&array_glob->split_off);
 	/* skip cont_uuid */
 	/* skip coh_uuid */
 }
@@ -867,6 +984,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	oid_cp(&obj_glob->oid, obj->oid);
 	oid_cp(&obj_glob->tail_oid, obj->f.tail_oid);
 	oid_cp(&obj_glob->parent_oid, obj->parent_oid);
+	obj_glob->split_off = obj->f.split_off;
 	uuid_copy(obj_glob->coh_uuid, coh_uuid);
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
 	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME);
@@ -928,6 +1046,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	oid_cp(&obj->oid, obj_glob->oid);
 	oid_cp(&obj->f.tail_oid, obj_glob->tail_oid);
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
+	obj->f.split_off = obj_glob->split_off;
 	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME);
 	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode               = obj_glob->mode;
@@ -1226,6 +1345,7 @@ statx_task(tse_task_t *task)
 	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.obj_hlc, sizeof(uint64_t));
 	if (args->dfs->layout_v >= DFS_PL_LAYOUT_VERSION) {
 		d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.tail_oid, sizeof(daos_obj_id_t));
+		d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.split_off, sizeof(daos_size_t));
 		d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.tail_state, sizeof(uint8_t));
 	}
 	op_args->sgl.sg_nr     = i;
