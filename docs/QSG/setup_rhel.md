@@ -280,7 +280,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 
 	An example of using the config generate command on the first server node:
 
-		daos_server config generate --ms-replicas=$(hostname -s) | tee /tmp/daos_server.yml
+		daos_server config generate --access-points=$(hostname -s) | tee /tmp/daos_server.yml
 
 	An example of modifying the sample daos_server.yml:
 
@@ -437,14 +437,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		# start agents
 		clush -B -w $CLIENT_NODES "sudo systemctl start daos_agent"
 
-2. (Optional) Check daos\_agent status:
-
-		# check status
-		clush -B -w $CLIENT_NODES "cat /var/log/daos/daos_agent.log"
-
-		# Sample output depending on number of client nodes
-		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.6 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
-		client-2: agent INFO 2022/05/05 22:38:53 DAOS Agent v2.6 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
+2. Verify daos\_agent communication:
 
 		# verify client communication
 		clush -B -w $CLIENT_NODES "daos system query --verbose"
