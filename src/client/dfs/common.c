@@ -261,6 +261,8 @@ fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool is
 				*exists = false;
 				D_GOTO(out, rc = 0);
 			}
+			D_ERROR("Failed to fetch entry %s " DF_RC "\n", (const char *)dkey->iov_buf,
+				DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
