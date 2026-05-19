@@ -545,6 +545,8 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 		if (rc == 0) {
 			obj->obj_sync_epoch = obj->obj_df->vo_sync;
 		} else if (rc == -DER_NONEXIST) {
+			if (!(flags & VOS_OBJ_CREATE))
+				return -DER_NONEXIST;
 			rc = vos_oi_alloc(cont, obj->obj_id, epr->epr_hi, &obj->obj_df, ts_set);
 			if (rc) {
 				DL_ERROR(rc, DF_CONT ": Failed to allocate OI " DF_UOID ".",
