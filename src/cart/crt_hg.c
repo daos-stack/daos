@@ -1118,7 +1118,7 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 		hg_ctx->chc_epfd = 0;
 	}
 
-	if (hg_ctx->chc_hgctx) {
+	if (hg_ctx->chc_hgctx != NULL) {
 		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
 		if (hg_ret != HG_SUCCESS) {
 			D_ERROR("Could not destroy HG context, hg_ret: " DF_HG_RC "\n",
@@ -1135,10 +1135,9 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	}
 
 	/* Shared class (sep case) is destroyed at crt_hg_fini time */
-	if (hg_ctx->chc_shared_hg_class == true)
-		goto out;
-
-	if (hg_ctx->chc_hgcla) {
+	if (hg_ctx->chc_shared_hg_class)
+		hg_ctx->chc_hgcla = NULL;
+	else if (hg_ctx->chc_hgcla != NULL) {
 		hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
 		if (hg_ret != HG_SUCCESS)
 			D_WARN("Could not finalize HG class, hg_ret: " DF_HG_RC "\n",
