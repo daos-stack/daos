@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -296,7 +296,8 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, false);
 	if (rc != 0)
-		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
+		DL_ERROR(rc, "crt_hg_bulk_transfer() failed; origin=%s",
+			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
 out:
 	return rc;
 }
@@ -317,7 +318,8 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_c
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, true);
 	if (rc != 0)
-		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
+		DL_ERROR(rc, "crt_hg_bulk_transfer() failed; origin=%s",
+			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
 out:
 	return rc;
 }
