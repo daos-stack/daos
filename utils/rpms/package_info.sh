@@ -129,6 +129,9 @@ export daos_dev
 set_lib_name uuid lib libuuid libuuid1 libuuid1
 export uuid_lib
 
+set_lib_name gperftools dev gperftools gperftools libgoogle-perftools
+export gperftools_dev
+
 set_lib_name hdf5 lib hdf5 hdf5 hdf5
 export hdf5_lib
 

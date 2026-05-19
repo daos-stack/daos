@@ -195,6 +195,7 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 	regex_t                preg;
 	regmatch_t             match[MATCH_SIZE];
 	struct vos_file_parts *vfp_tmp;
+	size_t                 vos_path_len;
 	int                    rc;
 
 	D_ASSERT(vos_path != NULL && vos_file_parts != NULL);
@@ -216,6 +217,15 @@ parse_vos_file_parts(const char *vos_path, const char *db_path,
 		goto out_preg;
 	}
 	D_ASSERT(rc == 0);
+
+	vos_path_len = strnlen(vos_path, VOS_PATH_SIZE);
+	if (vos_path_len >= VOS_PATH_SIZE) {
+		D_ERROR("VOS path '%s' too long: got=%zu, max=%d\n", vos_path, vos_path_len,
+			VOS_PATH_SIZE - 1);
+		rc = -DER_EXCEEDS_PATH_LEN;
+		goto out_preg;
+	}
+	memcpy(vfp_tmp->vf_vos_file_path, vos_path, vos_path_len + 1);
 
 	if (db_path != NULL && db_path[0] != '\0') {
 		size_t db_path_len = strnlen(db_path, PATH_MAX);
