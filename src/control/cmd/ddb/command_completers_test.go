@@ -1,3 +1,9 @@
+//
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
 package main
 
 import (
@@ -18,7 +24,7 @@ func createFile(t *testing.T, filePath string) {
 
 	fd, err := os.Create(filePath)
 	if err != nil {
-		t.Fatalf("Failed to create test vos file %s: %v", filePath, err)
+		t.Fatalf("failed to create test vos file %s: %v", filePath, err)
 	}
 	fd.Close()
 }
@@ -27,14 +33,14 @@ func createDirAll(t *testing.T, dirPath string) {
 	t.Helper()
 
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
-		t.Fatalf("Failed to create test pool directory %s: %v", dirPath, err)
+		t.Fatalf("failed to create test pool directory %s: %v", dirPath, err)
 	}
 }
 
-func testSetup(t *testing.T) (tmpDir string, teardown func()) {
+func testSetup(t *testing.T) string {
 	t.Helper()
 
-	tmpDir, teardown = test.CreateTestDir(t)
+	tmpDir := t.TempDir()
 
 	for _, dir := range testPoolDirs {
 		createDirAll(t, filepath.Join(tmpDir, dir))
@@ -51,12 +57,11 @@ func testSetup(t *testing.T) (tmpDir string, teardown func()) {
 	createDirAll(t, filepath.Join(tmpDir, "bar", "baz"))
 	createFile(t, filepath.Join(tmpDir, "bar", "baz", "no_vos"))
 
-	return
+	return tmpDir
 }
 
 func TestListVosFiles(t *testing.T) {
-	tmpDir, teardown := testSetup(t)
-	t.Cleanup(teardown)
+	tmpDir := testSetup(t)
 
 	for name, tc := range map[string]struct {
 		args   string
@@ -118,7 +123,7 @@ func TestListVosFiles(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			results := listVosFiles(tc.args)
-			test.AssertStringsEqual(t, tc.expRes, results, "listDirVos results do not match expected")
+			test.AssertStringsEqual(t, tc.expRes, results, "unexpected listVosFiles results")
 		})
 	}
 }
@@ -169,7 +174,7 @@ func TestFilterSuggestions(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			results := filterSuggestions(tc.prefix, initialSuggestions, additionalSuggestions)
-			test.AssertStringsEqual(t, tc.expRes, results, "filterSuggestions results do not match expected")
+			test.AssertStringsEqual(t, tc.expRes, results, "unexpected filterSuggestions results")
 		})
 	}
 }
