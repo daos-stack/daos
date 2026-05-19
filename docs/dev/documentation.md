@@ -54,7 +54,7 @@ Documentation on DAOS is available in the following places:
 The following sections describe how the multi-versioned documentation
 on [https://docs.daos.io/](https://docs.daos.io/)
 is generated from the documentation Markdown files in the Github
-`daos-stack/daos/doc/` tree (using the `mkdocs` and `mike` tools,
+`daos-stack/daos/docs/` tree (using the `mkdocs` and `mike` tools,
 and the `doxygen` tool for the API documentation).
 
 ## Configuration files in Github
@@ -73,13 +73,13 @@ as some information in that file is version specific or uses URLs
 that are pointing to that specific DAOS version.
 
 !!! note
-Absolute paths or hardcoded version numbers in the `mkdocs.yml` file
-should **not** be changed to relative URLs/paths,
-as that will break some of the processing by downstream tools.
-These specifics need to be updated once when a new release branch is
-created, and again when an existing release branch that was under
-development reaches General Availability (GA).
-Examples with detailed steps can be found below.
+    Absolute paths or hardcoded version numbers in the `mkdocs.yml` file
+    should **not** be changed to relative URLs/paths,
+    as that will break some of the processing by downstream tools.
+    These specifics need to be updated once when a new release branch is
+    created, and again when an existing release branch that was under
+    development reaches General Availability (GA).
+    Examples with detailed steps can be found below.
 
 The `mkdocs` tool creates a `sites` subdirectory in the toplevel
 directory of the DAOS project on github,
@@ -122,7 +122,7 @@ In addition, the MkDocs package and plugins need to be installed.
 Running `pip install mike` should install the prerequisite packages.
 
 Depending on the operation system and Python environment,
-prerquisite software and the mkdocs plugins may have to be explicitly
+prerequisite software and the mkdocs plugins may have to be explicitly
 installed. For example, on a Windows laptop running Cygwin:
 
 ```
@@ -162,9 +162,9 @@ For each DAOS release branch that should get included on the website:
   for this release in the `docs/doxygen/html` subdirectory.
 
 !!! note
-To prevent these files from being accidentally committed into github,
-the [.gitignore](https://github.com/daos-stack/daos/blob/master/.gitignore)
-file contains a `docs/doxygen/` line.
+    To prevent these files from being accidentally committed into github,
+    the [.gitignore](https://github.com/daos-stack/daos/blob/master/.gitignore)
+    file contains a `docs/doxygen/` line.
 
 * `mike deploy` is called with a title, a name for the release,
    and optional alias name(s) for this release.
@@ -274,15 +274,15 @@ staging area so it can be validated in the same webserver environment
 in which the live website is running:
 
 ```
-export WEBSITE="docs.daos.io"
+export WEBSERVER="docs.daos.io"
 export TARFILE="docs-daos-io.tgz"
 
-git checkout github-pages
+git checkout gh-pages
 
-tar czvf $TAR versions.json index.html v?.? latest master
+tar czvf $TARFILE versions.json index.html v?.? latest master
 
 ssh $WEBSERVER "rm -r docs.daos.io/staging && mkdir docs.daos.io/staging"
-scp R$TARFILE $WEBSERVER:docs.daos.io/staging
+scp $TARFILE $WEBSERVER:docs.daos.io/staging
 ssh $WEBSERVER "cd docs.daos.io/staging && tar xz $TARFILE && rm $TARFILE"
 
 rm $TARFILE
