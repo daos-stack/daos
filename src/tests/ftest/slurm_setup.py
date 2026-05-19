@@ -34,7 +34,7 @@ class SlurmSetup():
         '/etc/slurm/slurmdbd.conf.example']
     MUNGE_DIR = '/etc/munge'
     MUNGE_KEY = '/etc/munge/munge.key'
-    PACKAGE_LIST = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
+    PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd']
     SLURM_CONF = '/etc/slurm/slurm.conf'
     SLURM_LOG_DIR = '/var/log/slurm'
 
