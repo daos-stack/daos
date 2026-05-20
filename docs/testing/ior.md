@@ -84,7 +84,7 @@ information (`ior -a DFS --dfs.pool=$DAOS_POOL --daos.cont=$DAOS_CONT ...`).
 ```sh
 $ module load mpich # or any other MPI stack
 
-$ mpirun -hosts $CLIENT_NODES -np 10 ${HOME}/software/ior/bin/ior -a POSIX -b 2G -t 1M -v -W -w -r -R -k -i 1 -o /tmp/daos_dfuse/testfile
+$ mpirun -hosts $CLIENT_NODES -np 10 ${HOME}/software/ior/bin/ior -a POSIX -b 2G -t 1M -v -W -w -r -R -i 1 -k -o /tmp/daos_dfuse/testfile
 
 IOR-4.0.0: MPI Coordinated Test of Parallel I/O
 Began               : Thu Mar 19 17:42:44 2026
