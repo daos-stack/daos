@@ -140,6 +140,12 @@ enum daos_pool_props {
 	DAOS_PROP_PO_SVC_OPS_ENABLED,
 	/** Metadata duplicate operations SVC_OPS KVS max entry age (seconds), default 300 */
 	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
+	/** PEM intermediate CA bundle for per-pool node auth, default empty */
+	DAOS_PROP_PO_POOL_CA,
+	/** Per-CN cert revocation watermarks: opaque JSON blob managed by the
+	 *  control plane; engine stores and ships verbatim. Default empty.
+	 */
+	DAOS_PROP_PO_CERT_WATERMARKS,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -152,6 +158,9 @@ struct daos_prop_byteval {
 	/** Length of data */
 	size_t dpb_len;
 };
+
+/** Hard cap on a byteval prop's wire/memory length; bounds decode-time allocation. */
+#define DAOS_PROP_BYTEVAL_MAX_LEN       (1U << 20)
 
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
@@ -870,6 +879,16 @@ daos_prop_entry_dup_byteval(struct daos_prop_entry *entry_dst, struct daos_prop_
 int
 daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2);
+
+/**
+ * Compare a pair of byteval-typed daos_prop_entry. Both must satisfy
+ * daos_prop_has_byteval(); empty (NULL or zero-length) values match.
+ *
+ * \return	0		Entries match
+ *		-DER_MISMATCH	Entries do NOT match
+ */
+int
+daos_prop_entry_cmp_byteval(struct daos_prop_entry *entry1, struct daos_prop_entry *entry2);
 
 /**
  * Duplicate container roots from one DAOS prop entry to another.

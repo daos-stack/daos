@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,6 +71,63 @@ crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
+crt_proc_struct_daos_prop_byteval(crt_proc_t proc, crt_proc_op_t proc_op,
+				  struct daos_prop_byteval **data, uint32_t type)
+{
+	struct daos_prop_byteval *bv;
+	uint64_t                  len = 0;
+	int                       rc;
+
+	if (proc == NULL || data == NULL)
+		return -DER_INVAL;
+
+	if (FREEING(proc_op)) {
+		bv = *data;
+		if (bv != NULL) {
+			D_FREE(bv->dpb_data);
+			D_FREE(bv);
+			*data = NULL;
+		}
+		return 0;
+	}
+
+	if (ENCODING(proc_op) && *data != NULL)
+		len = (*data)->dpb_len;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &len);
+	if (rc)
+		return rc;
+
+	if (len > DAOS_PROP_BYTEVAL_MAX_LEN) {
+		D_ERROR("byteval prop %u len " DF_U64 " exceeds max %u\n", type, len,
+			DAOS_PROP_BYTEVAL_MAX_LEN);
+		return -DER_INVAL;
+	}
+
+	if (DECODING(proc_op)) {
+		if (len == 0) {
+			*data = NULL;
+			return 0;
+		}
+		D_ALLOC_PTR(bv);
+		if (bv == NULL)
+			return -DER_NOMEM;
+		D_ALLOC(bv->dpb_data, len);
+		if (bv->dpb_data == NULL) {
+			D_FREE(bv);
+			return -DER_NOMEM;
+		}
+		bv->dpb_len = len;
+		*data       = bv;
+	}
+
+	if (len > 0)
+		rc = crt_proc_memcpy(proc, proc_op, (*data)->dpb_data, len);
+
+	return rc;
+}
+
+static int
 crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 {
 	struct daos_prop_entry	*entry;
@@ -106,6 +164,10 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 		} else if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST) {
 			rc = crt_proc_d_rank_list_t(proc, proc_op,
 					(d_rank_list_t **)&entry->dpe_val_ptr);
+		} else if (daos_prop_has_byteval(entry)) {
+			rc = crt_proc_struct_daos_prop_byteval(
+			    proc, proc_op, (struct daos_prop_byteval **)&entry->dpe_val_ptr,
+			    entry->dpe_type);
 		} else if (entry->dpe_type == DAOS_PROP_CO_ROOTS) {
 			struct daos_prop_co_roots *roots;
 
