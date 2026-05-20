@@ -4530,6 +4530,61 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	D_ASSERT(obj_ver_entry != NULL);
 	obj_layout_ver = obj_ver_entry->dpe_val;
 
+	rc = ds_sec_cred_get_origin(credp, &machine);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": unable to retrieve origin", DP_UUID(in->pci_op.pi_uuid));
+		D_GOTO(out_map_version, rc);
+	}
+
+	{
+		struct daos_prop_entry *ca_entry;
+		struct daos_prop_entry *wm_entry;
+
+		ca_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_POOL_CA);
+		if (ca_entry != NULL && ca_entry->dpe_val_ptr != NULL) {
+			struct daos_prop_byteval *ca_bv = ca_entry->dpe_val_ptr;
+			d_iov_t                   ca_iov;
+			d_iov_t                   wm_iov;
+			d_iov_t                  *wm_iov_p            = NULL;
+			d_iov_t                  *node_cert_p         = NULL;
+			d_iov_t                  *node_cert_pop_p     = NULL;
+			d_iov_t                  *node_cert_payload_p = NULL;
+
+			if (!rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_NODE_CERT)) {
+				rc = -DER_PROTO;
+				D_ERROR(DF_UUID ": pool requires node "
+						"certificate but client protocol "
+						"version %d does not support it "
+						"(need >= %d)\n",
+					DP_UUID(in->pci_op.pi_uuid), opc_get_rpc_ver(rpc->cr_opc),
+					POOL_PROTO_VER_WITH_NODE_CERT);
+				D_GOTO(out_map_version, rc);
+			}
+
+			d_iov_set(&ca_iov, ca_bv->dpb_data, ca_bv->dpb_len);
+
+			pool_connect_in_get_node_cert(rpc, &node_cert_p, &node_cert_pop_p,
+						      &node_cert_payload_p);
+
+			wm_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_CERT_WATERMARKS);
+			if (wm_entry != NULL && wm_entry->dpe_val_ptr != NULL) {
+				struct daos_prop_byteval *wm_bv = wm_entry->dpe_val_ptr;
+
+				d_iov_set(&wm_iov, wm_bv->dpb_data, wm_bv->dpb_len);
+				wm_iov_p = &wm_iov;
+			}
+
+			rc = ds_sec_validate_node_cert(in->pci_op.pi_uuid, &ca_iov, machine,
+						       wm_iov_p, node_cert_p, node_cert_pop_p,
+						       node_cert_payload_p);
+			if (rc != 0) {
+				DL_ERROR(rc, DF_UUID ": node certificate validation failed",
+					 DP_UUID(in->pci_op.pi_uuid));
+				D_GOTO(out_map_version, rc);
+			}
+		}
+	}
+
 	/*
 	 * Security capabilities determine the access control policy on this
 	 * pool handle.
@@ -4538,13 +4593,6 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": refusing connect attempt for " DF_X64,
 			 DP_UUID(in->pci_op.pi_uuid), flags);
-		D_GOTO(out_map_version, rc);
-	}
-
-	rc = ds_sec_cred_get_origin(credp, &machine);
-
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": unable to retrieve origin", DP_UUID(in->pci_op.pi_uuid));
 		D_GOTO(out_map_version, rc);
 	}
 

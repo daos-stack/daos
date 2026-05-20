@@ -64,3 +64,34 @@ func SignPoP(key crypto.PrivateKey, cert *x509.Certificate, payload []byte) ([]b
 		return nil, fmt.Errorf("unsupported key type: %T", key)
 	}
 }
+
+// VerifyPoP verifies a SignPoP signature using the matching domain prefix.
+func VerifyPoP(pub crypto.PublicKey, payload, sig []byte) error {
+	signInput := append([]byte(popSigDomain), payload...)
+	switch k := pub.(type) {
+	case *rsa.PublicKey:
+		h := sha512.Sum512(signInput)
+		return rsa.VerifyPSS(k, crypto.SHA512, h[:], sig, &rsa.PSSOptions{
+			SaltLength: rsa.PSSSaltLengthEqualsHash,
+			Hash:       crypto.SHA512,
+		})
+	case *ecdsa.PublicKey:
+		var hash []byte
+		switch k.Curve {
+		case elliptic.P256():
+			h := sha256.Sum256(signInput)
+			hash = h[:]
+		case elliptic.P384():
+			h := sha512.Sum384(signInput)
+			hash = h[:]
+		default:
+			return fmt.Errorf("unsupported ECDSA curve: %v", k.Curve.Params().Name)
+		}
+		if !ecdsa.VerifyASN1(k, hash, sig) {
+			return fmt.Errorf("ECDSA signature verification failed")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported public key type: %T", pub)
+	}
+}

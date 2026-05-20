@@ -117,3 +117,49 @@ func TestSignPoP_RSA(t *testing.T) {
 		t.Fatalf("RSA-PSS signature verification failed: %v", err)
 	}
 }
+
+func TestVerifyPoP_RoundTrip(t *testing.T) {
+	payload := make([]byte, PoPPayloadLen)
+	if _, err := rand.Read(payload); err != nil {
+		t.Fatal(err)
+	}
+
+	ec384, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ec256, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, k := range map[string]struct {
+		priv crypto.PrivateKey
+		pub  crypto.PublicKey
+	}{
+		"ECDSA P-384": {ec384, &ec384.PublicKey},
+		"ECDSA P-256": {ec256, &ec256.PublicKey},
+		"RSA-PSS":     {rsaKey, &rsaKey.PublicKey},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sig, err := SignPoP(k.priv, nil, payload)
+			if err != nil {
+				t.Fatalf("SignPoP: %v", err)
+			}
+			if err := VerifyPoP(k.pub, payload, sig); err != nil {
+				t.Fatalf("VerifyPoP: %v", err)
+			}
+			// Tampering the payload must fail verification.
+			tampered := make([]byte, len(payload))
+			copy(tampered, payload)
+			tampered[0] ^= 0xff
+			if err := VerifyPoP(k.pub, tampered, sig); err == nil {
+				t.Fatal("VerifyPoP accepted a tampered payload")
+			}
+		})
+	}
+}
