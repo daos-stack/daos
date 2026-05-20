@@ -284,8 +284,8 @@ Help Options:
 
 [generate command options]
       -l, --helper-log-file=                Log file location for debug from daos_server_helper binary
-      -a, --access-points=                  Comma separated list of access point addresses <ipv4addr/hostname>
-                                            to host management service (default: localhost)
+      -r, --ms-replicas=                    Comma separated list of MS replica addresses
+                                            <ipv4addr/hostname> (default: localhost)
       -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
                                             config file output. If unset then the value will be set to the
                                             number of NUMA nodes on storage hosts in the DAOS system.
@@ -330,7 +330,7 @@ Help Options:
 
 [generate command options]
       -l, --host-list=                      A comma separated list of addresses <ipv4addr/hostname> to connect to
-      -a, --access-points=                  Comma separated list of access point addresses <ipv4addr/hostname>
+      -r, --ms-replicas=                    Comma separated list of MS replica addresses <ipv4addr/hostname>
                                             to host management service (default: localhost)
       -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
                                             config file output. If unset then the value will be set to the

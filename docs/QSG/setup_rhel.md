@@ -280,7 +280,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 
 	An example of using the config generate command on the first server node:
 
-		daos_server config generate --access-points=$(hostname -s) | tee /tmp/daos_server.yml
+		daos_server config generate --ms-replicas=$(hostname -s) | tee /tmp/daos_server.yml
 
 	An example of modifying the sample daos_server.yml:
 
@@ -439,7 +439,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 
 2. Verify daos\_agent communication:
 
-		# verify client communication
+		# verify client communication to each server rank
 		clush -B -w $CLIENT_NODES "daos system query --verbose"
 
 		# Sample output
