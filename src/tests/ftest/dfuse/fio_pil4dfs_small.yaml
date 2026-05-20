@@ -20,8 +20,7 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 2G
-  nvme_size: 20G
+  size: 100%
 
 container:
   type: POSIX
