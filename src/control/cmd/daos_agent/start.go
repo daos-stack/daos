@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/systemd"
 	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 type ctxKey string
@@ -108,8 +110,9 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	drpcRegStart := time.Now()
 	secCfg := &securityConfig{
-		transport:   cmd.cfg.TransportConfig,
-		credentials: cmd.cfg.CredentialConfig,
+		transport:      cmd.cfg.TransportConfig,
+		credentials:    cmd.cfg.CredentialConfig,
+		nodeCertLoader: security.NewNodeCertLoader(cmd.cfg.NodeCertDir),
 	}
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
 	mgmtMod := &mgmtModule{
