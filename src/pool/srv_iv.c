@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -93,6 +93,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
 	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
 		prop_entry = &prop->dpp_entries[i];
+		/* Byteval props are PS-leader-only; never propagated via IV. */
+		if (daos_prop_has_byteval(prop_entry))
+			continue;
 		switch (prop_entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
@@ -227,6 +230,11 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
 		prop_entry = &prop->dpp_entries[i];
 		prop_entry->dpe_type = DAOS_PROP_PO_MIN + i + 1;
+		/* Byteval props are PS-leader-only; never propagated via IV. */
+		if (daos_prop_has_byteval(prop_entry)) {
+			prop_entry->dpe_val_ptr = NULL;
+			continue;
+		}
 		switch (prop_entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			D_ASSERT(strlen(iv_prop->pip_label) <=
