@@ -12,7 +12,7 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 # Distro name for the repository path for accessing packages built by CI
-export DISTRO_NAME="${1:-el9}"
+distro_name="${1:-el9}"
 code_coverage="${2:-false}"
 
 # Import provisioning functions to add the repo
@@ -29,7 +29,7 @@ done
 env | sort -n
 
 # Add the repo for packages built by CI
-add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}" "${code_coverage}" "true"
+add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}" "${distro_name}" "${code_coverage}" "true"
 
 # Install bullseye
 bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"

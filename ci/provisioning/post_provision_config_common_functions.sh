@@ -64,13 +64,14 @@ add_inst_repo() {
     local repo="$1"
     local branch="$2"
     local build_number="$3"
-    local bullseye="${4:-false}"
-    local sudo="${5:-false}"
+    local distro_name="$4"
+    local bullseye="${5:-false}"
+    local sudo="${6:-false}"
     local dnf_cmd=("dnf" "-y")
     local repo_base="${ARTIFACTS_URL:-${JENKINS_URL}job/}daos-stack/job/${repo}/job/${branch//\//%252F}/${build_number}/artifact/artifacts"
-    local repo_url="${repo_base}/$DISTRO_NAME/"
+    local repo_url="${repo_base}/$distro_name/"
     if [[ "$bullseye" == "true" ]]; then
-        repo_url="${repo_base}/${DISTRO_NAME}-bullseye/"
+        repo_url="${repo_base}/${distro_name}-bullseye/"
     fi
     if [[ "$sudo" == "true" ]]; then
         dnf_cmd=("sudo" "${dnf_cmd[@]}")
@@ -408,7 +409,7 @@ post_provision_config_nodes() {
                 branch="${branch%:*}"
             fi
         fi
-        add_inst_repo "${repo}" "${branch}" "${build_number}" "${bullseye}"
+        add_inst_repo "${repo}" "${branch}" "${build_number}" "${DISTRO_NAME}" "${bullseye}"
     done
 
     # start with everything fully up-to-date
