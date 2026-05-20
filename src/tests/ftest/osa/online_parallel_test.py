@@ -54,7 +54,7 @@ class OSAOnlineParallelTest(OSAUtils):
         Args:
             action_args(dict) : {action: {"puuid":
                                           pool[val].uuid,
-                                          "rank": rank,
+                                          "ranks": rank,
                                           "target": t_string,
                                           "action": action,}
             results (queue) : dmg command output queue.
@@ -66,7 +66,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 time.sleep(60)
             # For each action, read the values from the
             # dictionary.
-            # example {"exclude" : {"puuid": self.pool, "rank": rank
+            # example {"exclude" : {"puuid": self.pool, "ranks: rank
             #                       "target": t_string, "action": exclude}}
             # getattr is used to obtain the method in dmg object.
             # eg: dmg -> pool_exclude method, then pass arguments like
@@ -128,13 +128,13 @@ class OSAOnlineParallelTest(OSAUtils):
                                                     self.ior_flags):
                 # Action dictionary with OSA dmg command parameters
                 action_args = {
-                    "drain": {"pool": self.pool[value].uuid, "rank": rank,
+                    "drain": {"pool": self.pool[value].uuid, "ranks": rank,
                               "tgt_idx": None},
                     "exclude": {"pool": self.pool[value].uuid,
-                                "rank": (rank + 1),
+                                "ranks": (rank + 1),
                                 "tgt_idx": t_string},
                     "reintegrate": {"pool": self.pool[value].uuid,
-                                    "rank": (rank + 1),
+                                    "ranks": (rank + 1),
                                     "tgt_idx": t_string}
                 }
                 for _ in range(0, num_jobs):
