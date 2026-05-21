@@ -36,6 +36,7 @@ pkgs="boost-python3$PY_MINOR_VER-devel                               \
       $(utils/rpms/package_version.sh pmdk debug pmem)               \
       fuse3                                                          \
       gotestsum                                                      \
+      gperftools-devel                                               \
       hwloc-devel                                                    \
       libasan                                                        \
       libipmctl-devel                                                \

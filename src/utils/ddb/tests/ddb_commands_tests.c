@@ -89,7 +89,7 @@ ls_cmd_tests(void **state)
 
 	/* printing a recx works */
 	dvt_fake_print_called = 0;
-	opt.path = "/[0]/[0]/[0]/[0]/[0]";
+	opt.path              = "/[0]/[0]/[0]/[1]/[0]";
 	opt.recursive = true;
 	assert_success(ddb_run_ls(&ctx, &opt));
 
@@ -142,7 +142,7 @@ dump_value_cmd_tests(void **state)
 	assert_rc_equal(ddb_run_value_dump(&ctx, &opt), -DDBER_INCOMPLETE_PATH_VALUE);
 
 	/* Path is complete, no destination means will dump to screen */
-	opt.path = "[0]/[0]/[0]/[1]";
+	opt.path = "[0]/[0]/[0]/[2]";
 	assert_success(ddb_run_value_dump(&ctx, &opt));
 
 	/* success */
@@ -188,7 +188,7 @@ dump_ilog_cmd_tests(void **state)
 	assert_rc_equal(ddb_run_ilog_dump(&ctx, &opt), -DER_INVAL);
 
 	/* Dump akey ilog */
-	opt.path = "[0]/[0]/[0]/[0]";
+	opt.path = "[0]/[0]/[0]/[1]";
 	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 }
 
@@ -211,8 +211,7 @@ dump_dtx_cmd_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	struct ddb_ctx		 ctx = {0};
-	struct dtx_dump_options	 opt = {0};
-	daos_handle_t		 coh;
+	struct dtx_dump_options  opt  = {0};
 
 	dvt_fake_print_reset();
 
@@ -221,11 +220,6 @@ dump_dtx_cmd_tests(void **state)
 	ctx.dc_poh = tctx->dvt_poh;
 
 	assert_invalid(ddb_run_dtx_dump(&ctx, &opt));
-
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
-
-	dvt_vos_insert_2_records_with_dtx(coh);
-	vos_cont_close(coh);
 
 	opt.path = "[0]";
 	assert_success(ddb_run_dtx_dump(&ctx, &opt));
@@ -457,8 +451,7 @@ dtx_stat_tests(void **state)
 		buf[59] += i;
 		assert_regex_match(dvt_fake_print_buffer, buf);
 	}
-	assert_regex_match(dvt_fake_print_buffer,
-			   "^DTX entries statistics of the pool \\(null\\)$");
+	assert_regex_match(dvt_fake_print_buffer, "^DTX entries statistics of the pool:$");
 }
 
 static uint64_t
@@ -567,17 +560,26 @@ dtx_aggr_tests(void **state)
 static int
 dcv_suit_setup(void **state)
 {
+	struct ddb_ctx          ctx = {0};
 	struct dt_vos_pool_ctx *tctx;
-	struct vos_file_parts   path_parts = {0};
+	daos_handle_t           coh;
 
 	assert_success(ddb_test_setup_vos(state));
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(parse_vos_file_parts(tctx->dvt_pmem_file, NULL, &path_parts));
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &tctx->dvt_poh, 0, true));
-
+	ctx.dc_write_mode = true;
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	tctx->dvt_poh = ctx.dc_poh;
 	g_ctx.dc_poh = tctx->dvt_poh;
+
+	assert_success(vos_cont_open(ctx.dc_poh, g_uuids[0], &coh));
+
+	/* Seed the first container with 1 active + 1 committed DTX entry required by
+	 * dtx_stat_tests, dtx_commit_entry_tests, dtx_act_discard_invalid_tests, and
+	 * dtx_abort_entry_tests. */
+	dvt_vos_insert_2_records_with_dtx(coh);
+	vos_cont_close(coh);
 
 	return 0;
 }
