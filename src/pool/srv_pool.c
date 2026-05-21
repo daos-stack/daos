@@ -4208,6 +4208,7 @@ pool_query_set_rebuild_status_degraded(struct pool_svc *svc, struct daos_rebuild
 			break;
 		}
 	}
+	D_FREE(tgts);
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
 	if (degraded)
