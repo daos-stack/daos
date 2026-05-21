@@ -1,0 +1,2 @@
+daos_python_version: python3.11
+daos_repo_dir: "{{ playbook_dir }}/../../.."

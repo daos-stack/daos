@@ -1,0 +1,38 @@
+# yamllint disable rule:line-length
+- name: Compute hugepages count from CPU topology
+  set_fact:
+    daos_hugepages_computed: "{{ ansible_processor_cores | int * ansible_processor_count | int * 512 }}"
+  when: daos_hugepages_nb | default(daos_hugepages_nb_default) | int == 0
+
+- name: Set hugepages count fact
+  set_fact:
+    daos_hugepages_nb_effective: >-
+      {{ daos_hugepages_nb | default(daos_hugepages_nb_default) | int
+         if daos_hugepages_nb | default(daos_hugepages_nb_default) | int != 0
+         else daos_hugepages_computed }}
+
+- name: Configure hugepages sysctl parameter
+  become: true
+  sysctl:
+    name: vm.nr_hugepages
+    value: "{{ daos_hugepages_nb_effective }}"
+    sysctl_file: /etc/sysctl.d/50-hugepages.conf
+    reload: "{{ daos_sysctl_reload | default(true) }}"
+
+- name: Deploy disable-transparent-huge-pages systemd service
+  become: true
+  template:
+    src: disable-thp.service.j2
+    dest: /etc/systemd/system/disable-transparent-huge-pages.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: systemd daemon-reload
+
+- name: Enable and start disable-transparent-huge-pages service
+  become: true
+  systemd:
+    name: disable-transparent-huge-pages
+    enabled: true
+    state: started
+  when: ansible_service_mgr == 'systemd'
