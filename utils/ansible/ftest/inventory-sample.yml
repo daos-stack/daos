@@ -1,4 +1,4 @@
-# Sample inventory of a DAOS functional platform running on the wolf cluster
+# Sample inventory for a DAOS functional test platform
 #
 # Detailed information on the content of this ansible inventory file is available in the README.md
 # file of the directory containing this first file.
@@ -11,11 +11,31 @@
 #     #
 #     # Optional variable defining the network provider to use by the DAOS engines.  This variable
 #     # is also used to define which network driver rpms have to be install.
-#     #  default: ofi+tcp;ofi_rxm
-#     daos_ofi_provider: ofi+tcp;ofi_rxm
+#     #  default: ofi+tcp
+#     daos_ofi_provider: ofi+tcp
 #     #
 #     # Mandatory variable defining the user running the daos-launch.sh script
 #     daos_launch_username: foo
+#     #
+#     # Optional variable defining the HTTP/HTTPS proxy URL.  When set, the proxy is forwarded to
+#     # all playbook tasks (gem, pip, curl, wget, etc.) at the play level via the Ansible
+#     # environment: mechanism.  The proxy is scoped to the playbook run only — it is never
+#     # written permanently to the nodes.  Leave empty (the default) to disable.
+#     daos_http_proxy: http://myproxy.net:8080
+#     #
+#     # Optional variable defining the comma-separated list of hosts that bypass the proxy.
+#     # Appended as no_proxy / NO_PROXY to every task that uses daos_proxy_env.
+#     #  default: "localhost,127.0.0.1"
+#     daos_proxy_bypass: "localhost,127.0.0.1"
+#     #
+#     # Optional list of tool/command names whose task files bypass the proxy.  Default is
+#     # empty — all tasks receive the proxy.  Add 'dnf' if your dnf repositories are hosted
+#     # on a local Artifactory or mirror that is not reachable through the proxy.  All tasks
+#     # in the corresponding included task file receive an empty proxy environment automatically
+#     # (see README Proxy Configuration section for details).
+#     #  default: []
+#     # daos_proxy_nofwd:
+#     #   - dnf
 #   children:
 #     daos_dev:
 #       vars:
@@ -31,16 +51,11 @@
 #         #  default: None
 #         daos_ofi_interface: eth0
 #       hosts:
-#         wolf-666:
+#         node1:
 #     daos_servers:
-#       vars:
-#         #
-#         # Optional variable defining the number of hugepages to be allocated by the linux kernel.
-#         #  default: 4096
-#         daos_hugepages_nb: 8182
 #       hosts:
-#         wolf-666:
-#         wolf-999:
+#         node1:
+#         node2:
 #     daos_clients:
 #       hosts:
-#         wolf-999:
+#         node2:

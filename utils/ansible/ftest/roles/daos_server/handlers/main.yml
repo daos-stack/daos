@@ -1,0 +1,10 @@
+- name: systemd daemon-reexec
+  become: true
+  command: systemctl daemon-reexec
+  when: ansible_service_mgr == 'systemd'
+
+- name: systemd daemon-reload
+  become: true
+  systemd:
+    daemon_reload: true
+  when: ansible_service_mgr == 'systemd'
