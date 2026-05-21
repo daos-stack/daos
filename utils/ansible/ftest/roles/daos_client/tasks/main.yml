@@ -1,0 +1,62 @@
+# yamllint disable rule:line-length
+- name: Gather distribution specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ playbook_dir }}/vars/{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version }}.yml"
+
+- name: Create DAOS client system users and groups
+  include_tasks: users_groups.yml
+
+- name: Install client dependency packages
+  include_tasks: dependencies.yml
+
+- name: Deploy DAOS agent systemd service
+  become: true
+  template:
+    src: daos_agent.service.j2
+    dest: /usr/lib/systemd/system/daos_agent.service
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+
+- name: Create DAOS configuration directories
+  become: true
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/daos
+    - /etc/daos/certs
+
+- name: Update dynamic linker configuration
+  become: true
+  template:
+    src: daos-ld.so.conf.j2
+    dest: /etc/ld.so.conf.d/daos-ftest-x86_64.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+
+- name: Update PATH in PAM environment
+  become: true
+  lineinfile:
+    path: /etc/security/pam_env.conf
+    state: present
+    regexp: '^PATH='
+    line: "PATH={{ daos_runtime_dir }}/install/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/usr/bin/syscfg:/root/bin"
+    backup: true
+
+- name: Create MPI module directory
+  become: true
+  file:
+    path: /etc/modulefiles/mpi
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+    recurse: true

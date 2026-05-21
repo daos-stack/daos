@@ -1,0 +1,5 @@
+- name: Install Python pip requirements (build + unit-test)
+  include_tasks: pip_deps.yml
+
+- name: Pre-download Go module dependencies
+  include_tasks: go_deps.yml
