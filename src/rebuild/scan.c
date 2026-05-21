@@ -129,7 +129,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		    !daos_crt_network_error(rc)))
 			break;
 
-		if (rpt->rt_abort || rpt->rt_finishing) {
+		if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done) {
 			rc = -DER_SHUTDOWN;
 			DL_INFO(rc, DF_RB ": give up ds_object_migrate_send, shutdown rebuild",
 				DP_RB_RPT(rpt));
@@ -728,7 +728,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	int				i;
 	int				rc = 0;
 
-	if (rpt->rt_abort || arg->cont_child->sc_stopping) {
+	if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done ||
+	    arg->cont_child->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "rebuild is aborted\n");
 		return 1;
 	}
@@ -1254,13 +1255,6 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	/* check if the rebuild with different leader is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1);
 	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
-		if (rpt->rt_global_done) {
-			D_WARN("the previous rebuild "DF_UUID"/%d/"DF_U64"/%p is not cleanup yet\n",
-			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
-			       rsi->rsi_leader_term, rpt);
-			D_GOTO(out_put, rc = -DER_BUSY);
-		}
-
 		/* Rebuild should never skip the version */
 		D_ASSERTF(rsi->rsi_rebuild_ver == rpt->rt_rebuild_ver,
 			  "rsi_rebuild_ver %d != rt_rebuild_ver %d\n",
@@ -1282,6 +1276,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			rpt_put(rpt);
 			rpt = NULL;
 			goto tls_lookup;
+		}
+
+		if (rpt->rt_global_done) {
+			D_WARN("the previous rebuild " DF_UUID "/%d/" DF_U64
+			       "/%p is not cleanup yet\n",
+			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
+			       rsi->rsi_leader_term, rpt);
+			D_GOTO(out_put, rc = -DER_BUSY);
 		}
 
 		D_DEBUG(DB_REBUILD, DF_UUID" already started, req "DF_U64" master %u/"DF_U64"\n",
