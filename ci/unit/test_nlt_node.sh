@@ -6,7 +6,6 @@
 set -uex
 
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
-sudo mkdir -p /mnt/daos
 # using mmap()'ed ULT stacks requires to bump system default
 if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     sudo sysctl vm.max_map_count=1000000
@@ -46,33 +45,27 @@ pip install /opt/daos/lib/daos/python/
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
-nlt_args=()
-nlt_args+=(--max-log-size 1950MiB)
-nlt_args+=(--dfuse-dir /localhome/jenkins/)
-
 : "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
 if [ -d "${BULLSEYE_DIR}" ]; then
     export COVFILE="/tmp/test.cov"
     export PATH="${BULLSEYE_DIR}/bin:$PATH"
     cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
     ls -al "${COVFILE}"
-    nlt_args+=(--log-usage-save nltir-bullseye.xml)
-    nlt_args+=(--log-usage-export nltr-bullseye.json)
-    nlt_args+=(--memcheck no)
-    nlt_args+=(--log-base-dir nlt_bullseye_logs)
-else
-    nlt_args+=(--log-usage-save nltir.xml)
-    nlt_args+=(--log-usage-export nltr.json)
 fi
+
+mkdir -p nlt_logs
+sudo mount -t tmpfs tmpfs nlt_logs
+sudo chown jenkins:jenkins nlt_logs
 
 if [ -e "${COVFILE:-}" ]; then
     echo "Code coverage before running unit tests:"
     /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
 fi
 
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+TMPDIR="$(pwd)/nlt_logs" \
+    HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
     NO_PROXY="${DAOS_NO_PROXY:-}" \
-    ./utils/node_local_test.py "${nlt_args[@]}" all
+    exec ./utils/node_local_test.py "$@"
 
 if [ -e "${COVFILE:-}" ]; then
     echo "Code coverage after running unit tests:"
