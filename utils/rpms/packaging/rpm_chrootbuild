@@ -56,6 +56,7 @@ repo_dels=()
 # Only for Leap 15.6 chroot
 # see ../../docker/Dockerfile.leap.15 for more details
 if [[ "${CHROOT_NAME}" == *opensuse-leap-15.6* ]]; then
+    #repo_adds+=(" --nogpgcheck ")
     repo_adds+=("--enablerepo=*opensuse-devel-languages-lua-*")
     repo_adds+=("--enablerepo=*opensuse-network-cluster-*")
     repo_adds+=("--enablerepo=*opensuse-oss-*")
