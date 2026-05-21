@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	sectest "github.com/daos-stack/daos/src/control/security/test"
 )
 
 func walkStruct(v reflect.Value, prefix []string, visit func([]string)) {
@@ -63,6 +65,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 	aclContent := "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n"
 	aclPath := test.CreateTestFile(t, testDir, aclContent)
 
+	caKeyPath, caCertPath := sectest.WriteCAFiles(t, testDir)
+
 	for _, args := range cmdArgs {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
@@ -70,6 +74,14 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "version", "telemetry config", "telemetry run", "config generate",
 				"manpage", "system set-prop", "support collect-log", "check repair":
 				return
+			case "pool set-cert":
+				testArgs = append(testArgs, test.MockUUID(),
+					"--cert", caCertPath)
+			case "pool add-client":
+				testArgs = append(testArgs, test.MockUUID(),
+					"--pool-ca-key", caKeyPath,
+					"--node", "testnode",
+					"--output", filepath.Join(testDir, "client_certs"))
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr())
@@ -87,8 +99,16 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool create":
 				testArgs = append(testArgs, "-s", "1TB", "label")
 			case "pool destroy", "pool evict", "pool query", "pool get-acl", "pool upgrade",
-				"pool rebuild start", "pool rebuild stop":
+				"pool rebuild start", "pool rebuild stop",
+				"pool get-cert", "pool list-revocations":
 				testArgs = append(testArgs, test.MockUUID())
+			case "pool delete-cert":
+				testArgs = append(testArgs, test.MockUUID(), "--all")
+			case "pool revoke-client":
+				testArgs = append(testArgs, test.MockUUID(),
+					"--pool-ca-key", caKeyPath,
+					"--node", "testnode",
+					"--output", filepath.Join(testDir, "revoked_certs"))
 			case "pool overwrite-acl", "pool update-acl":
 				testArgs = append(testArgs, test.MockUUID(), "-a", aclPath)
 			case "pool delete-acl":
