@@ -1,4 +1,4 @@
-# Set of variables for Rocky 8
+# Set of variables for Rocky 9
 # yamllint disable rule:line-length
 
 daos_base_deps:
@@ -20,8 +20,8 @@ daos_base_deps:
     - numatop
     - platform-python
     - psmisc
-    - python36
-    - python3.11-devel
+    - python3
+    - python3-devel
     - python3-pexpect
     - python3-wheel
     - systemd
@@ -31,6 +31,7 @@ daos_base_deps:
 
 daos_dev_deps:
   rpms:
+    - bear
     - daxctl-devel
     - gcc-gfortran
     - libaec-devel
@@ -38,16 +39,16 @@ daos_dev_deps:
     - ndctl-devel
     - python3.11
     - python3.11-devel
+    - python3.11-pip
     - python3-clustershell
     - python3-dnf
     - python3-pip
-    - python3-wheel
     - rpmdevtools
     - rpm-build
 
 daos_client_deps:
   rpms:
-    - compat-hwloc1
+    - hwloc
     - fuse3
     - fuse3-libs
     - libaec
@@ -59,8 +60,7 @@ daos_client_deps:
 
 daos_server_deps:
   rpms:
-    - compat-hwloc1
-    - dpdk
+    - hwloc
     - ipmctl
     - libipmctl
     - libpmemobj
@@ -77,7 +77,7 @@ daos_python_version: python3.11
 
 daos_build_deps:
   repos:
-    - powertools
+    - crb
   rpms:
     - boost-python3-devel
     - bzip2
@@ -86,6 +86,7 @@ daos_build_deps:
     - clang-tools-extra
     - cmake
     - createrepo
+    - CUnit-devel
     - daxctl-devel
     - diffutils
     - e2fsprogs
@@ -102,12 +103,14 @@ daos_build_deps:
     - help2man
     - hdf5-devel
     - hwloc-devel
+    - ipmctl
     - java-1.8.0-openjdk
     - json-c-devel
     - libaio-devel
     - libasan
     - libcmocka-devel
     - libevent-devel
+    - libipmctl-devel
     - libibverbs-devel
     - libiscsi-devel
     - libnl3-devel
@@ -119,8 +122,8 @@ daos_build_deps:
     - libuuid-devel
     - libyaml-devel
     - lz4-devel
+    - Lmod
     - make
-    - maven
     - nasm
     - ndctl
     - ndctl-devel
@@ -145,6 +148,3 @@ daos_build_deps:
     - which
     - ncurses-devel
     - yasm
-  rpms_x86_64:
-    - ipmctl
-    - libipmctl-devel

@@ -1,0 +1,87 @@
+# yamllint disable rule:line-length
+- block:
+    - name: Get list of available OS repository IDs
+      become: true
+      command: dnf repolist --all --quiet
+      register: _daos_dnf_repolist
+      changed_when: false
+
+    - name: Enable extra OS repositories for build dependencies
+      become: true
+      community.general.dnf_config_manager:
+        name: "{{ item }}"
+        state: enabled
+      loop: "{{ daos_build_deps.repos | default([]) }}"
+      when: item in (_daos_dnf_repolist.stdout_lines | map('split') | map('first') | list)
+
+    - name: Warn about unavailable OS repositories
+      ansible.builtin.debug:
+        msg: "Repository '{{ item }}' not found in dnf repolist — skipping (install the provider package, e.g. crb via 'dnf install epel-release')"
+      loop: "{{ daos_build_deps.repos | default([]) }}"
+      when: item not in (_daos_dnf_repolist.stdout_lines | map('split') | map('first') | list)
+
+    - name: Install DAOS dev dependency packages
+      become: true
+      dnf:
+        name: "{{ daos_dev_deps.rpms }}"
+        state: present
+        update_cache: true
+      when: daos_dev_deps is defined
+
+    - name: Install DAOS build dependency packages
+      become: true
+      dnf:
+        name: "{{ daos_build_deps.rpms }}"
+        state: present
+        update_cache: true
+
+    - name: Install x86_64-only build dependency packages
+      become: true
+      dnf:
+        name: "{{ daos_build_deps.rpms_x86_64 }}"
+        state: present
+      when:
+        - daos_build_deps.rpms_x86_64 is defined
+        - ansible_architecture == 'x86_64'
+
+    - name: Install openmpi-devel for verbs network provider
+      become: true
+      dnf:
+        name: openmpi-devel
+        state: present
+      when: daos_ofi_provider | default(daos_ofi_provider_default) is search('verbs')
+
+    - name: Get available Ruby module version
+      become: true
+      command: dnf module list ruby --quiet
+      register: daos_ruby_modules
+      changed_when: false
+
+    - name: Enable Ruby module stream
+      become: true
+      command: "dnf module enable ruby:{{ _ruby_ver }} -y"
+      vars:
+        _ruby_ver: "{{ daos_ruby_modules.stdout | regex_search('3\\.[0-9]+') }}"
+      register: daos_ruby_enable
+      changed_when: '"Nothing to do" not in daos_ruby_enable.stdout'
+      when:
+        - _ruby_ver | length > 0
+        - daos_ruby_modules.stdout is not search('3\\.[0-9]+ \\[e\\]')
+
+    - name: Install Ruby and rubygems packages
+      become: true
+      dnf:
+        name:
+          - rubygems
+          - rubygem-json
+        state: present
+
+  environment: "{{ daos_noproxy_env if 'dnf' in (daos_proxy_nofwd | default([])) else daos_proxy_env }}"
+
+- name: Install fpm build tool via gem
+  become: true
+  community.general.gem:
+    name: fpm
+    state: present
+    user_install: false
+  environment: "{{ daos_proxy_env }}"
