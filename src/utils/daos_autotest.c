@@ -499,8 +499,20 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			}
 
 			/* Poll failure: evp is stale, do not dereference it */
-			if (rc < 0)
+			if (rc < 0) {
+				D_ERROR("DAOS-18859 kv_put: daos_eq_poll "
+					"returned " DF_RC ", evp is stale"
+					" — breaking out safely"
+					" (fix applied)\n",
+					DP_RC(rc));
+				fprintf(stderr,
+					"DAOS-18859 kv_put:"
+					" daos_eq_poll returned %d, evp is"
+					" stale — breaking out safely"
+					" (fix applied)\n",
+					rc);
 				break;
+			}
 
 			/** Check if completed operation failed */
 			if (evp->ev_error != DER_SUCCESS) {
@@ -646,8 +658,20 @@ kv_get(daos_handle_t oh, daos_size_t size)
 			}
 
 			/* Poll failure: evp is stale, do not dereference it */
-			if (rc < 0)
+			if (rc < 0) {
+				D_ERROR("DAOS-18859 kv_get: daos_eq_poll "
+					"returned " DF_RC ", evp is stale"
+					" — breaking out safely"
+					" (fix applied)\n",
+					DP_RC(rc));
+				fprintf(stderr,
+					"DAOS-18859 kv_get:"
+					" daos_eq_poll returned %d, evp is"
+					" stale — breaking out safely"
+					" (fix applied)\n",
+					rc);
 				break;
+			}
 
 			/** Check if completed operation failed */
 			if (evp->ev_error != DER_SUCCESS) {
