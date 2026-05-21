@@ -1,0 +1,26 @@
+- name: Install pip for {{ daos_python_version }}
+  become: true
+  dnf:
+    name: "{{ daos_python_version }}-pip"
+    state: present
+
+- name: Copy Python ftest requirements to host
+  copy:
+    src: "{{ daos_repo_dir }}/requirements-ftest.txt"
+    dest: /tmp/daos-requirements-ftest.txt
+
+# Install system-wide (become: true) so packages land in /usr/local/lib on
+# each node's local disk rather than in ~/.local on the NFS-mounted home.
+# Using --user with a shared NFS home causes two problems:
+#   1. Parallel pip runs race on the same dist-info directory tree, corrupting
+#      package metadata (truncated filenames prefixed with '~').
+#   2. avocado-framework-plugin-result-html==82 requires jinja2<3.0.0, which
+#      pip's resolver enforces by downgrading the NFS-shared Jinja2, breaking
+#      the Ansible installation on the control node that shares the same home.
+# System-wide installs on each node are fully independent, avoiding both issues.
+- name: Install Python ftest requirements
+  become: true
+  pip:
+    requirements: /tmp/daos-requirements-ftest.txt
+    executable: "pip{{ daos_python_version | regex_replace('^python', '') }}"
+  environment: "{{ daos_proxy_env }}"

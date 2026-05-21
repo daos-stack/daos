@@ -1,0 +1,35 @@
+# yamllint disable rule:line-length
+- name: Gather distribution specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ playbook_dir }}/vars/{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version }}.yml"
+
+- name: Set includedir in sudoers
+  become: true
+  lineinfile:
+    state: present
+    create: false
+    dest: /etc/sudoers
+    line: "#includedir /etc/sudoers.d"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: "Add user {{ ansible_user_id }} to sudo"
+  become: true
+  lineinfile:
+    state: present
+    create: true
+    owner: root
+    group: root
+    path: "/etc/sudoers.d/{{ ansible_user_id }}"
+    line: "{{ ansible_user_id }} ALL=(ALL) NOPASSWD: ALL"
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Configure core dump settings
+  include_tasks: coredumps.yml
+
+- name: Install base OS dependencies
+  include_tasks:
+    file: base_deps.yml
+    apply:
+      environment: "{{ daos_noproxy_env if 'dnf' in (daos_proxy_nofwd | default([])) else daos_proxy_env }}"

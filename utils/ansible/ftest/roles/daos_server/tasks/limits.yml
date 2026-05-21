@@ -1,0 +1,53 @@
+# yamllint disable rule:line-length
+- name: Set DefaultLimitNOFILE in systemd configuration
+  become: true
+  lineinfile:
+    path: /etc/systemd/system.conf
+    regexp: '^#?DefaultLimitNOFILE='
+    line: 'DefaultLimitNOFILE=infinity:infinity'
+  notify: systemd daemon-reexec
+
+- name: Configure open files PAM limits
+  become: true
+  copy:
+    dest: /etc/security/limits.d/daos-nofile.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # /etc/security/limits.d/daos-nofile.conf
+      # <domain>  <type>    <item>    <value>
+      *           hard      nofile    unlimited
+      *           soft      nofile    unlimited
+
+- name: Set DefaultLimitMEMLOCK in systemd configuration
+  become: true
+  lineinfile:
+    path: /etc/systemd/system.conf
+    regexp: '^#?DefaultLimitMEMLOCK='
+    line: 'DefaultLimitMEMLOCK=infinity:infinity'
+  notify: systemd daemon-reexec
+
+- name: Configure memory lock PAM limits
+  become: true
+  copy:
+    dest: /etc/security/limits.d/daos-memlock.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # /etc/security/limits.d/daos-memlock.conf
+      # <domain>  <type>    <item>      <value>
+      *           hard      memlock     unlimited
+      *           soft      memlock     unlimited
+
+- name: Configure memory lock shell profile
+  become: true
+  copy:
+    dest: /etc/profile.d/daos-memlock.sh
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Unlimited memlock for DAOS users
+      ulimit -l unlimited
