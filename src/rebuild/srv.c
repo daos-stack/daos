@@ -2349,8 +2349,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	struct rebuild_pool_tls	*pool_tls;
 	int			 rc;
 
-	D_INFO("finishing rebuild for "DF_UUID", map_ver=%u refcount %u\n",
-	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_refcount);
+	D_INFO(DF_RB "finishing rebuild, refcount %u\n", DP_RB_RPT(rpt), rpt->rt_refcount);
 
 	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuilding) > 0);
 	atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
@@ -2420,8 +2419,7 @@ rebuild_tgt_status_check_ult(void *arg)
 		rc = rebuild_tgt_query(rpt, &status);
 		ABT_mutex_free(&status.lock);
 		if (rc || status.status != 0) {
-			D_ERROR(DF_UUID" rebuild failed: "DF_RC"\n",
-				DP_UUID(rpt->rt_pool_uuid),
+			D_ERROR(DF_RB " rebuild failed: " DF_RC "\n", DP_RB_RPT(rpt),
 				DP_RC(rc == 0 ? status.status : rc));
 			if (status.status == 0)
 				status.status = rc;
@@ -2530,14 +2528,13 @@ rebuild_tgt_status_check_ult(void *arg)
 		}
 
 		if (check_cnt % log_cnt_intv == 0 || rpt->rt_global_done || rpt->rt_abort) {
-			D_INFO(DF_UUID " ver %d gen %u obj " DF_U64 "/" DF_U64 " rec " DF_U64
-				       " size " DF_U64 " scan done %d pull done %d scan gl done %d"
-				       " gl done %d status %d abort %s\n",
-			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
-			       rpt->rt_pool->sp_rebuild_gen, iv.riv_toberb_obj_count,
-			       iv.riv_obj_count, iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done,
-			       iv.riv_pull_done, rpt->rt_global_scan_done, rpt->rt_global_done,
-			       iv.riv_status, rpt->rt_abort ? "yes" : "no");
+			D_INFO(DF_RB " obj " DF_U64 "/" DF_U64 " rec " DF_U64 " size " DF_U64
+				     " scan done %d pull done %d scan gl done %d"
+				     " gl done %d status %d abort %s\n",
+			       DP_RB_RPT(rpt), iv.riv_toberb_obj_count, iv.riv_obj_count,
+			       iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done, iv.riv_pull_done,
+			       rpt->rt_global_scan_done, rpt->rt_global_done, iv.riv_status,
+			       rpt->rt_abort ? "yes" : "no");
 			log_cnt_intv = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
 		}
 		check_cnt++;
