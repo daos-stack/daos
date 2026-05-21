@@ -1028,6 +1028,50 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("pool", "upgrade"), pool=pool)
 
+    def pool_set_cert(self, pool, daos_ca_key=None, output=None, cert=None,
+                      replace=False, append=False):
+        """Install a pool CA via dmg pool set-cert (generate or import mode)."""
+        return self._get_json_result(
+            ("pool", "set-cert"), pool=pool,
+            daos_ca_key=daos_ca_key, output=output, cert=cert,
+            replace=replace, append=append)
+
+    def pool_get_cert(self, pool, with_bundle=False):
+        """Display the pool's CA bundle.
+
+        When with_bundle is True, the JSON response also contains a
+        `bundle` field with the PEM-encoded CA bundle — useful for
+        recovering the bundle from a server when the original local
+        --output files have been lost.
+        """
+        return self._get_json_result(
+            ("pool", "get-cert"), pool=pool, with_bundle=with_bundle)
+
+    def pool_delete_cert(self, pool, fingerprint=None, delete_all=False):
+        """Remove one (by fingerprint) or all CAs from the pool's bundle."""
+        return self._get_json_result(
+            ("pool", "delete-cert"), pool=pool, fingerprint=fingerprint,
+            **{"all": delete_all})
+
+    def pool_add_client(self, pool, pool_ca_key, output, node=None, tenant=None):
+        """Mint client certs signed by the pool CA (offline)."""
+        return self._get_json_result(
+            ("pool", "add-client"), pool=pool, pool_ca_key=pool_ca_key,
+            output=output, node=node, tenant=tenant)
+
+    def pool_revoke_client(self, pool, pool_ca_key, output,
+                           node=None, tenant=None,
+                           evict_all_handles=False, no_evict=False):
+        """Advance the revocation watermark and mint a replacement cert."""
+        return self._get_json_result(
+            ("pool", "revoke-client"), pool=pool, pool_ca_key=pool_ca_key,
+            output=output, node=node, tenant=tenant,
+            evict_all_handles=evict_all_handles, no_evict=no_evict)
+
+    def pool_list_revocations(self, pool):
+        """List per-CN revocation watermarks for the pool."""
+        return self._get_json_result(("pool", "list-revocations"), pool=pool)
+
     def cont_set_owner(self, pool, cont, user=None, group=None):
         """Dmg container set-owner to the specified new user/group.
 

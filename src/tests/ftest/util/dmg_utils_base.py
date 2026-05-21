@@ -391,8 +391,12 @@ class DmgCommandBase(YamlCommand):
             """Get the dmg pool sub command object."""
             if self.sub_command.value == "create":
                 self.sub_command_class = self.CreateSubCommand()
+            elif self.sub_command.value == "add-client":
+                self.sub_command_class = self.AddClientSubCommand()
             elif self.sub_command.value == "delete-acl":
                 self.sub_command_class = self.DeleteAclSubCommand()
+            elif self.sub_command.value == "delete-cert":
+                self.sub_command_class = self.DeleteCertSubCommand()
             elif self.sub_command.value == "destroy":
                 self.sub_command_class = self.DestroySubCommand()
             elif self.sub_command.value == "drain":
@@ -405,10 +409,14 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.ExtendSubCommand()
             elif self.sub_command.value == "get-acl":
                 self.sub_command_class = self.GetAclSubCommand()
+            elif self.sub_command.value == "get-cert":
+                self.sub_command_class = self.GetCertSubCommand()
             elif self.sub_command.value == "get-prop":
                 self.sub_command_class = self.GetPropSubCommand()
             elif self.sub_command.value == "list":
                 self.sub_command_class = self.ListSubCommand()
+            elif self.sub_command.value == "list-revocations":
+                self.sub_command_class = self.ListRevocationsSubCommand()
             elif self.sub_command.value == "overwrite-acl":
                 self.sub_command_class = self.OverwriteAclSubCommand()
             elif self.sub_command.value == "query":
@@ -417,6 +425,10 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.QueryTargetsSubCommand()
             elif self.sub_command.value == "rebuild":
                 self.sub_command_class = self.RebuildSubCommand()
+            elif self.sub_command.value == "revoke-client":
+                self.sub_command_class = self.RevokeClientSubCommand()
+            elif self.sub_command.value == "set-cert":
+                self.sub_command_class = self.SetCertSubCommand()
             elif self.sub_command.value == "set-prop":
                 self.sub_command_class = self.SetPropSubCommand()
             elif self.sub_command.value == "update-acl":
@@ -633,6 +645,72 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool upgrade command object."""
                 super().__init__("/run/dmg/pool/upgrade/*", "upgrade")
+                self.pool = BasicParameter(None, position=1)
+
+        class SetCertSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool set-cert command."""
+
+            def __init__(self):
+                """Create a dmg pool set-cert command object."""
+                super().__init__("/run/dmg/pool/set-cert/*", "set-cert")
+                self.pool = BasicParameter(None, position=1)
+                self.daos_ca_key = FormattedParameter("--daos-ca-key={}", None)
+                self.output = FormattedParameter("--output={}", None)
+                self.cert = FormattedParameter("--cert={}", None)
+                self.replace = FormattedParameter("--replace", False)
+                self.append = FormattedParameter("--append", False)
+
+        class GetCertSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool get-cert command."""
+
+            def __init__(self):
+                """Create a dmg pool get-cert command object."""
+                super().__init__("/run/dmg/pool/get-cert/*", "get-cert")
+                self.pool = BasicParameter(None, position=1)
+                self.with_bundle = FormattedParameter("--with-bundle", False)
+
+        class DeleteCertSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool delete-cert command."""
+
+            def __init__(self):
+                """Create a dmg pool delete-cert command object."""
+                super().__init__("/run/dmg/pool/delete-cert/*", "delete-cert")
+                self.pool = BasicParameter(None, position=1)
+                self.fingerprint = FormattedParameter("--fingerprint={}", None)
+                self.all = FormattedParameter("--all", False)
+
+        class AddClientSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool add-client command."""
+
+            def __init__(self):
+                """Create a dmg pool add-client command object."""
+                super().__init__("/run/dmg/pool/add-client/*", "add-client")
+                self.pool = BasicParameter(None, position=1)
+                self.pool_ca_key = FormattedParameter("--pool-ca-key={}", None)
+                self.output = FormattedParameter("--output={}", None)
+                self.node = FormattedParameter("--node={}", None)
+                self.tenant = FormattedParameter("--tenant={}", None)
+
+        class RevokeClientSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool revoke-client command."""
+
+            def __init__(self):
+                """Create a dmg pool revoke-client command object."""
+                super().__init__("/run/dmg/pool/revoke-client/*", "revoke-client")
+                self.pool = BasicParameter(None, position=1)
+                self.pool_ca_key = FormattedParameter("--pool-ca-key={}", None)
+                self.output = FormattedParameter("--output={}", None)
+                self.node = FormattedParameter("--node={}", None)
+                self.tenant = FormattedParameter("--tenant={}", None)
+                self.evict_all_handles = FormattedParameter("--evict-all-handles", False)
+                self.no_evict = FormattedParameter("--no-evict", False)
+
+        class ListRevocationsSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool list-revocations command."""
+
+            def __init__(self):
+                """Create a dmg pool list-revocations command object."""
+                super().__init__("/run/dmg/pool/list-revocations/*", "list-revocations")
                 self.pool = BasicParameter(None, position=1)
 
     class ServerSubCommand(CommandWithSubCommand):
