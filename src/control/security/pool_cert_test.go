@@ -120,6 +120,28 @@ func TestAdvanceCertWatermark(t *testing.T) {
 	}
 }
 
+func TestPruneCertWatermarks(t *testing.T) {
+	t0 := time.Date(2026, 4, 15, 14, 0, 0, 0, time.UTC)
+	wm := CertWatermarks{
+		"node:fresh":    t0,
+		"node:stale":    t0.Add(-CertWatermarkRetention - time.Hour),
+		"node:boundary": t0.Add(-CertWatermarkRetention), // exactly at cutoff stays
+	}
+	out, pruned := PruneCertWatermarks(wm, t0.Add(-CertWatermarkRetention))
+	if pruned != 1 {
+		t.Fatalf("pruned=%d, want 1", pruned)
+	}
+	if _, ok := out["node:stale"]; ok {
+		t.Errorf("stale entry survived prune")
+	}
+	if _, ok := out["node:fresh"]; !ok {
+		t.Errorf("fresh entry was pruned")
+	}
+	if _, ok := out["node:boundary"]; !ok {
+		t.Errorf("boundary entry (==cutoff) was pruned")
+	}
+}
+
 // generateTestCA produces a self-signed CA cert + key.
 func generateTestCA(t *testing.T, cn string) (*x509.Certificate, *ecdsa.PrivateKey, []byte) {
 	t.Helper()

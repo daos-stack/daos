@@ -728,7 +728,6 @@ func PoolProperties() PoolPropertyMap {
 				"incremental":  PoolReintModeIncremental,
 			},
 		},
-		// pool_ca and cert_watermarks are managed via dedicated RPCs, same as ACL.
 	}
 }
 

@@ -22,6 +22,30 @@ import (
 // cert with NotBefore strictly past the watermark.
 type CertWatermarks map[string]time.Time
 
+// CertWatermarkRetention bounds the watermark history. An entry older than
+// retention can be pruned because any cert covered by it has long since
+// passed its NotAfter and would be rejected by the standard validity check.
+// Admins issuing certs with validity greater than this must bump it.
+const CertWatermarkRetention = 5 * 365 * 24 * time.Hour
+
+// PruneCertWatermarks returns wm minus entries with watermark before cutoff,
+// along with the number of entries dropped.
+func PruneCertWatermarks(wm CertWatermarks, cutoff time.Time) (CertWatermarks, int) {
+	if len(wm) == 0 {
+		return wm, 0
+	}
+	out := make(CertWatermarks, len(wm))
+	pruned := 0
+	for cn, t := range wm {
+		if t.Before(cutoff) {
+			pruned++
+			continue
+		}
+		out[cn] = t
+	}
+	return out, pruned
+}
+
 // EncodeCertWatermarks serializes wm as JSON. An empty map encodes to nil
 // so the prop layer can distinguish "no revocations" from an empty blob.
 func EncodeCertWatermarks(wm CertWatermarks) ([]byte, error) {
@@ -172,4 +196,42 @@ func AppendCACert(existing, certPEM []byte) ([]byte, error) {
 	combined = append(combined, existing...)
 	combined = append(combined, certPEM...)
 	return combined, nil
+}
+
+// PoolCertInfo summarizes a single PEM CA certificate.
+type PoolCertInfo struct {
+	Subject     string `json:"subject"`
+	Issuer      string `json:"issuer"`
+	NotBefore   string `json:"not_before"`
+	NotAfter    string `json:"not_after"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// ParseCABundle decodes a PEM bundle into a slice of PoolCertInfo entries.
+func ParseCABundle(bundle []byte) ([]PoolCertInfo, error) {
+	var out []PoolCertInfo
+	rest := bundle
+	for len(rest) > 0 {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("unexpected PEM block type %q in CA bundle", block.Type)
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, errors.Wrap(err, "malformed cert in CA bundle")
+		}
+		fp := sha256.Sum256(cert.Raw)
+		out = append(out, PoolCertInfo{
+			Subject:     cert.Subject.String(),
+			Issuer:      cert.Issuer.String(),
+			NotBefore:   cert.NotBefore.Format(time.RFC3339),
+			NotAfter:    cert.NotAfter.Format(time.RFC3339),
+			Fingerprint: fmt.Sprintf("%x", fp),
+		})
+	}
+	return out, nil
 }
