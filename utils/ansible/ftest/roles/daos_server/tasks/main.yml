@@ -1,0 +1,53 @@
+# yamllint disable rule:line-length
+- name: Create DAOS server system users and groups
+  include_tasks: users_groups.yml
+
+- name: Configure system resource limits
+  include_tasks: limits.yml
+
+- name: Configure hugepages and THP settings
+  include_tasks: hugepages.yml
+
+- name: Install server dependency packages
+  include_tasks: dependencies.yml
+
+- name: Deploy DAOS server systemd service
+  become: true
+  template:
+    src: daos_server.service.j2
+    dest: /usr/lib/systemd/system/daos_server.service
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+
+- name: Create DAOS configuration directories
+  become: true
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/daos
+    - /etc/daos/certs
+
+- name: Create client certificate directory for daos-server
+  become: true
+  file:
+    path: /etc/daos/certs/clients
+    state: directory
+    owner: daos_server
+    group: daos_server
+    mode: '0700'
+
+- name: Create DAOS SCM mount points
+  become: true
+  file:
+    path: "/mnt/daos{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ range(0, 4, 1) | list + [''] }}"

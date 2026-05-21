@@ -1,0 +1,47 @@
+# yamllint disable rule:line-length
+- name: Validate required variables
+  fail:
+    msg: "Variable '{{ item }}' is not defined"
+  when: item not in vars
+  loop:
+    - daos_source_dir
+    - daos_build_dir
+    - daos_launch_username
+
+- name: Create DAOS launch user local entry
+  include_tasks: users_groups.yml
+
+- name: Create DAOS server system users and groups
+  include_role:
+    name: daos_server
+    tasks_from: users_groups.yml
+
+- name: Create DAOS runtime directory
+  file:
+    path: "{{ daos_runtime_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Install DAOS build dependencies
+  include_tasks: build_deps.yml
+
+- name: Install Python and Go dependencies
+  include_tasks: pip_go_deps.yml
+
+- name: Install DAOS make helper script
+  template:
+    src: daos-make.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-make.sh"
+
+- name: Install DAOS launch helper script
+  template:
+    src: daos-launch.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-launch.sh"
+
+- name: Install DAOS NLT launch helper script
+  template:
+    src: daos-launch_nlt.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-launch_nlt.sh"
