@@ -25,6 +25,7 @@ import groovy.transform.Field
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
+// Keys and values updated by the updateRunStage() function using the parameters.
 @Field
 Map<String, Boolean> runStage = [:]
 
@@ -32,13 +33,47 @@ Map<String, Boolean> runStage = [:]
 void updateRunStage() {
     Map reasons = [:]
 
-    def orderedParams = currentBuild.rawBuild.parent.getProperty(
-        hudson.model.ParametersDefinitionProperty) ?.parameterDefinitions ?: []
+    // Ordered list of stage names as params.keySet() does not guarantee order
+    List<String> stageOrder = [
+        'Cancel Previous Builds',
+        'Pre-build',
+        'Python Bandit check',
+        'Build',
+        'Build on EL 8',
+        'Build on EL 9',
+        'Build on Leap 15',
+        'Build on EL 9 with Bullseye',
+        'Unit Tests',
+        'Unit Test',
+        'Unit Test bdev',
+        'NLT',
+        'NLT with Bullseye',
+        'Unit Test with memcheck',
+        'Unit Test bdev with memcheck',
+        'Test',
+        'Functional on EL 8.8 with Valgrind',
+        'Functional on EL 8',
+        'Functional on EL 9',
+        'Functional on Leap 15',
+        'Functional on SLES 15',
+        'Functional on Ubuntu 20.04',
+        'Fault injection testing',
+        'Test RPMs on EL 9.6',
+        'Test RPMs on Leap 15.5',
+        'Test Hardware',
+        'Functional Hardware Medium',
+        'Functional Hardware Medium MD on SSD',
+        'Functional Hardware Medium VMD',
+        'Functional Hardware Medium Verbs Provider',
+        'Functional Hardware Medium Verbs Provider MD on SSD',
+        'Functional Hardware Medium UCX Provider',
+        'Functional Hardware Large',
+        'Functional Hardware Large MD on SSD'
+    ]
 
     // Initialize the run state of each stage using the parameter stage keys
-    for (def paramDef in orderedParams) {
-        String name = paramDef.name
-        def value = params.get(name, null)
+    for (name in stageOrder) {
+        value = params.get(name, null)
         if (value instanceof Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
             reasons[name] = "parameter selection/default"
