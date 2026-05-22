@@ -144,14 +144,14 @@ void displayRunStage(Map reasons = [:]) {
     for (stage in runStage.keySet()) {
         String reason = reasons.get(stage, 'default')
         if (runStage[stage]) {
-            echo("  ${stage}: Running (reason: ${reason})")
+            echo("Running:   ${stage} (reason: ${reason})")
         } else {
-            echo("  ${stage}: Skipping (reason: ${reason})")
+            echo("Skipping:  ${stage} (reason: ${reason})")
         }
     }
 }
 
-// Returns only lines like: Key-Name: some value
+// Extract the commit pragmas from the commit message and return them as a map
 Map<String, String> getCommitMessageKeyValues() {
     String commitMessage = sh(
         script: 'git log -1 --pretty=%B',
@@ -170,6 +170,9 @@ Map<String, String> getCommitMessageKeyValues() {
             pragmas[m[0][1]] = m[0][2].trim()
         }
     }
+
+    // Ignore non-pragma lines that match the pragma pattern (i.e. Signed-off-by)
+    pragmas.remove('Signed-off-by')
 
     return pragmas
 }
