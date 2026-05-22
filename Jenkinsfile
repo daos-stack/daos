@@ -171,7 +171,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
     if (stageName.contains('Functional Hardware')) {
         pragmas.add('Skip-func-hw-test')
     }
-    for distro in ['el', 'leap', 'sles', 'ubuntu'] {
+    List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
+    for (distro in distros) {
         if (pragmas[0].contains("${distro}-")) {
             // Compatibility for commit pragmas that don't match stage names exactly
             pragmas[0] = pragmas[0].replace("${distro}-", "${distro}")
