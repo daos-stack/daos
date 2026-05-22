@@ -32,9 +32,13 @@ Map<String, Boolean> runStage = [:]
 void updateRunStage() {
     Map reasons = [:]
 
+    def orderedParams = currentBuild.rawBuild.parent.getProperty(
+        hudson.model.ParametersDefinitionProperty) ?.parameterDefinitions ?: []
+
     // Initialize the run state of each stage using the parameter stage keys
-    for (name in params.keySet()) {
-        value = params.get(name, null)
+    for (def paramDef in orderedParams) {
+        String name = paramDef.name
+        def value = params.get(name, null)
         if (value instanceof Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
             reasons[name] = "parameter selection/default"
