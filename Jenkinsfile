@@ -115,15 +115,21 @@ void updateRunStage() {
     }
 
     // Update stage running based on commit pragmas
+    Map<String, String> commitPragmas = getCommitMessageKeyValues()
+    println("updateRunStage: commit pragmas from commit message:")
+    commitPragmas.each { key, value ->
+        println("  ${key}: ${value}")
+    }
+
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
         for (pragma in skipPragmas) {
-            if (cachedCommitPragma(pragma, '').toLowerCase() == 'true') {
+            if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
                 runStage[stage] = false
                 reasons[stage] = "commit pragma ${pragma}: true"
                 continue
             }
-            if (cachedCommitPragma(pragma, '').toLowerCase() == 'false') {
+            if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
                 runStage[stage] = true
                 reasons[stage] = "commit pragma ${pragma}: false"
                 continue
@@ -145,43 +151,94 @@ void displayRunStage(Map reasons = [:]) {
     }
 }
 
+// Returns only lines like: Key-Name: some value
+Map<String, String> getCommitMessageKeyValues() {
+    String commitMessage = sh(
+        script: 'git log -1 --pretty=%B',
+        returnStdout: true
+    ).trim()
+
+    Map<String, String> pragmas = [:]
+
+    commitMessage.readLines().each { String line ->
+        // ^([A-Za-z0-9-]+):\s+(.+)$
+        // 1) key: letters/numbers/dashes
+        // 2) colon + at least one space
+        // 3) value: rest of line
+        def m = (line =~ /^([A-Za-z0-9-]+):\s+(.+)$/)
+        if (m.matches()) {
+            pragmas[m[0][1]] = m[0][2].trim()
+        }
+    }
+
+    return pragmas
+}
+
 // Get a list of skip commit pragmas to check for a given stage name
 List<String> getStageNameSkipPragmas(String stageName) {
     List<String> pragmas = []
     pragmas.add("Skip-${stageName.replaceAll(' ', '-').toLowerCase()}")
     if (stageName.contains('Build')) {
+        // Add skip pragma for parent stage
         pragmas.add('Skip-build')
+
+        // Compatibility with commit pragmas that don't match stage names exactly
+        if (pragmas[0].contains('build-on-')) {
+            pragmas.add(pragmas[0].replace('build-on-', 'build-'))
+        }
     }
     if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
+        // Add skip pragma for parent stage
         pragmas.add('Skip-unit-tests')
     }
     if (stageName.contains('Test')) {
+        // Add skip pragma for parent stage
         pragmas.add('Skip-test')
     }
     if (stageName.contains('Functional')) {
-        // Compatibility for commit pragmas that don't match stage names exactly
-        pragmas[0] = pragmas[0].replace('functional-', 'func-')
-        pragmas[0] = pragmas[0].replace('func-on-', 'func-test-')
-        pragmas[0] = pragmas[0].replace('hardware-', 'hw-')
+        // Add skip pragma for parent stage
         pragmas.add('Skip-func-test')
+
+        // Compatibility for commit pragmas that don't match stage names exactly
+        if (pragmas[0].contains('functional-on-')) {
+            pragmas.add(pragmas[0].replace('functional-on-', 'func-test-'))
+        } else if (pragmas[0].contains('functional-hardware-')) {
+            pragmas.add(pragmas[0].replace('functional-hardware-', 'func-hw-'))
+        }
     }
     if (stageName.contains('Functional on')) {
+        // Add skip pragma for parent stage
+        pragmas.add('Skip-test')
+
+        // Add skip pragma alias for all functional VM tests
         pragmas.add('Skip-func-test-vm')
     }
     if (stageName.contains('Functional Hardware')) {
+        // Add skip pragma for parent stage
+        pragmas.add('Skip-test-hardware')
+        pragmas.add('Skip-test-hw')
+
+        // Add skip pragma alias for all functional HW tests
         pragmas.add('Skip-func-hw-test')
     }
+
+    // Compatibility for commit pragmas with distro versions that don't match stage names exactly
     List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
+    List<String> copyPragmas = pragmas.clone()
     for (distro in distros) {
-        if (pragmas[0].contains("${distro}-")) {
-            // Compatibility for commit pragmas that don't match stage names exactly
-            pragmas[0] = pragmas[0].replace("${distro}-", "${distro}")
+        for (_pragma in copyPragmas) {
+            if (_pragma.contains("-${distro}-")) {
+                pragmas.add(_pragma.replace("-${distro}-", "-${distro}"))
+            }
         }
     }
 
     // Compatibility for commit pragmas that don't match stage names exactly
-    pragmas[0] = pragmas[0].replace('-testing', '-test')
-    pragmas[0] = pragmas[0].replace('-check', '')
+    if (pragmas[0].contains('-testing')) {
+        pragmas.add(pragmas[0].replace('-testing', '-test'))
+    } else if (pragmas[0].contains('-check')) {
+        pragmas.add(pragmas[0].replace('-check', ''))
+    }
 
     return pragmas
 }
