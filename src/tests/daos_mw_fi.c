@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,7 +34,7 @@
 #include <daos/common.h>
 
 /** Copied from dfs.c (TODO: create an internal header file) */
-#define INODE_AKEYS	12
+#define INODE_AKEYS     13
 #define INODE_AKEY_NAME	"DFS_INODE"
 #define SLINK_AKEY_NAME	"DFS_SLINK"
 #define MODE_IDX	0
@@ -48,7 +49,10 @@
 #define GID_IDX		(UID_IDX + sizeof(uid_t))
 #define SIZE_IDX	(GID_IDX + sizeof(gid_t))
 #define HLC_IDX		(SIZE_IDX + sizeof(daos_size_t))
-#define END_IDX		(HLC_IDX + sizeof(uint64_t))
+#define END_L3_IDX      (HLC_IDX + sizeof(uint64_t))
+/** GIT (Global Inode Table) layout extends the base inode with link_cnt */
+#define LINK_CNT_IDX    END_L3_IDX
+#define END_IDX         (LINK_CNT_IDX + sizeof(uint64_t))
 
 enum {
 	PUNCH_SB,
