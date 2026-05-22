@@ -449,6 +449,15 @@
    ...
 }
 {
+   DPDK_26_PCI_IOMMU_CLASS_UNINIT
+   Memcheck:Cond
+   fun:rte_pci_get_iommu_class
+   fun:rte_bus_get_iommu_class
+   fun:rte_eal_init
+   fun:spdk_env_init
+   fun:bio_spdk_env_init
+}
+{
    setgrent() leak
    Memcheck:Leak
    match-leak-kinds: reachable
