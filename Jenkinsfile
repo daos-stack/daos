@@ -124,7 +124,7 @@ void updateRunStage() {
 
     // Update stage running based on commit pragmas
     Map<String, String> commitPragmas = getCommitMessageKeyValues()
-    println("updateRunStage: commit pragmas from commit message:")
+    println("updateRunStage: Checking commit pragmas from commit message:")
     commitPragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
@@ -210,6 +210,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
 
     } else if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
+        // Add skip pragma alias for all tests
+        pragmas.add('Skip-all-tests')
         // Add skip pragma for parent stage
         if (stageName != 'Unit Tests') {
             pragmas.add('Skip-unit-tests')
@@ -223,6 +225,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
 
     } else if (stageName == 'Test' || stageName.contains('Functional on')
             || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
+        // Add skip pragma alias for all tests
+        pragmas.add('Skip-all-tests')
         // Add skip pragma for parent stage
         if (stageName != 'Test') {
             pragmas.add('Skip-test')
@@ -245,10 +249,14 @@ List<String> getStageNameSkipPragmas(String stageName) {
         pragmas.add(stagePragma)
 
     } else if (stageName.contains('Test Storage Prep')) {
+        // Add skip pragma alias for all tests
+        pragmas.add('Skip-all-tests')
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
 
     } else if (stageName.contains('Hardware')) {
+        // Add skip pragma alias for all tests
+        pragmas.add('Skip-all-tests')
         // Add skip pragma alias for all functional tests
         pragmas.add('Skip-func-test')
         // Add skip pragma alias for all functional HW tests
