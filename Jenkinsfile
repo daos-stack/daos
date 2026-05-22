@@ -25,7 +25,7 @@ job_status_internal = [:]
 
 // Update the defaults for running stages in a PR here
 /* groovylint-disable-next-line CompileStatic */
-runStage = [
+Map<String, Boolean> runStage = [
     'Cancel Previous Builds': true,
     'Pre-build': true,
     'Python Bandit check': true,
