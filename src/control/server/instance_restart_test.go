@@ -60,19 +60,22 @@ func setupTestHarness(t *testing.T, rankStr string, loggers ...logging.Logger) (
 	t.Helper()
 	log := getTestLogger(t, loggers)
 	harness := NewEngineHarness(log)
-	setupAddTestEngine(t, log, harness, false)
+
+	// Parse the rank from the string to pass to setupAddTestEngine
+	ranks, err := ranklist.ParseRanks(rankStr)
+	if err != nil || len(ranks) != 1 {
+		t.Fatalf("failed to parse rank: %v", err)
+	}
+	rankNum := uint32(ranks[0])
+
+	setupAddTestEngine(t, log, harness, false, rankNum)
 
 	instances, err := harness.FilterInstancesByRankSet(rankStr)
 	if err != nil || len(instances) == 0 {
 		t.Fatalf("failed to get instance: %v", err)
 	}
 
-	rank, err := ranklist.ParseRanks(rankStr)
-	if err != nil || len(rank) != 1 {
-		t.Fatalf("failed to parse rank: %v", err)
-	}
-
-	return instances[0].(*EngineInstance), rank[0]
+	return instances[0].(*EngineInstance), ranks[0]
 }
 
 func startInstanceConsumer(ctx context.Context, instance *EngineInstance) {
@@ -82,6 +85,38 @@ func startInstanceConsumer(ctx context.Context, instance *EngineInstance) {
 		case <-instance.startRequested:
 		}
 	}()
+}
+
+func waitForPendingRestart(ctx context.Context, t *testing.T, mgr *engineRestartManager, rank ranklist.Rank) bool {
+	t.Helper()
+	pending := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				mgr.mu.RLock()
+				_, exists := mgr.pendingRestart[rank]
+				mgr.mu.RUnlock()
+
+				if exists {
+					close(pending)
+					return
+				}
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-pending:
+		return true
+	}
 }
 
 func waitForRestartRecorded(ctx context.Context, t *testing.T, mgr *engineRestartManager, rank ranklist.Rank) bool {
@@ -143,130 +178,6 @@ func TestServer_EngineRestartManager_GetMinDelay(t *testing.T) {
 				t.Errorf("expected delay %s, got %s", tc.expDelay, gotDelay)
 			}
 		})
-	}
-}
-
-func TestServer_EngineRestartManager_CanRestartNow(t *testing.T) {
-	for name, tc := range map[string]struct {
-		lastRestartAge time.Duration
-		minDelay       int
-		expCanRestart  bool
-	}{
-		"no previous restart": {
-			lastRestartAge: 0,
-			minDelay:       60,
-			expCanRestart:  true,
-		},
-		"enough time elapsed": {
-			lastRestartAge: 70 * time.Second,
-			minDelay:       60,
-			expCanRestart:  true,
-		},
-		"not enough time elapsed": {
-			lastRestartAge: 50 * time.Second,
-			minDelay:       60,
-			expCanRestart:  false,
-		},
-		"exactly minimum delay": {
-			lastRestartAge: 60 * time.Second,
-			minDelay:       60,
-			expCanRestart:  true,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			mgr := setupTestManager(t, &config.Server{
-				EngineAutoRestartMinDelay: tc.minDelay,
-			})
-			testRank := ranklist.Rank(1)
-
-			// Set last restart time if test case specifies
-			if tc.lastRestartAge > 0 {
-				mgr.lastRestart[testRank] = time.Now().Add(-tc.lastRestartAge)
-			}
-
-			canRestart, remaining := mgr.canRestartNow(testRank)
-
-			if canRestart != tc.expCanRestart {
-				t.Errorf("expected canRestart=%v, got %v", tc.expCanRestart,
-					canRestart)
-			}
-
-			if tc.expCanRestart && remaining != 0 {
-				t.Errorf("expected no remaining delay when can restart, got %s",
-					remaining)
-			}
-
-			if !tc.expCanRestart && remaining <= 0 {
-				t.Errorf("expected positive remaining delay when cannot restart, "+
-					"got %s", remaining)
-			}
-		})
-	}
-}
-
-func TestServer_EngineRestartManager_RecordRestartTime(t *testing.T) {
-	mgr := setupTestManager(t, nil)
-	testRank := ranklist.Rank(1)
-
-	beforeRecord := time.Now()
-	mgr.recordRestartTime(testRank)
-	afterRecord := time.Now()
-
-	recordedTime, exists := mgr.lastRestart[testRank]
-	if !exists {
-		t.Fatal("restart time not recorded")
-	}
-
-	if recordedTime.Before(beforeRecord) || recordedTime.After(afterRecord) {
-		t.Errorf("recorded time %s outside expected range [%s, %s]",
-			recordedTime, beforeRecord, afterRecord)
-	}
-}
-
-func TestServer_EngineRestartManager_SetPendingRestart(t *testing.T) {
-	mgr := setupTestManager(t, nil)
-	testRank := ranklist.Rank(1)
-
-	// Set initial timer
-	timer1 := time.NewTimer(10 * time.Second)
-	mgr.setPendingRestart(testRank, timer1)
-
-	if len(mgr.pendingRestart) != 1 {
-		t.Fatalf("expected 1 pending restart, got %d", len(mgr.pendingRestart))
-	}
-
-	// Set another timer for same rank (should cancel previous)
-	timer2 := time.NewTimer(5 * time.Second)
-	mgr.setPendingRestart(testRank, timer2)
-
-	if len(mgr.pendingRestart) != 1 {
-		t.Fatalf("expected 1 pending restart after replacement, got %d",
-			len(mgr.pendingRestart))
-	}
-
-	if mgr.pendingRestart[testRank] != timer2 {
-		t.Error("pending restart timer not updated to new timer")
-	}
-
-	// Cleanup
-	timer2.Stop()
-}
-
-func TestServer_EngineRestartManager_ClearPendingRestart(t *testing.T) {
-	mgr := setupTestManager(t, nil)
-	testRank := ranklist.Rank(1)
-
-	// Set a timer
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-	mgr.pendingRestart[testRank] = timer
-
-	// Clear it
-	mgr.clearPendingRestart(testRank)
-
-	if len(mgr.pendingRestart) != 0 {
-		t.Errorf("expected no pending restarts after clear, got %d",
-			len(mgr.pendingRestart))
 	}
 }
 
@@ -389,10 +300,12 @@ func TestServer_EngineRestartManager_ProcessRestartRequest_Deferred(t *testing.T
 	}
 
 	// Cleanup
+	mgr.mu.Lock()
 	if timer != nil {
 		timer.Stop()
+		delete(mgr.pendingRestart, testRank)
 	}
-	mgr.clearPendingRestart(testRank)
+	mgr.mu.Unlock()
 
 	// Verify log message
 	logOutput := buf.String()
@@ -462,6 +375,7 @@ func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
 	})
 
 	startInstanceConsumer(ctx, instance)
+	mgr.start(ctx)
 
 	// Set recent restart time
 	mgr.lastRestart[testRank] = time.Now()
@@ -502,17 +416,30 @@ func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_MultipleRanks(t *testing.T) {
+	log, _ := setupTestLogger(t)
+	ctx := test.Context(t)
 	mgr := setupTestManager(t, &config.Server{
-		EngineAutoRestartMinDelay: 10,
-	})
+		EngineAutoRestartMinDelay: 2,
+	}, log)
 
-	rank1 := ranklist.Rank(1)
-	rank2 := ranklist.Rank(2)
+	instance1, rank1 := setupTestHarness(t, "1", log)
+	instance2, rank2 := setupTestHarness(t, "2", log)
 
-	// Record restarts for both ranks
-	mgr.recordRestartTime(rank1)
-	time.Sleep(10 * time.Millisecond)
-	mgr.recordRestartTime(rank2)
+	startInstanceConsumer(ctx, instance1)
+	startInstanceConsumer(ctx, instance2)
+	mgr.start(ctx)
+
+	// Request restarts for both ranks
+	mgr.requestRestart(rank1, instance1)
+	mgr.requestRestart(rank2, instance2)
+
+	// Wait for both to complete
+	if !waitForRestartRecorded(ctx, t, mgr, rank1) {
+		t.Fatal("rank1 restart was not recorded")
+	}
+	if !waitForRestartRecorded(ctx, t, mgr, rank2) {
+		t.Fatal("rank2 restart was not recorded")
+	}
 
 	// Verify both recorded
 	mgr.mu.RLock()
@@ -524,16 +451,31 @@ func TestServer_EngineRestartManager_MultipleRanks(t *testing.T) {
 		t.Fatal("expected both ranks to have restart times recorded")
 	}
 
-	if !time1.Before(time2) {
-		t.Error("expected rank1 restart time to be before rank2")
+	// Verify rank1 was processed first or at the same time (not after)
+	if time1.After(time2) {
+		t.Error("expected rank1 restart time to not be after rank2")
 	}
 
-	// Verify independent rate limiting
-	canRestart1, _ := mgr.canRestartNow(rank1)
-	canRestart2, _ := mgr.canRestartNow(rank2)
+	// Both should be rate limited if requested again immediately
+	mgr.requestRestart(rank1, instance1)
+	mgr.requestRestart(rank2, instance2)
 
-	if canRestart1 || canRestart2 {
-		t.Error("expected both ranks to be rate limited")
+	// Wait for pending restarts to be scheduled
+	if !waitForPendingRestart(ctx, t, mgr, rank1) {
+		t.Fatal("rank1 pending restart was not scheduled")
+	}
+	if !waitForPendingRestart(ctx, t, mgr, rank2) {
+		t.Fatal("rank2 pending restart was not scheduled")
+	}
+
+	// Verify both have pending restarts
+	mgr.mu.RLock()
+	_, pending1 := mgr.pendingRestart[rank1]
+	_, pending2 := mgr.pendingRestart[rank2]
+	mgr.mu.RUnlock()
+
+	if !pending1 || !pending2 {
+		t.Error("expected both ranks to have deferred restarts scheduled")
 	}
 }
 
@@ -556,14 +498,14 @@ func TestServer_EngineRestartManager_CancelExistingTimer(t *testing.T) {
 	mgr.processRestartRequest(ctx, req1)
 
 	mgr.mu.RLock()
-	timer1, exists1 := mgr.pendingRestart[testRank]
+	_, exists1 := mgr.pendingRestart[testRank]
 	mgr.mu.RUnlock()
 
 	if !exists1 {
 		t.Fatal("expected first pending restart to be set")
 	}
 
-	// Second deferred request (should cancel first)
+	// Second deferred request (should be dropped due to fast debounce)
 	time.Sleep(100 * time.Millisecond)
 	req2 := engineRestartRequest{
 		rank:     testRank,
@@ -571,29 +513,19 @@ func TestServer_EngineRestartManager_CancelExistingTimer(t *testing.T) {
 	}
 	mgr.processRestartRequest(ctx, req2)
 
-	mgr.mu.RLock()
-	timer2, exists2 := mgr.pendingRestart[testRank]
-	mgr.mu.RUnlock()
-
-	if !exists2 {
-		t.Fatal("expected second pending restart to be set")
-	}
-
-	if timer1 == timer2 {
-		t.Error("expected timer to be replaced")
-	}
-
-	// Verify log shows cancellation
+	// Verify log shows request was dropped
 	logOutput := buf.String()
-	if !strings.Contains(logOutput, "cancelled existing pending restart") {
-		t.Error("expected cancellation message in log")
+	if !strings.Contains(logOutput, "already has a deferred restart pending; dropping") {
+		t.Error("expected debounce message in log")
 	}
 
 	// Cleanup
-	if timer2 != nil {
-		timer2.Stop()
+	mgr.mu.Lock()
+	if timer, exists := mgr.pendingRestart[testRank]; exists {
+		timer.Stop()
+		delete(mgr.pendingRestart, testRank)
 	}
-	mgr.clearPendingRestart(testRank)
+	mgr.mu.Unlock()
 }
 
 func TestServer_NewEngineRestartManager(t *testing.T) {

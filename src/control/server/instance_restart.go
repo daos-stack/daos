@@ -52,108 +52,50 @@ func (mgr *engineRestartManager) getMinDelay() time.Duration {
 	return time.Duration(minDelay) * time.Second
 }
 
-// canRestartNow checks if a rank can be restarted immediately.
-// Returns true if restart can proceed, false and delay duration if rate limited.
-func (mgr *engineRestartManager) canRestartNow(rank ranklist.Rank) (bool, time.Duration) {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	lastRestart, hasRestarted := mgr.lastRestart[rank]
-	if !hasRestarted {
-		return true, 0
-	}
-
-	minDelay := mgr.getMinDelay()
-	elapsed := time.Since(lastRestart)
-	if elapsed >= minDelay {
-		return true, 0
-	}
-
-	remaining := minDelay - elapsed
-	return false, remaining
-}
-
-// recordRestartTime records when a rank was restarted.
-func (mgr *engineRestartManager) recordRestartTime(rank ranklist.Rank) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	mgr.lastRestart[rank] = time.Now()
-	mgr.log.Debugf("last restart recorded")
-}
-
-// clearPendingRestart removes a pending restart timer for a rank.
-func (mgr *engineRestartManager) clearPendingRestart(rank ranklist.Rank) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	delete(mgr.pendingRestart, rank)
-}
-
-// setPendingRestart stores a pending restart timer for a rank.
-func (mgr *engineRestartManager) setPendingRestart(rank ranklist.Rank, timer *time.Timer) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	// Cancel any existing timer
-	if existingTimer, exists := mgr.pendingRestart[rank]; exists {
-		existingTimer.Stop()
-		mgr.log.Debugf("cancelled existing pending restart timer for rank %d", rank)
-	}
-
-	mgr.pendingRestart[rank] = timer
-}
-
 // waitForEngineStopped polls until the engine instance is stopped.
 func waitForEngineStopped(ctx context.Context, instances []Engine) error {
 	pollFn := func(e Engine) bool { return !e.IsStarted() }
 	return pollInstanceState(ctx, instances, pollFn)
 }
 
-// performRestart executes the restart after waiting for the engine to stop.
-func (mgr *engineRestartManager) performRestart(ctx context.Context, rank ranklist.Rank, instance Engine) {
-	defer mgr.clearPendingRestart(rank)
+// processRestartRequest handles a single restart request with rate limiting.
+func (mgr *engineRestartManager) processRestartRequest(ctx context.Context, req engineRestartRequest) {
+	rank, instance := req.rank, req.instance
 
-	// Wait for engine to stop
-	instances := []Engine{instance}
-	if err := waitForEngineStopped(ctx, instances); err != nil {
+	mgr.mu.Lock()
+	if last, ok := mgr.lastRestart[rank]; ok {
+		if elapsed := time.Since(last); elapsed < mgr.getMinDelay() {
+			// Fast debounce for subsequent requests inside of the delay window
+			if _, pending := mgr.pendingRestart[rank]; pending {
+				mgr.mu.Unlock()
+				mgr.log.Debugf("rank %d already has a deferred restart pending; dropping",
+					rank)
+				return
+			}
+
+			// First restart request inside of the delay window claims it
+			remaining := mgr.getMinDelay() - elapsed
+			mgr.pendingRestart[rank] = time.AfterFunc(remaining, func() {
+				mgr.requestRestart(rank, instance)
+			})
+			mgr.mu.Unlock()
+			mgr.log.Noticef("rank %d restart rate limited: will restart in %s",
+				rank, remaining.Round(time.Second))
+			return
+		}
+	}
+
+	// If this is the first restart or it's outside of the delay window, start the process (over)
+	mgr.lastRestart[rank] = time.Now()
+	delete(mgr.pendingRestart, rank)
+	mgr.mu.Unlock()
+
+	if err := waitForEngineStopped(ctx, []Engine{instance}); err != nil {
 		mgr.log.Errorf("rank %d did not stop before restart: %s", rank, err)
 		return
 	}
-
 	mgr.log.Noticef("restart manager is restarting rank %d", rank)
 	instance.requestStart(ctx)
-
-	// Record restart time and clear pending state on exit (deferred)
-	mgr.recordRestartTime(rank)
-	mgr.log.Debugf("recording rank %d", rank)
-}
-
-// processRestartRequest handles a single restart request with rate limiting.
-func (mgr *engineRestartManager) processRestartRequest(ctx context.Context, req engineRestartRequest) {
-	rank := req.rank
-	instance := req.instance
-
-	mgr.log.Debugf("processing restart request for rank %d", rank)
-
-	canRestart, delay := mgr.canRestartNow(rank)
-	if !canRestart {
-		mgr.log.Noticef("rank %d restart rate limited: will restart in %s",
-			rank, delay.Round(time.Second))
-
-		// Schedule deferred restart
-		timer := time.AfterFunc(delay, func() {
-			mgr.log.Noticef("deferred restart triggered for rank %d after rate-limit delay", rank)
-			mgr.performRestart(ctx, rank, instance)
-		})
-
-		// Overwrite any existing pending restart
-		mgr.setPendingRestart(rank, timer)
-		return
-	}
-
-	// Can restart immediately
-	mgr.performRestart(ctx, rank, instance)
 }
 
 // requestRestart submits a restart request to the manager.
