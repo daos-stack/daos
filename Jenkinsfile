@@ -16,6 +16,8 @@
  * LICENSE file.
  */
 
+import groovy.transform.Field
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
@@ -24,7 +26,7 @@
 job_status_internal = [:]
 
 // Update the defaults for running stages in a PR here
-/* groovylint-disable-next-line CompileStatic */
+@Field
 Map<String, Boolean> runStage = [
     'Cancel Previous Builds': true,
     'Pre-build': true,
