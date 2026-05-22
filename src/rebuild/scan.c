@@ -1258,6 +1258,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		}
 	}
 
+redo_rpt_lookup:
 	/* check if the rebuild with different leader is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1);
 	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
@@ -1265,7 +1266,18 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			D_WARN("the previous rebuild "DF_UUID"/%d/"DF_U64"/%p is not cleanup yet\n",
 			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
 			       rsi->rsi_leader_term, rpt);
-			D_GOTO(out_put, rc = -DER_BUSY);
+			ts_now = daos_gettime_coarse();
+			if (ts_now > ts_start + 30) {
+				D_WARN(DF_UUID " %s ver %d/gen %u waited previous rebuild "
+					       "finishing more than 30 seconds\n",
+				       DP_UUID(rsi->rsi_pool_uuid), RB_OP_STR(rpt->rt_rebuild_op),
+				       rsi->rsi_rebuild_ver, rpt->rt_rebuild_gen);
+				D_GOTO(out_put, rc = -DER_BUSY);
+			} else {
+				rpt_put(rpt);
+				dss_sleep(1000);
+				goto redo_rpt_lookup;
+			}
 		}
 
 		/* Rebuild should never skip the version */
@@ -1346,7 +1358,7 @@ tls_lookup:
 			    (tmp->rt_finishing || tmp->rt_abort)) {
 				ts_now = daos_gettime_coarse();
 				if (ts_now > ts_start + 30) {
-					D_INFO(DF_UUID " %s ver %d/gen %u waited previous rebuild "
+					D_WARN(DF_UUID " %s ver %d/gen %u waited previous rebuild "
 						       "finishing more than 30 seconds\n",
 					       DP_UUID(rsi->rsi_pool_uuid),
 					       RB_OP_STR(tmp->rt_rebuild_op), rsi->rsi_rebuild_ver,
