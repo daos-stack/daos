@@ -25,7 +25,7 @@ job_status_internal = [:]
 
 // Values here don't matter, the true defaults are set in pipeline.parameters
 /* groovylint-disable-next-line CompileStatic */
-Map<String, Boolean> runStage = [
+runStage = [
     'Cancel Previous Builds': true,
     'Pre-build': true,
     'Python Bandit check': true,
