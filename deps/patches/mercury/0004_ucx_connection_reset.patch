@@ -1,0 +1,24 @@
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index 96501b2..9f7140f 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -2008,8 +2008,7 @@ error:
+ 
+ /*---------------------------------------------------------------------------*/
+ static void
+-na_ucp_ep_error_cb(void *arg, ucp_ep_h NA_DEBUG_LOG_USED ep,
+-    ucs_status_t NA_DEBUG_LOG_USED status)
++na_ucp_ep_error_cb(void *arg, ucp_ep_h ep, ucs_status_t status)
+ {
+     struct na_ucx_addr *na_ucx_addr = (struct na_ucx_addr *) arg;
+ 
+@@ -2018,7 +2017,8 @@ na_ucp_ep_error_cb(void *arg, ucp_ep_h NA_DEBUG_LOG_USED ep,
+         ucs_status_string(status), (void *) na_ucx_addr);
+ 
+     /* Mark addr as no longer resolved to force reconnection */
+-    hg_atomic_and32(&na_ucx_addr->status, ~NA_UCX_ADDR_RESOLVED);
++	if (status != UCS_ERR_CONNECTION_RESET)
++   	    hg_atomic_and32(&na_ucx_addr->status, ~NA_UCX_ADDR_RESOLVED);
+ 
+     /* Will schedule removal of address */
+     na_ucx_addr_ref_decr(na_ucx_addr);
