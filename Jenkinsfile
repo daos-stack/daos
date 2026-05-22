@@ -1053,7 +1053,7 @@ pipeline {
                                                   ' --log-base-dir nlt_bullseye_logs' +
                                                   ' --class-name nlt all',
                                      always_script: 'ci/unit/test_nlt_post.sh',
-                                     testResults: 'nlt-bullseye-junit.xml',
+                                     testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitTestInstRpms('el9'),
@@ -1067,7 +1067,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['nlt_bullseye_logs/'],
-                                         testResults: 'nlt-bullseye-junit.xml',
+                                         testResults: 'nlt-junit.xml',
                                          NLT: true,
                                          compiler: 'covc'
                             job_status_update()
