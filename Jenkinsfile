@@ -51,7 +51,6 @@ runStage = [
     'Fault injection testing': true,
     'Test RPMs on EL 9.6': true,
     'Test RPMs on Leap 15.5': true,
-    'Test Storage Prep on EL 8.8': true,
     'Test Hardware': true,
     'Functional Hardware Medium': false,
     'Functional Hardware Medium MD on SSD': true,
@@ -131,7 +130,7 @@ void updateRunStage() {
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
         for (pragma in skipPragmas) {
-            println("updateRunStage: checking for a ${pragma} commit pragma for stage ${stage}")
+            println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
             if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
                 runStage[stage] = false
                 reasons[stage] = "commit pragma ${pragma}: true"
@@ -191,7 +190,11 @@ List<String> getStageNameSkipPragmas(String stageName) {
     List<String> pragmas = []
 
     // Build up a priority list of pragmas to check based on the stage name.
-    if (stageName == 'Python Bandit check') {
+    if (stageName in ['Cancel Previous Builds', 'Pre-build']) {
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+
+    } else if (stageName == 'Python Bandit check') {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
         // Compatibility with existing commit pragmas
@@ -245,12 +248,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
             // Compatibility with existing commit pragmas
             pragmas.add('Skip-fault-injection-test')
         }
-        // Add skip pragma for this stage
-        pragmas.add(stagePragma)
-
-    } else if (stageName.contains('Test Storage Prep')) {
-        // Add skip pragma alias for all tests
-        pragmas.add('Skip-all-tests')
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
 
@@ -636,9 +633,6 @@ pipeline {
         booleanParam(name: 'Test RPMs on Leap 15.5',
                      defaultValue: runStage['Test RPMs on Leap 15.5'],
                      description: 'Run the Test RPMs on Leap 15.5 stage.')
-        booleanParam(name: 'Test Storage Prep on EL 8.8',
-                     defaultValue: runStage['Test Storage Prep on EL 8.8'],
-                     description: 'Run the Test Storage Prep on EL 8.8 stage.')
         booleanParam(name: 'Test Hardware',
                      defaultValue: runStage['Test Hardware'],
                      description: 'Run the Test Hardware stage.')
@@ -1489,7 +1483,7 @@ pipeline {
         stage('Test Storage Prep on EL 8.8') {
             when {
                 beforeAgent true
-                expression { runStage['Test Storage Prep on EL 8.8'] && params.CI_STORAGE_PREP_LABEL != '' }
+                expression { params.CI_STORAGE_PREP_LABEL != '' }
             }
             agent {
                 label params.CI_STORAGE_PREP_LABEL
