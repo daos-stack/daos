@@ -22,7 +22,7 @@ server_config:
       storage: auto
 
 pool_scm:
-  scm_size: 1G
+  scm_size: 5G
   nvme_size: 0
 
 pool_scm_nvme:
@@ -30,7 +30,6 @@ pool_scm_nvme:
 
 container:
   type: POSIX
-  control_method: daos
   properties: rd_fac:0
   oclass: SX
 
