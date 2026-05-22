@@ -25,53 +25,20 @@ import groovy.transform.Field
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
-// Initial values here don't matter, updateRunStage() will set the defaults using the parameters
 @Field
-Map<String, Boolean> runStage = [
-    'Cancel Previous Builds': false,
-    'Pre-build': false,
-    'Python Bandit check': false,
-    'Build': false,
-    'Build on EL 8': false,
-    'Build on EL 9': false,
-    'Build on Leap 15': false,
-    'Build on EL 9 with Bullseye': false,
-    'Unit Tests': false,
-    'Unit Test': false,
-    'Unit Test bdev': false,
-    'NLT': false,
-    'NLT with Bullseye': false,
-    'Unit Test with memcheck': false,
-    'Unit Test bdev with memcheck': false,
-    'Test': false,
-    'Functional on EL 8.8 with Valgrind': false,
-    'Functional on EL 8': false,
-    'Functional on EL 9': false,
-    'Functional on Leap 15': false,
-    'Functional on SLES 15': false,
-    'Functional on Ubuntu 20.04': false,
-    'Fault injection testing': false,
-    'Test RPMs on EL 9.6': false,
-    'Test RPMs on Leap 15.5': false,
-    'Test Hardware': false,
-    'Functional Hardware Medium': false,
-    'Functional Hardware Medium MD on SSD': false,
-    'Functional Hardware Medium VMD': false,
-    'Functional Hardware Medium Verbs Provider': false,
-    'Functional Hardware Medium Verbs Provider MD on SSD': false,
-    'Functional Hardware Medium UCX Provider': false,
-    'Functional Hardware Large': false,
-    'Functional Hardware Large MD on SSD': false,
-]
+Map<String, Boolean> runStage = [:]
 
 // Update the runStage map
 void updateRunStage() {
     Map reasons = [:]
 
-    // Default to the parameter selection/default for all stages
-    for (stage in runStage.keySet()) {
-        runStage[stage] = params.get(stage, true)
-        reasons[stage] = "parameter selection/default"
+    // Initialize the run state of each stage using the parameter stage keys
+    for (name in params.keySet()) {
+        value = params.get(name, null)
+        if (value instanceof Boolean && !name.startsWith('CI_')) {
+            runStage[name] = value
+            reasons[name] = "parameter selection/default"
+        }
     }
 
     // Handle doc-only changes: Only run default or selected build stages
@@ -554,12 +521,12 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
-        // booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
-        //              defaultValue: false,
-        //              description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Build RPM and DEB packages, Skip unit tests.')
+        booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
+                     defaultValue: false,
+                     description: 'Continue testing if a previous stage is Unstable')
         string(name: 'CI_SCONS_ARGS',
                defaultValue: '',
                description: 'Arguments for scons when building DAOS')
@@ -588,7 +555,7 @@ pipeline {
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
         booleanParam(name: 'Cancel Previous Builds',
                      defaultValue: true,
-                     description: 'Cancel previous build before running this one.')
+                     description: 'Run the Cancel Previous Builds stage.')
         booleanParam(name: 'Pre-build',
                      defaultValue: true,
                      description: 'Run the pre-build stage.')
@@ -688,84 +655,6 @@ pipeline {
         booleanParam(name: 'Functional Hardware Large MD on SSD',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
-        // booleanParam(name: 'CI_el8_NOBUILD',
-        //              defaultValue: false,
-        //              description: 'Do not build sources and RPMs on EL 8')
-        // booleanParam(name: 'CI_el9_NOBUILD',
-        //              defaultValue: false,
-        //              description: 'Do not build sources and RPMs on EL 9')
-        // booleanParam(name: 'CI_leap15_NOBUILD',
-        //              defaultValue: false,
-        //              description: 'Do not build sources and RPMs on Leap 15')
-        booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
-                     defaultValue: false,
-                     description: 'Continue testing if a previous stage is Unstable')
-        // booleanParam(name: 'CI_UNIT_TEST',
-        //              defaultValue: true,
-        //              description: 'Run the Unit Test test stage')
-        // booleanParam(name: 'CI_NLT_TEST',
-        //              defaultValue: true,
-        //              description: 'Run the NLT test stage')
-        // booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
-        //              defaultValue: true,
-        //              description: 'Run the Unit Test with memcheck test stage')
-        // booleanParam(name: 'CI_FI_TEST',
-        //              defaultValue: true,
-        //              description: 'Run the Fault injection testing test stage')
-        // booleanParam(name: 'CI_TEST_EL_RPMs',
-        //              defaultValue: true,
-        //              description: 'Run the Test RPMs on EL stage')
-        // booleanParam(name: 'CI_TEST_LEAP_RPMs',
-        //              defaultValue: true,
-        //              description: 'Run the Test RPMs on Leap test stage')
-        // booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
-        //              defaultValue: false,
-        //              description: 'Skip all functional test stages (Test)')
-        // booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
-        //              defaultValue: false,
-        //              description: 'Enable more distros for functional CI tests')
-        // booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional on EL 8 with Valgrind test stage')
-        // booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional on EL 8 test stage')
-        // booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-        //              defaultValue: true,
-        //              description: 'Run the Functional on EL 9 test stage')
-        // booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional on Leap 15 test stage')
-        // booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional on Ubuntu 20.04 test stage')
-        // booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_TEST_SKIP',
-        //              defaultValue: false,
-        //              description: 'Skip Functional Hardware (Test Hardware) stage')
-        // booleanParam(name: 'CI_medium_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional Hardware Medium test stage')
-        // booleanParam(name: 'CI_medium_md_on_ssd_TEST',
-        //              defaultValue: true,
-        //              description: 'Run the Functional Hardware Medium MD on SSD test stage')
-        // booleanParam(name: 'CI_medium_vmd_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional Hardware Medium VMD test stage')
-        // booleanParam(name: 'CI_medium_verbs_provider_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional Hardware Medium Verbs Provider test stage')
-        // booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
-        //              defaultValue: true,
-        //              description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
-        // booleanParam(name: 'CI_medium_ucx_provider_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional Hardware Medium UCX Provider test stage')
-        // booleanParam(name: 'CI_large_TEST',
-        //              defaultValue: false,
-        //              description: 'Run the Functional Hardware Large test stage')
-        // booleanParam(name: 'CI_large_md_on_ssd_TEST',
-        //              defaultValue: true,
-        //              description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
