@@ -66,15 +66,17 @@ runStage = [
 void updateRunStage() {
     Map reasons = [:]
 
+    // Default to the parameter selection/default for all stages
+    for (stage in runStage.keySet()) {
+        runStage[stage] = params.get(stage, true)
+        reasons[stage] = "parameter selection/default"
+    }
+
     // Handle doc-only changes: Only run default or selected build stages
     if (docOnlyChange(target_branch)) {
-        println("updateRunStage: Detected doc-only change, overwriting defaults")
+        println("updateRunStage: Detected doc-only change, skipping testing")
         for (stage in runStage.keySet()) {
-            if (stage in ['Cancel Previous Builds', 'Pre-build', 'Build']
-                    || stage.contains('Build')) {
-                runStage[stage] = params.get(stage, true)
-                reasons[stage] = "parameter selection/default"
-            } else {
+            if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
                 runStage[stage] = false
                 reasons[stage] = "doc-only change"
             }
@@ -87,10 +89,11 @@ void updateRunStage() {
     if (startedByLanding()) {
         println("updateRunStage: Detected landing build, overwriting defaults")
         for (stage in runStage.keySet()) {
-            if (stage in ['Pre-build', 'Build', 'Unit Tests', 'Test']
+            if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'Test']
                     || stage.contains('Build on')
                     || stage.contains('Unit Test')
                     || stage.contains('NLT')
+                    || stage.contains('Fault injection')
                     || stage.contains('Test RPMs')
                     || (stage.contains('Functional on') && !stage.contains('Ubuntu'))) {
                 runStage[stage] = true
@@ -103,15 +106,35 @@ void updateRunStage() {
         return
     }
 
-    // Handle specific RPM Version
+    // Handle user setting CI_RPM_TEST_VERSION
     if (params.CI_RPM_TEST_VERSION) {
-        println("updateRunStage: Detected specific RPM version, overwriting build/RPM test stages")
+        println("updateRunStage: Detected specific RPM version, skipping build/RPM test stages")
         for (stage in runStage.keySet()) {
-            if (stage.contains('Build') || stage.contains('Test RPMs')) {
+            if (stage.contains('Build')
+                    || stage.contains('Unit Tests')
+                    || stage.contains('Test RPMs')) {
                 runStage[stage] = false
                 reasons[stage] = "specific RPM version"
             }
         }
+        displayRunStage(reasons)
+        return
+    }
+
+    // Handle user setting CI_BUILD_PACKAGES_ONLY
+    if (params.CI_BUILD_PACKAGES_ONLY) {
+        println("updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages")
+        for (stage in runStage.keySet()) {
+            if (stage.contains('Unit Tests')) {
+                runStage[stage] = false
+                reasons[stage] = "CI_BUILD_PACKAGES_ONLY"
+            } else if (stage.contains('Build')) {
+                runStage[stage] = true
+                reasons[stage] = "CI_BUILD_PACKAGES_ONLY"
+            }
+        }
+        displayRunStage(reasons)
+        return
     }
 
     // Handle builds started by the user
@@ -529,9 +552,9 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
-        booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
-                     defaultValue: false,
-                     description: 'Do not cancel previous build.')
+        // booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
+        //              defaultValue: false,
+        //              description: 'Do not cancel previous build.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Build RPM and DEB packages, Skip unit tests.')
