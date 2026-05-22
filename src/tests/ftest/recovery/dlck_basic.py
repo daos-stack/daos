@@ -32,7 +32,8 @@ class DlckBasicTest(TestWithServers):
         if self.server_managers[0].manager.job.using_control_metadata:
             log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
             control_metadata_dir = os.path.join(log_dir, "control_metadata")
-            engine_path_dir = os.path.join(control_metadata_dir, "engine0")
+            daos_control_dir = os.path.join(control_meta_dir, "daos_control")
+            engine_path_dir = os.path.join(daos_control_dir, "engine0")
             nvme_conf = os.path.join(engine_path_dir, "daos_nvme.conf")
         dmg.system_stop()
         host = self.server_managers[0].hosts[0:1]
