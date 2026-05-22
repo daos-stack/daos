@@ -63,6 +63,7 @@ runStage = [
     'Functional Hardware Large MD on SSD': true,
 ]
 
+// Update the runStage map
 void updateRunStage() {
     Map reasons = [:]
 
@@ -114,31 +115,38 @@ void updateRunStage() {
         }
     }
 
+    // Handle builds started by the user
+    if (startedByUser()) {
+        println("updateRunStage: Build started by the user, skipping commit pragma checks")
+        displayRunStage(reasons)
+        return
+    }
+
     // Update stage running based on commit pragmas
     Map<String, String> commitPragmas = getCommitMessageKeyValues()
     println("updateRunStage: commit pragmas from commit message:")
     commitPragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
-
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
         for (pragma in skipPragmas) {
+            println("updateRunStage: checking for a ${pragma} commit pragma for stage ${stage}")
             if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
                 runStage[stage] = false
                 reasons[stage] = "commit pragma ${pragma}: true"
-                continue
-            }
-            if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
+                break
+            } else if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
                 runStage[stage] = true
                 reasons[stage] = "commit pragma ${pragma}: false"
-                continue
+                break
             }
         }
     }
     displayRunStage(reasons)
 }
 
+// Log which stages will be run and why based on the current state of the runStage map
 void displayRunStage(Map reasons = [:]) {
     println("Stage run conditions:")
     for (stage in runStage.keySet()) {
@@ -179,53 +187,81 @@ Map<String, String> getCommitMessageKeyValues() {
 
 // Get a list of skip commit pragmas to check for a given stage name
 List<String> getStageNameSkipPragmas(String stageName) {
+    String stagePragma = "Skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
     List<String> pragmas = []
-    pragmas.add("Skip-${stageName.replaceAll(' ', '-').toLowerCase()}")
-    if (stageName.contains('Build')) {
-        // Add skip pragma for parent stage
-        pragmas.add('Skip-build')
 
-        // Compatibility with commit pragmas that don't match stage names exactly
-        if (pragmas[0].contains('build-on-')) {
-            pragmas.add(pragmas[0].replace('build-on-', 'build-'))
+    // Build up a priority list of pragmas to check based on the stage name.
+    if (stageName == 'Python Bandit check') {
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+        // Compatibility with existing commit pragmas
+        pragmas.add(stagePragma.replace('-bandit-check', '-bandit'))
+
+    } else if (stageName.contains('Build')) {
+        // Add skip pragma for parent stage
+        if (stageName != 'Build') {
+            pragmas.add('Skip-build')
         }
-    }
-    if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+        // Compatibility with existing commit pragmas
+        if (stagePragma.contains('build-on-')) {
+            pragmas.add(stagePragma.replace('build-on-', 'build-'))
+        }
+
+    } else if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
         // Add skip pragma for parent stage
-        pragmas.add('Skip-unit-tests')
-    }
-    if (stageName.contains('Test')) {
+        if (stageName != 'Unit Tests') {
+            pragmas.add('Skip-unit-tests')
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+        // Compatibility with existing commit pragmas
+        if (stagePragma.contains('-with-')) {
+            pragmas.add(stagePragma.replace('-with-', '-'))
+        }
+
+    } else if (stageName == 'Test' || stageName.contains('Functional on')
+            || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
         // Add skip pragma for parent stage
-        pragmas.add('Skip-test')
-    }
-    if (stageName.contains('Functional')) {
-        // Add skip pragma for parent stage
+        if (stageName != 'Test') {
+            pragmas.add('Skip-test')
+        }
+        if (stageName.contains('Functional on')) {
+            // Add skip pragma alias for all functional tests
+            pragmas.add('Skip-func-test')
+            // Add skip pragma alias for all functional VM tests
+            pragmas.add('Skip-func-test-vm')
+            // Compatibility with existing commit pragmas
+            pragmas.add(stagePragma.replace('functional-on-', 'func-test-'))
+        } else if (stageName.contains('Test RPMs on')) {
+            // Add skip pragma alias for all RPM tests
+            pragmas.add('Skip-test-rpms')
+        } else if (stageName.contains('Fault injection')) {
+            // Compatibility with existing commit pragmas
+            pragmas.add('Skip-fault-injection-test')
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+
+    } else if (stageName.contains('Test Storage Prep')) {
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+
+    } else if (stageName.contains('Hardware')) {
+        // Add skip pragma alias for all functional tests
         pragmas.add('Skip-func-test')
-
-        // Compatibility for commit pragmas that don't match stage names exactly
-        if (pragmas[0].contains('functional-on-')) {
-            pragmas.add(pragmas[0].replace('functional-on-', 'func-test-'))
-        } else if (pragmas[0].contains('functional-hardware-')) {
-            pragmas.add(pragmas[0].replace('functional-hardware-', 'func-hw-'))
-        }
-    }
-    if (stageName.contains('Functional on')) {
-        // Add skip pragma for parent stage
-        pragmas.add('Skip-test')
-
-        // Add skip pragma alias for all functional VM tests
-        pragmas.add('Skip-func-test-vm')
-    }
-    if (stageName.contains('Functional Hardware')) {
-        // Add skip pragma for parent stage
-        pragmas.add('Skip-test-hardware')
-        pragmas.add('Skip-test-hw')
-
         // Add skip pragma alias for all functional HW tests
         pragmas.add('Skip-func-hw-test')
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+        // Compatibility with existing commit pragmas
+        if (stagePragma.contains('functional-hardware-')) {
+            pragmas.add(stagePragma.replace('functional-hardware-', 'func-hw-test-'))
+        }
     }
 
-    // Compatibility for commit pragmas with distro versions that don't match stage names exactly
+    // Compatibility with existing commit pragmas using distro versions
     List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
     List<String> copyPragmas = pragmas.clone()
     for (distro in distros) {
@@ -234,13 +270,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
                 pragmas.add(_pragma.replace("-${distro}-", "-${distro}"))
             }
         }
-    }
-
-    // Compatibility for commit pragmas that don't match stage names exactly
-    if (pragmas[0].contains('-testing')) {
-        pragmas.add(pragmas[0].replace('-testing', '-test'))
-    } else if (pragmas[0].contains('-check')) {
-        pragmas.add(pragmas[0].replace('-check', ''))
     }
 
     return pragmas
