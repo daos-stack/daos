@@ -1518,11 +1518,20 @@ retry_rebuild_task(struct rebuild_task *task, int error, daos_rebuild_opc_t *opc
 	*opc = RB_OP_REBUILD;
 }
 
+static bool
+rebuild_failed_due_to_network(int err)
+{
+	return daos_crt_network_error(err) || err == -DER_TIMEDOUT;
+}
+
+#define RB_DELAY_AFTER_NET_ERR (30)
+
 static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			       struct rebuild_global_pool_tracker *rgt, uint32_t obj_reclaim_ver,
 			       int ret)
 {
+	uint64_t delay_sec = 5;
 	int rc = 0;
 	int rc1;
 
@@ -1538,9 +1547,11 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 
 		DL_INFO(ret, DF_UUID" retry opc %u/%u", DP_UUID(task->dst_pool_uuid),
 			task->dst_rebuild_op, task->dst_map_ver);
+		if (rebuild_failed_due_to_network(ret))
+			delay_sec = RB_DELAY_AFTER_NET_ERR;
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_reclaim_eph,
-					 task->dst_new_layout_version,
-					 &task->dst_tgts, task->dst_rebuild_op, 5);
+					 task->dst_new_layout_version, &task->dst_tgts,
+					 task->dst_rebuild_op, delay_sec);
 		return rc;
 	}
 
@@ -1561,13 +1572,16 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		/* If current job failed */
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 
+		if (rebuild_failed_due_to_network(rgt->rgt_status.rs_errno))
+			delay_sec = RB_DELAY_AFTER_NET_ERR;
+
 		if (task->dst_rebuild_op == RB_OP_RECLAIM ||
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
 			DL_INFO(ret, DF_UUID" retry opc %u/%u", DP_UUID(task->dst_pool_uuid),
 				task->dst_rebuild_op, task->dst_map_ver);
 			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
 						 task->dst_new_layout_version, &task->dst_tgts,
-						 task->dst_rebuild_op, 5);
+						 task->dst_rebuild_op, delay_sec);
 			return rc;
 		}
 
@@ -1583,10 +1597,10 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 				DF_UUID" opc %u/%u, schedule RB_OP_FAIL_RECLAIM.",
 				DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op,
 				task->dst_map_ver);
-			rc = ds_rebuild_schedule(pool, task->dst_reclaim_ver - 1,
-						 rgt->rgt_stable_epoch,
-						 task->dst_new_layout_version,
-						 &task->dst_tgts, RB_OP_FAIL_RECLAIM, 5);
+			rc =
+			    ds_rebuild_schedule(pool, task->dst_reclaim_ver - 1,
+						rgt->rgt_stable_epoch, task->dst_new_layout_version,
+						&task->dst_tgts, RB_OP_FAIL_RECLAIM, delay_sec);
 			if (rc)
 				D_ERROR(DF_UUID "schedule reclaim fail: "DF_RC"\n",
 					DP_UUID(task->dst_pool_uuid), DP_RC(rc));
@@ -1598,8 +1612,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			D_GOTO(complete, rc);
 
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
-					 task->dst_new_layout_version, &task->dst_tgts,
-					 retry_opc, 5);
+					 task->dst_new_layout_version, &task->dst_tgts, retry_opc,
+					 delay_sec);
 		DL_INFO(rc, DF_UUID" opc %u/%u, error %d, re-scheduled opc %u.",
 			DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver,
 			rgt->rgt_status.rs_errno, retry_opc);
@@ -1615,7 +1629,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		obj_reclaim_ver = obj_reclaim_ver > 0 ? obj_reclaim_ver : task->dst_map_ver;
 		rc              = ds_rebuild_schedule(pool, obj_reclaim_ver, rgt->rgt_reclaim_epoch,
 						      task->dst_new_layout_version, &task->dst_tgts,
-						      RB_OP_RECLAIM, 5);
+						      RB_OP_RECLAIM, delay_sec);
 		if (rc != 0)
 			D_ERROR("reschedule reclaim, "DF_UUID" failed: "DF_RC"\n",
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
@@ -1825,7 +1839,7 @@ out_task:
 	return;
 }
 
-bool
+static bool
 pool_is_rebuilding(uuid_t pool_uuid)
 {
 	struct rebuild_task *task;
@@ -1837,13 +1851,27 @@ pool_is_rebuilding(uuid_t pool_uuid)
 	return false;
 }
 
+static bool
+pool_reclaim_in_queue(uuid_t pool_uuid)
+{
+	struct rebuild_task *task;
+
+	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
+		if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0 &&
+		    (task->dst_rebuild_op == RB_OP_RECLAIM ||
+		     task->dst_rebuild_op == RB_OP_FAIL_RECLAIM))
+			return true;
+	}
+	return false;
+}
+
 #define REBUILD_MAX_INFLIGHT	10
 static void
 rebuild_ults(void *arg)
 {
 	struct rebuild_task *task;
 	struct rebuild_task *task_tmp;
-	int		    rc;
+	int                  rc;
 
 	while (DAOS_FAIL_CHECK(DAOS_REBUILD_HANG))
 		ABT_thread_yield();
@@ -1865,6 +1893,19 @@ rebuild_ults(void *arg)
 
 		task = d_list_entry(rebuild_gst.rg_queue_list.next, struct rebuild_task, dst_list);
 		while (&rebuild_gst.rg_queue_list != &task->dst_list) {
+			/* make sure the reclaim runs first */
+			if ((task->dst_rebuild_op == RB_OP_REBUILD ||
+			     task->dst_rebuild_op == RB_OP_UPGRADE) &&
+			    pool_reclaim_in_queue(task->dst_pool_uuid)) {
+				D_DEBUG(DB_REBUILD, "pool " DF_UUID " %s, ver %d wait reclaim\n",
+					DP_UUID(task->dst_pool_uuid),
+					RB_OP_STR(task->dst_rebuild_op), task->dst_map_ver);
+				task = d_list_entry(task->dst_list.next, struct rebuild_task,
+						    dst_list);
+				dss_sleep(0);
+				continue;
+			}
+
 			/* If a pool is currently handling a rebuild, wait for it to finish.
 			 * Skip this pool now if its rebuild task is scheduled for later
 			 * (allow for merging of other tasks into this one in ds_rebuild_schedule().
@@ -1903,7 +1944,7 @@ rebuild_ults(void *arg)
 			}
 
 		}
-		dss_sleep(0);
+		dss_sleep(1000);
 	}
 
 	/* If there are still rebuild task in queue and running list, then
