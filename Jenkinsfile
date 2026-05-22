@@ -16,8 +16,6 @@
  * LICENSE file.
  */
 
-import groovy.transform.Field
-
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
@@ -25,8 +23,8 @@ import groovy.transform.Field
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
-// Update the defaults for running stages in a PR here
-@Field
+// Values here don't matter, the true defaults are set in pipeline.parameters
+/* groovylint-disable-next-line CompileStatic */
 Map<String, Boolean> runStage = [
     'Cancel Previous Builds': true,
     'Pre-build': true,
@@ -587,103 +585,106 @@ pipeline {
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
         booleanParam(name: 'Cancel Previous Builds',
-                     defaultValue: runStage['Cancel Previous Builds'],
+                     defaultValue: true,
                      description: 'Cancel previous build before running this one.')
         booleanParam(name: 'Pre-build',
-                     defaultValue: runStage['Pre-build'],
+                     defaultValue: true,
                      description: 'Run the pre-build stage.')
         booleanParam(name: 'Python Bandit check',
-                     defaultValue: runStage['Python Bandit check'],
+                     defaultValue: true,
                      description: 'Run the Python Bandit check stage.')
         booleanParam(name: 'Build',
-                     defaultValue: runStage['Build'],
+                     defaultValue: true,
                      description: 'Run the build stage.')
         booleanParam(name: 'Build on EL 8',
-                     defaultValue: runStage['Build on EL 8'],
+                     defaultValue: true,
                      description: 'Run the build on EL 8 stage.')
         booleanParam(name: 'Build on EL 9',
-                     defaultValue: runStage['Build on EL 9'],
+                     defaultValue: true,
                      description: 'Run the build on EL 9 stage.')
         booleanParam(name: 'Build on Leap 15',
-                     defaultValue: runStage['Build on Leap 15'],
+                     defaultValue: true,
                      description: 'Run the build on Leap 15 stage.')
         booleanParam(name: 'Build on EL 9 with Bullseye',
-                     defaultValue: runStage['Build on EL 9 with Bullseye'],
+                     defaultValue: true,
                      description: 'Run the build on EL 9 with Bullseye stage.')
         booleanParam(name: 'Unit Tests',
-                     defaultValue: runStage['Unit Tests'],
+                     defaultValue: true,
                      description: 'Run the Unit Tests stage.')
         booleanParam(name: 'Unit Test',
-                     defaultValue: runStage['Unit Test'],
+                     defaultValue: true,
                      description: 'Run the Unit Test stage.')
         booleanParam(name: 'Unit Test bdev',
-                     defaultValue: runStage['Unit Test bdev'],
+                     defaultValue: true,
                      description: 'Run the Unit Test bdev stage.')
         booleanParam(name: 'NLT',
-                     defaultValue: runStage['NLT'],
+                     defaultValue: true,
                      description: 'Run the NLT stage.')
         booleanParam(name: 'NLT with Bullseye',
-                     defaultValue: runStage['NLT with Bullseye'],
+                     defaultValue: true,
                      description: 'Run the NLT with Bullseye stage.')
         booleanParam(name: 'Unit Test with memcheck',
-                     defaultValue: runStage['Unit Test with memcheck'],
+                     defaultValue: true,
                      description: 'Run the Unit Test with memcheck stage.')
         booleanParam(name: 'Unit Test bdev with memcheck',
-                     defaultValue: runStage['Unit Test bdev with memcheck'],
+                     defaultValue: true,
                      description: 'Run the Unit Test bdev with memcheck stage.')
         booleanParam(name: 'Test',
-                     defaultValue: runStage['Test'],
+                     defaultValue: true,
                      description: 'Run the Test stage.')
         booleanParam(name: 'Functional on EL 8.8 with Valgrind',
-                     defaultValue: runStage['Functional on EL 8.8 with Valgrind'],
+                     defaultValue: false,
                      description: 'Run the Functional on EL 8.8 with Valgrind stage.')
         booleanParam(name: 'Functional on EL 8',
-                     defaultValue: runStage['Functional on EL 8'],
+                     defaultValue: false,
                      description: 'Run the Functional on EL 8 stage.')
         booleanParam(name: 'Functional on EL 9',
-                     defaultValue: runStage['Functional on EL 9'],
+                     defaultValue: true,
                      description: 'Run the Functional on EL 9 stage.')
         booleanParam(name: 'Functional on Leap 15',
-                     defaultValue: runStage['Functional on Leap 15'],
+                     defaultValue: false,
                      description: 'Run the Functional on Leap 15 stage.')
+        booleanParam(name: 'Functional on SLES 15',
+                     defaultValue: false,
+                     description: 'Run the Functional on SLES 15 stage.')
         booleanParam(name: 'Functional on Ubuntu 20.04',
-                     defaultValue: runStage['Functional on Ubuntu 20.04'],
+                     defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 stage.')
         booleanParam(name: 'Fault injection testing',
-                     defaultValue: runStage['Fault injection testing'],
+                     defaultValue: true,
                      description: 'Run the Fault injection testing stage.')
         booleanParam(name: 'Test RPMs on EL 9.6',
-                     defaultValue: runStage['Test RPMs on EL 9.6'],
+                     defaultValue: true,
                      description: 'Run the Test RPMs on EL 9.6 stage.')
         booleanParam(name: 'Test RPMs on Leap 15.5',
-                     defaultValue: runStage['Test RPMs on Leap 15.5'],
+                     defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15.5 stage.')
         booleanParam(name: 'Test Hardware',
-                     defaultValue: runStage['Test Hardware'],
+                     defaultValue: true,
                      description: 'Run the Test Hardware stage.')
         booleanParam(name: 'Functional Hardware Medium',
-                     defaultValue: runStage['Functional Hardware Medium'],
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium stage.')
         booleanParam(name: 'Functional Hardware Medium MD on SSD',
-                     defaultValue: runStage['Functional Hardware Medium MD on SSD'],
+                     defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD stage.')
         booleanParam(name: 'Functional Hardware Medium VMD',
-                     defaultValue: runStage['Functional Hardware Medium VMD'],
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium VMD stage.')
         booleanParam(name: 'Functional Hardware Medium Verbs Provider',
-                     defaultValue: runStage['Functional Hardware Medium Verbs Provider'],
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider stage.')
         booleanParam(name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                     defaultValue: runStage['Functional Hardware Medium Verbs Provider MD on SSD'],
+                     defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
         booleanParam(name: 'Functional Hardware Medium UCX Provider',
-                     defaultValue: runStage['Functional Hardware Medium UCX Provider'],
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider stage.')
         booleanParam(name: 'Functional Hardware Large',
-                     defaultValue: runStage['Functional Hardware Large'],
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Large stage.')
         booleanParam(name: 'Functional Hardware Large MD on SSD',
-                     defaultValue: runStage['Functional Hardware Large MD on SSD'],
+                     defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
         // booleanParam(name: 'CI_el8_NOBUILD',
         //              defaultValue: false,
