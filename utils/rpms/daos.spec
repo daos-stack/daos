@@ -76,7 +76,7 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
+BuildRequires: spdk-devel >= 26.01
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -159,7 +159,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
+Requires: spdk-tools >= 26.01
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
