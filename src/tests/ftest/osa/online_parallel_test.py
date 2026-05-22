@@ -10,7 +10,6 @@ import threading
 import time
 from itertools import product
 
-from apricot import skipForTicket
 from daos_racer_utils import DaosRacerCommand
 from exception_utils import CommandFailure
 from osa_utils import OSAUtils
@@ -185,7 +184,6 @@ class OSAOnlineParallelTest(OSAUtils):
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25, "Pool Version Error:  at the end")
 
-    @skipForTicket("DAOS-6664")
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752
