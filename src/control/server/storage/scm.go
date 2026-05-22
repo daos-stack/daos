@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -362,12 +362,13 @@ type (
 	// ScmFormatRequest defines the parameters for a Format operation or query.
 	ScmFormatRequest struct {
 		pbin.ForwardableRequest
-		Force      bool
-		Mountpoint string
-		OwnerUID   int
-		OwnerGID   int
-		Ramdisk    *RamdiskParams
-		Dcpm       *DeviceParams
+		Force            bool
+		Mountpoint       string
+		OwnerUID         int
+		OwnerGID         int
+		Ramdisk          *RamdiskParams
+		Dcpm             *DeviceParams
+		KernelConfigPath string
 	}
 
 	// ScmFormatResponse contains the results of a successful Format operation or query.
@@ -381,10 +382,11 @@ type (
 	// ScmMountRequest represents an SCM mount request.
 	ScmMountRequest struct {
 		pbin.ForwardableRequest
-		Class   Class
-		Device  string
-		Target  string
-		Ramdisk *RamdiskParams
+		Class            Class
+		Device           string
+		Target           string
+		Ramdisk          *RamdiskParams
+		KernelConfigPath string
 	}
 
 	// ScmFirmwareQueryRequest defines the parameters for a firmware query.

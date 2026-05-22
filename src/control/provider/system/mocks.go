@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -238,11 +239,10 @@ func (msp *MockSysProvider) Getegid() int {
 	return msp.cfg.GetegidRes
 }
 
-// Mkdir creates a new directory with the specified name and permission
-// bits (before umask).
+// Mkdir creates a new directory with the specified name and permission bits (umask ignored).
 func (msp *MockSysProvider) Mkdir(path string, flags os.FileMode) error {
 	if msp.cfg.RealMkdir {
-		return os.Mkdir(path, flags)
+		return common.MkdirForcePerm(path, flags)
 	}
 	return msp.cfg.MkdirErr
 }

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,9 +20,11 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
-// log message context refers to caller not callee.
-const UtilLogDepth = 4
+const (
+	// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
+	// log message context refers to caller not callee.
+	UtilLogDepth = 4
+)
 
 // GetFilenames returns names of files in a directory.
 func GetFilenames(dir string) ([]string, error) {
@@ -138,6 +140,13 @@ func writeFile(path string, data []byte, perm os.FileMode) (err error) {
 			os.Remove(path)
 		}
 	}()
+
+	// The requested permissions may have been reduced by the umask.
+	// Using chmod ensures the requested permissions are applied.
+	err = os.Chmod(path, perm)
+	if err != nil {
+		return
+	}
 
 	n, err := f.Write(data)
 	if err != nil {
@@ -369,4 +378,15 @@ func HasPrefixPath(base, sub string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// MkdirForcePerm creates a new directory with the specified name and permission bits (umask ignored).
+func MkdirForcePerm(path string, perm os.FileMode) error {
+	err := os.Mkdir(path, perm)
+	if err != nil {
+		return err
+	}
+	// The requested permissions may have been reduced by the umask.
+	// Using Chmod ensures the requested permissions are applied.
+	return os.Chmod(path, perm)
 }

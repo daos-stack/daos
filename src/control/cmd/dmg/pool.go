@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -888,7 +888,7 @@ func (cmd *poolGetPropCmd) Execute(_ []string) error {
 // DAOS pool.
 type poolGetACLCmd struct {
 	poolCmd
-	File    string `short:"o" long:"outfile" required:"0" description:"Output ACL to file"`
+	File    string `short:"O" long:"outfile" required:"0" description:"Output ACL to file"`
 	Force   bool   `short:"f" long:"force" required:"0" description:"Allow to clobber output file"`
 	Verbose bool   `short:"v" long:"verbose" required:"0" description:"Add descriptive comments to ACL entries"`
 }

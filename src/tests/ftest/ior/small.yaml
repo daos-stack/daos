@@ -36,14 +36,15 @@ dmg:
 pool: !mux
   default:
     size: 100%
+    properties: rd_fac:0
   md_on_ssd_p2:
     size: 100%
+    properties: rd_fac:0
     mem_ratio: 50
 
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  control_method: daos
 
 ior:
   env_vars:

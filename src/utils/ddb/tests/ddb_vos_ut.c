@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  * Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -51,7 +51,7 @@ const struct CMUnitTest dv_test_cases[] = {
 };
 
 int
-ddb_vos_tests_run()
+ddb_vos_ut_run()
 {
 	return cmocka_run_group_tests_name("DDB VOS Interface Unit Tests", dv_test_cases, NULL,
 					   NULL);

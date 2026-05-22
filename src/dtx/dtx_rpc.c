@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -748,8 +748,11 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 		else
 			dca->dca_steps = length;
 
-		/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
-		if (dss_has_enough_helper()) {
+		/*
+		 * Direct use current ULT instead of dss_chore to send DTX RPC to avoid being
+		 * blocked by some slow dss_chore users. DAOS-18607.
+		 */
+		if (0 && dss_has_enough_helper()) {
 			rc = ABT_eventual_create(0, &dca->dca_chore_eventual);
 			if (rc != ABT_SUCCESS) {
 				D_ERROR("failed to create eventual: %d\n", rc);
@@ -875,11 +878,13 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 		}
 
 		/*
-		 * Some DTX entries may have been committed on some participants. Then mark all
-		 * the DTX entries (in the dtis) as "PARTIAL_COMMITTED" and re-commit them later.
-		 * It is harmless to re-commit the DTX that has ever been committed.
+		 * Some DTX entries may have been committed on parts of (remote) participants.
+		 * It is no way to revert related partially committed DTX entries since we do
+		 * not know whether someone has already read related data for those partially
+		 * committed DTX entries. Then let's mark all the DTX entries in the @dtis as
+		 * "PARTIAL_COMMITTED" and re-commit them later. It is safe to re-commit them.
 		 */
-		rc1 = vos_dtx_commit(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
+		rc1 = dtx_commit_large(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
 		if (rc1 > 0) {
 			dra->dra_committed += rc1;
 			rc1 = 0;

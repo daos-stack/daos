@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -468,17 +468,18 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	t.Helper()
 
 	state := map[string]system.MemberState{
-		"awaitformat":   system.MemberStateAwaitFormat,
-		"errored":       system.MemberStateErrored,
-		"excluded":      system.MemberStateExcluded,
-		"joined":        system.MemberStateJoined,
-		"ready":         system.MemberStateReady,
-		"starting":      system.MemberStateStarting,
-		"stopped":       system.MemberStateStopped,
-		"stopping":      system.MemberStateStopping,
-		"unknown":       system.MemberStateUnknown,
-		"unresponsive":  system.MemberStateUnresponsive,
-		"adminexcluded": system.MemberStateAdminExcluded,
+		"awaitformat":    system.MemberStateAwaitFormat,
+		"errored":        system.MemberStateErrored,
+		"excluded":       system.MemberStateExcluded,
+		"joined":         system.MemberStateJoined,
+		"ready":          system.MemberStateReady,
+		"starting":       system.MemberStateStarting,
+		"stopped":        system.MemberStateStopped,
+		"stopping":       system.MemberStateStopping,
+		"unknown":        system.MemberStateUnknown,
+		"unresponsive":   system.MemberStateUnresponsive,
+		"adminexcluded":  system.MemberStateAdminExcluded,
+		"checkerstarted": system.MemberStateCheckerStarted,
 	}[s]
 
 	if state == system.MemberStateUnknown && s != "unknown" {

@@ -16,7 +16,11 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <daos/common.h>
+
+#define DEFAULT_FILE_PERM               (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)
+#define DEFAULT_DIR_PERM                (S_IRWXU | S_IRWXG)
 
 #define NVME_PCI_DEV_TYPE_VMD           "vmd"
 #define NVME_DETAIL_BUFLEN              1024
@@ -46,7 +50,7 @@
 /** NVMe config keys */
 #define NVME_CONF_ATTACH_CONTROLLER	"bdev_nvme_attach_controller"
 #define NVME_CONF_AIO_CREATE		"bdev_aio_create"
-#define NVME_CONF_ENABLE_VMD		"enable_vmd"
+#define NVME_CONF_ENABLE_VMD            "vmd_enable"
 #define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
 #define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
 #define NVME_CONF_SET_SPDK_RPC_SERVER	"spdk_rpc_srv"

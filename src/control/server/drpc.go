@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -96,7 +96,7 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	// Create and add our modules
 	drpcServer.RegisterRPCModule(NewSecurityModule(req.log, req.transportConfig))
 	drpcServer.RegisterRPCModule(newMgmtModule())
-	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.sysdb, req.engines, req.events, req.client, req.msReplicas))
+	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.engines, req.events, req.client, req.msReplicas))
 
 	if err := drpcServer.Start(ctx); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)

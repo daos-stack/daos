@@ -58,8 +58,6 @@ mdtest:
     np: 30
   num_of_files_dirs: 1667      # creating total of 50K files
   test_dir: "/"
-  iteration: 1
-  dfs_destroy: false
   manager: "MPICH"
   flags: "-F -C"
   write_bytes: 4096

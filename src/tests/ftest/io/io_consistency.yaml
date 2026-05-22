@@ -24,10 +24,10 @@ server_config:
 pool:
   scm_size: 5000000000
   nvme_size: 20000000000
+  properties: rd_fac:0
 
 container:
   type: POSIX
-  control_method: daos
 
 ior:
   client_processes:
@@ -41,17 +41,11 @@ ior:
       api_flag:
         - [DFS, "-v -w -k"]
         - [POSIX, "-v -r -R"]
-  dfs_destroy: false
   test_file: /testFile
   signature: 5
-  repetitions: 1
-  transfersize_blocksize:
-    1M:
-      transfer_size: '1M'
-      block_size: '2G'
-  objectclass:
-    SX:
-      dfs_oclass: "SX"
+  transfer_size: '1M'
+  block_size: '2G'
+  dfs_oclass: "SX"
 
 dfuse:
   disable_caching: true

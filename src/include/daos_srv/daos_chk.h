@@ -86,11 +86,59 @@ int chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 int chk_leader_prop(chk_prop_cb_t prop_cb, void *buf);
 
 int
-    chk_leader_act(uint64_t seq, uint32_t act);
+chk_act(uint64_t seq, uint32_t act);
 
 int
     chk_leader_set_policy(uint32_t policy_nr, struct chk_policy *policies);
 
 int chk_engine_pool_stop(uuid_t pool_uuid, bool destroy);
+
+/**
+ * List all the known pools from control plane (MS).
+ *
+ * \param[out] clp	The pools list.
+ *
+ * \retval		Positive value for the conut of pools.
+ *			Negative value if error.
+ */
+int
+ds_chk_listpool_upcall(struct chk_list_pool **clp);
+
+/**
+ * Register the pool to control plane (MS).
+ *
+ * \param[in] seq	DAOS Check event sequence, unique for the instance.
+ * \param[in] uuid	The pool uuid.
+ * \param[in] label	The pool label, optional.
+ * \param[in] svcreps	Ranks for the pool service.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svcreps);
+
+/**
+ * Deregister the pool from control plane (MS).
+ *
+ * \param[in] seq	DAOS Check event sequence, unique for the instance.
+ * \param[in] uuid	The pool uuid.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_chk_deregpool_upcall(uint64_t seq, uuid_t uuid);
+
+/**
+ * Report inconsistency to control plane (MS).
+ *
+ * \param[in] rpt	The pointer to Chk__CheckReport.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_chk_report_upcall(void *rpt);
+
+void
+ds_chk_free_pool_list(struct chk_list_pool *clp, uint32_t nr);
 
 #endif /* __DAOS_CHK_H__ */

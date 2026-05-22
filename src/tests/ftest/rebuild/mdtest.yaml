@@ -50,4 +50,3 @@ mdtest:
   read_bytes: 512KiB
   write_bytes: 512KiB
   num_of_files_dirs: 15625  # 1 million total files
-  dfs_destroy: false

@@ -8,7 +8,7 @@ def scons():
     denv = env.Clone()
     denv.Append(OBJPREFIX="ddb_")
 
-    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'ssl', 'cart']
+    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'ssl', 'cart', 'json-c']
     # spdk libraries
     libs += ['spdk_event', 'spdk_log']
     libs += ['spdk_bdev', 'spdk_blob', 'spdk_blob_bdev', 'spdk_json']
@@ -29,6 +29,7 @@ def scons():
         'ddb_parse.c',
         'ddb_tree_path.c',
         'ddb_printer.c',
+        'ddb_vmd_wa.c',
         'ddb_vos.c',
         'ddb_spdk.c',
         '../../mgmt/mgmt_common.c',

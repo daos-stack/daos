@@ -80,6 +80,9 @@ func New(c *Config) (a *App) {
 		printCommandHelp: defaultPrintCommandHelp,
 		interruptHandler: defaultInterruptHandler,
 	}
+	if c.InterruptHandler != nil {
+		a.interruptHandler = c.InterruptHandler
+	}
 
 	// Register the builtin flags.
 	a.flags.Bool("h", "help", false, "display help")
@@ -278,7 +281,20 @@ func (a *App) RunCommand(args []string) error {
 // Run the application and parse the command line arguments.
 // This method blocks.
 func (a *App) Run() (err error) {
+	// Create the readline instance.
+	config := &readline.Config{}
+	a.setReadlineDefaults(config)
+	rl, err := readline.NewEx(config)
+	if err != nil {
+		return err
+	}
+	return a.RunWithReadline(rl)
+}
+
+func (a *App) RunWithReadline(rl *readline.Instance) (err error) {
 	defer a.Close()
+
+	a.setReadlineDefaults(rl.Config)
 
 	// Sort all commands by their name.
 	a.commands.SortRecursive()
@@ -370,18 +386,8 @@ func (a *App) Run() (err error) {
 		return a.RunCommand(args)
 	}
 
-	// Create the readline instance.
-	a.rl, err = readline.NewEx(&readline.Config{
-		Prompt:                 a.currentPrompt,
-		HistorySearchFold:      true, // enable case-insensitive history searching
-		DisableAutoSaveHistory: true,
-		HistoryFile:            a.config.HistoryFile,
-		HistoryLimit:           a.config.HistoryLimit,
-		AutoComplete:           newCompleter(&a.commands),
-	})
-	if err != nil {
-		return err
-	}
+	// Assign readline instance
+	a.rl = rl
 	a.OnClose(a.rl.Close)
 
 	// Run the shell hook.
@@ -399,6 +405,16 @@ func (a *App) Run() (err error) {
 
 	// Run the shell.
 	return a.runShell()
+}
+
+func (a *App) setReadlineDefaults(config *readline.Config) {
+	config.Prompt = a.currentPrompt
+	config.HistorySearchFold = true
+	config.DisableAutoSaveHistory = true
+	config.HistoryFile = a.config.HistoryFile
+	config.HistoryLimit = a.config.HistoryLimit
+	config.AutoComplete = newCompleter(&a.commands)
+	config.VimMode = a.config.VimMode
 }
 
 func (a *App) runShell() error {

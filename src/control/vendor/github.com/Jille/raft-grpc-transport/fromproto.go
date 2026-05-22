@@ -20,6 +20,8 @@ func decodeAppendEntriesRequest(m *pb.AppendEntriesRequest) *raft.AppendEntriesR
 func decodeRPCHeader(m *pb.RPCHeader) raft.RPCHeader {
 	return raft.RPCHeader{
 		ProtocolVersion: raft.ProtocolVersion(m.ProtocolVersion),
+		ID:              m.Id,
+		Addr:            m.Addr,
 	}
 }
 
@@ -123,5 +125,22 @@ func decodeTimeoutNowRequest(m *pb.TimeoutNowRequest) *raft.TimeoutNowRequest {
 func decodeTimeoutNowResponse(m *pb.TimeoutNowResponse) *raft.TimeoutNowResponse {
 	return &raft.TimeoutNowResponse{
 		RPCHeader: decodeRPCHeader(m.RpcHeader),
+	}
+}
+
+func decodeRequestPreVoteRequest(m *pb.RequestPreVoteRequest) *raft.RequestPreVoteRequest {
+	return &raft.RequestPreVoteRequest{
+		RPCHeader:    decodeRPCHeader(m.RpcHeader),
+		Term:         m.Term,
+		LastLogIndex: m.LastLogIndex,
+		LastLogTerm:  m.LastLogTerm,
+	}
+}
+
+func decodeRequestPreVoteResponse(m *pb.RequestPreVoteResponse) *raft.RequestPreVoteResponse {
+	return &raft.RequestPreVoteResponse{
+		RPCHeader: decodeRPCHeader(m.RpcHeader),
+		Term:      m.Term,
+		Granted:   m.Granted,
 	}
 }

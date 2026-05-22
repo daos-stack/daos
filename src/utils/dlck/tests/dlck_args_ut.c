@@ -1,6 +1,6 @@
 /**
- * Copyright 2025 Hewlett Packard Enterprise Development LP.
- * Copyright 2026 Google LLC
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */

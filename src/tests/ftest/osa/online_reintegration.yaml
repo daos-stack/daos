@@ -7,9 +7,6 @@ timeout: 1110
 job_manager:
   manager_timeout: 300
 
-setup:
-  start_servers_once: false
-
 skip_add_log_msg: true
 
 server_config:
@@ -66,7 +63,7 @@ ior:
 
 daos_racer:
   runtime: 480
-  clush_timeout: 1000
+  daos_racer_timeout: 1000
 
 mdtest:
   api: DFS
@@ -74,8 +71,6 @@ mdtest:
     np: 2
   num_of_files_dirs: 100
   test_dir: "/tmp/"
-  iteration: 1
-  dfs_destroy: false
   dfs_oclass: RP_2G1
   dfs_dir_oclass: RP_2G1
   manager: "MPICH"

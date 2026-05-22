@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -176,5 +177,27 @@ func TestUtils_HasPrefixPath(t *testing.T) {
 	if hp {
 		t.Fatalf("%q is not a prefix of %q", testDir, testPath)
 	}
+}
 
+func TestUtils_MkdirForcePerm(t *testing.T) {
+	expPerm := 0777
+
+	testDir, clean := CreateTestDir(t)
+	defer clean()
+
+	testPath := path.Join(testDir, "foo")
+	err := MkdirForcePerm(testPath, os.FileMode(expPerm))
+	if err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+
+	info, err := os.Stat(testPath)
+	if err != nil {
+		t.Fatalf("Unexpected error: %q", err)
+	}
+
+	perm := int(info.Mode().Perm())
+	if perm != expPerm {
+		t.Fatalf("Created directory has unexpected permissions: %04o instead of %04o", perm, expPerm)
+	}
 }

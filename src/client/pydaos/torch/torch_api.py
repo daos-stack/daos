@@ -536,7 +536,7 @@ class Checkpoint():
 
     # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(self, pool, cont, prefix=os.sep,
-                 mode=stat.S_IFREG | stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH,
+                 mode=stat.S_IFREG | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
                  open_flags=os.O_CREAT | os.O_RDWR,
                  class_name="OC_UNKNOWN",
                  file_chunk_size=0,

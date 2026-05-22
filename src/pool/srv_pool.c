@@ -2069,21 +2069,15 @@ add_conn_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		return 0;
 	}
 
-	if (iv_conns == NULL ||
-	    iv_conns->pic_buf_size < iv_conns->pic_size + pool_iv_conn_size(hdl->ph_cred_len)) {
+	if (iv_conns->pic_buf_size < iv_conns->pic_size + pool_iv_conn_size(hdl->ph_cred_len)) {
 		unsigned int          new_size;
 		unsigned int          curr_size;
 		struct pool_iv_conns *new_conns;
 
-		curr_size =
-		    iv_conns ? iv_conns->pic_buf_size + sizeof(*iv_conns) : sizeof(*iv_conns);
+		curr_size = iv_conns->pic_buf_size + sizeof(*iv_conns);
 		new_size = curr_size + 32 * pool_iv_conn_size(hdl->ph_cred_len);
 
-		if (iv_conns != NULL)
-			D_REALLOC(new_conns, iv_conns, curr_size, new_size);
-		else
-			D_ALLOC(new_conns, new_size);
-
+		D_REALLOC(new_conns, iv_conns, curr_size, new_size);
 		if (new_conns == NULL)
 			return -DER_NOMEM;
 
@@ -2204,7 +2198,11 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 	D_ASSERT(prop_entry != NULL);
 	arg.obj_ver    = prop_entry->dpe_val;
 	arg.global_ver = svc->ps_global_version;
-	arg.iv_hdls    = NULL;
+	D_ALLOC_PTR(arg.iv_hdls);
+	if (arg.iv_hdls == NULL) {
+		rc = -DER_NOMEM;
+		goto out_free;
+	}
 	rc = rdb_tx_iterate(&tx, &svc->ps_handles, false /* backward */, add_conn_cb, &arg);
 	if (rc != 0) {
 		DL_ERROR(rc, "Failed to find hdls for evict pool " DF_UUIDF " connections.",
@@ -2614,14 +2612,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		goto out;
 	}
 
-	if (iv_hdls != NULL) {
-		rc = ds_pool_iv_conn_hdls_update(svc->ps_pool, iv_hdls);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_UUID ": ds_pool_iv_conn_hdls_update failed",
-				 DP_UUID(svc->ps_uuid));
-			goto out;
-		}
-		D_INFO(DF_UUID ": distribute existing hdls\n", DP_UUID(svc->ps_uuid));
+	rc = ds_pool_iv_conn_hdls_update(svc->ps_pool, iv_hdls);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": ds_pool_iv_conn_hdls_update failed", DP_UUID(svc->ps_uuid));
+		goto out;
 	}
 
 	/* resume pool upgrade if needed */
@@ -2661,7 +2655,6 @@ out:
 		daos_prop_free(prop);
 	if (iv_hdls != NULL)
 		D_FREE(iv_hdls);
-
 	if (svc->ps_error != 0) {
 		/*
 		 * Step up with the error anyway, so that RPCs to the PS

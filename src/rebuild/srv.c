@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -163,6 +163,7 @@ rebuild_pool_tls_create(struct rebuild_tgt_pool_tracker *rpt)
 	rebuild_pool_tls->rebuild_pool_scanning = 1;
 	rebuild_pool_tls->rebuild_pool_scan_done = 0;
 	rebuild_pool_tls->rebuild_pool_obj_count = 0;
+	rebuild_pool_tls->rebuild_pool_obj_send_pending  = 0;
 	rebuild_pool_tls->rebuild_pool_reclaim_obj_count = 0;
 	rebuild_pool_tls->rebuild_tree_hdl = DAOS_HDL_INVAL;
 	/* Only 1 thread will access the list, no need lock */
@@ -374,6 +375,8 @@ static void
 rpt_insert(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	rpt_get(rpt);
 	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
 	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
@@ -383,9 +386,13 @@ void
 rpt_delete(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	D_ASSERT(!d_list_empty(&rpt->rt_list));
+
 	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
 	d_list_del_init(&rpt->rt_list);
 	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
+
+	rpt_put(rpt);
 }
 
 struct rebuild_tgt_pool_tracker *
@@ -680,7 +687,12 @@ dss_rebuild_check_one(void *data)
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
 
-	status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
+		/* use rec_count to simulate progress when no object need to be reclaim */
+		status->rec_count += pool_tls->rebuild_pool_obj_count;
+	}
+
 	status->tobe_obj_count += pool_tls->rebuild_pool_obj_count;
 	ABT_mutex_unlock(status->lock);
 
@@ -1540,7 +1552,7 @@ rpt_put(struct rebuild_tgt_pool_tracker *rpt)
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, DF_RB ": rpt %p ref %d finishing %d\n", DP_RB_RPT(rpt), rpt,
 		rpt->rt_refcount, rpt->rt_finishing);
-	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
+	if (rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
 	zombie = (rpt->rt_refcount == 0);
 	ABT_mutex_unlock(rpt->rt_lock);
@@ -2864,22 +2876,8 @@ rebuild_fini_one(void *arg)
 	if (dpc == NULL)
 		return 0;
 
-	/* Reset rebuild epoch, then reset the aggregation epoch, so
-	 * it can aggregate the rebuild epoch.
-	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
-		dpc->spc_rebuild_fence = 0;
-		dpc->spc_rebuild_end_hlc = d_hlc_get();
-		D_DEBUG(DB_REBUILD, DF_RB ": Reset aggregation end hlc " DF_U64 "\n",
-			DP_RB_RPT(rpt), dpc->spc_rebuild_end_hlc);
-	} else {
-		D_DEBUG(DB_REBUILD,
-			DF_RB ": pool is still being rebuilt rt_rebuild_fence " DF_U64
-			      " spc_rebuild_fence " DF_U64 "\n",
-			DP_RB_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
-	}
-
+	D_DEBUG(DB_REBUILD, DF_RB ": rebuild fini for stable epoch " DF_U64 "\n", DP_RB_RPT(rpt),
+		rpt->rt_stable_epoch);
 	ds_pool_child_put(dpc);
 	return 0;
 }
@@ -2895,21 +2893,21 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuilding) > 0);
 	atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
-	rpt->rt_pool->sp_rebuild_scan = 0;
+
+	atomic_store(&rpt->rt_pool->sp_rebuild_enum, 0);
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
 	D_ASSERT(rpt->rt_refcount > 0);
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
-	 * NB: Because rebuild_tgt_fini will be only called in
-	 * rebuild_tgt_status_check_ult, which will make sure when
-	 * rt_refcount reaches to 1, either all rebuild is done or
-	 * all ult/task has been aborted by rt_abort, i.e. no new
-	 * ULT/task will be created after this check. So it is safe
-	 * to destroy the rpt after this.
+	 * NB: Because rebuild_tgt_fini will be only called in rebuild_tgt_status_check_ult,
+	 * which will make sure when rt_refcount reaches to 2 (one by check ULT, the other by
+	 * track list), either all rebuild is done or all ult/task has been aborted by rt_abort,
+	 * i.e. no new ULT/task will be created after this check. So it is safe to destroy
+	 * the rpt after this.
 	 */
-	if (rpt->rt_refcount > 1)
+	while (rpt->rt_refcount > 2)
 		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_lock);
 	ABT_mutex_unlock(rpt->rt_lock);
 
@@ -2928,7 +2926,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* No one should access rpt after rebuild_fini_one. */
 	D_INFO(DF_RB " Finalized rebuild\n", DP_RB_RPT(rpt));
 	rpt_delete(rpt);
-	rpt_put(rpt);
 }
 
 void
@@ -3065,11 +3062,14 @@ rebuild_tgt_status_check_ult(void *arg)
 		}
 
 		if (check_cnt % log_cnt_intv == 0 || rpt->rt_global_done || rpt->rt_abort) {
-			D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
-				     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
-			       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
-			       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
-			       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+			D_INFO(DF_RB
+			       " obj " DF_U64 "/" DF_U64 " rec " DF_U64 " size " DF_U64
+			       " scan done %d pull done %d scan gl done %d gl done %d status %d "
+			       "abort %s\n",
+			       DP_RB_RPT(rpt), iv.riv_toberb_obj_count, iv.riv_obj_count,
+			       iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done, iv.riv_pull_done,
+			       rpt->rt_global_scan_done, rpt->rt_global_done, iv.riv_status,
+			       rpt->rt_abort ? "yes" : "no");
 			log_cnt_intv = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
 		}
 		check_cnt++;
@@ -3084,8 +3084,8 @@ rebuild_tgt_status_check_ult(void *arg)
 	sched_req_put(rpt->rt_ult);
 	rpt->rt_ult = NULL;
 out:
-	rpt_put(rpt);
 	rebuild_tgt_fini(rpt);
+	rpt_put(rpt);
 }
 
 /**
@@ -3119,13 +3119,8 @@ rebuild_prepare_one(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	/* Set the rebuild epoch per VOS container, so VOS aggregation will not
-	 * cross the epoch to cause problem.
-	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	dpc->spc_rebuild_fence = rpt->rt_rebuild_fence;
-	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " rebuild eph " DF_X64 "\n",
-		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
+	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " stable eph " DF_X64 "\n",
+		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_stable_epoch);
 
 put:
 	ds_pool_child_put(dpc);
@@ -3187,10 +3182,9 @@ free:
  * each target get the scan rpc from the master.
  */
 int
-rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
+rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
+		    struct rebuild_tgt_pool_tracker **p_rpt)
 {
-	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
-	struct ds_pool			*pool;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
 	daos_prop_t			prop = { 0 };
@@ -3199,12 +3193,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	int				rc;
 
 	D_DEBUG(DB_REBUILD, DF_RB " prepare rebuild\n", DP_RB_RSI(rsi));
-
-	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
-	if (rc) {
-		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
-		return rc;
-	}
 
 	if (ds_pool_get_version(pool) < rsi->rsi_rebuild_ver) {
 		D_INFO(DF_RB " map %u < rsi_rebuild_ver %u\n", DP_RB_RSI(rsi),
@@ -3240,7 +3228,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	/* Let's add the rpt to the tracker list before IV fetch, which might yield,
 	 * to make sure the new coming request can find the rpt in the list.
 	 */
-	rpt_get(rpt);
 	rpt_insert(rpt);
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
 				      &rpt->rt_coh_uuid);
@@ -3267,31 +3254,24 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rpt->rt_rebuild_fence = d_hlc_get();
-	rc                    = ds_pool_task_collective(rpt->rt_pool_uuid,
-							PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-							rebuild_prepare_one, rpt, 0);
+	rc = ds_pool_task_collective(rpt->rt_pool_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     rebuild_prepare_one, rpt, 0);
 	if (rc) {
-		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);
 		D_GOTO(out, rc);
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
+	ds_pool_get(pool);
 	rpt->rt_pool = pool; /* pin it */
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	*p_rpt = rpt;
 out:
-	if (rc) {
-		if (rpt) {
-			if (!d_list_empty(&rpt->rt_list)) {
-				rpt_delete(rpt);
-				rpt_put(rpt);
-			}
-			rpt_put(rpt);
-		}
-		ds_pool_put(pool);
+	if (rc && rpt) {
+		rpt_delete(rpt);
+		rpt_put(rpt);
 	}
 	daos_prop_fini(&prop);
 

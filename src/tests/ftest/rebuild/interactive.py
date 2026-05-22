@@ -57,6 +57,12 @@ class RbldInteractive(TestWithServers):
             exclude_method='dmg pool exclude',
             reint_method='dmg pool reintegrate')
 
+        self.__run_rebuild_interactive(
+            pool, cont_ior, ior,
+            num_ranks_to_exclude=1,
+            exclude_method='dmg system exclude',
+            reint_method='dmg system reintegrate')
+
         self.log_step('Test Passed')
 
     def __run_rebuild_interactive(self, pool, cont_ior, ior,
@@ -136,6 +142,12 @@ class RbldInteractive(TestWithServers):
         self.log_step(f'{exclude_method} - Verify IOR after rebuild completed')
         ior.manager.job.update_params(flags=ior_flags_read)
         ior.run(cont_ior.pool, cont_ior, None, ior_ppn, display_space=False)
+
+        if exclude_method == 'dmg system exclude':
+            self.log_step(f'{exclude_method} - Clear exclusion of ranks')
+            pool.dmg.system_clear_exclude(ranks_to_exclude)
+            self.log_step(f'{exclude_method} - Start previously admin-excluded ranks')
+            pool.dmg.system_start(ranks_to_exclude)
 
         self.log_step('Reintegrate excluded ranks')
         if reint_method == 'dmg pool reintegrate':
