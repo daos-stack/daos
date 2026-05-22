@@ -1,4 +1,7 @@
 %changelog
+* Fri May 22 2026 Phillip Henderson <phillip.henderson@intel.com> 2.9.100-5
+- Move mpi4py requirement for daos-client-tests; covered by requirements-ftest.txt
+
 * Mon May 04 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-4
 - Add gperftools-devel as a build dependency of daos-devel
 

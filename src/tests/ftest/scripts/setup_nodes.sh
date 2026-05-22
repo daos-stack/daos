@@ -106,7 +106,6 @@ cat <<EOF > "${DAOS_FTEST_VENV}"/pip.conf
 [global]
     progress_bar = off
     no_color = true
-    quiet = 1
 EOF
 
 pip install --upgrade pip
