@@ -16,6 +16,8 @@
  * LICENSE file.
  */
 
+import groovy.transform.Field
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
@@ -23,43 +25,43 @@
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
-// Values here don't matter, the true defaults are set in pipeline.parameters
-/* groovylint-disable-next-line CompileStatic */
-runStage = [
-    'Cancel Previous Builds': true,
-    'Pre-build': true,
-    'Python Bandit check': true,
-    'Build': true,
-    'Build on EL 8': true,
-    'Build on EL 9': true,
-    'Build on Leap 15': true,
-    'Build on EL 9 with Bullseye': true,
-    'Unit Tests': true,
-    'Unit Test': true,
-    'Unit Test bdev': true,
-    'NLT': true,
-    'NLT with Bullseye': true,
-    'Unit Test with memcheck': true,
-    'Unit Test bdev with memcheck': true,
-    'Test': true,
+// Initial values here don't matter, updateRunStage() will set the defaults using the parameters
+@Field
+Map<String, Boolean> runStage = [
+    'Cancel Previous Builds': false,
+    'Pre-build': false,
+    'Python Bandit check': false,
+    'Build': false,
+    'Build on EL 8': false,
+    'Build on EL 9': false,
+    'Build on Leap 15': false,
+    'Build on EL 9 with Bullseye': false,
+    'Unit Tests': false,
+    'Unit Test': false,
+    'Unit Test bdev': false,
+    'NLT': false,
+    'NLT with Bullseye': false,
+    'Unit Test with memcheck': false,
+    'Unit Test bdev with memcheck': false,
+    'Test': false,
     'Functional on EL 8.8 with Valgrind': false,
     'Functional on EL 8': false,
-    'Functional on EL 9': true,
+    'Functional on EL 9': false,
     'Functional on Leap 15': false,
     'Functional on SLES 15': false,
     'Functional on Ubuntu 20.04': false,
-    'Fault injection testing': true,
-    'Test RPMs on EL 9.6': true,
-    'Test RPMs on Leap 15.5': true,
-    'Test Hardware': true,
+    'Fault injection testing': false,
+    'Test RPMs on EL 9.6': false,
+    'Test RPMs on Leap 15.5': false,
+    'Test Hardware': false,
     'Functional Hardware Medium': false,
-    'Functional Hardware Medium MD on SSD': true,
+    'Functional Hardware Medium MD on SSD': false,
     'Functional Hardware Medium VMD': false,
     'Functional Hardware Medium Verbs Provider': false,
-    'Functional Hardware Medium Verbs Provider MD on SSD': true,
+    'Functional Hardware Medium Verbs Provider MD on SSD': false,
     'Functional Hardware Medium UCX Provider': false,
     'Functional Hardware Large': false,
-    'Functional Hardware Large MD on SSD': true,
+    'Functional Hardware Large MD on SSD': false,
 ]
 
 // Update the runStage map
