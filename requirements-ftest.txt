@@ -6,3 +6,4 @@ paramiko
 distro
 torch
 mpi4py
+mpich
