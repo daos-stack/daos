@@ -281,7 +281,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 
 	An example of using the config generate command on the first server node:
 
-		daos_server config generate --ms-replicas=$(hostname -s) | tee /tmp/daos_server.yml
+		daos_server config generate --access-points=$(hostname -s) | tee /tmp/daos_server.yml
 
 	An example of modifying the sample daos_server.yml:
 
@@ -411,12 +411,8 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		clush -B -w $SERVER_NODES "sudo systemctl status daos_server"
 
 		# if you see following format messages (depending on number of servers), proceed to storage format
-<<<<<<< HEAD
-		node-4: node-1.test.hpdd.intel.com INFO 2023/04/11 23:14:06 SCM format required on instance 0
-=======
 		server-1: server-1.test.example.com INFO 2023/04/11 23:14:06 SCM format required on instance 1
 		server-1: server-1.test.example.com INFO 2023/04/11 23:14:06 SCM format required on instance 0
->>>>>>> 934ecca7c6 (DAOS-18638 doc: Updating quick start guides (#17806))
 
 		# format storage
 		dmg storage format -l $SERVER_NODES # can use --force if needed
@@ -429,18 +425,11 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		# all the server ranks should show 'Joined' STATE
 		Rank UUID                                 Control Address  Fault Domain                  State  Reason
 		---- ----                                 ---------------  ------------                  -----  ------
-<<<<<<< HEAD
-		0    604c4ffa-563a-49dc-b702-3c87293dbcf3 10.8.1.179:10001 /node-4.test.hpdd.intel.com Joined
-		1    f0791f98-4379-4ace-a083-6ca3ffa65756 10.8.1.179:10001 /node-4.test.hpdd.intel.com Joined
-		2    745d2a5b-46dd-42c5-b90a-d2e46e178b3e 10.8.1.189:10001 /node-5.test.hpdd.intel.com Joined
-		3    ba6a7800-3952-46ce-af92-bba9daa35048 10.8.1.189:10001 /node-5.test.hpdd.intel.com Joined
-=======
 		0    604c4ffa-563a-49dc-b702-3c87293dbcf3 10.8.1.179:10001 /server-1.test.example.com Joined
 		1    f0791f98-4379-4ace-a083-6ca3ffa65756 10.8.1.179:10001 /server-1.test.example.com Joined
 		2    745d2a5b-46dd-42c5-b90a-d2e46e178b3e 10.8.1.189:10001 /server-2.test.example.com Joined
 		3    ba6a7800-3952-46ce-af92-bba9daa35048 10.8.1.189:10001 /server-2.test.example.com Joined
 
->>>>>>> 934ecca7c6 (DAOS-18638 doc: Updating quick start guides (#17806))
 
 ## Start the DAOS Agents
 
@@ -449,20 +438,9 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		# start agents
 		clush -B -w $CLIENT_NODES "sudo systemctl start daos_agent"
 
-2. (Optional) Check daos\_agent status:
+2. Verify daos\_agent communication:
 
-		# check status
-<<<<<<< HEAD
-		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
-=======
-		clush -B -w $CLIENT_NODES "cat /var/log/daos/daos_agent.log"
->>>>>>> 934ecca7c6 (DAOS-18638 doc: Updating quick start guides (#17806))
-
-		# Sample output depending on number of client nodes
-		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.6 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
-		client-2: agent INFO 2022/05/05 22:38:53 DAOS Agent v2.6 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
-
-		# verify client communication
+		# verify client communication to each server rank
 		clush -B -w $CLIENT_NODES "daos system query --verbose"
 
 		# Sample output
