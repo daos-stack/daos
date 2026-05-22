@@ -1342,7 +1342,8 @@ tls_lookup:
 		d_list_for_each_entry(tmp, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 			if (uuid_compare(tmp->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
 			    tmp->rt_rebuild_ver == rsi->rsi_rebuild_ver &&
-			    tmp->rt_rebuild_gen == rsi->rsi_rebuild_gen && tmp->rt_finishing) {
+			    tmp->rt_rebuild_gen == rsi->rsi_rebuild_gen &&
+			    (tmp->rt_finishing || tmp->rt_abort)) {
 				ts_now = daos_gettime_coarse();
 				if (ts_now > ts_start + 30) {
 					D_INFO(DF_UUID " %s ver %d/gen %u waited previous rebuild "
