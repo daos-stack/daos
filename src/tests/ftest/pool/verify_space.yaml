@@ -10,7 +10,6 @@ server_config:
   engines:
     0:
       storage: auto
-  system_ram_reserved: 5
 
 pool_rank_0:
   size: 100G
