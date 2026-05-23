@@ -996,7 +996,7 @@ class PreReqComponent():
         return self._configs.get(section, name)
 
 
-class _Component():
+class _Component():  # pylint: disable=too-many-instance-attributes
     """A class to define attributes of an external component
 
     Args:
@@ -1022,6 +1022,11 @@ class _Component():
         build_env -- Environment variable(s) to add to build environment
         skip_arch -- not required on this platform
         static_libs -- Static libraries only, no public install
+
+    Note:
+        This class has 31 instance attributes which exceeds the pylint default
+        of 30. This is justified as it manages complex external component
+        configuration with many inter-related settings.
     """
 
     def __init__(self,
