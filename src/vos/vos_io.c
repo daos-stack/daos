@@ -2569,8 +2569,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	D_ASSERT(ioc->ic_obj != NULL);
 	if (unlikely(vos_obj_is_evicted(ioc->ic_obj))) {
-		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted during update, need to restart TX.\n",
-			DP_UOID(ioc->ic_oid));
+		D_WARN("Obj " DF_UOID " is evicted during update, need to restart TX.\n",
+		       DP_UOID(ioc->ic_oid));
 
 		D_GOTO(abort, err = -DER_TX_RESTART);
 	}
@@ -2611,8 +2611,11 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	err = vos_obj_incarnate(ioc->ic_obj, &ioc->ic_epr, ioc->ic_bound, flags,
 				DAOS_INTENT_UPDATE, ioc->ic_ts_set);
-	if (err != 0)
+	if (err != 0) {
+		if (err == -DER_TX_RESTART && !dtx_is_valid_handle(dth))
+			D_ERROR("Update failed out here(1)\n");
 		goto abort;
+	}
 
 	if (dtx_is_valid_handle(dth))
 		minor_epc = dth->dth_op_seq;
@@ -2624,6 +2627,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));
+		if (err == -DER_TX_RESTART && !dtx_is_valid_handle(dth))
+			D_ERROR("Update failed out here(2)\n");
 		goto abort;
 	}
 
@@ -2631,6 +2636,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	 * read conflict
 	 */
 	if (vos_ts_set_check_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
+		if (!dtx_is_valid_handle(dth))
+			D_ERROR("Update failed out here(3)\n");
 		err = -DER_TX_RESTART;
 		goto abort;
 	}
@@ -2642,6 +2649,8 @@ abort:
 	    err == -DER_INPROGRESS) {
 		if (vos_ts_wcheck(ioc->ic_ts_set, ioc->ic_epr.epr_hi,
 				  ioc->ic_bound)) {
+			if (!dtx_is_valid_handle(dth))
+				D_ERROR("Update failed out here(4)\n");
 			err = -DER_TX_RESTART;
 		}
 	}
