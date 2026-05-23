@@ -22,7 +22,7 @@ server_config:
 
 pool:
   size: 200G
-  properties: space_rb:10
+  properties: space_rb:5
 
 container:
   control_method: daos
@@ -34,7 +34,7 @@ ior:
     flags: -v -w -k
   api: DFS
   transfer_size: 1M
-  block_size: 20G
+  block_size: 10G
   dfs_oclass: RP_3GX
 
 cont_property:
