@@ -529,13 +529,81 @@ out:
 		param->ap_vos_agg ? "VOS" : "EC");
 }
 
+/**
+ * Per-object aggregation context passed to the OBJ iterator callback.
+ */
+struct obj_agg_iter_arg {
+	daos_handle_t       oa_coh;
+	daos_epoch_range_t *oa_epr;
+	uint32_t            oa_flags;
+	struct agg_param   *oa_param;
+	int                 oa_rc;
+};
+
+/**
+ * OBJ iterator filter: no filtering needed, iterate all objects.
+ */
+static int
+obj_agg_filter_cb(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
+{
+	return 0;
+}
+
+/**
+ * OBJ iterator callback: for each object, call vos_obj_aggregate().
+ * Uses \c VOS_ITER_CB_SKIP to prevent automatic recursion into dkeys.
+ */
+static int
+obj_agg_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		vos_iter_param_t *iter_param, void *cb_arg, unsigned int *acts)
+{
+	struct obj_agg_iter_arg *arg = cb_arg;
+
+	if (type == VOS_ITER_OBJ) {
+		arg->oa_rc = vos_obj_aggregate(arg->oa_coh, entry->ie_oid, arg->oa_epr,
+					       agg_rate_ctl, arg->oa_param, arg->oa_flags);
+		if (arg->oa_rc == -DER_CSUM)
+			arg->oa_rc = 0; /* suppress csum per current behavior */
+
+		*acts |= VOS_ITER_CB_SKIP; /* don't recurse into dkeys */
+	}
+	/* DKEY/AKEY/... levels are skipped by the above SKIP */
+	return 0;
+}
+
+/**
+ * VOS aggregation callback: iterates all objects in the container and
+ * calls vos_obj_aggregate() for each within the given epoch range.
+ * Replaces the older container-level vos_aggregate() call with per-object
+ * aggregation, paving the way for future ULT-per-object concurrency.
+ */
 static int
 cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		      uint32_t flags, struct agg_param *param)
 {
-	int rc;
+	struct obj_agg_iter_arg arg = {0};
+	vos_iter_param_t        iter_param;
+	struct vos_iter_anchors anchors;
+	int                     rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
+	memset(&iter_param, 0, sizeof(iter_param));
+	memset(&anchors, 0, sizeof(anchors));
+
+	iter_param.ip_hdl      = cont->sc_hdl;
+	iter_param.ip_epr      = *epr;
+	iter_param.ip_epc_expr = VOS_IT_EPC_RR;
+	iter_param.ip_flags =
+	    VOS_IT_PUNCHED | VOS_IT_RECX_COVERED | VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
+	iter_param.ip_filter_cb = obj_agg_filter_cb;
+
+	arg.oa_coh   = cont->sc_hdl;
+	arg.oa_epr   = epr;
+	arg.oa_flags = flags;
+	arg.oa_param = param;
+
+	rc = vos_iterate_obj(&iter_param, &anchors, obj_agg_iter_cb, NULL, &arg, NULL);
+	if (rc == 0)
+		rc = arg.oa_rc;
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)

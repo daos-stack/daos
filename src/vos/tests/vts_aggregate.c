@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -447,6 +447,81 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		int punch_nr, daos_epoch_t punch_epoch[])
 {
 	aggregate_basic_lb(arg, ds, punch_nr, punch_epoch, NULL, VOS_AGG_FL_FORCE_MERGE);
+}
+
+/**
+ * Like aggregate_basic_lb() but calls vos_obj_aggregate() on the specified
+ * object instead of container-level vos_aggregate().
+ */
+static void
+aggregate_basic_obj(struct io_test_args *arg, struct agg_tst_dataset *ds, int punch_nr,
+		    daos_epoch_t punch_epoch[], unsigned int agg_flags)
+{
+	daos_unit_oid_t     oid;
+	char                dkey[UPDATE_DKEY_SIZE] = {0};
+	char                akey[UPDATE_AKEY_SIZE] = {0};
+	daos_epoch_range_t *epr_u, *epr_a;
+	daos_epoch_t        epoch;
+	char               *buf_u;
+	daos_recx_t         recx = {0}, *recx_p;
+	daos_size_t         view_len;
+	int                 punch_idx = 0, recx_idx = 0, rc = 0;
+	int                 punch_or_delete = TF_PUNCH;
+
+	if (ds->td_delete)
+		punch_or_delete = TF_DELETE;
+
+	if (daos_unit_oid_is_null(ds->td_oid))
+		oid = dts_unit_oid_gen(0, 0);
+	else
+		oid = ds->td_oid;
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+	epr_u = &ds->td_upd_epr;
+	epr_a = &ds->td_agg_epr;
+
+	view_len = get_view_len(ds, &recx);
+	D_ALLOC(buf_u, view_len);
+	assert_non_null(buf_u);
+
+	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
+		if (punch_idx < punch_nr && punch_epoch[punch_idx] == epoch) {
+			arg->ta_flags |= punch_or_delete;
+			punch_idx++;
+		} else if (punch_nr < 0 && (rand() % 2) && epoch != epr_u->epr_lo) {
+			arg->ta_flags |= punch_or_delete;
+		}
+
+		if (ds->td_type == DAOS_IOD_SINGLE) {
+			recx_p = NULL;
+		} else {
+			assert_true(recx_idx < ds->td_recx_nr);
+			recx_p = &ds->td_recx[recx_idx];
+			recx_idx++;
+		}
+
+		update_value(arg, oid, epoch, 0, dkey, akey, ds->td_type, ds->td_iod_size, recx_p,
+			     buf_u);
+		arg->ta_flags &= ~punch_or_delete;
+	}
+	D_FREE(buf_u);
+
+	generate_view(arg, oid, dkey, akey, ds);
+
+	if (ds->td_discard)
+		rc = vos_discard(arg->ctx.tc_co_hdl, &oid, epr_a, NULL, NULL);
+	else {
+		D_DEBUG(DB_TRACE, "vos_obj_aggregate oid=" DF_UOID " epr " DF_U64 "->" DF_U64 "\n",
+			DP_UOID(oid), epr_a->epr_lo, epr_a->epr_hi);
+		rc = vos_obj_aggregate(arg->ctx.tc_co_hdl, oid, epr_a, NULL, NULL, agg_flags);
+	}
+	if (rc != -DER_CSUM) {
+		assert_rc_equal(rc, 0);
+		verify_view(arg, oid, dkey, akey, ds);
+	} else {
+		D_FREE(ds->td_expected_view);
+	}
 }
 
 static inline int
@@ -1936,6 +2011,132 @@ aggregate_37(void **state)
 	cleanup();
 }
 
+/*
+ * Per-object aggregation: single SV, confined epr.  Mirrors aggregate_1
+ * but uses vos_obj_aggregate() on an explicit OID.
+ */
+static void
+aggregate_obj_1(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct agg_tst_dataset ds  = {0};
+	int                    i;
+
+	ds.td_type           = DAOS_IOD_SINGLE;
+	ds.td_recx_nr        = 0;
+	ds.td_expected_recs  = 1;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 10;
+	ds.td_agg_epr.epr_lo = 4;
+	ds.td_agg_epr.epr_hi = 6;
+	ds.td_discard        = false;
+
+	for (i = 0; i < 2; i++) {
+		ds.td_iod_size = i == 0 ? AT_SV_IOD_SIZE_SMALL : AT_SV_IOD_SIZE_LARGE;
+
+		VERBOSE_MSG("Obj aggregate SV epr [" DF_U64 ", " DF_U64 "], "
+			    "iod_size:" DF_U64 "\n",
+			    ds.td_agg_epr.epr_lo, ds.td_agg_epr.epr_hi, ds.td_iod_size);
+		aggregate_basic_obj(arg, &ds, 0, NULL, VOS_AGG_FL_FORCE_MERGE);
+	}
+
+	cleanup();
+}
+
+/*
+ * Per-object aggregation: single EV, disjoint records.
+ * Copies aggregate_6 but uses vos_obj_aggregate().
+ */
+static void
+aggregate_obj_2(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct agg_tst_dataset ds  = {0};
+	daos_recx_t            recx_arr[3];
+
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr  = 10;
+	recx_arr[1].rx_idx = 30;
+	recx_arr[1].rx_nr  = 10;
+	recx_arr[2].rx_idx = 60;
+	recx_arr[2].rx_nr  = 10;
+
+	ds.td_type           = DAOS_IOD_ARRAY;
+	ds.td_iod_size       = 1;
+	ds.td_expected_recs  = -1;
+	ds.td_recx_nr        = 3;
+	ds.td_recx           = &recx_arr[0];
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 3;
+	ds.td_agg_epr.epr_lo = 1;
+	ds.td_agg_epr.epr_hi = 2;
+	ds.td_discard        = false;
+
+	VERBOSE_MSG("Obj aggregate EV, disjoint records.\n");
+	aggregate_basic_obj(arg, &ds, 0, NULL, VOS_AGG_FL_FORCE_MERGE);
+
+	cleanup();
+}
+
+/*
+ * Per-object aggregation: multiple objects, only one aggregated.
+ * Creates 3 objects, calls vos_obj_aggregate() on only one, and
+ * verifies that only that object's visibility changes.
+ */
+static void
+aggregate_obj_multi(void **state)
+{
+	struct io_test_args   *arg   = *state;
+	struct agg_tst_dataset ds[3] = {0};
+	daos_unit_oid_t        oid[3];
+	char                   dkey[UPDATE_DKEY_SIZE] = {0};
+	char                   akey[UPDATE_AKEY_SIZE] = {0};
+	char                   buf[AT_SV_IOD_SIZE_SMALL];
+	int                    i, rc;
+
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+	/* Create 3 objects with the same data pattern */
+	for (i = 0; i < 3; i++) {
+		oid[i] = dts_unit_oid_gen(0, 0);
+
+		ds[i].td_type           = DAOS_IOD_SINGLE;
+		ds[i].td_iod_size       = AT_SV_IOD_SIZE_SMALL;
+		ds[i].td_upd_epr.epr_lo = 1;
+		ds[i].td_upd_epr.epr_hi = 10;
+		ds[i].td_agg_epr.epr_lo = 4;
+		ds[i].td_agg_epr.epr_hi = 6;
+		ds[i].td_expected_recs  = 1;
+		ds[i].td_discard        = false;
+		ds[i].td_oid            = oid[i];
+
+		buf[0] = (char)('A' + i);
+
+		update_value(arg, oid[i], 1, 0, dkey, akey, DAOS_IOD_SINGLE, AT_SV_IOD_SIZE_SMALL,
+			     NULL, buf);
+		update_value(arg, oid[i], 5, 0, dkey, akey, DAOS_IOD_SINGLE, AT_SV_IOD_SIZE_SMALL,
+			     NULL, buf);
+	}
+
+	/* Aggregate only the second object */
+	VERBOSE_MSG("Obj aggregate multi: aggregating only oid[1].\n");
+	rc = vos_obj_aggregate(arg->ctx.tc_co_hdl, oid[1], &ds[1].td_agg_epr, NULL, NULL,
+			       VOS_AGG_FL_FORCE_MERGE);
+	assert_rc_equal(rc, 0);
+
+	/* Verify: object 1 (index 0) should still have 2 records (epoch 1 + 5) */
+	/* Object 2 (index 1) should have 1 record (epoch 5 preserved, 1 aggregated) */
+	/* Object 3 (index 2) should still have 2 records */
+
+	for (i = 0; i < 3; i++) {
+		generate_view(arg, oid[i], dkey, akey, &ds[i]);
+		verify_view(arg, oid[i], dkey, akey, &ds[i]);
+	}
+
+	cleanup();
+}
+
 static void
 print_space_info(vos_pool_info_t *pi, char *desc)
 {
@@ -3054,6 +3255,11 @@ static const struct CMUnitTest aggregate_tests[] = {
     {"VOS435: Test aggregation timestamp functions", aggregate_35, NULL, NULL},
     {"VOS436: Aggregate SV, multiple objects, flat dkeys", aggregate_36, NULL, agg_tst_teardown},
     {"VOS437: Aggregate EV, multiple objects, flat dkeys", aggregate_37, NULL, agg_tst_teardown},
+    /* per-object aggregation (vos_obj_aggregate) tests */
+    {"VOS438: Obj aggregate SV with confined epr", aggregate_obj_1, NULL, agg_tst_teardown},
+    {"VOS439: Obj aggregate EV, disjoint records", aggregate_obj_2, NULL, agg_tst_teardown},
+    {"VOS440: Obj aggregate multi objects, only one aggregated", aggregate_obj_multi, NULL,
+     agg_tst_teardown},
 };
 
 int

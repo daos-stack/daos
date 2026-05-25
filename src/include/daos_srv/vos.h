@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -625,6 +625,23 @@ enum {
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
+
+/**
+ * Aggregates all epochs within the epoch range \a epr for the specified object.
+ * Different objects in the same container can be aggregated concurrently.
+ *
+ * \param coh	  [IN]		Container open handle
+ * \param oid	  [IN]		Object ID
+ * \param epr	  [IN]		Epoch range of aggregation
+ * \param yield_func [IN]	Pointer to customized yield function
+ * \param yield_arg  [IN]	Argument of yield function
+ * \param flags      [IN]	Aggregation flags
+ *
+ * \return			0 on success, negative on error
+ */
+int
+vos_obj_aggregate(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+		  int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
  * Round up the scm and meta sizes to match the backend requirement.
@@ -1770,6 +1787,24 @@ vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr);
  */
 void
 vos_aggregate_exit(daos_handle_t coh);
+
+/**
+ * Enter per-object aggregation, so other operations may be excluded for the
+ * same object but different objects can proceed concurrently.
+ * \param[in]	coh	container open handle.
+ * \param[in]	epr	epoch range.
+ *
+ * \return 0 on success, error otherwise.
+ */
+int
+vos_obj_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr);
+
+/**
+ * Exit per-object aggregation.
+ * \param[in]	coh	container open handle.
+ */
+void
+vos_obj_aggregate_exit(daos_handle_t coh);
 
 struct vos_pin_handle;
 
