@@ -3,3 +3,5 @@ ninja
 meson
 distro
 pyelftools
+uv
+hatchling
