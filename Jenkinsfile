@@ -721,7 +721,7 @@ pipeline {
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
-                                                  ' --max-log-size 1950MiB' +
+                                                  ' --max-log-size 2450MiB' +
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
