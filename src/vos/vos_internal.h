@@ -1367,6 +1367,14 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_actp, d_list_t *nvme_exts, bool started,
 	   struct bio_desc *biod, int err);
 
+/**
+ * Raise a csum error RAS event for the specified \p obj_id.
+ * 
+ * \param[in]	obj_id	The object ID for which the csum error occurred.
+ */
+void
+vos_ras_notify_csum_err(daos_unit_oid_t *obj_id);
+
 /* vos_obj.c */
 int
 key_tree_prepare(struct vos_object *obj, daos_handle_t toh,

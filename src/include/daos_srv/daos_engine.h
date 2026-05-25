@@ -740,7 +740,6 @@ enum dss_media_error_type {
 	MET_WRITE = 0,  /* NVME write error */
 	MET_READ,       /* NVME read error */
 	MET_UNMAP,      /* NVME unmap error */
-	MET_CSUM,       /* Checksum error */
 	MET_IO_STALLED, /* NVMe I/O stalled */
 };
 

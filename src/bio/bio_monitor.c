@@ -108,31 +108,6 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
 
-static void
-bio_log_csum_err(struct bio_xs_context *bxc, enum smd_dev_type st)
-{
-	struct media_error_msg	*mem;
-	struct bio_xs_blobstore	*bxb;
-
-	bxb = bio_xs_context2xs_blobstore(bxc, st);
-	if (bxb == NULL || bxb->bxb_blobstore == NULL)
-		return;
-	D_ALLOC_PTR(mem); /* mem is freed in bio_media_error */
-	if (mem == NULL)
-		return;
-	mem->mem_bs		= bxb->bxb_blobstore;
-	mem->mem_err_type	= MET_CSUM;
-	mem->mem_tgt_id		= bxc->bxc_tgt_id;
-	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
-}
-
-inline void
-bio_log_data_csum_err(struct bio_xs_context *bxc)
-{
-	bio_log_csum_err(bxc, SMD_DEV_TYPE_DATA);
-}
-
-
 /* Call internal method to get BIO device state from the device owner xstream */
 int
 bio_get_dev_state(struct nvme_stats *state, uuid_t dev_uuid,
@@ -721,12 +696,6 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 	if (dev_stats->bio_read_errs + dev_stats->bio_write_errs > glb_criteria.fc_max_io_errs) {
 		D_ERROR("NVMe I/O errors %u/%u reached limit %u\n", dev_stats->bio_read_errs,
 			dev_stats->bio_write_errs, glb_criteria.fc_max_io_errs);
-		return true;
-	}
-
-	if (dev_stats->checksum_errs > glb_criteria.fc_max_csum_errs) {
-		D_ERROR("NVME csum errors %u reached limit %u\n", dev_stats->checksum_errs,
-			glb_criteria.fc_max_csum_errs);
 		return true;
 	}
 

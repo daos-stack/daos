@@ -1084,7 +1084,7 @@ csum_add_recalcs(struct csum_recalc **recalcs_p, struct agg_phy_ent *phy_ent,
 }
 
 static int
-verify_and_recalc(struct bio_sglist *bsgl, struct evt_entry_in *ent_in,
+verify_and_recalc(struct bio_sglist *bsgl, daos_unit_oid_t *obj_id, struct evt_entry_in *ent_in,
 		  struct csum_recalc *recalcs, unsigned int recalc_seg_cnt)
 {
 	struct csum_recalc_args	args;
@@ -1096,7 +1096,7 @@ verify_and_recalc(struct bio_sglist *bsgl, struct evt_entry_in *ent_in,
 
 	vos_offload_exec(vos_csum_recalc_fn, &args);
 	if (args.cra_rc == -DER_CSUM)
-		bio_log_data_csum_err(vos_xsctxt_get());
+		vos_ras_notify_csum_err(obj_id);
 	return args.cra_rc;
 }
 
@@ -1224,7 +1224,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	if (mw->mw_csum_type) {
 		/* Verify prior data, calculate csums for output range. */
-		rc = verify_and_recalc(bio_copy_get_sgl(copy_desc, true), ent_in,
+		rc = verify_and_recalc(bio_copy_get_sgl(copy_desc, true), &obj->obj_id, ent_in,
 				       io->ic_csum_recalcs, seg_count);
 		if (rc) {
 			D_ERROR("CSUM verify error: "DF_RC"\n", DP_RC(rc));

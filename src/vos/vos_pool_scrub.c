@@ -382,7 +382,7 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 	rc = sc_mark_corrupt(ctx);
 
 	if (sc_is_nvme(ctx))
-		bio_log_data_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
+		vos_ras_notify_csum_err(&ctx->sc_cur_oid);
 	if (rc != 0) {
 		/* Log error but don't let it stop the scrubbing process */
 		D_ERROR("Error trying to mark corrupt: "DF_RC"\n", DP_RC(rc));

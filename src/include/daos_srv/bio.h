@@ -874,9 +874,6 @@ int bio_get_bs_state(int *blobstore_state, uuid_t dev_uuid, struct bio_xs_contex
  */
 int bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_id);
 
-/* Function to increment data CSUM media error. */
-void bio_log_data_csum_err(struct bio_xs_context *xs);
-
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
 

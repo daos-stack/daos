@@ -1172,3 +1172,15 @@ out:
 
 	return rc;
 }
+
+void
+vos_ras_notify_csum_err(daos_unit_oid_t *obj_id)
+{
+#ifdef VOS_STANDALONE
+	int tgt_id = BIO_STANDALONE_TGT_ID;
+#else
+	int tgt_id = dss_get_module_info()->dmi_tgt_id;
+#endif
+	ras_notify_eventf(RAS_OBJ_CSUM_ERR, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL, "CSUM error for " DF_UOID " on target %u\n", DP_UOID(*obj_id), tgt_id);
+}

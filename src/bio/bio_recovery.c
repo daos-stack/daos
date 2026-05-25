@@ -759,14 +759,6 @@ bio_media_error(void *msg_arg)
 			 "Device: " DF_UUID " read error logged from tgt_id:%d",
 			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
-	case MET_CSUM:
-		/* Update CSUM error counter */
-		dev_state->checksum_errs++;
-		d_tm_inc_counter(bdh->bdh_checksum_errs, 1);
-		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
-			 "Device: " DF_UUID " csum error logged from tgt_id:%d",
-			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
-		break;
 	case MET_IO_STALLED:
 		/* I/O stalling has been reported for this device */
 		if (bdh->bdh_io_stalled)
