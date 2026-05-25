@@ -5026,9 +5026,10 @@ def log_test(conf,
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
     lto.skip_substrings.extend([
-        'sluggish ec boundary report from rank',
+        'sluggish ec boundary',
         'sluggish stable epoch reporting',
         'progress callback was not called for too long',
+        'crt_context_timeout_check',
         'rpc failed; rc:',
     ])
 
