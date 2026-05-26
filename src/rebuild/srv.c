@@ -874,6 +874,8 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
 			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_state = DRS_IN_PROGRESS;
+				D_DEBUG(DB_REBUILD, "pool " DF_UUID " in rg_queue_list\n",
+					DP_UUID(pool_uuid));
 				D_GOTO(out, rc);
 			}
 		}
@@ -881,6 +883,8 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
 			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_state = DRS_IN_PROGRESS;
+				D_DEBUG(DB_REBUILD, "pool " DF_UUID " in rg_running_list\n",
+					DP_UUID(pool_uuid));
 				D_GOTO(out, rc);
 			}
 		}
@@ -1816,6 +1820,13 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	return rc;
 }
 
+static bool
+rebuild_retryable_err(int error)
+{
+	return (daos_crt_network_error(error) || error == -DER_TIMEDOUT || error == -DER_GRPVER ||
+		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE);
+}
+
 static void
 retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker *rgt,
 		   daos_rebuild_opc_t *opc)
@@ -1834,8 +1845,7 @@ retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker
 	/* retry with network error, since the pool map will be changed accordingly, so
 	 * rebuild job can be fixed by the new pool map anyway.
 	 */
-	if (daos_crt_network_error(error) || error == -DER_TIMEDOUT ||
-	    error == -DER_GRPVER || error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE) {
+	if (rebuild_retryable_err(error)) {
 		DL_CDEBUG(error, DLOG_ERR, DLOG_INFO, error, DF_UUID " opc %u/%u retry",
 			  DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver);
 		*opc = task->dst_rebuild_op;
@@ -1945,7 +1955,14 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		daos_rebuild_opc_t retry_opc = 0;
 
 		/* If current job failed */
-		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
+		if ((rgt->rgt_opc == RB_OP_REBUILD) && (rgt->rgt_status.rs_errno != 0) &&
+		    !rebuild_retryable_err(rgt->rgt_status.rs_errno))
+			rgt->rgt_status.rs_state = DRS_COMPLETED;
+		else
+			rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
+
+		D_DEBUG(DB_REBUILD, DF_RB " rs_errno %d, rs_state %d\n", DP_RB_RGT(rgt),
+			rgt->rgt_status.rs_errno, rgt->rgt_status.rs_state);
 
 		/* reclaim or fail_reclaim failed - retry */
 		if (task->dst_rebuild_op == RB_OP_RECLAIM ||
@@ -2500,9 +2517,9 @@ rebuild_print_list_update(const uuid_t uuid, const uint32_t map_ver,
 {
 	int i;
 
-	D_PRINT("%s [%s] (pool="DF_UUID" ver=%u) tgts=",
-		RB_OP_STR(rebuild_op), delay_sec == -1 ? "queued/delayed" : "queued",
-		DP_UUID(uuid), map_ver);
+	D_PRINT("%s [%s] (pool=" DF_UUID " ver=%u) %d tgts=", RB_OP_STR(rebuild_op),
+		delay_sec == -1 ? "queued/delayed" : "queued", DP_UUID(uuid), map_ver,
+		tgts->pti_number);
 	for (i = 0; tgts != NULL && i < tgts->pti_number; i++) {
 		if (i > 0)
 			D_PRINT(",");

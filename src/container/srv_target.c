@@ -1045,7 +1045,7 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being destroying (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
 			cont_child->sc_destroying);
-		rc = -DER_CONT_NONEXIST;
+		rc = -DER_CONT_DESTROYING;
 	} else if (cont_child->sc_stopping) {
 		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being stopped (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
@@ -1503,14 +1503,10 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		return rc;
 
-	/**
-	 * Return -DER_CONT_NONEXIST to simplify caller-side handling.
-	 * This may return -DER_CONT_DESTROYING in the future if needed.
-	 **/
 	if ((*ds_cont)->sc_destroying) {
 		cont_child_put(tls->dt_cont_cache, *ds_cont);
 		*ds_cont = NULL;
-		return -DER_CONT_NONEXIST;
+		return -DER_CONT_DESTROYING;
 	}
 
 	if ((*ds_cont)->sc_stopping) {
@@ -2542,15 +2538,20 @@ out:
 void
 ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 {
-	struct cont_op_in	*in = crt_req_get(rpc);
-	struct cont_op_out	*out = crt_reply_get(rpc);
-	struct ds_pool_hdl	*pool_hdl;
-	crt_opcode_t		opc = opc_get(rpc->cr_opc);
-	int			rc;
+	struct cont_op_in  *in  = crt_req_get(rpc);
+	struct cont_op_out *out = crt_reply_get(rpc);
+	uuid_t              pool_uuid;
+	struct ds_pool_hdl *pool_hdl;
+	crt_opcode_t        opc = opc_get(rpc->cr_opc);
+	int                 rc;
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	cont_op_in_get_pool_uuid(rpc, pool_uuid);
+	rc = ds_pool_hdl_lookup(pool_uuid, in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_CONT ": failed to lookup pool handle: " DF_RC "\n",
+			DP_CONT(pool_uuid, in->ci_uuid), DP_RC(rc));
+		goto out;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
