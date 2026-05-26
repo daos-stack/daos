@@ -7,6 +7,9 @@ VERSION=0.2
 CWD="$(realpath "${0%}")"
 CWD="${CWD%/*}"
 
+# shellcheck source=./daos-deploy-info.sh
+[[ -f "${CWD}/daos-deploy-info.sh" ]] && source "${CWD}/daos-deploy-info.sh"
+
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
 DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"

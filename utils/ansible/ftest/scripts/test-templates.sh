@@ -35,9 +35,9 @@ except ImportError:
 FTEST_DIR = sys.argv[1]
 VERBOSE = sys.argv[2].lower() == "true"
 
-_DAOS_MAKE_TPL = os.path.join(FTEST_DIR, "roles", "daos_dev", "templates")
+_TPL_DIR = os.path.join(FTEST_DIR, "roles", "daos_dev", "templates")
 
-# Minimal context satisfying every Jinja2 expression in daos-make.sh.j2
+# Minimal context satisfying every Jinja2 expression in the templates
 _BASE = dict(
     daos_runtime_dir="/opt/daos-install",
     daos_source_dir="/home/user/daos",
@@ -49,19 +49,43 @@ _BASE = dict(
     },
 )
 
+# Extra context required by daos-deploy-info.sh.j2 (values that Ansible
+# computes from lookups/facts before passing to the template task)
+_DEPLOY_INFO_VARS = dict(
+    _deploy_timestamp="2024-01-15T10:30:00Z",
+    _deploy_controller_host="ctrl.example.com",
+    _deploy_controller_user="testuser",
+    _deploy_ansible_version="2.14.3",
+    _deploy_inventory_path="/home/testuser/my-inventory.yml",
+)
 
-def render(**extra):
-    """Render daos-make.sh.j2 with base vars plus any keyword overrides."""
-    env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(_DAOS_MAKE_TPL),
+
+def _env():
+    """Return a Jinja2 Environment backed by the daos_dev templates directory."""
+    return jinja2.Environment(
+        loader=jinja2.FileSystemLoader(_TPL_DIR),
         undefined=jinja2.StrictUndefined,
         keep_trailing_newline=True,
     )
+
+
+def render(**extra):
+    """Render daos-make.sh.j2 with base vars plus any keyword overrides."""
     ctx = {**_BASE, **extra}
     if "groups" in extra and isinstance(extra["groups"], dict):
         ctx["groups"] = {**_BASE["groups"], **extra["groups"]}
-    return env.get_template("daos-make.sh.j2").render(**ctx)
+    return _env().get_template("daos-make.sh.j2").render(**ctx)
 
+
+def render_deploy_info(**extra):
+    """Render daos-deploy-info.sh.j2 with base + deploy-info vars + overrides."""
+    ctx = {**_BASE, **_DEPLOY_INFO_VARS, **extra}
+    if "groups" in extra and isinstance(extra["groups"], dict):
+        ctx["groups"] = {**_BASE["groups"], **extra["groups"]}
+    return _env().get_template("daos-deploy-info.sh.j2").render(**ctx)
+
+
+# ── daos-make.sh.j2 tests ─────────────────────────────────────────────────────
 
 class TestDaosMakeProxy(unittest.TestCase):
     """Verify proxy variable rendering in daos-make.sh.j2."""
@@ -158,6 +182,72 @@ class TestDaosMakeClientsList(unittest.TestCase):
         self.assertIn('CLIENTS_LIST="cli1,cli2"', script)
 
 
+# ── daos-deploy-info.sh.j2 tests ──────────────────────────────────────────────
+
+class TestDeployInfo(unittest.TestCase):
+    """Verify provenance metadata rendering in daos-deploy-info.sh.j2."""
+
+    def setUp(self):
+        """Render with and without a clients group."""
+        self.script = render_deploy_info()
+        self.script_with_clients = render_deploy_info(
+            groups={"daos_clients": ["cli1", "cli2"]}
+        )
+
+    def test_timestamp_is_rendered(self):
+        """Generated timestamp is baked into the script."""
+        self.assertIn('DAOS_GENERATED="2024-01-15T10:30:00Z"', self.script)
+
+    def test_controller_host_is_rendered(self):
+        """Controller hostname is baked into the script."""
+        self.assertIn('DAOS_CONTROLLER_HOST="ctrl.example.com"', self.script)
+
+    def test_controller_user_is_rendered(self):
+        """Controller username is baked into the script."""
+        self.assertIn('DAOS_CONTROLLER_USER="testuser"', self.script)
+
+    def test_ansible_version_is_rendered(self):
+        """Ansible version is baked into the script."""
+        self.assertIn('DAOS_ANSIBLE_VERSION="2.14.3"', self.script)
+
+    def test_inventory_path_is_rendered(self):
+        """Inventory path is baked into the script."""
+        self.assertIn(
+            'DAOS_INVENTORY="/home/testuser/my-inventory.yml"', self.script
+        )
+
+    def test_inventory_copy_path_uses_runtime_dir(self):
+        """Inventory copy path points inside daos_runtime_dir."""
+        self.assertIn(
+            'DAOS_INVENTORY_COPY="/opt/daos-install/inventory.yml"', self.script
+        )
+
+    def test_dev_nodes_rendered(self):
+        """DAOS_DEV_NODES contains the dev node list."""
+        self.assertIn('DAOS_DEV_NODES="dev-node"', self.script)
+
+    def test_server_nodes_rendered(self):
+        """DAOS_SERVER_NODES contains the server node list."""
+        self.assertIn('DAOS_SERVER_NODES="srv-node"', self.script)
+
+    def test_client_nodes_empty_when_no_clients(self):
+        """DAOS_CLIENT_NODES is empty string when daos_clients group is empty."""
+        self.assertIn('DAOS_CLIENT_NODES=""', self.script)
+
+    def test_client_nodes_rendered_when_present(self):
+        """DAOS_CLIENT_NODES is comma-joined when clients are present."""
+        self.assertIn('DAOS_CLIENT_NODES="cli1,cli2"', self.script_with_clients)
+
+    def test_sourced_guard_is_present(self):
+        """Script has BASH_SOURCE guard so sourcing it causes no output."""
+        self.assertIn('if [[ "${BASH_SOURCE[0]}" == "${0}" ]]', self.script)
+
+    def test_inventory_copy_cat_is_present(self):
+        """Script prints inventory content when run directly."""
+        self.assertIn("cat", self.script)
+        self.assertIn("DAOS_INVENTORY_COPY", self.script)
+
+
 loader = unittest.TestLoader()
 suite = unittest.TestSuite()
 for cls in (
@@ -165,6 +255,7 @@ for cls in (
     TestDaosMakeGoproxy,
     TestDaosMakeSconsProxyUnset,
     TestDaosMakeClientsList,
+    TestDeployInfo,
 ):
     suite.addTests(loader.loadTestsFromTestCase(cls))
 
