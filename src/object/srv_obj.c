@@ -3228,6 +3228,18 @@ again:
 		if (opc != DAOS_OBJ_RPC_UPDATE)
 			break;
 
+		/*
+		 * For conditional update/insert, the -DER_TX_RESTART maybe caused by race among
+		 * unsorted conditional insert operations on non-leader(s). Directly restart the
+		 * transaction with newer epoch may cause more conflict. Instead, let's make the
+		 * client to retry with random delay via replying -DER_INPROGRESS (to avoid fail
+		 * old client if reply with -DER_TX_RESTART).
+		 */
+		if (orw->orw_api_flags & DAOS_COND_MASK) {
+			rc = -DER_INPROGRESS;
+			break;
+		}
+
 		/* Only standalone updates use this RPC. Retry with newer epoch. */
 		orw->orw_epoch = d_hlc_get();
 		exec_arg.flags |= ORF_RESEND;
@@ -4129,6 +4141,18 @@ again:
 	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
+		/*
+		 * For conditional punch, the -DER_TX_RESTART maybe caused by race among
+		 * unsorted conditional operations on non-leader(s). Directly restart the
+		 * transaction with newer epoch may cause more conflict. Instead, let's
+		 * make the client to retry with random delay via replying -DER_INPROGRESS
+		 * (to avoid fail old client if reply -DER_TX_RESTART).
+		 */
+		if (opi->opi_api_flags & DAOS_COND_PUNCH) {
+			rc = -DER_INPROGRESS;
+			break;
+		}
+
 		/* Only standalone punches use this RPC. Retry with newer epoch. */
 		opi->opi_epoch = d_hlc_get();
 		exec_arg.flags |= ORF_RESEND;
