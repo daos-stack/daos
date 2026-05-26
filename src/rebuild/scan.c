@@ -728,7 +728,12 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	int				i;
 	int				rc = 0;
 
-	if (rpt->rt_abort || arg->cont_child->sc_stopping) {
+	/* Check rt_finishing to allow rebuild_scan_leader to exit quickly when
+	 * rebuild_tgt_fini() is waiting for the refcount to drop. Without this,
+	 * a stale scan_leader continues scanning all VOS objects indefinitely,
+	 * blocking TLS cleanup and causing retries to fail with -DER_BUSY.
+	 */
+	if (rpt->rt_abort || rpt->rt_finishing || arg->cont_child->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "rebuild is aborted\n");
 		return 1;
 	}
@@ -1206,6 +1211,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct ds_pool                  *pool    = NULL;
 	bool                             checker = false;
+	uint64_t                         ts_start, ts_now;
 	int				 rc;
 
 	rsi = crt_req_get(rpc);
@@ -1216,6 +1222,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	       rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen, rsi->rsi_master_rank,
 	       rsi->rsi_leader_term, RB_OP_STR(rsi->rsi_rebuild_op));
 
+	ts_start = daos_gettime_coarse();
 	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
 	if (rc) {
 		D_ERROR("Can not find pool " DF_UUID ": %d\n", DP_UUID(rsi->rsi_pool_uuid), rc);
@@ -1251,6 +1258,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		}
 	}
 
+redo_rpt_lookup:
 	/* check if the rebuild with different leader is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1);
 	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
@@ -1258,7 +1266,18 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			D_WARN("the previous rebuild "DF_UUID"/%d/"DF_U64"/%p is not cleanup yet\n",
 			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
 			       rsi->rsi_leader_term, rpt);
-			D_GOTO(out_put, rc = -DER_BUSY);
+			ts_now = daos_gettime_coarse();
+			if (ts_now > ts_start + 30) {
+				D_WARN(DF_UUID " %s ver %d/gen %u waited previous rebuild "
+					       "finishing more than 30 seconds\n",
+				       DP_UUID(rsi->rsi_pool_uuid), RB_OP_STR(rpt->rt_rebuild_op),
+				       rsi->rsi_rebuild_ver, rpt->rt_rebuild_gen);
+				D_GOTO(out_put, rc = -DER_BUSY);
+			} else {
+				rpt_put(rpt);
+				dss_sleep(1000);
+				goto redo_rpt_lookup;
+			}
 		}
 
 		/* Rebuild should never skip the version */
@@ -1322,6 +1341,36 @@ tls_lookup:
 	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
 				      rsi->rsi_rebuild_gen);
 	if (tls != NULL) {
+		struct rebuild_tgt_pool_tracker *tmp;
+
+		/* Check whether the TLS belongs to an rpt that is finishing
+		 * (rt_finishing == 1). rpt_lookup() skips such rpts, so the
+		 * scan handler arrives here with a NULL rpt but a live TLS.
+		 * This is a transient window between rebuild_tgt_fini() setting
+		 * rt_finishing and the subsequent rebuild_pool_tls_destroy().
+		 * Yield to let the finishing rpt's scan_leader exit and drop
+		 * its refcount so TLS cleanup can proceed, then retry.
+		 */
+		d_list_for_each_entry(tmp, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+			if (uuid_compare(tmp->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
+			    tmp->rt_rebuild_ver == rsi->rsi_rebuild_ver &&
+			    tmp->rt_rebuild_gen == rsi->rsi_rebuild_gen &&
+			    (tmp->rt_finishing || tmp->rt_abort)) {
+				ts_now = daos_gettime_coarse();
+				if (ts_now > ts_start + 30) {
+					D_WARN(DF_UUID " %s ver %d/gen %u waited previous rebuild "
+						       "finishing more than 30 seconds\n",
+					       DP_UUID(rsi->rsi_pool_uuid),
+					       RB_OP_STR(tmp->rt_rebuild_op), rsi->rsi_rebuild_ver,
+					       rsi->rsi_rebuild_gen);
+					break;
+				} else {
+					dss_sleep(1000);
+					goto tls_lookup;
+				}
+			}
+		}
+
 		D_WARN("the previous rebuild "DF_UUID"/%d is not cleanup yet\n",
 		       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
 		D_GOTO(out_delete, rc = -DER_BUSY);

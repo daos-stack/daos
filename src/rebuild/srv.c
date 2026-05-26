@@ -1479,7 +1479,9 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts,
 				    task->dst_new_layout_version, task->dst_rebuild_op);
 	if (rc)
-		D_ERROR("object scan failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "pool " DF_UUID ": %s, ver %d, object scan broadcast failed.",
+			 DP_UUID(pool->sp_uuid), RB_OP_STR(task->dst_rebuild_op),
+			 task->dst_map_ver);
 	else
 		rc = 1;
 
