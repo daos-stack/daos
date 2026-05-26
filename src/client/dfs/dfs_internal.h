@@ -406,8 +406,6 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 			D_MUTEX_UNLOCK(&dfs->lock);
 			return daos_der2errno(rc);
 		}
-		/** Start such that dfs->last_hi will be final value */
-		dfs->oid.hi = dfs->last_hi;
 	}
 
 	/** set oid and lo, bump the current hi value */

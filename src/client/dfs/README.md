@@ -26,6 +26,64 @@ the filesystem, which will be another reserved object with a predefined OID
 section). The OID of the root id will be inserted as an entry in the superblock
 object.
 
+## DFS OID Management
+
+DFS uses a two-level strategy to assign object IDs for new files and
+directories.
+
+At mount time, a read-write mount seeds the in-memory OID state by:
+
+- choosing a random starting value for `dfs->last_hi`
+- forcing that value away from `0` and `1`, which are reserved for the
+  superblock (`0.0`) and root object (`1.0`)
+- allocating one container-unique low portion with `daos_cont_alloc_oids()`
+
+That low portion is kept in `dfs->oid.lo` and is unique across the container.
+DFS then uses the local `dfs->oid.hi` value to generate many object IDs from
+that single allocation while the mount stays active.
+
+When DFS later creates a file or directory, `oid_gen()` in
+`src/client/dfs/dfs_internal.h` combines:
+
+- `oid.lo`: the container-allocated low 96-bit portion
+- `oid.hi`: a mount-local 32-bit sequence value
+
+DFS keeps cycling only the local high portion until it reaches the mount's
+terminal value (`dfs->last_hi`). Once that happens, DFS asks the container for
+another low portion with `daos_cont_alloc_oids()` and repeats the process.
+
+This is why the mount code initializes `dfs->oid.hi` from `dfs->last_hi` and
+immediately calls `daos_obj_oid_cycle()`: the cycle call advances to the first
+usable per-mount value so that `dfs->last_hi` remains the sentinel marking the
+end of the current local cycle.
+
+DFS also skips the reserved combinations that would collide with the predefined
+superblock and root object IDs. In practice, if the low portion matches the
+reserved low value, DFS avoids `hi <= 1` before handing out an OID.
+
+After DFS has selected the caller-visible bits, it passes the OID to
+`daos_obj_generate_oid()`, which encodes the DAOS-managed metadata in the high
+32 bits, such as the object type and object-class selection.
+
+### `daos_obj_oid_cycle()`
+
+`daos_obj_oid_cycle()` is a small inline helper in `src/include/daos_obj.h`:
+
+~~~~c
+oid->hi = (oid->hi + 999999937) & UINT_MAX;
+~~~~
+
+Conceptually, it advances `oid->hi` by a fixed stride modulo `2^32`.
+
+- The arithmetic wraps naturally in the 32-bit space.
+- The stride `999999937` is odd, so it is relatively prime to `2^32`.
+- Because the stride and modulus are relatively prime, repeated calls walk
+  every possible 32-bit value exactly once before repeating.
+
+For DFS, that means a single `dfs->oid.lo` allocation can be paired with every
+possible local high value without duplicates, while still allowing DFS to avoid
+reserved values explicitly.
+
 The SB will look like this:
 
 ~~~~
