@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -247,7 +248,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					Name: "vmd",
 					Configs: []*SpdkSubsystemConfig{
 						{
-							Method: "enable_vmd",
+							Method: "vmd_enable",
 							Params: &VmdEnableParams{},
 						},
 					},
@@ -350,7 +351,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					Name: "vmd",
 					Configs: []*SpdkSubsystemConfig{
 						{
-							Method: "enable_vmd",
+							Method: "vmd_enable",
 							Params: &VmdEnableParams{},
 						},
 					},
