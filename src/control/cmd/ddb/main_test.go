@@ -221,6 +221,45 @@ func TestParseOpts(t *testing.T) {
 // entirely to grumble's app.Run(), which requires a real terminal (readline) and
 // piping os.Stdin — making tests fragile and hard to maintain for little gain.
 func TestRun(t *testing.T) {
+	// Helper factories for ddb_run_open_Fn — declared here to keep the test
+	// table readable instead of embedding anonymous functions inline.
+
+	openFnChecking := func(wantPath, wantDbPath string) func(string, string, bool) error {
+		return func(path, dbPath string, _ bool) error {
+			fmt.Println("Open called")
+			if err := isArgEqual(wantPath, path, "vos path"); err != nil {
+				return err
+			}
+			return isArgEqual(wantDbPath, dbPath, "sysdb path")
+		}
+	}
+
+	openFnCheckingWriteMode := func(wantWriteMode bool) func(string, string, bool) error {
+		return func(_ string, _ string, writeMode bool) error {
+			fmt.Println("Open called")
+			return isArgEqual(wantWriteMode, writeMode, "write_mode")
+		}
+	}
+
+	openFnMustNotBeCalled := func(_ string, _ string, _ bool) error {
+		return fmt.Errorf("open should not have been called")
+	}
+
+	openFnAllowedOnce := func() func(string, string, bool) error {
+		count := 0
+		return func(_ string, _ string, _ bool) error {
+			count++
+			if count > 1 {
+				return fmt.Errorf("open pre-opened by CLI (called %d times)", count)
+			}
+			return nil
+		}
+	}
+
+	openFnFailing := func(_ string, _ string, _ bool) error {
+		return fmt.Errorf("simulated open failure")
+	}
+
 	for name, tc := range map[string]struct {
 		args      []string
 		setup     func()
@@ -258,16 +297,7 @@ func TestRun(t *testing.T) {
 		"Open called with short vos path and db path": {
 			args: []string{"-s", "/foo/vos-0", "-p", "/bar", "ls"},
 			setup: func() {
-				ddb_run_open_Fn = func(path string, dbPath string, writeMode bool) error {
-					fmt.Println("Open called")
-					if err := isArgEqual("/foo/vos-0", path, "vos path"); err != nil {
-						return err
-					}
-					if err := isArgEqual("/bar", dbPath, "sysdb path"); err != nil {
-						return err
-					}
-					return nil
-				}
+				ddb_run_open_Fn = openFnChecking("/foo/vos-0", "/bar")
 			},
 			expStdout:   []string{"Open called"},
 			cmdFileArgs: []string{"-s", "/foo/vos-0", "-p", "/bar"},
@@ -276,16 +306,7 @@ func TestRun(t *testing.T) {
 		"Open called with long vos path and db path": {
 			args: []string{"--vos_path=/foo/vos-0", "--db_path=/bar", "ls"},
 			setup: func() {
-				ddb_run_open_Fn = func(path string, dbPath string, writeMode bool) error {
-					fmt.Println("Open called")
-					if err := isArgEqual("/foo/vos-0", path, "vos path"); err != nil {
-						return err
-					}
-					if err := isArgEqual("/bar", dbPath, "sysdb path"); err != nil {
-						return err
-					}
-					return nil
-				}
+				ddb_run_open_Fn = openFnChecking("/foo/vos-0", "/bar")
 			},
 			expStdout:   []string{"Open called"},
 			cmdFileArgs: []string{"--vos_path=/foo/vos-0", "--db_path=/bar"},
@@ -294,13 +315,7 @@ func TestRun(t *testing.T) {
 		"Open called with write mode": {
 			args: []string{"-w", "-s", "/foo/vos-0", "ls"},
 			setup: func() {
-				ddb_run_open_Fn = func(path string, dbPath string, writeMode bool) error {
-					fmt.Println("Open called")
-					if err := isArgEqual(true, writeMode, "write_mode"); err != nil {
-						return err
-					}
-					return nil
-				}
+				ddb_run_open_Fn = openFnCheckingWriteMode(true)
 			},
 			expStdout:   []string{"Open called"},
 			cmdFileArgs: []string{"-w", "-s", "/foo/vos-0"},
@@ -311,9 +326,7 @@ func TestRun(t *testing.T) {
 			// mode, so this case only applies to command-line mode.
 			args: []string{"-s", "/foo/vos-0", "feature", "--show"},
 			setup: func() {
-				ddb_run_open_Fn = func(path string, dbPath string, writeMode bool) error {
-					return fmt.Errorf("open should not have been called")
-				}
+				ddb_run_open_Fn = openFnMustNotBeCalled
 			},
 		},
 		"No auto-open for open command": {
@@ -322,22 +335,13 @@ func TestRun(t *testing.T) {
 			// Only valid for command-line mode (see note above).
 			args: []string{"-s", "/foo/vos-0", "open", "/foo/vos-0"},
 			setup: func() {
-				openCount := 0
-				ddb_run_open_Fn = func(path string, dbPath string, writeMode bool) error {
-					openCount++
-					if openCount > 1 {
-						return fmt.Errorf("open pre-opened by CLI (called %d times)", openCount)
-					}
-					return nil
-				}
+				ddb_run_open_Fn = openFnAllowedOnce()
 			},
 		},
 		"No auto-open for smd_sync": {
 			args: []string{"-s", "/foo/vos-0", "smd_sync"},
 			setup: func() {
-				ddb_run_open_Fn = func(path string, dbPath string, writeMode bool) error {
-					return fmt.Errorf("open should not have been called")
-				}
+				ddb_run_open_Fn = openFnMustNotBeCalled
 			},
 		},
 		"Init failure": {
@@ -351,9 +355,7 @@ func TestRun(t *testing.T) {
 			args:   []string{"-s", "/foo/vos-0", "ls"},
 			expErr: ddbTestErr("Error opening VOS path"),
 			setup: func() {
-				ddb_run_open_Fn = func(path string, dbPath string, writeMode bool) error {
-					return fmt.Errorf("simulated open failure")
-				}
+				ddb_run_open_Fn = openFnFailing
 			},
 		},
 	} {
