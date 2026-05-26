@@ -146,6 +146,9 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             f'daos filesystem query {mount_dir}']
     for cmd in cmds:
         command = '{} {}'.format(preload_cmd, cmd)
+        if '-m venv' in cmd:
+            # Source the virtual environment for all subsequent commands.
+            preload_cmd = f'{preload_cmd}; source {mount_dir}/venv/bin/activate'
         # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
         timeout = 10 * 60
         if cmd.startswith('scons'):
