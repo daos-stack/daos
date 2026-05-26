@@ -3412,7 +3412,8 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	atomic_fetch_sub(&pool->sp_rebuilding, arg.tls_stopped);
 	ABT_mutex_free(&arg.stop_lock);
 
-	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
+	D_INFO(DF_UUID " ver %d, gen %d migrate stopped\n", DP_UUID(pool->sp_uuid), version,
+	       generation);
 }
 
 static int
