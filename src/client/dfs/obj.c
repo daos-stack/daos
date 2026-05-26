@@ -1785,7 +1785,7 @@ update_entry_mode(daos_handle_t oh, daos_handle_t th, const char *name, size_t l
 }
 
 int
-dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *name, dfs_obj_t **new_obj,
+dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *new_name, dfs_obj_t **new_obj,
 	 struct stat *stbuf)
 {
 	struct dfs_entry  src_entry = {0};
@@ -1800,6 +1800,7 @@ dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *name, dfs_ob
 	int               daos_mode;
 	int               rc;
 
+	/** Validate inputs and normalize defaults for parent/new_obj. */
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (dfs->amode != O_RDWR)
@@ -1817,15 +1818,17 @@ dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *name, dfs_ob
 	if (new_obj)
 		*new_obj = NULL;
 
-	rc = check_name(name, &len);
+	rc = check_name(new_name, &len);
 	if (rc)
 		return rc;
 
+	/** Use a transaction so metadata/GIT updates are committed atomically. */
 	rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 	if (rc)
 		return daos_der2errno(rc);
 
 restart:
+	/** Re-read source entry under this TX attempt to avoid stale assumptions. */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &src_parent_oh, NULL);
 	if (rc) {
 		rc = daos_der2errno(rc);
@@ -1842,12 +1845,11 @@ restart:
 	if (src_entry.oid.hi != obj->oid.hi || src_entry.oid.lo != obj->oid.lo)
 		D_GOTO(out, rc = ENOENT);
 
+	/** Update existing GIT link count, or create/initialize GIT state on first hardlink. */
 	if (DFS_IS_HARDLINK(src_entry.mode)) {
 		rc = git_fetch_entry(dfs->git_oh, th, &obj->oid, &git_entry, 0, NULL, NULL, NULL);
-		if (rc) {
-			D_ERROR("Missing GIT entry for file %s", obj->name);
-			D_GOTO(out, EIO);
-		}
+		if (rc)
+			D_GOTO(out, rc);
 		new_link_cnt = git_entry.link_cnt + 1;
 		rc           = git_update_link_cnt(dfs->git_oh, th, &obj->oid, new_link_cnt);
 		if (rc)
@@ -1885,10 +1887,13 @@ restart:
 		link_entry = &src_entry;
 	}
 
-	rc = insert_entry(dfs->layout_v, parent->oh, th, name, len, 0, link_entry);
+	/** Create the hardlink only if the destination entry does not already exist. */
+	rc = insert_entry(dfs->layout_v, parent->oh, th, new_name, len, DAOS_COND_DKEY_INSERT,
+			  link_entry);
 	if (rc)
 		D_GOTO(out, rc);
 
+	/** Commit all metadata changes; TX restart is handled in the common out path. */
 	rc = daos_tx_commit(th, NULL);
 	if (rc) {
 		if (rc != -DER_TX_RESTART)
@@ -1896,6 +1901,7 @@ restart:
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
+	/** Optionally return an opened handle for the newly created link. */
 	if (new_obj) {
 		dfs_obj_t *nobj;
 
@@ -1922,11 +1928,12 @@ restart:
 		dfs_set_hardlink(&nobj->mode);
 		nobj->flags      = obj->flags;
 		nobj->parent_oid = parent->oid;
-		strncpy(nobj->name, name, len + 1);
+		strncpy(nobj->name, new_name, len + 1);
 		*new_obj    = nobj;
 		created_obj = nobj;
 	}
 
+	/** Optionally fill stat data from link metadata plus object size. */
 	if (stbuf) {
 		daos_array_stbuf_t array_stbuf = {0};
 		daos_handle_t      arr_oh      = DAOS_HDL_INVAL;
@@ -1972,6 +1979,7 @@ restart:
 
 	rc = 0;
 out:
+	/** Close/restart TX and clean up partially created outputs on failure. */
 	rc = check_tx(th, rc);
 	if (rc == ERESTART)
 		goto restart;

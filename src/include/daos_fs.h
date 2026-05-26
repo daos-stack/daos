@@ -901,14 +901,14 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *paren
  * \param[in]	obj	Open object to create a hard link to.
  * \param[in]	parent	Opened parent directory object where the new link is created.
  *			If NULL, use root obj.
- * \param[in]	name	Link name of the new hard link.
+ * \param[in]	new_name	Link name of the new hard link.
  * \param[out]	new_obj	Optional: return an opened object handle for the new link.
  * \param[out]	stbuf	Optional: stat struct of the linked object.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *name, dfs_obj_t **new_obj,
+dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *new_name, dfs_obj_t **new_obj,
 	 struct stat *stbuf);
 
 /**
