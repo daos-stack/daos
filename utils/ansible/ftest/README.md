@@ -377,7 +377,38 @@ Applied exclusively to the `daos_dev` host. Sets up the development and test-lau
 | `build_deps.yml` | `install_dev-el{8,9}.sh` + `daos.spec` | Installs the full build dependency package set from `daos_build_deps.rpms` (distro-specific), enables the Ruby module, and installs `fpm` via `gem`. |
 | `pip_go_deps.yml` | *(inline)* | Orchestrates `pip_deps.yml` and `go_deps.yml`: installs `requirements-build.txt` and `requirements-utest.txt` system-wide with `pip` (so executables like `meson` and `ninja` land in `/usr/local/bin` and are accessible in PATH), then runs `go mod download` in `src/control/`. |
 
-Templates: `daos-make.sh.j2`, `daos-launch.sh.j2`, `daos-launch_nlt.sh.j2`.
+Templates: `daos-make.sh.j2`, `daos-launch.sh.j2`, `daos-launch_nlt.sh.j2`, `daos-deploy-info.sh.j2`.
+
+##### Deployment Provenance (`daos-deploy-info.sh`)
+
+The playbook generates a `daos-deploy-info.sh` script in `daos_runtime_dir` that records
+exactly how and when the cluster was configured. All other generated scripts (`daos-make.sh`,
+`daos-launch.sh`, `daos-launch_nlt.sh`) automatically source it when they run.
+
+The script serves two purposes:
+
+1. **When sourced** — sets `DAOS_*` environment variables silently for use by other scripts.
+2. **When run directly** — prints a human-readable provenance summary and the full content of
+   the saved inventory copy.
+
+```bash
+# Print provenance summary and saved inventory
+/scratch/user/daos-install/daos-deploy-info.sh
+
+# Variables exposed after sourcing:
+#   DAOS_GENERATED        — ISO 8601 timestamp of the playbook run
+#   DAOS_CONTROLLER_HOST  — FQDN of the machine that ran ansible-playbook
+#   DAOS_CONTROLLER_USER  — username on the controller
+#   DAOS_ANSIBLE_VERSION  — Ansible version string
+#   DAOS_INVENTORY        — path to the inventory on the controller at run time
+#   DAOS_INVENTORY_COPY   — path to the saved inventory copy on this node
+#   DAOS_DEV_NODES        — comma-separated dev hostnames
+#   DAOS_SERVER_NODES     — comma-separated server hostnames
+#   DAOS_CLIENT_NODES     — comma-separated client hostnames (empty if none)
+```
+
+The inventory is also saved as `{{ daos_runtime_dir }}/inventory.yml` on each node (guarded
+by a `stat` check so dynamic inventories that have no backing file are silently skipped).
 
 > **DRY pattern**: `daos_dev/tasks/main.yml` reuses server users/groups by calling
 > `include_role: name: daos_server tasks_from: users_groups.yml` instead of duplicating the
@@ -696,6 +727,7 @@ scripts/test-templates.sh -v      # verbose (one line per test)
 | `TestDaosMakeGoproxy` | `daos-make.sh.j2` | `GOPROXY` is always rendered; falls back to `direct`; custom value is honored |
 | `TestDaosMakeSconsProxyUnset` | `daos-make.sh.j2` | Scons compilation step clears the proxy with `env --unset=…` |
 | `TestDaosMakeClientsList` | `daos-make.sh.j2` | `CLIENTS_LIST` is absent/present depending on the `daos_clients` group |
+| `TestDeployInfo` | `daos-deploy-info.sh.j2` | All `DAOS_*` variables are rendered; `DAOS_CLIENT_NODES` is empty/populated based on group; `BASH_SOURCE` guard and `cat` output are present |
 
 ---
 
