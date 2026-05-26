@@ -154,6 +154,7 @@ lookup_rel_path_loop:
 			}
 
 			obj->f.has_tail = dfs_entry_has_tail(dfs->layout_v, &entry);
+			obj->f.split_off = obj->f.has_tail ? entry.split_off : 0;
 			if (obj->f.has_tail) {
 				oid_cp(&obj->f.tail_oid, entry.tail_oid);
 				rc = daos_array_open_with_attr(
@@ -480,6 +481,7 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 		}
 
 		obj->f.has_tail = dfs_entry_has_tail(dfs->layout_v, &entry);
+		obj->f.split_off = obj->f.has_tail ? entry.split_off : 0;
 		if (obj->f.has_tail) {
 			oid_cp(&obj->f.tail_oid, entry.tail_oid);
 			rc = daos_array_open_with_attr(

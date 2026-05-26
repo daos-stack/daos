@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -114,6 +114,10 @@ typedef struct {
 	daos_oclass_id_t        doi_file_oclass_id;
 	/** Object id */
 	daos_obj_id_t           doi_oid;
+	/** Tail object id for progressive-layout files, or nil when absent */
+	daos_obj_id_t           doi_tail_oid;
+	/** Logical file offset where progressive layout switches from head to tail */
+	daos_size_t             doi_split_off;
 } dfs_obj_info_t;
 
 /**
@@ -906,8 +910,8 @@ int
 dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
 
 /**
- * Retrieve some attributes of DFS object. Those include the object class and
- * the chunk size.
+ * Retrieve some attributes of DFS object. Those include the object class,
+ * chunk size, and progressive-layout metadata when applicable.
  *
  * \param[in]   dfs     Pointer to the mounted file system.
  * \param[in]   obj	Open object handle to query.
@@ -919,16 +923,16 @@ int
 dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info);
 
 /**
- * Set the object class on a directory for new files or sub-dirs that are
- * created in that dir.  This does not change the chunk size for existing files
- * or dirs in that directory, nor it does change the object class of the
- * directory itself. Note that this is only supported on directories and will
- * fail if called on non-directory objects.
+ * Set the default object class on a directory for new files or sub-dirs that
+ * are created in that dir. This does not change the object class of any
+ * existing file or sub-dir in that directory, nor does it change the object
+ * class of the directory itself. Note that this is only supported on
+ * directories and will fail if called on non-directory objects.
  *
  * \param[in]   dfs     Pointer to the mounted file system.
  * \param[in]   obj	Open object handle to access.
  * \param[in]	flags	Flags for setting oclass (currently ignored)
- * \param[in]   cid	object class.
+ * \param[in]   cid	default object class for new entries created in this directory.
  *
  * \return		0 on success, errno code on failure.
  */

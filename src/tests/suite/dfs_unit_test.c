@@ -13,6 +13,11 @@
 #include <daos/placement.h>
 #include <pthread.h>
 
+#define DFS_PL_HEAD_BUDGET_NUM 2ULL
+#define DFS_PL_HEAD_BUDGET_DEN 1000ULL
+#define DFS_PL_SPLIT_OFF_MIN   (64ULL << 20)
+#define DFS_PL_SPLIT_OFF_MAX   (64ULL << 30)
+
 /** global DFS mount used for all tests */
 static uuid_t		co_uuid;
 static daos_handle_t	co_hdl;
@@ -3581,63 +3586,288 @@ dfs_test_pipeline_find(void **state)
 	test_pipeline_find(state, OC_RP_3GX);
 }
 
+static daos_oclass_id_t
+expected_pl_head_oclass(daos_oclass_id_t tail_cid, uint32_t max_groups)
+{
+	static const uint32_t head_groups[] = {32, 16, 12, 8, 6, 4, 2, 1};
+	uint32_t              group_nr;
+	int                   i;
+
+	if (max_groups == 0)
+		return OC_UNKNOWN;
+
+	group_nr = min(max(max_groups / 8, 1U), 32U);
+	for (i = 0; i < ARRAY_SIZE(head_groups); i++) {
+		if (head_groups[i] <= group_nr)
+			return OBJ_CLASS_DEF(tail_cid >> OC_REDUN_SHIFT, head_groups[i]);
+	}
+
+	return OBJ_CLASS_DEF(tail_cid >> OC_REDUN_SHIFT, 1);
+}
+
+static daos_size_t
+expected_pl_split_off(const daos_pool_info_t *pool_info, daos_oclass_id_t head_cid,
+		      daos_oclass_id_t tail_cid, daos_size_t chunk_size)
+{
+	struct daos_oclass_attr *tail_attr;
+	struct daos_oclass_attr *head_attr;
+	unsigned __int128        raw_split_off;
+	uint64_t                 target_capacity;
+	uint64_t                 per_target_budget;
+	uint32_t                 head_groups = 0;
+	unsigned int             data_cells;
+	daos_size_t              split_off;
+
+	if (pool_info == NULL || chunk_size == 0 || head_cid == OC_UNKNOWN ||
+	    tail_cid == OC_UNKNOWN)
+		return 0;
+	if (pool_info->pi_ntargets == 0)
+		return 0;
+
+	if (pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME] != 0)
+		target_capacity =
+		    pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME] / pool_info->pi_ntargets;
+	else
+		target_capacity =
+		    pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_SCM] / pool_info->pi_ntargets;
+	if (target_capacity == 0)
+		return 0;
+
+	head_attr = daos_oclass_id2attr(head_cid, &head_groups);
+	tail_attr = daos_oclass_id2attr(tail_cid, NULL);
+	if (head_attr == NULL || tail_attr == NULL || head_groups == 0)
+		return 0;
+
+	data_cells = daos_oclass_is_ec(tail_attr) ? tail_attr->u.ec.e_k : 1;
+	if (data_cells == 0)
+		return 0;
+
+	per_target_budget = (target_capacity * DFS_PL_HEAD_BUDGET_NUM) / DFS_PL_HEAD_BUDGET_DEN;
+	if (per_target_budget == 0)
+		return 0;
+
+	raw_split_off = (unsigned __int128)head_groups * data_cells * per_target_budget;
+	if (raw_split_off < DFS_PL_SPLIT_OFF_MIN)
+		split_off = DFS_PL_SPLIT_OFF_MIN;
+	else if (raw_split_off > DFS_PL_SPLIT_OFF_MAX)
+		split_off = DFS_PL_SPLIT_OFF_MAX;
+	else
+		split_off = (daos_size_t)raw_split_off;
+
+	if (split_off % chunk_size != 0)
+		split_off = ((split_off / chunk_size) + 1) * chunk_size;
+
+	return split_off;
+}
+
+static void
+assert_file_oclass_selection(dfs_t *dfs, daos_handle_t coh, const daos_pool_info_t *pool_info,
+			     dfs_obj_t *parent, const char *name, daos_oclass_id_t cid,
+			     daos_oclass_id_t exp_head, daos_oclass_id_t exp_tail,
+			     bool exp_has_tail)
+{
+	dfs_obj_t       *obj;
+	dfs_obj_info_t   info = {0};
+	daos_oclass_id_t actual_cid;
+	daos_size_t      exp_split_off;
+	char             exp_head_name[MAX_OBJ_CLASS_NAME_LEN] = "unknown";
+	char             act_head_name[MAX_OBJ_CLASS_NAME_LEN] = "unknown";
+	char             exp_tail_name[MAX_OBJ_CLASS_NAME_LEN] = "none";
+	char             act_tail_name[MAX_OBJ_CLASS_NAME_LEN] = "none";
+	int              rc;
+
+	rc = dfs_open(dfs, parent, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      cid, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj_get_info(dfs, obj, &info);
+	assert_int_equal(rc, 0);
+	actual_cid = daos_obj_id2class(info.doi_oid);
+	daos_oclass_id2name(exp_head, exp_head_name);
+	daos_oclass_id2name(actual_cid, act_head_name);
+	rc = compare_oclass(coh, actual_cid, exp_head);
+	print_message("PL test '%s': head expected=%s(%u) actual=%s(%u)\n", name, exp_head_name,
+		      exp_head, act_head_name, actual_cid);
+	assert_rc_equal(rc, 0);
+
+	exp_split_off =
+	    exp_has_tail ? expected_pl_split_off(pool_info, exp_head, exp_tail, info.doi_chunk_size)
+			 : 0;
+	print_message("PL test '%s': tail expected_present=%d actual_present=%d split_off "
+		      "expected=%zu actual=%zu chunk=%zu\n",
+		      name, exp_has_tail, !daos_obj_id_is_nil(info.doi_tail_oid), exp_split_off,
+		      info.doi_split_off, info.doi_chunk_size);
+	assert_int_equal(!daos_obj_id_is_nil(info.doi_tail_oid), exp_has_tail);
+	assert_int_equal(info.doi_split_off, exp_split_off);
+	if (exp_has_tail) {
+		actual_cid = daos_obj_id2class(info.doi_tail_oid);
+		daos_oclass_id2name(exp_tail, exp_tail_name);
+		daos_oclass_id2name(actual_cid, act_tail_name);
+		rc = compare_oclass(coh, actual_cid, exp_tail);
+		print_message("PL test '%s': tail expected=%s(%u) actual=%s(%u)\n", name,
+			      exp_tail_name, exp_tail, act_tail_name, actual_cid);
+		assert_rc_equal(rc, 0);
+	} else {
+		assert_true(daos_obj_id_is_nil(info.doi_tail_oid));
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs, parent, name, 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_pl_oclass_selection(void **state)
+{
+	test_arg_t              *arg = *state;
+	struct daos_oclass_attr *tail_attr;
+	daos_pool_info_t         pool_info = {0};
+	dfs_obj_t               *dir;
+	dfs_t                   *dfs_l;
+	daos_handle_t            coh;
+	daos_oclass_id_t         default_tail;
+	daos_oclass_id_t         default_head;
+	daos_oclass_id_t         explicit_cid;
+	uint32_t                 max_groups          = 0;
+	bool                     bypass_target_limit = false;
+	bool                     has_tail;
+	dfs_attr_t               dattr = {0};
+	int                      rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/* Use a known explicit file class for the override cases below. */
+	rc = dfs_suggest_oclass(dfs_mt, "file:single", &explicit_cid);
+	assert_int_equal(rc, 0);
+
+	/* Start from a container with default file-class selection enabled. */
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_oclass_sel", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/* Query the pool and resolve the default wide file class through the public hint API. */
+	rc = daos_pool_query(arg->pool.poh, NULL, &pool_info, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_suggest_oclass(dfs_l, "file:max", &default_tail);
+	assert_int_equal(rc, 0);
+	tail_attr = daos_oclass_id2attr(default_tail, &max_groups);
+	assert_non_null(tail_attr);
+	d_getenv_bool("DFS_PL_BYPASS_TARGET_LIMIT", &bypass_target_limit);
+
+	/*
+	 * PL should create a tail on the default-selection path when the tail class has a valid
+	 * group count and the pool passes the target gate, or when that gate is bypassed for tests.
+	 * Otherwise the file stays single-oid.
+	 */
+	has_tail = (pool_info.pi_ntargets >= 1000 || bypass_target_limit) && max_groups != 0;
+	/* When PL is active, the head should be the compact head class derived from the default
+	 * tail. */
+	default_head = has_tail ? expected_pl_head_oclass(default_tail, max_groups) : default_tail;
+	assert_true(!has_tail || default_head != OC_UNKNOWN);
+	print_message("PL default stage: ntargets=%u bypass_target_limit=%d max_groups=%u "
+		      "expected_tail=%u expected_head=%u has_tail=%d\n",
+		      pool_info.pi_ntargets, bypass_target_limit, max_groups, default_tail,
+		      default_head, has_tail);
+
+	/* Default file creation should use PL selection: compact head plus default tail when
+	 * enabled. */
+	print_message("PL stage: default file selection\n");
+	assert_file_oclass_selection(dfs_l, coh, &pool_info, NULL, "pl_default", 0, default_head,
+				     default_tail, has_tail);
+
+	/* Create a directory-level override to verify that parent settings disable default PL
+	 * selection. */
+	rc = dfs_open(dfs_l, NULL, "pl_dir", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_set_oclass(dfs_l, dir, 0, explicit_cid);
+	assert_int_equal(rc, 0);
+	/* A file created under that directory should use the explicit class directly and have no
+	 * tail. */
+	print_message("PL stage: directory override explicit_cid=%u\n", explicit_cid);
+	assert_file_oclass_selection(dfs_l, coh, &pool_info, dir, "pl_dir_file", 0, explicit_cid,
+				     OC_UNKNOWN, false);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_l, NULL, "pl_dir", 1, NULL);
+	assert_int_equal(rc, 0);
+
+	/* An explicit API oclass on create should also bypass PL and create a single object. */
+	print_message("PL stage: API override explicit_cid=%u\n", explicit_cid);
+	assert_file_oclass_selection(dfs_l, coh, &pool_info, NULL, "pl_api", explicit_cid,
+				     explicit_cid, OC_UNKNOWN, false);
+
+	/* Tear down the default-selection container before checking container-wide explicit
+	 * override. */
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_success(rc);
+	rc = daos_cont_destroy(arg->pool.poh, "pl_oclass_sel", 0, NULL);
+	assert_success(rc);
+
+	/* Recreate the container with an explicit file oclass and confirm that PL stays disabled.
+	 */
+	dattr.da_file_oclass_id = explicit_cid;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_oclass_sel_exp", &dattr, NULL, &coh,
+					&dfs_l);
+	assert_int_equal(rc, 0);
+	/* Files in this container should inherit the configured class directly and never get a
+	 * tail. */
+	print_message("PL stage: container override explicit_cid=%u\n", explicit_cid);
+	assert_file_oclass_selection(dfs_l, coh, &pool_info, NULL, "pl_container", 0, explicit_cid,
+				     OC_UNKNOWN, false);
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_success(rc);
+	rc = daos_cont_destroy(arg->pool.poh, "pl_oclass_sel_exp", 0, NULL);
+	assert_success(rc);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: DFS container modes",
-	  dfs_test_modes, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
-	  dfs_test_lookup, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST4: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
-	  dfs_test_syml_follow, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST6: multi-threads read shared file",
-	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: DFS lookupx",
-	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: DFS IO sync error code",
-	  dfs_test_io_error_code, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST9: DFS IO async error code",
-	  dfs_test_io_error_code, async_enable, test_case_teardown},
-	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
-	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST11: Simple rename",
-	  dfs_test_rename, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST12: DFS API compat",
-	  dfs_test_compat, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
-	  dfs_test_handles, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
-	  dfs_test_mt_connect, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST15: DFS chown",
-	  dfs_test_chown, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST16: DFS stat mtime",
-	  dfs_test_mtime, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST17: multi-threads async IO",
-	  dfs_test_async_io_th, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST18: async IO",
-	  dfs_test_async_io, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST19: DFS readdir",
-	  dfs_test_readdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST20: dfs oclass hints",
-	  dfs_test_oclass_hints, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST21: dfs multiple pools",
-	  dfs_test_multiple_pools, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST22: dfs extended attributes",
-	  dfs_test_xattrs, test_case_teardown},
-	{ "DFS_UNIT_TEST23: dfs MWC container checker",
-	  dfs_test_checker, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST24: dfs MWC SB fix",
-	  dfs_test_fix_sb, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST25: dfs MWC root fix",
-	  dfs_test_relink_root, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
-	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST27: dfs pipeline find",
-	  dfs_test_pipeline_find, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
-	  dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST3: DFS lookup / lookup_rel", dfs_test_lookup, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST4: Simple Symlinks", dfs_test_syml, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW", dfs_test_syml_follow, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST6: multi-threads read shared file", dfs_test_read_shared_file, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST7: DFS lookupx", dfs_test_lookupx, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST8: DFS IO sync error code", dfs_test_io_error_code, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST9: DFS IO async error code", dfs_test_io_error_code, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST10: multi-threads mkdir same dir", dfs_test_mt_mkdir, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST11: Simple rename", dfs_test_rename, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST12: DFS API compat", dfs_test_compat, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST13: DFS l2g/g2l_all", dfs_test_handles, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST14: multi-threads connect to same container", dfs_test_mt_connect, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST15: DFS chown", dfs_test_chown, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST16: DFS stat mtime", dfs_test_mtime, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST17: multi-threads async IO", dfs_test_async_io_th, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST18: async IO", dfs_test_async_io, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST19: DFS readdir", dfs_test_readdir, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST20: dfs oclass hints", dfs_test_oclass_hints, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST21: dfs multiple pools", dfs_test_multiple_pools, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST22: dfs extended attributes", dfs_test_xattrs, test_case_teardown},
+    {"DFS_UNIT_TEST23: dfs MWC container checker", dfs_test_checker, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST24: dfs MWC SB fix", dfs_test_fix_sb, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST25: dfs MWC root fix", dfs_test_relink_root, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST26: dfs MWC chunk size fix", dfs_test_fix_chunk_size, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST29: dfs progressive layout oclass selection", dfs_test_pl_oclass_selection,
+     async_disable, test_case_teardown},
 };
 
 static int
