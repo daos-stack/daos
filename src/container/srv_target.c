@@ -566,6 +566,10 @@ obj_agg_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 			arg->oa_rc = 0; /* suppress csum per current behavior */
 
 		*acts |= VOS_ITER_CB_SKIP; /* don't recurse into dkeys */
+
+		/* Propagate error to stop iteration; -DER_CSUM already suppressed above */
+		if (arg->oa_rc != 0)
+			return arg->oa_rc;
 	}
 	/* DKEY/AKEY/... levels are skipped by the above SKIP */
 	return 0;

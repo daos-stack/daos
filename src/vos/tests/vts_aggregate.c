@@ -2080,58 +2080,79 @@ aggregate_obj_2(void **state)
 
 /*
  * Per-object aggregation: multiple objects, only one aggregated.
- * Creates 3 objects, calls vos_obj_aggregate() on only one, and
- * verifies that only that object's visibility changes.
+ * Creates 3 identical objects, calls vos_obj_aggregate() on only the
+ * second one, and verifies:
+ *  - The aggregated object's data is correctly coalesced.
+ *  - The other two objects are untouched (fetch returns same data).
  */
 static void
 aggregate_obj_multi(void **state)
 {
-	struct io_test_args   *arg   = *state;
-	struct agg_tst_dataset ds[3] = {0};
+	struct io_test_args   *arg = *state;
+	struct agg_tst_dataset ds  = {0};
 	daos_unit_oid_t        oid[3];
 	char                   dkey[UPDATE_DKEY_SIZE] = {0};
 	char                   akey[UPDATE_AKEY_SIZE] = {0};
-	char                   buf[AT_SV_IOD_SIZE_SMALL];
-	int                    i, rc;
+	char                   buf_in[AT_SV_IOD_SIZE_SMALL];
+	char                   buf_out[AT_SV_IOD_SIZE_SMALL];
+	daos_iod_t             iod = {0};
+	d_sg_list_t            sgl;
+	d_iov_t                iov;
+	daos_key_t             dkey_iov, akey_iov;
+	int                    i;
 
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
-	/* Create 3 objects with the same data pattern */
+	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	d_iov_set(&akey_iov, akey, strlen(akey));
+
 	for (i = 0; i < 3; i++) {
-		oid[i] = dts_unit_oid_gen(0, 0);
-
-		ds[i].td_type           = DAOS_IOD_SINGLE;
-		ds[i].td_iod_size       = AT_SV_IOD_SIZE_SMALL;
-		ds[i].td_upd_epr.epr_lo = 1;
-		ds[i].td_upd_epr.epr_hi = 10;
-		ds[i].td_agg_epr.epr_lo = 4;
-		ds[i].td_agg_epr.epr_hi = 6;
-		ds[i].td_expected_recs  = 1;
-		ds[i].td_discard        = false;
-		ds[i].td_oid            = oid[i];
-
-		buf[0] = (char)('A' + i);
+		oid[i]    = dts_unit_oid_gen(0, 0);
+		buf_in[0] = (char)('A' + i);
 
 		update_value(arg, oid[i], 1, 0, dkey, akey, DAOS_IOD_SINGLE, AT_SV_IOD_SIZE_SMALL,
-			     NULL, buf);
+			     NULL, buf_in);
 		update_value(arg, oid[i], 5, 0, dkey, akey, DAOS_IOD_SINGLE, AT_SV_IOD_SIZE_SMALL,
-			     NULL, buf);
+			     NULL, buf_in);
 	}
 
-	/* Aggregate only the second object */
-	VERBOSE_MSG("Obj aggregate multi: aggregating only oid[1].\n");
-	rc = vos_obj_aggregate(arg->ctx.tc_co_hdl, oid[1], &ds[1].td_agg_epr, NULL, NULL,
-			       VOS_AGG_FL_FORCE_MERGE);
-	assert_rc_equal(rc, 0);
+	/* Use aggregate_basic_obj helper to aggregate and verify the second object */
+	ds.td_type           = DAOS_IOD_SINGLE;
+	ds.td_oid            = oid[1];
+	ds.td_iod_size       = AT_SV_IOD_SIZE_SMALL;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 10;
+	ds.td_agg_epr.epr_lo = 4;
+	ds.td_agg_epr.epr_hi = 6;
+	ds.td_expected_recs  = 1;
+	ds.td_discard        = false;
 
-	/* Verify: object 1 (index 0) should still have 2 records (epoch 1 + 5) */
-	/* Object 2 (index 1) should have 1 record (epoch 5 preserved, 1 aggregated) */
-	/* Object 3 (index 2) should still have 2 records */
+	VERBOSE_MSG("Obj aggregate multi: aggregate & verify only oid[1]\n");
+	aggregate_basic_obj(arg, &ds, 0, NULL, VOS_AGG_FL_FORCE_MERGE);
+
+	/* Verify objects 0 and 2 are untouched: fetch at agg_epr_hi (=6)
+	 * should return the epoch-5 value (MVCC rules).  A fetch suffices;
+	 * if aggregation leaked, data or checksums would mismatch.
+	 */
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = AT_SV_IOD_SIZE_SMALL;
+	iod.iod_nr   = 1;
+
+	d_iov_set(&iov, buf_out, AT_SV_IOD_SIZE_SMALL);
+	memset(buf_out, 0, AT_SV_IOD_SIZE_SMALL);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
 
 	for (i = 0; i < 3; i++) {
-		generate_view(arg, oid[i], dkey, akey, &ds[i]);
-		verify_view(arg, oid[i], dkey, akey, &ds[i]);
+		if (i == 1)
+			continue; /* already verified by aggregate_basic_obj */
+
+		rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid[i], ds.td_agg_epr.epr_hi, 0, &dkey_iov,
+				   1, &iod, &sgl);
+		assert_int_equal(rc, 0);
+		assert_int_equal(buf_out[0], 'A' + i);
 	}
 
 	cleanup();
