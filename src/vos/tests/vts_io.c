@@ -3089,22 +3089,30 @@ io_csum_fetch_single(void **state)
 	/* Fill the buffer with random letters */
 	dts_buf_render(&update_buf[0], update_buf_size);
 	rc = d_sgl_init(&sgl, 1);
-	if (rc)
+	if (rc) {
+		print_message("d_sgl_init failed: rc=%d\n", rc);
 		goto out;
+	}
 	d_iov_set(sgl.sg_iovs, &update_buf[0], update_buf_size);
 
 	/* Compute update buffer checksum */
 	rc = daos_csummer_init_with_type(&csummer, csum_type, csum_chunk_size, 0);
-	if (rc != 0)
+	if (rc != 0) {
+		print_message("daos_csummer_init_with_type failed: rc=%d\n", rc);
 		goto out_sgl;
+	}
 	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic);
-	if (rc)
+	if (rc) {
+		print_message("daos_csummer_calc_iods failed: rc=%d\n", rc);
 		goto out_csummer;
+	}
 
 	/* Write/Update and update mocking counters */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1, &iod, ic, &sgl);
-	if (rc)
+	if (rc) {
+		print_message("vos_obj_update failed: rc=%d\n", rc);
 		goto out_ic;
+	}
 	inc_cntr(arg->ta_flags);
 
 	/* Fetch checksum info */
@@ -3224,16 +3232,20 @@ io_csum_fetch_recx(void **state)
 	vts_key_gen(&akey_name[0], arg->akey_size, false, arg);
 	set_iov(&akey, &akey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
-	/* Create csumer */
+	/* Create csummer */
 	rc = daos_csummer_init_with_type(&csummer, csum_type, csum_chunk_size, 0);
-	if (rc != 0)
+	if (rc != 0) {
+		print_message("daos_csummer_init_with_type failed: rc=%d\n", rc);
 		goto out;
+	}
 
 	for (i = 0; i < 2; i++) {
 		rc = io_csum_update_recx(arg, i + 1, &dkey, &akey, i * csum_chunk_size / 2,
 					 2 * csum_chunk_size, csummer, &ic[i]);
-		if (rc)
+		if (rc) {
+			print_message("io_csum_update_recx (write %d) failed: rc=%d\n", i + 1, rc);
 			goto out_csums;
+		}
 	}
 
 	/* Fetch recx and checksums info */
