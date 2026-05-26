@@ -3201,11 +3201,27 @@ out:
 	return rc;
 }
 
+/*
+ * Verify that VOS correctly fills the checksum info list when fetching two
+ * overlapping ARRAY extents written at different chunk-boundary alignments.
+ *
+ * Write layout (chunk_size = 64 bytes):
+ *   Write 1: offset 0, length 128 (chunk-aligned)
+ *            spans chunks [0,64) and [64,128) → cs_nr = 2
+ *   Write 2: offset 32, length 128 (not chunk-aligned)
+ *            spans chunks [32,64), [64,128), and [128,160) → cs_nr = 3
+ *
+ * After fetching, the checksum info list must contain one entry per write
+ * with cs_nr equal to the number of chunks it spans, and the checksums must
+ * match those computed at write time.
+ */
 static void
 io_csum_fetch_recx(void **state)
 {
 	const enum DAOS_HASH_TYPE csum_type       = HASH_TYPE_CRC16;
 	const size_t              csum_chunk_size = 1u << 6;
+	const size_t              recx_size       = 2 * csum_chunk_size;
+	const daos_off_t          recx2_idx       = csum_chunk_size / 2;
 
 	struct io_test_args      *arg;
 	daos_key_t                dkey;
@@ -3221,7 +3237,6 @@ io_csum_fetch_recx(void **state)
 	char                      dkey_name[UPDATE_DKEY_SIZE];
 	char                      akey_name[UPDATE_AKEY_SIZE];
 	daos_handle_t             ioh;
-	int                       i;
 	int                       rc;
 
 	arg = *state;
@@ -3239,18 +3254,23 @@ io_csum_fetch_recx(void **state)
 		goto out;
 	}
 
-	for (i = 0; i < 2; i++) {
-		rc = io_csum_update_recx(arg, i + 1, &dkey, &akey, i * csum_chunk_size / 2,
-					 2 * csum_chunk_size, csummer, &ic[i]);
-		if (rc) {
-			print_message("io_csum_update_recx (write %d) failed: rc=%d\n", i + 1, rc);
-			goto out_csums;
-		}
+	/* Write 1: chunk-aligned at offset 0, epoch 1 → cs_nr=2 */
+	rc = io_csum_update_recx(arg, 1, &dkey, &akey, 0, recx_size, csummer, &ic[0]);
+	if (rc) {
+		print_message("io_csum_update_recx (write 1) failed: rc=%d\n", rc);
+		goto out_csums;
+	}
+
+	/* Write 2: non-aligned at offset recx2_idx=32, epoch 2 → cs_nr=3 */
+	rc = io_csum_update_recx(arg, 2, &dkey, &akey, recx2_idx, recx_size, csummer, &ic[1]);
+	if (rc) {
+		print_message("io_csum_update_recx (write 2) failed: rc=%d\n", rc);
+		goto out_csums;
 	}
 
 	/* Fetch recx and checksums info */
 	recx.rx_idx   = 0;
-	recx.rx_nr    = 2 * csum_chunk_size;
+	recx.rx_nr    = recx_size;
 	iod.iod_type  = DAOS_IOD_ARRAY;
 	iod.iod_name  = akey;
 	iod.iod_recxs = &recx;
@@ -3265,22 +3285,26 @@ io_csum_fetch_recx(void **state)
 	assert_non_null(rel);
 	assert_int_equal(rel->re_nr, 2);
 	assert_int_equal(rel->re_items[0].re_recx.rx_idx, 0);
-	assert_int_equal(rel->re_items[0].re_recx.rx_nr, 2 * csum_chunk_size);
+	assert_int_equal(rel->re_items[0].re_recx.rx_nr, recx_size);
 	assert_int_equal(rel->re_items[0].re_ep, 1);
-	assert_int_equal(rel->re_items[1].re_recx.rx_idx, csum_chunk_size / 2);
-	assert_int_equal(rel->re_items[1].re_recx.rx_nr, 2 * csum_chunk_size);
+	assert_int_equal(rel->re_items[1].re_recx.rx_idx, recx2_idx);
+	assert_int_equal(rel->re_items[1].re_recx.rx_nr, recx_size);
 	assert_int_equal(rel->re_items[1].re_ep, 2);
 
 	/* Check fetched csum info */
 	cil = vos_ioh2ci(ioh);
 	assert_non_null(cil);
 	assert_int_equal(cil->dcl_csum_infos_nr, 2);
+
+	/* Write 1: chunk-aligned → 2 chunks → cs_nr=2 */
 	ci = dcs_csum_info_get(cil, 0);
 	assert_true(ci_is_valid(ci));
 	assert_int_equal(ci->cs_nr, 2);
 	hf = daos_mhash_type2algo(ci->cs_type);
 	assert_int_equal(hf->cf_type, csum_type);
 	assert_true(daos_csummer_compare_csum_info(csummer, ic[0]->ic_data, ci));
+
+	/* Write 2: non-aligned start at recx2_idx=32 → spans 3 chunks → cs_nr=3 */
 	ci = dcs_csum_info_get(cil, 1);
 	assert_true(ci_is_valid(ci));
 	assert_int_equal(ci->cs_nr, 3);
@@ -3294,7 +3318,7 @@ io_csum_fetch_recx(void **state)
 	assert_rc_equal(rc, 0);
 
 out_csums:
-	for (i = 0; i < 2; i++) {
+	for (int i = 0; i < 2; i++) {
 		if (ic[i] != NULL)
 			daos_csummer_free_ic(csummer, &ic[i]);
 	}
