@@ -110,7 +110,7 @@ cat <<EOF > "${DAOS_FTEST_VENV}"/pip.conf
 EOF
 
 pip install --upgrade pip
-pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
+pip install --no-binary=mpi4py -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 # Copy the pydaos source locally and install it, in an ideal world this would install
 # from the read-only tree directly but for now that isn't working.
 # https://github.com/pypa/setuptools/issues/3237

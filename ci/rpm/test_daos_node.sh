@@ -145,7 +145,7 @@ cat <<EOF > venv/pip.conf
 EOF
 
 pip install --upgrade pip
-pip install -r $FTEST/requirements-ftest.txt
+pip install --no-binary=mpi4py -r $FTEST/requirements-ftest.txt
 
 sudo PYTHONPATH="$FTEST/util"                        \
      "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
