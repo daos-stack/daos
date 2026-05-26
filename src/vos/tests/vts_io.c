@@ -3327,6 +3327,124 @@ out:
 	assert_rc_equal(rc, 0);
 }
 
+/**
+ * Helper: write recx [recx_idx, recx_idx+recx_size) at the given epoch WITHOUT a checksum.
+ */
+static void
+io_csum_write_no_csum(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dkey,
+		      daos_key_t *akey, uint64_t recx_idx, size_t recx_size)
+{
+	daos_recx_t recx;
+	daos_iod_t  iod;
+	d_sg_list_t sgl;
+	char       *buf;
+	int         rc;
+
+	D_ALLOC(buf, recx_size);
+	assert_non_null(buf);
+	dts_buf_render(buf, recx_size);
+
+	rc = d_sgl_init(&sgl, 1);
+	if (rc) {
+		print_message("d_sgl_init failed: rc=%d\n", rc);
+		D_FREE(buf);
+		assert_rc_equal(rc, 0);
+		return;
+	}
+	d_iov_set(sgl.sg_iovs, buf, recx_size);
+
+	recx.rx_idx   = recx_idx;
+	recx.rx_nr    = recx_size;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = *akey;
+	iod.iod_recxs = &recx;
+	iod.iod_size  = 1;
+	iod.iod_nr    = 1;
+
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, 0, dkey, 1, &iod, NULL, &sgl);
+	d_sgl_fini(&sgl, false);
+	D_FREE(buf);
+	if (rc)
+		print_message("vos_obj_update (no-csum) failed: rc=%d\n", rc);
+	assert_rc_equal(rc, 0);
+}
+
+/**
+ * Verify that entries without stored checksums are visible in the recx list
+ * returned by VOS_OF_FETCH_CSUM, and that the csum list is empty.
+ *
+ * When no entry in the akey has ever stored a checksum the EVT root has
+ * tr_csum_len==0, so evt_entry_csum_fill() leaves every entry's en_csum
+ * zero-initialised and ci_is_valid() reliably returns false.  Because null
+ * placeholders would only ever fill the entire csum list in that case, an
+ * empty csum list (dcl_csum_infos_nr==0) is the correct signal for
+ * "no checksums stored for any extent in this akey".
+ *
+ *   write [0, 64) at epoch 1 WITHOUT checksum
+ *   write [64, 128) at epoch 2 WITHOUT checksum
+ *   fetch [0, 128) with VOS_OF_FETCH_CSUM:
+ *     expect re_nr == 2            (no-csum entries are visible)
+ *     expect dcl_csum_infos_nr == 0 (empty csum list, not null placeholders)
+ */
+static void
+io_csum_fetch_recx_missing_csum(void **state)
+{
+	const size_t              recx_size = 1u << 6; /* 64 bytes, one csum chunk */
+
+	struct io_test_args      *arg;
+	struct daos_recx_ep_list *rel;
+	struct dcs_ci_list       *cil;
+	daos_key_t                dkey;
+	daos_key_t                akey;
+	daos_recx_t               recx;
+	daos_iod_t                iod;
+	char                      dkey_name[UPDATE_DKEY_SIZE];
+	char                      akey_name[UPDATE_AKEY_SIZE];
+	daos_handle_t             ioh;
+	int                       rc = 0;
+
+	arg = *state;
+
+	vts_key_gen(&dkey_name[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	vts_key_gen(&akey_name[0], arg->akey_size, false, arg);
+	set_iov(&akey, &akey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	/* Write both extents WITHOUT any checksum (keeps EVT root tr_csum_len == 0) */
+	io_csum_write_no_csum(arg, 1, &dkey, &akey, 0, recx_size);
+	io_csum_write_no_csum(arg, 2, &dkey, &akey, recx_size, recx_size);
+
+	/* Fetch [0, 2*recx_size) with VOS_OF_FETCH_CSUM */
+	recx.rx_idx   = 0;
+	recx.rx_nr    = 2 * recx_size;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = akey;
+	iod.iod_recxs = &recx;
+	iod.iod_size  = 1;
+	iod.iod_nr    = 1;
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &dkey, 1, &iod,
+			     VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (rc) {
+		print_message("vos_fetch_begin failed: rc=%d\n", rc);
+		goto out;
+	}
+
+	/* Both no-csum extents must appear in the recx list (gate was removed) */
+	rel = vos_ioh2recx_list(ioh);
+	assert_non_null(rel);
+	assert_int_equal(rel->re_nr, 2);
+
+	/* Csum list must be empty: no checksums were stored for this akey */
+	cil = vos_ioh2ci(ioh);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+
+	daos_recx_ep_list_free(rel, iod.iod_nr);
+	rc = vos_fetch_end(ioh, NULL, 0);
+out:
+	assert_rc_equal(rc, 0);
+}
+
 static const struct CMUnitTest iterator_tests[] = {
     {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
     {"VOS240.0: KV Iter tests (for dkey)", io_iter_test, NULL, NULL},
@@ -3364,6 +3482,8 @@ static const struct CMUnitTest io_tests[] = {
     {"VOS299: Space overflow negative error test", io_pool_overflow_test, NULL,
      io_pool_overflow_teardown},
     {"VOS401.1: Fetch checksum of array value objects", io_csum_fetch_recx, NULL, NULL},
+    {"VOS401.2: Fetch checksum with missing csum entries (no-csum entries visible)",
+     io_csum_fetch_recx_missing_csum, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {

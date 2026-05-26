@@ -1057,8 +1057,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	daos_size_t		 holes; /* hole width */
 	daos_size_t		 rsize;
 	daos_off_t		 index;
-	daos_off_t		 end;
-	bool			 csum_enabled = false;
+	daos_off_t               end;
 	bool			 with_shadow = (shadow_ep != DAOS_EPOCH_MAX);
 	uint32_t		 inob;
 	int			 rc;
@@ -1183,15 +1182,11 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			if (rc != 0)
 				goto failed;
 			biov_align_lens(&biov, ent, rsize);
-			csum_enabled = true;
 		} else {
 			bio_iov_set_extra(&biov, 0, 0);
-			if (csum_enabled)
-				D_ERROR("Checksum found in some entries, "
-					"but not all\n");
 		}
 
-		if (ioc->ic_csum_fetch && csum_enabled) {
+		if (ioc->ic_csum_fetch) {
 			daos_off_t  ex_lo;
 			daos_size_t ex_nr;
 
