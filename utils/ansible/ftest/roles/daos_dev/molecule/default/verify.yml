@@ -77,3 +77,49 @@
         that:
           - "'export GOPROXY=\"direct\"' in _noproxy_script"
         fail_msg: "GOPROXY must always be set in daos-make.sh even when no proxy is configured"
+
+    # ── Provenance script verification ────────────────────────────────────────
+
+    - name: Read rendered daos-deploy-info.sh
+      slurp:
+        src: /opt/daos/daos-deploy-info.sh
+      register: _deploy_info
+
+    - name: Set fact for deploy info script content
+      set_fact:
+        _deploy_info_content: "{{ _deploy_info.content | b64decode }}"
+
+    - name: Verify DAOS_GENERATED is baked into the provenance script
+      assert:
+        that: "'DAOS_GENERATED=\"2024-01-15T10:30:00Z\"' in _deploy_info_content"
+        fail_msg: "DAOS_GENERATED not found in rendered daos-deploy-info.sh"
+
+    - name: Verify DAOS_CONTROLLER_HOST is baked into the provenance script
+      assert:
+        that: "'DAOS_CONTROLLER_HOST=\"test-ctrl.example.com\"' in _deploy_info_content"
+        fail_msg: "DAOS_CONTROLLER_HOST not found in rendered daos-deploy-info.sh"
+
+    - name: Verify DAOS_INVENTORY is baked into the provenance script
+      assert:
+        that: "'DAOS_INVENTORY=\"/home/testuser/test-inventory.yml\"' in _deploy_info_content"
+        fail_msg: "DAOS_INVENTORY not found in rendered daos-deploy-info.sh"
+
+    - name: Verify DAOS_INVENTORY_COPY path is inside daos_runtime_dir
+      assert:
+        that: "'DAOS_INVENTORY_COPY=\"/opt/daos/inventory.yml\"' in _deploy_info_content"
+        fail_msg: "DAOS_INVENTORY_COPY not pointing to /opt/daos/inventory.yml"
+
+    - name: Verify DAOS_SERVER_NODES is set (molecule host is in daos_servers group)
+      assert:
+        that: "'DAOS_SERVER_NODES=' in _deploy_info_content"
+        fail_msg: "DAOS_SERVER_NODES not found in rendered daos-deploy-info.sh"
+
+    - name: Verify DAOS_CLIENT_NODES is empty string (no clients in molecule scenario)
+      assert:
+        that: "'DAOS_CLIENT_NODES=\"\"' in _deploy_info_content"
+        fail_msg: "DAOS_CLIENT_NODES should be empty string (no daos_clients group in molecule)"
+
+    - name: Verify BASH_SOURCE guard is present in provenance script
+      assert:
+        that: "'BASH_SOURCE[0]' in _deploy_info_content"
+        fail_msg: "BASH_SOURCE guard not found — provenance script must be sourceable"
