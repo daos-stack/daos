@@ -107,6 +107,18 @@
 /** DFS mode mask (3rd bit) */
 #define MODE_MASK          (1 << 2)
 
+/** Hardlink mode bit used to mark regular files that are tracked in GIT */
+#define DFS_MODE_HARDLINK      ((mode_t)(1U << 31))
+#define DFS_MODE_INTERNAL_MASK (DFS_MODE_HARDLINK)
+#define DFS_IS_HARDLINK(mode)  (S_ISREG(mode) && ((mode) & DFS_MODE_HARDLINK))
+static inline void
+dfs_set_hardlink(mode_t *mode)
+{
+	D_ASSERT(S_ISREG(*mode));
+	*mode |= DFS_MODE_HARDLINK;
+}
+#define DFS_EXTERNAL_MODE(mode) ((mode) & ~DFS_MODE_INTERNAL_MASK)
+
 /** Max recursion depth for symlinks */
 #define DFS_MAX_RECURSION  40
 
@@ -439,6 +451,8 @@ git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, 
 int
 git_copy_xattr(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *dst_oid, daos_handle_t src_oh,
 	       const char *src_name);
+int
+xattr_delete_entry(daos_handle_t oh, const char *name, daos_handle_t th);
 int
 open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct dfs_entry *entry,
 	 size_t len, dfs_obj_t *dir);
