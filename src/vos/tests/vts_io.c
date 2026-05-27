@@ -3089,30 +3089,18 @@ io_csum_fetch_single(void **state)
 	/* Fill the buffer with random letters */
 	dts_buf_render(&update_buf[0], update_buf_size);
 	rc = d_sgl_init(&sgl, 1);
-	if (rc) {
-		print_message("d_sgl_init failed: rc=%d\n", rc);
-		goto out;
-	}
+	assert_rc_equal(rc, 0);
 	d_iov_set(sgl.sg_iovs, &update_buf[0], update_buf_size);
 
 	/* Compute update buffer checksum */
 	rc = daos_csummer_init_with_type(&csummer, csum_type, csum_chunk_size, 0);
-	if (rc != 0) {
-		print_message("daos_csummer_init_with_type failed: rc=%d\n", rc);
-		goto out_sgl;
-	}
+	assert_rc_equal(rc, 0);
 	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic);
-	if (rc) {
-		print_message("daos_csummer_calc_iods failed: rc=%d\n", rc);
-		goto out_csummer;
-	}
+	assert_rc_equal(rc, 0);
 
 	/* Write/Update and update mocking counters */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1, &iod, ic, &sgl);
-	if (rc) {
-		print_message("vos_obj_update failed: rc=%d\n", rc);
-		goto out_ic;
-	}
+	assert_rc_equal(rc, 0);
 	inc_cntr(arg->ta_flags);
 
 	/* Fetch checksum info */
@@ -3137,16 +3125,10 @@ io_csum_fetch_single(void **state)
 	/* Cleanup */
 	rc = vos_fetch_end(ioh, NULL, rc);
 	assert_rc_equal(rc, 0);
-
-out_ic:
 	daos_csummer_free_ic(csummer, &ic);
-out_csummer:
 	daos_csummer_destroy(&csummer);
-out_sgl:
 	d_sgl_fini(&sgl, false);
-out:
 	D_FREE(update_buf);
-	assert_rc_equal(rc, 0);
 }
 
 static int
@@ -3249,24 +3231,15 @@ io_csum_fetch_recx(void **state)
 
 	/* Create csummer */
 	rc = daos_csummer_init_with_type(&csummer, csum_type, csum_chunk_size, 0);
-	if (rc != 0) {
-		print_message("daos_csummer_init_with_type failed: rc=%d\n", rc);
-		goto out;
-	}
+	assert_rc_equal(rc, 0);
 
 	/* Write 1: chunk-aligned at offset 0, epoch 1 → cs_nr=2 */
 	rc = io_csum_update_recx(arg, 1, &dkey, &akey, 0, recx_size, csummer, &ic[0]);
-	if (rc) {
-		print_message("io_csum_update_recx (write 1) failed: rc=%d\n", rc);
-		goto out_csums;
-	}
+	assert_rc_equal(rc, 0);
 
 	/* Write 2: non-aligned at offset recx2_idx=32, epoch 2 → cs_nr=3 */
 	rc = io_csum_update_recx(arg, 2, &dkey, &akey, recx2_idx, recx_size, csummer, &ic[1]);
-	if (rc) {
-		print_message("io_csum_update_recx (write 2) failed: rc=%d\n", rc);
-		goto out_csums;
-	}
+	assert_rc_equal(rc, 0);
 
 	/* Fetch recx and checksums info */
 	recx.rx_idx   = 0;
@@ -3316,15 +3289,11 @@ io_csum_fetch_recx(void **state)
 	daos_recx_ep_list_free(rel, iod.iod_nr);
 	rc = vos_fetch_end(ioh, NULL, rc);
 	assert_rc_equal(rc, 0);
-
-out_csums:
 	for (int i = 0; i < 2; i++) {
 		if (ic[i] != NULL)
 			daos_csummer_free_ic(csummer, &ic[i]);
 	}
 	daos_csummer_destroy(&csummer);
-out:
-	assert_rc_equal(rc, 0);
 }
 
 /**
@@ -3345,12 +3314,7 @@ io_csum_write_no_csum(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *
 	dts_buf_render(buf, recx_size);
 
 	rc = d_sgl_init(&sgl, 1);
-	if (rc) {
-		print_message("d_sgl_init failed: rc=%d\n", rc);
-		D_FREE(buf);
-		assert_rc_equal(rc, 0);
-		return;
-	}
+	assert_rc_equal(rc, 0);
 	d_iov_set(sgl.sg_iovs, buf, recx_size);
 
 	recx.rx_idx   = recx_idx;
@@ -3362,11 +3326,11 @@ io_csum_write_no_csum(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *
 	iod.iod_nr    = 1;
 
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, 0, dkey, 1, &iod, NULL, &sgl);
+	assert_rc_equal(rc, 0);
+
+	/* Cleanup */
 	d_sgl_fini(&sgl, false);
 	D_FREE(buf);
-	if (rc)
-		print_message("vos_obj_update (no-csum) failed: rc=%d\n", rc);
-	assert_rc_equal(rc, 0);
 }
 
 /**
@@ -3424,10 +3388,7 @@ io_csum_fetch_recx_missing_csum(void **state)
 	iod.iod_nr    = 1;
 	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &dkey, 1, &iod,
 			     VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
-	if (rc) {
-		print_message("vos_fetch_begin failed: rc=%d\n", rc);
-		goto out;
-	}
+	assert_rc_equal(rc, 0);
 
 	/* Both no-csum extents must appear in the recx list (gate was removed) */
 	rel = vos_ioh2recx_list(ioh);
@@ -3439,9 +3400,9 @@ io_csum_fetch_recx_missing_csum(void **state)
 	assert_non_null(cil);
 	assert_int_equal(cil->dcl_csum_infos_nr, 0);
 
+	/* Cleanup */
 	daos_recx_ep_list_free(rel, iod.iod_nr);
 	rc = vos_fetch_end(ioh, NULL, 0);
-out:
 	assert_rc_equal(rc, 0);
 }
 
