@@ -1,5 +1,5 @@
 diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
-index 96501b2..9e663bc 100644
+index 96501b2..400aef5 100644
 --- a/src/na/na_ucx.c
 +++ b/src/na/na_ucx.c
 @@ -2008,8 +2008,7 @@ error:
@@ -17,8 +17,24 @@ index 96501b2..9e663bc 100644
  
      /* Mark addr as no longer resolved to force reconnection */
 -    hg_atomic_and32(&na_ucx_addr->status, ~NA_UCX_ADDR_RESOLVED);
-+	if (na_ucx_addr->na_ucx_class->ucp_listener && status != UCS_ERR_CONNECTION_RESET)
++	// if (na_ucx_addr->na_ucx_class->ucp_listener && status != UCS_ERR_CONNECTION_RESET)
 +   	    hg_atomic_and32(&na_ucx_addr->status, ~NA_UCX_ADDR_RESOLVED);
  
      /* Will schedule removal of address */
      na_ucx_addr_ref_decr(na_ucx_addr);
+@@ -3256,10 +3256,11 @@ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
+ 
+     /* Check addr to ensure the EP for that addr is still valid */
+     if (!(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
+-        ret = na_ucx_addr_map_update(
+-            na_ucx_class, &na_ucx_class->addr_map, na_ucx_addr);
+-        NA_CHECK_SUBSYS_NA_ERROR(
+-            addr, error, ret, "Could not update NA UCX address");
++        hg_atomic_or32(&na_ucx_addr->status, NA_UCX_ADDR_RESOLVED);
++       // ret = na_ucx_addr_map_update(
++       //    na_ucx_class, &na_ucx_class->addr_map, na_ucx_addr);
++       // NA_CHECK_SUBSYS_NA_ERROR(
++       //     addr, error, ret, "Could not update NA UCX address");
+     }
+     NA_CHECK_SUBSYS_ERROR(rma, na_ucx_addr->ucp_ep == NULL, error, ret,
+         NA_ADDRNOTAVAIL, "UCP endpoint is NULL for that address");
