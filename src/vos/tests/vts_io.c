@@ -3131,9 +3131,9 @@ io_csum_fetch_single(void **state)
 	D_FREE(update_buf);
 }
 
-static int
+static void
 io_csum_update_recx(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dkey,
-		    daos_key_t *akey, uint64_t recx_idx, size_t recx_size,
+		    const daos_key_t *akey, uint64_t recx_idx, size_t recx_size,
 		    struct daos_csummer *csummer, struct dcs_iod_csums **p_ic)
 {
 	char       *buf;
@@ -3143,10 +3143,7 @@ io_csum_update_recx(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dk
 	int         rc;
 
 	D_ALLOC(buf, recx_size);
-	if (buf == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	assert_non_null(buf);
 
 	recx.rx_idx = recx_idx;
 	recx.rx_nr  = recx_size;
@@ -3160,27 +3157,21 @@ io_csum_update_recx(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dk
 	/* Fill the buffer with random letters */
 	dts_buf_render(&buf[0], recx_size);
 	rc = d_sgl_init(&sgl, 1);
-	if (rc)
-		goto out_buf;
+	assert_rc_equal(rc, 0);
 	d_iov_set(sgl.sg_iovs, &buf[0], recx_size);
 
 	/* Compute update buffer checksum */
 	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, p_ic);
-	if (rc)
-		goto out_sgl;
+	assert_rc_equal(rc, 0);
 
 	/* Write/Update and update mocking counters */
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, 0, dkey, 1, &iod, *p_ic, &sgl);
-	if (rc)
-		goto out_sgl;
+	assert_rc_equal(rc, 0);
 	inc_cntr(arg->ta_flags);
 
-out_sgl:
+	/* Cleanup */
 	d_sgl_fini(&sgl, false);
-out_buf:
 	D_FREE(buf);
-out:
-	return rc;
 }
 
 /*
@@ -3234,12 +3225,10 @@ io_csum_fetch_recx(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Write 1: chunk-aligned at offset 0, epoch 1 → cs_nr=2 */
-	rc = io_csum_update_recx(arg, 1, &dkey, &akey, 0, recx_size, csummer, &ic[0]);
-	assert_rc_equal(rc, 0);
+	io_csum_update_recx(arg, 1, &dkey, &akey, 0, recx_size, csummer, &ic[0]);
 
 	/* Write 2: non-aligned at offset recx2_idx=32, epoch 2 → cs_nr=3 */
-	rc = io_csum_update_recx(arg, 2, &dkey, &akey, recx2_idx, recx_size, csummer, &ic[1]);
-	assert_rc_equal(rc, 0);
+	io_csum_update_recx(arg, 2, &dkey, &akey, recx2_idx, recx_size, csummer, &ic[1]);
 
 	/* Fetch recx and checksums info */
 	recx.rx_idx   = 0;
