@@ -1,6 +1,6 @@
 """
-  Copyright 2018-2023 Intel Corporation.
-  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -93,7 +93,7 @@ class FullPoolContainerCreate(TestWithServers):
         self.pool.set_query_data()
         self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
-        # destroy container\
+        # destroy container
         self.log_step("Destroy the container to free up space in the pool")
         self.container.destroy()
 
