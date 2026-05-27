@@ -841,6 +841,12 @@ d_timeinc(struct timespec *now, uint64_t ns)
 	now->tv_nsec = now->tv_nsec % NSEC_PER_SEC;
 }
 
+static inline void
+d_timeinc_ms(struct timespec *now, unsigned int ms)
+{
+	d_timeinc(now, ms * 1000000);
+}
+
 static inline struct timespec
 d_time_ms(unsigned int ms)
 {
