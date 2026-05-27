@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -116,7 +116,12 @@ struct vos_gc_bkt_df {
 /** 2.8 features */
 #define VOS_POOL_FEAT_2_8			(VOS_POOL_FEAT_GANG_SV)
 
-#define VOS_POOL_EXT_DF_PADDING_SIZE            53
+#define VOS_POOL_EXT_DF_PADDING_SIZE            52
+
+/* Preallocate 512KB buffer for backend transaction snapshots under space pressure.
+ * NB: workload of GC/DTX is deterministic (tree operations), 512K should be sufficient.
+ */
+#define VOS_SNAPBUF_EMERG_SIZE                  (1 << 19)
 
 /* VOS pool durable format extension */
 struct vos_pool_ext_df {
@@ -124,6 +129,8 @@ struct vos_pool_ext_df {
 	struct vos_gc_bkt_df	ped_gc_bkt;
 	/* Memory file size for md-on-ssd phase2 pool */
 	uint64_t                ped_mem_sz;
+	/* emergency buffer for TX snapshots under space pressure */
+	umem_off_t              ped_emerg_buf;
 	/* Paddings for other potential new feature */
 	uint64_t                ped_paddings[VOS_POOL_EXT_DF_PADDING_SIZE];
 	/* Reserved for future extension */

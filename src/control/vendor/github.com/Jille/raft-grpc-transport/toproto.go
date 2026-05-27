@@ -21,6 +21,8 @@ func encodeAppendEntriesRequest(s *raft.AppendEntriesRequest) *pb.AppendEntriesR
 func encodeRPCHeader(s raft.RPCHeader) *pb.RPCHeader {
 	return &pb.RPCHeader{
 		ProtocolVersion: int64(s.ProtocolVersion),
+		Id:              s.ID,
+		Addr:            s.Addr,
 	}
 }
 
@@ -124,5 +126,22 @@ func encodeTimeoutNowRequest(s *raft.TimeoutNowRequest) *pb.TimeoutNowRequest {
 func encodeTimeoutNowResponse(s *raft.TimeoutNowResponse) *pb.TimeoutNowResponse {
 	return &pb.TimeoutNowResponse{
 		RpcHeader: encodeRPCHeader(s.RPCHeader),
+	}
+}
+
+func encodeRequestPreVoteRequest(s *raft.RequestPreVoteRequest) *pb.RequestPreVoteRequest {
+	return &pb.RequestPreVoteRequest{
+		RpcHeader:    encodeRPCHeader(s.RPCHeader),
+		Term:         s.Term,
+		LastLogIndex: s.LastLogIndex,
+		LastLogTerm:  s.LastLogTerm,
+	}
+}
+
+func encodeRequestPreVoteResponse(s *raft.RequestPreVoteResponse) *pb.RequestPreVoteResponse {
+	return &pb.RequestPreVoteResponse{
+		RpcHeader: encodeRPCHeader(s.RPCHeader),
+		Term:      s.Term,
+		Granted:   s.Granted,
 	}
 }

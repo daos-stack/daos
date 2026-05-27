@@ -105,6 +105,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.SystemSubCommand()
         elif self.sub_command.value == "telemetry":
             self.sub_command_class = self.TelemetrySubCommand()
+        elif self.sub_command.value == "server-version":
+            self.sub_command_class = self.ServerVersionSubCommand()
         elif self.sub_command.value == "version":
             self.sub_command_class = self.VersionSubCommand()
         elif self.sub_command.value == "support":
@@ -1124,6 +1126,13 @@ class DmgCommandBase(YamlCommand):
                     self.host = FormattedParameter("--host={}", None)
                     self.port = FormattedParameter("--port={}", None)
                     self.metrics = FormattedParameter("--metrics={}", None)
+
+    class ServerVersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg server-version sub command."""
+
+        def __init__(self):
+            """Create a dmg server-version subcommand object."""
+            super().__init__("/run/dmg/server-version/*", "server-version")
 
     class VersionSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg version sub command."""

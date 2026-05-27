@@ -9,14 +9,20 @@ package control
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestControl_SystemCheckReport_RepairChoices(t *testing.T) {
@@ -183,6 +189,119 @@ func TestControl_SystemCheckReport_IsStale(t *testing.T) {
 	}
 }
 
+func TestControl_SystemCheckQuery(t *testing.T) {
+	testTime := time.Now()
+
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *SystemCheckQueryReq
+		expErr  error
+		expResp *SystemCheckQueryResp
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"gRPC failed": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("foobar"),
+			},
+			req:    &SystemCheckQueryReq{},
+			expErr: errors.New("foobar"),
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("", nil, &mgmtpb.CheckQueryResp{
+					ReqStatus: daos.MiscError.Int32(),
+					InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
+					InsPhase:  chkpb.CheckScanPhase_CSP_CONT_CLEANUP,
+					Inconsistency: &mgmtpb.CheckQueryInconsist{
+						Total:    5,
+						Repaired: 3,
+						Ignored:  1,
+						Failed:   1,
+					},
+					Time: &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+					Pools: []*mgmtpb.CheckQueryPool{
+						{
+							Uuid:          "12345678-1234-1234-1234-123456789abc",
+							Status:        chkpb.CheckPoolStatus_CPS_CHECKED,
+							Phase:         chkpb.CheckScanPhase_CSP_DONE,
+							Inconsistency: &mgmtpb.CheckQueryInconsist{},
+							Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+							Targets: []*mgmtpb.CheckQueryTarget{
+								{
+									Rank:          3,
+									Status:        chkpb.CheckInstStatus_CIS_COMPLETED,
+									Inconsistency: &mgmtpb.CheckQueryInconsist{},
+									Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+								},
+							},
+						},
+					},
+					Reports: []*chkpb.CheckReport{
+						{Seq: 1, Class: chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL},
+						{Seq: 3, Class: chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL},
+					},
+					Leader: 5,
+				}),
+			},
+			req: &SystemCheckQueryReq{},
+			expResp: &SystemCheckQueryResp{
+				Status:    SystemCheckStatusRunning,
+				ScanPhase: SystemCheckScanPhaseContainerCleanup,
+				StartTime: time.Unix(testTime.Unix(), 0),
+				Leader:    5,
+				Pools: map[string]*SystemCheckPoolInfo{
+					"12345678-1234-1234-1234-123456789abc": {
+						RawRankInfo: rawRankMap{
+							3: {
+								Uuid:          "12345678-1234-1234-1234-123456789abc",
+								Status:        chkpb.CheckPoolStatus_CPS_CHECKED,
+								Phase:         chkpb.CheckScanPhase_CSP_DONE,
+								Inconsistency: &mgmtpb.CheckQueryInconsist{},
+								Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+								Targets: []*mgmtpb.CheckQueryTarget{
+									{
+										Rank:          3,
+										Status:        chkpb.CheckInstStatus_CIS_COMPLETED,
+										Inconsistency: &mgmtpb.CheckQueryInconsist{},
+										Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+									},
+								},
+							},
+						},
+						UUID:      "12345678-1234-1234-1234-123456789abc",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: time.Unix(testTime.Unix(), 0),
+					},
+				},
+				Reports: []*SystemCheckReport{
+					{CheckReport: chkpb.CheckReport{Seq: 1, Class: chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL}},
+					{CheckReport: chkpb.CheckReport{Seq: 3, Class: chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL}},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			mi := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+
+			resp, err := SystemCheckQuery(ctx, mi, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "SystemCheckQueryResp", tc.expResp, resp, cmpopts.IgnoreUnexported(
+				chkpb.CheckReport{},
+				mgmtpb.CheckQueryPool{},
+				mgmtpb.CheckQueryInconsist{},
+				mgmtpb.CheckQueryTarget{},
+				mgmtpb.CheckQueryTime{},
+			))
+		})
+	}
+}
+
 func TestControl_SystemCheckQuery_ReportsSorted(t *testing.T) {
 	// Reports are returned in scrambled order to verify that
 	// SystemCheckQuery sorts them by class, then by sequence.
@@ -215,5 +334,214 @@ func TestControl_SystemCheckQuery_ReportsSorted(t *testing.T) {
 
 	if diff := cmp.Diff(expReports, resp.Reports, protocmp.Transform()); diff != "" {
 		t.Fatalf("reports not sorted (-want +got):\n%s", diff)
+	}
+}
+
+func TestControl_SystemCheckEngineReport(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *SystemCheckEngineReportReq
+		expErr  error
+		expResp *SystemCheckEngineReportResp
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"nil report": {
+			req:    &SystemCheckEngineReportReq{},
+			expErr: errors.New("no check report"),
+		},
+		"gRPC fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expErr: errors.New("MockInvoker error"),
+		},
+		"MS error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Error: errors.New("MockInvoker response error"),
+						},
+					},
+				},
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expErr: errors.New("MockInvoker response error"),
+		},
+		"daos error code": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{{
+						Message: &sharedpb.CheckReportResp{
+							Status: daos.MiscError.Int32(),
+						},
+					}},
+				},
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expResp: &SystemCheckEngineReportResp{
+				CheckReportResp: sharedpb.CheckReportResp{
+					Status: daos.MiscError.Int32(),
+				},
+			},
+		},
+		"bad MS response type": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Message: &mgmtpb.CheckStartReq{
+								Sys: "something",
+							},
+						},
+					},
+				},
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expErr: errors.New("unexpected response"),
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{{
+						Message: &sharedpb.CheckReportResp{},
+					}},
+				},
+			},
+			req: &SystemCheckEngineReportReq{
+				CheckReportReq: sharedpb.CheckReportReq{
+					Report: &chkpb.CheckReport{},
+				},
+			},
+			expResp: &SystemCheckEngineReportResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			invoker := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+			resp, err := SystemCheckEngineReport(ctx, invoker, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "response", tc.expResp, resp, cmpopts.IgnoreUnexported(sharedpb.CheckReportResp{}))
+		})
+	}
+}
+
+func TestControl_CheckEngineRepair(t *testing.T) {
+	reqWithHostList := func(rank uint32, actReq *mgmtpb.CheckActReq, hosts ...string) *CheckEngineRepairReq {
+		req := &CheckEngineRepairReq{
+			CheckEngineActReq: ctlpb.CheckEngineActReq{
+				Rank: rank,
+				Req:  actReq,
+			},
+		}
+		req.SetHostList(hosts)
+		return req
+	}
+
+	defaultReq := reqWithHostList(42, &mgmtpb.CheckActReq{}, "1.2.3.4")
+
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *CheckEngineRepairReq
+		expResp *CheckEngineRepairResp
+		expErr  error
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"no action req": {
+			req:    reqWithHostList(5, nil),
+			expErr: errors.New("no action"),
+		},
+		"host list too long": {
+			req:    reqWithHostList(5, &mgmtpb.CheckActReq{}, "1.2.3.4", "5.6.7.8"),
+			expErr: errors.New("exactly one host"),
+		},
+		"gRPC fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			req:    defaultReq,
+			expErr: errors.New("MockInvoker error"),
+		},
+		"no host response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{},
+				},
+			},
+			req:    defaultReq,
+			expErr: errors.New("no host responses"),
+		},
+		"bad return type": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Message: &MockMessage{},
+						},
+					},
+				},
+			},
+			req:    defaultReq,
+			expErr: errors.New("bad response type"),
+		},
+		"got response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Message: &ctlpb.CheckEngineActResp{
+								Rank: 5,
+								Resp: &mgmtpb.CheckActResp{
+									Status: daos.MiscError.Int32(),
+								},
+							},
+						},
+					},
+				},
+			},
+			req: defaultReq,
+			expResp: &CheckEngineRepairResp{
+				CheckEngineActResp: ctlpb.CheckEngineActResp{
+					Rank: 5,
+					Resp: &mgmtpb.CheckActResp{
+						Status: daos.MiscError.Int32(),
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+
+			invoker := NewMockInvoker(logging.FromContext(ctx), tc.mic)
+			resp, err := CheckEngineRepair(ctx, invoker, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "response", tc.expResp, resp,
+				cmpopts.IgnoreUnexported(ctlpb.CheckEngineActResp{}, mgmtpb.CheckActResp{}))
+		})
 	}
 }

@@ -489,8 +489,11 @@ ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t 
 			goto out;
 		}
 		if (mem_file_bytes) {
-			D_ASSERT(i == 0 || *mem_file_bytes == mem_bytes);
-			*mem_file_bytes = mem_bytes;
+			if (*mem_file_bytes == 0) {
+				*mem_file_bytes = mem_bytes;
+			} else {
+				D_ASSERT(mem_bytes == 0 || *mem_file_bytes == mem_bytes);
+			}
 		}
 	}
 

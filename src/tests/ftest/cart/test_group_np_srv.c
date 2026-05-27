@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +58,9 @@ test_run(d_rank_t my_rank)
 	int			 i;
 	int			 rc = 0;
 
+	/* Do not delay shutdown for this server */
+	crtu_set_shutdown_delay(test_g.t_shutdown_delay);
+
 	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0], &test_g.t_tid[0],
 				  &grp, &grp_size, NULL, NULL);
 	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
@@ -77,9 +80,6 @@ test_run(d_rank_t my_rank)
 
 	rc = crt_proto_register(&my_proto_fmt_test_group1);
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
-
-	/* Do not delay shutdown for this server */
-	crtu_set_shutdown_delay(test_g.t_shutdown_delay);
 
 	DBG_PRINT("Protocol registered\n");
 	for (i = 1; i < test_g.t_srv_ctx_num; i++) {

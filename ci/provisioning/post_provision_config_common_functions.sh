@@ -321,6 +321,12 @@ post_provision_config_nodes() {
         dnf -y erase fuse3\*
     fi
 
+    # maldet might bring additional load on CPU during tests
+    if command -v maldet &>/dev/null; then
+        systemctl stop maldet 2>/dev/null || true
+        systemctl disable maldet 2>/dev/null || true
+    fi
+
     if [ -n "$CONFIG_POWER_ONLY" ]; then
         rm -f "$REPOS_DIR"/*_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload          \

@@ -69,7 +69,7 @@ enum daos_module_id {
 #define DAOS_VOS_VERSION      1
 #define DAOS_MGMT_VERSION     4
 #define DAOS_POOL_VERSION     7
-#define DAOS_CONT_VERSION     8
+#define DAOS_CONT_VERSION     9
 #define DAOS_OBJ_VERSION      10
 #define DAOS_REBUILD_VERSION  5
 #define DAOS_RSVC_VERSION     5

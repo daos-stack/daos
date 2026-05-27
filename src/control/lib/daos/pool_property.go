@@ -9,6 +9,7 @@
 package daos
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -757,6 +758,23 @@ func (ppv *PoolPropertyValue) SetNumber(numVal uint64) {
 	ppv.data = numVal
 }
 
+// SetBytes sets the property value to a byte array.
+func (ppv *PoolPropertyValue) SetBytes(byteVal []byte) {
+	ppv.data = byteVal
+}
+
+// GetBytes returns the byte array value set for the property,
+// or an error if the value is not a byte array.
+func (ppv *PoolPropertyValue) GetBytes() ([]byte, error) {
+	if !ppv.IsSet() {
+		return nil, errors.New("value not set")
+	}
+	if v, ok := ppv.data.([]byte); ok {
+		return v, nil
+	}
+	return nil, errors.Errorf("%+v is not []byte", ppv.data)
+}
+
 func (ppv *PoolPropertyValue) IsSet() bool {
 	return ppv != nil && ppv.data != nil
 }
@@ -771,6 +789,8 @@ func (ppv *PoolPropertyValue) String() string {
 		return v
 	case uint64:
 		return strconv.FormatUint(v, 10)
+	case []byte:
+		return base64.StdEncoding.EncodeToString(v)
 	default:
 		return fmt.Sprintf("unknown data type for %+v", ppv.data)
 	}

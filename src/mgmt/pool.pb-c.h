@@ -898,7 +898,8 @@ struct  _Mgmt__PoolQueryResp
 typedef enum {
   MGMT__POOL_PROPERTY__VALUE__NOT_SET = 0,
   MGMT__POOL_PROPERTY__VALUE_STRVAL = 2,
-  MGMT__POOL_PROPERTY__VALUE_NUMVAL = 3
+  MGMT__POOL_PROPERTY__VALUE_NUMVAL = 3,
+  MGMT__POOL_PROPERTY__VALUE_BYTEVAL = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_PROPERTY__VALUE)
 } Mgmt__PoolProperty__ValueCase;
 
@@ -919,6 +920,10 @@ struct  _Mgmt__PoolProperty
      * pool property numeric value
      */
     uint64_t numval;
+    /*
+     * pool property byte array value
+     */
+    ProtobufCBinaryData byteval;
   };
 };
 #define MGMT__POOL_PROPERTY__INIT \

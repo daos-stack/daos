@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
   (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -8,6 +8,7 @@
 
 import os
 import re
+import sys
 import time
 
 from apricot import TestWithServers
@@ -104,7 +105,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
     remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
     remote_env['COVFILE'] = os.environ['COVFILE']
-    remote_env['HTTPS_PROXY'] = os.environ['HTTPS_PROXY']
+    remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
+    remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
 
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
@@ -127,7 +129,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    cmds = ['python3 -m venv {}/venv'.format(mount_dir),
+    cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
@@ -238,7 +240,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,daos_cmd
+        :avocado: tags=daosio,dfs,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         run_build_test(self, "writeback")
