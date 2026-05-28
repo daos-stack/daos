@@ -1,4 +1,3 @@
-# Run test on medium cluster
 hosts:
   test_servers: 1
   test_clients: 2
