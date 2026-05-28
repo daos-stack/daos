@@ -7,6 +7,13 @@ platforms:
     image: daos/rocky-el9:2.8
     pre_build_image: true
     privileged: true
+    env:
+      http_proxy: "{{ lookup('env', 'http_proxy') }}"
+      https_proxy: "{{ lookup('env', 'https_proxy') }}"
+      HTTP_PROXY: "{{ lookup('env', 'HTTP_PROXY') }}"
+      HTTPS_PROXY: "{{ lookup('env', 'HTTPS_PROXY') }}"
+      no_proxy: "{{ lookup('env', 'no_proxy') | default('localhost,127.0.0.1', true) }}"
+      NO_PROXY: "{{ lookup('env', 'NO_PROXY') | default('localhost,127.0.0.1', true) }}"
 provisioner:
   name: ansible
   env:

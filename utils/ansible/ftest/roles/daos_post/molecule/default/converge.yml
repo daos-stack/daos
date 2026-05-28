@@ -4,6 +4,17 @@
     daos_python_version: python3
     daos_repo_dir: /tmp/daos-molecule
   tasks:
+    - name: Configure dnf to skip unavailable repos and limit timeout
+      become: true
+      community.general.ini_file:
+        path: /etc/dnf/dnf.conf
+        section: main
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - {option: skip_if_unavailable, value: 'True'}
+        - {option: timeout, value: '10'}
+
     - name: Create mock requirements-ftest.txt on the controller
       delegate_to: localhost
       run_once: true
