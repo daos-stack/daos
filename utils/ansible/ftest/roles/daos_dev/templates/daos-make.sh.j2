@@ -36,6 +36,16 @@ for it in $@ ; do
 	fi
 done
 
+{% if daos_http_proxy is defined and daos_http_proxy %}
+export HTTP_PROXY="{{ daos_http_proxy }}"
+export HTTPS_PROXY="{{ daos_http_proxy }}"
+export http_proxy="{{ daos_http_proxy }}"
+export https_proxy="{{ daos_http_proxy }}"
+export NO_PROXY="{{ daos_proxy_bypass | default('localhost,127.0.0.1') }}"
+export no_proxy="{{ daos_proxy_bypass | default('localhost,127.0.0.1') }}"
+{% endif %}
+export GOPROXY="{{ daos_goproxy | default('direct') }}"
+
 CLUSH_OPTS="-bL -S"
 
 MPI_FILE_UTILS_DEPS=(
