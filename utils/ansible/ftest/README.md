@@ -25,6 +25,7 @@ generates helper bash scripts for building DAOS binaries and launching test suit
   - [Variable Reference](#variable-reference)
   - [Idempotency Design](#idempotency-design)
   - [Linting](#linting)
+  - [Template Unit Tests](#template-unit-tests)
   - [Molecule Unit Tests](#molecule-unit-tests)
   - [Adding a New Role](#adding-a-new-role)
 
@@ -659,6 +660,45 @@ Ansible/Molecule files:
 
 ---
 
+### Template Unit Tests
+
+The `scripts/test-templates.sh` script renders Jinja2 templates directly with the
+Python `jinja2` library and asserts the expected shell-script content.  Unlike Molecule
+tests it requires **no Docker image and no network access** and completes in under a
+second — making it suitable for rapid iteration during template development.
+
+#### Requirements
+
+Only `jinja2`, which is already listed in `requirements.txt`:
+
+```bash
+pip install --user --requirement requirements.txt
+```
+
+#### Running Tests
+
+```bash
+# From any directory inside the repository
+bash utils/ansible/ftest/scripts/test-templates.sh
+
+# Or from the ftest directory
+scripts/test-templates.sh         # summary output
+scripts/test-templates.sh -v      # verbose (one line per test)
+```
+
+#### What is tested
+
+| Test class | Template | Scenarios |
+|---|---|---|
+| `TestDaosMakeProxyProxy` | `daos-make.sh.j2` | All six proxy env-vars are exported when `daos_http_proxy` is set |
+| `TestDaosMakeProxyNoBypass` | `daos-make.sh.j2` | `no_proxy`/`NO_PROXY` fall back to `localhost,127.0.0.1` when `daos_proxy_bypass` is absent |
+| `TestDaosMakeNoProxy` | `daos-make.sh.j2` | Proxy block is absent for empty-string and undefined `daos_http_proxy` |
+| `TestDaosMakeGoproxy` | `daos-make.sh.j2` | `GOPROXY` is always rendered; falls back to `direct`; custom value is honored |
+| `TestDaosMakeSconsProxyUnset` | `daos-make.sh.j2` | Scons compilation step clears the proxy with `env --unset=…` |
+| `TestDaosMakeClientsList` | `daos-make.sh.j2` | `CLIENTS_LIST` is absent/present depending on the `daos_clients` group |
+
+---
+
 ### Molecule Unit Tests
 
 Each role ships a [Molecule](https://molecule.readthedocs.io/) test scenario under
@@ -807,9 +847,10 @@ the `daos_dev` converge playbook.
 
 5. Add the new role to the appropriate play(s) in `ftest.yml`.
 
-6. Verify linting and the Molecule scenario both pass:
+6. Verify linting, template tests, and the Molecule scenario all pass:
 
    ```bash
    scripts/lint.sh roles/daos_<name>
+   scripts/test-templates.sh -v
    scripts/molecule-test.sh daos_<name>
    ```

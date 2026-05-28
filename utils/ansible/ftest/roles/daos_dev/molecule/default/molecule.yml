@@ -15,5 +15,13 @@ provisioner:
     ANSIBLE_REMOTE_TMP: "/tmp"
   options:
     v: false
+  inventory:
+    hosts:
+      daos_dev:
+        hosts:
+          daos-rocky9-dev: {}
+      daos_servers:
+        hosts:
+          daos-rocky9-dev: {}
 verifier:
   name: ansible
