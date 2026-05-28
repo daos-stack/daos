@@ -50,6 +50,12 @@
 #         # script.
 #         #  default: None
 #         daos_ofi_interface: eth0
+#         #
+#         # Optional variable defining the HTTP proxy for outgoing network requests during the
+#         # DAOS build (fetching packages via uv, pip, wget, etc.).  Sets HTTP_PROXY, HTTPS_PROXY,
+#         # http_proxy and https_proxy in the generated daos-make.sh script.
+#         #  default: None
+#         # daos_http_proxy: http://proxy.example.net:8080
 #       hosts:
 #         node1:
 #     daos_servers:
