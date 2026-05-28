@@ -236,6 +236,7 @@ pipeline {
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         HTTPS_PROXY = ''
+        PYTHON_VERSION = '3.11'
     }
 
     options {
@@ -536,7 +537,8 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.10 '
+                                                ' --build-arg POINT_RELEASE=.10 ' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -589,7 +591,8 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.7 '
+                                                ' --build-arg POINT_RELEASE=.7' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -640,8 +643,10 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" + 
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg POINT_RELEASE=.6 '
+                                                ' --build-arg POINT_RELEASE=.6' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -932,6 +937,30 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Leap 15')
+                stage('Functional on SLES 15') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('Leap15')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'sles15.7'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } // post
+                } // stage('Functional on SLES 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -966,8 +995,9 @@ pipeline {
                             label 'docker_runner_fi'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true) +
-                                                                ' --build-arg POINT_RELEASE=.7 '
+                                                                deps_build: true) + 
+                                                ' --build-arg POINT_RELEASE=.7 ' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                             args '--tmpfs /mnt/daos_0'
                         }
                     }
@@ -1126,7 +1156,8 @@ pipeline {
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
@@ -1138,7 +1169,8 @@ pipeline {
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
@@ -1151,7 +1183,8 @@ pipeline {
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
@@ -1192,7 +1225,8 @@ pipeline {
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
@@ -1204,7 +1238,8 @@ pipeline {
                             default_nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
@@ -1216,7 +1251,8 @@ pipeline {
                             default_nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                     )
                 }

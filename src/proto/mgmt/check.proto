@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -146,6 +146,8 @@ message CheckQueryResp {
 	repeated CheckQueryPool pools = 6;
 	// Inconsistency reports to be displayed
 	repeated chk.CheckReport reports = 7;
+	// Check leader rank
+	uint32 leader = 8;
 }
 
 // For 'dmg check set-policy'

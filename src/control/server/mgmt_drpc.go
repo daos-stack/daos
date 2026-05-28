@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,7 +26,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
-	"github.com/daos-stack/daos/src/control/system/checker"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
@@ -76,7 +75,6 @@ type poolDatabase interface {
 type srvModule struct {
 	log        logging.Logger
 	poolDB     poolDatabase
-	checkerDB  checker.FindingStore
 	engines    []Engine
 	events     *events.PubSub
 	rpcClient  control.UnaryInvoker
@@ -85,11 +83,10 @@ type srvModule struct {
 
 // newSrvModule creates a new srv module references to the system database,
 // resident EngineInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, pdb poolDatabase, cdb checker.FindingStore, engines []Engine, events *events.PubSub, client control.UnaryInvoker, msReplicas []string) *srvModule {
+func newSrvModule(log logging.Logger, pdb poolDatabase, engines []Engine, events *events.PubSub, client control.UnaryInvoker, msReplicas []string) *srvModule {
 	return &srvModule{
 		log:        log,
 		poolDB:     pdb,
-		checkerDB:  cdb,
 		engines:    engines,
 		events:     events,
 		rpcClient:  client,

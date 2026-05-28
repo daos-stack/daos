@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -89,6 +90,20 @@ var (
 	FaultNoFilterMatch = scmFault(code.ScmNoDevicesMatchFilter,
 		"no SCM modules matched the filter criteria",
 		"adjust or relax the filters and try again")
+
+	// FaultKernelConfigUnavailable represents an error where the kernel
+	// configuration could not be read, preventing determination of
+	// available tmpfs mount options.
+	FaultKernelConfigUnavailable = scmFault(code.ScmKernelConfigUnavailable,
+		"kernel config is unavailable; unable to determine tmpfs mount options",
+		"set kernel_config_path in the server config to specify an alternate location "+
+			"(e.g. a bind-mounted host kernel config in containerized environments)")
+
+	// FaultHugepagesNotSupported indicates that hugepages were requested
+	// but the kernel does not have CONFIG_TRANSPARENT_HUGEPAGE enabled.
+	FaultHugepagesNotSupported = scmFault(code.ScmHugepagesNotSupported,
+		"hugepages requested but kernel does not support transparent hugepages (CONFIG_TRANSPARENT_HUGEPAGE not set)",
+		"set scm_hugepages_disabled: true in the server config, or rebuild the kernel with CONFIG_TRANSPARENT_HUGEPAGE")
 )
 
 // FaultIpmctlBadVersion represents an error where an incompatible version of

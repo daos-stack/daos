@@ -19,6 +19,10 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${TARGET:=centos9}"
       : "${REPO_SPEC:=el-9}"
       ;;
+    *SLES\ 15.7*|*sles15.7*)
+      : "${CHROOT_NAME:=sles-15-sp7-x86_64}"
+      : "${TARGET:=sles15.7}"
+      ;;
     *Leap\ 15.6*|*leap15.6*|*opensuse15.6*|*sles15.6*)
       : "${TARGET:=leap15.6}"
       ;;
@@ -42,6 +46,11 @@ if [ -n "${STAGE_NAME:?}" ]; then
     *Ubuntu\ 22.04*|*ubuntu2204*)
       : "${TARGET:=ubuntu22}"
       : "${REPO_SPEC:=ubuntu-22.04}"
+      ;;
+    *Ubuntu\ 24.04*|*ubuntu2404*)
+      : "${CHROOT_NAME:="not_applicable"}"
+      : "${TARGET:=ubuntu24}"
+      : "${REPO_SPEC:=ubuntu-24.04}"
       ;;
   esac
 fi

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ package mgmt;
 option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 
 import "shared/event.proto";
+import "shared/check_engine.proto";
 import "mgmt/pool.proto";
 import "mgmt/check.proto";
 import "mgmt/cont.proto";
@@ -114,6 +115,8 @@ service MgmtSvc {
 	rpc SystemCheckGetPolicy(CheckGetPolicyReq) returns (CheckGetPolicyResp) {}
 	// Send the desired action to repair an inconsistency.
 	rpc SystemCheckRepair(CheckActReq) returns (CheckActResp) {}
+	// Report on checker results for an individual rank.
+	rpc SystemCheckEngineReport(shared.CheckReportReq) returns (shared.CheckReportResp) {}
 	// Set a system attribute or attributes.
 	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
 	// Get a system attribute or attributes.

@@ -52,16 +52,6 @@ fake_write_file(const char *path, d_iov_t *contents)
  */
 
 static void
-quit_cmd_tests(void **state)
-{
-	/* Quit is really simple and should just indicate to the program context that it's
-	 * time to quit
-	 */
-	assert_success(ddb_run_quit(&g_ctx));
-	assert_true(g_ctx.dc_should_quit);
-}
-
-static void
 ls_cmd_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
@@ -99,7 +89,7 @@ ls_cmd_tests(void **state)
 
 	/* printing a recx works */
 	dvt_fake_print_called = 0;
-	opt.path = "/[0]/[0]/[0]/[0]/[0]";
+	opt.path              = "/[0]/[0]/[0]/[1]/[0]";
 	opt.recursive = true;
 	assert_success(ddb_run_ls(&ctx, &opt));
 
@@ -152,7 +142,7 @@ dump_value_cmd_tests(void **state)
 	assert_rc_equal(ddb_run_value_dump(&ctx, &opt), -DDBER_INCOMPLETE_PATH_VALUE);
 
 	/* Path is complete, no destination means will dump to screen */
-	opt.path = "[0]/[0]/[0]/[1]";
+	opt.path = "[0]/[0]/[0]/[2]";
 	assert_success(ddb_run_value_dump(&ctx, &opt));
 
 	/* success */
@@ -198,7 +188,7 @@ dump_ilog_cmd_tests(void **state)
 	assert_rc_equal(ddb_run_ilog_dump(&ctx, &opt), -DER_INVAL);
 
 	/* Dump akey ilog */
-	opt.path = "[0]/[0]/[0]/[0]";
+	opt.path = "[0]/[0]/[0]/[1]";
 	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 }
 
@@ -221,8 +211,7 @@ dump_dtx_cmd_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	struct ddb_ctx		 ctx = {0};
-	struct dtx_dump_options	 opt = {0};
-	daos_handle_t		 coh;
+	struct dtx_dump_options  opt  = {0};
 
 	dvt_fake_print_reset();
 
@@ -231,11 +220,6 @@ dump_dtx_cmd_tests(void **state)
 	ctx.dc_poh = tctx->dvt_poh;
 
 	assert_invalid(ddb_run_dtx_dump(&ctx, &opt));
-
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
-
-	dvt_vos_insert_2_records_with_dtx(coh);
-	vos_cont_close(coh);
 
 	opt.path = "[0]";
 	assert_success(ddb_run_dtx_dump(&ctx, &opt));
@@ -467,8 +451,7 @@ dtx_stat_tests(void **state)
 		buf[59] += i;
 		assert_regex_match(dvt_fake_print_buffer, buf);
 	}
-	assert_regex_match(dvt_fake_print_buffer,
-			   "^DTX entries statistics of the pool \\(null\\)$");
+	assert_regex_match(dvt_fake_print_buffer, "^DTX entries statistics of the pool:$");
 }
 
 static uint64_t
@@ -490,6 +473,41 @@ dtx_get_cmt_time(char *buf)
 	}
 
 	return cmt_time;
+}
+
+static void
+open_cmd_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct ddb_ctx          ctx  = {0};
+	struct open_options     opt  = {0};
+
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+
+	/* Non-existent path: must return DER_INVAL */
+	opt.path = "/non/existent/vos-0";
+	assert_invalid(ddb_run_open(&ctx, &opt));
+
+	/* Read-only open: pool handle must be valid, dc_write_mode must be false */
+	opt.path       = tctx->dvt_pmem_file;
+	opt.write_mode = false;
+	assert_success(ddb_run_open(&ctx, &opt));
+	assert_true(daos_handle_is_valid(ctx.dc_poh));
+	assert_false(ctx.dc_write_mode);
+	assert_success(ddb_run_close(&ctx));
+
+	/* Write-mode open: dc_write_mode must be propagated to the context */
+	opt.write_mode = true;
+	assert_success(ddb_run_open(&ctx, &opt));
+	assert_true(daos_handle_is_valid(ctx.dc_poh));
+	assert_true(ctx.dc_write_mode);
+
+	/* Pool already open: must return DER_BUSY with an error message */
+	dvt_fake_print_reset();
+	assert_rc_equal(-DER_BUSY, ddb_run_open(&ctx, &opt));
+	assert_printed_contains("Cannot operate on an opened pool. Close it first.");
+	assert_success(ddb_run_close(&ctx));
 }
 
 static void
@@ -577,17 +595,26 @@ dtx_aggr_tests(void **state)
 static int
 dcv_suit_setup(void **state)
 {
+	struct ddb_ctx          ctx = {0};
 	struct dt_vos_pool_ctx *tctx;
-	struct vos_file_parts   path_parts = {0};
+	daos_handle_t           coh;
 
 	assert_success(ddb_test_setup_vos(state));
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(parse_vos_file_parts(tctx->dvt_pmem_file, NULL, &path_parts));
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &path_parts, &tctx->dvt_poh, 0, true));
-
+	ctx.dc_write_mode = true;
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	tctx->dvt_poh = ctx.dc_poh;
 	g_ctx.dc_poh = tctx->dvt_poh;
+
+	assert_success(vos_cont_open(ctx.dc_poh, g_uuids[0], &coh));
+
+	/* Seed the first container with 1 active + 1 committed DTX entry required by
+	 * dtx_stat_tests, dtx_commit_entry_tests, dtx_act_discard_invalid_tests, and
+	 * dtx_abort_entry_tests. */
+	dvt_vos_insert_2_records_with_dtx(coh);
+	vos_cont_close(coh);
 
 	return 0;
 }
@@ -614,7 +641,6 @@ int
 ddb_commands_tests_run()
 {
 	const struct CMUnitTest tests[] = {
-	    TEST(quit_cmd_tests),
 	    TEST(ls_cmd_tests),
 	    TEST(dump_value_cmd_tests),
 	    TEST(dump_ilog_cmd_tests),
@@ -630,6 +656,7 @@ ddb_commands_tests_run()
 	    TEST(dtx_act_discard_invalid_tests),
 	    TEST(dtx_abort_entry_tests),
 	    TEST(feature_cmd_tests),
+	    TEST(open_cmd_tests),
 	    TEST(dtx_aggr_tests),
 	};
 

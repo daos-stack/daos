@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2026 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2328,80 +2328,278 @@ placement_test_teardown(void **state)
 	return 0;
 }
 
+static void
+basic_down2up_test_oid(daos_obj_id_t oid, bool print_lo)
+{
+	struct pool_map      *po_map;
+	struct pl_map        *pl_map;
+	uint32_t              num_pd, fdoms_per_pd, nodes_per_fdom, vos_per_tgt, num_tgts;
+	uint32_t              i, fault_dom, new_dom;
+	uint32_t              down_shard_tgt        = 0;
+	uint32_t              down_shard_new_tgt    = 0;
+	uint32_t              downout_shard_tgt     = 0;
+	uint32_t              downout_shard_new_tgt = 0;
+	uint32_t              downout_tgt, down_tgt;
+	int                   downout_shard, down_shard;
+	struct pl_obj_layout *layout = NULL;
+	daos_oclass_id_t      ocid;
+	char                  oc_name[16] = {0};
+
+	ocid = daos_obj_id2class(oid);
+	daos_oclass_id2name(ocid, oc_name);
+	print_message("======== oid " DF_OID ", ocname %s ========\n", DP_OID(oid), oc_name);
+
+	num_pd         = 1;
+	fdoms_per_pd   = 8;
+	nodes_per_fdom = 1;
+	vos_per_tgt    = 2;
+	num_tgts       = num_pd * fdoms_per_pd * nodes_per_fdom * vos_per_tgt;
+	print_message("\nWith %d PDs, %d fault domains each PD, %d node/rank each domain, "
+		      "%d targets each node/rank = %d targets\n",
+		      num_pd, fdoms_per_pd, nodes_per_fdom, vos_per_tgt, num_tgts);
+
+	gen_maps(num_pd, fdoms_per_pd, nodes_per_fdom, vos_per_tgt, &po_map, &pl_map);
+
+	print_message("layout for plt_obj_place_mode RW, when all ALIVE\n");
+	assert_success(plt_obj_place_mode(oid, &layout, pl_map, DAOS_OO_RW));
+	if (print_lo)
+		plt_layout_dump(oid, layout);
+	downout_shard = -1;
+	for (i = 0; i < layout->ol_nr; i++) {
+		if (layout->ol_shards[i].po_target == 0 || layout->ol_shards[i].po_target == 1) {
+			downout_shard = i;
+			break;
+		}
+	}
+	pl_obj_layout_free(layout);
+
+	plt_set_tgt_status(0, PO_COMP_ST_DOWNOUT, NULL, po_map, true);
+	plt_set_tgt_status(1, PO_COMP_ST_DOWNOUT, NULL, po_map, true);
+
+	print_message("layout for plt_obj_place_mode RW, after target 0,1 DOWNOUT\n");
+	assert_success(plt_obj_place_mode(oid, &layout, pl_map, DAOS_OO_RW));
+	if (print_lo)
+		plt_layout_dump(oid, layout);
+
+	if (oid.lo % 3 == 0 && downout_shard != -1) {
+		down_tgt = layout->ol_shards[downout_shard].po_target;
+		print_message("down_tgt %d, downout_shard %d, 2nd remap\n", down_tgt,
+			      downout_shard);
+	} else {
+		down_tgt = 9;
+	}
+	if (down_tgt % (nodes_per_fdom * vos_per_tgt) == 0)
+		downout_tgt = down_tgt + 1;
+	else
+		downout_tgt = down_tgt - 1;
+
+	downout_shard = -1;
+	down_shard    = -1;
+	fault_dom     = downout_tgt / (nodes_per_fdom * vos_per_tgt);
+	assert(fault_dom == down_tgt / (nodes_per_fdom * vos_per_tgt));
+	for (i = 0; i < layout->ol_nr; i++) {
+		if (layout->ol_shards[i].po_target == downout_tgt)
+			downout_shard = i;
+		if (layout->ol_shards[i].po_target == down_tgt)
+			down_shard = i;
+	}
+	if (down_shard != -1)
+		down_shard_tgt = layout->ol_shards[down_shard].po_target;
+	if (downout_shard != -1)
+		downout_shard_tgt = layout->ol_shards[downout_shard].po_target;
+	print_message("down_shard %d, down_tgt %d, downout_shard %d, downout_tgt %d\n", down_shard,
+		      down_tgt, downout_shard, downout_tgt);
+	pl_obj_layout_free(layout);
+
+	plt_set_tgt_status(downout_tgt, PO_COMP_ST_DOWNOUT, NULL, po_map, true);
+	plt_set_tgt_status(down_tgt, PO_COMP_ST_DOWN, NULL, po_map, true);
+
+	layout = NULL;
+	assert_success(plt_obj_place_mode(oid, &layout, pl_map, DAOS_OO_RW));
+	print_message("layout for plt_obj_place_mode RW after target %d DOWNOUT, %d DOWN\n",
+		      downout_tgt, down_tgt);
+	if (print_lo)
+		plt_layout_dump(oid, layout);
+	assert_true(plt_layout_with_tgts_on_same_dom_for_same_grp(
+			layout, nodes_per_fdom * vos_per_tgt) == false);
+
+	if (downout_shard != -1) {
+		downout_shard_new_tgt = layout->ol_shards[downout_shard].po_target;
+		new_dom               = downout_shard_new_tgt / (nodes_per_fdom * vos_per_tgt);
+		assert_true(new_dom != fault_dom);
+		assert_true(downout_shard_new_tgt != downout_shard_tgt);
+		print_message("target %d DOWNOUT, shard[%d] changed from tgt[%d]/dom[%d] "
+			      "to tgt[%d]/dom[%d]\n",
+			      downout_tgt, downout_shard, downout_shard_tgt, fault_dom,
+			      downout_shard_new_tgt, new_dom);
+		assert(layout->ol_shards[downout_shard].po_rebuilding == 0);
+		assert(layout->ol_shards[downout_shard].po_reintegrating == 0);
+	}
+	if (down_shard != -1) {
+		down_shard_new_tgt = layout->ol_shards[down_shard].po_target;
+		new_dom            = down_shard_new_tgt / (nodes_per_fdom * vos_per_tgt);
+		assert_true(new_dom != fault_dom);
+		assert_true(down_shard_new_tgt != down_shard_tgt);
+		print_message("target %d DOWN, shard[%d] changed from tgt[%d]/dom[%d] "
+			      "to tgt[%d]/dom[%d]\n",
+			      down_tgt, down_shard, down_shard_tgt, fault_dom, down_shard_new_tgt,
+			      new_dom);
+		assert(layout->ol_shards[down_shard].po_rebuilding == 1);
+		assert(layout->ol_shards[down_shard].po_reintegrating == 0);
+	}
+	pl_obj_layout_free(layout);
+
+	plt_set_tgt_status(downout_tgt, PO_COMP_ST_UP, NULL, po_map, true);
+	plt_set_tgt_status(down_tgt, PO_COMP_ST_UP, NULL, po_map, true);
+	layout = NULL;
+	assert_success(plt_obj_place_mode(oid, &layout, pl_map, DAOS_OO_RW));
+	print_message("layout for plt_obj_place_mode RW after reintegration with "
+		      "both DOWNOUT and DOWN(DOWN2UP), down_shard %d, downout_shard %d\n",
+		      down_shard, downout_shard);
+	if (print_lo)
+		plt_layout_dump(oid, layout);
+	if (downout_shard != -1)
+		assert(layout->ol_grp_size == 7);
+	else
+		assert(layout->ol_grp_size == 6);
+	assert_true(plt_layout_with_tgts_on_same_dom_for_same_grp(
+			layout, nodes_per_fdom * vos_per_tgt) == false);
+	for (i = 0; i < layout->ol_nr; i++) {
+		if (downout_shard != -1 && layout->ol_shards[i].po_shard == downout_shard) {
+			if (layout->ol_shards[i].po_target == downout_shard_new_tgt) {
+				assert(layout->ol_shards[i].po_rebuilding == 0);
+				assert(layout->ol_shards[i].po_reintegrating == 0);
+			} else {
+				assert(layout->ol_shards[i].po_target == downout_shard_tgt);
+				assert(layout->ol_shards[i].po_rebuilding == 1);
+				assert(layout->ol_shards[i].po_reintegrating == 1);
+			}
+		} else if (down_shard != -1 && layout->ol_shards[i].po_shard == down_shard) {
+			if (layout->ol_shards[i].po_target == down_shard_new_tgt) {
+				assert(layout->ol_shards[i].po_rebuilding == 1);
+				/* assert(layout->ol_shards[i].po_reintegrating == 1); */
+			} else {
+				assert(layout->ol_shards[i].po_target == down_shard_tgt);
+				assert(layout->ol_shards[i].po_rebuilding == 1);
+				assert(layout->ol_shards[i].po_reintegrating == 1);
+			}
+		}
+	}
+	pl_obj_layout_free(layout);
+
+	layout = NULL;
+	assert_success(plt_obj_place_mode(oid, &layout, pl_map, DAOS_OO_RO));
+	print_message("layout for plt_obj_place_mode DAOS_OO_RO after reintegration with "
+		      "both DOWNOUT and DOWN(DOWN2UP), downout_shard %d, down_shard %d\n",
+		      downout_shard, down_shard);
+	if (print_lo)
+		plt_layout_dump(oid, layout);
+	assert(layout->ol_grp_size == 6);
+	if (downout_shard != -1) {
+		assert(downout_shard_new_tgt == layout->ol_shards[downout_shard].po_target);
+		assert(layout->ol_shards[downout_shard].po_rebuilding == 0);
+		assert(layout->ol_shards[downout_shard].po_reintegrating == 0);
+	}
+	if (down_shard != -1) {
+		assert(down_shard_tgt == layout->ol_shards[down_shard].po_target);
+		assert(layout->ol_shards[down_shard].po_rebuilding == 1);
+		/* assert(layout->ol_shards[down_shard].po_reintegrating == 0); */
+	}
+	assert_true(plt_layout_with_tgts_on_same_dom_for_same_grp(
+			layout, nodes_per_fdom * vos_per_tgt) == false);
+	pl_obj_layout_free(layout);
+
+	free_pool_and_placement_map(po_map, pl_map);
+}
+
+static void
+basic_down2up_test(void **state)
+{
+	daos_obj_id_t oid;
+	int           i;
+
+	for (i = 0; i < 800; i++) {
+		print_message("test %d oid --- \n", i);
+		gen_oid(&oid, i, UINT64_MAX, OC_EC_4P2G2);
+		basic_down2up_test_oid(oid, false);
+	}
+}
+
 #define WIP(dsc, test) { "WIP PLACEMENT "STR(__COUNTER__)" ("#test"): " dsc, \
 			  test, placement_test_setup, placement_test_teardown }
 #define T(dsc, test) { "PLACEMENT "STR(__COUNTER__)" ("#test"): " dsc, test, \
 			  placement_test_setup, placement_test_teardown }
 
 static const struct CMUnitTest tests[] = {
-	/* Standard configurations */
-	T("Target for first shard continually goes to DOWN state and "
-	  "never finishes rebuild. Should still get new target until no more",
-	  down_continuously),
-	T("Object class is verified appropriately", object_class_is_verified),
-	T("With all healthy targets, can create layout, nothing is in "
-	  "rebuild, and no duplicates.", all_healthy),
-	/* DOWN */
-	T("Take a target down in a system with no servers available, but "
-	  "should still collocate", down_to_target),
-	T("Target for first shard continually goes to DOWN state and "
-	  "never finishes rebuild. Should still get new target until no more",
-	  down_continuously),
-	/* DOWNOUT */
-	T("Rebuild first shard's target repeatedly",
-	  chained_rebuild_completes_first_shard),
-	T("Rebuild all shards' targets", chained_rebuild_completes_all_at_once),
-	/* UP */
-	T("For each shard at a time, take the shard's target "
-	    "DOWN->DOWNOUT->UP. Then verify that the reintegration looks "
-	    "correct", one_is_being_reintegrated),
-	T("With all targets being reintegrated, make sure the correct "
-	    "targets are being rebuilt.", all_are_being_reintegrated),
-	T("Take a single shard's target down, downout, then again with the "
-	  "new target. Then reintegrate the first downed target, "
-	  "then the second.", down_up_sequences),
-	T("Take a single shard's target down, downout, then again with the "
-	  "new target. Then reintegrate the second downed target, "
-	  "then the first (Reverse of previous test).", down_up_sequences1),
-	T("multiple shard targets go down, then are reintegrated in the "
-	  "same order they were brought down",
-	  down_back_to_up_in_same_order),
-	T("multiple targets go down for the same shard, then are reintegrated "
-	  "in reverse order than how they were brought down",
-	  down_back_to_up_in_reverse_order),
-	/* DRAIN */
-	T("Drain all shards with extra domains", drain_all_with_extra_domains),
-	T("Drain all shards with extra targets",
-	  drain_all_with_enough_targets),
-	T("Drain the target of the first shard repeatedly until there is no "
-	    "where to drain to.",
-	    drain_target_same_shard_repeatedly_for_all_shards),
-	/* NEW */
-	T("A server is added and an object id is chosen that requires "
-	  "data movement to the new server",
-	  one_server_is_added),
-	/* Multiple */
-	T("Placement can handle multiple states (excluding addition)",
-	  placement_handles_multiple_states),
-	T("Placement can handle multiple states (including addition)",
-	  placement_handles_multiple_states_with_addition),
-	/* Non-standard system setups*/
-	T("Non-standard system configurations. All healthy",
-	  unbalanced_config),
-	T("shards in the same group not in the same domain",
-	  same_group_shards_not_in_same_domain),
-	T("shards in the same group not in the same domain with multiple objects",
-	  same_group_shards_not_in_same_domain_multiple_objs),
-	T("large shards over limited targets",
-	  large_shards_over_limited_targets),
-	T("multiple shards in the same target", multiple_shards_in_the_same_target),
-	T("shards over xpf", shards_over_xpf),
-	T("same group shards not in the same domain fail",
-	  same_group_shards_not_in_same_domain_with_fail),
-	T("fail shard during reintegration",
-	  fail_shard_during_reintegration),
-	T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
-	T("fail multiple ranks", fail_multiple_ranks),
+    /* Standard configurations */
+    T("Target for first shard continually goes to DOWN state and "
+      "never finishes rebuild. Should still get new target until no more",
+      down_continuously),
+    T("Object class is verified appropriately", object_class_is_verified),
+    T("With all healthy targets, can create layout, nothing is in "
+      "rebuild, and no duplicates.",
+      all_healthy),
+    /* DOWN */
+    T("Take a target down in a system with no servers available, but "
+      "should still collocate",
+      down_to_target),
+    T("Target for first shard continually goes to DOWN state and "
+      "never finishes rebuild. Should still get new target until no more",
+      down_continuously),
+    /* DOWNOUT */
+    T("Rebuild first shard's target repeatedly", chained_rebuild_completes_first_shard),
+    T("Rebuild all shards' targets", chained_rebuild_completes_all_at_once),
+    /* UP */
+    T("For each shard at a time, take the shard's target "
+      "DOWN->DOWNOUT->UP. Then verify that the reintegration looks "
+      "correct",
+      one_is_being_reintegrated),
+    T("With all targets being reintegrated, make sure the correct "
+      "targets are being rebuilt.",
+      all_are_being_reintegrated),
+    T("Take a single shard's target down, downout, then again with the "
+      "new target. Then reintegrate the first downed target, "
+      "then the second.",
+      down_up_sequences),
+    T("Take a single shard's target down, downout, then again with the "
+      "new target. Then reintegrate the second downed target, "
+      "then the first (Reverse of previous test).",
+      down_up_sequences1),
+    T("multiple shard targets go down, then are reintegrated in the "
+      "same order they were brought down",
+      down_back_to_up_in_same_order),
+    T("multiple targets go down for the same shard, then are reintegrated "
+      "in reverse order than how they were brought down",
+      down_back_to_up_in_reverse_order),
+    /* DRAIN */
+    T("Drain all shards with extra domains", drain_all_with_extra_domains),
+    T("Drain all shards with extra targets", drain_all_with_enough_targets),
+    T("Drain the target of the first shard repeatedly until there is no "
+      "where to drain to.",
+      drain_target_same_shard_repeatedly_for_all_shards),
+    /* NEW */
+    T("A server is added and an object id is chosen that requires "
+      "data movement to the new server",
+      one_server_is_added),
+    /* Multiple */
+    T("Placement can handle multiple states (excluding addition)",
+      placement_handles_multiple_states),
+    T("Placement can handle multiple states (including addition)",
+      placement_handles_multiple_states_with_addition),
+    /* Non-standard system setups*/
+    T("Non-standard system configurations. All healthy", unbalanced_config),
+    T("shards in the same group not in the same domain", same_group_shards_not_in_same_domain),
+    T("shards in the same group not in the same domain with multiple objects",
+      same_group_shards_not_in_same_domain_multiple_objs),
+    T("large shards over limited targets", large_shards_over_limited_targets),
+    T("multiple shards in the same target", multiple_shards_in_the_same_target),
+    T("shards over xpf", shards_over_xpf),
+    T("same group shards not in the same domain fail",
+      same_group_shards_not_in_same_domain_with_fail),
+    T("fail shard during reintegration", fail_shard_during_reintegration),
+    T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
+    T("fail multiple ranks", fail_multiple_ranks),
+    T("Basic DOWN2UP test", basic_down2up_test),
 };
 
 int

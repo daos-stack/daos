@@ -141,11 +141,8 @@ ds_chk_mark_hdlr(crt_rpc_t *rpc)
 static void
 ds_chk_act_hdlr(crt_rpc_t *rpc)
 {
-	struct chk_act_in	*cai = crt_req_get(rpc);
-	struct chk_act_out	*cao = crt_reply_get(rpc);
-	int			 rc;
-
-	rc = chk_engine_act(cai->cai_gen, cai->cai_seq, cai->cai_act);
+	struct chk_act_out *cao = crt_reply_get(rpc);
+	int                 rc  = -DER_NOTSUPPORTED;
 
 	cao->cao_status = rc;
 	rc = crt_reply_send(rpc);
@@ -214,31 +211,8 @@ ds_chk_pool_mbs_hdlr(crt_rpc_t *rpc)
 static void
 ds_chk_report_hdlr(crt_rpc_t *rpc)
 {
-	struct chk_report_in	*cri = crt_req_get(rpc);
-	struct chk_report_out	*cro = crt_reply_get(rpc);
-	struct chk_report_unit	 cru;
-	int			 rc;
-
-	cru.cru_gen = cri->cri_gen;
-	cru.cru_cla = cri->cri_ics_class;
-	cru.cru_act = cri->cri_ics_action;
-	cru.cru_target = cri->cri_target;
-	cru.cru_rank = cri->cri_rank;
-	cru.cru_option_nr = cri->cri_options.ca_count;
-	cru.cru_detail_nr = cri->cri_details.ca_count;
-	cru.cru_pool = &cri->cri_pool;
-	cru.cru_pool_label = cri->cri_pool_label;
-	cru.cru_cont = &cri->cri_cont;
-	cru.cru_cont_label = cri->cri_cont_label;
-	cru.cru_obj = &cri->cri_obj;
-	cru.cru_dkey = &cri->cri_dkey;
-	cru.cru_akey = &cri->cri_akey;
-	cru.cru_msg = cri->cri_msg;
-	cru.cru_options = cri->cri_options.ca_arrays;
-	cru.cru_details = cri->cri_details.ca_arrays;
-	cru.cru_result = cri->cri_ics_result;
-
-	rc = chk_leader_report(&cru, &cri->cri_seq, NULL);
+	struct chk_report_out *cro = crt_reply_get(rpc);
+	int                    rc  = -DER_NOTSUPPORTED;
 
 	cro->cro_status = rc;
 	rc = crt_reply_send(rpc);

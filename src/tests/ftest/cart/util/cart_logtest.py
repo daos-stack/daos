@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # (C) Copyright 2018-2024 Intel Corporation
-# (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -225,6 +225,7 @@ class LogTest():
         self.fi_triggered = False
         self.fi_location = None
         self.skip_suffixes = []
+        self.skip_substrings = []
         self._tracers = []
         self.ftest_mode = False
 
@@ -443,6 +444,10 @@ class LogTest():
                         show = False
                     if show and any(map(line.get_msg().endswith, self.skip_suffixes)):
                         show = False
+                    if show:
+                        line_msg = line.get_msg().casefold()
+                        if any(sub in line_msg for sub in self.skip_substrings):
+                            show = False
                     if show:
                         # Allow WARNING or ERROR messages, but anything higher like assert should
                         # trigger a failure.

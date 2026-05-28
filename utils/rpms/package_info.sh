@@ -51,15 +51,16 @@ export argobots_version="1.2"
 export argobots_release="4${distro_name}"
 export argobots_full="${argobots_version}-${argobots_release}"
 export pmdk_version="2.1.3"
-export pmdk_release="1${distro_name}"
+export pmdk_release="2${distro_name}"
 export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.31.1"
 export isal_release="8${distro_name}"
 export isal_full="${isal_version}-${isal_release}"
-export isal_crypto_version="2.25.0"
+export isal_crypto_version="2.26"
 export isal_crypto_release="1${distro_name}"
 export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
-export daos_spdk_version="2.0.0"
+export spdk_major_version="26.01"
+export daos_spdk_version=${spdk_major_version}
 export daos_spdk_release="1${distro_name}"
 export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
 export fused_version="1.0.0"
@@ -129,8 +130,14 @@ export daos_dev
 set_lib_name uuid lib libuuid libuuid1 libuuid1
 export uuid_lib
 
+set_lib_name gperftools dev gperftools gperftools libgoogle-perftools
+export gperftools_dev
+
 set_lib_name hdf5 lib hdf5 hdf5 hdf5
 export hdf5_lib
+
+set_lib_name libasan lib libasan libasan8 libasan8
+export libasan_lib
 
 lmod="Lmod"
 if [[ "${DISTRO:-el8}" =~ suse ]]; then

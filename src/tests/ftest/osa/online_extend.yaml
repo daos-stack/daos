@@ -78,7 +78,6 @@ mdtest:
   num_of_files_dirs: 100
   test_dir: "/tmp/"
   iteration: 10
-  dfs_destroy: false
   dfs_oclass: RP_2G1
   dfs_dir_oclass: RP_2G1
   manager: "MPICH"
@@ -92,7 +91,7 @@ mdtest:
 
 daos_racer:
   runtime: 480
-  clush_timeout: 1000
+  daos_racer_timeout: 1000
 
 test_obj_class:
   oclass:

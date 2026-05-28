@@ -12,6 +12,11 @@
 
 #include "crt_internal.h"
 
+#include <sys/epoll.h>
+
+static inline int
+crt_epoll_wait(int fd, struct epoll_event *events, int maxevents, const struct timespec *timeout);
+
 /*
  * List of supported CaRT providers. The table is terminated with the last entry
  * having nad_str = NULL.
@@ -991,85 +996,108 @@ crt_hg_ctx_init_tm(struct crt_hg_context *hg_ctx, int idx)
 }
 
 int
-crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
-		bool primary, int iface_idx)
+crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx, bool primary,
+		int iface_idx)
 {
-	struct crt_context	*crt_ctx;
-	hg_class_t		*hg_class = NULL;
-	hg_context_t		*hg_context = NULL;
-	hg_return_t		 hg_ret;
-	bool			 sep_mode;
-	int			 rc = 0;
+	struct crt_context *crt_ctx;
+	hg_return_t         hg_ret;
+	int                 wait_fd;
+	int                 rc;
 
 	D_ASSERT(hg_ctx != NULL);
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
 
-	hg_ctx->chc_provider = provider;
-	sep_mode             = crt_provider_is_sep(true, provider);
-	if ((!sep_mode && crt_is_service()) || crt_gdata.cg_thread_mode_single)
-		hg_ctx->chc_thread_mode_single = true;
+	rc = D_MUTEX_INIT(&hg_ctx->chc_progress_multi.mutex, NULL);
+	if (rc != 0)
+		return rc;
+	rc = D_COND_INIT(&hg_ctx->chc_progress_multi.cond, NULL);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&hg_ctx->chc_progress_multi.mutex);
+		return rc;
+	}
+	atomic_init(&hg_ctx->chc_progress_multi.count, 0);
+
+	hg_ctx->chc_spin_deadline = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
+	hg_ctx->chc_spindown_ms   = crt_gdata.cg_progress_spindown_ms;
+	hg_ctx->chc_spin_flag     = false;
+
+	hg_ctx->chc_diag_pub_ts = 0;
+	hg_ctx->chc_provider    = provider;
+
+	hg_ctx->chc_shared_hg_class = crt_provider_is_sep(true, provider);
+	hg_ctx->chc_thread_mode_single =
+	    (!hg_ctx->chc_shared_hg_class && crt_is_service()) || crt_gdata.cg_thread_mode_single;
 
 	/* In SEP mode all contexts share same hg_class*/
-	if (sep_mode) {
+	if (hg_ctx->chc_shared_hg_class) {
 		/* Only initialize class for context0 */
 		if (idx == 0) {
 			rc = crt_hg_class_init(provider, idx, primary, iface_idx,
-					       hg_ctx->chc_thread_mode_single, &hg_class);
+					       hg_ctx->chc_thread_mode_single, &hg_ctx->chc_hgcla);
 			if (rc != 0)
-				D_GOTO(out, rc);
+				D_GOTO(error, rc);
 
-			crt_sep_hg_class_set(provider, hg_class);
-		} else {
-			hg_class = crt_sep_hg_class_get(provider);
-		}
+			crt_sep_hg_class_set(provider, hg_ctx->chc_hgcla);
+		} else
+			hg_ctx->chc_hgcla = crt_sep_hg_class_get(provider);
 	} else {
 		rc = crt_hg_class_init(provider, idx, primary, iface_idx,
-				       hg_ctx->chc_thread_mode_single, &hg_class);
+				       hg_ctx->chc_thread_mode_single, &hg_ctx->chc_hgcla);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(error, rc);
+	}
+	if (hg_ctx->chc_hgcla == NULL) {
+		D_ERROR("Failed to init HG class for prov=%d, idx=%d\n", provider, idx);
+		D_GOTO(error, rc = -DER_HG);
 	}
 
-	if (!hg_class) {
-		D_ERROR("Failed to init hg class for prov=%d idx=%d\n",
-			provider, idx);
-		D_GOTO(out, rc = -DER_HG);
+	hg_ctx->chc_hgctx = (hg_ctx->chc_shared_hg_class)
+				? HG_Context_create_id(hg_ctx->chc_hgcla, idx)
+				: HG_Context_create(hg_ctx->chc_hgcla);
+	if (hg_ctx->chc_hgctx == NULL) {
+		D_ERROR("Could not create HG context\n");
+		D_GOTO(error, rc = -DER_HG);
 	}
-
-	hg_ctx->chc_diag_pub_ts     = 0;
-	hg_ctx->chc_hgcla = hg_class;
-	hg_ctx->chc_shared_hg_class = sep_mode;
-
-	if (sep_mode)
-		hg_context = HG_Context_create_id(hg_class, idx);
-	else
-		hg_context = HG_Context_create(hg_class);
-
-	if (hg_context == NULL) {
-		D_ERROR("Could not create HG context.\n");
-		D_GOTO(out, rc = -DER_HG);
-	}
-
-	hg_ctx->chc_hgctx = hg_context;
-
-	/* TODO: need to create separate bulk class and bulk context? */
-	hg_ctx->chc_bulkctx = hg_ctx->chc_hgctx;
-	hg_ctx->chc_bulkcla = hg_ctx->chc_hgcla;
 
 	/* register crt_ctx to get it in crt_rpc_handler_common */
-	hg_ret = HG_Context_set_data(hg_context, crt_ctx, NULL);
+	hg_ret = HG_Context_set_data(hg_ctx->chc_hgctx, crt_ctx, NULL);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Context_set_data() failed, ret: %d.\n", hg_ret);
-		HG_Context_destroy(hg_context);
-		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+		D_GOTO(error, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	rc = crt_hg_pool_init(hg_ctx);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("crt_hg_pool_init() failed, context idx %d hg_ctx %p, "
-			"rc: " DF_RC "\n", idx, hg_ctx, DP_RC(rc));
+			"rc: " DF_RC "\n",
+			idx, hg_ctx, DP_RC(rc));
+		D_GOTO(error, rc);
+	}
+
+	wait_fd = HG_Event_get_wait_fd(hg_ctx->chc_hgctx);
+	if (wait_fd > 0) {
+		struct epoll_event ev = {.events = EPOLLIN, .data.u32 = 0};
+		hg_ctx->chc_epfd      = epoll_create1(0);
+		if (hg_ctx->chc_epfd < 0) {
+			DS_ERROR(errno, "epoll_create1() failed");
+			D_GOTO(error, rc = -DER_MISC);
+		}
+
+		rc = epoll_ctl(hg_ctx->chc_epfd, EPOLL_CTL_ADD, wait_fd, &ev);
+		if (rc != 0) {
+			DS_ERROR(errno, "epoll_ctl(EPOLL_CTL_ADD) failed");
+			D_GOTO(error, rc = -DER_MISC);
+		}
+	} else
+		D_WARN("HG_Event_get_wait_fd() returned invalid fd %d, progress will busy poll\n",
+		       wait_fd);
 
 	crt_hg_ctx_init_tm(hg_ctx, idx);
-out:
+
+	return 0;
+
+error:
+	(void)crt_hg_ctx_fini(hg_ctx);
 	return rc;
 }
 
@@ -1081,7 +1109,16 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 
 	crt_hg_pool_fini(hg_ctx);
 
-	if (hg_ctx->chc_hgctx) {
+	if (hg_ctx->chc_epfd > 0) {
+		rc = close(hg_ctx->chc_epfd);
+		if (rc != 0) {
+			DS_ERROR(errno, "close() failed");
+			D_GOTO(out, rc = -DER_MISC);
+		}
+		hg_ctx->chc_epfd = 0;
+	}
+
+	if (hg_ctx->chc_hgctx != NULL) {
 		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
 		if (hg_ret != HG_SUCCESS) {
 			D_ERROR("Could not destroy HG context, hg_ret: " DF_HG_RC "\n",
@@ -1098,15 +1135,19 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	}
 
 	/* Shared class (sep case) is destroyed at crt_hg_fini time */
-	if (hg_ctx->chc_shared_hg_class == true)
-		goto out;
-
-	if (hg_ctx->chc_hgcla) {
+	if (hg_ctx->chc_shared_hg_class)
+		hg_ctx->chc_hgcla = NULL;
+	else if (hg_ctx->chc_hgcla != NULL) {
 		hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
 		if (hg_ret != HG_SUCCESS)
 			D_WARN("Could not finalize HG class, hg_ret: " DF_HG_RC "\n",
 			       DP_HG_RC(hg_ret));
+		hg_ctx->chc_hgcla = NULL;
 	}
+
+	(void)D_MUTEX_DESTROY(&hg_ctx->chc_progress_multi.mutex);
+	(void)D_COND_DESTROY(&hg_ctx->chc_progress_multi.cond);
+
 out:
 	return rc;
 }
@@ -1179,6 +1220,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_hg_addr = hg_info->addr;
 	rpc_tmp.crp_hg_hdl = hg_hdl;
 	rpc_tmp.crp_pub.cr_ctx = crt_ctx;
+
+	CRT_METRIC_INC(crt_ctx, CM_RPC_RECV);
 
 	rc = crt_hg_unpack_header(hg_hdl, &rpc_tmp, &proc);
 	if (unlikely(rc != 0)) {
@@ -1585,8 +1628,8 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	 * see CART-146 for details
 	 */
 	if (hg_ret != HG_SUCCESS)
-		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x.\n",
-		       DP_HG_RC(hg_ret), opc);
+		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x from %s\n", DP_HG_RC(hg_ret), opc,
+		       crt_rpc_priv_get_origin_addr(rpc_priv));
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
 	RPC_DECREF(rpc_priv);
@@ -1597,22 +1640,28 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 int
 crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	hg_ret;
-	int		rc = 0;
+	struct crt_context *crt_ctx;
+	hg_return_t         hg_ret;
+	int                 rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	/* corresponds to decref in crt_hg_reply_send_cb */
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
 	if (hg_ret != HG_SUCCESS) {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLY_FAILED);
 		RPC_ERROR(rpc_priv, "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
+
+	CRT_METRIC_INC(crt_ctx, CM_RPC_REPLIED);
 
 	/* Release input buffer */
 	if (rpc_priv->crp_release_input_early && !rpc_priv->crp_forward) {
@@ -1631,8 +1680,11 @@ out:
 void
 crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 {
-	void	*hg_out_struct;
-	int	 hg_ret;
+	struct crt_context *crt_ctx;
+	void               *hg_out_struct;
+	int                 hg_ret;
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(error_code != 0);
@@ -1641,10 +1693,12 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	rpc_priv->crp_reply_hdr.cch_rc = error_code;
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLY_FAILED);
 		RPC_ERROR(rpc_priv,
 			  "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
 	} else {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLIED);
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Sent CART level error message back to client. error_code: %d\n",
 			  error_code);
@@ -1652,12 +1706,13 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	rpc_priv->crp_reply_pending = 0;
 }
 
+#define CRT_HG_TRIGGER_COUNT (256)
 int
 crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 {
-	hg_context_t		*hg_context;
-	unsigned int		hg_timeout;
-	unsigned int		total = 256;
+	hg_context_t *hg_context;
+	unsigned int  hg_timeout;
+	unsigned int  total = CRT_HG_TRIGGER_COUNT;
 
 	hg_context = hg_ctx->chc_hgctx;
 
@@ -1670,17 +1725,16 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 		hg_timeout = timeout / 1000;
 
 	do {
-		hg_return_t     hg_ret = HG_SUCCESS;
-		int             rc = 0;
-		unsigned int count = 0;
+		hg_return_t  hg_ret = HG_SUCCESS;
+		int          rc     = 0;
+		unsigned int count  = 0;
 
 		/** progress RPC execution */
 		hg_ret = HG_Progress(hg_context, hg_timeout);
 		if (hg_ret == HG_TIMEOUT) {
 			rc = -DER_TIMEDOUT;
 		} else if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Progress failed, hg_ret: " DF_HG_RC "\n",
-				DP_HG_RC(hg_ret));
+			D_ERROR("HG_Progress failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
 			return crt_hgret_2_der(hg_ret);
 		}
 
@@ -1690,8 +1744,7 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 			/** nothing to trigger */
 			return rc;
 		} else if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Trigger failed, hg_ret: " DF_HG_RC "\n",
-				DP_HG_RC(hg_ret));
+			D_ERROR("HG_Trigger failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
 			return crt_hgret_2_der(hg_ret);
 		}
 
@@ -1710,6 +1763,196 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	return 0;
 }
 
+/* 32-bit lock value for serial progress */
+#define CRT_HG_PROGRESS_LOCK (0x80000000)
+static bool
+crt_hg_progress_multi_trylock(struct crt_hg_progress_multi *progress_multi,
+			      const struct timespec        *deadline)
+{
+	atomic_fetch_add(&progress_multi->count, 1);
+	for (;;) {
+		struct timespec now;
+		unsigned int    old, num;
+		int             rc;
+
+		old = atomic_load(&progress_multi->count) & (unsigned int)~CRT_HG_PROGRESS_LOCK;
+		num = old | (unsigned int)CRT_HG_PROGRESS_LOCK;
+		if (atomic_compare_exchange(&progress_multi->count, old, num))
+			return true; /* No other thread is progressing */
+
+		rc = (deadline != NULL) ? d_gettime_coarse(&now) : 0;
+
+		/* Exit if deadline is passed */
+		if (deadline == NULL || rc != 0 || !d_timeless(&now, deadline)) {
+			atomic_fetch_sub(&progress_multi->count, 1);
+			return false; /* Could not get lock */
+		}
+
+		/* Sleep while waiting for other thread to release lock */
+		D_MUTEX_LOCK(&progress_multi->mutex);
+		num = atomic_load(&progress_multi->count);
+		/* Do not need to enter condition if lock is already released */
+		if ((num & (int32_t)CRT_HG_PROGRESS_LOCK) != 0 &&
+		    pthread_cond_timedwait(&progress_multi->cond, &progress_multi->mutex,
+					   deadline) != 0) {
+			/* Timeout occurred so leave */
+			atomic_fetch_sub(&progress_multi->count, 1);
+			D_MUTEX_UNLOCK(&progress_multi->mutex);
+			return false;
+		}
+		D_MUTEX_UNLOCK(&progress_multi->mutex);
+	}
+}
+
+static void
+crt_hg_progress_multi_unlock(struct crt_hg_progress_multi *progress_multi)
+{
+	unsigned int old, num;
+
+	do {
+		old = atomic_load(&progress_multi->count);
+		num = (old - 1) ^ (unsigned int)CRT_HG_PROGRESS_LOCK;
+	} while (!atomic_compare_exchange(&progress_multi->count, old, num));
+
+	if (num > 0) {
+		/* If there is another processes entered in progress, signal it */
+		D_MUTEX_LOCK(&progress_multi->mutex);
+		pthread_cond_signal(&progress_multi->cond);
+		D_MUTEX_UNLOCK(&progress_multi->mutex);
+	}
+}
+
+static inline unsigned int
+crt_time_to_ms(const struct timespec *tv)
+{
+	uint64_t ms = (uint64_t)tv->tv_sec * 1000 + ((uint64_t)tv->tv_nsec + 999999) / 1000000;
+	return ms > UINT32_MAX ? UINT32_MAX : (unsigned int)ms;
+}
+
+static inline int
+crt_epoll_wait(int fd, struct epoll_event *events, int maxevents, const struct timespec *timeout)
+{
+	D_ASSERT(timeout != NULL);
+	return epoll_wait(fd, events, maxevents, crt_time_to_ms(timeout));
+}
+
+static int
+crt_hg_event_progress_serial(struct crt_hg_context *hg_ctx, const struct timespec *deadline,
+			     unsigned int *trigger_count_p)
+{
+	hg_return_t hg_ret;
+	int         rc = 0;
+
+	/* Ensure that only one thread enters progress, other threads will wait until deadline or
+	 * until the current thread has finished progressing. */
+	if (!hg_ctx->chc_thread_mode_single &&
+	    !crt_hg_progress_multi_trylock(&hg_ctx->chc_progress_multi, deadline)) {
+		*trigger_count_p = CRT_HG_TRIGGER_COUNT;
+		return DER_SUCCESS;
+	}
+
+	/* Skip epoll_wait() call if either there's no fd to wait on, there's already work to do
+	 * (i.e., it is not safe to block), there's no deadline set, we've already reached the
+	 * deadline or we have reached the spin deadline */
+	if (hg_ctx->chc_epfd > 0 && deadline != NULL) {
+		struct timespec now;
+
+		rc = d_gettime_coarse(&now);
+
+		if (rc == 0 && !d_timeless(&now, &hg_ctx->chc_spin_deadline)) {
+			/* Reached spin deadline, reset to force re-evaluation */
+			hg_ctx->chc_spin_flag     = false;
+			hg_ctx->chc_spin_deadline = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
+		}
+
+		if (rc == 0 && !hg_ctx->chc_spin_flag && d_timeless(&now, deadline)) {
+			if (!HG_Event_ready(hg_ctx->chc_hgctx)) {
+				struct epoll_event event;
+				struct timespec    timeout;
+				int                nfds;
+
+				timeout = d_timediff(&now, deadline);
+
+				nfds = crt_epoll_wait(hg_ctx->chc_epfd, &event, 1, &timeout);
+				if (nfds > 0 && hg_ctx->chc_spindown_ms > 0 &&
+				    d_gettime_coarse(&now) == 0) {
+					/* If we woke up with an event, set spin flag to true to
+					 * keep spinning for a while until we reach
+					 * spin_deadline or deadline/timeout. */
+					hg_ctx->chc_spin_flag = true;
+					/* Set new spin deadline to be the current time plus the
+					 * spin duration */
+					hg_ctx->chc_spin_deadline = now;
+					d_timeinc_ms(&hg_ctx->chc_spin_deadline,
+						     hg_ctx->chc_spindown_ms);
+				} else if (nfds < 0) {
+					if (unlikely(errno == EINTR)) {
+						errno = 0; /* reset errno */
+						rc    = 0;
+					} else {
+						D_ERROR("epoll_wait() failed, rc: %d (%s)\n", errno,
+							strerror(errno));
+						D_GOTO(out, rc = -DER_IO);
+					}
+				}
+				/* Try to progress even if timeout was reached */
+			} else if (hg_ctx->chc_spindown_ms > 0) {
+				/* Set spin flag to true to indicate that we should skip
+				 * epoll_wait() in the next iteration */
+				hg_ctx->chc_spin_flag = true;
+				/* Set new spin deadline to be the current time plus the spin
+				 * duration */
+				hg_ctx->chc_spin_deadline = now;
+				d_timeinc_ms(&hg_ctx->chc_spin_deadline, hg_ctx->chc_spindown_ms);
+			}
+		}
+	}
+
+	hg_ret = HG_Event_progress(hg_ctx->chc_hgctx, trigger_count_p);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Event_progress failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+	}
+
+out:
+	if (!hg_ctx->chc_thread_mode_single)
+		crt_hg_progress_multi_unlock(&hg_ctx->chc_progress_multi);
+	return rc;
+}
+
+int
+crt_hg_event_progress(struct crt_hg_context *hg_ctx, const struct timespec *deadline)
+{
+	struct timespec now;
+
+	do {
+		unsigned int count = 0, actual_count = 0;
+		hg_return_t  hg_ret;
+		int          rc;
+
+		rc = crt_hg_event_progress_serial(hg_ctx, deadline, &count);
+		if (rc != 0) {
+			DL_ERROR(rc, "crt_hg_event_progress_serial failed");
+			return rc;
+		}
+
+		if (count == 0)
+			continue;
+
+		hg_ret = HG_Event_trigger(hg_ctx->chc_hgctx, count, &actual_count);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Event_trigger failed, hg_ret: " DF_HG_RC "\n",
+				DP_HG_RC(hg_ret));
+			return crt_hgret_2_der(hg_ret);
+		}
+		if (actual_count > 0)
+			return DER_SUCCESS;
+
+	} while (deadline && d_gettime_coarse(&now) == 0 && d_timeless(&now, deadline));
+
+	return -DER_TIMEDOUT;
+}
+
 #define CRT_HG_IOVN_STACK	(8)
 int
 crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
@@ -1726,7 +1969,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_per
 	int         i;
 	bool        allocate = false;
 
-	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
+	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_hgcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
 
 	switch (bulk_perm) {
@@ -1773,8 +2016,8 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_per
 			buf_ptrs[i] = sgl->sg_iovs[i].iov_buf;
 	}
 
-	hg_ret = HG_Bulk_create(hg_ctx->chc_bulkcla, sgl->sg_nr, buf_ptrs,
-				buf_sizes, flags, &hg_bulk_hdl);
+	hg_ret =
+	    HG_Bulk_create(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs, buf_sizes, flags, &hg_bulk_hdl);
 	if (hg_ret == HG_SUCCESS) {
 		*bulk_hdl = hg_bulk_hdl;
 	} else {
@@ -1966,7 +2209,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 	local_bulk  = crt_local_bulk->hg_bulk_hdl;
 	remote_bulk = crt_remote_bulk->hg_bulk_hdl;
 
-	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkctx != NULL);
+	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_hgctx != NULL);
 
 	D_ALLOC_PTR(bulk_cbinfo);
 	if (bulk_cbinfo == NULL)
@@ -1990,12 +2233,12 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 
 	if (bind)
 		hg_ret = HG_Bulk_bind_transfer(
-		    hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
+		    hg_ctx->chc_hgctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
 		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
 		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
 	else
 		hg_ret = HG_Bulk_transfer_id(
-		    hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
+		    hg_ctx->chc_hgctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
 		    rpc_priv->crp_hg_addr, HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
 		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
 		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
@@ -2009,4 +2252,41 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 
 out:
 	return rc;
+}
+
+char *
+crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv)
+{
+	const struct hg_info *hg_info;
+	char                  addr[48];
+	hg_size_t             addr_size = 48;
+	int                   rc;
+
+	if (rpc_priv->crp_orig_uri != NULL)
+		return rpc_priv->crp_orig_uri;
+
+	hg_info = HG_Get_info(rpc_priv->crp_hg_hdl);
+	if (hg_info == NULL)
+		return "NOINFO";
+
+	rc = HG_Addr_to_string(hg_info->hg_class, addr, (hg_size_t *)&addr_size, hg_info->addr);
+	if (rc != 0)
+		return "NONE";
+
+	D_ALLOC(rpc_priv->crp_orig_uri, addr_size);
+	if (rpc_priv->crp_orig_uri == NULL)
+		return "NOMEM";
+
+	memcpy(rpc_priv->crp_orig_uri, addr, addr_size);
+
+	return rpc_priv->crp_orig_uri;
+}
+
+char *
+crt_req_origin_addr_get(crt_rpc_t *rpc_pub)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
+	return crt_rpc_priv_get_origin_addr(rpc_priv);
 }

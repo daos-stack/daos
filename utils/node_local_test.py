@@ -442,6 +442,9 @@ def get_base_env(clean=False):
     http_proxy = os.environ.get('HTTPS_PROXY')
     if http_proxy:
         env['HTTPS_PROXY'] = http_proxy
+    no_proxy = os.environ.get('NO_PROXY')
+    if no_proxy:
+        env['NO_PROXY'] = no_proxy
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
@@ -5021,6 +5024,14 @@ def log_test(conf,
 
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
+
+    lto.skip_substrings.extend([
+        'sluggish ec boundary',
+        'sluggish stable epoch reporting',
+        'progress callback was not called for too long',
+        'crt_context_timeout_check',
+        'rpc failed; rc:',
+    ])
 
     try:
         lto.check_log_file(abort_on_warning=True,

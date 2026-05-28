@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -74,6 +74,19 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.
 			t.Fatalf("unmatched result for rank %d", rank)
 		}
 	}
+}
+
+func setupTestEngine(t *testing.T, srv *EngineInstance, idx, rank uint32, stopped ...bool) {
+	trc := &engine.TestRunnerConfig{}
+	if len(stopped) == 0 || !stopped[0] {
+		trc.Running.SetTrue()
+		srv.ready.SetTrue()
+	}
+	srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
+	srv.setIndex(idx)
+
+	srv._superblock.Rank = new(ranklist.Rank)
+	*srv._superblock.Rank = ranklist.Rank(rank)
 }
 
 func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
@@ -194,16 +207,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 					continue
 				}
 
-				trc := &engine.TestRunnerConfig{}
-				if !tc.instancesStopped {
-					trc.Running.SetTrue()
-					srv.ready.SetTrue()
-				}
-				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
-				srv.setIndex(uint32(i))
-
-				srv._superblock.Rank = new(ranklist.Rank)
-				*srv._superblock.Rank = ranklist.Rank(i + 1)
+				setupTestEngine(t, srv, uint32(i), uint32(i+1), tc.instancesStopped)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {

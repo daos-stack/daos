@@ -515,8 +515,11 @@ class PreReqComponent():
                               ['gcc', 'covc', 'clang'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
-        opts.Add(('SANITIZERS', 'Instrument C code with google sanitizers', None))
+        opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
         opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
+        opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
+        opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
+                              False))
 
         opts.Update(self.__env)
 
@@ -1471,10 +1474,19 @@ class _Component():
                 if lib.endswith(".py"):
                     continue
                 full_lib = os.path.join(path, lib)
+                # Check if file is an ELF binary before attempting to patch
+                try:
+                    with open(full_lib, 'rb') as f:
+                        magic = f.read(4)
+                        if magic != b'\x7fELF':
+                            # Not an ELF file, skip silently (e.g., Python script wrappers)
+                            continue
+                except (IOError, OSError):
+                    continue
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 res = RUNNER.run_commands([cmd])
                 if not res:
-                    if lib in ('libspdk.so', 'spdk_cli', 'spdk_rpc'):
+                    if lib in ('libspdk.so', 'spdk_cli', 'spdk_rpc', 'spdk-mcp', 'spdk-sma'):
                         print(f'Skipped patching {full_lib}')
                     else:
                         raise BuildFailure(f'Error running patchelf on {full_lib}')
