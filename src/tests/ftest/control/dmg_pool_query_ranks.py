@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -106,11 +106,11 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.log_step("Waiting for rebuild to complete")
         self.pool.wait_for_rebuild_to_end()
 
-        self.log_step(f"Reintegrating rank {exclude_rank}")
+        self.log_step(f"Reintegrating rank {exclude_rank} (--wait blocks until rebuild done)")
         cmd_succeed = False
         for _ in range(3):
             try:
-                self.pool.reintegrate(exclude_rank)
+                self.pool.reintegrate(exclude_rank, wait=True)
                 cmd_succeed = True
                 break
             except CommandFailure:
@@ -118,9 +118,6 @@ class DmgPoolQueryRanks(ControlTestBase):
             time.sleep(3)
 
         self.assertTrue(cmd_succeed, "pool reintegrate failed")
-        self.log_step(f"Waiting for rebuild to complete after reintegrating rank {exclude_rank}")
-        self.pool.wait_for_rebuild_to_start()
-        self.pool.wait_for_rebuild_to_end()
 
         enabled_ranks = sorted(enabled_ranks + [exclude_rank])
         disabled_ranks.remove(exclude_rank)

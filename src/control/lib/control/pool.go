@@ -44,6 +44,10 @@ const (
 	DefaultPoolTimeout = 5 * time.Minute
 )
 
+// defaultPoolWaitRetry is the interval between PoolQuery polls while waiting
+// for a pool to reach a target state. Overridable for testing.
+const defaultPoolWaitRetry = 1 * time.Second
+
 // Pool create error conditions.
 var (
 	errPoolCreateFirstTierZeroBytes = errors.New("can't create pool with 0 byte first tier")
@@ -609,6 +613,46 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	return poolQueryInt(ctx, rpcClient, req, nil)
 }
 
+// waitForPoolState polls PoolQuery on the named pool until one of the following
+// conditions is met: chkFn returns true, an error occurs, or the retry context is cancelled.
+func waitForPoolState(ctx context.Context, rpcClient UnaryInvoker, poolID string, retryInterval time.Duration, chkFn func(*PoolQueryResp) (bool, error)) error {
+	startedAt := time.Now()
+	for {
+		pqr, err := PoolQuery(ctx, rpcClient, &PoolQueryReq{ID: poolID})
+		if err != nil {
+			return errors.Wrap(err, "pool query while waiting for pool state")
+		}
+		ok, err := chkFn(pqr)
+		if err != nil {
+			return err
+		}
+		if ok {
+			rpcClient.Debugf("pool %s reached expected state after %s", poolID, time.Since(startedAt))
+			return nil
+		}
+		rpcClient.Debugf("pool %s not yet in expected state, waiting...", poolID)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryInterval):
+		}
+	}
+}
+
+// WaitForPoolRebuild blocks until the named pool's rebuild status is reported
+// as done, polling PoolQuery on the supplied invoker.
+func WaitForPoolRebuild(ctx context.Context, rpcClient UnaryInvoker, poolID string, retryInterval ...time.Duration) error {
+	if len(retryInterval) == 0 {
+		retryInterval = []time.Duration{defaultPoolWaitRetry}
+	}
+	return waitForPoolState(ctx, rpcClient, poolID, retryInterval[0], func(pqr *PoolQueryResp) (bool, error) {
+		if pqr.Rebuild == nil {
+			return false, errors.New("pool rebuild status missing from query response")
+		}
+		return pqr.Rebuild.State == daos.PoolRebuildStateDone, nil
+	})
+}
+
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
 // for the specified pool ID, pool engine rank, and target indices.
 func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryTargetReq) (*PoolQueryTargetResp, error) {
@@ -860,6 +904,21 @@ func (resp *PoolRanksResp) Errors() error {
 	}
 
 	return nil
+}
+
+// HasSuccess reports whether at least one rank's operation succeeded. Useful
+// for gating a follow-up wait-for-rebuild: if every rank failed, no rebuild
+// was started and there is nothing to wait for.
+func (resp *PoolRanksResp) HasSuccess() bool {
+	if resp == nil {
+		return false
+	}
+	for _, res := range resp.Results {
+		if !res.Errored {
+			return true
+		}
+	}
+	return false
 }
 
 type poolRankOpSig func(context.Context, UnaryInvoker, *PoolRanksReq, ranklist.Rank) (*PoolRankResult, error)
