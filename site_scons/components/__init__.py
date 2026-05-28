@@ -114,6 +114,11 @@ def define_mercury(reqs):
     else:
         reqs.define('rt', libs=['rt'])
 
+    enable_gpu_direct = reqs.get_env('BUILD_GPU_DIRECT')
+
+    # BUILD_GPU_DIRECT enables GPU memory registration support in the transport
+    # prerequisites. This requires the CUDA toolkit, gdrcopy, and compatible
+    # GPU drivers/runtime on the build system.
     # pylint: disable-next=wrong-spelling-in-comment,fixme
     # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
@@ -131,7 +136,7 @@ def define_mercury(reqs):
                  '--enable-opx',
                  '--disable-efa',
                  '--disable-dmabuf_peer_mem',
-                 '--disable-hook_hmem',
+                 '--enable-hook_hmem' if enable_gpu_direct else '--disable-hook_hmem',
                  '--disable-hook_debug',
                  '--disable-trace',
                  '--disable-perf',
@@ -161,8 +166,10 @@ def define_mercury(reqs):
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
-                     '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
-                     '--without-gdrcopy', '--with-verbs', '--without-knem', '--without-rocm',
+                     '--libdir=$UCX_PREFIX/lib64', '--enable-cma',
+                     '--with-cuda' if enable_gpu_direct else '--without-cuda',
+                     '--with-gdrcopy' if enable_gpu_direct else '--without-gdrcopy',
+                     '--with-verbs', '--without-knem', '--without-rocm',
                      '--without-xpmem', '--without-fuse3', '--without-ugni']
 
     if reqs.target_type == 'debug':

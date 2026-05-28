@@ -652,7 +652,7 @@ again:
 	cpca->cpca_sgl.sg_nr_out = 1;
 	cpca->cpca_sgl.sg_iovs = &cpca->cpca_iov;
 
-	rc = obj_bulk_prep(&cpca->cpca_sgl, 1, false, CRT_BULK_RO, task, &cpca->cpca_bulks);
+	rc = obj_bulk_prep(&cpca->cpca_sgl, NULL, 1, false, CRT_BULK_RO, task, &cpca->cpca_bulks);
 
 out:
 	if (rc != 0) {
