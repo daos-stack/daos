@@ -17,9 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
@@ -79,29 +77,12 @@ func runCmdToStdout(ctx *DdbContext, args []string) (cliOptions, string, error) 
 	return opts, stdout, err
 }
 
-// runMainFlow simulates the main() execution flow without calling os.Exit.
-// It calls parseOpts, handles the version flag, then calls run().
-// errHelpRequested is treated as a non-error (consistent with main()).
-// Returns stdout output and any error.
+// runMainFlow captures stdout and delegates to the production runDdb function.
+// This ensures tests exercise the same code path as main(), without calling os.Exit.
 func runMainFlow(ctx *DdbContext, args []string) (string, error) {
-	stdout, err := captureStdout(func() error {
-		opts, parser, e := parseOpts(args, ctx)
-		if errors.Is(e, errHelpRequested) {
-			return nil
-		}
-		if e != nil {
-			return e
-		}
-
-		if opts.Version {
-			fmt.Printf("ddb version %s\n", build.DaosVersion)
-			return nil
-		}
-
-		log := logging.NewCommandLineLogger()
-		return run(ctx, log, opts, parser)
+	return captureStdout(func() error {
+		return runDdb(ctx, args)
 	})
-	return stdout, err
 }
 
 // assertContainsAll asserts that s contains each of the given substrings.
