@@ -1,0 +1,3 @@
+# Local Molecule proxy configuration — not version-controlled.
+# Copy molecule-proxy.yml.example to molecule-proxy.yml and customize.
+molecule-proxy.yml
