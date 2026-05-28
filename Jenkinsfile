@@ -749,6 +749,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
+                                         referenceJobName: 'daos-stack/daos/release%252F2.8',
                                          valgrind_stash: 'nlt-memcheck',
                                          valgrind_pattern: '*memcheck.xml',
                                          NLT: true
