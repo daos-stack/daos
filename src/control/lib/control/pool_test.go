@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -772,6 +773,78 @@ func TestControl_PoolReintegrate(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_WaitForPoolRebuild(t *testing.T) {
+	doneResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_DONE},
+	})
+	busyResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_BUSY},
+	})
+	idleResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_IDLE},
+	})
+	missingRebuildResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{})
+
+	for name, tc := range map[string]struct {
+		mic        *MockInvokerConfig
+		cancelCtx  bool
+		expErr     error
+		expQueries int
+	}{
+		"already done": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: doneResp,
+			},
+			expQueries: 1,
+		},
+		"transitions to done": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{idleResp, busyResp, doneResp},
+			},
+			expQueries: 3,
+		},
+		"query error propagates": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("network down"),
+			},
+			expErr: errors.New("pool query while waiting for pool state: network down"),
+		},
+		"missing rebuild status is an error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: missingRebuildResp,
+			},
+			expErr: errors.New("pool rebuild status missing from query response"),
+		},
+		"context cancellation aborts wait": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: idleResp,
+			},
+			cancelCtx: true,
+			expErr:    context.Canceled,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+			mi := NewMockInvoker(log, mic)
+
+			ctx, cancel := context.WithCancel(test.Context(t))
+			defer cancel()
+			if tc.cancelCtx {
+				cancel()
+			}
+
+			gotErr := WaitForPoolRebuild(ctx, mi, test.MockUUID(), time.Microsecond)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

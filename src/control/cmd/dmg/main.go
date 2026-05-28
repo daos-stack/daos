@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -89,6 +90,12 @@ func (cmd *hostListCmd) setHostList(newList *hostlist.HostSet) {
 
 func (cmd *cfgCmd) setConfig(cfg *control.Config) {
 	cmd.config = cfg
+}
+
+// waitCmd is embedded in subcommands that kick off a pool rebuild and may
+// optionally block until that rebuild completes.
+type waitCmd struct {
+	Wait bool `long:"wait" description:"Block until the rebuild triggered by this operation completes"`
 }
 
 type cliOptions struct {

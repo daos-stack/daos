@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -233,11 +233,10 @@ class NetworkFailureTest(IorTestBase):
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        # --wait blocks each reintegrate until its rebuild completes.
         self.log_step("Reintegrate one rank at a time to enable all ranks.")
         for disabled_rank in disabled_ranks:
-            self.pool.reintegrate(ranks=disabled_rank)
-            self.pool.wait_for_rebuild_to_start(interval=5)
-            self.pool.wait_for_rebuild_to_end(interval=10)
+            self.pool.reintegrate(ranks=disabled_rank, wait=True)
 
         # 8. Run IOR again. It should work this time.
         self.log_step("Expect IOR to pass with the network interface back up.")
