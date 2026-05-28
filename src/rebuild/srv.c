@@ -757,9 +757,10 @@ out:
 	return rc;
 }
 
-void
-ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
-			 daos_epoch_t *stable_eph, uint32_t *generation)
+static void
+ds_rebuild_running_query_adv(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
+			     daos_epoch_t *stable_eph, uint32_t *generation, uint32_t *leader_rank,
+			     uint64_t *leader_term)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
 
@@ -769,6 +770,10 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 		*stable_eph = 0;
 	if (generation)
 		*generation = -1;
+	if (leader_rank)
+		*leader_rank = -1;
+	if (leader_term)
+		*leader_term = -1;
 	rpt = rpt_lookup(pool_uuid, opc, -1 /* ver */, -1 /* gen */);
 	if (rpt != NULL && !rpt->rt_global_done && !rpt->rt_abort) {
 		D_DEBUG(DB_REBUILD, DF_RB " rebuild %p running eph " DF_X64 "\n", DP_RB_RPT(rpt),
@@ -779,9 +784,20 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 			*upper_ver = rpt->rt_rebuild_ver;
 		if (generation)
 			*generation = rpt->rt_rebuild_gen;
+		if (leader_rank)
+			*leader_rank = rpt->rt_leader_rank;
+		if (leader_term)
+			*leader_term = rpt->rt_leader_term;
 	}
 	if (rpt)
 		rpt_put(rpt);
+}
+
+void
+ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
+			 daos_epoch_t *stable_eph, uint32_t *generation)
+{
+	ds_rebuild_running_query_adv(pool_uuid, opc, upper_ver, stable_eph, generation, NULL, NULL);
 }
 
 /*
@@ -1776,7 +1792,8 @@ static int
 rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
-	uint64_t	leader_term;
+	uint64_t        leader_term, rebuild_leader_term;
+	uint32_t        leader_rank, rebuild_leader_rank;
 	uint32_t	version;
 	uint32_t	generation;
 	int		rc;
@@ -1787,12 +1804,17 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 			DP_RC(rc));
 		return rc;
 	}
+	leader_rank = dss_self_rank();
 
-	/* If this happened due to leader switch, then do not need update
-	 * generation.
+	/* If this happened due to leader switch, then do not need update generation.
+	 * If on the same PS leader, it retry the rebuild/reclaim on same version, should bump
+	 * the generation.
 	 */
-	ds_rebuild_running_query(pool->sp_uuid, -1, &version, NULL, &generation);
-	if (version < task->dst_map_ver)
+	ds_rebuild_running_query_adv(pool->sp_uuid, -1, &version, NULL, &generation,
+				     &rebuild_leader_rank, &rebuild_leader_term);
+	if ((version < task->dst_map_ver) ||
+	    (version == task->dst_map_ver && leader_rank == rebuild_leader_rank &&
+	     leader_term == rebuild_leader_term))
 		generation = ++pool->sp_rebuild_gen;
 
 	rc = rebuild_prepare(pool, task->dst_map_ver, generation,
