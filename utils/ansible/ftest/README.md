@@ -27,6 +27,7 @@ generates helper bash scripts for building DAOS binaries and launching test suit
   - [Linting](#linting)
   - [Template Unit Tests](#template-unit-tests)
   - [Molecule Unit Tests](#molecule-unit-tests)
+    - [Molecule Proxy Configuration](#molecule-proxy-configuration)
   - [Adding a New Role](#adding-a-new-role)
 
 ---
@@ -736,6 +737,56 @@ scripts/test-templates.sh -v      # verbose (one line per test)
 Each role ships a [Molecule](https://molecule.readthedocs.io/) test scenario under
 `roles/<role>/molecule/default/`. Tests run inside Docker containers using the same
 `daos/rocky-el9:2.8` image used by DAOS CI.
+
+#### Molecule Proxy Configuration
+
+If your environment requires a corporate HTTP proxy to reach external package repositories
+(PyPI, RubyGems, dnf mirrors, etc.), create `molecule-proxy.yml` in the ftest root.
+A commented sample is provided in `molecule-proxy.yml.example`:
+
+```bash
+cp molecule-proxy.yml.example molecule-proxy.yml
+# edit molecule-proxy.yml to set your proxy URL and bypass rules
+```
+
+`molecule-proxy.yml` is listed in `.gitignore` and will never be committed.
+
+**Available variables:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `molecule_http_proxy` | *(unset)* | HTTP/HTTPS proxy URL forwarded to Docker containers. Mirrors `daos_http_proxy` in the inventory. |
+| `molecule_proxy_bypass` | `localhost,127.0.0.1` | Comma-separated bypass list. Exported as `no_proxy` / `NO_PROXY`. |
+| `molecule_proxy_nofwd` | `[dnf]` | Package managers that bypass the proxy at the Ansible task level in the `daos_dev` scenario. Mirrors `daos_proxy_nofwd` in the inventory. |
+
+**Example (typical corporate environment):**
+
+```yaml
+molecule_http_proxy: "http://proxy.corp.example.com:8080"
+molecule_proxy_bypass: "localhost,127.0.0.1,.corp.example.com"
+molecule_proxy_nofwd:
+  - dnf
+```
+
+**How proxy settings propagate:**
+
+- `molecule-test.sh` reads `molecule-proxy.yml` and exports `HTTP_PROXY`, `HTTPS_PROXY`,
+  `no_proxy`, and `NO_PROXY` into the shell before launching Molecule. Each `molecule.yml`
+  picks these up via `lookup('env', ...)` and injects them into the Docker container
+  environment so that `dnf`, `pip`, `gem`, and `curl` inside the container use the proxy.
+
+- `scripts/molecule-load-proxy.yml` (a shared Ansible task file) is included at the start
+  of `daos_dev/converge.yml`. It loads `molecule-proxy.yml` via `include_vars` and applies
+  `molecule_proxy_nofwd` → `daos_proxy_nofwd` via `set_fact`. This controls which task files
+  bypass the proxy at the Ansible task level, mirroring how `daos_proxy_nofwd` works in the
+  real inventory.
+
+> **Note on `molecule_proxy_nofwd: [dnf]` (the default):**
+> The `daos_dev` converge play uses a synthetic test proxy (`test-proxy.example.com:3128`)
+> to verify the proxy environment-dict mechanism.  `dnf` must bypass this fake proxy so that
+> real package installs succeed.  The default `[dnf]` ensures this.  If you have a working
+> corporate proxy, setting `molecule_proxy_nofwd: []` would cause `dnf` tasks to route
+> through the fake test proxy and fail — keep `dnf` in the list.
 
 #### Requirements
 
