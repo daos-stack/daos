@@ -13,6 +13,7 @@ From one of the client node:
 
 ```sh
 $ dbench -D /tmp/daos_dfuse/ -c /usr/share/dbench/client.txt -t 10 10
+
 dbench version 4.00 - Copyright Andrew Tridgell 1999-2004
 
 Running for 10 seconds with load '/usr/share/dbench/client.txt' and minimum warmup 2 secs
