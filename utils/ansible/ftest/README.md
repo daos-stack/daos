@@ -134,7 +134,7 @@ Nodes can belong to multiple groups (e.g. a node can be both a server and a clie
 | `daos_proxy_bypass` | `"localhost,127.0.0.1"` | Comma-separated list of hosts that bypass the proxy (passed as `no_proxy` / `NO_PROXY`). When unset, defaults to `localhost,127.0.0.1`. |
 | `daos_proxy_nofwd` | `[]` | List of tool names whose task files bypass the proxy. By default the list is empty — all tasks receive the proxy. Add `dnf` if your dnf repositories are hosted on a local Artifactory or mirror that is not reachable through the proxy. Tasks in included task files that match an entry are run with an empty proxy environment. **Must be set in the inventory**. See [Proxy Configuration](#proxy-configuration) for the full explanation. |
 | `daos_python_version` | `python3.11` | Python interpreter used for `pip` tasks on all nodes. |
-| `daos_goproxy` | `direct` | Go module proxy (`GOPROXY`) used when running `go mod download` on the dev node. |
+| `daos_goproxy` | `direct` | Go module proxy (`GOPROXY`) used when running `go mod download` on the dev node and baked into the generated `daos-make.sh` script. |
 
 #### Example Inventory
 
@@ -409,9 +409,11 @@ The Python interpreter used is controlled by the `daos_python_version` variable
 
 ### Proxy Configuration
 
-The proxy is **scoped to the playbook run** — it is forwarded to tasks via Ansible's
-`environment:` mechanism and is **never written permanently** to the nodes (no
-`/etc/environment` entries, no `/etc/profile.d/` scripts).
+The proxy is forwarded to tasks via Ansible's `environment:` mechanism and is **never
+written permanently to the system** (no `/etc/environment` entries, no `/etc/profile.d/`
+scripts). However, it **is** baked into the generated `daos-make.sh` helper script so
+that developers can run it standalone outside of a playbook session (see
+[Proxy in generated helper scripts](#proxy-in-generated-helper-scripts)).
 
 #### How it works
 
@@ -529,6 +531,37 @@ all:
 
 When `daos_http_proxy` is not set in the inventory, `daos_proxy_env` contains empty strings —
 equivalent to no proxy. No tasks are affected.
+
+#### Proxy in generated helper scripts
+
+The `daos-make.sh` script rendered by the `daos_dev` role bakes the proxy settings
+directly into the script file. This allows `daos-make.sh` to be run standalone on the
+dev node (outside any Ansible playbook session) while still reaching external services
+such as Go module downloads, SPDK dependency fetches, and MPI utilities.
+
+The following variables are exported at the top of the rendered script:
+
+| Variable | Source | Description |
+|---|---|---|
+| `http_proxy` / `HTTP_PROXY` / `https_proxy` / `HTTPS_PROXY` | `daos_http_proxy` | Proxy URL; omitted if `daos_http_proxy` is not set |
+| `no_proxy` / `NO_PROXY` | `daos_proxy_bypass` (default: `localhost,127.0.0.1`) | Bypass list; only written when the proxy block is active |
+| `GOPROXY` | `daos_goproxy` (default: `direct`) | Go module proxy; always written regardless of whether a proxy is configured |
+
+`GOPROXY` is always written (even when no HTTP proxy is set) because Go's default
+value (`https://proxy.golang.org,direct`) uses the public Go module proxy, which may
+not be reachable in air-gapped or restricted environments. Setting it to `direct` makes
+Go fetch modules directly from VCS. To route through a corporate module proxy:
+
+```yaml
+all:
+  vars:
+    daos_goproxy: "https://goproxy.corp.example.com,direct"
+```
+
+Note that the scons compilation step inside `daos-make.sh` explicitly clears the HTTP
+proxy (`env --unset=http_proxy ...`) for its invocation — this is intentional, as the
+compiler should not attempt network access. The proxy is only active for the dependency
+download step (`daos-make.sh --deps`) and other network-aware commands (pip, wget).
 
 ---
 
