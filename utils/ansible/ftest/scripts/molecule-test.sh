@@ -19,6 +19,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FTEST_DIR="$(dirname "${SCRIPT_DIR}")"
 ROLES_DIR="${FTEST_DIR}/roles"
 
+# Load proxy settings from molecule-proxy.yml (if present) and export them as
+# shell environment variables.  molecule.yml reads these via lookup('env', ...)
+# and injects them into Docker containers so that dnf, pip, gem, etc. can
+# reach external package repos through the corporate proxy.
+_load_molecule_proxy() {
+    local cfg="${FTEST_DIR}/molecule-proxy.yml"
+    [[ -f "${cfg}" ]] || return 0
+    eval "$(python3 - "${cfg}" << 'PYEOF'
+import sys, yaml
+with open(sys.argv[1]) as f:
+    cfg = yaml.safe_load(f) or {}
+proxy = cfg.get('molecule_http_proxy', '')
+bypass = cfg.get('molecule_proxy_bypass', 'localhost,127.0.0.1')
+if proxy:
+    for var in ('http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY'):
+        print(f'export {var}={proxy!r}')
+    for var in ('no_proxy', 'NO_PROXY'):
+        print(f'export {var}={bypass!r}')
+PYEOF
+)"
+}
+_load_molecule_proxy
+
 usage() {
     sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
     exit 1
