@@ -4181,16 +4181,38 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 static int
 pool_query_set_rebuild_status_degraded(struct pool_svc *svc, struct daos_rebuild_status *rebuild_st)
 {
-	unsigned int down_tgts = 0;
-	int          rc;
+	struct pool_target *tgts       = NULL;
+	unsigned int        tgts_count = 0;
+	bool                degraded   = false;
+	int                 rc;
+	int                 i;
 
+	/* Infer the data redundancy status from the pool map. */
 	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-	rc = pool_map_find_down_tgts(svc->ps_pool->sp_map, NULL /* tgt_pp */, &down_tgts);
-	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
-	if (rc != 0)
+	rc = pool_map_find_tgts_by_state(svc->ps_pool->sp_map, PO_COMP_ST_DOWN | PO_COMP_ST_UP,
+					 &tgts, &tgts_count);
+	if (rc != 0) {
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 		return rc;
+	}
+	for (i = 0; i < tgts_count; i++) {
+		if (tgts[i].ta_comp.co_status == PO_COMP_ST_DOWN ||
+		    (tgts[i].ta_comp.co_status == PO_COMP_ST_UP &&
+		     tgts[i].ta_comp.co_flags & PO_COMPF_DOWN2UP)) {
+			/*
+			 * Any DOWN targets are not yet rebuilt, and any UP
+			 * targets with the DOWN2UP flag are neither rebuilt
+			 * nor fully reintegrated, hence degraded data
+			 * redundancy.
+			 */
+			degraded = true;
+			break;
+		}
+	}
+	D_FREE(tgts);
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
-	if (down_tgts > 0)
+	if (degraded)
 		rebuild_st->rs_flags |= DAOS_RSF_DEGRADED;
 	else
 		rebuild_st->rs_flags &= ~DAOS_RSF_DEGRADED;
