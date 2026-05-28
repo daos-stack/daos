@@ -47,6 +47,7 @@
 struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
+struct crt_bulk_mem_attr;
 
 /**
  * Enumeration specifying providers supported by the library
@@ -278,7 +279,7 @@ crt_hg_bulk_get_len(hg_bulk_t hg_bulk_hdl)
 
 int
 crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
-		   hg_bulk_t *bulk_hdl);
+		   const struct crt_bulk_mem_attr *mem_attr, hg_bulk_t *bulk_hdl);
 int
 crt_hg_bulk_bind(hg_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int

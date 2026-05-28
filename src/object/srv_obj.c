@@ -437,6 +437,12 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			sgl_sent.sg_nr = sgl_sent.sg_nr_out = iov_idx - start;
 			bulk_iovs += sgl_sent.sg_nr;
 
+			/*
+			 * Server-side bulk handles are always created from host-memory SGLs.
+			 * If the remote bulk maps client GPU memory, Mercury/CaRT handles the
+			 * heterogeneous host<->GPU transfer transparently. Future server-side
+			 * GPU buffers could hook peer GPU-to-GPU optimizations in this path.
+			 */
 again:
 			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
 					     &local_bulk);
@@ -520,6 +526,22 @@ again:
 /* bypass bulk rma for single value's degraded fetch */
 #define OBJ_BULK_OFFSET_SKIP ((uint64_t)-1)
 
+static inline bool
+obj_rpc_is_gpu_direct(crt_rpc_t *rpc)
+{
+	switch (opc_get(rpc->cr_opc)) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+	case DAOS_OBJ_RPC_FETCH: {
+		struct obj_rw_in *orw = crt_req_get(rpc);
+
+		return (orw->orw_flags & ORF_GPU_DIRECT) != 0;
+	}
+	default:
+		return false;
+	}
+}
+
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
 		  uint64_t *remote_offs, uint8_t *skips, daos_handle_t ioh, d_sg_list_t **sgls,
@@ -529,6 +551,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 	int			i, rc, *status, ret;
 	int			skip_nr = 0;
 	bool			async = true;
+	bool			gpu_direct = obj_rpc_is_gpu_direct(rpc);
 	uint64_t		time = daos_get_ntime();
 
 	if (unlikely(sgl_nr > bulk_nr)) {
@@ -552,6 +575,10 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 
 	p_arg->inited = true;
 	D_DEBUG(DB_IO, "bulk_op %d, sgl_nr %d, bulk_nr %d\n", bulk_op, sgl_nr, bulk_nr);
+	if (gpu_direct)
+		D_DEBUG(DB_IO,
+			"GPU-direct bulk transfer detected: opc=%u bulk_op=%d sgl_nr=%d bulk_nr=%d\n",
+			opc_get(rpc->cr_opc), bulk_op, sgl_nr, bulk_nr);
 
 	p_arg->bulks_inflight++;
 
@@ -2403,6 +2430,14 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	default:
 		lat = tls->ot_op_lat[opc];
 	}
+
+	if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE ||
+	    opc == DAOS_OBJ_RPC_FETCH) {
+		orw = crt_req_get(ioc->ioc_rpc);
+		if (orw->orw_flags & ORF_GPU_DIRECT)
+			d_tm_inc_counter(opm->opm_gpu_direct, 1);
+	}
+
 	d_tm_set_gauge(lat, time);
 }
 
@@ -4847,6 +4882,11 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		}
 
 		if (dcu->dcu_flags & ORF_CPD_BULK) {
+			if (dcu->dcu_flags & ORF_GPU_DIRECT)
+				D_DEBUG(DB_IO,
+					"GPU-direct CPD bulk transfer detected: obj=" DF_UOID
+					" shards=%u\n",
+					DP_UOID(dcsr->dcsr_oid), dcsr->dcsr_nr);
 			if (bulks == NULL) {
 				D_ALLOC_ARRAY(bulks, dcde->dcde_write_cnt);
 				if (bulks == NULL)

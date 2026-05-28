@@ -2046,8 +2046,8 @@ out:
 
 /* prepare the bulk handle(s) for obj request */
 int
-obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
-	      crt_bulk_perm_t bulk_perm, tse_task_t *task,
+obj_bulk_prep(d_sg_list_t *sgls, daos_mem_attr_t *mem_attrs, unsigned int nr,
+	      bool bulk_bind, crt_bulk_perm_t bulk_perm, tse_task_t *task,
 	      crt_bulk_t **p_bulks)
 {
 	crt_bulk_t	*bulks;
@@ -2063,8 +2063,12 @@ obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 	for (; sgls != NULL && i < nr; i++) {
 		if (sgls[i].sg_iovs != NULL &&
 		    sgls[i].sg_iovs[0].iov_buf != NULL) {
-			rc = crt_bulk_create(daos_task2ctx(task), &sgls[i],
-					     bulk_perm, &bulks[i]);
+			daos_mem_attr_t	*mem_attr = mem_attrs == NULL ? NULL :
+						  &mem_attrs[i];
+
+			rc = crt_bulk_create_with_mem_attr(daos_task2ctx(task),
+							   &sgls[i], bulk_perm,
+							   mem_attr, &bulks[i]);
 			if (rc < 0)
 				D_GOTO(out, rc);
 			if (!bulk_bind)
@@ -2129,20 +2133,28 @@ obj_sgls_bulk_needed(struct obj_auxi_args *obj_auxi, d_sg_list_t *sgls, unsigned
 
 static int
 obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
-		 unsigned int nr, bool update, bool bulk_bind,
-		 tse_task_t *task, struct obj_auxi_args *obj_auxi)
+		 daos_mem_attr_t *mem_attrs, unsigned int nr, bool update,
+		 bool bulk_bind, tse_task_t *task, struct obj_auxi_args *obj_auxi)
 {
-	crt_bulk_perm_t		bulk_perm;
-	int			rc = 0;
+	daos_mem_attr_t		*bulk_mem_attrs = NULL;
+	crt_bulk_perm_t		 bulk_perm;
+	int			 rc = 0;
 
 	if ((obj_auxi->io_retry && !obj_auxi->reasb_req.orr_size_fetched &&
 	     obj_auxi->bulks != NULL) || obj_auxi->reasb_req.orr_size_fetch || sgls == NULL)
 		return 0;
 
+	/* Reassembled/duplicated SGLs are host buffers, so only pass memory
+	 * attributes when the bulk is built from the original user SGLs.
+	 */
+	if (mem_attrs != NULL && (obj_auxi->reasb_req.orr_usgls == NULL ||
+	    sgls == obj_auxi->reasb_req.orr_usgls))
+		bulk_mem_attrs = mem_attrs;
+
 	if (obj_sgls_bulk_needed(obj_auxi, sgls, nr)) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
-		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
-				   &obj_auxi->bulks);
+		rc = obj_bulk_prep(sgls, bulk_mem_attrs, nr, bulk_bind,
+				   bulk_perm, task, &obj_auxi->bulks);
 	}
 	obj_auxi->reasb_req.orr_size_fetched = 0;
 
@@ -2434,6 +2446,39 @@ obj_req_with_cond_flags(uint64_t flags)
 	return flags & DAOS_COND_MASK;
 }
 
+static int
+obj_mem_attrs_valid(daos_mem_attr_t *mem_attrs, unsigned int nr)
+{
+	unsigned int	 i;
+
+	if (mem_attrs == NULL)
+		return 0;
+
+	for (i = 0; i < nr; i++) {
+		daos_mem_attr_t	*mem_attr = &mem_attrs[i];
+
+		switch (mem_attr->ma_mem_type) {
+		case DAOS_MEM_TYPE_HOST:
+			if (mem_attr->ma_device_id != 0) {
+				D_ERROR("invalid host memory attributes for sgl %u\n", i);
+				return -DER_INVAL;
+			}
+			break;
+		case DAOS_MEM_TYPE_CUDA:
+		case DAOS_MEM_TYPE_CUDA_MANAGED:
+		case DAOS_MEM_TYPE_ROCM:
+		case DAOS_MEM_TYPE_ZE:
+			break;
+		default:
+			D_ERROR("invalid memory type %d for sgl %u\n",
+				mem_attr->ma_mem_type, i);
+			return -DER_INVAL;
+		}
+	}
+
+	return 0;
+}
+
 static bool
 obj_req_is_ec_cond_fetch(struct obj_auxi_args *obj_auxi)
 {
@@ -2515,6 +2560,12 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			}
 		}
 
+		if (flags & DAOS_OBJ_IO_GPU_DIRECT) {
+			rc = obj_mem_attrs_valid(f_args->mem_attrs, f_args->nr);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		}
+
 		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
 		    size_fetch) {
 			if (!obj_key_valid(obj->cob_md.omd_id, f_args->dkey,
@@ -2555,6 +2606,12 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 					"DAOS_COND_AKEY_UPDATE | DAOS_COND_AKEY_INSERT\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
+		}
+
+		if (flags & DAOS_OBJ_IO_GPU_DIRECT) {
+			rc = obj_mem_attrs_valid(u_args->mem_attrs, u_args->nr);
+			if (rc != 0)
+				D_GOTO(out, rc);
 		}
 
 		if (!obj_auxi->io_retry && !obj_auxi->req_reasbed) {
@@ -6032,6 +6089,9 @@ dc_obj_fetch_task(tse_task_t *task)
 		if ((args->extra_flags & DIOF_EC_RECOV_SNAP) != 0)
 			obj_auxi->reasb_req.orr_recov_snap = 1;
 	}
+	if (args->flags & DAOS_OBJ_IO_GPU_DIRECT)
+		obj_auxi->flags |= ORF_GPU_DIRECT;
+
 	if (args->extra_flags & DIOF_FOR_MIGRATION) {
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
 		obj_auxi->for_migrate = 1;
@@ -6106,8 +6166,9 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (!obj_auxi->io_retry && !obj_auxi->is_ec_obj)
 		obj_auxi->initial_shard = obj_auxi->req_tgts.ort_shard_tgts[0].st_shard;
 
-	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,
-			      false, false, task, obj_auxi);
+	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls,
+			      args->mem_attrs, args->nr, false, false, task,
+			      obj_auxi);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -6264,6 +6325,8 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	if (args->flags & DAOS_COND_MASK)
 		obj_auxi->cond_modify = 1;
+	if (args->flags & DAOS_OBJ_IO_GPU_DIRECT)
+		obj_auxi->flags |= ORF_GPU_DIRECT;
 
 	rc = obj_shards_2_fwtgts(obj, map_ver, tgt_bitmap, shard, shard_cnt, 1,
 				 OBJ_TGT_FLAG_FW_LEADER_INFO, obj_auxi);
@@ -6293,7 +6356,8 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), obj_auxi->dkey_hash);
 
-	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr, true,
+	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls,
+			      args->mem_attrs, args->nr, true,
 			      obj_auxi->req_tgts.ort_srv_disp, task, obj_auxi);
 	if (rc != 0)
 		goto out_task;

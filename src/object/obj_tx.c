@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1149,7 +1149,7 @@ tx_bulk_prepare(struct daos_cpd_sub_req *dcsr, tse_task_t *task)
 	 * for bulk data transfer. It is not optimized, but it
 	 * simplifies the logic.
 	 */
-	rc = obj_bulk_prep(dcsr->dcsr_sgls, dcsr->dcsr_nr, true,
+	rc = obj_bulk_prep(dcsr->dcsr_sgls, NULL, dcsr->dcsr_nr, true,
 			   CRT_BULK_RO, task, &dcu->dcu_bulks);
 	if (rc == 0)
 		dcu->dcu_flags |= ORF_BULK_BIND | ORF_CPD_BULK;

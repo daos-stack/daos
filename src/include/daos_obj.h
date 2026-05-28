@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -287,6 +287,13 @@ enum {
 	/** Mask for convenience */
 	DAOS_COND_MASK = ((1 << IO_FLAGS_COND_BITS) - 1),
 };
+
+/**
+ * GPU direct I/O flag: indicates that scatter-gather list buffers reside in
+ * GPU device memory. The memory type and device ID are supplied through the
+ * side-channel daos_mem_attr_t passed to the bulk layer.
+ */
+#define DAOS_OBJ_IO_GPU_DIRECT	(1ULL << 32)
 
 /**
  * Object attributes (metadata).
@@ -792,6 +799,20 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       d_sg_list_t *sgls, daos_iom_t *ioms, daos_event_t *ev);
 
 /**
+ * GPU direct variant of daos_obj_fetch().
+ *
+ * \param[in]	mem_attrs	Optional array of \a nr memory attributes, one per
+ *				sgl in \a sgls. Pass NULL for host memory.
+ *
+ * The DAOS_OBJ_IO_GPU_DIRECT flag is set automatically.
+ */
+int
+daos_obj_fetch_gpu(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		   daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		   d_sg_list_t *sgls, daos_mem_attr_t *mem_attrs,
+		   daos_iom_t *ioms, daos_event_t *ev);
+
+/**
  * Insert or update object records stored in co-located arrays.
  *
  * \param[in]	oh	Object open handle.
@@ -843,6 +864,20 @@ int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		d_sg_list_t *sgls, daos_event_t *ev);
+
+/**
+ * GPU direct variant of daos_obj_update().
+ *
+ * \param[in]	mem_attrs	Optional array of \a nr memory attributes, one per
+ *				sgl in \a sgls. Pass NULL for host memory.
+ *
+ * The DAOS_OBJ_IO_GPU_DIRECT flag is set automatically.
+ */
+int
+daos_obj_update_gpu(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		    d_sg_list_t *sgls, daos_mem_attr_t *mem_attrs,
+		    daos_event_t *ev);
 
 /**
  * Distribution key enumeration.

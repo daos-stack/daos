@@ -1967,9 +1967,39 @@ crt_hg_event_progress(struct crt_hg_context *hg_ctx, const struct timespec *dead
 }
 
 #define CRT_HG_IOVN_STACK	(8)
+#define CRT_HG_HAS_BULK_ATTR							\
+	(HG_VERSION_MAJOR > 2 || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 4))
+
+#if CRT_HG_HAS_BULK_ATTR
+static int
+crt_hg_mem_type_map(daos_mem_type_t mem_type, hg_mem_type_t *hg_mem_type)
+{
+	D_ASSERT(hg_mem_type != NULL);
+
+	switch (mem_type) {
+	case DAOS_MEM_TYPE_HOST:
+		*hg_mem_type = HG_MEM_TYPE_HOST;
+		return 0;
+	case DAOS_MEM_TYPE_CUDA:
+	case DAOS_MEM_TYPE_CUDA_MANAGED:
+		*hg_mem_type = HG_MEM_TYPE_CUDA;
+		return 0;
+	case DAOS_MEM_TYPE_ROCM:
+		*hg_mem_type = HG_MEM_TYPE_ROCM;
+		return 0;
+	case DAOS_MEM_TYPE_ZE:
+		*hg_mem_type = HG_MEM_TYPE_ZE;
+		return 0;
+	default:
+		D_ERROR("unsupported DAOS memory type %d\n", mem_type);
+		return -DER_INVAL;
+	}
+}
+#endif
+
 int
 crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
-		   hg_bulk_t *bulk_hdl)
+		   const struct crt_bulk_mem_attr *mem_attr, hg_bulk_t *bulk_hdl)
 {
 	void      **buf_ptrs                           = NULL;
 	void       *buf_ptrs_stack[CRT_HG_IOVN_STACK]  = {0};
@@ -2029,8 +2059,30 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_per
 			buf_ptrs[i] = sgl->sg_iovs[i].iov_buf;
 	}
 
-	hg_ret =
-	    HG_Bulk_create(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs, buf_sizes, flags, &hg_bulk_hdl);
+	if (mem_attr != NULL && mem_attr->cbma_has_mem_type) {
+#if CRT_HG_HAS_BULK_ATTR
+		hg_mem_type_t	     hg_mem_type;
+		struct hg_bulk_attr hg_attr;
+
+		rc = crt_hg_mem_type_map(mem_attr->cbma_mem_type, &hg_mem_type);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		hg_attr.mem_type = hg_mem_type;
+		hg_attr.device = mem_attr->cbma_device_id;
+		hg_ret = HG_Bulk_create_attr(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs,
+					     buf_sizes, flags, &hg_attr,
+					     &hg_bulk_hdl);
+#else
+		/* TODO: Upgrade Mercury to use hg_bulk_attr for GPU bulk handles. */
+		D_WARN("Mercury bulk attrs unavailable, creating GPU bulk without memory type metadata\n");
+		hg_ret = HG_Bulk_create(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs,
+				       buf_sizes, flags, &hg_bulk_hdl);
+#endif
+	} else {
+		hg_ret = HG_Bulk_create(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs,
+				       buf_sizes, flags, &hg_bulk_hdl);
+	}
 	if (hg_ret == HG_SUCCESS) {
 		*bulk_hdl = hg_bulk_hdl;
 	} else {
