@@ -21,3 +21,59 @@
       become: true
       command: python3.11 -c "import distro"
       changed_when: false
+
+    # ── Proxy rendering verification ──────────────────────────────────────────
+
+    - name: Read rendered daos-make.sh (proxy case)
+      slurp:
+        src: /opt/daos/daos-make-proxy.sh
+      register: _daos_make_proxy
+
+    - name: Set fact for proxy script content
+      set_fact:
+        _proxy_script: "{{ _daos_make_proxy.content | b64decode }}"
+
+    - name: Verify http_proxy is exported when daos_http_proxy is set
+      assert:
+        that:
+          - "'export http_proxy=\"http://test-proxy.example.com:3128\"' in _proxy_script"
+          - "'export HTTP_PROXY=\"http://test-proxy.example.com:3128\"' in _proxy_script"
+          - "'export https_proxy=\"http://test-proxy.example.com:3128\"' in _proxy_script"
+          - "'export HTTPS_PROXY=\"http://test-proxy.example.com:3128\"' in _proxy_script"
+        fail_msg: "Proxy URL not found in rendered daos-make.sh (proxy case)"
+
+    - name: Verify no_proxy is exported alongside http_proxy
+      assert:
+        that:
+          - "'export no_proxy=\"localhost,127.0.0.1\"' in _proxy_script"
+          - "'export NO_PROXY=\"localhost,127.0.0.1\"' in _proxy_script"
+        fail_msg: "no_proxy / NO_PROXY not found in rendered daos-make.sh (proxy case)"
+
+    - name: Verify GOPROXY is set to the configured value when proxy is active
+      assert:
+        that:
+          - "'export GOPROXY=\"http://goproxy.example.com\"' in _proxy_script"
+        fail_msg: "GOPROXY not found in rendered daos-make.sh (proxy case)"
+
+    - name: Read rendered daos-make.sh (no-proxy case)
+      slurp:
+        src: /opt/daos/daos-make-noproxy.sh
+      register: _daos_make_noproxy
+
+    - name: Set fact for no-proxy script content
+      set_fact:
+        _noproxy_script: "{{ _daos_make_noproxy.content | b64decode }}"
+
+    - name: Verify proxy exports are absent when daos_http_proxy is empty
+      assert:
+        that:
+          - "'export http_proxy' not in _noproxy_script"
+          - "'export HTTP_PROXY' not in _noproxy_script"
+          - "'export no_proxy' not in _noproxy_script"
+        fail_msg: "Proxy exports should be absent in no-proxy rendering of daos-make.sh"
+
+    - name: Verify GOPROXY is always set even without a proxy
+      assert:
+        that:
+          - "'export GOPROXY=\"direct\"' in _noproxy_script"
+        fail_msg: "GOPROXY must always be set in daos-make.sh even when no proxy is configured"

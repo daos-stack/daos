@@ -99,3 +99,32 @@
       include_role:
         name: daos_dev
         tasks_from: pip_deps.yml
+
+    # Render the daos-make.sh script with proxy settings active (daos_http_proxy,
+    # daos_proxy_bypass, daos_goproxy are all set via the play-level vars above).
+    # The rendered file is verified in verify.yml.
+    - name: Create runtime dir for template test
+      become: true
+      file:
+        path: /opt/daos
+        state: directory
+        mode: '0755'
+
+    - name: Render daos-make.sh with proxy settings (proxy case)
+      vars:
+        daos_goproxy: "http://goproxy.example.com"
+      template:
+        src: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/../templates/daos-make.sh.j2"
+        dest: /opt/daos/daos-make-proxy.sh
+        mode: '0755'
+
+    # Render a second copy without daos_http_proxy to verify that the proxy
+    # exports are absent but GOPROXY is still written (it is always rendered).
+    - name: Render daos-make.sh without proxy settings (no-proxy case)
+      vars:
+        daos_http_proxy: ""
+        daos_goproxy: "direct"
+      template:
+        src: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/../templates/daos-make.sh.j2"
+        dest: /opt/daos/daos-make-noproxy.sh
+        mode: '0755'
