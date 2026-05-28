@@ -28,5 +28,8 @@ group_repo_post() {
 distro_custom() {
     # TODO: This code is not exiting on failure.
 
-    dnf -y install python3.11 python3.11-devel
+    # Use a more recent python version for unit testing, this allows us to also test installing
+    # pydaos into virtual environments.
+    : "${PYTHON_VERSION:=3.11}"
+    dnf -y install "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-devel"
 }
