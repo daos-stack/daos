@@ -1,0 +1,30 @@
+# Shared task file — included at the start of Molecule converge playbooks that
+# use daos_proxy_nofwd to control per-tool proxy bypass.
+#
+# Reads molecule-proxy.yml from the ftest root (if present) and sets
+# daos_proxy_nofwd from molecule_proxy_nofwd (defaulting to [] — no exceptions,
+# proxy forwarded to all tools).  This mirrors the standard Ansible role
+# behavior: add a tool to molecule_proxy_nofwd only when that tool can reach
+# its repos without the proxy (e.g. via an internal mirror).
+#
+# Usage (in converge.yml, before any task that needs daos_proxy_nofwd):
+#
+#   - name: Load local Molecule proxy configuration
+#     include_tasks: >-
+#       {{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/../../scripts/molecule-load-proxy.yml
+
+- name: Check for local Molecule proxy configuration
+  stat:
+    path: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/../../molecule-proxy.yml"
+  register: _mol_proxy_cfg
+  delegate_to: localhost
+  run_once: true
+
+- name: Load local Molecule proxy configuration
+  include_vars:
+    file: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/../../molecule-proxy.yml"
+  when: _mol_proxy_cfg.stat.exists
+
+- name: Apply molecule_proxy_nofwd (default [] when not configured)
+  set_fact:
+    daos_proxy_nofwd: "{{ molecule_proxy_nofwd | default([]) }}"
