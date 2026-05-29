@@ -49,6 +49,7 @@ const (
 	RASUnknownEvent            RASID = C.RAS_UNKNOWN_EVENT
 	RASEngineFormatRequired    RASID = C.RAS_ENGINE_FORMAT_REQUIRED     // notice
 	RASEngineDied              RASID = C.RAS_ENGINE_DIED                // error
+	RASEngineSelfTerminated    RASID = C.RAS_ENGINE_SELF_TERMINATED     // notice
 	RASPoolRepsUpdate          RASID = C.RAS_POOL_REPS_UPDATE           // info
 	RASSwimRankAlive           RASID = C.RAS_SWIM_RANK_ALIVE            // info
 	RASSwimRankDead            RASID = C.RAS_SWIM_RANK_DEAD             // info
