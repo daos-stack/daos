@@ -62,7 +62,7 @@ RUN dnf upgrade &&        \
 # opensuse-oss for lua53, lua53-luaterm,, sqlite3-tcl, tcl
 # opensuse-devel-languages-lua for lua53-luafilesystem, lua53-luaposix
 ARG JENKINS_URL
-RUN if [ -n "$JENKINS_URL" ]; then \
+RUN if [ -n "$JENKINS_URL" ] || true; then \
     dnf -y remove lua-lmod; \
     dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*'; \
     fi

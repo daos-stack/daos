@@ -60,7 +60,7 @@ jobs:
             python: 3.11
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.5
+            with: opensuse/leap:15.6
             python: 3.11
     env:
       DEPS_JOBS: 10
@@ -186,7 +186,7 @@ jobs:
             python: 3.11
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.5
+            with: opensuse/leap:15.6
             python: 3.11
     env:
       DEPS_JOBS: 10
@@ -370,7 +370,7 @@ jobs:
             python: 3.11
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.5
+            with: opensuse/leap:15.6
             python: 3.11
     env:
       DEPS_JOBS: 10
