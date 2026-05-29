@@ -1459,7 +1459,8 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	 */
 	ds_rebuild_running_query_adv(pool->sp_uuid, -1, &version, NULL, &generation,
 				     &rebuild_leader_rank, &rebuild_leader_term);
-	if ((version < task->dst_map_ver) ||
+	if (task->dst_rebuild_op == RB_OP_RECLAIM || task->dst_rebuild_op == RB_OP_FAIL_RECLAIM ||
+	    (version < task->dst_map_ver) ||
 	    (version == task->dst_map_ver && leader_rank == rebuild_leader_rank &&
 	     leader_term == rebuild_leader_term))
 		generation = ++pool->sp_rebuild_gen;
@@ -1806,6 +1807,8 @@ iv_stop:
 	 * rebuild.
 	 */
 	if (rgt && rgt->rgt_init_scan) {
+		struct rebuild_tgt_pool_tracker *local_rpt;
+
 		if (myrank != pool->sp_iv_ns->iv_master_rank) {
 			/* If master has been changed, then let's skip
 			 * iv sync, and the new leader will take over
@@ -1817,6 +1820,14 @@ iv_stop:
 		}
 
 		rebuild_leader_status_notify(rgt, pool, task->dst_rebuild_op, myrank);
+
+		local_rpt = rpt_lookup(pool->sp_uuid, task->dst_rebuild_op, rgt->rgt_rebuild_ver,
+				       rgt->rgt_rebuild_gen);
+		if (local_rpt) {
+			local_rpt->rt_abort = 1;
+			D_INFO(DF_RB " set rt_abort", DP_RB_RPT(local_rpt));
+			rpt_put(local_rpt);
+		}
 	}
 
 try_reschedule:
@@ -2385,8 +2396,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 	/* No one should access rpt after rebuild_fini_one. */
-	D_INFO("Finalized rebuild for "DF_UUID", map_ver=%u.\n",
-	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
+	DL_INFO(rc, DF_RB " Finalized rebuild", DP_RB_RPT(rpt));
 	rpt_delete(rpt);
 }
 
@@ -2515,8 +2525,12 @@ rebuild_tgt_status_check_ult(void *arg)
 				 * it can not find the IV see crt_iv_hdlr_xx().
 				 * let's just stop the rebuild.
 				 */
-				if (rc == -DER_NONEXIST && !status.rebuilding)
+				if (rc == -DER_NONEXIST && !status.rebuilding) {
+					D_INFO(DF_RB ", rc %d, status.rebuilding %d, "
+						     "set rt_global_done",
+					       DP_RB_RPT(rpt), rc, status.rebuilding);
 					rpt->rt_global_done = 1;
+				}
 
 				if (ns->iv_stop) {
 					D_DEBUG(DB_REBUILD, "abort rebuild "
