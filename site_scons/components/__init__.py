@@ -419,7 +419,7 @@ def define_components(reqs):
                 headers=['spdk/nvme.h'],
                 pkgconfig='daos_spdk',
                 patch_rpath=['lib64/daos_srv', 'bin'],
-                patch_rpath_exclusions=['libspdk.so', 'spdk_cli', 'spdk_rpc', 'spdk-mcp',
+                patch_rpath_exclusions=['libspdk.so', 'spdk-cli', 'spdk-rpc', 'spdk-mcp',
                                         'spdk-sma'],
                 requires=spdk_reqs)
 
