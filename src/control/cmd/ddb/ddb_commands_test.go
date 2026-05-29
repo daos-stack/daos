@@ -80,55 +80,47 @@ func TestCmds(t *testing.T) {
 	// Helper factories for command stub functions — declared here to avoid
 	// anonymous functions nested inside the test table.
 
-	lsFnChecking := func(wantPath string, wantRecursive, wantDetails bool) func(string, bool, bool) error {
+	lsFnChecking := func(t *testing.T, wantPath string, wantRecursive, wantDetails bool) func(string, bool, bool) error {
 		return func(path string, recursive, details bool) error {
 			fmt.Println("ls called")
-			if err := isArgEqual(wantPath, path, "path"); err != nil {
-				return err
-			}
-			if err := isArgEqual(wantRecursive, recursive, "recursive"); err != nil {
-				return err
-			}
-			return isArgEqual(wantDetails, details, "details")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "recursive", wantRecursive, recursive)
+			test.CmpAny(t, "details", wantDetails, details)
+			return nil
 		}
 	}
 
-	openFnChecking := func(wantPath, wantDbPath string, wantWriteMode bool) func(string, string, bool) error {
+	openFnChecking := func(t *testing.T, wantPath, wantDbPath string, wantWriteMode bool) func(string, string, bool) error {
 		return func(path, dbPath string, writeMode bool) error {
 			fmt.Println("open called")
-			if err := isArgEqual(wantPath, path, "path"); err != nil {
-				return err
-			}
-			if err := isArgEqual(wantDbPath, dbPath, "db_path"); err != nil {
-				return err
-			}
-			return isArgEqual(wantWriteMode, writeMode, "write_mode")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "db_path", wantDbPath, dbPath)
+			test.CmpAny(t, "write_mode", wantWriteMode, writeMode)
+			return nil
 		}
 	}
 
-	featureFnCheckingShow := func(wantShow bool) func(string, string, string, string, bool) error {
+	featureFnCheckingShow := func(t *testing.T, wantShow bool) func(string, string, string, string, bool) error {
 		return func(_, _, _, _ string, show bool) error {
 			fmt.Println("feature called")
-			return isArgEqual(wantShow, show, "show")
+			test.CmpAny(t, "show", wantShow, show)
+			return nil
 		}
 	}
 
-	dtxAggrFnChecking := func(wantPath string, wantCmtTime uint64, wantCmtDate string) func(string, uint64, string) error {
+	dtxAggrFnChecking := func(t *testing.T, wantPath string, wantCmtTime uint64, wantCmtDate string) func(string, uint64, string) error {
 		return func(path string, cmtTime uint64, cmtDate string) error {
 			fmt.Println("dtx_aggr called")
-			if err := isArgEqual(wantPath, path, "path"); err != nil {
-				return err
-			}
-			if err := isArgEqual(wantCmtTime, cmtTime, "cmtTime"); err != nil {
-				return err
-			}
-			return isArgEqual(wantCmtDate, cmtDate, "cmtDate")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "cmtTime", wantCmtTime, cmtTime)
+			test.CmpAny(t, "cmtDate", wantCmtDate, cmtDate)
+			return nil
 		}
 	}
 
 	for name, tc := range map[string]struct {
 		args      []string
-		setup     func()
+		setup     func(*testing.T)
 		expStdout []string
 		expErr    error
 		// skipCmdLine skips the command-line sub-test with a message. Use when
@@ -143,36 +135,36 @@ func TestCmds(t *testing.T) {
 		},
 		"ls default": {
 			args: []string{"ls"},
-			setup: func() {
-				ddb_run_ls_Fn = lsFnChecking("", false, false)
+			setup: func(t *testing.T) {
+				ddb_run_ls_Fn = lsFnChecking(t, "", false, false)
 			},
 			expStdout: []string{"ls called"},
 		},
 		"ls path": {
 			args: []string{"ls", "/[0]"},
-			setup: func() {
-				ddb_run_ls_Fn = lsFnChecking("/[0]", false, false)
+			setup: func(t *testing.T) {
+				ddb_run_ls_Fn = lsFnChecking(t, "/[0]", false, false)
 			},
 			expStdout: []string{"ls called"},
 		},
 		"ls long recursive opt": {
 			args: []string{"ls", "--recursive"},
-			setup: func() {
-				ddb_run_ls_Fn = lsFnChecking("", true, false)
+			setup: func(t *testing.T) {
+				ddb_run_ls_Fn = lsFnChecking(t, "", true, false)
 			},
 			expStdout: []string{"ls called"},
 		},
 		"ls short details opt": {
 			args: []string{"ls", "-d"},
-			setup: func() {
-				ddb_run_ls_Fn = lsFnChecking("", false, true)
+			setup: func(t *testing.T) {
+				ddb_run_ls_Fn = lsFnChecking(t, "", false, true)
 			},
 			expStdout: []string{"ls called"},
 		},
 		"ls details long opt": {
 			args: []string{"ls", "--details"},
-			setup: func() {
-				ddb_run_ls_Fn = lsFnChecking("", false, true)
+			setup: func(t *testing.T) {
+				ddb_run_ls_Fn = lsFnChecking(t, "", false, true)
 			},
 			expStdout: []string{"ls called"},
 		},
@@ -185,24 +177,24 @@ func TestCmds(t *testing.T) {
 		// in command-file mode; see TestRun for CLI-level flag coverage.
 		"open default": {
 			args: []string{"open", "/path/to/vos-0"},
-			setup: func() {
-				ddb_run_open_Fn = openFnChecking("/path/to/vos-0", "", false)
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/path/to/vos-0", "", false)
 			},
 			expStdout: []string{"open called"},
 		},
 		"open write mode": {
 			args:        []string{"open", "-w", "/path/to/vos-0"},
 			skipCmdLine: "-w is consumed by the CLI write_mode flag before reaching grumble",
-			setup: func() {
-				ddb_run_open_Fn = openFnChecking("/path/to/vos-0", "", true)
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/path/to/vos-0", "", true)
 			},
 			expStdout: []string{"open called"},
 		},
 		"open with db path": {
 			args:        []string{"open", "-p", "/sysdb", "/path/to/vos-0"},
 			skipCmdLine: "-p is consumed by the CLI db_path flag before reaching grumble",
-			setup: func() {
-				ddb_run_open_Fn = openFnChecking("/path/to/vos-0", "/sysdb", false)
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/path/to/vos-0", "/sysdb", false)
 			},
 			expStdout: []string{"open called"},
 		},
@@ -211,15 +203,15 @@ func TestCmds(t *testing.T) {
 		// feature --show: verifies the show flag is forwarded to the C layer.
 		"feature show": {
 			args: []string{"feature", "--show"},
-			setup: func() {
-				ddb_run_feature_Fn = featureFnCheckingShow(true)
+			setup: func(t *testing.T) {
+				ddb_run_feature_Fn = featureFnCheckingShow(t, true)
 			},
 			expStdout: []string{"feature called"},
 		},
 		// feature --enable: verifies that the enable string reaches ddb_feature_string2flags.
 		"feature enable": {
 			args: []string{"feature", "--enable=myflag"},
-			setup: func() {
+			setup: func(t *testing.T) {
 				var capturedFlag string
 				ddb_feature_string2flags_Fn = func(s string) (uint64, uint64, error) {
 					capturedFlag = s
@@ -227,9 +219,7 @@ func TestCmds(t *testing.T) {
 				}
 				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
 					fmt.Println("feature called")
-					if err := isArgEqual("myflag", capturedFlag, "enable flag string"); err != nil {
-						return err
-					}
+					test.CmpAny(t, "enable flag string", "myflag", capturedFlag)
 					return nil
 				}
 			},
@@ -238,7 +228,7 @@ func TestCmds(t *testing.T) {
 		// feature --disable: verifies that the disable string reaches ddb_feature_string2flags.
 		"feature disable": {
 			args: []string{"feature", "--disable=otherflag"},
-			setup: func() {
+			setup: func(t *testing.T) {
 				var capturedFlag string
 				ddb_feature_string2flags_Fn = func(s string) (uint64, uint64, error) {
 					capturedFlag = s
@@ -246,9 +236,7 @@ func TestCmds(t *testing.T) {
 				}
 				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
 					fmt.Println("feature called")
-					if err := isArgEqual("otherflag", capturedFlag, "disable flag string"); err != nil {
-						return err
-					}
+					test.CmpAny(t, "disable flag string", "otherflag", capturedFlag)
 					return nil
 				}
 			},
@@ -268,22 +256,22 @@ func TestCmds(t *testing.T) {
 		},
 		"dtx_aggr cmt_time": {
 			args: []string{"dtx_aggr", "--cmt_time=1000"},
-			setup: func() {
-				ddb_run_dtx_aggr_Fn = dtxAggrFnChecking("", 1000, "")
+			setup: func(t *testing.T) {
+				ddb_run_dtx_aggr_Fn = dtxAggrFnChecking(t, "", 1000, "")
 			},
 			expStdout: []string{"dtx_aggr called"},
 		},
 		"dtx_aggr cmt_date": {
 			args: []string{"dtx_aggr", "--cmt_date=2024-01-01"},
-			setup: func() {
-				ddb_run_dtx_aggr_Fn = dtxAggrFnChecking("", 0, "2024-01-01")
+			setup: func(t *testing.T) {
+				ddb_run_dtx_aggr_Fn = dtxAggrFnChecking(t, "", 0, "2024-01-01")
 			},
 			expStdout: []string{"dtx_aggr called"},
 		},
 		"dtx_aggr with path": {
 			args: []string{"dtx_aggr", "--cmt_time=0", "[0]"},
-			setup: func() {
-				ddb_run_dtx_aggr_Fn = dtxAggrFnChecking("[0]", 0, "")
+			setup: func(t *testing.T) {
+				ddb_run_dtx_aggr_Fn = dtxAggrFnChecking(t, "[0]", 0, "")
 			},
 			expStdout: []string{"dtx_aggr called"},
 		},
@@ -291,7 +279,7 @@ func TestCmds(t *testing.T) {
 		// --- close command ---
 		"close": {
 			args: []string{"close"},
-			setup: func() {
+			setup: func(t *testing.T) {
 				ddb_run_close_Fn = func() error {
 					fmt.Println("close called")
 					return nil
@@ -303,7 +291,7 @@ func TestCmds(t *testing.T) {
 		// --- version command ---
 		"version": {
 			args: []string{"version"},
-			setup: func() {
+			setup: func(t *testing.T) {
 				ddb_run_version_Fn = func() error {
 					fmt.Println("version called")
 					return nil
@@ -340,7 +328,7 @@ func TestCmds(t *testing.T) {
 				}
 				ctx := newTestContext(t)
 				if tc.setup != nil {
-					tc.setup()
+					tc.setup(t)
 				}
 				stdout, err := runMainFlow(ctx, tc.args)
 				checkCmd(t, stdout, err)
@@ -355,7 +343,7 @@ func TestCmds(t *testing.T) {
 				}
 				ctx := newTestContext(t)
 				if tc.setup != nil {
-					tc.setup()
+					tc.setup(t)
 				}
 				stdout, err := runMainFlow(ctx, []string{"--cmd_file=" + cmdFile})
 				checkCmd(t, stdout, err)

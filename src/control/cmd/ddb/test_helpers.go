@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -41,7 +40,7 @@ func newTestContext(t *testing.T) *DdbContext {
 
 // captureStdout replaces os.Stdout with a pipe, runs fn, restores os.Stdout,
 // and returns the captured output along with any error from fn.
-func captureStdout(fn func() error) (string, error) {
+func captureStdout(fn func() error) (output string, err error) {
 	var result bytes.Buffer
 	r, w, _ := os.Pipe()
 	done := make(chan struct{})
@@ -50,14 +49,18 @@ func captureStdout(fn func() error) (string, error) {
 		close(done)
 	}()
 	stdout := os.Stdout
-	defer func() { os.Stdout = stdout }()
 	os.Stdout = w
+	// Deferred so cleanup and output capture always run, even if fn() exits
+	// via runtime.Goexit() (e.g., t.Fatalf called from a stub via test.CmpAny).
+	defer func() {
+		w.Close()
+		<-done
+		os.Stdout = stdout
+		output = result.String()
+	}()
 
-	err := fn()
-	w.Close()
-	<-done
-
-	return result.String(), err
+	err = fn()
+	return
 }
 
 // runCmdToStdout calls parseOpts with the given args and captures stdout
@@ -92,12 +95,4 @@ func assertContainsAll(t *testing.T, s string, substrings []string) {
 		test.AssertTrue(t, strings.Contains(s, sub),
 			fmt.Sprintf("expected output to contain %q: got\n%s", sub, s))
 	}
-}
-
-func isArgEqual(want interface{}, got interface{}, wantName string) error {
-	if reflect.DeepEqual(want, got) {
-		return nil
-	}
-
-	return errors.New(fmt.Sprintf("Unexpected %s argument: wanted '%+v', got '%+v'", wantName, want, got))
 }

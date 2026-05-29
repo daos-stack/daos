@@ -224,20 +224,20 @@ func TestRun(t *testing.T) {
 	// Helper factories for ddb_run_open_Fn — declared here to keep the test
 	// table readable instead of embedding anonymous functions inline.
 
-	openFnChecking := func(wantPath, wantDbPath string) func(string, string, bool) error {
+	openFnChecking := func(t *testing.T, wantPath, wantDbPath string) func(string, string, bool) error {
 		return func(path, dbPath string, _ bool) error {
 			fmt.Println("Open called")
-			if err := isArgEqual(wantPath, path, "vos path"); err != nil {
-				return err
-			}
-			return isArgEqual(wantDbPath, dbPath, "sysdb path")
+			test.CmpAny(t, "vos path", wantPath, path)
+			test.CmpAny(t, "sysdb path", wantDbPath, dbPath)
+			return nil
 		}
 	}
 
-	openFnCheckingWriteMode := func(wantWriteMode bool) func(string, string, bool) error {
+	openFnCheckingWriteMode := func(t *testing.T, wantWriteMode bool) func(string, string, bool) error {
 		return func(_ string, _ string, writeMode bool) error {
 			fmt.Println("Open called")
-			return isArgEqual(wantWriteMode, writeMode, "write_mode")
+			test.CmpAny(t, "write_mode", wantWriteMode, writeMode)
+			return nil
 		}
 	}
 
@@ -262,7 +262,7 @@ func TestRun(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		args      []string
-		setup     func()
+		setup     func(*testing.T)
 		expStdout []string
 		expErr    error
 		// When cmdFileCmd is non-empty the test is also run in command-file mode.
@@ -296,8 +296,8 @@ func TestRun(t *testing.T) {
 		},
 		"Open called with short vos path and db path": {
 			args: []string{"-s", "/foo/vos-0", "-p", "/bar", "ls"},
-			setup: func() {
-				ddb_run_open_Fn = openFnChecking("/foo/vos-0", "/bar")
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
 			},
 			expStdout:   []string{"Open called"},
 			cmdFileArgs: []string{"-s", "/foo/vos-0", "-p", "/bar"},
@@ -305,8 +305,8 @@ func TestRun(t *testing.T) {
 		},
 		"Open called with long vos path and db path": {
 			args: []string{"--vos_path=/foo/vos-0", "--db_path=/bar", "ls"},
-			setup: func() {
-				ddb_run_open_Fn = openFnChecking("/foo/vos-0", "/bar")
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
 			},
 			expStdout:   []string{"Open called"},
 			cmdFileArgs: []string{"--vos_path=/foo/vos-0", "--db_path=/bar"},
@@ -314,8 +314,8 @@ func TestRun(t *testing.T) {
 		},
 		"Open called with write mode": {
 			args: []string{"-w", "-s", "/foo/vos-0", "ls"},
-			setup: func() {
-				ddb_run_open_Fn = openFnCheckingWriteMode(true)
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnCheckingWriteMode(t, true)
 			},
 			expStdout:   []string{"Open called"},
 			cmdFileArgs: []string{"-w", "-s", "/foo/vos-0"},
@@ -325,7 +325,7 @@ func TestRun(t *testing.T) {
 			// noAutoOpen is keyed on opts.Args.RunCmd which is empty in command-file
 			// mode, so this case only applies to command-line mode.
 			args: []string{"-s", "/foo/vos-0", "feature", "--show"},
-			setup: func() {
+			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnMustNotBeCalled
 			},
 		},
@@ -334,27 +334,27 @@ func TestRun(t *testing.T) {
 			// command itself should call ctx.Open (exactly once).
 			// Only valid for command-line mode (see note above).
 			args: []string{"-s", "/foo/vos-0", "open", "/foo/vos-0"},
-			setup: func() {
+			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnAllowedOnce()
 			},
 		},
 		"No auto-open for smd_sync": {
 			args: []string{"-s", "/foo/vos-0", "smd_sync"},
-			setup: func() {
+			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnMustNotBeCalled
 			},
 		},
 		"Init failure": {
 			args:   []string{"ls"},
 			expErr: ddbTestErr(ctxInitErr),
-			setup: func() {
+			setup: func(t *testing.T) {
 				ddb_init_RC = -1 // non-zero triggers DER_UNKNOWN
 			},
 		},
 		"Open failure": {
 			args:   []string{"-s", "/foo/vos-0", "ls"},
 			expErr: ddbTestErr("Error opening VOS path"),
-			setup: func() {
+			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnFailing
 			},
 		},
@@ -376,7 +376,7 @@ func TestRun(t *testing.T) {
 			t.Run("command-line", func(t *testing.T) {
 				ctx := newTestContext(t)
 				if tc.setup != nil {
-					tc.setup()
+					tc.setup(t)
 				}
 				stdout, err := runMainFlow(ctx, tc.args)
 				checkRun(t, stdout, err)
@@ -393,7 +393,7 @@ func TestRun(t *testing.T) {
 
 					ctx := newTestContext(t)
 					if tc.setup != nil {
-						tc.setup()
+						tc.setup(t)
 					}
 					args := append(tc.cmdFileArgs, "--cmd_file="+cmdFile)
 					stdout, err := runMainFlow(ctx, args)
