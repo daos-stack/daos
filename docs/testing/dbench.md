@@ -1,6 +1,6 @@
 # Run dbench
 
-Install dbench on one of the client node:
+Install dbench on a client node:
 
 !!! note
   The example below makes use of DAOS pools and containers setup as part of [Run IOR and mdtest](https://docs.daos.io/v2.6/testing/ior/)
