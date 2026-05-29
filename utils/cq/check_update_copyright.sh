@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 #  Copyright 2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Google LLC
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -28,9 +29,13 @@ cd "$PARENT_DIR"/../../
 
 
 regex_intel='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
-# shortname_intel="Intel Corporation."
+shortname_intel="Intel Corporation."
 regex_hpe='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Hewlett Packard Enterprise Development LP.*$))'
 shortname_hpe="Hewlett Packard Enterprise Development LP"
+regex_google='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Google LLC.*$))'
+shortname_google="Google LLC"
+regex_enakta='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Enakta.*$))'
+shortname_enakta="Enakta Labs Ltd"
 year=$(date +%Y)
 errors=0
 targets=(
@@ -50,15 +55,13 @@ targets=(
     '*README*'
     '*LICENSE*'
     '*NOTICE*'
-    '*.txt'
-    '*.md'
+    '*Makefile'
+    '*SConscript'
+    '*SConstruct'
+    '*.env'
     # Entries without a wildcard
-    'Makefile'
     'Jenkinsfile'
-    'SConscript'
-    'SConstruct'
     'copyright'
-    '.env'
 )
 
 function git_reset() {
@@ -86,26 +89,35 @@ function git_add() {
 # See below example to toggle copyright regex based on user
 regex_user="$regex_hpe"
 shortname_user="$shortname_hpe"
-# if [[ "$mode" == "githook" ]]; then
-#     # Extract domain from configured email
-#     user_domain="$(git config user.email | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
-# else
-#     # Extract domain from the first Signed-off-by
-#     user_domain="$(git log -1 | grep 'Signed-off-by' | head -n 1 | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
-# fi
-# case "$user_domain" in
-#     "hpe")
-#         regex_user="$regex_hpe"
-#         shortname_user="$shortname_hpe"
-#         ;;
-#     "intel")
-#         regex_user="$regex_intel"
-#         shortname_user="$shortname_intel"
-#         ;;
-#     *)
-#         echo "  Unsupported email domain: $user_domain"
-#         exit 1
-# esac
+if [[ "$mode" == "githook" ]]; then
+    # Extract domain from configured email
+    user_domain="$(git config user.email | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+else
+    # Extract domain from the first Signed-off-by
+    user_domain="$(git log -1 | grep 'Signed-off-by' | head -n 1 | sed -n 's/^.*@\([-0-9a-zA-Z]*\).*/\1/p')"
+fi
+case "$user_domain" in
+    "hpe")
+        regex_user="$regex_hpe"
+        shortname_user="$shortname_hpe"
+        ;;
+    "intel")
+        regex_user="$regex_intel"
+        shortname_user="$shortname_intel"
+        ;;
+    "google")
+        regex_user="$regex_google"
+        shortname_user="$shortname_google"
+        ;;
+    "enakta")
+        regex_user="$regex_enakta"
+        shortname_user="$shortname_enakta"
+        ;;
+    *)
+        regex_user="$regex_hpe"
+        shortname_user="$shortname_hpe"
+        ;;
+esac
 
 # Generate list of all copyright regex except the user's domain.
 # Used to add a new copyright header to files.
@@ -135,7 +147,27 @@ for file in $files; do
          [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
         continue
     fi
-    
+
+    if [[ "$mode" == "githook" ]]; then
+        # Fix Intel copyright format if needed
+        # 1. Split single line C-style comment
+        if grep -qE '^[[:blank:]]*\/\*[[:blank:]]*.*Copyright.*Intel Corporation.*[[:blank:]]*\*\/' "$file"; then
+            if [[ "$os" == 'Linux' ]]; then
+                sed -i -re 's/^([[:blank:]]*)\/\*[[:blank:]]*(.*Copyright.*Intel Corporation.*)[[:blank:]]*\*\//\1\/\*\n\1 \* \2\n\1 \*\//' "$file"
+            else
+                sed -i '' -re 's/^([[:blank:]]*)\/\*[[:blank:]]*(.*Copyright.*Intel Corporation.*)[[:blank:]]*\*\//\1\/\*\n\1 \* \2\n\1 \*\//' "$file"
+            fi
+        fi
+        # 2. Fix Intel copyright format (comma vs dot, ensure dot at end)
+        if grep -qE '^[[:blank:]]*[\*/#]*[[:blank:]]*Copyright [0-9]{4}(-[0-9]{4})?,[[:blank:]]*Intel Corporation' "$file"; then
+            if [[ "$os" == 'Linux' ]]; then
+                sed -i -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \2 Intel Corporation./' "$file"
+            else
+                sed -i '' -re 's/^([[:blank:]]*[\*/#]*[[:blank:]]*)Copyright ([0-9]{4}(-[0-9]{4})?),[[:blank:]]*Intel Corporation/\1Copyright \2 Intel Corporation./' "$file"
+            fi
+        fi
+    fi
+
     # Check for existing copyright in user's domain
     # If it exists and is updated, nothing to do
     read -r y1_user y2_user <<< "$(sed -nre "s/^.*$regex_user.*$/\4 \6/p" "$file")"
