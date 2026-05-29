@@ -51,3 +51,5 @@ daos_tests:
     test_daos_cat_recov_core: DAOS_Cat_Recov_Core
   daos_test:
     test_daos_cat_recov_core: F
+  args:
+    test_daos_cat_recov_core: -s3
