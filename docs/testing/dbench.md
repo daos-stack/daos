@@ -1,6 +1,6 @@
 # Run dbench
 
-Install dbench on a client node:
+Install dbench on one of the client node:
 
 !!! note
   The example below makes use of DAOS pools and containers setup as part of [Run IOR and mdtest](https://docs.daos.io/v2.6/testing/ior/)
@@ -9,7 +9,7 @@ Install dbench on a client node:
 $ sudo dnf -y install dbench
 ```
 
-From one of the client node:
+Run dbench:
 
 ```sh
 $ dbench -D /tmp/daos_dfuse/ -c /usr/share/dbench/client.txt -t 10 10
