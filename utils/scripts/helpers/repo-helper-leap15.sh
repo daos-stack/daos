@@ -190,6 +190,14 @@ if [ -n "$REPO_FILE_URL" ]; then
     quiet = 1
 EOF
 
+# Set up the uv (a part of SPDK installer)
+# to use the artifactory as the installation packages source
+    mkdir -p /etc/uv
+    cat <<EOF > /etc/uv/uv.toml
+index-url = "https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple"
+native-tls = true
+EOF
+
 # Setup RubyGems to use artifactory as the primary installation source.
 # Prior to setup, it is essential to ensure that Ruby-Dev is installed.
 # Failure to comply with this procedure will result

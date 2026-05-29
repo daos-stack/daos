@@ -49,6 +49,8 @@ severity, message, description, and cause.
 | engine\_died| STATE\_CHANGE| ERROR| DAOS engine <idx\> exited exited unexpectedly: <error\> | Indicates engine instance <idx\> unexpectedly. <error> describes the exit state returned from exited daos\_engine process.| N/A                          |
 | engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx\> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
 | engine\_clock\_drift| INFO\_ONLY   | ERROR| clock drift detected| Indicates CART comms layer has detected clock skew between engines.| NTP may not be syncing clocks across DAOS system.      |
+| engine\_self\_terminated| INFO\_ONLY| NOTICE| excluded rank self terminated detected| Indicates that a DAOS engine rank has performed a self-termination due to having been excluded from the system's group map. The rank is automatically restarted by the control plane with rate-limiting (default: 5 minute minimum delay between restarts per rank) to prevent restart storms. | An engine was found to be in a transient non-functional state and excluded from the group map. The control plane monitors for this event and automatically restarts the affected engine so it can rejoin the system. Restarts are rate-limited per rank using the `engine_auto_restart_min_delay` configuration parameter. |
+| engine\_join\_failed| INFO\_ONLY| ERROR | DAOS engine <idx\> (rank <rank\>) was not allowed to join the system | Join operation failed for the given engine instance ID and rank (if assigned). | Reason should be provided in the extended info field of the event data. |
 | pool\_corruption\_detected| INFO\_ONLY| ERROR | Data corruption detected| Indicates a corruption in pool data has been detected. The event fields will contain pool and container UUIDs. | A corruption was found by the checksum scrubber. |
 | pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. The event data field contains pool map version and pool operation identifier. | When a pool rank becomes unavailable a rebuild will be triggered.   |
 | pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. The event data field includes the pool map version and pool operation identifier.  | N/A|
@@ -69,7 +71,6 @@ severity, message, description, and cause.
 | device\_plugged| INFO\_ONLY| NOTICE| Detected hot plugged device: <bdev-name\> | Indicates device was physically inserted into host. | NVMe SSD physically added to host. |
 | device\_replace| INFO\_ONLY| NOTICE or ERROR| Replaced device: <uuid\> with device: <uuid\> [failed: <rc\>] | Indicates that a faulty device was replaced with a new device and if the operation failed. The old and new device IDs as well as any non-zero return code are specified in the event data. | Device was replaced using DMG nvme replace command. |
 | system\_fabric\_provider\_changed| INFO\_ONLY| NOTICE| System fabric provider has changed: <old-provider\> -> <new-provider\>| Indicates that the system-wide fabric provider has been updated. No other specific information is included in event data.| A system-wide fabric provider change has been intentionally applied to all joined ranks.|
-| engine\_join\_failed| INFO\_ONLY| ERROR | DAOS engine <idx\> (rank <rank\>) was not allowed to join the system | Join operation failed for the given engine instance ID and rank (if assigned). | Reason should be provided in the extended info field of the event data. |
 | device\_link\_speed\_changed| INFO\_ONLY| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link speed changed to <transfer-rate\> (max <transfer-rate\>)| Indicates that an NVMe device link speed has changed. The negotiated and maximum device link speeds are indicated in the event message field and the severity is set to warning if the negotiated speed is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link speed was previously downgraded and has returned to maximum or link speed has downgraded to a value that is less than its maximum capability.|
 | device\_link\_width\_changed| INFO\_ONLY| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link width changed to <pcie-link-lanes\> (max <pcie-link-lanes\>)| Indicates that an NVMe device link width has changed. The negotiated and maximum device link widths are indicated in the event message field and the severity is set to warning if the negotiated width is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link width was previously downgraded and has returned to maximum or link width has downgraded to a value that is less than its maximum capability.|
 | device\_led\_set| INFO\_ONLY| NOTICE| LED on device <device\> set to state <state\>| Indicates that the LED state has been changed on a device. Device identifier and LED state are specified in the event message.| LED control command was issued to change device LED state for visual identification or fault indication.|
@@ -1007,6 +1008,94 @@ specified on the command line:
 If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
 
+### Engine Auto-Restart
+
+DAOS automatically restarts engines that self-terminate after being excluded from
+the system. This feature improves system availability by recovering from transient
+failures without administrator intervention.
+
+#### How It Works
+
+When an engine is excluded (e.g., due to network issues detected by SWIM), the
+engine detects the exclusion and performs a self-termination. The control plane
+monitors for these events and automatically restarts the affected engine after
+clearing the exclusion state, allowing it to rejoin the system.
+
+The automatic restart includes rate-limiting to prevent restart storms. By default,
+an engine must wait 5 minutes between automatic restarts.
+
+#### Configuration
+
+Control auto-restart behavior in `daos_server.yml`:
+
+```yaml
+# Disable automatic restart (default: enabled)
+disable_engine_auto_restart: false
+
+# Minimum delay between automatic restarts per rank (default: 300 seconds)
+engine_auto_restart_min_delay: 300
+```
+
+#### Manual Operations
+
+Manual `dmg system stop` and `dmg system start` operations are never affected by
+the rate-limiting mechanism. Administrators can always immediately stop and start
+ranks regardless of recent automatic restart activity.
+
+```bash
+# Manual operations always work immediately
+$ dmg system stop --ranks=0,1,2
+$ dmg system start --ranks=0,1,2
+```
+
+When you manually stop or start ranks, the restart history for those ranks is
+automatically cleared, ensuring no delays from previous automatic restarts.
+
+#### Monitoring
+
+The `engine_self_terminated` RAS event is logged when an engine self-terminates
+and triggers an automatic restart:
+
+```
+&&& RAS EVENT id: [engine_self_terminated] ... msg: [excluded rank self terminated detected]
+```
+
+Use `dmg system query` to check rank status and incarnation numbers. The
+incarnation number increments each time a rank restarts, helping track restart
+events:
+
+```bash
+$ dmg system query --ranks=0
+Rank UUID                                 Control Address  Fault Domain State  Reason Incarnation
+---- ----                                 --------------- ------------- -----  ------ -----------
+0    12345678-1234-1234-1234-123456789012 10.0.0.1:10001  /node1        Joined        3
+```
+
+#### Best Practices
+
+- **Leave enabled**: Automatic restart improves availability for transient failures
+- **Adjust timing**: For frequent exclusions, consider increasing `engine_auto_restart_min_delay`
+- **Monitor events**: Watch for repeated `engine_self_terminated` events indicating persistent issues
+- **Manual control**: Use `dmg system stop/start` for maintenance without worrying about delays
+
+#### Troubleshooting
+
+**Problem**: Rank keeps self-terminating and restarting
+
+**Solution**: Investigate root cause:
+1. Check network connectivity (SWIM may be detecting real failures)
+2. Review engine logs for errors
+3. Verify hardware health
+4. Consider disabling auto-restart temporarily for investigation
+
+**Problem**: Need immediate restart but recently auto-restarted
+
+**Solution**: Use manual operations (not affected by rate-limiting):
+```bash
+$ dmg system stop --ranks=X
+$ dmg system start --ranks=X
+```
+
 ### Storage Reformat
 
 To reformat the system after a controlled shutdown, run the command:
@@ -1052,15 +1141,15 @@ the storage server has not changed the old rank can be "reused" by formatting us
 
 An examples workflow would be:
 
-- `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
-- `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
-- After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
-- Storage server is rebooted after running `daos_server scm prepare` and command is run again.
-- Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
-- `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
-- Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
-  rank will be created).
-- Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
+1. `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
+2. `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
+3. After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
+4. Storage server is rebooted after running `daos_server scm prepare` and command is run again.
+5. Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
+6. `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
+7. Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
+   rank will be created).
+8. Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
 
 !!! note
     `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. The
