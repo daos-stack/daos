@@ -977,7 +977,11 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                inst_rpms: functionalPackages(
+                                    clientVersion: 1,
+                                    next_version: next_version(),
+                                    addDaosPkgs: 'tests-internal',
+                                    rpmDistribution: '.suse.lp155'),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
