@@ -52,7 +52,7 @@ Successfully copied to DAOS: daos://test_pool/test_cont2
 ```
 
 !!! note
-  The `daos://test_pool/test_cont2` destination path utilizes the `test_pool` pool and `test_cont`
+  The `daos://test_pool/test_cont2` destination path utilizes the `test_pool` pool and `test_cont2`
   container labels
 
 
