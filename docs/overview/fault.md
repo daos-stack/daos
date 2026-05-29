@@ -84,3 +84,68 @@ can now read from the rebuilt object shards.
 
 This rebuild process is executed online while applications continue accessing
 and updating objects.
+
+### Engine Self-Termination and Automatic Restart
+
+A DAOS engine may be excluded from the group map because of inactivity
+for example. When an engine becomes aware of it's removal from the
+group map it will self-terminate to protect data integrity and system stability.
+
+When an engine self terminates, it raises a `engine_self_terminated` RAS event
+(INFO_ONLY, NOTICE severity) containing the rank and incarnation information.
+The control plane automatically handles this event by:
+
+1. Detecting the engine self terminated event through the RAS event system
+2. Identifying the engine instance associated with the rank
+3. Waiting for the engine process to fully stop
+4. Automatically restarting the engine to rejoin the system
+
+This automatic restart mechanism is implemented in all control servers to ensure
+local engine recovery happens regardless of management service leadership state.
+The restarted engine will rejoin the system with a new incarnation number and
+resume normal operations.
+
+This self-healing mechanism allows DAOS to automatically recover system
+membership state from transient engine failures without administrator
+intervention, improving overall system availability.
+
+#### Rate Limiting
+
+To prevent restart storms and ensure system stability, automatic engine restarts
+are rate-limited on a per-rank basis. By default, a minimum delay of 300 seconds
+(5 minutes) is enforced between consecutive restart attempts for the same rank.
+
+When an engine self-terminates within the minimum delay period, the control plane
+schedules a deferred restart that will automatically trigger when the delay expires.
+If multiple self-termination events occur for the same rank during the delay period
+(this would be unexpected) only the most recent event triggers a deferred restart.
+This ensures the engine is restarted exactly once after the delay, regardless of
+how many self-termination events occur.
+
+The rate-limiting interval can be customized by setting the
+`engine_auto_restart_min_delay` configuration option (in seconds) in the
+daos_server.yml file. For example:
+
+```yaml
+engine_auto_restart_min_delay: 600  # 10 minutes between restarts
+```
+
+This protection mechanism prevents scenarios where:
+- Repeated transient failures cause excessive restart cycling
+- A misconfigured engine continuously self-terminates
+- Cascading failures overwhelm the control plane with restart requests
+
+#### Disabling Automatic Restart
+
+The automatic restart behavior can be completely disabled by setting the
+`disable_engine_auto_restart` configuration option to `true` in the
+daos_server.yml file:
+
+```yaml
+disable_engine_auto_restart: true
+```
+
+When auto restart is disabled, engines that self-terminate will not be
+automatically restarted by the control plane, requiring manual intervention
+to restart the affected engine instances. This setting may be useful for
+debugging scenarios or when custom external restart management is preferred.
