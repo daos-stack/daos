@@ -17,21 +17,6 @@ echo "Get number of processors online"
 echo "Remove some old build files if present."
 rm -rf src/rdb/raft/CLinkedListQueue bandit.xml test.cov
 
-# Original code from Jenkinsfile, moved here to be used in both Jenkins and manual builds
-# command -v scons
-#
-# /usr/bin/getconf _NPROCESSORS_ONLN
-# echo "Get number of processors online"
-# rm -rf src/rdb/raft/CLinkedListQueue bandit.xml test.cov
-# echo "Remove some old build files if present."
-# String tee_file = '| tee $WORKSPACE/' + stage_info['log_to_file']
-# /home/daos/venv/bin/scons -c
-# rm -rf _build.external install build daos_m.conf daos.conf iof.conf cart-Linux.conf .sconsign.dblite .sconsign-Linux.dblite .sconf-temp .sconf-temp-Linux
-# SCONS_ARGS='-j 144 --build-deps=no install USE_INSTALLED=all COMPILER=gcc BUILD_TYPE=dev PREFIX=/opt/daos TARGET_TYPE=release'
-# /home/daos/venv/bin/scons --config=force -j 144 --build-deps=no install USE_INSTALLED=all COMPILER=gcc BUILD_TYPE=dev PREFIX=/opt/daos TARGET_TYPE=release
-# tee /var/lib/jenkins/jenkins-3/docker_1/workspace/daos-stack_daos_master@2/el8-gcc-build.log
-
-
 scons -c && \
 rm -rf _build.external install build daos_m.conf daos.conf iof.conf\
       cart-Linux.conf .sconsign.dblite .sconsign-Linux.dblite .sconf-temp .sconf-temp-Linux && \
