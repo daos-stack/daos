@@ -271,6 +271,17 @@ struct iter_obj_arg {
 	uint32_t		generation;
 };
 
+#define MIGR_RETRY_WAIT_WARN(tls, oid, rc, tried, duration)                                        \
+	do {                                                                                       \
+		tried++;                                                                           \
+		if (tried >= 4096)                                                                 \
+			tried = 2048;                                                              \
+		if ((tried & (tried - 1)) == 0)                                                    \
+			D_WARN(DF_RB ": retry " DF_UOID ", tried[%d] " DF_U64 " secs, rc " DF_RC,  \
+			       DP_RB_MPT(tls), DP_UOID(oid), tried, (duration), DP_RC(rc));        \
+		dss_sleep(1000);                                                                   \
+	} while (0)
+
 static int
 migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, daos_epoch_t punched_epoch, unsigned int shard,
@@ -784,6 +795,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 	uint64_t              now;
 	int       rc;
 	int                   wait = MEM_NO_WAIT;
+	int                   tried = 0;
 
 	/* pass rebuild epoch by extra_arg */
 	if (flags & DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
@@ -795,7 +807,8 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM) &&
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM ||
+	     daos_crt_network_error(rc)) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -805,19 +818,25 @@ retry:
 		/* If pool map does not change, then let's retry for timeout, instead of
 		 * fail out.
 		 */
+		now = daos_gettime_coarse();
+		if (then == 0)
+			then = now;
+
 		if (rc != -DER_NOMEM) {
-			DL_WARN(rc, DF_RB ": retry " DF_UOID, DP_RB_MPT(tls),
-				DP_UOID(mrone->mo_oid));
-			dss_sleep(1000);
-			D_GOTO(retry, rc);
+			if (rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || now - then < 600) {
+				MIGR_RETRY_WAIT_WARN(tls, mrone->mo_oid, rc, tried, now - then);
+				D_GOTO(retry, rc);
+			}
+			/* waited for too long, return error and restart rebuild */
+			DL_ERROR(rc, DF_RB " waited for over 10 minutes due to network error",
+				 DP_RB_MRO(mrone));
+			return rc;
 		}
 
-		now = daos_gettime_coarse();
 		if (wait == MEM_NO_WAIT) {
 			wait = MEM_WAIT;
 			res->res_data.mem_waiting++;
 			res->res_data.mem_err++;
-			then = now;
 		}
 		/* sleep a few seconds before retry, give other layers a chance to
 		 * release resources.
@@ -3114,7 +3133,9 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 	uint32_t		 minimum_nr;
 	uint32_t		 enum_flags;
 	uint32_t		 num;
-	int                       waited = 0;
+	uint64_t                  now;
+	uint64_t                  then  = 0;
+	int                       tried = 0;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, DF_RB ": migrate obj " DF_UOID " shard %u eph " DF_X64 "-" DF_X64 "\n",
@@ -3251,22 +3272,29 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
 			 * aggregation yet, so let's retry.
 			 */
-			waited++;
+			now = daos_gettime_coarse();
+			if (then == 0)
+				then = now;
 			dss_sleep(5000);
 			D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " retry %d secs with %d \n",
-				DP_RB_MPT(tls), DP_UOID(arg->oid), waited * 5, rc);
+				DP_RB_MPT(tls), DP_UOID(arg->oid), (int)(now + 5 - then), rc);
 			rc = 0;
 			continue;
 		} else if (rc) {
 			/* To avoid reclaim and retry rebuild, let's retry until the pool map
 			 * being changed due to further failure.
 			 */
-			if (rc == -DER_TIMEDOUT &&
+			if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) &&
 			    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
-				D_WARN(DF_RB ": retry " DF_UOID " " DF_RC "\n", DP_RB_MPT(tls),
-				       DP_UOID(arg->oid), DP_RC(rc));
-				rc = 0;
-				continue;
+				now = daos_gettime_coarse();
+				if (then == 0)
+					then = now;
+				if (rc == -DER_TIMEDOUT || now - then < 600) {
+					MIGR_RETRY_WAIT_WARN(tls, arg->oid, rc, tried, now - then);
+					rc = 0;
+					continue;
+				}
+				/* fall through and fail rebuild */
 			}
 
 			/* container might have been destroyed. Or there is
