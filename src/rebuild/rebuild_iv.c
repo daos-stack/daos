@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -214,11 +214,16 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			D_WARN("leader change stable epoch from "DF_U64" to "
 			       DF_U64 "\n", rpt->rt_stable_epoch,
 			       dst_iv->riv_stable_epoch);
-		rpt->rt_global_done = dst_iv->riv_global_done;
-		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
+
+		/* NB: IV refresh can arrive out of order, but rebuild can't revert global done */
+		if (!rpt->rt_global_done)
+			rpt->rt_global_done = dst_iv->riv_global_done;
+		if (!rpt->rt_global_scan_done)
+			rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
 		old_ver = rpt->rt_global_dtx_resync_version;
-		if (rpt->rt_global_dtx_resync_version < dst_iv->riv_global_dtx_resyc_version)
+		if (old_ver < dst_iv->riv_global_dtx_resyc_version)
 			rpt->rt_global_dtx_resync_version = dst_iv->riv_global_dtx_resyc_version;
+
 		if (old_ver < rpt->rt_rebuild_ver &&
 		    dst_iv->riv_global_dtx_resyc_version >= rpt->rt_rebuild_ver) {
 			D_INFO(DF_UUID " global/iv/rebuild_ver %u/%u/%u signal wait cond\n",
