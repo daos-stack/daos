@@ -442,40 +442,40 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Build on EL 9') {
+                stage('Build RPM on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
+                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                            args '--group-add mock'     +
+                                 ' --cap-add=SYS_ADMIN' +
+                                 ' -v /scratch:/scratch'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                        job_step_update(buildRpm())
                     }
                     post {
+                        success {
+                            fixup_rpmlintrc()
+                            buildRpmPost condition: 'success', rpmlint: true
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
                         unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el9-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el9-gcc',
-                                             allowEmptyArchive: true
+                            buildRpmPost condition: 'unsuccessful'
                         }
                         cleanup {
+                            buildRpmPost condition: 'cleanup'
                             job_status_update()
                         }
                     }
