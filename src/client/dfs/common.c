@@ -332,6 +332,8 @@ remove_hardlink(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const cha
 	uint64_t         new_link_cnt;
 	bool             local_tx = false;
 
+	D_ASSERT(DFS_IS_HARDLINK(entry.mode));
+
 	if (!daos_handle_is_valid(th)) {
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc)
@@ -340,7 +342,6 @@ remove_hardlink(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const cha
 	}
 
 restart:
-	D_ASSERT(DFS_IS_HARDLINK(entry.mode));
 	if (!daos_handle_is_valid(dfs->git_oh)) {
 		D_ERROR("GIT handle is not valid\n");
 		D_GOTO(out, rc = EIO);
@@ -352,15 +353,22 @@ restart:
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (git_entry.link_cnt == 0)
+		D_GOTO(out, rc = EIO);
+
 	d_iov_set(&dkey, (void *)name, len);
 	rc = daos_obj_punch_dkeys(parent_oh, th, 0, 1, &dkey, NULL);
 	if (rc)
 		D_GOTO(out, rc = daos_der2errno(rc));
 
-	if (git_entry.link_cnt == 0)
-		D_GOTO(out, rc = EIO);
-
 	new_link_cnt = git_entry.link_cnt - 1;
+	/*
+	 * If there are other directory entries pointing to the same GIT entry, just
+	 * decrement the link count and return.
+	 * Under the current design, when link_cnt reaches 1, the last surviving
+	 * directory entry still has its hardlink bit set, and the inode metadata
+	 * remains in GIT.
+	 */
 	if (new_link_cnt > 0)
 		D_GOTO(out, rc = git_update_link_cnt(dfs->git_oh, th, &entry.oid, new_link_cnt));
 
@@ -381,7 +389,7 @@ restart:
 
 	rc = daos_obj_close(oh, NULL);
 	if (rc)
-		D_GOTO(out, rc = daos_der2errno(rc));
+		rc = daos_der2errno(rc);
 
 out:
 	if (!local_tx)
@@ -715,7 +723,7 @@ xattr_delete_entry(daos_handle_t oh, const char *name, daos_handle_t th)
 	if (name == NULL)
 		return EINVAL;
 
-	d_iov_set(&dkey, (void *)name, strlen(name));
+	d_iov_set(&dkey, (void *)name, strnlen(name, DFS_MAX_NAME));
 
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
