@@ -13,12 +13,6 @@ server_config:
       nr_xs_helpers: 1
       log_file: daos_server_0.log
       storage: auto
-      log_mask: debug
-      env_vars:
-        - HG_LOG_LEVEL=debug
-        - HG_LOG_SUBSYS=hg,na
-        - DD_SUBSYS=external
-        - D_LOG_MASK=debug
 
 pool:
   size: 80G
