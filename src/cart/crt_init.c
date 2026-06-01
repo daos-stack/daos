@@ -24,6 +24,10 @@ static bool             g_prov_settings_applied[CRT_PROV_COUNT];
 static const char *const crt_tc_name[] = {CRT_TRAFFIC_CLASSES};
 #undef X
 
+#define X(a, b) b,
+static const char *const crt_addr_format_name[] = {CRT_ADDR_FORMATS};
+#undef X
+
 #define CRT_ENV_OPT_GET(opt, x, env)                                                               \
 	do {                                                                                       \
 		if (opt != NULL && opt->cio_##x)                                                   \
@@ -35,7 +39,7 @@ static const char *const crt_tc_name[] = {CRT_TRAFFIC_CLASSES};
 static int
 crt_init_prov(crt_provider_t provider, bool primary, struct crt_prov_gdata *prov_gdata,
 	      const char *interface, const char *domain, const char *port, const char *auth_key,
-	      bool port_auto_adjust, crt_init_options_t *opt);
+	      const char *addr_format, bool port_auto_adjust, crt_init_options_t *opt);
 
 static void
 crt_lib_init(void) __attribute__((__constructor__));
@@ -96,11 +100,13 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("domain      = %s\n", opt->cio_domain);
 	D_INFO("port        = %s\n", opt->cio_port);
 	D_INFO("auth_key    = %s\n", opt->cio_auth_key);
+	D_INFO("addr_format = %s\n", opt->cio_addr_format);
 	D_INFO("ep_credits  = %d\n", opt->cio_ep_credits);
 	D_INFO("Flags: fault_inject = %d, use_sensors = %d, thread_mode_single = %d, "
-	       "progress_busy = %d, mem_device = %d\n",
+	       "progress_busy = %d, progress_legacy = %d, mem_device = %d\n",
 	       opt->cio_fault_inject, opt->cio_use_sensors, opt->cio_thread_mode_single,
-	       opt->cio_progress_busy, opt->cio_mem_device);
+	       opt->cio_progress_busy, opt->cio_progress_legacy, opt->cio_mem_device);
+	D_INFO("progress_spindown = %u ms\n", opt->cio_progress_spindown);
 
 	if (opt->cio_use_expected_size)
 		D_INFO("max_expected_size = %d\n", opt->cio_max_expected_size);
@@ -235,17 +241,26 @@ crt_gdata_dump(void)
 	D_INFO("settings:\n");
 	DUMP_GDATA_FIELD("%d", cg_post_init);
 	DUMP_GDATA_FIELD("%d", cg_post_incr);
+	DUMP_GDATA_FIELD("%d", cg_mrecv_buf);
+	DUMP_GDATA_FIELD("%d", cg_mrecv_buf_copy);
 	DUMP_GDATA_FIELD("%d", cg_timeout);
+	DUMP_GDATA_FIELD("%d", cg_progress_busy);
+	DUMP_GDATA_FIELD("%d", cg_progress_legacy);
+	DUMP_GDATA_FIELD("%u", cg_progress_spindown_ms);
 	DUMP_GDATA_FIELD("%d", cg_swim_ctx_idx);
+	DUMP_GDATA_FIELD("%d", cg_swim_tc);
 	DUMP_GDATA_FIELD("%d", cg_credit_ep_ctx);
 	DUMP_GDATA_FIELD("%d", cg_iv_inline_limit);
 	DUMP_GDATA_FIELD("%d", cg_auto_swim_disable);
 	DUMP_GDATA_FIELD("%d", cg_server);
 	DUMP_GDATA_FIELD("%d", cg_use_sensors);
+	DUMP_GDATA_FIELD("%d", cg_thread_mode_single);
+	DUMP_GDATA_FIELD("%d", cg_mem_device);
 	DUMP_GDATA_FIELD("%d", cg_provider_is_primary);
 	DUMP_GDATA_FIELD("0x%lx", cg_rpcid);
 	DUMP_GDATA_FIELD("%ld", cg_num_cores);
 	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
+	DUMP_GDATA_FIELD("%d", cg_bulk_quota);
 }
 
 static enum crt_traffic_class
@@ -258,6 +273,37 @@ crt_str_to_tc(const char *str)
 
 	return i == CRT_TC_UNKNOWN ? CRT_TC_UNSPEC : i;
 }
+
+/*
+ * Parse a textual address-format hint into the matching enum value.
+ * Falls back to CRT_AF_UNSPEC (Mercury default) on NULL, empty, or
+ * unrecognized input — keeps the historical behavior for users who
+ * don't set the option, and avoids surfacing typos as init failures.
+ */
+static enum crt_addr_format
+crt_str_to_addr_format(const char *str)
+{
+	enum crt_addr_format i = 0;
+
+	if (str == NULL || str[0] == '\0')
+		return CRT_AF_UNSPEC;
+
+	while (strcmp(crt_addr_format_name[i], str) != 0 && i < CRT_AF_UNKNOWN)
+		i++;
+
+	return i == CRT_AF_UNKNOWN ? CRT_AF_UNSPEC : i;
+}
+
+/*
+ * CRT_AF_* values are kept aligned with Mercury's enum na_addr_format so
+ * that crt_hg.c can cast directly when assigning na_init_info.addr_format
+ * (mirroring how cg_swim_tc is cast to enum na_traffic_class). The static
+ * assertions below catch any future drift between the two enums.
+ */
+D_CASSERT((int)CRT_AF_UNSPEC == (int)NA_ADDR_UNSPEC);
+D_CASSERT((int)CRT_AF_IPV4 == (int)NA_ADDR_IPV4);
+D_CASSERT((int)CRT_AF_IPV6 == (int)NA_ADDR_IPV6);
+D_CASSERT((int)CRT_AF_NATIVE == (int)NA_ADDR_NATIVE);
 
 /* first step init - for initializing crt_gdata */
 static int
@@ -603,13 +649,15 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	int            rc     = 0;
 	crt_provider_t prov;
 	char *provider = NULL, *interface = NULL, *domain = NULL, *port = NULL, *auth_key = NULL;
+	char *addr_format  = NULL;
 	char *path         = NULL;
 	char *provider_str = NULL, *interface_str = NULL, *domain_str = NULL, *port_str = NULL,
-	     *auth_key_str      = NULL;
+	     *auth_key_str      = NULL, *addr_format_str = NULL;
 	char *save_provider_str = NULL, *save_interface_str = NULL, *save_domain_str = NULL,
-	     *save_port_str = NULL, *save_auth_key_str = NULL;
+	     *save_port_str = NULL, *save_auth_key_str = NULL, *save_addr_format_str = NULL;
 	bool port_auto_adjust = false, thread_mode_single = false, progress_busy = false,
-	     mem_device = false;
+	     mem_device = false, progress_legacy = false;
+	unsigned int progress_spindown = CRT_HG_PROGRESS_SPINDOWN_MS;
 	int i;
 
 	d_signal_register();
@@ -680,6 +728,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	CRT_ENV_OPT_GET(opt, domain, D_DOMAIN);
 	CRT_ENV_OPT_GET(opt, port, D_PORT);
 	CRT_ENV_OPT_GET(opt, auth_key, D_PROVIDER_AUTH_KEY);
+	CRT_ENV_OPT_GET(opt, addr_format, D_ADDR_FORMAT);
 
 	crt_env_get(D_PORT_AUTO_ADJUST, &port_auto_adjust);
 
@@ -692,6 +741,12 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	CRT_ENV_OPT_GET(opt, mem_device, D_MEM_DEVICE);
 	crt_gdata.cg_mem_device = mem_device;
+
+	CRT_ENV_OPT_GET(opt, progress_legacy, D_PROGRESS_LEGACY);
+	crt_gdata.cg_progress_legacy = progress_legacy;
+
+	CRT_ENV_OPT_GET(opt, progress_spindown, D_PROGRESS_SPINDOWN);
+	crt_gdata.cg_progress_spindown_ms = progress_spindown;
 
 	if (provider == NULL) {
 		D_ERROR("No provider specified\n");
@@ -743,6 +798,13 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				D_GOTO(unlock, rc = -DER_NOMEM);
 			auth_key = strtok_r(auth_key_str, ",", &save_auth_key_str);
 		}
+
+		if (addr_format != NULL) {
+			D_STRNDUP(addr_format_str, addr_format, CRT_ENV_STR_MAX_SIZE);
+			if (addr_format_str == NULL)
+				D_GOTO(unlock, rc = -DER_NOMEM);
+			addr_format = strtok_r(addr_format_str, ",", &save_addr_format_str);
+		}
 	}
 
 	prov = crt_str_to_provider(provider);
@@ -768,7 +830,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	 * and processed in crt_na_config_init().
 	 */
 	rc = crt_init_prov(prov, true, &crt_gdata.cg_prov_gdata_primary, interface, domain, port,
-			   auth_key, port_auto_adjust, opt);
+			   auth_key, addr_format, port_auto_adjust, opt);
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
@@ -812,6 +874,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				port = strtok_r(NULL, ",", &save_port_str);
 			if (auth_key != NULL)
 				auth_key = strtok_r(NULL, ",", &save_auth_key_str);
+			if (addr_format != NULL)
+				addr_format = strtok_r(NULL, ",", &save_addr_format_str);
 
 			/* Secondary provider needs its own interface or domain */
 			if (interface == NULL && domain == NULL) {
@@ -825,7 +889,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 			rc = crt_init_prov(crt_gdata.cg_secondary_provs[i], false,
 					   &crt_gdata.cg_prov_gdata_secondary[i], interface, domain,
-					   port, auth_key, port_auto_adjust, opt);
+					   port, auth_key, addr_format, port_auto_adjust, opt);
 			if (rc != 0) {
 				D_ERROR("crt_init_prov() failed for secondary provider, " DF_RC
 					"\n",
@@ -904,6 +968,7 @@ out:
 	D_FREE(domain_str);
 	D_FREE(port_str);
 	D_FREE(auth_key_str);
+	D_FREE(addr_format_str);
 
 	if (rc != 0) {
 		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
@@ -916,7 +981,7 @@ out:
 static int
 crt_init_prov(crt_provider_t provider, bool primary, struct crt_prov_gdata *prov_gdata,
 	      const char *interface, const char *domain, const char *port, const char *auth_key,
-	      bool port_auto_adjust, crt_init_options_t *opt)
+	      const char *addr_format, bool port_auto_adjust, crt_init_options_t *opt)
 {
 	int rc;
 
@@ -925,6 +990,15 @@ crt_init_prov(crt_provider_t provider, bool primary, struct crt_prov_gdata *prov
 		return rc;
 
 	prov_settings_apply(primary, provider, opt);
+
+	/*
+	 * Record the requested address family on the per-provider gdata so it
+	 * can be forwarded to Mercury via na_init_info.addr_format when each
+	 * HG class is initialized (see crt_hg.c::crt_hg_class_init). Unknown
+	 * or unset values resolve to CRT_AF_UNSPEC, preserving the historical
+	 * Mercury-default behavior.
+	 */
+	prov_gdata->cpg_addr_format = crt_str_to_addr_format(addr_format);
 
 	rc = crt_na_config_init(primary, provider, interface, domain, port, auth_key,
 				port_auto_adjust);

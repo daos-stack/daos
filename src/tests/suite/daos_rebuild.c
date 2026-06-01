@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1408,12 +1408,14 @@ reintegrate_failure_and_retry(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
 
 	arg->rebuild_cb = reintegrate_failure_cb;
+	print_message("start reintegrate rank %d\n", ranks_to_kill[0]);
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 
 	arg->rebuild_cb = NULL;
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	rebuild_io_validate(arg, oids, OBJ_NR);
 
+	print_message("redo reintegrate rank %d\n", ranks_to_kill[0]);
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
@@ -1425,11 +1427,11 @@ rebuild_kill_more_RF_ranks(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oids[OBJ_NR];
 	struct ioreq	req;
-	d_rank_t	ranks[4] = {7, 6, 5, 4};
+	d_rank_t         ranks[3] = {7, 6, 5};
 	int		i;
 
-	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
-		print_message("need at least 5 svcs, -s5\n");
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 7) {
+		print_message("need at least 7 svcs, -s7\n");
 		return;
 	}
 
@@ -1440,12 +1442,17 @@ rebuild_kill_more_RF_ranks(void **state)
 			      DAOS_TX_NONE, &req);
 		ioreq_fini(&req);
 	}
-	rebuild_pools_ranks(&arg, 1, ranks, 4, true);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_POOL_TGT_UPDATE_SKIP_RF_CHECK | DAOS_FAIL_ALWAYS, 0, NULL);
+
+	rebuild_pools_ranks(&arg, 1, ranks, 3, true);
 
 	reintegrate_single_pool_rank(arg, 5, true);
 	reintegrate_single_pool_rank(arg, 6, true);
-	reintegrate_single_pool_rank(arg, 4, true);
 	reintegrate_single_pool_rank(arg, 7, true);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
 	print_message("lookup and expect -DER_RF\n");
 	for (i = 0; i < OBJ_NR; i++) {
