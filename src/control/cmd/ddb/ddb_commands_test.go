@@ -58,7 +58,7 @@ func runHelpCmd(t *testing.T, cmdStr string, helpSubStr string) {
 		fmt.Sprintf("unexpected help output mismatch between command file and command line for '%s'", cmdStr))
 }
 
-func TestHelpCmds(t *testing.T) {
+func TestDdb_HelpCmds(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cmdStr     string
 		helpSubStr string
@@ -80,7 +80,7 @@ func TestHelpCmds(t *testing.T) {
 	}
 }
 
-func TestCmds(t *testing.T) {
+func TestDdb_Cmds(t *testing.T) {
 	// Helper factories for command stub functions — declared here to avoid
 	// anonymous functions nested inside the test table.
 
@@ -360,7 +360,7 @@ func TestCmds(t *testing.T) {
 	}
 }
 
-func TestManPage(t *testing.T) {
+func TestDdb_ManPage(t *testing.T) {
 	// Expected sections and commands present in every man page rendering.
 	expSections := []string{
 		manArgsHeader,

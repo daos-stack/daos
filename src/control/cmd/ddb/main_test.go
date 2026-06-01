@@ -20,7 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 )
 
-func TestParseOpts(t *testing.T) {
+func TestDdb_parseOpts(t *testing.T) {
 	for name, tc := range map[string]struct {
 		args      []string
 		checkFunc func(opts *cliOptions) error
@@ -266,7 +266,7 @@ func openFnFailing(_ string, _ string, _ bool) error {
 // TestRun covers the non-interactive command-line execution paths of runDdb().
 // Interactive mode is intentionally not tested: it delegates entirely to
 // grumble's app.Run(), which requires a real terminal and is hard to automate.
-func TestRun(t *testing.T) {
+func TestDdb_runDdb(t *testing.T) {
 	for name, tc := range map[string]struct {
 		args      []string
 		setup     func(*testing.T)
@@ -367,7 +367,7 @@ func TestRun(t *testing.T) {
 // TestRunCommandFile covers command-file execution paths of runDdb().
 // It exercises the same behavior as TestRun for cases where command-file
 // mode produces the same result as command-line mode.
-func TestRunCommandFile(t *testing.T) {
+func TestDdb_runDdbCommandFile(t *testing.T) {
 	for name, tc := range map[string]struct {
 		flags     []string // CLI flags (before --cmd_file)
 		cmdLine   string   // line written to the temporary command file
@@ -433,7 +433,7 @@ func TestRunCommandFile(t *testing.T) {
 
 // TestRunMultiLineCommandFile verifies that runFileCmds iterates over multiple
 // lines in a command file, executing each one in sequence.
-func TestRunMultiLineCommandFile(t *testing.T) {
+func TestDdb_runFileCmds(t *testing.T) {
 	ctx := newTestContext(t)
 	ddb_run_ls_Fn = func(path string, recursive bool, details bool) error {
 		fmt.Println("ls called")
@@ -459,7 +459,7 @@ func TestRunMultiLineCommandFile(t *testing.T) {
 	test.AssertStringContains(t, stdout, "ls called", "version called")
 }
 
-func TestStrToLogLevels(t *testing.T) {
+func TestDdb_strToLogLevels(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input          string
 		expCliLevel    logging.LogLevel
@@ -508,7 +508,7 @@ func TestStrToLogLevels(t *testing.T) {
 // TestNewLogger verifies the newLogger code paths: default level, explicit debug
 // level, invalid level, and all three LogDir branches (valid dir, non-existent
 // path, path that is a file rather than a directory).
-func TestNewLogger(t *testing.T) {
+func TestDdb_newLogger(t *testing.T) {
 	t.Run("no LogDir default level", func(t *testing.T) {
 		log, err := newLogger(cliOptions{})
 		if err != nil {
@@ -569,7 +569,7 @@ func TestNewLogger(t *testing.T) {
 
 // TestClosePoolIfOpen verifies that closePoolIfOpen only calls Close when the
 // pool is actually open, and that it tolerates a Close error (log only, no panic).
-func TestClosePoolIfOpen(t *testing.T) {
+func TestDdb_closePoolIfOpen(t *testing.T) {
 	log := logging.NewCommandLineLogger()
 
 	t.Run("pool not open, close not called", func(t *testing.T) {

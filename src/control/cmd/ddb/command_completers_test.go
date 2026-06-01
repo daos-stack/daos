@@ -60,7 +60,7 @@ func testSetup(t *testing.T) string {
 	return tmpDir
 }
 
-func TestListVosFiles(t *testing.T) {
+func TestDdb_listVosFiles(t *testing.T) {
 	tmpDir := testSetup(t)
 
 	for name, tc := range map[string]struct {
@@ -128,7 +128,7 @@ func TestListVosFiles(t *testing.T) {
 	}
 }
 
-func TestFilterSuggestions(t *testing.T) {
+func TestDdb_filterSuggestions(t *testing.T) {
 	// The test cases are designed to cover various prefix scenarios.
 	// It should notably cover the case where the prefix is a single character that matches the
 	// second character of a suggestion, which is a special case in the appendSuggestion
