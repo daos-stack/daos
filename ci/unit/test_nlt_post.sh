@@ -9,18 +9,8 @@ NODE="${NODELIST%%,*}"
 
 test_log_dir="${1:-}"
 if [ -z "$test_log_dir" ]; then
-    case $STAGE_NAME in
-        "NLT")
-          test_log_dir="nlt_logs"
-          ;;
-        "NLT with Bullseye")
-          test_log_dir="nlt_bullseye_logs"
-          ;;
-        *)
-          echo "test_nlt_post: The test log directory argument is missing!"
-          exit 1
-          ;;
-    esac
+    echo "test_nlt_post: The test log directory argument is missing!"
+    exit 1
 fi
 
 rm -rf "$test_log_dir"

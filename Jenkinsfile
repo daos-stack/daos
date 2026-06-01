@@ -334,8 +334,9 @@ def scriptedBuildStage(Map kwargs = [:]) {
                             if (buildRpms) {
                                 sh label: 'Install RPMs',
                                     script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
+                                // Avoid interpolation of sensitive environment variables
                                 sh label: 'Build deps',
-                                    script: "./ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}"
+                                    script: './ci/rpm/build_deps.sh ${bullseye} ${env.BULLSEYE_KEY}'
                             }
                             job_step_update(sconsBuild(sconsBuildArgs))
                             if (buildRpms) {
@@ -988,10 +989,11 @@ pipeline {
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
+                                                  ' --log-base-dir nlt_logs' +
                                                   ' --class-name nlt all',
                                      with_valgrind: 'memcheck',
                                      valgrind_pattern: '*memcheck.xml',
-                                     always_script: 'ci/unit/test_nlt_post.sh',
+                                     always_script: 'ci/unit/test_nlt_post.sh nlt_logs',
                                      testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
@@ -1049,10 +1051,10 @@ pipeline {
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir-bullseye.xml' +
                                                   ' --log-usage-export nltr-bullseye.json' +
-                                                  ' --memcheck no' +
                                                   ' --log-base-dir nlt_bullseye_logs' +
+                                                  ' --memcheck no' +
                                                   ' --class-name nlt all',
-                                     always_script: 'ci/unit/test_nlt_post.sh',
+                                     always_script: 'ci/unit/test_nlt_post.sh nlt_bullseye_logs',
                                      testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
@@ -1303,9 +1305,10 @@ pipeline {
                                                   ' --system-ram-reserved 4 --server-debug WARN' +
                                                   ' --log-usage-import nltr.json' +
                                                   ' --log-usage-save nltr.xml' +
+                                                  ' --log-base-dir nlt_logs' +
                                                   ' --class-name fault-injection fi',
                                      with_valgrind: '',
-                                     always_script: 'ci/unit/test_nlt_post.sh',
+                                     always_script: 'ci/unit/test_nlt_post.sh nlt_logs',
                                      testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
