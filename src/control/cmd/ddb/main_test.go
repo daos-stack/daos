@@ -378,7 +378,9 @@ func TestRun(t *testing.T) {
 				if tc.setup != nil {
 					tc.setup(t)
 				}
-				stdout, err := runMainFlow(ctx, tc.args)
+				stdout, err := captureStdout(func() error {
+					return runDdb(ctx, tc.args)
+				})
 				checkRun(t, stdout, err)
 			})
 
@@ -396,7 +398,9 @@ func TestRun(t *testing.T) {
 						tc.setup(t)
 					}
 					args := append(tc.cmdFileArgs, "--cmd_file="+cmdFile)
-					stdout, err := runMainFlow(ctx, args)
+					stdout, err := captureStdout(func() error {
+						return runDdb(ctx, args)
+					})
 					checkRun(t, stdout, err)
 				})
 			}
@@ -423,7 +427,9 @@ func TestRunMultiLineCommandFile(t *testing.T) {
 		t.Fatalf("failed to write command file: %v", err)
 	}
 
-	stdout, err := runMainFlow(ctx, []string{"--cmd_file=" + cmdFile})
+	stdout, err := captureStdout(func() error {
+		return runDdb(ctx, []string{"--cmd_file=" + cmdFile})
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -33,7 +33,9 @@ func runHelpCmd(t *testing.T, cmdStr string, helpSubStr string) {
 
 	// Run the help command with a command file
 	args := test.JoinArgs(nil, "--cmd_file="+tmpCfgFile)
-	stdoutCmdFile, err := runMainFlow(ctx, args)
+	stdoutCmdFile, err := captureStdout(func() error {
+		return runDdb(ctx, args)
+	})
 	if err != nil {
 		t.Fatalf("unexpected error when running '%s --help' via command file: want nil, got %v", cmdStr, err)
 	}
@@ -42,7 +44,9 @@ func runHelpCmd(t *testing.T, cmdStr string, helpSubStr string) {
 
 	// Run the help command with a command line
 	args = test.JoinArgs(nil, cmdStr, "--help")
-	stdoutCmdLine, err := runMainFlow(ctx, args)
+	stdoutCmdLine, err := captureStdout(func() error {
+		return runDdb(ctx, args)
+	})
 	if err != nil {
 		t.Fatalf("unexpected error when running '%s --help' via command line: want nil, got %v", cmdStr, err)
 	}
@@ -330,7 +334,9 @@ func TestCmds(t *testing.T) {
 				if tc.setup != nil {
 					tc.setup(t)
 				}
-				stdout, err := runMainFlow(ctx, tc.args)
+				stdout, err := captureStdout(func() error {
+					return runDdb(ctx, tc.args)
+				})
 				checkCmd(t, stdout, err)
 			})
 
@@ -345,7 +351,9 @@ func TestCmds(t *testing.T) {
 				if tc.setup != nil {
 					tc.setup(t)
 				}
-				stdout, err := runMainFlow(ctx, []string{"--cmd_file=" + cmdFile})
+				stdout, err := captureStdout(func() error {
+					return runDdb(ctx, []string{"--cmd_file=" + cmdFile})
+				})
 				checkCmd(t, stdout, err)
 			})
 		})
@@ -366,7 +374,9 @@ func TestManPage(t *testing.T) {
 
 	// manpage to stdout: must contain all section headers and known commands.
 	ctx := newTestContext(t)
-	stdout, err := runMainFlow(ctx, []string{"manpage"})
+	stdout, err := captureStdout(func() error {
+		return runDdb(ctx, []string{"manpage"})
+	})
 	test.CmpErr(t, nil, err)
 	assertContainsAll(t, stdout, expSections)
 
@@ -375,7 +385,9 @@ func TestManPage(t *testing.T) {
 	outFile := filepath.Join(tmpDir, "ddb.groff")
 
 	ctx = newTestContext(t)
-	stdout, err = runMainFlow(ctx, []string{"manpage", "--output=" + outFile})
+	stdout, err = captureStdout(func() error {
+		return runDdb(ctx, []string{"manpage", "--output=" + outFile})
+	})
 	if err != nil {
 		t.Fatalf("unexpected error when running 'manpage --output': want nil, got %v", err)
 	}

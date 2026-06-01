@@ -80,14 +80,6 @@ func runCmdToStdout(ctx *DdbContext, args []string) (cliOptions, string, error) 
 	return opts, stdout, err
 }
 
-// runMainFlow captures stdout and delegates to the production runDdb function.
-// This ensures tests exercise the same code path as main(), without calling os.Exit.
-func runMainFlow(ctx *DdbContext, args []string) (string, error) {
-	return captureStdout(func() error {
-		return runDdb(ctx, args)
-	})
-}
-
 // assertContainsAll asserts that s contains each of the given substrings.
 func assertContainsAll(t *testing.T, s string, substrings []string) {
 	t.Helper()
