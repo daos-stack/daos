@@ -22,4 +22,4 @@ rm -rf _build.external install build daos_m.conf daos.conf iof.conf\
       cart-Linux.conf .sconsign.dblite .sconsign-Linux.dblite .sconf-temp .sconf-temp-Linux && \
 scons --config=force --jobs "$JOBS" --build-deps=no install PREFIX="$PREFIX" COMPILER="$COMPILER" \
       BUILD_TYPE="$DAOS_BUILD_TYPE" TARGET_TYPE="$DAOS_TARGET_TYPE" \
-      USE_INSTALLED=all | tee $WORKSPACE/${TARGET}-${COMPILER}-build.log
+      USE_INSTALLED=all | tee "${WORKSPACE}/${TARGET}-${COMPILER}-build.log"
