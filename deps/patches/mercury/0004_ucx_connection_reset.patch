@@ -1,16 +1,15 @@
 diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
-index 96501b2..f97ce69 100644
+index 96501b2..3c3384e 100644
 --- a/src/na/na_ucx.c
 +++ b/src/na/na_ucx.c
-@@ -3251,16 +3251,10 @@ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
+@@ -3251,16 +3251,9 @@ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
  
      /* There is no need to have a fully resolved address to start an RMA.
       * This is only necessary for two-sided communication. */
 -    /* The above assumption is now in question, so the following will resolve
 -     * the address if required. */
-+    NA_CHECK_SUBSYS_WARNING(rma,
-+        (!(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)),
-+        "Connection is not resolved for rma operation");
++    if (!(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED))
++        hg_atomic_or32(&na_ucx_addr->status, NA_UCX_ADDR_RESOLVED);
  
 -    /* Check addr to ensure the EP for that addr is still valid */
 -    if (!(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
