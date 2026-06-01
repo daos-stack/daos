@@ -27,8 +27,8 @@ show_help() {
     echo "  -g, --git_checkout <val>  Git branch or commit to checkout (default: origin/master)"
     echo "  -d, --distro <val>        Linux distribution for installing dependencies (default: el9)"
     echo "  -j, --build_jobs <val>    Number of parallel jobs for building DAOS (default: 30)"
-    echo "  -t, --skip_test           Whether to skip filesystem tests (default: true)"
-    echo "  -s, --skip_setup          Whether to skip setup of build and venv directories (default: false)"
+    echo "  -f, --filesystem_test     Whether to run filesystem tests (default: false)"
+    echo "  -r, --rebuild             Whether to skip setup of build and venv directories (default: false)"
     echo "  -h, --help                Show this help message and exit"
 }
 
@@ -39,8 +39,8 @@ build_dir="/tmp/daos_build/daos"
 git_checkout="origin/master"
 distro="el9"
 build_jobs="30"
-filesystem_test="true"
-setup="true"
+filesystem_test="false"
+rebuild="false"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -69,12 +69,12 @@ while [[ $# -gt 0 ]]; do
       build_jobs="$2"
       shift 2
       ;;
-    -t|--skip_test)
-      filesystem_test="false"
+    -f|--filesystem_test)
+      filesystem_test="true"
       shift 1
       ;;
-    -s|--skip_setup)
-      setup="false"
+    -r|--rebuild)
+      rebuild="true"
       shift 1
       ;;
     --help|-h)
@@ -121,14 +121,14 @@ run_cmd() {
 }
 
 # Create a Python virtual environment and install python build dependencies
-if [ "${setup}" = "true" ]; then
+if [ "${rebuild}" = "false" ]; then
     run_cmd 10s "rm -rf ${python_venv}" || exit $?
     run_cmd 10s "${python_cmd} -m venv ${python_venv}" || exit $?
 fi
 run_cmd 10s "source ${python_venv}/bin/activate" || exit $?
 
 # Clone the DAOS repository and install RPM dependencies for the build
-if [ "${setup}" = "true" ]; then
+if [ "${rebuild}" = "false" ]; then
     run_cmd 10s "rm -rf ${build_dir}" || exit $?
     run_cmd 1m "git clone https://github.com/daos-stack/daos.git ${build_dir}" || exit $?
     run_cmd 15s "git -C ${build_dir} checkout ${git_checkout}" || exit $?

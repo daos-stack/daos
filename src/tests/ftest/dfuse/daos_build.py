@@ -125,24 +125,16 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    # python_cmd="${1:-python3}"
-    # python_venv="${2:-/tmp/daos_build/venv}"
-    # build_dir="${3:-/tmp/daos_build/daos}"
-    # git_checkout="${4:-origin/master}"
-    # distro="${5:-el9}"
-    # build_jobs="${6:-30}"
-    # filesystem_test="${7:-false}"
-
     command = " ".join([
         remote_env.to_export_str(),
         os.path.abspath(os.path.join(os.getcwd(), 'daos_build.sh')),
-        sys.executable,
-        f"{mount_dir}/venv",
-        build_dir,
-        f"{__get_daos_build_checkout(self)}",
-        distro,
-        f"{build_jobs}",
-        "true"
+        f"--python_cmd {sys.executable}",
+        f"--python_venv {mount_dir}/venv",
+        f"--build_dir {build_dir}",
+        f"--git_checkout {__get_daos_build_checkout(self)}",
+        f"--distro {distro}",
+        f"--build_jobs {build_jobs}",
+        "--filesystem_test"
     ])
     timeout = 10800  # 3 hours
     self.log_step(f"Running '{command}' with a {timeout}s timeout")
