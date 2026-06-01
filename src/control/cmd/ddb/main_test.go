@@ -216,63 +216,62 @@ func TestParseOpts(t *testing.T) {
 	}
 }
 
-// TestRun covers the non-interactive execution paths of run() (command-line and
-// command-file modes). Interactive mode is intentionally not tested: it delegates
-// entirely to grumble's app.Run(), which requires a real terminal (readline) and
-// piping os.Stdin — making tests fragile and hard to maintain for little gain.
+// openFnChecking returns a ddb_run_open_Fn stub that verifies the vos path and
+// sysdb path arguments passed to the open call.
+func openFnChecking(t *testing.T, wantPath, wantDbPath string) func(string, string, bool) error {
+	return func(path, dbPath string, _ bool) error {
+		fmt.Println("Open called")
+		test.CmpAny(t, "vos path", wantPath, path)
+		test.CmpAny(t, "sysdb path", wantDbPath, dbPath)
+		return nil
+	}
+}
+
+// openFnCheckingWriteMode returns a ddb_run_open_Fn stub that verifies the
+// write_mode argument passed to the open call.
+func openFnCheckingWriteMode(t *testing.T, wantWriteMode bool) func(string, string, bool) error {
+	return func(_ string, _ string, writeMode bool) error {
+		fmt.Println("Open called")
+		test.CmpAny(t, "write_mode", wantWriteMode, writeMode)
+		return nil
+	}
+}
+
+// openFnMustNotBeCalled is a ddb_run_open_Fn stub that fails the test if
+// the open function is called at all (used to verify no-auto-open behavior).
+func openFnMustNotBeCalled(_ string, _ string, _ bool) error {
+	return fmt.Errorf("open should not have been called")
+}
+
+// openFnAllowedOnce returns a ddb_run_open_Fn stub that allows the open
+// function to be called exactly once (used to verify the 'open' command
+// itself calls open but the CLI does not pre-open).
+func openFnAllowedOnce() func(string, string, bool) error {
+	count := 0
+	return func(_ string, _ string, _ bool) error {
+		count++
+		if count > 1 {
+			return fmt.Errorf("open pre-opened by CLI (called %d times)", count)
+		}
+		return nil
+	}
+}
+
+// openFnFailing is a ddb_run_open_Fn stub that always returns an error,
+// used to verify that open failures are propagated correctly.
+func openFnFailing(_ string, _ string, _ bool) error {
+	return fmt.Errorf("simulated open failure")
+}
+
+// TestRun covers the non-interactive command-line execution paths of runDdb().
+// Interactive mode is intentionally not tested: it delegates entirely to
+// grumble's app.Run(), which requires a real terminal and is hard to automate.
 func TestRun(t *testing.T) {
-	// Helper factories for ddb_run_open_Fn — declared here to keep the test
-	// table readable instead of embedding anonymous functions inline.
-
-	openFnChecking := func(t *testing.T, wantPath, wantDbPath string) func(string, string, bool) error {
-		return func(path, dbPath string, _ bool) error {
-			fmt.Println("Open called")
-			test.CmpAny(t, "vos path", wantPath, path)
-			test.CmpAny(t, "sysdb path", wantDbPath, dbPath)
-			return nil
-		}
-	}
-
-	openFnCheckingWriteMode := func(t *testing.T, wantWriteMode bool) func(string, string, bool) error {
-		return func(_ string, _ string, writeMode bool) error {
-			fmt.Println("Open called")
-			test.CmpAny(t, "write_mode", wantWriteMode, writeMode)
-			return nil
-		}
-	}
-
-	openFnMustNotBeCalled := func(_ string, _ string, _ bool) error {
-		return fmt.Errorf("open should not have been called")
-	}
-
-	openFnAllowedOnce := func() func(string, string, bool) error {
-		count := 0
-		return func(_ string, _ string, _ bool) error {
-			count++
-			if count > 1 {
-				return fmt.Errorf("open pre-opened by CLI (called %d times)", count)
-			}
-			return nil
-		}
-	}
-
-	openFnFailing := func(_ string, _ string, _ bool) error {
-		return fmt.Errorf("simulated open failure")
-	}
-
 	for name, tc := range map[string]struct {
 		args      []string
 		setup     func(*testing.T)
 		expStdout []string
 		expErr    error
-		// When cmdFileCmd is non-empty the test is also run in command-file mode.
-		// cmdFileArgs holds the CLI flags (everything except the positional command),
-		// and cmdFileCmd is the line written to the temporary command file.
-		// Note: "no auto-open" cases intentionally omit cmdFileCmd because in
-		// command-file mode opts.Args.RunCmd is always empty, so noAutoOpen is
-		// never triggered and the CLI would pre-open the pool.
-		cmdFileArgs []string
-		cmdFileCmd  string
 	}{
 		"Version output": {
 			args:      []string{"-v"},
@@ -283,43 +282,33 @@ func TestRun(t *testing.T) {
 			expStdout: []string{"ddb version"},
 		},
 		"Unknown command": {
-			args:        []string{"foo"},
-			expErr:      errUnknownCmd,
-			cmdFileArgs: []string{},
-			cmdFileCmd:  "foo",
+			args:   []string{"foo"},
+			expErr: errUnknownCmd,
 		},
 		"Unknown command with write option": {
-			args:        []string{"-w", "foo"},
-			expErr:      errUnknownCmd,
-			cmdFileArgs: []string{"-w"},
-			cmdFileCmd:  "foo",
+			args:   []string{"-w", "foo"},
+			expErr: errUnknownCmd,
 		},
 		"Open called with short vos path and db path": {
 			args: []string{"-s", "/foo/vos-0", "-p", "/bar", "ls"},
 			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
 			},
-			expStdout:   []string{"Open called"},
-			cmdFileArgs: []string{"-s", "/foo/vos-0", "-p", "/bar"},
-			cmdFileCmd:  "ls",
+			expStdout: []string{"Open called"},
 		},
 		"Open called with long vos path and db path": {
 			args: []string{"--vos_path=/foo/vos-0", "--db_path=/bar", "ls"},
 			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
 			},
-			expStdout:   []string{"Open called"},
-			cmdFileArgs: []string{"--vos_path=/foo/vos-0", "--db_path=/bar"},
-			cmdFileCmd:  "ls",
+			expStdout: []string{"Open called"},
 		},
 		"Open called with write mode": {
 			args: []string{"-w", "-s", "/foo/vos-0", "ls"},
 			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnCheckingWriteMode(t, true)
 			},
-			expStdout:   []string{"Open called"},
-			cmdFileArgs: []string{"-w", "-s", "/foo/vos-0"},
-			cmdFileCmd:  "ls",
+			expStdout: []string{"Open called"},
 		},
 		"No auto-open for feature command": {
 			// noAutoOpen is keyed on opts.Args.RunCmd which is empty in command-file
@@ -360,49 +349,83 @@ func TestRun(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			checkRun := func(t *testing.T, stdout string, err error) {
-				t.Helper()
-				test.CmpErr(t, tc.expErr, err)
-				if tc.expErr != nil {
-					return
-				}
-				for _, msg := range tc.expStdout {
-					test.AssertTrue(t, strings.Contains(stdout, msg),
-						fmt.Sprintf("expected stdout to contain %q: got\n%s", msg, stdout))
-				}
+			ctx := newTestContext(t)
+			if tc.setup != nil {
+				tc.setup(t)
 			}
-
-			// Command-line mode
-			t.Run("command-line", func(t *testing.T) {
-				ctx := newTestContext(t)
-				if tc.setup != nil {
-					tc.setup(t)
-				}
-				stdout, err := captureStdout(func() error {
-					return runDdb(ctx, tc.args)
-				})
-				checkRun(t, stdout, err)
+			stdout, err := captureStdout(func() error {
+				return runDdb(ctx, tc.args)
 			})
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr == nil {
+				test.AssertStringContains(t, stdout, tc.expStdout...)
+			}
+		})
+	}
+}
 
-			// Command-file mode (only for cases that provide a command file command)
-			if tc.cmdFileCmd != "" {
-				t.Run("command-file", func(t *testing.T) {
-					tmpDir := t.TempDir()
-					cmdFile := filepath.Join(tmpDir, "cmds.txt")
-					if err := os.WriteFile(cmdFile, []byte(tc.cmdFileCmd), 0644); err != nil {
-						t.Fatalf("failed to write command file: %v", err)
-					}
-
-					ctx := newTestContext(t)
-					if tc.setup != nil {
-						tc.setup(t)
-					}
-					args := append(tc.cmdFileArgs, "--cmd_file="+cmdFile)
-					stdout, err := captureStdout(func() error {
-						return runDdb(ctx, args)
-					})
-					checkRun(t, stdout, err)
-				})
+// TestRunCommandFile covers command-file execution paths of runDdb().
+// It exercises the same behavior as TestRun for cases where command-file
+// mode produces the same result as command-line mode.
+func TestRunCommandFile(t *testing.T) {
+	for name, tc := range map[string]struct {
+		flags     []string // CLI flags (before --cmd_file)
+		cmdLine   string   // line written to the temporary command file
+		setup     func(*testing.T)
+		expStdout []string
+		expErr    error
+	}{
+		"Unknown command": {
+			cmdLine: "foo",
+			expErr:  errUnknownCmd,
+		},
+		"Unknown command with write option": {
+			flags:   []string{"-w"},
+			cmdLine: "foo",
+			expErr:  errUnknownCmd,
+		},
+		"Open called with short vos path and db path": {
+			flags:   []string{"-s", "/foo/vos-0", "-p", "/bar"},
+			cmdLine: "ls",
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
+			},
+			expStdout: []string{"Open called"},
+		},
+		"Open called with long vos path and db path": {
+			flags:   []string{"--vos_path=/foo/vos-0", "--db_path=/bar"},
+			cmdLine: "ls",
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
+			},
+			expStdout: []string{"Open called"},
+		},
+		"Open called with write mode": {
+			flags:   []string{"-w", "-s", "/foo/vos-0"},
+			cmdLine: "ls",
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnCheckingWriteMode(t, true)
+			},
+			expStdout: []string{"Open called"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			cmdFile := filepath.Join(tmpDir, "cmds.txt")
+			if err := os.WriteFile(cmdFile, []byte(tc.cmdLine), 0644); err != nil {
+				t.Fatalf("failed to write command file: %v", err)
+			}
+			ctx := newTestContext(t)
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+			args := append(tc.flags, "--cmd_file="+cmdFile)
+			stdout, err := captureStdout(func() error {
+				return runDdb(ctx, args)
+			})
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr == nil {
+				test.AssertStringContains(t, stdout, tc.expStdout...)
 			}
 		})
 	}
