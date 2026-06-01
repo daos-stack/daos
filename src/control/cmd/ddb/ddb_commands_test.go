@@ -19,45 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
-func runHelpCmd(t *testing.T, cmdStr string, helpSubStr string) {
-	t.Helper()
-
-	ctx := newTestContext(t)
-
-	// Create a temporary config file with the help command
-	tmpCfgDir := t.TempDir()
-	tmpCfgFile := path.Join(tmpCfgDir, "ddb-cmd_file.txt")
-	if err := os.WriteFile(tmpCfgFile, []byte(fmt.Sprintf("%s --help", cmdStr)), 0644); err != nil {
-		t.Fatalf("failed to write temp config file: %v", err)
-	}
-
-	// Run the help command with a command file
-	args := test.JoinArgs(nil, "--cmd_file="+tmpCfgFile)
-	stdoutCmdFile, err := captureStdout(func() error {
-		return runDdb(ctx, args)
-	})
-	if err != nil {
-		t.Fatalf("unexpected error when running '%s --help' via command file: want nil, got %v", cmdStr, err)
-	}
-	test.AssertTrue(t, strings.Contains(stdoutCmdFile, helpSubStr),
-		fmt.Sprintf("expected stdout to contain %q: got\n%s", helpSubStr, stdoutCmdFile))
-
-	// Run the help command with a command line
-	args = test.JoinArgs(nil, cmdStr, "--help")
-	stdoutCmdLine, err := captureStdout(func() error {
-		return runDdb(ctx, args)
-	})
-	if err != nil {
-		t.Fatalf("unexpected error when running '%s --help' via command line: want nil, got %v", cmdStr, err)
-	}
-	test.AssertTrue(t, strings.Contains(stdoutCmdLine, helpSubStr),
-		fmt.Sprintf("expected stdout to contain %q: got\n%s", helpSubStr, stdoutCmdLine))
-
-	// Compare command line and command file outputs
-	test.AssertEqual(t, stdoutCmdFile, stdoutCmdLine,
-		fmt.Sprintf("unexpected help output mismatch between command file and command line for '%s'", cmdStr))
-}
-
 func TestDdb_HelpCmds(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cmdStr     string
@@ -72,10 +33,42 @@ func TestDdb_HelpCmds(t *testing.T) {
 			helpSubStr: "Usage:\n  open [flags] path\n",
 		},
 		// TODO(follow-up PR): Add help tests for the remaining commands.
-		// Use runHelpCmd(t, "<cmd>", "Usage:\n  <cmd>") following the same pattern.
 	} {
 		t.Run(name, func(t *testing.T) {
-			runHelpCmd(t, tc.cmdStr, tc.helpSubStr)
+			ctx := newTestContext(t)
+
+			// Create a temporary config file with the help command
+			tmpCfgDir := t.TempDir()
+			tmpCfgFile := path.Join(tmpCfgDir, "ddb-cmd_file.txt")
+			if err := os.WriteFile(tmpCfgFile, []byte(fmt.Sprintf("%s --help", tc.cmdStr)), 0644); err != nil {
+				t.Fatalf("failed to write temp config file: %v", err)
+			}
+
+			// Run the help command with a command file
+			args := test.JoinArgs(nil, "--cmd_file="+tmpCfgFile)
+			stdoutCmdFile, err := captureStdout(func() error {
+				return runDdb(ctx, args)
+			})
+			if err != nil {
+				t.Fatalf("unexpected error when running '%s --help' via command file: want nil, got %v", tc.cmdStr, err)
+			}
+			test.AssertTrue(t, strings.Contains(stdoutCmdFile, tc.helpSubStr),
+				fmt.Sprintf("expected stdout to contain %q: got\n%s", tc.helpSubStr, stdoutCmdFile))
+
+			// Run the help command with a command line
+			args = test.JoinArgs(nil, tc.cmdStr, "--help")
+			stdoutCmdLine, err := captureStdout(func() error {
+				return runDdb(ctx, args)
+			})
+			if err != nil {
+				t.Fatalf("unexpected error when running '%s --help' via command line: want nil, got %v", tc.cmdStr, err)
+			}
+			test.AssertTrue(t, strings.Contains(stdoutCmdLine, tc.helpSubStr),
+				fmt.Sprintf("expected stdout to contain %q: got\n%s", tc.helpSubStr, stdoutCmdLine))
+
+			// Compare command line and command file outputs
+			test.AssertEqual(t, stdoutCmdFile, stdoutCmdLine,
+				fmt.Sprintf("unexpected help output mismatch between command file and command line for '%s'", tc.cmdStr))
 		})
 	}
 }
