@@ -749,7 +749,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             try:
-                # Fill 10% more to SCM ,which should Fail because no SCM space
+                # Fill 45% more to SCM ,which should Fail because no SCM space
                 self.start_ior_load(
                     storage='SCM', operation="Auto_Write", percent=45, log_file=log_file)
             except TestFail:
