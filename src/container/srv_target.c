@@ -1999,8 +1999,10 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid), cont_child->sc_open,
 		DP_UUID(cont_hdl_uuid));
 
+	ABT_mutex_lock(hdl->sch_cont->sc_open_mutex);
 	D_ASSERT(cont_child->sc_open > 0);
 	cont_child->sc_open--;
+	ABT_mutex_unlock(hdl->sch_cont->sc_open_mutex);
 	if (cont_child->sc_open == 0)
 		dtx_cont_close(cont_child, false);
 
