@@ -336,7 +336,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
                                     script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
                                 // Avoid interpolation of sensitive environment variables
                                 sh label: 'Build deps',
-                                    script: './ci/rpm/build_deps.sh "${bullseye}" ${BULLSEYE_KEY}'
+                                    script: "./ci/rpm/build_deps.sh ${bullseye}" + ' ${BULLSEYE_KEY}'
                             }
                             job_step_update(sconsBuild(sconsBuildArgs))
                             if (buildRpms) {
