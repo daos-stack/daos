@@ -139,9 +139,9 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         sys.executable,
         f"{mount_dir}/venv",
         build_dir,
-        __get_daos_build_checkout(self),
+        f"{__get_daos_build_checkout(self)}",
         distro,
-        build_jobs,
+        f"{build_jobs}",
         "true"
     ])
     timeout = 10800  # 3 hours
