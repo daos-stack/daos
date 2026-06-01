@@ -433,7 +433,7 @@ func TestRunMultiLineCommandFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	assertContainsAll(t, stdout, []string{"ls called", "version called"})
+	test.AssertStringContains(t, stdout, "ls called", "version called")
 }
 
 func TestStrToLogLevels(t *testing.T) {

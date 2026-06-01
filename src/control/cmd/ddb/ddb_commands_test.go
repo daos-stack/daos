@@ -378,7 +378,7 @@ func TestManPage(t *testing.T) {
 		return runDdb(ctx, []string{"manpage"})
 	})
 	test.CmpErr(t, nil, err)
-	assertContainsAll(t, stdout, expSections)
+	test.AssertStringContains(t, stdout, expSections...)
 
 	// --output flag: man page is written to a file, stdout is empty.
 	tmpDir := t.TempDir()
@@ -398,5 +398,5 @@ func TestManPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read output file: %v", err)
 	}
-	assertContainsAll(t, string(content), expSections)
+	test.AssertStringContains(t, string(content), expSections...)
 }

@@ -10,13 +10,10 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
-	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/pkg/errors"
 )
 
@@ -78,13 +75,4 @@ func runCmdToStdout(ctx *DdbContext, args []string) (cliOptions, string, error) 
 		return opts, stdout, nil
 	}
 	return opts, stdout, err
-}
-
-// assertContainsAll asserts that s contains each of the given substrings.
-func assertContainsAll(t *testing.T, s string, substrings []string) {
-	t.Helper()
-	for _, sub := range substrings {
-		test.AssertTrue(t, strings.Contains(s, sub),
-			fmt.Sprintf("expected output to contain %q: got\n%s", sub, s))
-	}
 }
