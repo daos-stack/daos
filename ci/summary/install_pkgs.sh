@@ -32,5 +32,6 @@ env | sort -n
 add_inst_repo "daos" "${BRANCH_NAME}" "${BUILD_NUMBER}" "${distro_name}" "${code_coverage}" "true"
 
 # Install bullseye
+export DISTRO="${distro_name}"
 bullseye_pkg="$(utils/rpms/package_version.sh bullseye normal)"
 sudo dnf install --allowerasing -y "${bullseye_pkg}"
