@@ -1,0 +1,36 @@
+##
+## (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+##
+## SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+timeouts:
+  test_layout_performance: 0
+
+topology:
+  n128_r1_t16:
+    nodes: 128
+    ranks: 1
+    targets: 16
+  n128_r2_t16:
+    nodes: 128
+    ranks: 2
+    targets: 16
+
+obj_count: 100000
+
+object_class:
+  ec_2p1_s2_g1:
+    object_class: EC_2P1G1
+    # yamllint disable-line rule:line-length
+    operation: "exclude node=[0],exclude node=[1],reint node=[1],reint node=[0],add node=[128],drain node=[128],drain node=[127],reint node=[127,128],exclude rank=[17],exclude rank=[18],reint rank=[18,17],drain rank=[18],drain rank=[19],reint rank=[19,18]"
+
+  ec_4p3_s2_g1:
+    object_class: EC_4P3G1
+    # yamllint disable-line rule:line-length
+    operation: "exclude node=[0-2],reint node=[0],reint node=[1],reint node=[2],add node=[128],add node=[129],add node=[130],drain node=[128],drain node=[129],drain node=[130],reint node=[128],reint node=[129],reint node=[130],exclude rank=[0-2],reint rank=[0],reint rank=[1],reint rank=[2],drain rank=[0-2],reint rank=[0],reint rank=[1],reint rank=[2],exclude target=[0-2],reint target=[0],reint target=[1],reint target=[2],drain target=[100,200,300],reint target=[100],reint target=[200],reint target=[300]"
+
+  rp_5_s1_g1:
+    object_class: RP_5G1
+    # yamllint disable-line rule:line-length
+    operation: "exclude node=[0-3],reint node=[0-3],add node=[128-131],drain node=[128-131],reint node=[128-131],exclude rank=[0-3],reint rank=[0-3],drain rank=[0-3],reint rank=[0-3],exclude target=[0-3],reint target=[0-3],drain target=[100,200,300,400],reint target=[100,200,300,400]"
