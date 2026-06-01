@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -751,7 +751,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             try:
                 # Fill 10% more to SCM ,which should Fail because no SCM space
                 self.start_ior_load(
-                    storage='SCM', operation="Auto_Write", percent=40, log_file=log_file)
+                    storage='SCM', operation="Auto_Write", percent=45, log_file=log_file)
             except TestFail:
                 self.log.info('Expected to fail because of DER_NOSPACE')
             else:
