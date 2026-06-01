@@ -6,15 +6,92 @@
 #
 # This is a script to be run by the src/tests/ftest/dfuse/daos_build.py to run a test on a CI node.
 
-# Inputs
-python_cmd="${1:-python3}"
-python_venv="${2:-/tmp/daos_build/venv}"
-build_dir="${3:-/tmp/daos_build/daos}"
-git_checkout="${4:-origin/master}"
-distro="${5:-el9}"
-build_jobs="${6:-30}"
-filesystem_test="${7:-false}"
+set -euo pipefail
 
+# Timestamp all script output (stdout + stderr)
+timestamp_output() {
+    while IFS= read -r line; do
+        # Use bash printf time formatting to avoid spawning `date` per line
+        printf '%(%Y-%m-%d %H:%M:%S)T %s\n' -1 "$line"
+    done
+}
+
+exec > >(timestamp_output) 2>&1
+
+show_help() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -p, --python_cmd <val>    Python command to use (default: python3)"
+    echo "  -v, --python_venv <val>   Path to Python virtual environment (default: /tmp/daos_build/venv)"
+    echo "  -b, --build_dir <val>     Directory to clone and build DAOS (default: /tmp/daos_build/daos)"
+    echo "  -g, --git_checkout <val>  Git branch or commit to checkout (default: origin/master)"
+    echo "  -d, --distro <val>        Linux distribution for installing dependencies (default: el9)"
+    echo "  -j, --build_jobs <val>    Number of parallel jobs for building DAOS (default: 30)"
+    echo "  -t, --skip_test           Whether to skip filesystem tests (default: true)"
+    echo "  -s, --skip_setup          Whether to skip setup of build and venv directories (default: false)"
+    echo "  -h, --help                Show this help message and exit"
+}
+
+# Argument defaults
+python_cmd="python3"
+python_venv="/tmp/daos_build/venv"
+build_dir="/tmp/daos_build/daos"
+git_checkout="origin/master"
+distro="el9"
+build_jobs="30"
+filesystem_test="true"
+setup="true"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -p|--python_cmd)
+      python_cmd="$2"
+      shift 2
+      ;;
+    -v|--python_venv)
+      python_venv="$2"
+      shift 2
+      ;;
+    -b|--build_dir)
+      build_dir="$2"
+      shift 2
+      ;;
+    -g|--git_checkout)
+      git_checkout="$2"
+      shift 2
+      ;;
+    -d|--distro)
+      distro="$2"
+      shift 2
+      ;;
+    -j|--build_jobs)
+      build_jobs="$2"
+      shift 2
+      ;;
+    -t|--skip_test)
+      filesystem_test="false"
+      shift 1
+      ;;
+    -s|--skip_setup)
+      setup="false"
+      shift 1
+      ;;
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      show_help
+      exit 1
+      ;;
+  esac
+done
 
 run_cmd() {
     local timeout_duration="$1"
@@ -44,17 +121,24 @@ run_cmd() {
 }
 
 # Create a Python virtual environment and install python build dependencies
-run_cmd 10s "${python_cmd} -m venv ${python_venv}" || exit $?
+if [ "${setup}" = "true" ]; then
+    run_cmd 10s "rm -rf ${python_venv}" || exit $?
+    run_cmd 10s "${python_cmd} -m venv ${python_venv}" || exit $?
+fi
 run_cmd 10s "source ${python_venv}/bin/activate" || exit $?
 
 # Clone the DAOS repository and install RPM dependencies for the build
-run_cmd 1m "git clone https://github.com/daos-stack/daos.git ${build_dir}" || exit $?
-run_cmd 15s "git -C ${build_dir} checkout ${git_checkout}" || exit $?
-run_cmd 15s "git -C ${build_dir} submodule update --init --recursive" || exit $?
-run_cmd 10s "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit $?
-run_cmd 3m "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit $?
-run_cmd 1m "${python_cmd} -m pip install pip --upgrade" || exit $?
-run_cmd 5m "${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit $?
+if [ "${setup}" = "true" ]; then
+    run_cmd 10s "rm -rf ${build_dir}" || exit $?
+    run_cmd 1m "git clone https://github.com/daos-stack/daos.git ${build_dir}" || exit $?
+    run_cmd 15s "git -C ${build_dir} checkout ${git_checkout}" || exit $?
+    run_cmd 15s "git -C ${build_dir} submodule update --init --recursive" || exit $?
+
+    run_cmd 10s "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit $?
+    run_cmd 3m "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit $?
+    run_cmd 1m "${python_cmd} -m pip install pip --upgrade" || exit $?
+    run_cmd 5m "${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit $?
+fi
 
 # Build DAOS dependencies
 run_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit $?
