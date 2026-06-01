@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +8,6 @@ import os
 import threading
 import time
 
-from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
@@ -667,7 +666,6 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log_step("Run one more sanity IOR to fill 1%")
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
-    @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
