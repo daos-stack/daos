@@ -1331,7 +1331,10 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner, nil)
 
-			setEngineMemSize(srv, ei, tc.memInfo2)
+			err = setEngineMemSize(srv, ei, tc.memInfo2)
+			if err != nil {
+				t.Fatalf("setEngineMemSize failed: %v", err)
+			}
 
 			test.AssertEqual(t, tc.expMemSize, ei.runner.GetConfig().MemSize,
 				"unexpected memory size")

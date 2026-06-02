@@ -494,8 +494,9 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 
 // Per-NUMA hugepage allocations have been calculated and requested from kernel in prepBdevStorage
 // so now set mem-size values for engines and verify there are enough free hugepages to satisfy
-// typical DMA buffer requirements.
-func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) {
+// typical DMA buffer requirements. Note that mem_size generally follows the 1gib-per-tgt rule
+// whereas hugepage allocations made in prepBdevStorage may be slightly different.
+func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
 	ei.RLock()
 	ec := ei.runner.GetConfig()
 	eIdx := ec.Index
@@ -503,20 +504,23 @@ func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) {
 	if ec.Storage.Tiers.Bdevs().Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", eIdx)
 		ei.RUnlock()
-		return
+		return nil
 	}
 	ei.RUnlock()
 
-	// Mem-size for each engine to be calculated based on server config total hugepage
-	// requirements. Mem-size should be the same for each engine to avoid performance imbalance
+	// nrPagesRequired is per-engine and to be calculated based on engine config target counts.
+	// Mem-size should be the same for each engine to avoid performance imbalance
 	// and will act as memory cap to stop DMA buffer growing beyond mem-size.
-	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
+	nrPagesRequired, err := storage.CalcMinHugepages(smi.HugepageSizeKiB, ec.TargetCount)
+	if err != nil {
+		return errors.Wrapf(err, "calculating hugepage mem_size for engine %d", eIdx)
+	}
 
 	// Global (rather than per-NUMA) meminfo stats used to verify sufficient free hugepages as
 	// engines should be started even if hugemem has to be used across NUMA boundaries.
 	nrPagesFree := smi.HugepagesFree
 
-	// Calculate mem_size per I/O engine (in MB) based on number of pages required per engine.
+	// Calculate mem_size per I/O engine (in MiB) based on number of pages required per engine.
 	pageSizeMiB := smi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := nrPagesFree * pageSizeMiB
@@ -526,17 +530,19 @@ func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) {
 	memSizeMiB := memSizeReqMiB
 	if memSizeFreeMiB < memSizeReqMiB {
 		srv.log.Noticef("The amount of hugepage memory available for engine %d (%s, %d "+
-			"hugepages) does not meet what is required (%s, %d hugepages)", ei.Index(),
+			"hugepages) does not meet what is required (%s, %d hugepages)", eIdx,
 			humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)), nrPagesFree,
 			humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)), nrPagesRequired)
 		memSizeMiB = memSizeFreeMiB
 	}
 
 	// Set hugepage_size (MiB) values based on hugepage info.
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %s)", memSizeMiB,
-		pageSizeMiB, smi.Summary())
+	srv.log.Debugf("Engine %d Per-engine MemSize:%dMiB, HugepageSize:%dMiB (meminfo: %s)",
+		ei.Index(), memSizeMiB, pageSizeMiB, smi.Summary())
 	ei.setMemSize(memSizeMiB)
 	ei.setHugepageSz(pageSizeMiB)
+
+	return nil
 }
 
 // Clean SPDK resources, both lockfiles and orphaned hugepages. Orphaned hugepages will be cleaned
@@ -697,7 +703,9 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Update engine memory related config parameters before starting.
-		setEngineMemSize(srv, engine, smi)
+		if err := setEngineMemSize(srv, engine, smi); err != nil {
+			return errors.Wrap(err, "set engine mem_size value")
+		}
 
 		// Check available RAM can satisfy tmpfs size before starting a new engine.
 		if err := checkEngineTmpfsMem(srv, engine, smi); err != nil {
