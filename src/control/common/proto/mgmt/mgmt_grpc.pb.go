@@ -76,6 +76,7 @@ const (
 	MgmtSvc_SystemGetAttr_FullMethodName            = "/mgmt.MgmtSvc/SystemGetAttr"
 	MgmtSvc_SystemSetProp_FullMethodName            = "/mgmt.MgmtSvc/SystemSetProp"
 	MgmtSvc_SystemGetProp_FullMethodName            = "/mgmt.MgmtSvc/SystemGetProp"
+	MgmtSvc_CheckLeaderDrpc_FullMethodName          = "/mgmt.MgmtSvc/CheckLeaderDrpc"
 	MgmtSvc_FaultInjectReport_FullMethodName        = "/mgmt.MgmtSvc/FaultInjectReport"
 	MgmtSvc_FaultInjectPoolFault_FullMethodName     = "/mgmt.MgmtSvc/FaultInjectPoolFault"
 	MgmtSvc_FaultInjectMgmtPoolFault_FullMethodName = "/mgmt.MgmtSvc/FaultInjectMgmtPoolFault"
@@ -189,6 +190,8 @@ type MgmtSvcClient interface {
 	SystemSetProp(ctx context.Context, in *SystemSetPropReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Get a system property or properties.
 	SystemGetProp(ctx context.Context, in *SystemGetPropReq, opts ...grpc.CallOption) (*SystemGetPropResp, error)
+	// Forward a request to the check leader while in checker mode.
+	CheckLeaderDrpc(ctx context.Context, in *CheckLeaderReq, opts ...grpc.CallOption) (*CheckLeaderResp, error)
 	// Fault injection handlers are only implemented in non-release builds.
 	// FaultInjectReport injects a checker report.
 	FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error)
@@ -685,6 +688,16 @@ func (c *mgmtSvcClient) SystemGetProp(ctx context.Context, in *SystemGetPropReq,
 	return out, nil
 }
 
+func (c *mgmtSvcClient) CheckLeaderDrpc(ctx context.Context, in *CheckLeaderReq, opts ...grpc.CallOption) (*CheckLeaderResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckLeaderResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_CheckLeaderDrpc_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DaosResp)
@@ -823,6 +836,8 @@ type MgmtSvcServer interface {
 	SystemSetProp(context.Context, *SystemSetPropReq) (*DaosResp, error)
 	// Get a system property or properties.
 	SystemGetProp(context.Context, *SystemGetPropReq) (*SystemGetPropResp, error)
+	// Forward a request to the check leader while in checker mode.
+	CheckLeaderDrpc(context.Context, *CheckLeaderReq) (*CheckLeaderResp, error)
 	// Fault injection handlers are only implemented in non-release builds.
 	// FaultInjectReport injects a checker report.
 	FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error)
@@ -982,6 +997,9 @@ func (UnimplementedMgmtSvcServer) SystemSetProp(context.Context, *SystemSetPropR
 }
 func (UnimplementedMgmtSvcServer) SystemGetProp(context.Context, *SystemGetPropReq) (*SystemGetPropResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemGetProp not implemented")
+}
+func (UnimplementedMgmtSvcServer) CheckLeaderDrpc(context.Context, *CheckLeaderReq) (*CheckLeaderResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckLeaderDrpc not implemented")
 }
 func (UnimplementedMgmtSvcServer) FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FaultInjectReport not implemented")
@@ -1877,6 +1895,24 @@ func _MgmtSvc_SystemGetProp_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_CheckLeaderDrpc_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckLeaderReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).CheckLeaderDrpc(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_CheckLeaderDrpc_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).CheckLeaderDrpc(ctx, req.(*CheckLeaderReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_FaultInjectReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(chk.CheckReport)
 	if err := dec(in); err != nil {
@@ -2129,6 +2165,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemGetProp",
 			Handler:    _MgmtSvc_SystemGetProp_Handler,
+		},
+		{
+			MethodName: "CheckLeaderDrpc",
+			Handler:    _MgmtSvc_CheckLeaderDrpc_Handler,
 		},
 		{
 			MethodName: "FaultInjectReport",

@@ -988,86 +988,6 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 	}
 }
 
-func TestServer_mgmtSvc_getCheckLeader(t *testing.T) {
-	for name, tc := range map[string]struct {
-		createMS func(t *testing.T, l logging.Logger) *mgmtSvc
-		expRank  ranklist.Rank
-		expErr   error
-	}{
-		"can't get rank": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				svc := newTestMgmtSvc(t, l)
-				for _, e := range svc.harness.instances {
-					ei := e.(*EngineInstance)
-					ei._superblock = nil
-				}
-				return svc
-			},
-			expRank: ranklist.NilRank,
-			expErr:  errors.New("no ranks are usable"),
-		},
-		"rank missing from db": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				return newTestMgmtSvc(t, l)
-			},
-			expRank: ranklist.NilRank,
-			expErr:  errors.New("no ranks are usable"),
-		},
-		"bad member state": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				svc := newTestMgmtSvc(t, l)
-				if err := svc.sysdb.AddMember(mockMember(t, 0, 1, "adminexcluded")); err != nil {
-					t.Fatal(err)
-				}
-				return svc
-			},
-			expRank: ranklist.NilRank,
-			expErr:  errors.New("no ranks are usable"),
-		},
-		"first rank success": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				numEngines := 2
-				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
-				for i := 0; i < numEngines; i++ {
-					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), "checkerstarted")); err != nil {
-						t.Fatal(err)
-					}
-				}
-				return svc
-			},
-		},
-		"second rank success": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				numEngines := 2
-				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
-				for i := 0; i < numEngines; i++ {
-					state := "checkerstarted"
-					if i == 0 {
-						state = "adminexcluded"
-					}
-					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), state)); err != nil {
-						t.Fatal(err)
-					}
-				}
-				return svc
-			},
-			expRank: ranklist.Rank(1),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
-			log := logging.FromContext(ctx)
-
-			svc := tc.createMS(t, log)
-
-			rank, err := svc.getCheckLeader()
-
-			test.CmpErr(t, tc.expErr, err)
-			test.CmpAny(t, "rank", tc.expRank, rank)
-		})
-	}
-}
-
 func TestServer_mgmtSvc_SystemCheckEngineReport(t *testing.T) {
 	uuids := testPoolUUIDs(5)
 
@@ -1351,22 +1271,104 @@ func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 	}
 }
 
-func TestServer_mgmtSvc_getCheckerLeader(t *testing.T) {
+func TestServer_mgmtSvc_selectLocalCheckLeader(t *testing.T) {
+	for name, tc := range map[string]struct {
+		createMS func(t *testing.T, l logging.Logger) *mgmtSvc
+		expRank  ranklist.Rank
+		expErr   error
+	}{
+		"can't get rank": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, l)
+				for _, e := range svc.harness.instances {
+					ei := e.(*EngineInstance)
+					ei._superblock = nil
+				}
+				return svc
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"rank missing from db": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				return newTestMgmtSvc(t, l)
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"bad member state": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, l)
+				if err := svc.sysdb.AddMember(mockMember(t, 0, 1, "adminexcluded")); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"first rank success": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				numEngines := 2
+				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
+				for i := 0; i < numEngines; i++ {
+					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), "checkerstarted")); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return svc
+			},
+		},
+		"second rank success": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				numEngines := 2
+				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
+				for i := 0; i < numEngines; i++ {
+					state := "checkerstarted"
+					if i == 0 {
+						state = "adminexcluded"
+					}
+					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), state)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return svc
+			},
+			expRank: ranklist.Rank(1),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			svc := tc.createMS(t, log)
+
+			rank, err := svc.selectLocalCheckLeader()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "rank", tc.expRank, rank)
+		})
+	}
+}
+
+func TestServer_mgmtSvc_getCheckerLeaderRank(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startValue string
-		expResult  *ranklist.Rank
+		expResult  ranklist.Rank
 		expErr     error
 	}{
 		"unset": {
-			expErr: system.ErrSystemAttrNotFound("mgmt." + checkerLeaderKey),
+			expResult: ranklist.NilRank,
+			expErr:    system.ErrSystemAttrNotFound("mgmt." + checkerLeaderKey),
 		},
 		"invalid": {
 			startValue: "1234junk",
+			expResult:  ranklist.NilRank,
 			expErr:     errors.New("invalid rank"),
 		},
 		"valid": {
 			startValue: "42",
-			expResult:  ranklist.NewRankPtr(42),
+			expResult:  ranklist.Rank(42),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1378,7 +1380,7 @@ func TestServer_mgmtSvc_getCheckerLeader(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			result, err := svc.getCheckerLeader()
+			result, err := svc.getCheckerLeaderRank()
 
 			test.CmpErr(t, tc.expErr, err)
 			test.AssertEqual(t, tc.expResult, result, "")
@@ -1386,31 +1388,32 @@ func TestServer_mgmtSvc_getCheckerLeader(t *testing.T) {
 	}
 }
 
-func TestServer_mgmtSvc_setCheckerLeader(t *testing.T) {
+func TestServer_mgmtSvc_setCheckerLeaderRank(t *testing.T) {
 	for name, tc := range map[string]struct {
 		notLeader  bool
 		startValue string
-		input      *ranklist.Rank
+		input      ranklist.Rank
 		expErr     error
 		expSaved   string
 	}{
 		"not leader": {
 			notLeader: true,
-			input:     ranklist.NewRankPtr(13),
+			input:     ranklist.Rank(13),
 			expErr:    &system.ErrNotLeader{},
 		},
 		"nil rank": {
 			startValue: "123",
+			input:      ranklist.NilRank,
 			expErr:     errors.New("nil rank"),
 			expSaved:   "123",
 		},
 		"valid initialize": {
-			input:    ranklist.NewRankPtr(42),
+			input:    ranklist.Rank(42),
 			expSaved: "42",
 		},
 		"valid overwrite": {
 			startValue: "123",
-			input:      ranklist.NewRankPtr(42),
+			input:      ranklist.Rank(42),
 			expSaved:   "42",
 		},
 	} {
@@ -1429,7 +1432,7 @@ func TestServer_mgmtSvc_setCheckerLeader(t *testing.T) {
 				}
 			}
 
-			err := svc.setCheckerLeader(tc.input)
+			err := svc.setCheckerLeaderRank(tc.input)
 
 			test.CmpErr(t, tc.expErr, err)
 

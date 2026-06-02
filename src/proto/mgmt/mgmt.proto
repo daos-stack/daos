@@ -126,6 +126,8 @@ service MgmtSvc {
 	// Get a system property or properties.
 	rpc SystemGetProp(SystemGetPropReq) returns (SystemGetPropResp) {}
 
+	// Forward a request to the check leader while in checker mode.
+	rpc CheckLeaderDrpc(CheckLeaderReq) returns (CheckLeaderResp) {}
 
 	// Fault injection handlers are only implemented in non-release builds.
 	// FaultInjectReport injects a checker report.

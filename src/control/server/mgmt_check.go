@@ -38,43 +38,47 @@ const (
 	checkerLeaderKey       = "checker_leader"
 )
 
-func (svc *mgmtSvc) getCheckerLeader() (*ranklist.Rank, error) {
+func errRankNotLocal(rank ranklist.Rank) error {
+	return errors.Errorf("rank %s is not managed by this DAOS node", rank.String())
+}
+
+func (svc *mgmtSvc) getCheckerLeaderRank() (ranklist.Rank, error) {
 	value, err := system.GetMgmtProperty(svc.sysdb, checkerLeaderKey)
 	if err != nil {
-		return nil, errors.Wrap(err, "get checker leader")
+		return ranklist.NilRank, errors.Wrap(err, "get checker leader")
 	}
 
 	r, err := ranklist.NewRankFromString(value)
 	if err != nil {
-		return nil, errors.Wrapf(err, "parsing rank from prop %q", checkerLeaderKey)
+		return ranklist.NilRank, errors.Wrapf(err, "parsing rank from prop %q", checkerLeaderKey)
 	}
-	return r, nil
+	return *r, nil
 }
 
-func (svc *mgmtSvc) setCheckerLeaderValue(val string) error {
+func (svc *mgmtSvc) setCheckerLeaderString(val string) error {
 	if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, val); err != nil {
 		return errors.Wrapf(err, "failed to set checker leader to %q", val)
 	}
 	return nil
 }
 
-func (svc *mgmtSvc) setCheckerLeader(rank *ranklist.Rank) error {
-	if rank.Equals(ranklist.NilRank) {
+func (svc *mgmtSvc) setCheckerLeaderRank(rank ranklist.Rank) error {
+	if rank == ranklist.NilRank {
 		return errors.New("cannot set checker leader to nil rank")
 	}
-	return svc.setCheckerLeaderValue(rank.String())
+	return svc.setCheckerLeaderString(rank.String())
 }
 
 func (svc *mgmtSvc) clearCheckerLeader() error {
-	return svc.setCheckerLeaderValue("")
+	return svc.setCheckerLeaderString("")
 }
 
 func (svc *mgmtSvc) hasCheckerLeader() (bool, error) {
-	leaderRank, err := svc.getCheckerLeader()
-	if system.IsErrSystemAttrNotFound(err) {
-		return false, nil
-	}
+	leaderRank, err := svc.getCheckerLeaderRank()
 	if err != nil {
+		if system.IsErrSystemAttrNotFound(err) {
+			return false, nil
+		}
 		return false, err
 	}
 
@@ -82,7 +86,7 @@ func (svc *mgmtSvc) hasCheckerLeader() (bool, error) {
 		if r, err := engine.GetRank(); err != nil {
 			svc.log.Errorf("unable to get rank from engine instance %d", i)
 			continue
-		} else if r == *leaderRank {
+		} else if r == leaderRank {
 			return true, nil
 		}
 	}
@@ -143,10 +147,8 @@ func (svc *mgmtSvc) unwrapCheckerReq(req proto.Message) (proto.Message, error) {
 	return req, nil
 }
 
-// getCheckLeader gets the rank number of the check leader.
-//
-// NB: For now, this is the first usable rank on the MS leader.
-func (svc *mgmtSvc) getCheckLeader() (ranklist.Rank, error) {
+// selectLocalCheckLeader returns a local rank that can be used as the check leader.
+func (svc *mgmtSvc) selectLocalCheckLeader() (ranklist.Rank, error) {
 	for i, ei := range svc.harness.instances {
 		r, err := ei.GetRank()
 		if err != nil {
@@ -172,8 +174,23 @@ func (svc *mgmtSvc) getCheckLeader() (ranklist.Rank, error) {
 	return ranklist.NilRank, errors.New("no ranks are usable as the check leader")
 }
 
-func (svc *mgmtSvc) makeCheckerCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
-	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+func (svc *mgmtSvc) getCheckerLeaderForReq(req proto.Message) (ranklist.Rank, error) {
+	// Checker calls must be sent to the check leader, which may not be the same as the MS leader.
+	r, err := svc.getCheckerLeaderRank()
+	if system.IsErrSystemAttrNotFound(err) {
+		// If not found, the check leader should be a rank on the MS leader.
+		if err := svc.checkLeaderRequest(req); err != nil {
+			return ranklist.NilRank, err
+		}
+		return svc.selectLocalCheckLeader()
+	}
+
+	return r, err
+}
+
+func (svc *mgmtSvc) makeCheckerDrpcCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
+	r, err := svc.getCheckerLeaderForReq(req)
+	if err != nil {
 		return nil, err
 	}
 
@@ -181,7 +198,21 @@ func (svc *mgmtSvc) makeCheckerCall(ctx context.Context, method drpc.Method, req
 		return nil, err
 	}
 
-	return svc.harness.CallDrpc(ctx, method, req)
+	eiList, err := svc.harness.FilterInstancesByRankSet(r.String())
+	if err != nil {
+		return nil, errors.Wrapf(err, "search for rank %s on local server", r.String())
+	}
+
+	if len(eiList) == 0 {
+		return nil, errRankNotLocal(r)
+	}
+
+	dResp, err := eiList[0].CallDrpc(ctx, method, req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "dRPC to rank %d", r)
+	}
+
+	return dResp, err
 }
 
 func (svc *mgmtSvc) verifyCheckerReady() error {
@@ -204,7 +235,7 @@ type poolCheckerReq interface {
 	GetUuids() []string
 }
 
-func (svc *mgmtSvc) makePoolCheckerCall(ctx context.Context, method drpc.Method, req poolCheckerReq) (*drpc.Response, error) {
+func (svc *mgmtSvc) makePoolCheckerDrpcCall(ctx context.Context, method drpc.Method, req poolCheckerReq) (*drpc.Response, error) {
 	poolUuids := make([]string, len(req.GetUuids()))
 	for i, id := range req.GetUuids() {
 		uuid, err := svc.resolvePoolID(id)
@@ -231,7 +262,7 @@ func (svc *mgmtSvc) makePoolCheckerCall(ctx context.Context, method drpc.Method,
 		return nil, errors.Errorf("unexpected request type %T", req)
 	}
 
-	return svc.makeCheckerCall(ctx, method, req)
+	return svc.makeCheckerDrpcCall(ctx, method, req)
 }
 
 func (svc *mgmtSvc) startSystemRanks(ctx context.Context, sys string) error {
@@ -258,6 +289,23 @@ func (svc *mgmtSvc) startSystemRanks(ctx context.Context, sys string) error {
 	}
 
 	return nil
+}
+
+// CheckLeaderDrpc allows the MS leader to forward a checker leader dRPC request to the node where
+// check leader rank is co-located.
+// NB: The check leader is always on an MS replica node, but it may not be the MS leader, since
+// leadership can change during a checker run.
+func (svc *mgmtSvc) CheckLeaderDrpc(ctx context.Context, req *mgmtpb.CheckLeaderReq) (*mgmtpb.CheckLeaderResp, error) {
+	// Verify this is an MS replica
+
+	// Verify checker mode is enabled and checker is ready
+
+	// Fetch check leader and verify if it is local to this node.
+	// If none set, only MS leader can update the check leader.
+
+	// Send request only to check leader rank.
+
+	return nil, nil
 }
 
 // SystemCheckEnable puts the system in checker mode.
@@ -337,7 +385,7 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		svc.log.Errorf("failed to save the policies used: %s", err.Error())
 	}
 
-	dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerStart, req)
+	dResp, err := svc.makePoolCheckerDrpcCall(ctx, daos.MethodCheckerStart, req)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +490,7 @@ func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopRe
 		return nil, err
 	}
 
-	dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerStop, req)
+	dResp, err := svc.makePoolCheckerDrpcCall(ctx, daos.MethodCheckerStop, req)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +523,7 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 	reports := []*chkpb.CheckReport{}
 
 	if !req.Shallow {
-		dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerQuery, req)
+		dResp, err := svc.makePoolCheckerDrpcCall(ctx, daos.MethodCheckerQuery, req)
 		if err != nil {
 			return nil, err
 		}
@@ -491,7 +539,7 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 		}
 	}
 
-	leader, err := svc.getCheckLeader()
+	leader, err := svc.getCheckerLeaderRank()
 	if err != nil {
 		svc.log.Errorf("can't get the check leader rank: %s", err)
 		resp.Leader = uint32(ranklist.NilRank)
@@ -652,7 +700,7 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 		return nil, err
 	}
 
-	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerSetPolicy, req)
+	dResp, err := svc.makeCheckerDrpcCall(ctx, daos.MethodCheckerSetPolicy, req)
 	if err != nil {
 		return nil, err
 	}
