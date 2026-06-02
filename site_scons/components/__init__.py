@@ -1,5 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
-# Copyright 2025 Google LLC
+# Copyright 2025-2026 Google LLC
 # Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -405,6 +405,8 @@ def define_components(reqs):
                 headers=['spdk/nvme.h'],
                 pkgconfig='daos_spdk',
                 patch_rpath=['lib64/daos_srv', 'bin'],
+                patch_rpath_exclusions=['libspdk.so', 'spdk-cli', 'spdk-rpc', 'spdk-mcp',
+                                        'spdk-sma'],
                 requires=spdk_reqs)
 
     reqs.define('protobufc',

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2025 Google LLC
+#  (C) Copyright 2025-2026 Google LLC
 #  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -61,7 +61,7 @@ export isal_crypto_release="1${distro_name}"
 export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
 export spdk_major_version="26.01"
 export daos_spdk_version=${spdk_major_version}
-export daos_spdk_release="1${distro_name}"
+export daos_spdk_release="2${distro_name}"
 export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
 export fused_version="1.0.0"
 export fused_release="3${distro_name}"
