@@ -122,19 +122,19 @@ run_cmd() {
 
 # Create a Python virtual environment and install python build dependencies
 if [ "${rebuild}" = "false" ]; then
-    run_cmd 10s "rm -rf ${python_venv}" || exit $?
-    run_cmd 10s "${python_cmd} -m venv ${python_venv}" || exit $?
+    run_cmd 1m "rm -rf ${python_venv}" || exit $?
+    run_cmd 1m "${python_cmd} -m venv ${python_venv}" || exit $?
 fi
-run_cmd 10s "source ${python_venv}/bin/activate" || exit $?
+run_cmd 1m "source ${python_venv}/bin/activate" || exit $?
 
 # Clone the DAOS repository and install RPM dependencies for the build
 if [ "${rebuild}" = "false" ]; then
-    run_cmd 10s "rm -rf ${build_dir}" || exit $?
+    run_cmd 1m "rm -rf ${build_dir}" || exit $?
     run_cmd 1m "git clone https://github.com/daos-stack/daos.git ${build_dir}" || exit $?
-    run_cmd 15s "git -C ${build_dir} checkout ${git_checkout}" || exit $?
-    run_cmd 15s "git -C ${build_dir} submodule update --init --recursive" || exit $?
+    run_cmd 1m "git -C ${build_dir} checkout ${git_checkout}" || exit $?
+    run_cmd 1m "git -C ${build_dir} submodule update --init --recursive" || exit $?
 
-    run_cmd 10s "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit $?
+    run_cmd 1m "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit $?
     run_cmd 3m "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit $?
     run_cmd 1m "${python_cmd} -m pip install pip --upgrade" || exit $?
     run_cmd 5m "${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit $?
