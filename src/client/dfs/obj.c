@@ -1794,6 +1794,7 @@ dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *new_name, df
 	dfs_obj_t        *created_obj = NULL;
 	daos_handle_t     th          = DAOS_TX_NONE;
 	daos_handle_t     src_parent_oh;
+	struct timespec   now;
 	bool              exists;
 	size_t            len;
 	uint64_t          new_link_cnt;
@@ -1859,6 +1860,13 @@ restart:
 	} else {
 		dfs_set_hardlink(&src_entry.mode);
 		src_entry.link_cnt = 2;
+
+		/** Link count update requires ctime update as well. */
+		rc = clock_gettime(CLOCK_REALTIME, &now);
+		if (rc)
+			D_GOTO(out, rc = errno);
+		src_entry.ctime      = now.tv_sec;
+		src_entry.ctime_nano = now.tv_nsec;
 
 		rc = git_insert_entry(dfs->git_oh, th, &obj->oid, 0, &src_entry);
 		if (rc)
