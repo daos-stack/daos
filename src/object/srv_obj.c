@@ -2118,6 +2118,9 @@ again:
 		}
 	}
 
+	if (rc != 0 && retry > 0)
+		vos_dtx_cleanup(dth, true);
+
 	return rc;
 }
 
@@ -3822,6 +3825,9 @@ again:
 	}
 
 out:
+	if (rc != 0 && retry > 0)
+		vos_dtx_cleanup(dth, true);
+
 	return rc;
 }
 
@@ -5137,6 +5143,9 @@ again:
 			    DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count);
 		}
 	}
+
+	if (rc != 0 && retry > 0)
+		vos_dtx_cleanup(dth, true);
 
 	return rc;
 }
