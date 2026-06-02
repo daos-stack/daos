@@ -28,6 +28,9 @@ EOF
 for x in \$(cd /sys/class/net/ && ls -d ib*); do
     echo \"net.ipv4.conf.\$x.rp_filter=2\"
 done >> /etc/sysctl.d/10-daos-verbs.conf
+cat <<EOF > /etc/sysctl.d/10-daos-hugepages.conf
+vm.nr_hugepages=8192
+EOF
 sysctl --system
 if [ \"\$(ulimit -c)\" != \"unlimited\" ]; then
     echo \"*  soft  core  unlimited\" >> /etc/security/limits.d/80_daos_limits.conf
