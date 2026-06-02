@@ -134,7 +134,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         f"--git-checkout {__get_daos_build_checkout(self)}",
         f"--distro {distro}",
         f"--build-jobs {build_jobs}",
-        "--filesystem-test"
+        "--filesystem-test",
+        "--debug"
     ])
     timeout = 10800  # 3 hours
     self.log_step(f"Running '{command}' with a {timeout}s timeout")

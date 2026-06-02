@@ -41,6 +41,7 @@ distro="el9"
 build_jobs="30"
 filesystem_test="false"
 rebuild="false"
+debug="false"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -77,6 +78,10 @@ while [[ $# -gt 0 ]]; do
       rebuild="true"
       shift 1
       ;;
+    --debug)
+      debug="true"
+      shift 1
+      ;;
     --help|-h)
       show_help
       exit 0
@@ -93,43 +98,30 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-time_cmd() {
-    local timeout_duration="$1"
-    shift
-
+run_cmd() {
     local start_time end_time elapsed_seconds rc
     local cmd="$*"
 
     echo ">---------------------------------------------------------"
-    echo "Running command with a ${timeout_duration} timeout: ${cmd}"
+    echo "Running command: ${cmd}"
     start_time=$(date +%s)
-    timeout -k 10s "${timeout_duration}" bash -lc "${cmd}"
+    ${cmd}
     rc=$?
     end_time=$(date +%s)
     elapsed_seconds=$((end_time - start_time))
 
-    echo "Command finished in ${elapsed_seconds}s of ${timeout_duration} with rc=${rc}: ${cmd}"
-    if [ "${rc}" -eq 124 ]; then
-        echo "ERROR: command timed out after ${timeout_duration}: ${cmd}" # >&2
-        return "${rc}"
-    elif [ "${rc}" -ne 0 ]; then
+    echo "Command finished in ${elapsed_seconds}s with rc=${rc}: ${cmd}"
+    if [ "${rc}" -ne 0 ]; then
         echo "ERROR: command failed with rc=${rc}: ${cmd}" # >&2
         return "${rc}"
     fi
     return 0
 }
 
-time_venv_cmd() {
-  local timeout_duration="$1"
-  shift
-
-  time_cmd "$timeout_duration" "source ${python_venv}/bin/activate && $*"
-}
-
 # Create a Python virtual environment and install python build dependencies
 if [ "${rebuild}" = "false" ]; then
-    time_cmd 1m "rm -rf ${python_venv}" || exit
-    time_cmd 1m "${python_cmd} -m venv ${python_venv}" || exit
+    run_cmd "rm -rf ${python_venv}" || exit
+    run_cmd "${python_cmd} -m venv ${python_venv}" || exit
 
     cat <<EOF > "${python_venv}"/pip.conf
 [global]
@@ -140,37 +132,48 @@ if [ "${rebuild}" = "false" ]; then
 EOF
 fi
 
+# Run in the python virtual environment for the rest of the script
+run_cmd "source ${python_venv}/bin/activate" || exit
+
 # Clone the DAOS repository and install RPM dependencies for the build
 if [ "${rebuild}" = "false" ]; then
-  time_venv_cmd 1m "rm -rf ${build_dir}" || exit
-  time_venv_cmd 3m "git clone https://github.com/daos-stack/daos.git ${build_dir}" || exit
-  time_venv_cmd 1m "git -C ${build_dir} checkout ${git_checkout}" || exit
-  time_venv_cmd 1m "git -C ${build_dir} submodule update --init --recursive" || exit
+  run_cmd "rm -rf ${build_dir}" || exit
+  run_cmd "git clone https://github.com/daos-stack/daos.git ${build_dir}" || exit
+  run_cmd "git -C ${build_dir} checkout ${git_checkout}" || exit
+  run_cmd "git -C ${build_dir} submodule update --init --recursive" || exit
 
-  time_venv_cmd 1m "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit
-  time_venv_cmd 3m "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit
+  run_cmd "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit
+  run_cmd "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit
 
-  time_venv_cmd 5m "${python_cmd} -m pip install pip --upgrade" || exit
-  time_venv_cmd 10m "${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit
-  time_venv_cmd 1m "which meson"
+  run_cmd "${python_cmd} -m pip install pip --upgrade" || exit
+  run_cmd "${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit
+fi
+
+# Debug
+if [ "${debug}" = "true" ]; then
+  # Check that all required Python packages are installed and available in PATH
+  awk '!/^\s*($|#)/ {print $1}' "${build_dir}/requirements-build.txt" | while read -r pkg; do
+    run_cmd "which ${pkg}" || true
+  done
 fi
 
 # Build DAOS dependencies
-time_venv_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
+run_cmd "scons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
 
 if [ "${filesystem_test}" = "true" ]; then
-    # Run filesystem tests to verify the build.
-  time_venv_cmd 3m "daos filesystem query ${mount_dir}" || exit
-  time_venv_cmd 3m "daos filesystem evict ${build_dir}" || exit
-  time_venv_cmd 3m "daos filesystem query ${mount_dir}" || exit
+  # Run filesystem tests to verify the build.
+  run_cmd "daos filesystem query ${mount_dir}" || exit
+  run_cmd "daos filesystem evict ${build_dir}" || exit
+  run_cmd "daos filesystem query ${mount_dir}" || exit
 fi
 
 # Build and install DAOS
-time_venv_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs}" || exit
-time_venv_cmd 5m "scons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
+run_cmd "scons -C ${build_dir} --jobs ${build_jobs}" || exit
+run_cmd "scons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
 
 if [ "${filesystem_test}" = "true" ]; then
-  time_venv_cmd 3m "daos filesystem query ${mount_dir}" || exit
+  run_cmd "daos filesystem query ${mount_dir}" || exit
 fi
 
+echo "DAOS build and installation completed successfully"
 exit 0
