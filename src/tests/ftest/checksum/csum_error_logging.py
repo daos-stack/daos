@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -53,7 +54,7 @@ class CsumErrorLog(DaosCoreBase):
                           pool/container disconnect/reconnect.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=vm
         :avocado: tags=checksum,faults,daos_test
         :avocado: tags=CsumErrorLog,test_csum_error_logging
         """
