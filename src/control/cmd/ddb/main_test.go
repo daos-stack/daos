@@ -220,10 +220,11 @@ func TestDdb_parseOpts(t *testing.T) {
 }
 
 // openFnChecking returns a ddb_run_open_Fn stub that verifies the vos path and
-// sysdb path arguments passed to the open call.
-func openFnChecking(t *testing.T, wantPath, wantDbPath string) func(string, string, bool) error {
+// sysdb path arguments passed to the open call. called is set to true when the
+// stub is invoked, allowing the caller to assert that open was called.
+func openFnChecking(t *testing.T, wantPath, wantDbPath string, called *bool) func(string, string, bool) error {
 	return func(path, dbPath string, _ bool) error {
-		fmt.Println("Open called")
+		*called = true
 		test.CmpAny(t, "vos path", wantPath, path)
 		test.CmpAny(t, "sysdb path", wantDbPath, dbPath)
 		return nil
@@ -231,10 +232,11 @@ func openFnChecking(t *testing.T, wantPath, wantDbPath string) func(string, stri
 }
 
 // openFnCheckingWriteMode returns a ddb_run_open_Fn stub that verifies the
-// write_mode argument passed to the open call.
-func openFnCheckingWriteMode(t *testing.T, wantWriteMode bool) func(string, string, bool) error {
+// write_mode argument passed to the open call. called is set to true when the
+// stub is invoked, allowing the caller to assert that open was called.
+func openFnCheckingWriteMode(t *testing.T, wantWriteMode bool, called *bool) func(string, string, bool) error {
 	return func(_ string, _ string, writeMode bool) error {
-		fmt.Println("Open called")
+		*called = true
 		test.CmpAny(t, "write_mode", wantWriteMode, writeMode)
 		return nil
 	}
@@ -295,23 +297,26 @@ func TestDdb_runDdb(t *testing.T) {
 		"Open called with short vos path and db path": {
 			args: []string{"-s", "/foo/vos-0", "-p", "/bar", "ls"},
 			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
+				var called bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
 			},
-			expStdout: []string{"Open called"},
 		},
 		"Open called with long vos path and db path": {
 			args: []string{"--vos_path=/foo/vos-0", "--db_path=/bar", "ls"},
 			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
+				var called bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
 			},
-			expStdout: []string{"Open called"},
 		},
 		"Open called with write mode": {
 			args: []string{"-w", "-s", "/foo/vos-0", "ls"},
 			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnCheckingWriteMode(t, true)
+				var called bool
+				ddb_run_open_Fn = openFnCheckingWriteMode(t, true, &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
 			},
-			expStdout: []string{"Open called"},
 		},
 		"No auto-open for feature command": {
 			// noAutoOpen is keyed on opts.Args.RunCmd which is empty in command-file
@@ -391,25 +396,28 @@ func TestDdb_runDdbCommandFile(t *testing.T) {
 			flags:   []string{"-s", "/foo/vos-0", "-p", "/bar"},
 			cmdLine: "ls",
 			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
+				var called bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
 			},
-			expStdout: []string{"Open called"},
 		},
 		"Open called with long vos path and db path": {
 			flags:   []string{"--vos_path=/foo/vos-0", "--db_path=/bar"},
 			cmdLine: "ls",
 			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar")
+				var called bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
 			},
-			expStdout: []string{"Open called"},
 		},
 		"Open called with write mode": {
 			flags:   []string{"-w", "-s", "/foo/vos-0"},
 			cmdLine: "ls",
 			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnCheckingWriteMode(t, true)
+				var called bool
+				ddb_run_open_Fn = openFnCheckingWriteMode(t, true, &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
 			},
-			expStdout: []string{"Open called"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -438,12 +446,13 @@ func TestDdb_runDdbCommandFile(t *testing.T) {
 // lines in a command file, executing each one in sequence.
 func TestDdb_runFileCmds(t *testing.T) {
 	ctx := newTestContext(t)
+	var lsCalled, versionCalled bool
 	ddb_run_ls_Fn = func(path string, recursive bool, details bool) error {
-		fmt.Println("ls called")
+		lsCalled = true
 		return nil
 	}
 	ddb_run_version_Fn = func() error {
-		fmt.Println("version called")
+		versionCalled = true
 		return nil
 	}
 
@@ -453,13 +462,11 @@ func TestDdb_runFileCmds(t *testing.T) {
 		t.Fatalf("failed to write command file: %v", err)
 	}
 
-	stdout, err := captureStdout(func() error {
-		return runDdb(ctx, []string{"--cmd_file=" + cmdFile})
-	})
-	if err != nil {
+	if err := runDdb(ctx, []string{"--cmd_file=" + cmdFile}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	test.AssertStringContains(t, stdout, "ls called", "version called")
+	test.AssertTrue(t, lsCalled, "ls was not called")
+	test.AssertTrue(t, versionCalled, "version was not called")
 }
 
 func TestDdb_strToLogLevels(t *testing.T) {
