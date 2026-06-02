@@ -36,6 +36,9 @@ RUN chmod +x /tmp/repo-helper.sh && \
     rm -f /tmp/repo-helper.sh
 
 # Script to install OS packages needed for code scanning, including python and bandit.
+ARG PYTHON_VERSION
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
 COPY ./utils/scripts/install-el-bandit.sh /tmp/install.sh
 FROM basic
 # Install OS packages
@@ -44,14 +47,3 @@ RUN dnf upgrade &&              \
     /tmp/install.sh &&          \
     dnf clean all &&            \
     rm -f /tmp/install.sh
-
-# Setup a python venv so that python packages can be installed locally.
-ARG PYTHON_VERSION
-RUN python${PYTHON_VERSION} -m venv /home/daos/venv
-ENV PATH=/home/daos/venv/bin:$PATH
-ENV VIRTUAL_ENV=/home/daos/venv/
-
-# Install Python Bandit scanner
-RUN . /home/daos/venv/bin/activate && \
-    python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install bandit

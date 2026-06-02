@@ -13,9 +13,20 @@ set -e
 dnf_install_args="${1:-}"
 
 : "${PYTHON_VERSION:=}"
+: "${VIRTUAL_ENV:=}"
 
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
     git \
     python${PYTHON_VERSION} \
     python${PYTHON_VERSION}-pip
+
+# Setup a virtual environment if requested
+if [ -n "$VIRTUAL_ENV" ]; then
+    python${PYTHON_VERSION} -m venv "$VIRTUAL_ENV"
+    . "$VIRTUAL_ENV/bin/activate"
+fi
+
+# Install Python Bandit scanner
+python3 -m pip --no-cache-dir install --upgrade pip
+python3 -m pip --no-cache-dir install bandit
