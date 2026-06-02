@@ -8,7 +8,6 @@
 
 set -euo pipefail
 
-# Timestamp all script output (stdout + stderr)
 timestamp_output() {
     while IFS= read -r line; do
         # Use bash printf time formatting to avoid spawning `date` per line
@@ -16,6 +15,7 @@ timestamp_output() {
     done
 }
 
+# Timestamp all script output (stdout + stderr)
 exec > >(timestamp_output) 2>&1
 
 show_help() {
@@ -122,8 +122,8 @@ run_cmd() {
 
 # Create a Python virtual environment and install python build dependencies
 if [ "${rebuild}" = "false" ]; then
-    run_cmd 1m "rm -rf ${python_venv}" || exit $?
-    run_cmd 1m "${python_cmd} -m venv ${python_venv}" || exit $?
+    run_cmd 1m "rm -rf ${python_venv}" || exit
+    run_cmd 1m "${python_cmd} -m venv ${python_venv}" || exit
 
     cat <<EOF > "${python_venv}"/pip.conf
 [global]
@@ -133,37 +133,37 @@ if [ "${rebuild}" = "false" ]; then
     verbose = 2
 EOF
 fi
-run_cmd 1m "source ${python_venv}/bin/activate" || exit $?
+run_cmd 1m "source ${python_venv}/bin/activate" || exit
 
 # Clone the DAOS repository and install RPM dependencies for the build
 if [ "${rebuild}" = "false" ]; then
-    run_cmd 1m "rm -rf ${build_dir}" || exit $?
-    run_cmd 1m "git clone https://github.com/daos-stack/daos.git ${build_dir}" || exit $?
-    run_cmd 1m "git -C ${build_dir} checkout ${git_checkout}" || exit $?
-    run_cmd 1m "git -C ${build_dir} submodule update --init --recursive" || exit $?
+    run_cmd 1m "rm -rf ${build_dir}" || exit
+    run_cmd 3m "git clone https://github.com/daos-stack/daos.git ${build_dir}" || exit
+    run_cmd 1m "git -C ${build_dir} checkout ${git_checkout}" || exit
+    run_cmd 1m "git -C ${build_dir} submodule update --init --recursive" || exit
 
-    run_cmd 1m "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit $?
-    run_cmd 3m "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit $?
-    run_cmd 1m "sudo ${python_cmd} -m pip install pip --upgrade" || exit $?
-    run_cmd 5m "sudo ${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit $?
+    run_cmd 1m "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit
+    run_cmd 3m "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit
+    run_cmd 1m "sudo ${python_cmd} -m pip install pip --upgrade" || exit
+    run_cmd 5m "sudo ${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit
 fi
 
 # Build DAOS dependencies
-run_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit $?
+run_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
 
 if [ "${filesystem_test}" = "true" ]; then
     # Run filesystem tests to verify the build.
-    run_cmd 3m "daos filesystem query ${mount_dir}" || exit $?
-    run_cmd 3m "daos filesystem evict ${build_dir}" || exit $?
-    run_cmd 3m "daos filesystem query ${mount_dir}" || exit $?
+    run_cmd 3m "daos filesystem query ${mount_dir}" || exit
+    run_cmd 3m "daos filesystem evict ${build_dir}" || exit
+    run_cmd 3m "daos filesystem query ${mount_dir}" || exit
 fi
 
 # Build and install DAOS
-run_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs}" || exit $?
-run_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit $?
+run_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs}" || exit
+run_cmd 3h "scons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
 
 if [ "${filesystem_test}" = "true" ]; then
-    run_cmd 3m "daos filesystem query ${mount_dir}" || exit $?
+    run_cmd 3m "daos filesystem query ${mount_dir}" || exit
 fi
 
 exit 0
