@@ -460,7 +460,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.code_scanning'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false) +
-                                                ' --build-arg FVERSION=latest' +
+                                                ' --build-arg FVERSION=44' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
