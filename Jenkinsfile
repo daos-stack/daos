@@ -489,7 +489,7 @@ pipeline {
                 expression { !skip_build_stage() }
             }
             parallel {
-                stage('Build on EL 8') {
+                stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el8') }
@@ -543,7 +543,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on EL 9') {
+                stage('Build RPM on EL 9') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('el9') }
@@ -597,7 +597,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15') {
+                stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skip_build_stage('leap15') }
