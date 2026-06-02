@@ -5,11 +5,13 @@
 # 'recipe' for Docker for code scanning.
 #
 
-ARG FVERSION=latest
-FROM fedora:$FVERSION
-# Needed for later use of FVERSION
-ARG FVERSION
+# Pull base image
+ARG POINT_RELEASE=
+ARG BASE_DISTRO=rockylinux:9$POINT_RELEASE
+FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
+# Needed for later use of BASE_DISTRO
+ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
@@ -27,24 +29,29 @@ ENV NO_PROXY=${DAOS_NO_PROXY}
 RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
-ARG PYTHON_VERSION=3.11
-RUN dnf --nodocs install -y \
-    git \
-    python${PYTHON_VERSION}
-
-# script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-fedora.sh /tmp/repo-helper.sh
-
-RUN chmod +x /tmp/repo-helper.sh &&                 \
-    /tmp/repo-helper.sh &&                          \
+# Script to setup local repo if available
+COPY ./utils/scripts/helpers/repo-helper-el9.sh /tmp/repo-helper.sh
+RUN chmod +x /tmp/repo-helper.sh && \
+    /tmp/repo-helper.sh &&          \
     rm -f /tmp/repo-helper.sh
 
+# Script to install OS packages needed for code scanning, including python and bandit.
+COPY ./utils/scripts/install-el9-bandit.sh /tmp/install.sh
+FROM basic
+# Install OS packages
+RUN dnf upgrade &&              \
+    chmod +x /tmp/install.sh && \
+    /tmp/install.sh &&          \
+    dnf clean all &&            \
+    rm -f /tmp/install.sh
+
 # Setup a python venv so that python packages can be installed locally.
+ARG PYTHON_VERSION=3.11
 RUN python${PYTHON_VERSION} -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
-# Install Python Bandit scanner.
+# Install Python Bandit scanner
 RUN . /home/daos/venv/bin/activate && \
     python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install bandit
