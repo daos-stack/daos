@@ -625,6 +625,16 @@
    fun:runtime.persistentalloc
 }
 {
+   Newproc cgo malloc
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_cgo_*_Cfunc__Cmalloc
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:runtime.newproc.abi0
+}
+{
    __tsan_write_pc
    Memcheck:Value8
    ...
