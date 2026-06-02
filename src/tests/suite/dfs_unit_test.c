@@ -32,6 +32,39 @@ check_ts(struct timespec l, struct timespec r)
 	}
 }
 
+static bool
+test_akey_present(dfs_obj_t *parent_dir, const char *file_name, const char *akey_name)
+{
+	daos_obj_id_t dir_oid;
+	daos_handle_t parent_oh = DAOS_HDL_INVAL;
+	daos_key_t    dkey;
+	daos_iod_t    iod;
+	int           rc;
+
+	rc = dfs_obj2id(parent_dir, &dir_oid);
+	assert_int_equal(rc, 0);
+
+	rc = daos_obj_open(co_hdl, dir_oid, DAOS_OO_RO, &parent_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, (void *)file_name, strlen(file_name));
+	d_iov_set(&iod.iod_name, (void *)akey_name, strlen(akey_name));
+	iod.iod_nr    = 1;
+	iod.iod_recxs = NULL;
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	iod.iod_size  = DAOS_REC_ANY;
+
+	rc = daos_obj_fetch(parent_oh, DAOS_TX_NONE, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, NULL,
+			    NULL, NULL);
+	assert_rc_equal(daos_obj_close(parent_oh, NULL), 0);
+
+	if (rc == -DER_NONEXIST)
+		return false;
+
+	assert_rc_equal(rc, 0);
+	return true;
+}
+
 static void
 dfs_test_mount(void **state)
 {
@@ -3571,63 +3604,538 @@ dfs_test_pipeline_find(void **state)
 	test_pipeline_find(state, OC_RP_3GX);
 }
 
+/**
+ * Test dfs_link and dfs_remove covering the following steps:
+ *
+ *  1.  Create file1 in dir1, write content, add 3 xattrs, and stat into statbuf1.
+ *  2.  Run negative dfs_link cases:
+ *      existing target (file/dir/symlink), deleted source object, invalid parent,
+ *      NULL name, NULL source object, and source object type checks.
+ *  3.  Create a hardlink in the same directory, verify nlink/content, then unlink it.
+ *  3a. Validate xattr akeys are removed from the parent dkey entry for file1.
+ *  4.  Link file1 → file2 in dir2 (new_obj=NULL, statbuf2 returned).
+ *  5.  Compare statbuf2 vs statbuf1: mode/ino/size match; nlink == 2.
+ *  6.  Link file1 → file3 in dir2 (newobj3 + statbuf3 returned).
+ *  7.  Compare statbuf3 vs statbuf1: mode/ino/size match; nlink == 3.
+ *  8.  Read via newobj3; content must match buf1.
+ *  9.  Link file2 → file4 in dir4 (newobj4 + statbuf4 returned).
+ * 10.  Repeat steps 6-7 for statbuf4/newobj4: nlink == 4.
+ * 11.  Remove file1.
+ * 12.  Read via newobj3; content must still match buf1.
+ * 13.  Link file3 → file5 in dir1 (newobj5 + statbuf5 returned).
+ * 14.  Compare statbuf5 vs statbuf4: mode/ino match; nlink == 4.
+ * 15.  Unlink file3, file4, and file5.
+ * 16.  Link file2 → file6 in dir1 (newobj6 + statbuf6 returned).
+ * 17.  Compare statbuf6 vs statbuf2: mode/ino match; nlink == 2.
+ * 18.  Write new content buf2 via newobj6.
+ * 19.  Unlink file6.
+ * 20.  Open file2 and verify content matches buf2.
+ * 21.  Read content via file2 and verify it matches buf2.
+ * 22.  Link file2 into root by passing parent=NULL, then open/read/verify content.
+ *      TODO: add nlink verification once dfs_ostat() is updated to check GIT.
+ * 23.  Unlink file2.
+ */
+static void
+dfs_test_link_remove(void **state)
+{
+	test_arg_t *arg = *state;
+	dfs_obj_t  *dir1, *dir2, *dir4;
+	dfs_obj_t  *file1_obj, *file2_obj;
+	dfs_obj_t  *source_dir_obj, *source_symlink_obj;
+	dfs_obj_t  *existing_file_obj, *existing_dir_obj, *existing_sym_obj;
+	dfs_obj_t  *deleted_src_obj;
+	dfs_obj_t  *same_dir_link_obj;
+	dfs_obj_t  *root_link_obj;
+	dfs_obj_t  *newobj3, *newobj4, *newobj5, *newobj6;
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	char        buf1[64];
+	char        buf2[64];
+	char        rbuf[64];
+	const char *xnames[3] = {"hl_x1", "hl_x2", "hl_x3"};
+	const char *xvals[3]  = {"v1", "v2", "v3"};
+	struct stat statbuf1, statbuf2, statbuf3, statbuf4, statbuf5, statbuf6;
+	struct stat statbuf_same_dir;
+
+	daos_size_t read_size;
+	int         rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Create directories dir1, dir2, dir4 */
+	rc = dfs_open(dfs_mt, NULL, "hl_dir1", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, "hl_dir2", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir2);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, "hl_dir4", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir4);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 1: Create file1 in dir1 and write buf1.
+	 */
+	print_message("Step 1: Create file1 in dir1 and write content\n");
+	rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &file1_obj);
+	assert_int_equal(rc, 0);
+	dts_buf_render(buf1, sizeof(buf1));
+	d_iov_set(&iov, buf1, sizeof(buf1));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs_mt, file1_obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Step 1a: Add 3 xattrs to dir1/file1\n");
+	rc = dfs_setxattr(dfs_mt, file1_obj, xnames[0], xvals[0], strlen(xvals[0]) + 1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, file1_obj, xnames[1], xvals[1], strlen(xvals[1]) + 1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, file1_obj, xnames[2], xvals[2], strlen(xvals[2]) + 1, 0);
+	assert_int_equal(rc, 0);
+
+	print_message("Step 2: Stat file1 into statbuf1\n");
+	rc = dfs_stat(dfs_mt, dir1, "file1", &statbuf1);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISREG(statbuf1.st_mode));
+
+	/**
+	 * Step 2: Negative tests for dfs_link around destination/source/parent validation.
+	 */
+	print_message("Step 2: Verify linking into existing file/dir/symlink returns EEXIST\n");
+	print_message("Step 2.1: existing file target -> EEXIST\n");
+	rc = dfs_open(dfs_mt, dir2, "existing_file", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &existing_file_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(existing_file_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, file1_obj, dir2, "existing_file", NULL, NULL);
+	assert_int_equal(rc, EEXIST);
+
+	print_message("Step 2.2: existing directory target -> EEXIST\n");
+	rc = dfs_open(dfs_mt, dir2, "existing_dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &existing_dir_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(existing_dir_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, file1_obj, dir2, "existing_dir", NULL, NULL);
+	assert_int_equal(rc, EEXIST);
+
+	print_message("Step 2.3: existing symlink target -> EEXIST\n");
+	rc = dfs_open(dfs_mt, dir2, "existing_symlink", S_IFLNK | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, "file1", &existing_sym_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(existing_sym_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, file1_obj, dir2, "existing_symlink", NULL, NULL);
+	assert_int_equal(rc, EEXIST);
+
+	print_message("Step 2.4: source file object points to deleted entry -> ENOENT\n");
+	rc = dfs_open(dfs_mt, dir1, "deleted_src", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &deleted_src_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "deleted_src", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, deleted_src_obj, dir2, "deleted_src_link", NULL, NULL);
+	assert_int_equal(rc, ENOENT);
+	rc = dfs_release(deleted_src_obj);
+	assert_int_equal(rc, 0);
+
+	print_message("Step 2.5: parent object is not a directory -> ENOTDIR\n");
+	rc = dfs_link(dfs_mt, file1_obj, file1_obj, "bad_parent_not_dir", NULL, NULL);
+	assert_int_equal(rc, ENOTDIR);
+
+	print_message("Step 2.6: name is NULL -> EINVAL\n");
+	rc = dfs_link(dfs_mt, file1_obj, dir2, NULL, NULL, NULL);
+	assert_int_equal(rc, EINVAL);
+
+	print_message("Step 2.7: source file object is NULL -> EINVAL\n");
+	rc = dfs_link(dfs_mt, NULL, dir2, "null_file_obj", NULL, NULL);
+	assert_int_equal(rc, EINVAL);
+
+	print_message("Step 2.8: source object is a directory -> EPERM\n");
+	rc = dfs_open(dfs_mt, dir1, "source_dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &source_dir_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, source_dir_obj, dir2, "source_dir_link", NULL, NULL);
+	assert_int_equal(rc, EPERM);
+	rc = dfs_release(source_dir_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "source_dir", true, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("Step 2.9: source object is a symlink -> EPERM\n");
+	rc = dfs_open(dfs_mt, dir1, "source_symlink", S_IFLNK | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, "file1", &source_symlink_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, source_symlink_obj, dir2, "source_symlink_link", NULL, NULL);
+	assert_int_equal(rc, EPERM);
+	rc = dfs_release(source_symlink_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "source_symlink", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 3: Create a hardlink in the same directory, verify nlink/content, then unlink it.
+	 */
+	print_message("Step 3: Link file1 -> dir1/file1_same_dir and verify nlink/content\n");
+	same_dir_link_obj = NULL;
+	memset(&statbuf_same_dir, 0, sizeof(statbuf_same_dir));
+	rc = dfs_link(dfs_mt, file1_obj, dir1, "file1_same_dir", &same_dir_link_obj,
+		      &statbuf_same_dir);
+	assert_int_equal(rc, 0);
+	assert_non_null(same_dir_link_obj);
+	assert_int_equal(statbuf1.st_mode, statbuf_same_dir.st_mode);
+	assert_int_equal(statbuf1.st_ino, statbuf_same_dir.st_ino);
+	assert_int_equal(statbuf1.st_size, statbuf_same_dir.st_size);
+	assert_int_equal((int)statbuf_same_dir.st_nlink, 2);
+	assert_true(
+	    (statbuf_same_dir.st_ctim.tv_sec * 1000000000LL + statbuf_same_dir.st_ctim.tv_nsec) >
+	    (statbuf1.st_ctim.tv_sec * 1000000000LL + statbuf1.st_ctim.tv_nsec));
+
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs_mt, same_dir_link_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)sizeof(buf1));
+	assert_memory_equal(buf1, rbuf, sizeof(buf1));
+
+	print_message(
+	    "Step 3a: Conditionally fetch xattr akeys for dkey=file1 and verify deletion\n");
+	{
+		char xakey[64];
+		int  i;
+
+		for (i = 0; i < 3; i++) {
+			snprintf(xakey, sizeof(xakey), "x:%s", xnames[i]);
+			assert_false(test_akey_present(dir1, "file1", xakey));
+		}
+	}
+
+	rc = dfs_release(same_dir_link_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "file1_same_dir", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 4: Create link dir2/file2 from file1; new_obj=NULL, statbuf2 passed.
+	 * After this call: link_cnt = 2 (file1 + file2).
+	 */
+	print_message("Step 4: Link file1 -> dir2/file2 (new_obj=NULL)\n");
+	memset(&statbuf2, 0, sizeof(statbuf2));
+	rc = dfs_link(dfs_mt, file1_obj, dir2, "file2", NULL, &statbuf2);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 5: Compare statbuf2 vs statbuf1: mode, ino and size must match;
+	 * statbuf2.st_nlink must be 2.
+	 */
+	print_message("Step 5: Verify statbuf2 vs statbuf1 (nlink=2)\n");
+	assert_int_equal(statbuf1.st_mode, statbuf2.st_mode);
+	assert_int_equal(statbuf1.st_ino, statbuf2.st_ino);
+	assert_int_equal(statbuf1.st_size, statbuf2.st_size);
+	assert_int_equal((int)statbuf2.st_nlink, 2);
+	assert_true(
+	    (statbuf2.st_ctim.tv_sec * 1000000000LL + statbuf2.st_ctim.tv_nsec) >
+	    (statbuf_same_dir.st_ctim.tv_sec * 1000000000LL + statbuf_same_dir.st_ctim.tv_nsec));
+
+	/**
+	 * Step 6: Create link dir2/file3 from file1; newobj3 and statbuf3 passed.
+	 * After this call: link_cnt = 3 (file1, file2, file3).
+	 */
+	print_message("Step 6: Link file1 -> dir2/file3\n");
+	newobj3 = NULL;
+	memset(&statbuf3, 0, sizeof(statbuf3));
+	rc = dfs_link(dfs_mt, file1_obj, dir2, "file3", &newobj3, &statbuf3);
+	assert_int_equal(rc, 0);
+	assert_non_null(newobj3);
+
+	/**
+	 * Step 7: Compare statbuf3 vs statbuf1: mode, ino and size must match;
+	 * statbuf3.st_nlink must be 3.
+	 */
+	print_message("Step 7: Verify statbuf3 vs statbuf1 (nlink=3)\n");
+	assert_int_equal(statbuf1.st_mode, statbuf3.st_mode);
+	assert_int_equal(statbuf1.st_ino, statbuf3.st_ino);
+	assert_int_equal(statbuf1.st_size, statbuf3.st_size);
+	assert_int_equal((int)statbuf3.st_nlink, 3);
+	assert_true((statbuf3.st_ctim.tv_sec * 1000000000LL + statbuf3.st_ctim.tv_nsec) >
+		    (statbuf2.st_ctim.tv_sec * 1000000000LL + statbuf2.st_ctim.tv_nsec));
+
+	/**
+	 * Step 8: Read via newobj3; content must match buf1.
+	 */
+	print_message("Step 8: Read via newobj3, verify content == buf1\n");
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs_mt, newobj3, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)sizeof(buf1));
+	assert_memory_equal(buf1, rbuf, sizeof(buf1));
+
+	/**
+	 * Step 9: Open file2 and use it as the source for linking dir4/file4.
+	 * newobj4 and statbuf4 are passed.
+	 * After this call: link_cnt = 4 (file1, file2, file3, file4).
+	 */
+	print_message("Step 9: Link dir2/file2 -> dir4/file4\n");
+	rc = dfs_open(dfs_mt, dir2, "file2", S_IFREG, O_RDONLY, 0, 0, NULL, &file2_obj);
+	assert_int_equal(rc, 0);
+	newobj4 = NULL;
+	memset(&statbuf4, 0, sizeof(statbuf4));
+	rc = dfs_link(dfs_mt, file2_obj, dir4, "file4", &newobj4, &statbuf4);
+	assert_int_equal(rc, 0);
+	assert_non_null(newobj4);
+	rc = dfs_release(file2_obj);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 10: Repeat steps 7-8 for statbuf4/newobj4.
+	 * statbuf4 must match statbuf1 with nlink == 4;
+	 * content read via newobj4 must equal buf1.
+	 */
+	print_message("Step 10: Verify statbuf4 vs statbuf1 (nlink=4) and read via newobj4\n");
+	assert_int_equal(statbuf1.st_mode, statbuf4.st_mode);
+	assert_int_equal(statbuf1.st_ino, statbuf4.st_ino);
+	assert_int_equal(statbuf1.st_size, statbuf4.st_size);
+	assert_int_equal((int)statbuf4.st_nlink, 4);
+	assert_true((statbuf4.st_ctim.tv_sec * 1000000000LL + statbuf4.st_ctim.tv_nsec) >
+		    (statbuf3.st_ctim.tv_sec * 1000000000LL + statbuf3.st_ctim.tv_nsec));
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs_mt, newobj4, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)sizeof(buf1));
+	assert_memory_equal(buf1, rbuf, sizeof(buf1));
+
+	/**
+	 * Step 11: Remove file1.
+	 * link_cnt drops to 3 (file2, file3, file4 remain).
+	 */
+	print_message("Step 11: Remove dir1/file1\n");
+	rc = dfs_release(file1_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "file1", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 12: Read via newobj3; content must still match buf1.
+	 */
+	print_message("Step 12: Read via newobj3 after removing file1\n");
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs_mt, newobj3, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)sizeof(buf1));
+	assert_memory_equal(buf1, rbuf, sizeof(buf1));
+
+	/**
+	 * Step 13: Link file3 (via newobj3) → dir1/file5; newobj5 and statbuf5 passed.
+	 * After this call: link_cnt = 4 (file2, file3, file4, file5).
+	 */
+	print_message("Step 13: Link dir2/file3 -> dir1/file5\n");
+	newobj5 = NULL;
+	memset(&statbuf5, 0, sizeof(statbuf5));
+	rc = dfs_link(dfs_mt, newobj3, dir1, "file5", &newobj5, &statbuf5);
+	assert_int_equal(rc, 0);
+	assert_non_null(newobj5);
+
+	/**
+	 * Step 14: Compare statbuf5 vs statbuf4: mode and ino must match;
+	 * statbuf5.st_nlink must be 4.
+	 */
+	print_message("Step 14: Verify statbuf5 vs statbuf4 (nlink=4)\n");
+	assert_int_equal(statbuf4.st_mode, statbuf5.st_mode);
+	assert_int_equal(statbuf4.st_ino, statbuf5.st_ino);
+	assert_int_equal((int)statbuf5.st_nlink, 4);
+	assert_true((statbuf5.st_ctim.tv_sec * 1000000000LL + statbuf5.st_ctim.tv_nsec) >
+		    (statbuf4.st_ctim.tv_sec * 1000000000LL + statbuf4.st_ctim.tv_nsec));
+
+	/**
+	 * Step 15: Unlink file3, file4, and file5.
+	 * link_cnt drops to 1 (only file2 remains).
+	 */
+	print_message("Step 15: Unlink file3, file4, file5\n");
+	rc = dfs_release(newobj3);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "file3", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(newobj4);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir4, "file4", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(newobj5);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "file5", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 16: Open file2 and link it to dir1/file6; newobj6 and statbuf6 passed.
+	 * After this call: link_cnt = 2 (file2 + file6).
+	 */
+	print_message("Step 16: Link dir2/file2 -> dir1/file6\n");
+	rc = dfs_open(dfs_mt, dir2, "file2", S_IFREG, O_RDWR, 0, 0, NULL, &file2_obj);
+	assert_int_equal(rc, 0);
+	newobj6 = NULL;
+	memset(&statbuf6, 0, sizeof(statbuf6));
+	rc = dfs_link(dfs_mt, file2_obj, dir1, "file6", &newobj6, &statbuf6);
+	assert_int_equal(rc, 0);
+	assert_non_null(newobj6);
+	rc = dfs_release(file2_obj);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 17: Compare statbuf6 vs statbuf2: mode and ino must match;
+	 * statbuf6.st_nlink must be 2.
+	 */
+	print_message("Step 17: Verify statbuf6 vs statbuf2 (nlink=2)\n");
+	assert_int_equal(statbuf2.st_mode, statbuf6.st_mode);
+	assert_int_equal(statbuf2.st_ino, statbuf6.st_ino);
+	assert_int_equal((int)statbuf6.st_nlink, 2);
+	assert_true((statbuf6.st_ctim.tv_sec * 1000000000LL + statbuf6.st_ctim.tv_nsec) >
+		    (statbuf5.st_ctim.tv_sec * 1000000000LL + statbuf5.st_ctim.tv_nsec));
+
+	/**
+	 * Step 18: Write new content buf2 to the underlying file via newobj6.
+	 */
+	print_message("Step 18: Write new content buf2 via newobj6\n");
+	dts_buf_render(buf2, sizeof(buf2));
+	d_iov_set(&iov, buf2, sizeof(buf2));
+	rc = dfs_write(dfs_mt, newobj6, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 19: Unlink file6.
+	 * link_cnt drops to 1 (only file2 remains).
+	 */
+	print_message("Step 19: Unlink dir1/file6\n");
+	rc = dfs_release(newobj6);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "file6", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 20: Open file2.
+	 */
+	print_message("Step 20: Open dir2/file2\n");
+	rc = dfs_open(dfs_mt, dir2, "file2", S_IFREG, O_RDONLY, 0, 0, NULL, &file2_obj);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 21: Content read via file2 must match buf2.
+	 *
+	 * TODO: add assertion that st_nlink == 1 once dfs_ostat() is updated
+	 * to query the GIT for the accurate hard-link count.
+	 */
+	print_message("Step 21: Verify content == buf2 via file2\n");
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs_mt, file2_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)sizeof(buf2));
+	assert_memory_equal(buf2, rbuf, sizeof(buf2));
+
+	/**
+	 * Step 22: Link file2 into root by passing parent=NULL and verify content.
+	 */
+	print_message("Step 22: Link dir2/file2 -> /file2_root_link using parent=NULL\n");
+	root_link_obj = NULL;
+	rc            = dfs_link(dfs_mt, file2_obj, NULL, "file2_root_link", &root_link_obj, NULL);
+	assert_int_equal(rc, 0);
+	assert_non_null(root_link_obj);
+	rc = dfs_release(root_link_obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, "file2_root_link", S_IFREG, O_RDONLY, 0, 0, NULL,
+		      &root_link_obj);
+	assert_int_equal(rc, 0);
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs_mt, root_link_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)sizeof(buf2));
+	assert_memory_equal(buf2, rbuf, sizeof(buf2));
+	rc = dfs_release(root_link_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "file2_root_link", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(file2_obj);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 23: Unlink file2 — all links now removed.
+	 */
+	print_message("Step 23: Unlink dir2/file2\n");
+	rc = dfs_remove(dfs_mt, dir2, "file2", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/** Cleanup: remove the now-empty directories */
+	rc = dfs_remove(dfs_mt, dir2, "existing_file", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "existing_symlink", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "existing_dir", true, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "hl_dir1", true, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir2);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "hl_dir2", true, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir4);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "hl_dir4", true, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: DFS container modes",
-	  dfs_test_modes, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
-	  dfs_test_lookup, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST4: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
-	  dfs_test_syml_follow, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST6: multi-threads read shared file",
-	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: DFS lookupx",
-	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: DFS IO sync error code",
-	  dfs_test_io_error_code, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST9: DFS IO async error code",
-	  dfs_test_io_error_code, async_enable, test_case_teardown},
-	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
-	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST11: Simple rename",
-	  dfs_test_rename, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST12: DFS API compat",
-	  dfs_test_compat, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
-	  dfs_test_handles, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
-	  dfs_test_mt_connect, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST15: DFS chown",
-	  dfs_test_chown, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST16: DFS stat mtime",
-	  dfs_test_mtime, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST17: multi-threads async IO",
-	  dfs_test_async_io_th, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST18: async IO",
-	  dfs_test_async_io, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST19: DFS readdir",
-	  dfs_test_readdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST20: dfs oclass hints",
-	  dfs_test_oclass_hints, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST21: dfs multiple pools",
-	  dfs_test_multiple_pools, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST22: dfs extended attributes",
-	  dfs_test_xattrs, test_case_teardown},
-	{ "DFS_UNIT_TEST23: dfs MWC container checker",
-	  dfs_test_checker, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST24: dfs MWC SB fix",
-	  dfs_test_fix_sb, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST25: dfs MWC root fix",
-	  dfs_test_relink_root, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
-	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST27: dfs pipeline find",
-	  dfs_test_pipeline_find, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
-	  dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST3: DFS lookup / lookup_rel", dfs_test_lookup, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST4: Simple Symlinks", dfs_test_syml, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW", dfs_test_syml_follow, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST6: multi-threads read shared file", dfs_test_read_shared_file, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST7: DFS lookupx", dfs_test_lookupx, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST8: DFS IO sync error code", dfs_test_io_error_code, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST9: DFS IO async error code", dfs_test_io_error_code, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST10: multi-threads mkdir same dir", dfs_test_mt_mkdir, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST11: Simple rename", dfs_test_rename, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST12: DFS API compat", dfs_test_compat, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST13: DFS l2g/g2l_all", dfs_test_handles, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST14: multi-threads connect to same container", dfs_test_mt_connect, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST15: DFS chown", dfs_test_chown, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST16: DFS stat mtime", dfs_test_mtime, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST17: multi-threads async IO", dfs_test_async_io_th, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST18: async IO", dfs_test_async_io, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST19: DFS readdir", dfs_test_readdir, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST20: dfs oclass hints", dfs_test_oclass_hints, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST21: dfs multiple pools", dfs_test_multiple_pools, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST22: dfs extended attributes", dfs_test_xattrs, test_case_teardown},
+    {"DFS_UNIT_TEST23: dfs MWC container checker", dfs_test_checker, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST24: dfs MWC SB fix", dfs_test_fix_sb, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST25: dfs MWC root fix", dfs_test_relink_root, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST26: dfs MWC chunk size fix", dfs_test_fix_chunk_size, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST29: dfs hard link and remove", dfs_test_link_remove, async_disable,
+     test_case_teardown},
 };
 
 static int

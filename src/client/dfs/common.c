@@ -320,6 +320,94 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	return rc;
 }
 
+static int
+remove_hardlink(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name, size_t len,
+		struct dfs_entry entry)
+{
+	daos_key_t       dkey;
+	daos_key_t       git_dkey;
+	daos_handle_t    oh;
+	struct dfs_entry git_entry = {0};
+	int              rc;
+	uint64_t         new_link_cnt;
+	bool             local_tx = false;
+
+	D_ASSERT(DFS_IS_HARDLINK(entry.mode));
+
+	if (!daos_handle_is_valid(th)) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+		local_tx = true;
+	}
+
+restart:
+	if (!daos_handle_is_valid(dfs->git_oh)) {
+		D_ERROR("GIT handle is not valid\n");
+		D_GOTO(out, rc = EIO);
+	}
+
+	rc = git_fetch_entry(dfs->git_oh, th, &entry.oid, &git_entry, 0, NULL, NULL, NULL);
+	if (rc == ENOENT)
+		D_GOTO(out, rc = EIO);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (git_entry.link_cnt == 0)
+		D_GOTO(out, rc = EIO);
+
+	d_iov_set(&dkey, (void *)name, len);
+	rc = daos_obj_punch_dkeys(parent_oh, th, 0, 1, &dkey, NULL);
+	if (rc)
+		D_GOTO(out, rc = daos_der2errno(rc));
+
+	new_link_cnt = git_entry.link_cnt - 1;
+	/*
+	 * If there are other directory entries pointing to the same GIT entry, just
+	 * decrement the link count and return.
+	 * Under the current design, when link_cnt reaches 1, the last surviving
+	 * directory entry still has its hardlink bit set, and the inode metadata
+	 * remains in GIT.
+	 */
+	if (new_link_cnt > 0)
+		D_GOTO(out, rc = git_update_link_cnt(dfs->git_oh, th, &entry.oid, new_link_cnt));
+
+	d_iov_set(&git_dkey, &entry.oid, sizeof(daos_obj_id_t));
+	rc = daos_obj_punch_dkeys(dfs->git_oh, th, 0, 1, &git_dkey, NULL);
+	if (rc)
+		D_GOTO(out, rc = daos_der2errno(rc));
+
+	rc = daos_obj_open(dfs->coh, entry.oid, DAOS_OO_RW, &oh, NULL);
+	if (rc)
+		D_GOTO(out, rc = daos_der2errno(rc));
+
+	rc = daos_obj_punch(oh, th, 0, NULL);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	rc = daos_obj_close(oh, NULL);
+	if (rc)
+		rc = daos_der2errno(rc);
+
+out:
+	if (!local_tx)
+		return rc;
+
+	if (rc == 0) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc)
+			rc = daos_der2errno(rc);
+	}
+
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
+
+	return rc;
+}
+
 int
 remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name, size_t len,
 	     struct dfs_entry entry)
@@ -327,6 +415,9 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *
 	daos_key_t    dkey;
 	daos_handle_t oh;
 	int           rc;
+
+	if (DFS_IS_HARDLINK(entry.mode))
+		return remove_hardlink(dfs, th, parent_oh, name, len, entry);
 
 	if (S_ISLNK(entry.mode))
 		goto punch_entry;
@@ -613,6 +704,66 @@ out:
 	return rc;
 }
 
+/*
+ * Delete all extended attributes stored under a directory entry.
+ * Enumerates every akey whose name starts with "x:" under the dkey
+ * identified by @name in directory object @oh, and punches each one.
+ */
+int
+xattr_delete_entry(daos_handle_t oh, const char *name, daos_handle_t th)
+{
+	daos_key_t      dkey, akey;
+	daos_anchor_t   anchor = {0};
+	d_sg_list_t     sgl;
+	d_iov_t         iov;
+	char            enum_buf[ENUM_XDESC_BUF];
+	daos_key_desc_t kds[ENUM_DESC_NR];
+	int             rc = 0;
+
+	if (name == NULL)
+		return EINVAL;
+
+	d_iov_set(&dkey, (void *)name, strnlen(name, DFS_MAX_NAME));
+
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, ENUM_XDESC_BUF);
+	sgl.sg_iovs = &iov;
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t number = ENUM_DESC_NR;
+		uint32_t i;
+		char    *ptr;
+
+		memset(enum_buf, 0, ENUM_XDESC_BUF);
+		rc = daos_obj_list_akey(oh, th, &dkey, &number, kds, &sgl, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_list_akey() failed " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+
+		if (number == 0)
+			continue;
+
+		for (ptr = enum_buf, i = 0; i < number; i++) {
+			if (kds[i].kd_key_len < 2 || strncmp("x:", ptr, 2) != 0) {
+				ptr += kds[i].kd_key_len;
+				continue;
+			}
+
+			d_iov_set(&akey, ptr, kds[i].kd_key_len);
+			rc = daos_obj_punch_akeys(oh, th, 0, &dkey, 1, &akey, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_punch_akeys() xattr failed " DF_RC "\n",
+					DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+			ptr += kds[i].kd_key_len;
+		}
+	}
+	return 0;
+}
+
 int
 get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr, bool check_empty)
 {
@@ -835,7 +986,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 	stbuf->st_nlink = 1;
 	stbuf->st_size  = size;
-	stbuf->st_mode  = entry.mode;
+	stbuf->st_mode  = DFS_EXTERNAL_MODE(entry.mode);
 	stbuf->st_uid   = entry.uid;
 	stbuf->st_gid   = entry.gid;
 	if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {

@@ -433,7 +433,7 @@ out:
 		if (stbuf) {
 			stbuf->st_size         = file_size;
 			stbuf->st_nlink        = 1;
-			stbuf->st_mode         = entry.mode;
+			stbuf->st_mode         = DFS_EXTERNAL_MODE(entry.mode);
 			stbuf->st_uid          = entry.uid;
 			stbuf->st_gid          = entry.gid;
 			stbuf->st_mtim.tv_sec  = entry.mtime;
@@ -905,7 +905,7 @@ ostatx_cb(tse_task_t *task, void *data)
 	}
 
 	args->stbuf->st_nlink = 1;
-	args->stbuf->st_mode  = op_args->entry.mode;
+	args->stbuf->st_mode  = DFS_EXTERNAL_MODE(op_args->entry.mode);
 	args->stbuf->st_uid   = op_args->entry.uid;
 	args->stbuf->st_gid   = op_args->entry.gid;
 	if (tspec_gt(args->stbuf->st_ctim, args->stbuf->st_mtim)) {
@@ -1717,7 +1717,7 @@ dfs_get_mode(dfs_obj_t *obj, mode_t *mode)
 	if (obj == NULL || mode == NULL)
 		return EINVAL;
 
-	*mode = obj->mode;
+	*mode = DFS_EXTERNAL_MODE(obj->mode);
 	return 0;
 }
 
@@ -1751,6 +1751,255 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 	*size = val_size;
 	DFS_OP_STAT_INCR(obj->dfs, DOS_READLINK);
 	return 0;
+}
+
+static int
+update_entry_mode(daos_handle_t oh, daos_handle_t th, const char *name, size_t len, mode_t mode)
+{
+	daos_key_t  dkey;
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	daos_iod_t  iod;
+	daos_recx_t recx;
+	int         rc;
+
+	d_iov_set(&dkey, (void *)name, len);
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod.iod_nr    = 1;
+	recx.rx_idx   = MODE_IDX;
+	recx.rx_nr    = sizeof(mode_t);
+	iod.iod_recxs = &recx;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_size  = 1;
+
+	d_iov_set(&iov, &mode, sizeof(mode_t));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+
+	rc = daos_obj_update(oh, th, 0, &dkey, 1, &iod, &sgl, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	return 0;
+}
+
+int
+dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *new_name, dfs_obj_t **new_obj,
+	 struct stat *stbuf)
+{
+	struct dfs_entry  src_entry = {0};
+	struct dfs_entry  git_entry = {0};
+	struct dfs_entry *link_entry;
+	dfs_obj_t        *created_obj = NULL;
+	daos_handle_t     th          = DAOS_TX_NONE;
+	daos_handle_t     src_parent_oh;
+	struct timespec   now;
+	bool              exists;
+	size_t            len;
+	uint64_t          new_link_cnt;
+	int               daos_mode;
+	int               rc;
+
+	/** Validate inputs and normalize defaults for parent/new_obj. */
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (dfs->amode != O_RDWR)
+		return EPERM;
+	if (!daos_handle_is_valid(dfs->git_oh))
+		return ENOTSUP;
+	if (obj == NULL)
+		return EINVAL;
+	if (!S_ISREG(obj->mode))
+		return EPERM;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+	if (new_obj)
+		*new_obj = NULL;
+
+	rc = check_name(new_name, &len);
+	if (rc)
+		return rc;
+
+	/** Use a transaction so metadata/GIT updates are committed atomically. */
+	rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+restart:
+	/** Re-read source entry under this TX attempt to avoid stale assumptions. */
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &src_parent_oh, NULL);
+	if (rc) {
+		rc = daos_der2errno(rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = fetch_entry(dfs->layout_v, src_parent_oh, th, obj->name, strlen(obj->name), false,
+			 &exists, &src_entry, 0, NULL, NULL, NULL);
+	daos_obj_close(src_parent_oh, NULL);
+	if (rc)
+		D_GOTO(out, rc);
+	if (!exists)
+		D_GOTO(out, rc = ENOENT);
+	if (src_entry.oid.hi != obj->oid.hi || src_entry.oid.lo != obj->oid.lo)
+		D_GOTO(out, rc = ENOENT);
+
+	/** Update existing GIT link count, or create/initialize GIT state on first hardlink. */
+	if (DFS_IS_HARDLINK(src_entry.mode)) {
+		rc = git_fetch_entry(dfs->git_oh, th, &obj->oid, &git_entry, 0, NULL, NULL, NULL);
+		if (rc)
+			D_GOTO(out, rc);
+		new_link_cnt = git_entry.link_cnt + 1;
+		rc           = git_update_link_cnt(dfs->git_oh, th, &obj->oid, new_link_cnt);
+		if (rc)
+			D_GOTO(out, rc);
+		git_entry.link_cnt = new_link_cnt;
+		link_entry         = &git_entry;
+	} else {
+		dfs_set_hardlink(&src_entry.mode);
+		src_entry.link_cnt = 2;
+
+		/** Link count update requires ctime update as well. */
+		rc = clock_gettime(CLOCK_REALTIME, &now);
+		if (rc)
+			D_GOTO(out, rc = errno);
+		src_entry.ctime      = now.tv_sec;
+		src_entry.ctime_nano = now.tv_nsec;
+
+		rc = git_insert_entry(dfs->git_oh, th, &obj->oid, 0, &src_entry);
+		if (rc)
+			D_GOTO(out, rc);
+
+		rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &src_parent_oh, NULL);
+		if (rc) {
+			rc = daos_der2errno(rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = update_entry_mode(src_parent_oh, th, obj->name, strlen(obj->name),
+				       src_entry.mode);
+		if (rc) {
+			daos_obj_close(src_parent_oh, NULL);
+			D_GOTO(out, rc);
+		}
+
+		rc = git_copy_xattr(dfs->git_oh, th, &obj->oid, src_parent_oh, obj->name);
+		if (rc == 0)
+			rc = xattr_delete_entry(src_parent_oh, obj->name, th);
+		daos_obj_close(src_parent_oh, NULL);
+		if (rc)
+			D_GOTO(out, rc);
+
+		link_entry = &src_entry;
+	}
+
+	/** Create the hardlink only if the destination entry does not already exist. */
+	rc = insert_entry(dfs->layout_v, parent->oh, th, new_name, len, DAOS_COND_DKEY_INSERT,
+			  link_entry);
+	if (rc)
+		D_GOTO(out, rc);
+
+	/** Commit all metadata changes; TX restart is handled in the common out path. */
+	rc = daos_tx_commit(th, NULL);
+	if (rc) {
+		if (rc != -DER_TX_RESTART)
+			D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	/** Optionally return an opened handle for the newly created link. */
+	if (new_obj) {
+		dfs_obj_t *nobj;
+
+		D_ALLOC_PTR(nobj);
+		if (nobj == NULL)
+			D_GOTO(out, rc = ENOMEM);
+
+		daos_mode = get_daos_obj_mode(obj->flags);
+		if (daos_mode < 0)
+			daos_mode = DAOS_OO_RW;
+
+		rc = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE, daos_mode, 1,
+					       link_entry->chunk_size ? link_entry->chunk_size
+								      : dfs->attr.da_chunk_size,
+					       &nobj->oh, NULL);
+		if (rc) {
+			D_FREE(nobj);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		nobj->dfs  = dfs;
+		nobj->oid  = obj->oid;
+		nobj->mode = obj->mode;
+		dfs_set_hardlink(&nobj->mode);
+		nobj->flags      = obj->flags;
+		nobj->parent_oid = parent->oid;
+		strncpy(nobj->name, new_name, len + 1);
+		*new_obj    = nobj;
+		created_obj = nobj;
+	}
+
+	/** Optionally fill stat data from link metadata plus object size. */
+	if (stbuf) {
+		daos_array_stbuf_t array_stbuf = {0};
+		daos_handle_t      arr_oh      = DAOS_HDL_INVAL;
+
+		memset(stbuf, 0, sizeof(*stbuf));
+		stbuf->st_nlink        = link_entry->link_cnt;
+		stbuf->st_mode         = DFS_EXTERNAL_MODE(link_entry->mode);
+		stbuf->st_uid          = link_entry->uid;
+		stbuf->st_gid          = link_entry->gid;
+		stbuf->st_mtim.tv_sec  = link_entry->mtime;
+		stbuf->st_mtim.tv_nsec = link_entry->mtime_nano;
+		stbuf->st_ctim.tv_sec  = link_entry->ctime;
+		stbuf->st_ctim.tv_nsec = link_entry->ctime_nano;
+		stbuf->st_atim         = stbuf->st_mtim;
+		stbuf->st_blksize =
+		    link_entry->chunk_size ? link_entry->chunk_size : dfs->attr.da_chunk_size;
+
+		if (new_obj && *new_obj) {
+			arr_oh = (*new_obj)->oh;
+		} else {
+			rc = daos_array_open_with_attr(
+			    dfs->coh, obj->oid, DAOS_TX_NONE, DAOS_OO_RO, 1,
+			    link_entry->chunk_size ? link_entry->chunk_size
+						   : dfs->attr.da_chunk_size,
+			    &arr_oh, NULL);
+			if (rc)
+				D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		rc = daos_array_stat(arr_oh, DAOS_TX_NONE, &array_stbuf, NULL);
+		if (rc) {
+			if (!(new_obj && *new_obj))
+				daos_array_close(arr_oh, NULL);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		if (!(new_obj && *new_obj))
+			daos_array_close(arr_oh, NULL);
+
+		stbuf->st_size   = array_stbuf.st_size;
+		stbuf->st_blocks = (array_stbuf.st_size + (1 << 9) - 1) >> 9;
+	}
+
+	rc = 0;
+out:
+	/** Close/restart TX and clean up partially created outputs on failure. */
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
+	if (rc != 0 && created_obj) {
+		daos_array_close(created_obj->oh, NULL);
+		D_FREE(created_obj);
+		if (new_obj)
+			*new_obj = NULL;
+	}
+	if (!rc)
+		dfs_set_hardlink(&obj->mode);
+	return rc;
 }
 
 int
