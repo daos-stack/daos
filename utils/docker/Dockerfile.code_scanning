@@ -36,7 +36,7 @@ RUN chmod +x /tmp/repo-helper.sh && \
     rm -f /tmp/repo-helper.sh
 
 # Script to install OS packages needed for code scanning, including python and bandit.
-COPY ./utils/scripts/install-el9-bandit.sh /tmp/install.sh
+COPY ./utils/scripts/install-el-bandit.sh /tmp/install.sh
 FROM basic
 # Install OS packages
 RUN dnf upgrade &&              \
@@ -46,7 +46,7 @@ RUN dnf upgrade &&              \
     rm -f /tmp/install.sh
 
 # Setup a python venv so that python packages can be installed locally.
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION
 RUN python${PYTHON_VERSION} -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
