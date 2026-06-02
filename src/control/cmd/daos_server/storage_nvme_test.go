@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -191,7 +191,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				},
 				{
 					EnableVMD: true,
-					HugeNodes: testHugeNodesStr(config.ScanMinHugepageCount),
+					HugeNodes: testHugeNodesStr(64),
 				},
 			},
 		},

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -86,7 +86,7 @@ func updateNVMePrepReqAllowedFromCfg(log logging.Logger, cfg *config.Server, req
 	if req.PCIAllowList == "" {
 		allowed := nvmeBdevsFromCfg(cfg)
 		if allowed.Len() != 0 {
-			log.Tracef("reading bdev_list entries (%q) from cfg", allowed)
+			log.Debugf("reading bdev_list entries (%q) from cfg", allowed)
 			req.PCIAllowList = strings.Join(allowed.Strings(), storage.BdevPciAddrSep)
 		}
 	}
@@ -108,7 +108,7 @@ func updateNVMePrepReqBlockedFromCfg(log logging.Logger, cfg *config.Server, req
 			return errors.Wrap(err, "invalid addresses in pci block list")
 		}
 		if blocked.Len() != 0 {
-			log.Tracef("reading bdev_exclude entries (%q) from cfg", blocked)
+			log.Debugf("reading bdev_exclude entries (%q) from cfg", blocked)
 			req.PCIBlockList = strings.Join(blocked.Strings(), storage.BdevPciAddrSep)
 		}
 	}
@@ -131,6 +131,11 @@ func updateNVMePrepReqFromCfg(log logging.Logger, cfg *config.Server, req *stora
 	}
 	if err := updateNVMePrepReqBlockedFromCfg(log, cfg, req); err != nil {
 		return err
+	}
+	// Ignore config hugepage count if supplied in config, see comment in prepareNVMe().
+	if req.HugepageCount == 0 && cfg.NrHugepages != 0 {
+		log.Noticef("ignoring nr_hugepages %d specified in server config file, "+
+			"set in prepare cli opts if required", cfg.NrHugepages)
 	}
 
 	return nil
@@ -284,14 +289,17 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, smi *common.SysMe
 	// enough to perform NVMe discovery. This introduces some inconsistency in terms of ignoring
 	// config parameters but more importantly should prevent inaccurate allocations.
 
-	if req.HugepageCount < config.ScanMinHugepageCount {
+	if req.HugepageCount == 0 {
 		req.HugepageCount = config.ScanMinHugepageCount
+		cmd.Infof("Ensuring min %d hugepage allocation on NUMA-0 for NVMe device access",
+			req.HugepageCount)
 	}
+
 	if err := server.SetHugeNodes(cmd.Logger, nil, smi, &req); err != nil {
 		return errors.Wrap(err, "setting hugenodes in bdev prep request")
 	}
 
-	cmd.Tracef("nvme prepare request parameters: %+v", req)
+	cmd.Debugf("nvme prepare request parameters: %+v", req)
 
 	// Prepare NVMe device access.
 	_, err := cmd.ctlSvc.NvmePrepare(req)
@@ -370,7 +378,7 @@ func resetNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	req.CleanSpdkLockfiles = false
 	req.Reset_ = true
 
-	cmd.Tracef("nvme reset request parameters: %+v", req)
+	cmd.Debugf("nvme reset request parameters: %+v", req)
 
 	resetResp, err := cmd.ctlSvc.NvmePrepare(req)
 	if err != nil {
@@ -390,7 +398,7 @@ func resetNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 		req.PCIBlockList = ""
 		req.EnableVMD = false // Prevents VMD endpoints being auto populated
 
-		cmd.Tracef("vmd second nvme reset request parameters: %+v", req)
+		cmd.Debugf("vmd second nvme reset request parameters: %+v", req)
 
 		if _, err := cmd.ctlSvc.NvmePrepare(req); err != nil {
 			return errors.Wrap(err, "nvme reset backend")
@@ -470,7 +478,7 @@ func scanNVMe(cmd *scanNVMeCmd, smi *common.SysMemInfo) (_ *storage.BdevScanResp
 
 	cmd.Info("Scan locally-attached NVMe storage...")
 
-	cmd.Tracef("nvme scan request: %+v", req)
+	cmd.Debugf("nvme scan request: %+v", req)
 	return cmd.ctlSvc.NvmeScan(req)
 }
 
@@ -486,7 +494,7 @@ func (cmd *scanNVMeCmd) Execute(_ []string) (err error) {
 	if err != nil {
 		return errors.Wrap(err, "nvme scan backend")
 	}
-	cmd.Tracef("scm scan response: %+v", resp)
+	cmd.Debugf("scm scan response: %+v", resp)
 
 	if cmd.JSONOutputEnabled() {
 		if err := cmd.OutputJSON(resp.Controllers, nil); err != nil {

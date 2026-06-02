@@ -692,7 +692,7 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expPrepCalls: []storage.BdevPrepareRequest{
 				defClean,
 				{
-					HugeNodes:  "nodes_hp[0]=128",
+					HugeNodes:  "nodes_hp[0]=1024",
 					TargetUser: username,
 					EnableVMD:  true,
 				},
@@ -708,7 +708,7 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expPrepCalls: []storage.BdevPrepareRequest{
 				defClean,
 				{
-					HugeNodes:  "nodes_hp[0]=128",
+					HugeNodes:  "nodes_hp[0]=1024",
 					TargetUser: username,
 					EnableVMD:  true,
 				},
@@ -1158,7 +1158,7 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				{
 					TargetUser: username,
 					EnableVMD:  true,
-					HugeNodes:  "nodes_hp[0]=128",
+					HugeNodes:  "nodes_hp[0]=1024",
 				},
 			},
 			// Allocation change logged.
@@ -1172,7 +1172,7 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				{
 					TargetUser: username,
 					EnableVMD:  true,
-					HugeNodes:  "nodes_hp[0]=128",
+					HugeNodes:  "nodes_hp[0]=1024",
 				},
 			},
 		},
