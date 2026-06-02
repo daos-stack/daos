@@ -34,6 +34,7 @@ func TestDdb_parseOpts(t *testing.T) {
 				"VOS Paths:\n",
 				"Available Commands:\n",
 			},
+			expErr: errHelpRequested,
 		},
 		"General help message with opt": {
 			args: []string{"-w", "--help"},
@@ -42,6 +43,7 @@ func TestDdb_parseOpts(t *testing.T) {
 				"VOS Paths:\n",
 				"Available Commands:\n",
 			},
+			expErr: errHelpRequested,
 		},
 		"Unknown commands with help": {
 			args:   []string{"foo", "--help"},
@@ -198,13 +200,14 @@ func TestDdb_parseOpts(t *testing.T) {
 
 			opts, stdout, err := runCmdToStdout(ctx, tc.args)
 			test.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
 
 			for _, msg := range tc.expStdout {
 				test.AssertTrue(t, strings.Contains(stdout, msg),
 					fmt.Sprintf("expected stdout to contain %q: got\n%s", msg, stdout))
+			}
+
+			if tc.expErr != nil {
+				return
 			}
 
 			if tc.checkFunc != nil {

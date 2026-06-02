@@ -13,8 +13,6 @@ import (
 	"io"
 	"os"
 	"testing"
-
-	"github.com/pkg/errors"
 )
 
 type ddbTestErr string
@@ -61,8 +59,7 @@ func captureStdout(fn func() error) (output string, err error) {
 }
 
 // runCmdToStdout calls parseOpts with the given args and captures stdout
-// output. errHelpRequested is treated as a non-error (consistent with main()).
-// Returns the parsed options, stdout output, and error.
+// output. Returns the parsed options, stdout output, and error.
 func runCmdToStdout(ctx *DdbContext, args []string) (cliOptions, string, error) {
 	var opts cliOptions
 	stdout, err := captureStdout(func() error {
@@ -71,8 +68,5 @@ func runCmdToStdout(ctx *DdbContext, args []string) (cliOptions, string, error) 
 		return e
 	})
 
-	if errors.Is(err, errHelpRequested) {
-		return opts, stdout, nil
-	}
 	return opts, stdout, err
 }
