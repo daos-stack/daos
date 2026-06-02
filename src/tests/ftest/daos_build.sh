@@ -21,13 +21,13 @@ exec > >(timestamp_output) 2>&1
 show_help() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  -p, --python_cmd <val>    Python command to use (default: python3)"
-    echo "  -v, --python_venv <val>   Path to Python virtual environment (default: /tmp/daos_build/venv)"
-    echo "  -b, --build_dir <val>     Directory to clone and build DAOS (default: /tmp/daos_build/daos)"
-    echo "  -g, --git_checkout <val>  Git branch or commit to checkout (default: origin/master)"
+    echo "  -p, --python-cmd <val>    Python command to use (default: python3)"
+    echo "  -v, --python-venv <val>   Path to Python virtual environment (default: /tmp/daos_build/venv)"
+    echo "  -b, --build-dir <val>     Directory to clone and build DAOS (default: /tmp/daos_build/daos)"
+    echo "  -g, --git-checkout <val>  Git branch or commit to checkout (default: origin/master)"
     echo "  -d, --distro <val>        Linux distribution for installing dependencies (default: el9)"
-    echo "  -j, --build_jobs <val>    Number of parallel jobs for building DAOS (default: 30)"
-    echo "  -f, --filesystem_test     Whether to run filesystem tests (default: false)"
+    echo "  -j, --build-jobs <val>    Number of parallel jobs for building DAOS (default: 30)"
+    echo "  -f, --filesystem-test     Whether to run filesystem tests (default: false)"
     echo "  -r, --rebuild             Whether to skip setup of build and venv directories (default: false)"
     echo "  -h, --help                Show this help message and exit"
 }
@@ -45,19 +45,19 @@ rebuild="false"
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -p|--python_cmd)
+    -p|--python-cmd)
       python_cmd="$2"
       shift 2
       ;;
-    -v|--python_venv)
+    -v|--python-venv)
       python_venv="$2"
       shift 2
       ;;
-    -b|--build_dir)
+    -b|--build-dir)
       build_dir="$2"
       shift 2
       ;;
-    -g|--git_checkout)
+    -g|--git-checkout)
       git_checkout="$2"
       shift 2
       ;;
@@ -65,11 +65,11 @@ while [[ $# -gt 0 ]]; do
       distro="$2"
       shift 2
       ;;
-    -j|--build_jobs)
+    -j|--build-jobs)
       build_jobs="$2"
       shift 2
       ;;
-    -f|--filesystem_test)
+    -f|--filesystem-test)
       filesystem_test="true"
       shift 1
       ;;
@@ -124,6 +124,14 @@ run_cmd() {
 if [ "${rebuild}" = "false" ]; then
     run_cmd 1m "rm -rf ${python_venv}" || exit $?
     run_cmd 1m "${python_cmd} -m venv ${python_venv}" || exit $?
+
+    cat <<EOF > "${python_venv}"/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+    quiet = 0
+    verbose = 2
+EOF
 fi
 run_cmd 1m "source ${python_venv}/bin/activate" || exit $?
 
@@ -136,8 +144,8 @@ if [ "${rebuild}" = "false" ]; then
 
     run_cmd 1m "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit $?
     run_cmd 3m "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit $?
-    run_cmd 1m "${python_cmd} -m pip install pip --upgrade" || exit $?
-    run_cmd 5m "${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit $?
+    run_cmd 1m "sudo ${python_cmd} -m pip install pip --upgrade" || exit $?
+    run_cmd 5m "sudo ${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit $?
 fi
 
 # Build DAOS dependencies
