@@ -23,7 +23,8 @@ dnf --nodocs install ${dnf_install_args} \
 
 # Setup a virtual environment if requested
 if [ -n "$VIRTUAL_ENV" ]; then
-    python${PYTHON_VERSION} -m venv "$VIRTUAL_ENV"
+    python"${PYTHON_VERSION}" -m venv "$VIRTUAL_ENV"
+    # shellcheck disable=SC1091
     . "$VIRTUAL_ENV/bin/activate"
 fi
 
