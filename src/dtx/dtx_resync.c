@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,11 +36,12 @@ struct dtx_resync_head {
 };
 
 struct dtx_resync_args {
-	struct ds_cont_child	*cont;
-	struct dtx_resync_head	 tables;
-	daos_epoch_t		 epoch;
-	uint32_t		 resync_version;
-	uint32_t		 discard_version;
+	struct ds_cont_child  *cont;
+	struct dtx_resync_head tables;
+	daos_epoch_t           epoch;
+	uint32_t               resync_version;
+	uint32_t               discard_version;
+	bool                   for_all;
 };
 
 static inline void
@@ -329,8 +330,8 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		else
 			rc = dtx_abort(cont, dte, epoch);
 
-		D_DEBUG(DB_TRACE, "As new leader for DTX "DF_DTI", abort it (2): "DF_RC"\n",
-			DP_DTI(&dte->dte_xid), DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
+			  "As new leader for DTX " DF_DTI ", abort it (2)", DP_DTI(&dte->dte_xid));
 
 		if (rc < 0) {
 			if (err != NULL)
@@ -392,7 +393,8 @@ dtx_status_handle(struct dtx_resync_args *dra)
 again:
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
-			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
+			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch,
+					    dre->dre_dte.dte_ver);
 			if (err == -DER_NONEXIST)
 				err = 0;
 			if (err != 0)
@@ -538,7 +540,17 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (dra->resync_version == dra->discard_version)
 		return 0;
 
-	/* Skip unprepared entry which version is at least not older than discard version. */
+	/*
+	 * The DTX version maybe refreshed via obj_handle_resend(). It means that either the
+	 * DTX is generated against the latest pool map or related IO RPC is resent by client
+	 * after pool map changed. Under both cases, the DTX resync that is triggered for pool
+	 * map changes (@for_all is false) should not handle such DTX to avoid making conflict
+	 * commit/abort decision (against regular IO handler) by race.
+	 */
+	if ((ent->ie_dtx_ver > dra->resync_version) ||
+	    (ent->ie_dtx_ver == dra->resync_version && !dra->for_all))
+		return 0;
+
 	if (ent->ie_dtx_tgt_cnt == 0)
 		return 0;
 
@@ -664,6 +676,11 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	dra.epoch = d_hlc_get();
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
+
+	if (block)
+		dra.for_all = false;
+	else
+		dra.for_all = true;
 
 	/*
 	 * Trigger DTX reindex. That will avoid DTX_CHECK from others being blocked.
