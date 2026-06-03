@@ -55,3 +55,31 @@ updates:
       - daos-stack/actions-watchers
     commit-message:
       prefix: "Doc-only: true \n"
+
+  - package-ecosystem: maven
+    target-branch: master
+    directory: /src/client/java/hadoop-daos
+    schedule:
+      interval: weekly
+    groups:
+      java-packages:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: maven
+    target-branch: release/2.8
+    directory: /src/client/java/hadoop-daos
+    schedule:
+      interval: weekly
+    groups:
+      java-packages:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
