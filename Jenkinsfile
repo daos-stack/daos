@@ -153,19 +153,30 @@ void updateRunStage() {
     }
 
     // Update stage running based on commit pragmas
+    Map<String, String> commitPragmas = [:]
+    if (env.pragmas && env.pragmas != '{}') {
+        // Convert the env.pragmas string back into a Map
+        commitPragmas = env.pragmas
+            .replaceAll(/^\{|\}$/, '')
+            .split(',\s*')
+            .collectEntries { entry ->
+                def (key, value) = entry.split('=', 2)*.trim()
+                [(key): value]
+            } as Map<String, String>
+    }
     println("updateRunStage: Checking commit pragmas from commit message:")
-    env.pragmas.each { key, value ->
+    commitPragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
         for (pragma in skipPragmas) {
             println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
-            if (env.pragmas.get(pragma, '').toLowerCase() == 'true') {
+            if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
                 runStage[stage] = false
                 reasons[stage] = "commit pragma ${pragma}: true"
                 break
-            } else if (env.pragmas.get(pragma, '').toLowerCase() == 'false') {
+            } else if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
                 runStage[stage] = true
                 reasons[stage] = "commit pragma ${pragma}: false"
                 break
