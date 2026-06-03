@@ -1,0 +1,58 @@
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index 7c0ac8d4..662c3a79 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -144,6 +144,7 @@ struct na_ucx_addr {
+     void *close_request;        /* Close request */
+     hg_atomic_int32_t refcount; /* Reference counter */
+     hg_atomic_int32_t status;   /* Connection state */
++    bool connect;               /* Issued from a connection request */
+ };
+ 
+ /* Map (used to cache addresses) */
+@@ -2746,6 +2747,7 @@ na_ucx_addr_map_insert(struct na_ucx_class *na_ucx_class,
+             (void *) na_ucx_addr, &na_ucx_addr->ucp_ep);
+         NA_CHECK_SUBSYS_NA_ERROR(
+             addr, error, ret, "Could not connect UCP endpoint");
++        na_ucx_addr->connect = true;
+     }
+     NA_LOG_SUBSYS_DEBUG(addr, "UCP ep for addr %p is %p", (void *) na_ucx_addr,
+         (void *) na_ucx_addr->ucp_ep);
+@@ -3105,6 +3107,7 @@ na_ucx_addr_reset(struct na_ucx_addr *na_ucx_addr, ucs_sock_addr_t *addr_key)
+     na_ucx_addr->ucp_ep = NULL;
+     hg_atomic_init32(&na_ucx_addr->refcount, 1);
+     hg_atomic_init32(&na_ucx_addr->status, 0);
++    na_ucx_addr->connect = false;
+ 
+     if (addr_key && addr_key->addr) {
+         memcpy(&na_ucx_addr->ss_addr, addr_key->addr, addr_key->addrlen);
+@@ -3255,7 +3258,8 @@ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
+      * the address if required. */
+ 
+     /* Check addr to ensure the EP for that addr is still valid */
+-    if (!(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
++    if (na_ucx_addr->connect &&
++        !(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
+         ret = na_ucx_addr_map_update(
+             na_ucx_class, &na_ucx_class->addr_map, na_ucx_addr);
+         NA_CHECK_SUBSYS_NA_ERROR(
+@@ -4076,7 +4080,8 @@ na_ucx_msg_send_unexpected(na_class_t NA_UNUSED *na_class,
+         na_cb_type_to_string(na_ucx_op_id->completion_data.callback_info.type));
+ 
+     /* Check addr to ensure the EP for that addr is still valid */
+-    if (!(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
++    if (na_ucx_addr->connect &&
++        !(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
+         struct na_ucx_class *na_ucx_class = NA_UCX_CLASS(na_class);
+ 
+         ret = na_ucx_addr_map_update(
+@@ -4159,7 +4164,8 @@ na_ucx_msg_send_expected(na_class_t NA_UNUSED *na_class, na_context_t *context,
+         na_cb_type_to_string(na_ucx_op_id->completion_data.callback_info.type));
+ 
+     /* Check addr to ensure the EP for that addr is still valid */
+-    if (!(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
++    if (na_ucx_addr->connect &&
++        !(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
+         struct na_ucx_class *na_ucx_class = NA_UCX_CLASS(na_class);
+ 
+         ret = na_ucx_addr_map_update(
