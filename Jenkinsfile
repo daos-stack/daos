@@ -158,7 +158,7 @@ void updateRunStage() {
         // Convert the env.pragmas string back into a Map
         commitPragmas = env.pragmas
             .replaceAll(/^\{|\}$/, '')
-            .split(',\s*')
+            .split(/,\s*/)
             .collectEntries { entry ->
                 def (key, value) = entry.split('=', 2)*.trim()
                 [(key): value]
