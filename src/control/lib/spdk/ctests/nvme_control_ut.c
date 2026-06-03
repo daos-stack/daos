@@ -281,6 +281,46 @@ test_get_controller(void **state)
 	assert_return_code(rc, 0);
 }
 
+/*
+ * This test should be run with ASan to detect the memory leak fixed by DAOS-19019. It verifies
+ * that the opts.pci_allowed buffer built by opts_add_pci_addr() is freed before daos_spdk_init()
+ * returns.
+ */
+static void
+test_daos_spdk_init_pci_freed(void **state)
+{
+	char *pcil[] = {"0000:01:00.0"};
+
+	(void)state;
+
+	test_ret = daos_spdk_init(0, NULL, 1, pcil);
+	/* spdk_env_init() is expected to fail in a unit-test context (no hugepages) */
+	assert_non_null(test_ret);
+}
+
+/*
+ * This test should be run with ASan to detect the memory leak fixed by DAOS-19019. It verifies
+ * that pci_addr is freed by teardown via clean_ret() -> free_ctrlr_fields().
+ */
+static void
+test_collect_pci_addr_freed(void **state)
+{
+	(void)state;
+
+	/*
+	 * Inject two mock controllers and drive _collect() via function pointers instead of real
+	 * SPDK calls.
+	 */
+	attach_mock_controllers();
+	test_ret = init_ret();
+	_collect(test_ret, &mock_copy_ctrlr_data, &mock_spdk_nvme_ctrlr_get_pci_device,
+		 &mock_spdk_pci_device_get_numa_id, &mock_spdk_pci_device_get_type);
+	assert_int_equal(test_ret->rc, 0);
+	assert_non_null(test_ret->ctrlrs);
+	assert_non_null(test_ret->ctrlrs->pci_addr);
+	assert_non_null(test_ret->ctrlrs->next->pci_addr);
+}
+
 static int
 setup(void **state)
 {
@@ -313,6 +353,7 @@ main(void)
 	    cmocka_unit_test_setup_teardown(test_collect, setup, teardown),
 	    cmocka_unit_test_setup_teardown(test_get_controller, setup, teardown),
 	    cmocka_unit_test_setup_teardown(test_daos_spdk_init_pci_freed, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_collect_pci_addr_freed, setup, teardown),
 	};
 
 	return cmocka_run_group_tests_name("control_nvme_control_ut", tests,
