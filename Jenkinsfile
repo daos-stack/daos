@@ -156,6 +156,7 @@ void updateRunStage() {
     Map<String, String> commitPragmas = [:]
     if (env.pragmas && env.pragmas != '{}') {
         // Convert the env.pragmas string back into a Map
+        println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
         env.pragmas.replaceAll(/^\{|\}$/, '').split(/,\s*/).each { line ->
             String key, value
             try {
