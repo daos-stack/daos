@@ -3651,7 +3651,11 @@ class PosixTests():
 
     def test_with_path(self):
         """Test that dfuse starts with path option."""
-        tmp_dir = tempfile.mkdtemp()
+        # Use dfuse_dir rather than tempfile default to avoid landing on a tmpfs
+        # (e.g. nlt_logs) which does not support user xattrs on older kernels
+        # (RHEL 8 / kernel < 5.15), causing duns_create_path() to fail with
+        # DER_NOTSUPPORTED.
+        tmp_dir = tempfile.mkdtemp(dir=self.conf.args.dfuse_dir)
 
         cont_path = join(tmp_dir, 'my-cont')
         create_cont(self.conf, self.pool, path=cont_path)
