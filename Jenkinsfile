@@ -162,6 +162,7 @@ void updateRunStage() {
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
         for (pragma in skipPragmas) {
+            // commitPragmas will already contain lower case keys from pragmasToMap()
             println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
             if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
                 runStage[stage] = false
@@ -192,7 +193,7 @@ void displayRunStage(Map reasons = [:]) {
 
 // Get a list of skip commit pragmas to check for a given stage name
 List<String> getStageNameSkipPragmas(String stageName) {
-    String stagePragma = "Skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
+    String stagePragma = "skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
     List<String> pragmas = []
 
     // Build up a priority list of pragmas to check based on the stage name.
@@ -209,7 +210,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
     } else if (stageName.contains('Build')) {
         // Add skip pragma for parent stage
         if (stageName != 'Build') {
-            pragmas.add('Skip-build')
+            pragmas.add('skip-build')
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
@@ -220,10 +221,10 @@ List<String> getStageNameSkipPragmas(String stageName) {
 
     } else if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
         // Add skip pragma alias for all tests
-        pragmas.add('Skip-all-tests')
+        pragmas.add('skip-all-tests')
         // Add skip pragma for parent stage
         if (stageName != 'Unit Tests') {
-            pragmas.add('Skip-unit-tests')
+            pragmas.add('skip-unit-tests')
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
@@ -235,35 +236,35 @@ List<String> getStageNameSkipPragmas(String stageName) {
     } else if (stageName == 'Test' || stageName.contains('Functional on')
             || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
         // Add skip pragma alias for all tests
-        pragmas.add('Skip-all-tests')
+        pragmas.add('skip-all-tests')
         // Add skip pragma for parent stage
         if (stageName != 'Test') {
-            pragmas.add('Skip-test')
+            pragmas.add('skip-test')
         }
         if (stageName.contains('Functional on')) {
             // Add skip pragma alias for all functional tests
-            pragmas.add('Skip-func-test')
+            pragmas.add('skip-func-test')
             // Add skip pragma alias for all functional VM tests
-            pragmas.add('Skip-func-test-vm')
+            pragmas.add('skip-func-test-vm')
             // Compatibility with existing commit pragmas
             pragmas.add(stagePragma.replace('functional-on-', 'func-test-'))
         } else if (stageName.contains('Test RPMs on')) {
             // Add skip pragma alias for all RPM tests
-            pragmas.add('Skip-test-rpms')
+            pragmas.add('skip-test-rpms')
         } else if (stageName.contains('Fault injection')) {
             // Compatibility with existing commit pragmas
-            pragmas.add('Skip-fault-injection-test')
+            pragmas.add('skip-fault-injection-test')
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
 
     } else if (stageName.contains('Hardware')) {
         // Add skip pragma alias for all tests
-        pragmas.add('Skip-all-tests')
+        pragmas.add('skip-all-tests')
         // Add skip pragma alias for all functional tests
-        pragmas.add('Skip-func-test')
+        pragmas.add('skip-func-test')
         // Add skip pragma alias for all functional HW tests
-        pragmas.add('Skip-func-hw-test')
+        pragmas.add('skip-func-hw-test')
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
         // Compatibility with existing commit pragmas
@@ -411,45 +412,6 @@ Map update_default_commit_pragmas() {
     if (default_pragmas_str) {
         updatePragmas(default_pragmas_str, false)
     }
-}
-
-Boolean skip_pragma_set(String name, String def_val='false') {
-    // Return whether or not the skip pragma is set
-    return cachedCommitPragma("Skip-${name}", def_val).toLowerCase() == 'true'
-}
-
-Boolean skip_build_stage(String distro='', String compiler='gcc') {
-    // Skip the stage if the CI_<distro>_NOBUILD parameter is set
-    if (distro) {
-        if (startedByUser() && paramsValue("CI_${distro}_NOBUILD", false)) {
-            println("[${env.STAGE_NAME}] Skipping build stage due to CI_${distro}_NOBUILD")
-            return true
-        }
-    }
-
-    // Skip the stage if any Skip-build[-<distro>-<compiler>] pragmas are true
-    List<String> pragma_names = ['build']
-    if (distro && compiler) {
-        pragma_names << "build-${distro}-${compiler}"
-    }
-    Boolean any_pragma_skip = pragma_names.any { name ->
-        if (skip_pragma_set(name)) {
-            println("[${env.STAGE_NAME}] Skipping build stage due to \"Skip-${name}: true\" pragma")
-            return true
-        }
-    }
-    if (any_pragma_skip) {
-        return true
-    }
-
-    // Skip the stage if a specific DAOS RPM version is specified
-    if (rpmTestVersion() != '') {
-        println("[${env.STAGE_NAME}] Skipping build stage for due to specific DAOS RPM version")
-        return true
-    }
-
-    // Otherwise run the build stage
-    return false
 }
 
 pipeline {
