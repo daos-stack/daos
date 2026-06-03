@@ -235,6 +235,9 @@ d_aligned_alloc(size_t alignment, size_t size, bool zero)
 {
 	void *buf;
 
+	/* POSIX requires size to be a multiple of alignment; round up to satisfy
+	 * strict allocators (e.g. ASAN) without changing the callers. */
+	size = D_ALIGNUP(size, alignment);
 	buf = aligned_alloc(alignment, size);
 	if (unlikely(track_arg != NULL)) {
 		if (buf != NULL)
