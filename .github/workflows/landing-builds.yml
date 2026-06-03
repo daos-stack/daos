@@ -271,7 +271,7 @@ jobs:
             python: 3.11
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:24.04
             python: 3
     env:
       DEPS_JOBS: 10
