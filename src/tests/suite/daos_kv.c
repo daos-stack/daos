@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +11,7 @@
  */
 #include <daos.h>
 #include <daos_kv.h>
+#include <daos/kv.h>
 #include "daos_test.h"
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than")
@@ -352,15 +354,58 @@ kv_cond_ops(void **state)
 	print_message("all good\n");
 } /* End simple_put_get */
 
+static void
+kv_obj_handle(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t kv_oh;
+	daos_handle_t oh;
+	int           rc;
+	int           i;
+
+	/** invalid handle must return DAOS_HDL_INVAL */
+	print_message("Getting obj handle from invalid KV handle\n");
+	oh = daos_kv2objhandle(DAOS_HDL_INVAL);
+	assert_true(daos_handle_is_inval(oh));
+
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
+	rc  = daos_kv_open(arg->coh, oid, DAOS_OO_RW, &kv_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** valid handle must return a valid object handle */
+	print_message("Getting obj handle from valid KV handle\n");
+	oh = daos_kv2objhandle(kv_oh);
+	assert_true(daos_handle_is_valid(oh));
+
+	/**
+	 * Call multiple times: each call must release the lookup reference so
+	 * no reference leak accumulates (regression for DAOS-19018).
+	 * When built with ASAN/LeakSanitizer, any leaked dc_kv reference will
+	 * be reported here.
+	 */
+	print_message("Calling daos_kv2objhandle() repeatedly\n");
+	for (i = 0; i < 10; i++) {
+		oh = daos_kv2objhandle(kv_oh);
+		assert_true(daos_handle_is_valid(oh));
+	}
+
+	/** KV must be closeable after repeated calls */
+	print_message("Closing KV handle\n");
+	rc = daos_kv_close(kv_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("all good\n");
+}
+
 static const struct CMUnitTest kv_tests[] = {
-	{"KV: Object Put/GET (blocking)",
-	 simple_put_get, async_disable, NULL},
-	{"KV: Object Put/GET with daos_ofeat_t flag(blocking)",
-	 simple_put_get_old, async_disable, NULL},
-	{"KV: Object Put/GET (non-blocking)",
-	 simple_put_get, async_enable, NULL},
-	{"KV: Object Conditional Ops (blocking)",
-	 kv_cond_ops, async_disable, NULL},
+    {"KV: Object Put/GET (blocking)", simple_put_get, async_disable, NULL},
+    {"KV: Object Put/GET with daos_ofeat_t flag(blocking)", simple_put_get_old, async_disable,
+     NULL},
+    {"KV: Object Put/GET (non-blocking)", simple_put_get, async_enable, NULL},
+    {"KV: Object Conditional Ops (blocking)", kv_cond_ops, async_disable, NULL},
+    {"KV: daos_kv2objhandle() correctness and reference leak (DAOS-19018)", kv_obj_handle,
+     async_disable, NULL},
 };
 
 int
