@@ -128,7 +128,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     command = " ".join([
         remote_env.to_export_str(),
         os.path.abspath(os.path.join(os.getcwd(), 'daos_build.sh')),
-        f"--python-cmd {sys.executable}",
+        f"--python-cmd python{sys.version_info.major}.{sys.version_info.minor}",
         f"--venv-dir {mount_dir}/venv",
         f"--build-dir {build_dir}",
         f"--mount-dir {mount_dir}",

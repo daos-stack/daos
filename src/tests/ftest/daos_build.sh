@@ -147,8 +147,8 @@ if [ "${rebuild}" = "false" ]; then
   run_cmd "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit
   run_cmd "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit
 
-  run_cmd "${python_cmd} -m pip install pip --upgrade" || exit
-  run_cmd "${python_cmd} -m pip install -r ${build_dir}/requirements-build.txt" || exit
+  run_cmd "python -m pip install pip --upgrade" || exit
+  run_cmd "python -m pip install -r ${build_dir}/requirements-build.txt" || exit
 fi
 
 # Debug
