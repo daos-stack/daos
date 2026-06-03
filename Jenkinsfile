@@ -153,20 +153,19 @@ void updateRunStage() {
     }
 
     // Update stage running based on commit pragmas
-    Map<String, String> commitPragmas = getCommitMessageKeyValues()
     println("updateRunStage: Checking commit pragmas from commit message:")
-    commitPragmas.each { key, value ->
+    env.pragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
         for (pragma in skipPragmas) {
             println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
-            if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
+            if (env.pragmas.get(pragma, '').toLowerCase() == 'true') {
                 runStage[stage] = false
                 reasons[stage] = "commit pragma ${pragma}: true"
                 break
-            } else if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
+            } else if (env.pragmas.get(pragma, '').toLowerCase() == 'false') {
                 runStage[stage] = true
                 reasons[stage] = "commit pragma ${pragma}: false"
                 break
@@ -187,32 +186,6 @@ void displayRunStage(Map reasons = [:]) {
             echo("Skipping:  ${stage} (reason: ${reason})")
         }
     }
-}
-
-// Extract the commit pragmas from the commit message and return them as a map
-Map<String, String> getCommitMessageKeyValues() {
-    String commitMessage = sh(
-        script: 'git log -1 --pretty=%B',
-        returnStdout: true
-    ).trim()
-
-    Map<String, String> pragmas = [:]
-
-    commitMessage.readLines().each { String line ->
-        // ^([A-Za-z0-9-]+):\s+(.+)$
-        // 1) key: letters/numbers/dashes
-        // 2) colon + at least one space
-        // 3) value: rest of line
-        def m = (line =~ /^([A-Za-z0-9-]+):\s+(.+)$/)
-        if (m.matches()) {
-            pragmas[m[0][1]] = m[0][2].trim()
-        }
-    }
-
-    // Ignore non-pragma lines that match the pragma pattern (i.e. Signed-off-by)
-    pragmas.remove('Signed-off-by')
-
-    return pragmas
 }
 
 // Get a list of skip commit pragmas to check for a given stage name
@@ -700,7 +673,7 @@ pipeline {
     }
 
     stages {
-        stage('Setup') {
+        stage('Prepare') {
             parallel {
                 stage('Set Description') {
                     steps {
@@ -711,19 +684,11 @@ pipeline {
                         }
                     }
                 }
-                stage('Update Run Stage') {
-                    steps {
-                        updateRunStage()
-                    }
-                }
-            }
-        }
-        stage('Prepare') {
-            parallel {
-                stage('Get Commit Message') {
+                stage('Configure Stage Actions') {
                     steps {
                         pragmasToEnv()
                         update_default_commit_pragmas()
+                        updateRunStage()
                     }
                 }
                 stage('Get RPM relval') {
