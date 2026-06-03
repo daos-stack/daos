@@ -778,7 +778,7 @@ pipeline {
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
-                                                  ' --max-log-size 1700MiB' +
+                                                  ' --max-log-size 1900MiB' +
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +

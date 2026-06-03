@@ -41,8 +41,8 @@ sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
 mkdir -p nlt_logs
-sudo mount -t tmpfs tmpfs nlt_logs
-sudo chown jenkins:jenkins nlt_logs
+#sudo mount -t tmpfs tmpfs nlt_logs
+#sudo chown jenkins:jenkins nlt_logs
 
 TMPDIR="$(pwd)/nlt_logs" \
     HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
