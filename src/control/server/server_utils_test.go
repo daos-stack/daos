@@ -549,6 +549,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				return sc.WithAllowTHP(true).
 					WithEngines(pmemEngine(0), pmemEngine(1))
 			},
+			hugepagesFree:  8190,
+			hugepagesTotal: 8190,
 			expPrepCalls: []storage.BdevPrepareRequest{
 				defCleanDualEngine,
 				{
@@ -559,6 +561,7 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD: true,
 				},
 			},
+			expMemSize:      16384,
 			expHugepageSize: 2,
 			// Allocation change logged.
 			expNotice: true,
@@ -1025,8 +1028,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD:    true,
 				},
 			},
-			// mem_size engine parameter is hower "hugepagesFree" value
-			expMemSize:      16360,
+			// mem_size engine parameter (8192 * // 2MiB), > "hugepagesFree" value
+			expMemSize:      16384,
 			expHugepageSize: 2,
 			// No error returned, notice logged only, engine-side mem threshold
 			// validation instead.
@@ -1105,6 +1108,30 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 				},
 			},
 			expMemSize:      16384, // (16384 hugepages / 2 engines) * 2mib size
+			expHugepageSize: 2,
+		},
+		"config hugepages differs from target-based calculation": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				// Config specifies 10240 hugepages but engine has 16 targets.
+				// Memsize should be calculated from targets (16 * 1GiB / 2MiB = 8192),
+				// not from config value.
+				return sc.WithNrHugepages(10240).
+					WithEngines(pmemEngine(0))
+			},
+			hugepagesFree:  10240,
+			hugepagesTotal: 10240,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				defCleanSingleEngine,
+				{
+					TargetUser:   username,
+					PCIAllowList: test.MockPCIAddr(0),
+					HugeNodes:    "nodes_hp[0]=10240",
+					EnableVMD:    true,
+				},
+			},
+			// Memsize calculated from target count (16 targets * 1GiB/tgt / 2MiB = 8192 pages)
+			// 8192 hugepages * 2MiB = 16384 MiB, NOT from config's 10240 pages.
+			expMemSize:      16384,
 			expHugepageSize: 2,
 		},
 		// VMD not enabled in prepare request.

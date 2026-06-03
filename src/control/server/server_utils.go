@@ -525,21 +525,18 @@ func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) e
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := nrPagesFree * pageSizeMiB
 
-	// If free hugepage mem is not enough to meet requested number of hugepages, log notice and
-	// set mem_size engine parameter to free value. Otherwise set to requested value.
-	memSizeMiB := memSizeReqMiB
+	// If free hugepage mem is not enough to meet requested number of hugepages, log notice.
 	if memSizeFreeMiB < memSizeReqMiB {
 		srv.log.Noticef("The amount of hugepage memory available for engine %d (%s, %d "+
 			"hugepages) does not meet what is required (%s, %d hugepages)", eIdx,
 			humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)), nrPagesFree,
 			humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)), nrPagesRequired)
-		memSizeMiB = memSizeFreeMiB
 	}
 
 	// Set hugepage_size (MiB) values based on hugepage info.
 	srv.log.Debugf("Engine %d Per-engine MemSize:%dMiB, HugepageSize:%dMiB (meminfo: %s)",
-		ei.Index(), memSizeMiB, pageSizeMiB, smi.Summary())
-	ei.setMemSize(memSizeMiB)
+		eIdx, memSizeReqMiB, pageSizeMiB, smi.Summary())
+	ei.setMemSize(memSizeReqMiB)
 	ei.setHugepageSz(pageSizeMiB)
 
 	return nil
