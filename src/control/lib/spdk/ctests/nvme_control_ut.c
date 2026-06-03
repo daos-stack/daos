@@ -17,12 +17,16 @@
 #include "nvme_internal.h"
 
 #include "../include/nvme_control_common.h"
+#include "../include/nvme_control.h"
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
+#define MAX_MOCK_PCI_DEVS 16
+
 static struct ret_t	*test_ret;
+static int               mock_pci_dev_count;
 
 /**
  * ==============================
@@ -85,15 +89,18 @@ mock_copy_ctrlr_data(struct nvme_ctrlr_t *ctrlr, const struct spdk_nvme_ctrlr_da
 	return 0;
 }
 
+/*
+ * Return a unique device per call from a static local pool (indexed by
+ * mock_pci_dev_count, reset in teardown).
+ */
 static struct spdk_pci_device *
 mock_spdk_nvme_ctrlr_get_pci_device(struct spdk_nvme_ctrlr *ctrlr)
 {
-	struct spdk_pci_device *dev;
-
-	dev = calloc(1, sizeof(struct spdk_pci_device));
+	static struct spdk_pci_device devs[MAX_MOCK_PCI_DEVS];
 
 	(void)ctrlr;
-	return dev;
+	assert_true(mock_pci_dev_count < MAX_MOCK_PCI_DEVS);
+	return &devs[mock_pci_dev_count++];
 }
 
 static int
@@ -291,6 +298,7 @@ teardown(void **state)
 	free(test_ret);
 	test_ret = NULL;
 	cleanup(false);
+	mock_pci_dev_count = 0;
 
 	return 0;
 }
@@ -299,15 +307,12 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test_setup_teardown(test_discover_null_controllers,
-						setup, teardown),
-		cmocka_unit_test_setup_teardown(test_discover_set_controllers,
-						setup, teardown),
-		cmocka_unit_test_setup_teardown(test_discover_probe_fail, setup,
-						teardown),
-		cmocka_unit_test_setup_teardown(test_collect, setup, teardown),
-		cmocka_unit_test_setup_teardown(test_get_controller, setup,
-						teardown),
+	    cmocka_unit_test_setup_teardown(test_discover_null_controllers, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_discover_set_controllers, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_discover_probe_fail, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_collect, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_get_controller, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_daos_spdk_init_pci_freed, setup, teardown),
 	};
 
 	return cmocka_run_group_tests_name("control_nvme_control_ut", tests,
