@@ -409,16 +409,16 @@ to the next section for more information.
 
 ### SSDs
 
-Performance of SSDs can be measured directly with SPDK via the spdk_nvme_perf
+Performance of SSDs can be measured directly with SPDK via the daos_spdk_nvme_perf
 tool. It can be run to test bandwidth in a non-destructive way as follows:
 
 ```bash
-spdk_nvme_perf -q 16 -o 1048576 -w read -c 0xff -t 60
+daos_spdk_nvme_perf -q 16 -o 1048576 -w read -c 0xff -t 60
 ```
 
 IOPS can be measured with the following command:
 ```bash
-spdk_nvme_perf -q 16 -o 4096 -w read -c 0xff -t 60
+daos_spdk_nvme_perf -q 16 -o 4096 -w read -c 0xff -t 60
 ```
 
 `-q` is used to control the queue depth, `-o` for the I/O size, `-w` is the
@@ -438,7 +438,7 @@ form of a core mash. `-c 0xff` uses the first 8 cores.
 !!! note
     On storage node using Intel VMD, the `--enable-vmd` option must be specified.
 
-Many more options are available. Please run `spdk_nvme_perf` to see the list of
+Many more options are available. Please run `daos_spdk_nvme_perf` to see the list of
 parameters that can be tweaked.
 
 ## End-to-end Performance
