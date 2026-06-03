@@ -129,12 +129,12 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         remote_env.to_export_str(),
         os.path.abspath(os.path.join(os.getcwd(), 'daos_build.sh')),
         f"--python-cmd {sys.executable}",
-        f"--python-venv {mount_dir}/venv",
+        f"--venv-dir {mount_dir}/venv",
         f"--build-dir {build_dir}",
+        f"--mount-dir {mount_dir}",
         f"--git-checkout {__get_daos_build_checkout(self)}",
         f"--distro {distro}",
         f"--build-jobs {build_jobs}",
-        "--filesystem-test",
         "--debug"
     ])
     timeout = 10800  # 3 hours

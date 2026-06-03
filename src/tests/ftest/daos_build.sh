@@ -22,24 +22,24 @@ show_help() {
     echo "Usage: $0 [options]"
     echo "Options:"
     echo "  -p, --python-cmd <val>    Python command to use (default: python3)"
-    echo "  -v, --python-venv <val>   Path to Python virtual environment (default: /tmp/daos_build/venv)"
+    echo "  -v, --venv-dir <val>      Path to Python virtual environment (default: /tmp/daos_build/venv)"
     echo "  -b, --build-dir <val>     Directory to clone and build DAOS (default: /tmp/daos_build/daos)"
+    echo "  -m, --mount-dir <val>     Optional mount directory to use for filesystem tests (default: none)"
     echo "  -g, --git-checkout <val>  Git branch or commit to checkout (default: origin/master)"
     echo "  -d, --distro <val>        Linux distribution for installing dependencies (default: el9)"
     echo "  -j, --build-jobs <val>    Number of parallel jobs for building DAOS (default: 30)"
-    echo "  -f, --filesystem-test     Whether to run filesystem tests (default: false)"
     echo "  -r, --rebuild             Whether to skip setup of build and venv directories (default: false)"
     echo "  -h, --help                Show this help message and exit"
 }
 
 # Argument defaults
 python_cmd="python3"
-python_venv="/tmp/daos_build/venv"
+venv_dir="/tmp/daos_build/venv"
 build_dir="/tmp/daos_build/daos"
+mount_dir=""
 git_checkout="origin/master"
 distro="el9"
 build_jobs="30"
-filesystem_test="false"
 rebuild="false"
 debug="false"
 
@@ -50,12 +50,16 @@ while [[ $# -gt 0 ]]; do
       python_cmd="$2"
       shift 2
       ;;
-    -v|--python-venv)
-      python_venv="$2"
+    -v|--venv-dir)
+      venv_dir="$2"
       shift 2
       ;;
     -b|--build-dir)
       build_dir="$2"
+      shift 2
+      ;;
+    -m|--mount-dir)
+      mount_dir="$2"
       shift 2
       ;;
     -g|--git-checkout)
@@ -69,10 +73,6 @@ while [[ $# -gt 0 ]]; do
     -j|--build-jobs)
       build_jobs="$2"
       shift 2
-      ;;
-    -f|--filesystem-test)
-      filesystem_test="true"
-      shift 1
       ;;
     -r|--rebuild)
       rebuild="true"
@@ -118,12 +118,14 @@ run_cmd() {
     return 0
 }
 
+full_start=$(date +%s)
+
 # Create a Python virtual environment and install python build dependencies
 if [ "${rebuild}" = "false" ]; then
-    run_cmd "rm -rf ${python_venv}" || exit
-    run_cmd "${python_cmd} -m venv ${python_venv}" || exit
+    run_cmd "rm -rf ${venv_dir}" || exit
+    run_cmd "${python_cmd} -m venv ${venv_dir}" || exit
 
-    cat <<EOF > "${python_venv}"/pip.conf
+    cat <<EOF > "${venv_dir}"/pip.conf
 [global]
     progress_bar = off
     no_color = true
@@ -133,7 +135,7 @@ EOF
 fi
 
 # Run in the python virtual environment for the rest of the script
-run_cmd "source ${python_venv}/bin/activate" || exit
+run_cmd "source ${venv_dir}/bin/activate" || exit
 
 # Clone the DAOS repository and install RPM dependencies for the build
 if [ "${rebuild}" = "false" ]; then
@@ -153,6 +155,9 @@ fi
 if [ "${debug}" = "true" ]; then
   # Check that all required Python packages are installed and available in PATH
   awk '!/^\s*($|#)/ {print $1}' "${build_dir}/requirements-build.txt" | while read -r pkg; do
+    if [ "${pkg}" = "pyelftools" ]; then
+      continue
+    fi
     run_cmd "which ${pkg}" || true
   done
 fi
@@ -160,7 +165,7 @@ fi
 # Build DAOS dependencies
 run_cmd "scons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
 
-if [ "${filesystem_test}" = "true" ]; then
+if [[ -n ${mount_dir-} ]]; then
   # Run filesystem tests to verify the build.
   run_cmd "daos filesystem query ${mount_dir}" || exit
   run_cmd "daos filesystem evict ${build_dir}" || exit
@@ -171,9 +176,11 @@ fi
 run_cmd "scons -C ${build_dir} --jobs ${build_jobs}" || exit
 run_cmd "scons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
 
-if [ "${filesystem_test}" = "true" ]; then
+if [[ -n ${mount_dir-} ]]; then
   run_cmd "daos filesystem query ${mount_dir}" || exit
 fi
 
-echo "DAOS build and installation completed successfully"
+full_end=$(date +%s)
+full_time=$((full_end - full_start))
+echo "DAOS build and installation completed successfully in ${full_time}s"
 exit 0
