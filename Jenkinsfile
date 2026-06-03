@@ -156,13 +156,20 @@ void updateRunStage() {
     Map<String, String> commitPragmas = [:]
     if (env.pragmas && env.pragmas != '{}') {
         // Convert the env.pragmas string back into a Map
-        commitPragmas = env.pragmas
-            .replaceAll(/^\{|\}$/, '')
-            .split(/,\s*/)
-            .collectEntries { entry ->
-                def (key, value) = entry.split('=', 2)*.trim()
-                [(key): value]
-            } as Map<String, String>
+        env.pragmas.replaceAll(/^\{|\}$/, '').split(/,\s*/).each { line ->
+            String key, value
+            try {
+                (key, value) = line.split(':', 2)
+                if (key.contains(' ')) {
+                    // this returns from the .each closure, not the method
+                    return
+                }
+                commitPragmas[key.toLowerCase()] = value.trim()
+            /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
+            } catch (ArrayIndexOutOfBoundsException ignored) {
+                // ignore and move on to the next line
+            }
+        }
     }
     println("updateRunStage: Checking commit pragmas from commit message:")
     commitPragmas.each { key, value ->
