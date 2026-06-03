@@ -5793,6 +5793,8 @@ class AllocFailTest():
         if self.single_process:
             max_child = 1
 
+        max_child = 1
+
         print(f'Maximum number of spawned tests will be {max_child}')
 
         active = []
