@@ -4943,8 +4943,26 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 			uint32_t     dup_data_len = 0;
 			char        *dup_buf;
 
-			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i])
+			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i]) {
+				/* SGL was duplicated (e.g. to strip zero-buf-len
+				 * entries) but has no merged/allocated buffers.
+				 * Dup IOVs share the same iov_buf pointers as the
+				 * originals, so fetch data is already in place.
+				 * Copy iov_len back so the caller sees actual bytes
+				 * read, and update sg_nr_out accordingly.
+				 */
+				uint32_t dup_idx = 0;
+
+				for (j = 0; j < sg_orig->sg_nr && dup_idx < sg_dup->sg_nr_out;
+				     j++) {
+					iov = &sg_orig->sg_iovs[j];
+					if (skip_sgl_iov(false, iov))
+						continue;
+					iov->iov_len = sg_dup->sg_iovs[dup_idx++].iov_len;
+				}
+				sg_orig->sg_nr_out = j;
 				continue;
+			}
 
 			D_ASSERT(ctx->merged_bitmaps[i] != NULL);
 			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out; j++) {
@@ -4988,7 +5006,6 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 	sgls_dup_free(ctx, obj_auxi->iod_nr);
 	D_FREE(ctx);
 	obj_auxi->rw_args.merge_ctx = NULL;
-	api_args                    = dc_task_get_args(obj_auxi->obj_task);
 	api_args                    = dc_task_get_args(obj_auxi->obj_task);
 	api_args->sgls              = obj_auxi->reasb_req.orr_usgls;
 }
