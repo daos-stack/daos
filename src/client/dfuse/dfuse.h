@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -287,6 +287,12 @@ struct dfuse_readdir_entry {
 	 * This could in theory be a boolean.
 	 */
 	off_t dre_next_offset;
+
+	/* Fixed-size inode metadata returned with the directory entry, if valid */
+	struct dfs_readdir_attrs dre_attrs;
+
+	/* True when dre_attrs was fetched together with the name */
+	bool                     dre_attrs_valid;
 };
 
 /* Readdir entry as saved by the cache.  These are backwards looking from the current position

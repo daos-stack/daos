@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,6 +85,12 @@ dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize);
 int
 dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name);
 
+/**
+ * Query the max epoch of an opened DFS object without exposing dfs_obj_t internals to callers.
+ */
+int
+dfs_obj_query_max_epoch(dfs_obj_t *obj, daos_epoch_t *epoch);
+
 /*
  * Internal routine to recreate a POSIX container if it was ever corrupted as part of a catastrophic
  * recovery event.
@@ -101,6 +108,39 @@ dfs_relink_root(daos_handle_t coh);
 /** Internal routine for async ostat.*/
 int
 dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev);
+
+/** Fixed-size inode metadata returned by batched internal readdir helpers. */
+struct dfs_readdir_attrs {
+	mode_t        dra_mode;
+	daos_obj_id_t dra_oid;
+};
+
+/**
+ * Lightweight readdir helper: return the mode and object ID of an entry without opening the
+ * underlying object. Unlike dfs_lookup_rel(), this does NOT issue an array/object open RPC per
+ * entry, so it is meant for callers (e.g. plain readdir) that only need the entry type and inode
+ * number and do not need an open object handle or the file size. The backing object is therefore
+ * not validated.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the entry to look up.
+ * \param[out]	mode	Mode (permission and type bits) of the entry.
+ * \param[out]	oid	Object ID of the entry.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_lookup_rel_entry(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t *mode,
+		     daos_obj_id_t *oid);
+
+/**
+ * Internal readdir helper that batches name + mode + oid fetches using the pipeline enumeration
+ * path without opening each object.
+ */
+int
+dfs_readdirx(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, struct dirent *dirs,
+	     struct dfs_readdir_attrs *attrs, uint64_t *nr_scanned);
 
 #if defined(__cplusplus)
 }

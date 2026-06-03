@@ -1775,3 +1775,18 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 	oid_cp(oid, obj->oid);
 	return 0;
 }
+
+int
+dfs_obj_query_max_epoch(dfs_obj_t *obj, daos_epoch_t *epoch)
+{
+	int rc;
+
+	if (obj == NULL || epoch == NULL)
+		return EINVAL;
+
+	rc = daos_obj_query_max_epoch(obj->oh, DAOS_TX_NONE, epoch, NULL);
+	if (rc != 0)
+		return daos_der2errno(rc);
+
+	return 0;
+}

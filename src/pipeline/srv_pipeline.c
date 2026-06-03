@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,8 +54,10 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		D_ASSERTF(false, "unknown/unsupported type %d\n", type);
 		return -DER_INVAL;
 	}
-	if (d_key->iov_len != 0) /** one dkey at a time */
-		return 1;
+	if (d_key->iov_len != 0) { /** one dkey at a time */
+		*acts |= VOS_ITER_CB_EXIT;
+		return 0;
+	}
 	if (entry->ie_key.iov_len > 0)
 		*d_key = entry->ie_key;
 
@@ -91,7 +94,10 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 
 	/** iterating over dkeys only */
 	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL, d_key, NULL);
-	D_DEBUG(DB_IO, "enum type %d rc " DF_RC "\n", type, DP_RC(rc));
+	if (rc < 0)
+		D_DEBUG(DB_IO, "enum type %d rc " DF_RC "\n", type, DP_RC(rc));
+	else if (rc > 0)
+		D_DEBUG(DB_IO, "enum type %d rc %d\n", type, rc);
 	if (rc < 0)
 		return rc;
 	if (d_key->iov_len == 0) /** d_key not found */
@@ -797,6 +803,11 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	uint32_t                 nr_kds_out  = 0;
 	uint32_t                 nr_iods_out = 0;
 	daos_pipeline_stats_t    stats       = {0};
+	bool                     free_kds    = true;
+	bool                     free_recxs  = true;
+	bool                     keys_alloc  = false;
+	bool                     recx_alloc  = false;
+	bool                     aggr_alloc  = false;
 
 	pri = crt_req_get(rpc);
 	D_ASSERT(pri != NULL);
@@ -825,12 +836,15 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	rc = alloc_iovs_in_sgl(&pri->pri_sgl_keys);
 	if (rc != 0)
 		D_GOTO(exit0, rc);
+	keys_alloc = true;
 	rc = alloc_iovs_in_sgl(&pri->pri_sgl_recx);
 	if (rc != 0)
 		D_GOTO(exit0, rc);
+	recx_alloc = true;
 	rc = alloc_iovs_in_sgl(&pri->pri_sgl_agg);
 	if (rc != 0)
 		D_GOTO(exit0, rc);
+	aggr_alloc = true;
 
 	/** -- calling pipeline run */
 
@@ -870,6 +884,10 @@ exit:
 
 		/** handle any data that has to be transferred in bulk (RDMA) */
 		rc = pipeline_bulk_transfer(rpc);
+		if (pri->pri_kds_bulk != NULL && nr_kds_out > 0)
+			free_kds = false;
+		if (pri->pri_iods_bulk != NULL && nr_iods_out > 0)
+			free_recxs = false;
 	}
 
 	/** -- send RPC */
@@ -880,9 +898,11 @@ exit:
 		D_ERROR("send reply failed: " DF_RC "\n", DP_RC(rc));
 
 	/** free memory after sending RPC */
-	D_FREE(kds);
-	D_FREE(recx_size);
-	d_sgl_fini(&pri->pri_sgl_keys, true);
-	d_sgl_fini(&pri->pri_sgl_recx, true);
-	d_sgl_fini(&pri->pri_sgl_agg, true);
+	if (free_kds)
+		D_FREE(kds);
+	if (free_recxs)
+		D_FREE(recx_size);
+	d_sgl_fini(&pri->pri_sgl_keys, keys_alloc);
+	d_sgl_fini(&pri->pri_sgl_recx, recx_alloc);
+	d_sgl_fini(&pri->pri_sgl_agg, aggr_alloc);
 }
