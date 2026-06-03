@@ -158,7 +158,7 @@ if [ "${debug}" = "true" ]; then
     if [ "${pkg}" = "pyelftools" ]; then
       continue
     fi
-    run_cmd "which ${pkg}" || true
+    run_cmd "which ${pkg}" || exit
   done
 fi
 
