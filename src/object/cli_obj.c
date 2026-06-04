@@ -4710,7 +4710,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	d_sg_list_t         *sg, *sg_dup;
 	d_iov_t             *iov, *iov_dup;
 	bool                 dup = false;
-	uint32_t             i, j, k, sgl_idx, count = 0, bitmap_sz;
+	uint32_t             i, j, k, sgl_idx, bitmap_sz;
 	int                  rc  = 0;
 	struct sgl_merge_ctx ctx = {0};
 	bool                 merge_iov =
@@ -4725,6 +4725,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	for (i = 0; i < args->nr; i++) {
 		iod = &args->iods[i];
 		sg                  = &sgls[i];
+		uint32_t valid_iov_count = 0;
 		uint32_t frag_chain = 0;
 		uint32_t frag_start = 0;
 
@@ -4752,7 +4753,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			/* Detect need for iov_buf_len normalization */
 			if (update && iov->iov_len < iov->iov_buf_len)
 				dup = true;
-			count++;
+			valid_iov_count++;
 
 			/* Skip merging logic for single-IOV SGLs */
 			if (sg->sg_nr == 1)
@@ -4784,7 +4785,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			}
 		}
 		/* Validate non-empty SGL for non-ANY size requests */
-		if (count == 0 && iod->iod_size != DAOS_REC_ANY) {
+		if (valid_iov_count == 0 && iod->iod_size != DAOS_REC_ANY) {
 			DL_ERROR(-DER_INVAL, "invalid args, sgl contained only 0 length entries");
 			rc = -DER_INVAL;
 			goto cleanup;

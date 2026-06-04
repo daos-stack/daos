@@ -1,5 +1,5 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
+# (C) Copyright 2025-2026 Google LLC
 root="$(realpath "$(dirname "$(dirname "$(dirname "${BASH_SOURCE[0]}")")")")"
 . "${root}/utils/sl/setup_local.sh" > /dev/null
 unset tmp
@@ -126,7 +126,9 @@ clean_bin() {
     dbgpath="${dbgroot}/${dname}"
     cp "${file}" "${dbgpath}"
     strip --only-keep-debug "${dbgpath}" > /dev/null 2>&1
-    strip "${file}" > /dev/null 2>&1 || true
+    if [[ -z "${NO_STRIP:-}" ]]; then
+      strip "${file}" > /dev/null 2>&1 || true
+    fi
     dbg_list+=("${dbgpath}")
   done
 }
@@ -170,7 +172,7 @@ build_package() {
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
-  fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
+  fpm --verbose -s "${PACKAGE_TYPE}" -t "${output_type}" \
   -p "${pkgname}" \
   --name "${name}" \
   --license "${LICENSE}" \

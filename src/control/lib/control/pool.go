@@ -110,6 +110,14 @@ func convertPoolProps(in []*daos.PoolProperty, setProp bool) ([]*mgmtpb.PoolProp
 		if err != nil {
 			return nil, err
 		}
+		if byteVal, err := prop.Value.GetBytes(); err == nil {
+			// Byte values bypass the string round-trip validation
+			// below because base64-encoding and re-parsing would
+			// fail for properties without a byte-aware handler.
+			out[i].SetValueBytes(byteVal)
+			continue
+		}
+
 		if setProp {
 			if err := p.SetValue(prop.StringValue()); err != nil {
 				return nil, err
@@ -791,6 +799,8 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 			prop.Value.SetString(v.Strval)
 		case *mgmtpb.PoolProperty_Numval:
 			prop.Value.SetNumber(v.Numval)
+		case *mgmtpb.PoolProperty_Byteval:
+			prop.Value.SetBytes(v.Byteval)
 		default:
 			return nil, errors.Errorf("unable to represent response value %+v", v)
 		}

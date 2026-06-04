@@ -2567,12 +2567,15 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
-	D_ASSERT(ioc->ic_obj != NULL);
-	if (unlikely(vos_obj_is_evicted(ioc->ic_obj))) {
-		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted during update, need to restart TX.\n",
+	if (ioc->ic_obj == NULL) {
+		err = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_obj);
+		if (err != 0)
+			goto abort;
+	} else if (unlikely(vos_obj_is_evicted(ioc->ic_obj))) {
+		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted during update, need to retry.\n",
 			DP_UOID(ioc->ic_oid));
 
-		D_GOTO(abort, err = -DER_TX_RESTART);
+		D_GOTO(abort, err = -DER_AGAIN);
 	}
 
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
@@ -2755,9 +2758,12 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto error;
 	}
 
-	rc = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_obj);
-	if (rc != 0)
-		goto error;
+	/* Hold the object for the evictable md-on-ssd phase2 pool */
+	if (vos_pool_is_evictable(vos_cont2pool(ioc->ic_cont))) {
+		rc = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_obj);
+		if (rc != 0)
+			goto error;
+	}
 
 	rc = dkey_update_begin(ioc);
 	if (rc != 0) {
