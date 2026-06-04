@@ -62,7 +62,7 @@ const char	       *dss_nvme_conf;
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
 
-/** NVMe mem_size for SPDK memory allocation */
+/** NVMe mem_size for SPDK memory allocation (MiB) */
 unsigned int		dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation */
