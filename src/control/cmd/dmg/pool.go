@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -191,20 +191,20 @@ type poolCreateCmd struct {
 	} `positional-args:"yes"`
 }
 
-func ratio2Percentage(log logging.Logger, scm, nvme float64) (p float64) {
+func ratio2Percentage(log logging.Logger, tier1, tier2 float64) (p float64) {
 	p = 100.00
 	min := storage.MinScmToNVMeRatio * p
 
-	if nvme > 0 {
-		p *= scm / nvme
+	if tier2 > 0 {
+		p *= tier1 / (tier1 + tier2)
 		if p < min {
-			log.Noticef("SCM:NVMe ratio is less than %0.2f%%, DAOS performance "+
+			log.Noticef("storage tier ratio is less than %0.2f%%, DAOS performance "+
 				"will suffer!", min)
 		}
 		return
 	}
 
-	log.Notice("Creating DAOS pool without NVME storage")
+	log.Notice("Creating DAOS pool with only a single tier of storage")
 	return
 }
 
@@ -261,7 +261,8 @@ func (cmd *poolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
 
 	scmPercentage := ratio2Percentage(cmd.Logger, req.TierRatio[0], req.TierRatio[1])
 	msg := fmt.Sprintf("Creating DAOS pool with automatic storage allocation: "+
-		"%s total, %0.2f%% ratio", humanize.Bytes(req.TotalBytes), scmPercentage)
+		"%s total, %0.2f%% storage tier ratio", humanize.Bytes(req.TotalBytes),
+		scmPercentage)
 	if req.NumRanks > 0 {
 		msg += fmt.Sprintf(" with %d ranks", req.NumRanks)
 	}
@@ -282,7 +283,7 @@ func (cmd *poolCreateCmd) storageManualMdOnSsd(req *control.PoolCreateReq) error
 	}
 
 	msg := fmt.Sprintf("Creating DAOS pool in MD-on-SSD mode with manual per-engine storage "+
-		"allocation: %s metadata, %s data (%0.2f%% storage ratio) and %0.2f%% "+
+		"allocation: %s metadata, %s data (%0.2f%% storage tier ratio) and %0.2f%% "+
 		"memory-file:meta-blob size ratio", humanize.Bytes(metaBytes),
 		humanize.Bytes(dataBytes), 100.00*(float64(metaBytes)/float64(dataBytes)),
 		100.00*req.MemRatio)
@@ -311,7 +312,7 @@ func (cmd *poolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 	req.TierBytes = []uint64{scmBytes, nvmeBytes}
 
 	msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
-		" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
+		" %s SCM, %s NVMe (%0.2f%% storage tier ratio)", humanize.Bytes(scmBytes),
 		humanize.Bytes(nvmeBytes),
 		ratio2Percentage(cmd.Logger, float64(scmBytes), float64(nvmeBytes)))
 	cmd.Info(msg)
@@ -888,7 +889,7 @@ func (cmd *poolGetPropCmd) Execute(_ []string) error {
 // DAOS pool.
 type poolGetACLCmd struct {
 	poolCmd
-	File    string `short:"o" long:"outfile" required:"0" description:"Output ACL to file"`
+	File    string `short:"O" long:"outfile" required:"0" description:"Output ACL to file"`
 	Force   bool   `short:"f" long:"force" required:"0" description:"Allow to clobber output file"`
 	Verbose bool   `short:"v" long:"verbose" required:"0" description:"Add descriptive comments to ACL entries"`
 }

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,17 +95,17 @@ read_snap_list(struct rdb_tx *tx, struct cont *cont, daos_epoch_t **buf, int *co
 
 int
 ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
+			struct container_hdl *hdl, crt_rpc_t *rpc)
 {
-	struct cont_epoch_op_in	*in = crt_req_get(rpc);
+	struct cont_op_in       *in = crt_req_get(rpc);
 	daos_epoch_t             epoch;
 	uint64_t                 opts;
 	int			 rc = 0;
 
-	cont_epoch_op_in_get_data(rpc, CONT_EPOCH_AGGREGATE, cont_proto_ver, &epoch, &opts);
+	cont_epoch_op_in_get_data(rpc, &epoch, &opts);
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, epoch);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, epoch);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -124,7 +124,7 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct 
 
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p epoch=" DF_U64 ", " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, epoch, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, epoch, DP_RC(rc));
 	return rc;
 }
 
@@ -288,17 +288,16 @@ out:
 
 int
 ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver,
-		    struct ds_pool_svc_op_val *op_val)
+		    struct container_hdl *hdl, crt_rpc_t *rpc, struct ds_pool_svc_op_val *op_val)
 {
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
+	struct cont_op_in              *in  = crt_req_get(rpc);
+	struct cont_epoch_op_v8_out    *out = crt_reply_get(rpc);
 	daos_epoch_t			snap_eph;
 	uint64_t                        opts;
 	int				rc;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc %p\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -308,32 +307,32 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont
 		goto out;
 	}
 
-	cont_epoch_op_in_get_data(rpc, CONT_SNAP_CREATE, cont_proto_ver, &snap_eph, &opts);
+	cont_epoch_op_in_get_data(rpc, &snap_eph, &opts);
 
-	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, opts, rpc->cr_ctx, &snap_eph);
+	rc = snap_create_bcast(tx, cont, in->ci_hdl, opts, rpc->cr_ctx, &snap_eph);
 	if (rc == 0) {
 		out->ceo_epoch = snap_eph;
 		*(daos_epoch_t *)op_val->ov_resvd = snap_eph;
 	}
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 
 int
 ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
+			struct container_hdl *hdl, crt_rpc_t *rpc)
 {
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+	struct cont_op_in              *in = crt_req_get(rpc);
 	uint64_t                        epoch;
 	uint64_t                        opts;
 	int				rc;
 	d_iov_t				key;
 	d_iov_t				value;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc %p\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -343,7 +342,7 @@ ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct 
 		goto out;
 	}
 
-	cont_epoch_op_in_get_data(rpc, CONT_SNAP_OIT_CREATE, cont_proto_ver, &epoch, &opts);
+	cont_epoch_op_in_get_data(rpc, &epoch, &opts);
 
 	d_iov_set(&key, &epoch, sizeof(daos_epoch_t));
 	d_iov_set(&value, NULL, 0);
@@ -354,26 +353,26 @@ ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct 
 		goto out;
 	}
 
-	rc = snap_oit_create(tx, cont, in->cei_op.ci_hdl, DAOS_SNAP_OPT_OIT, rpc->cr_ctx, &epoch);
+	rc = snap_oit_create(tx, cont, in->ci_hdl, DAOS_SNAP_OPT_OIT, rpc->cr_ctx, &epoch);
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 
 int
 ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			 struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
+			 struct container_hdl *hdl, crt_rpc_t *rpc)
 {
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+	struct cont_op_in              *in = crt_req_get(rpc);
 	uint64_t                        epoch;
 	uint64_t                        opts;
 	int				rc;
 	d_iov_t				key;
 	d_iov_t				value;
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc %p\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -383,7 +382,7 @@ ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct
 		goto out;
 	}
 
-	cont_epoch_op_in_get_data(rpc, CONT_SNAP_OIT_DESTROY, cont_proto_ver, &epoch, &opts);
+	cont_epoch_op_in_get_data(rpc, &epoch, &opts);
 
 	d_iov_set(&key, &epoch, sizeof(daos_epoch_t));
 	d_iov_set(&value, NULL, 0);
@@ -411,15 +410,15 @@ ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct
 
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 
 int
 ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		     struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
+		     struct container_hdl *hdl, crt_rpc_t *rpc)
 {
-	struct cont_epoch_op_in		*in = crt_req_get(rpc);
+	struct cont_op_in               *in = crt_req_get(rpc);
 	uint64_t                         epoch;
 	uint64_t                         opts;
 	d_iov_t				 key;
@@ -427,10 +426,10 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct con
 	uint32_t			 nsnapshots;
 	int				 rc;
 
-	cont_epoch_op_in_get_data(rpc, CONT_SNAP_DESTROY, cont_proto_ver, &epoch, &opts);
+	cont_epoch_op_in_get_data(rpc, &epoch, &opts);
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, epoch);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, epoch);
 
 	/* Verify the handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -489,28 +488,28 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct con
 	}
 
 	D_DEBUG(DB_MD, DF_CONT ": deleted snapshot [%lu]\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), epoch);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), epoch);
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 
 int
 ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-			 struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
+			 struct container_hdl *hdl, crt_rpc_t *rpc)
 {
-	daos_epoch_t                      epoch;
-	d_iov_t				  key;
-	d_iov_t				  value;
-	int				  rc;
-	struct cont_snap_oit_oid_get_in	 *in = crt_req_get(rpc);
-	struct cont_snap_oit_oid_get_out *out = crt_reply_get(rpc);
+	daos_epoch_t                         epoch;
+	d_iov_t                              key;
+	d_iov_t                              value;
+	int                                  rc;
+	struct cont_op_in                   *in  = crt_req_get(rpc);
+	struct cont_snap_oit_oid_get_v8_out *out = crt_reply_get(rpc);
 
-	cont_snap_oit_oid_get_in_get_data(rpc, CONT_SNAP_OIT_OID_GET, cont_proto_ver, &epoch);
+	cont_snap_oit_oid_get_in_get_data(rpc, &epoch);
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ogi_op.ci_uuid), rpc, epoch);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, epoch);
 
 	/* Verify the handle has read access */
 	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
@@ -530,7 +529,7 @@ ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct
 	}
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ogi_op.ci_uuid), rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 
@@ -638,17 +637,16 @@ out:
 
 int
 ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		  struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
+		  struct container_hdl *hdl, crt_rpc_t *rpc)
 {
-	struct cont_snap_list_in	*in		= crt_req_get(rpc);
-	struct cont_snap_list_out	*out		= crt_reply_get(rpc);
-	crt_bulk_t                       bulk;
-	int				 snap_count;
-	int				 rc;
+	struct cont_op_in            *in  = crt_req_get(rpc);
+	struct cont_snap_list_v8_out *out = crt_reply_get(rpc);
+	crt_bulk_t                    bulk;
+	int                           snap_count;
+	int                           rc;
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid), rpc,
-		DP_UUID(in->sli_op.ci_hdl));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl));
 
 	/* Verify the handle has read access */
 	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
@@ -658,7 +656,7 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *
 		goto out;
 	}
 
-	cont_snap_list_in_get_data(rpc, CONT_SNAP_LIST, cont_proto_ver, &bulk);
+	cont_snap_list_in_get_data(rpc, &bulk);
 
 	rc = xfer_snap_list(tx, pool_hdl, cont, hdl, rpc, bulk, &snap_count);
 	if (rc)
@@ -667,7 +665,7 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *
 
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid), rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,25 +11,28 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
-	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (out []byte, outErr error) {
 	// TODO: Remove if we never add request fields?
-	req := new(srvpb.CheckListPoolReq)
+	req := new(sharedpb.CheckListPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerListPools: %+v", req)
 
-	resp := new(srvpb.CheckListPoolResp)
+	resp := new(sharedpb.CheckListPoolResp)
 	defer func() {
 		mod.log.Debugf("CheckerListPools resp: %+v", resp)
 		out, outErr = proto.Marshal(resp)
@@ -42,7 +46,7 @@ func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (ou
 	}
 
 	for _, ps := range pools {
-		resp.Pools = append(resp.Pools, &srvpb.CheckListPoolResp_OnePool{
+		resp.Pools = append(resp.Pools, &sharedpb.CheckListPoolResp_OnePool{
 			Uuid:    ps.PoolUUID.String(),
 			Label:   ps.PoolLabel,
 			Svcreps: ranklist.RanksToUint32(ps.Replicas),
@@ -53,13 +57,13 @@ func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (ou
 }
 
 func (mod *srvModule) handleCheckerRegisterPool(parent context.Context, reqb []byte) (out []byte, outErr error) {
-	req := new(srvpb.CheckRegPoolReq)
+	req := new(sharedpb.CheckRegPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerRegisterPool: %+v", req)
 
-	resp := new(srvpb.CheckRegPoolResp)
+	resp := new(sharedpb.CheckRegPoolResp)
 	defer func() {
 		mod.log.Debugf("CheckerRegisterPool resp: %+v", resp)
 		out, outErr = proto.Marshal(resp)
@@ -142,13 +146,13 @@ func (mod *srvModule) handleCheckerRegisterPool(parent context.Context, reqb []b
 }
 
 func (mod *srvModule) handleCheckerDeregisterPool(parent context.Context, reqb []byte) (out []byte, outErr error) {
-	req := new(srvpb.CheckDeregPoolReq)
+	req := new(sharedpb.CheckDeregPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerDeregisterPool: %+v", req)
 
-	resp := new(srvpb.CheckDeregPoolResp)
+	resp := new(sharedpb.CheckDeregPoolResp)
 	defer func() {
 		mod.log.Debugf("CheckerDeregisterPool resp: %+v", resp)
 		out, outErr = proto.Marshal(resp)
@@ -190,43 +194,52 @@ func (mod *srvModule) handleCheckerDeregisterPool(parent context.Context, reqb [
 	return
 }
 
-func (mod *srvModule) handleCheckerReport(_ context.Context, reqb []byte) (out []byte, outErr error) {
-	req := new(srvpb.CheckReportReq)
+func chkReportErrToDaosStatus(err error) daos.Status {
+	err = errors.Cause(err) // Fully unwrap before attempting comparisons
+
+	if status, ok := err.(daos.Status); ok {
+		return status
+	}
+
+	switch {
+	case control.IsRetryableConnErr(err), system.IsNotLeader(err), system.IsNotReplica(err):
+		// If these errors manage to boil to the top, it's probably worth trying over.
+		return daos.TryAgain
+	case control.IsConnErr(err), control.IsMSConnectionFailure(err):
+		return daos.Unreachable
+	case fault.IsFaultCode(err, code.SystemCheckerNotEnabled),
+		fault.IsFaultCode(err, code.SystemCheckerInvalidMemberStates):
+		return daos.NotApplicable
+	default:
+		return daos.MiscError
+	}
+}
+
+func (mod *srvModule) handleCheckerReport(ctx context.Context, reqb []byte) (out []byte, outErr error) {
+	req := new(sharedpb.CheckReportReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerReport: %+v", req)
 
-	resp := new(srvpb.CheckReportResp)
-	defer func() {
-		mod.log.Debugf("CheckerReport resp: %+v", resp)
-		out, outErr = proto.Marshal(resp)
-	}()
+	// Forward the report to the MS
+	msReq := &control.SystemCheckEngineReportReq{
+		CheckReportReq: *req,
+	}
+	msReq.SetHostList(mod.msReplicas)
 
-	if req.Report != nil && req.Report.PoolLabel == "" && req.Report.PoolUuid != "" {
-		poolUUID, err := uuid.Parse(req.Report.PoolUuid)
-		if err != nil {
-			mod.log.Errorf("invalid pool UUID %q: %s", req.Report.PoolUuid, err)
-			resp.Status = int32(daos.InvalidInput)
-			return
-		}
+	mod.log.Debugf("forwarding check report to MS: %+v", msReq)
+	resp, err := control.SystemCheckEngineReport(ctx, mod.rpcClient, msReq)
 
-		if ps, err := mod.poolDB.FindPoolServiceByUUID(poolUUID); err == nil {
-			// Annotate the report with the pool label for the user.
-			// NB: In some cases this label may be incorrect, in which
-			// case the user will want to use the verbose or JSON output
-			// modes of the checker in order to get the UUID.
-			req.Report.PoolLabel = ps.PoolLabel
+	var drpcResp *sharedpb.CheckReportResp
+	if err != nil {
+		mod.log.Errorf("SystemCheckEngineReport failed: %s", err)
+		drpcResp = &sharedpb.CheckReportResp{
+			Status: chkReportErrToDaosStatus(err).Int32(),
 		}
+	} else {
+		drpcResp = &resp.CheckReportResp
 	}
 
-	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
-	mod.log.Debugf("annotated finding: %+v", finding)
-	if err := mod.checkerDB.AddOrUpdateCheckerFinding(finding); err != nil {
-		mod.log.Errorf("failed to add checker finding %+v: %s", finding, err)
-		resp.Status = int32(daos.MiscError)
-		return
-	}
-
-	return
+	return proto.Marshal(drpcResp)
 }

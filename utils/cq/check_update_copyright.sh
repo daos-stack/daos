@@ -55,13 +55,13 @@ targets=(
     '*README*'
     '*LICENSE*'
     '*NOTICE*'
+    '*Makefile'
+    '*SConscript'
+    '*SConstruct'
+    '*.env'
     # Entries without a wildcard
-    'Makefile'
     'Jenkinsfile'
-    'SConscript'
-    'SConstruct'
     'copyright'
-    '.env'
 )
 
 function git_reset() {

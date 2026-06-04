@@ -26,8 +26,11 @@ const (
 	// DefaultSysMountPoint is the common mount point of the sys filesystem.
 	DefaultSysMountPoint = "/sys"
 
-	// DefaultConfigfsMountPoint is the common mount point of the configfs
+	// DefaultConfigfsMountPoint is the common mount point of the configfs.
 	DefaultConfigfsMountPoint = "/sys/kernel/config"
+
+	// DefaultSelinuxMountPoint is the common mount point of the selinuxfs.
+	DefaultSelinuxMountPoint = "/sys/fs/selinux"
 )
 
 // FS represents a pseudo-filesystem, normally /proc or /sys, which provides an

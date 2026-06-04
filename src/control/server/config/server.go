@@ -89,7 +89,8 @@ type Server struct {
 
 	MgmtSvcReplicas []string `yaml:"mgmt_svc_replicas"`
 
-	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
+	Metadata         storage.ControlMetadata `yaml:"control_metadata,omitempty"`
+	KernelConfigPath string                  `yaml:"kernel_config_path,omitempty"`
 
 	// unused (?)
 	FaultCb      string `yaml:"fault_cb"`
@@ -98,7 +99,9 @@ type Server struct {
 	Path string `yaml:"-"` // path to config file
 
 	// Behavior flags
-	AutoFormat bool `yaml:"-"`
+	AutoFormat                bool `yaml:"-"`
+	DisableEngineAutoRestart  bool `yaml:"disable_engine_auto_restart"`
+	EngineAutoRestartMinDelay int  `yaml:"engine_auto_restart_min_delay,omitempty"`
 
 	deprecatedParams `yaml:",inline"`
 }
@@ -312,6 +315,12 @@ func (cfg *Server) WithAllowTHP(allowed bool) *Server {
 	return cfg
 }
 
+// WithKernelConfigPath sets the path to an alternate kernel configuration file.
+func (cfg *Server) WithKernelConfigPath(path string) *Server {
+	cfg.KernelConfigPath = path
+	return cfg
+}
+
 // WithSystemRamReserved sets the amount of system memory to reserve for system (non-DAOS)
 // use. In units of GiB.
 func (cfg *Server) WithSystemRamReserved(nr int) *Server {
@@ -352,6 +361,18 @@ func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
 // WithTelemetryPort sets the port for the telemetry exporter.
 func (cfg *Server) WithTelemetryPort(port int) *Server {
 	cfg.TelemetryPort = port
+	return cfg
+}
+
+// WithDisableEngineAutoRestart enables or disables automatic engine restarts on self-termination.
+func (cfg *Server) WithDisableEngineAutoRestart(disabled bool) *Server {
+	cfg.DisableEngineAutoRestart = disabled
+	return cfg
+}
+
+// WithEngineAutoRestartMinDelay sets minimum time between automatic engine restarts.
+func (cfg *Server) WithEngineAutoRestartMinDelay(secs uint) *Server {
+	cfg.EngineAutoRestartMinDelay = int(secs)
 	return cfg
 }
 
@@ -830,6 +851,11 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigSysRsvdZero
 	}
 
+	if cfg.EngineAutoRestartMinDelay < 0 {
+		return errors.Errorf("engine_auto_restart_min_delay must be >= 0 (got %d)",
+			cfg.EngineAutoRestartMinDelay)
+	}
+
 	// A config without engines is valid when initially discovering hardware prior to adding
 	// per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
@@ -860,6 +886,7 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
+		ec.Storage.KernelConfigPath = cfg.KernelConfigPath
 		ec.Storage.EngineIdx = uint(idx)
 		ec.Fabric.Update(cfg.Fabric)
 

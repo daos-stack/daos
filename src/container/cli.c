@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,15 +36,15 @@ dc_cont_init(void)
 	uint32_t        ver_array[2] = {DAOS_CONT_VERSION - 1, DAOS_CONT_VERSION};
 
 	dc_cont_proto_version = 0;
-	rc = daos_rpc_proto_query(cont_proto_fmt_v7.cpf_base, ver_array, 2, &dc_cont_proto_version);
+	rc = daos_rpc_proto_query(cont_proto_fmt_v9.cpf_base, ver_array, 2, &dc_cont_proto_version);
 	if (rc)
 		return rc;
 
 	if (dc_cont_proto_version == DAOS_CONT_VERSION - 1) {
-		rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&cont_proto_fmt_v8, CONT_PROTO_CLI_COUNT, NULL,
 				       DAOS_CONT_MODULE);
 	} else if (dc_cont_proto_version == DAOS_CONT_VERSION) {
-		rc = daos_rpc_register(&cont_proto_fmt_v8, CONT_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&cont_proto_fmt_v9, CONT_PROTO_CLI_COUNT, NULL,
 				       DAOS_CONT_MODULE);
 	} else {
 		D_ERROR("%d version cont RPC not supported.\n", dc_cont_proto_version);
@@ -66,9 +66,9 @@ dc_cont_fini(void)
 	int rc;
 
 	if (dc_cont_proto_version == DAOS_CONT_VERSION - 1)
-		rc = daos_rpc_unregister(&cont_proto_fmt_v7);
-	else
 		rc = daos_rpc_unregister(&cont_proto_fmt_v8);
+	else
+		rc = daos_rpc_unregister(&cont_proto_fmt_v9);
 	if (rc != 0)
 		D_ERROR("failed to unregister %d version cont RPCs: "DF_RC"\n",
 			dc_cont_proto_version, DP_RC(rc));
@@ -152,12 +152,12 @@ cont_task_reinit(tse_task_t *task)
 static int
 cont_create_complete(tse_task_t *task, void *data)
 {
-	struct cont_args       *arg = (struct cont_args *)data;
-	daos_cont_create_t     *args;
-	struct dc_pool	       *pool = arg->pool;
-	struct cont_create_out *out = crt_reply_get(arg->rpc);
-	bool                    reinit = false;
-	int			rc = task->dt_result;
+	struct cont_args          *arg = (struct cont_args *)data;
+	daos_cont_create_t        *args;
+	struct dc_pool            *pool   = arg->pool;
+	struct cont_create_v8_out *out    = crt_reply_get(arg->rpc);
+	bool                       reinit = false;
+	int                        rc     = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cco_op, task);
@@ -414,14 +414,15 @@ dc_cont_create(tse_task_t *task)
 		goto err_prop;
 	}
 	uuid_clear(null_hdl_uuid);
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, pool->dp_pool_hdl,
-				args->uuid, null_hdl_uuid, &tpriv->rq_time, &rpc);
+	rc =
+	    dc_cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, pool->dp_pool,
+			       pool->dp_pool_hdl, args->uuid, null_hdl_uuid, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc);
 	}
 
-	cont_create_in_set_data(rpc, CONT_CREATE, dc_cont_proto_version, rpc_prop);
+	cont_create_in_set_data(rpc, rpc_prop);
 
 	arg.pool = pool;
 	arg.rpc = rpc;
@@ -452,11 +453,11 @@ err_task:
 static int
 cont_destroy_complete(tse_task_t *task, void *data)
 {
-	struct cont_args        *arg    = (struct cont_args *)data;
-	struct dc_pool		*pool = arg->pool;
-	struct cont_destroy_out	*out = crt_reply_get(arg->rpc);
-	bool                     reinit = false;
-	int			 rc = task->dt_result;
+	struct cont_args           *arg    = (struct cont_args *)data;
+	struct dc_pool             *pool   = arg->pool;
+	struct cont_destroy_v8_out *out    = crt_reply_get(arg->rpc);
+	bool                        reinit = false;
+	int                         rc     = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cdo_op, task);
@@ -553,14 +554,14 @@ dc_cont_destroy(tse_task_t *task)
 	}
 	opc = label ? CONT_DESTROY_BYLABEL : CONT_DESTROY;
 	uuid_clear(null_hdl_uuid);
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, opc, pool->dp_pool_hdl, uuid,
-				null_hdl_uuid, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, opc, pool->dp_pool, pool->dp_pool_hdl,
+				uuid, null_hdl_uuid, &tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_pool, rc);
 	}
 
-	cont_destroy_in_set_data(rpc, opc, dc_cont_proto_version, args->force, label);
+	cont_destroy_in_set_data(rpc, args->force, label);
 
 	arg.pool = pool;
 	arg.rpc = rpc;
@@ -717,26 +718,17 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 		else
 			delay = 0;
 
-		rc = tse_task_register_comp_cb(task, pmap_refresh_cb, cb_arg,
-					       sizeof(*cb_arg));
-		if (rc) {
-			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), failed "
-				"to reg_comp_cb, "DF_RC"\n",
-				DP_UUID(pool->dp_pool), pm_ver,
-				cb_arg->pra_pm_ver, DP_RC(rc));
-			goto out;
-		}
-
 		cb_arg->pra_retry_nr++;
 		D_DEBUG(DB_TRACE, DF_UUID": pmap_refresh version (%d:%d), "
 			"in %d retry\n", DP_UUID(pool->dp_pool), pm_ver,
 			cb_arg->pra_pm_ver, cb_arg->pra_retry_nr);
 
-		rc = tse_task_reinit_with_delay(task, delay);
+		rc = tse_task_register_comp_cb_and_reinit(task, pmap_refresh_cb, cb_arg,
+							  sizeof(*cb_arg), delay);
 		if (rc) {
-			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), resched"
-				" failed, "DF_RC"\n", DP_UUID(pool->dp_pool),
-				pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
+			D_ERROR(DF_UUID ": pmap_refresh version (%d:%d), reg_comp_cb/reinit"
+					" failed, " DF_RC "\n",
+				DP_UUID(pool->dp_pool), pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
 			goto out;
 		}
 
@@ -799,7 +791,7 @@ static int
 cont_open_complete(tse_task_t *task, void *data)
 {
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
-	struct cont_open_out    *out   = crt_reply_get(arg->rpc);
+	struct cont_open_v8_out *out   = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
 	struct cont_task_priv   *tpriv = dc_task_get_priv(task);
 	struct dc_cont          *cont  = tpriv->cont;
@@ -834,7 +826,7 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	/* If open by label, copy the returned UUID into dc_cont structure */
 	if (arg->coa_label) {
-		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
+		struct cont_open_bylabel_v8_out *lbl_out = crt_reply_get(arg->rpc);
 
 		uuid_copy(cont->dc_uuid, lbl_out->colo_uuid);
 	}
@@ -892,7 +884,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
 	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
 	if (arg->coa_label) {
-		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
+		struct cont_open_bylabel_v8_out *lbl_out = crt_reply_get(arg->rpc);
 
 		arg->coa_info->ci_md_otime = lbl_out->coo_md_otime;
 		arg->coa_info->ci_md_mtime = lbl_out->coo_md_mtime;
@@ -962,7 +954,7 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 				DP_CONT(pool->dp_pool, tpriv->cont->dc_uuid), DP_RC(rc));
 		goto err;
 	}
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, cont_op, pool->dp_pool_hdl,
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, cont_op, pool->dp_pool, pool->dp_pool_hdl,
 				tpriv->cont->dc_uuid, tpriv->cont->dc_cont_hdl, &tpriv->rq_time,
 				&rpc);
 	if (rc != 0) {
@@ -977,8 +969,7 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 		    DAOS_CO_QUERY_PROP_EC_CELL_SZ | DAOS_CO_QUERY_PROP_EC_PDA |
 		    DAOS_CO_QUERY_PROP_RP_PDA | DAOS_CO_QUERY_PROP_GLOBAL_VERSION |
 		    DAOS_CO_QUERY_PROP_OBJ_VERSION | DAOS_CO_QUERY_PROP_PERF_DOMAIN;
-	cont_open_in_set_data(rpc, cont_op, dc_cont_proto_version, tpriv->cont->dc_capas, prop_bits,
-			      label);
+	cont_open_in_set_data(rpc, tpriv->cont->dc_capas, prop_bits, label);
 
 	arg.coa_pool	= pool;
 	arg.coa_info	= args->info;
@@ -1085,12 +1076,12 @@ struct cont_close_args {
 static int
 cont_close_complete(tse_task_t *task, void *data)
 {
-	struct cont_close_args	*arg = (struct cont_close_args *)data;
-	struct cont_close_out	*out = crt_reply_get(arg->rpc);
-	struct dc_pool          *pool   = arg->cca_pool;
-	struct dc_cont		*cont = arg->cca_cont;
-	bool                     reinit = false;
-	int			 rc = task->dt_result;
+	struct cont_close_args   *arg    = (struct cont_close_args *)data;
+	struct cont_close_v8_out *out    = crt_reply_get(arg->rpc);
+	struct dc_pool           *pool   = arg->cca_pool;
+	struct dc_cont           *cont   = arg->cca_cont;
+	bool                      reinit = false;
+	int                       rc     = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cco_op, task);
@@ -1226,8 +1217,9 @@ dc_cont_close(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_pool;
 	}
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, pool->dp_pool_hdl,
-				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, pool->dp_pool,
+				pool->dp_pool_hdl, cont->dc_uuid, cont->dc_cont_hdl,
+				&tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		goto err_pool;
@@ -1276,7 +1268,7 @@ static int
 cont_query_complete(tse_task_t *task, void *data)
 {
 	struct cont_query_args		*arg = (struct cont_query_args *)data;
-	struct cont_query_out           *out   = crt_reply_get(arg->rpc);
+	struct cont_query_v8_out        *out   = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cqa_pool;
 	struct dc_cont                  *cont  = arg->cqa_cont;
 	time_t				 otime_sec, mtime_sec;
@@ -1495,14 +1487,15 @@ dc_cont_query(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_cont;
 	}
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, pool->dp_pool_hdl,
-				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, pool->dp_pool,
+				pool->dp_pool_hdl, cont->dc_uuid, cont->dc_cont_hdl,
+				&tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	cont_query_in_set_data(rpc, CONT_QUERY, dc_cont_proto_version, cont_query_bits(args->prop));
+	cont_query_in_set_data(rpc, cont_query_bits(args->prop));
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1543,7 +1536,7 @@ static int
 cont_set_prop_complete(tse_task_t *task, void *data)
 {
 	struct cont_set_prop_args       *arg    = (struct cont_set_prop_args *)data;
-	struct cont_prop_set_out	*out = crt_reply_get(arg->rpc);
+	struct cont_prop_set_v8_out     *out    = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cqa_pool;
 	struct dc_cont			*cont = arg->cqa_cont;
 	bool                             reinit = false;
@@ -1676,15 +1669,15 @@ dc_cont_set_prop(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_cont;
 	}
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, pool->dp_pool_hdl,
-				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, pool->dp_pool,
+				pool->dp_pool_hdl, cont->dc_uuid, cont->dc_cont_hdl,
+				&tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	cont_prop_set_in_set_data(rpc, CONT_PROP_SET, dc_cont_proto_version, args->prop,
-				  pool->dp_pool);
+	cont_prop_set_in_set_data(rpc, args->prop, pool->dp_pool);
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1725,7 +1718,7 @@ static int
 cont_update_acl_complete(tse_task_t *task, void *data)
 {
 	struct cont_update_acl_args     *arg    = (struct cont_update_acl_args *)data;
-	struct cont_acl_update_out	*out = crt_reply_get(arg->rpc);
+	struct cont_acl_update_v8_out   *out    = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cua_pool;
 	struct dc_cont			*cont = arg->cua_cont;
 	bool                             reinit = false;
@@ -1814,14 +1807,15 @@ dc_cont_update_acl(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_cont;
 	}
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, pool->dp_pool_hdl,
-				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, pool->dp_pool,
+				pool->dp_pool_hdl, cont->dc_uuid, cont->dc_cont_hdl,
+				&tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	cont_acl_update_in_set_data(rpc, CONT_ACL_UPDATE, dc_cont_proto_version, args->acl);
+	cont_acl_update_in_set_data(rpc, args->acl);
 
 	arg.cua_pool = pool;
 	arg.cua_cont = cont;
@@ -1862,7 +1856,7 @@ static int
 cont_delete_acl_complete(tse_task_t *task, void *data)
 {
 	struct cont_delete_acl_args     *arg    = (struct cont_delete_acl_args *)data;
-	struct cont_acl_delete_out	*out = crt_reply_get(arg->rpc);
+	struct cont_acl_delete_v8_out   *out    = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cda_pool;
 	struct dc_cont			*cont = arg->cda_cont;
 	bool                             reinit = false;
@@ -1951,15 +1945,15 @@ dc_cont_delete_acl(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_cont;
 	}
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, pool->dp_pool_hdl,
-				cont->dc_uuid, cont->dc_cont_hdl, &tpriv->rq_time, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, pool->dp_pool,
+				pool->dp_pool_hdl, cont->dc_uuid, cont->dc_cont_hdl,
+				&tpriv->rq_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	cont_acl_delete_in_set_data(rpc, CONT_ACL_DELETE, dc_cont_proto_version, args->name,
-				    args->type);
+	cont_acl_delete_in_set_data(rpc, args->name, args->type);
 
 	arg.cda_pool = pool;
 	arg.cda_cont = cont;
@@ -2001,48 +1995,39 @@ struct cont_oid_alloc_args {
 static int
 cont_oid_alloc_complete(tse_task_t *task, void *data)
 {
-	struct cont_oid_alloc_args *arg = (struct cont_oid_alloc_args *)data;
-	struct cont_oid_alloc_out *out = crt_reply_get(arg->rpc);
-	struct dc_pool *pool = arg->coaa_pool;
-	struct dc_cont *cont = arg->coaa_cont;
-	int rc = task->dt_result;
+	struct cont_oid_alloc_args *arg         = data;
+	struct cont_oid_alloc_out  *out         = crt_reply_get(arg->rpc);
+	struct dc_pool             *pool        = arg->coaa_pool;
+	struct dc_cont             *cont        = arg->coaa_cont;
+	bool                        resched     = false;
+	bool                        refresh_map = false;
+	unsigned int                map_version = 0;
+	int                         rc          = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
-		tse_sched_t *sched = tse_task2sched(task);
-		tse_task_t *ptask;
-		unsigned int map_version = out->coao_op.co_map_version;
-
-		/** pool map refresh task */
-		rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl, map_version,
-						     sched, &ptask);
-		if (rc != 0)
-			D_GOTO(out, rc);
-
-		rc = dc_task_depend(task, 1, &ptask);
-		if (rc != 0) {
-			dc_pool_abandon_map_refresh_task(ptask);
-			D_GOTO(out, rc);
-		}
-
-		rc = dc_task_resched(task);
-		if (rc != 0) {
-			dc_pool_abandon_map_refresh_task(ptask);
-			D_GOTO(out, rc);
-		}
-
-		/* ignore returned value, error is reported by comp_cb */
-		tse_task_schedule(ptask, true);
-		D_GOTO(out, rc = 0);
+	if (daos_rpc_retryable_rc(rc)) {
+		resched     = true;
+		refresh_map = true;
+		goto out_resched;
 	} else if (rc != 0) {
 		/** error but non retryable RPC */
-		D_ERROR("failed to allocate oids: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_ERROR(rc, DF_CONT ": failed to allocate oids",
+			 DP_CONT(pool->dp_pool, cont->dc_uuid));
+		goto out_resched;
 	}
 
 	rc = out->coao_op.co_rc;
-	if (rc != 0) {
-		D_ERROR("failed to allocate oids: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+	if (rc == -DER_STALE) {
+		resched     = true;
+		refresh_map = true;
+		map_version = out->coao_op.co_map_version;
+		goto out_resched;
+	} else if (daos_rpc_retryable_rc(rc)) {
+		resched = true;
+		goto out_resched;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to allocate oids",
+			 DP_CONT(pool->dp_pool, cont->dc_uuid));
+		goto out_resched;
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": OID ALLOC: using hdl="DF_UUID" oid "DF_U64"/"DF_U64"\n",
@@ -2052,6 +2037,38 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	if (arg->oid)
 		*arg->oid = out->oid;
 
+out_resched:
+	if (resched) {
+		tse_sched_t *sched = tse_task2sched(task);
+		tse_task_t  *ptask;
+
+		D_DEBUG(DB_MD, DF_CONT ": resched: refresh_map=%d map_version=%u\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), refresh_map, map_version);
+		if (refresh_map) {
+			rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl,
+							     map_version, sched, &ptask);
+			if (rc != 0)
+				goto out;
+
+			rc = dc_task_depend(task, 1, &ptask);
+			if (rc != 0) {
+				dc_pool_abandon_map_refresh_task(ptask);
+				goto out;
+			}
+		}
+		rc = dc_task_resched(task);
+		if (rc != 0) {
+			if (refresh_map)
+				dc_pool_abandon_map_refresh_task(ptask);
+			goto out;
+		}
+		if (refresh_map) {
+			/* ignore returned value, error is reported by comp_cb */
+			tse_task_schedule(ptask, true);
+			rc = 0;
+			goto out;
+		}
+	}
 out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
@@ -2085,8 +2102,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 int
 dc_cont_alloc_oids(tse_task_t *task)
 {
-	daos_cont_alloc_oids_t		*args;
-	struct cont_oid_alloc_in	*in;
+	daos_cont_alloc_oids_t          *args;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
 	crt_endpoint_t                   ep;
@@ -2118,15 +2134,15 @@ dc_cont_alloc_oids(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
-	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, pool->dp_pool_hdl,
-				cont->dc_uuid, cont->dc_cont_hdl, NULL /* req_timep */, &rpc);
+	rc = dc_cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, pool->dp_pool,
+				pool->dp_pool_hdl, cont->dc_uuid, cont->dc_cont_hdl,
+				NULL /* req_timep */, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	in           = crt_req_get(rpc);
-	in->num_oids = args->num_oids;
+	cont_oid_alloc_in_set_data(rpc, args->num_oids);
 
 	arg.coaa_pool	= pool;
 	arg.coaa_cont	= cont;
@@ -2566,9 +2582,9 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 		goto out;
 	}
 
-	rc = dc_cont_req_create(ctx, &ep, opcode, args->cra_pool->dp_pool_hdl,
-				args->cra_cont->dc_uuid, args->cra_cont->dc_cont_hdl,
-				&tpriv->rq_time, &args->cra_rpc);
+	rc = dc_cont_req_create(ctx, &ep, opcode, args->cra_pool->dp_pool,
+				args->cra_pool->dp_pool_hdl, args->cra_cont->dc_uuid,
+				args->cra_cont->dc_cont_hdl, &tpriv->rq_time, &args->cra_rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		cont_req_cleanup(CLEANUP_TASK_PRIV, task, true /* free_tpriv */, args);
@@ -2582,9 +2598,9 @@ out:
 static int
 attr_list_req_complete(tse_task_t *task, void *data)
 {
-	struct cont_req_arg	  *args = data;
-	daos_cont_list_attr_t	  *task_args = dc_task_get_args(task);
-	struct cont_attr_list_out *out = crt_reply_get(args->cra_rpc);
+	struct cont_req_arg          *args      = data;
+	daos_cont_list_attr_t        *task_args = dc_task_get_args(task);
+	struct cont_attr_list_v8_out *out       = crt_reply_get(args->cra_rpc);
 
 	*task_args->size = out->calo_size;
 	return 0;
@@ -2634,7 +2650,7 @@ dc_cont_list_attr(tse_task_t *task)
 		}
 	}
 
-	cont_attr_list_in_set_data(cb_args.cra_rpc, CONT_ATTR_LIST, dc_cont_proto_version, bulk);
+	cont_attr_list_in_set_data(cb_args.cra_rpc, bulk);
 
 	cb_args.cra_bulk     = bulk;
 	cb_args.cra_callback = attr_list_req_complete;
@@ -2831,8 +2847,7 @@ dc_cont_get_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	cont_attr_get_in_set_data(cb_args.cra_rpc, CONT_ATTR_GET, dc_cont_proto_version, args->n,
-				  key_length, bulk);
+	cont_attr_get_in_set_data(cb_args.cra_rpc, args->n, key_length, bulk);
 
 	cb_args.cra_bulk = bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
@@ -2941,8 +2956,7 @@ dc_cont_set_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	cont_attr_set_in_set_data(cb_args.cra_rpc, CONT_ATTR_SET, dc_cont_proto_version, count,
-				  bulk);
+	cont_attr_set_in_set_data(cb_args.cra_rpc, count, bulk);
 
 	cb_args.cra_bulk = bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
@@ -3023,8 +3037,7 @@ dc_cont_del_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	cont_attr_del_in_set_data(cb_args.cra_rpc, CONT_ATTR_DEL, dc_cont_proto_version, count,
-				  bulk);
+	cont_attr_del_in_set_data(cb_args.cra_rpc, count, bulk);
 
 	cb_args.cra_bulk = bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
@@ -3064,7 +3077,7 @@ cont_epoch_op_req_complete(tse_task_t *task, void *data)
 
 	/* Only assign epoch if the task is really done (i.e., cont_req_complete did not reinit) */
 	if (arg->eoa_req.cra_tpriv == NULL) {
-		struct cont_epoch_op_out *op_out = crt_reply_get(arg->eoa_req.cra_rpc);
+		struct cont_epoch_op_v8_out *op_out = crt_reply_get(arg->eoa_req.cra_rpc);
 
 		*arg->eoa_epoch = op_out->ceo_epoch;
 	}
@@ -3097,7 +3110,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch, unsigned i
 
 	if (opc != CONT_SNAP_CREATE)
 		epc = *epoch;
-	cont_epoch_op_in_set_data(arg.eoa_req.cra_rpc, opc, dc_cont_proto_version, epc, opts);
+	cont_epoch_op_in_set_data(arg.eoa_req.cra_rpc, epc, opts);
 
 	arg.eoa_epoch = epoch;
 
@@ -3227,7 +3240,7 @@ cont_get_oit_oid_req_complete(tse_task_t *task, void *data)
 		return rc;
 
 	if (arg->goo_req.cra_tpriv == NULL) {
-		struct cont_snap_oit_oid_get_out *oit_out = crt_reply_get(arg->goo_req.cra_rpc);
+		struct cont_snap_oit_oid_get_v8_out *oit_out = crt_reply_get(arg->goo_req.cra_rpc);
 
 		*arg->goo_oid = oit_out->ogo_oid;
 	}
@@ -3257,8 +3270,7 @@ int dc_cont_snap_oit_oid_get(tse_task_t *task)
 
 	epoch       = dc_args->epoch;
 	arg.goo_oid = dc_args->oid;
-	cont_snap_oit_oid_get_in_set_data(arg.goo_req.cra_rpc, CONT_SNAP_OIT_OID_GET,
-					  dc_cont_proto_version, epoch);
+	cont_snap_oit_oid_get_in_set_data(arg.goo_req.cra_rpc, epoch);
 
 	rc = tse_task_register_comp_cb(task, cont_get_oit_oid_req_complete,
 				       &arg, sizeof(arg));
@@ -3305,9 +3317,9 @@ err:
 static int
 snap_list_req_complete(tse_task_t *task, void *data)
 {
-	struct cont_req_arg	  *args = data;
-	daos_cont_list_snap_t	  *task_args = dc_task_get_args(task);
-	struct cont_snap_list_out *out = crt_reply_get(args->cra_rpc);
+	struct cont_req_arg          *args      = data;
+	daos_cont_list_snap_t        *task_args = dc_task_get_args(task);
+	struct cont_snap_list_v8_out *out       = crt_reply_get(args->cra_rpc);
 
 	*task_args->nr = out->slo_count;
 	task_args->anchor->da_type = DAOS_ANCHOR_TYPE_EOF;
@@ -3362,7 +3374,7 @@ dc_cont_list_snap(tse_task_t *task)
 		}
 	}
 
-	cont_snap_list_in_set_data(cb_args.cra_rpc, CONT_SNAP_LIST, dc_cont_proto_version, bulk);
+	cont_snap_list_in_set_data(cb_args.cra_rpc, bulk);
 
 	cb_args.cra_bulk     = bulk;
 	cb_args.cra_callback = snap_list_req_complete;
@@ -3599,5 +3611,8 @@ cont_mark_slave(struct d_hlink *link, void *arg)
 int
 dc_cont_mark_all_slave(void)
 {
+	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_AFTER_FORK))
+		return 0;
+
 	return daos_hhash_traverse(DAOS_HTYPE_CO, cont_mark_slave, NULL);
 }

@@ -55,6 +55,32 @@ struct crt_na_config {
 enum crt_traffic_class { CRT_TRAFFIC_CLASSES };
 #undef X
 
+/*
+ * Preferred address family for fabric init. Forwarded to Mercury via
+ * na_init_info.addr_format and translated by Mercury's na_ofi plugin
+ * into the libfabric addr_format hint (FI_SOCKADDR_IN / FI_SOCKADDR_IN6
+ * / provider native / FI_FORMAT_UNSPEC).
+ *
+ * Default is CRT_AF_UNSPEC, which preserves the historical behavior of
+ * letting Mercury pick from its per-provider preference table (IPv4 for
+ * verbs/RoCE). Set to CRT_AF_IPV6 to enable IPv6 fabric on an interface
+ * that lacks an IPv4 address.
+ *
+ * CRT_AF_UNKNOWN is a sentinel returned by crt_str_to_addr_format() when
+ * the input string does not match any known value; callers map it back
+ * to CRT_AF_UNSPEC.
+ */
+#define CRT_ADDR_FORMATS                                                                           \
+	X(CRT_AF_UNSPEC, "unspec")   /* Leave it upon plugin to choose (default) */                \
+	X(CRT_AF_IPV4, "ipv4")       /* Prefer IPv4 (FI_SOCKADDR_IN) */                            \
+	X(CRT_AF_IPV6, "ipv6")       /* Prefer IPv6 (FI_SOCKADDR_IN6) */                           \
+	X(CRT_AF_NATIVE, "native")   /* Provider native addressing */                              \
+	X(CRT_AF_UNKNOWN, "unknown") /* Unknown / parse error sentinel */
+
+#define X(a, b) a,
+enum crt_addr_format { CRT_ADDR_FORMATS };
+#undef X
+
 struct crt_prov_gdata {
 	/** NA plugin type */
 	int                  cpg_provider;
@@ -76,6 +102,13 @@ struct crt_prov_gdata {
 	/** Hints to mercury/ofi for max expected/unexp sizes */
 	uint32_t             cpg_max_exp_size;
 	uint32_t             cpg_max_unexp_size;
+
+	/**
+	 * Preferred address family for Mercury fabric init for this provider.
+	 * Defaults to CRT_AF_UNSPEC (Mercury picks). Set via D_ADDR_FORMAT env
+	 * or crt_init_options_t::cio_addr_format API field.
+	 */
+	enum crt_addr_format cpg_addr_format;
 
 	/** Number of remote tags */
 	uint32_t             cpg_num_remote_tags;
@@ -149,6 +182,12 @@ struct crt_gdata {
 	/** whether we are on a primary provider */
 	unsigned int             cg_provider_is_primary : 1;
 
+	/** progress spindown time in milliseconds */
+	unsigned int             cg_progress_spindown_ms;
+
+	/** use legacy progress method */
+	bool                     cg_progress_legacy;
+
 	/** use single thread to access context */
 	bool                     cg_thread_mode_single;
 
@@ -219,6 +258,7 @@ struct crt_event_cb_priv {
 	ENV_STR(DD_MASK)                                                                           \
 	ENV_STR(DD_STDERR)                                                                         \
 	ENV_STR(DD_SUBSYS)                                                                         \
+	ENV_STR(D_ADDR_FORMAT)                                                                     \
 	ENV_STR(D_CLIENT_METRICS_DUMP_DIR)                                                         \
 	ENV(D_CLIENT_METRICS_ENABLE)                                                               \
 	ENV(D_CLIENT_METRICS_RETAIN)                                                               \
@@ -238,6 +278,8 @@ struct crt_event_cb_priv {
 	ENV(D_THREAD_MODE_SINGLE)                                                                  \
 	ENV(D_PROGRESS_BUSY)                                                                       \
 	ENV(D_MEM_DEVICE)                                                                          \
+	ENV(D_PROGRESS_LEGACY)                                                                     \
+	ENV(D_PROGRESS_SPINDOWN)                                                                   \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
 	ENV(D_MRECV_BUF)                                                                           \
@@ -422,14 +464,84 @@ struct crt_quotas {
  * Deferred allocation is only supported on clients through D_QUOTA_BULKS env
  */
 struct crt_bulk {
-	hg_bulk_t       hg_bulk_hdl; /** mercury bulk handle */
-	bool            deferred;    /** whether handle allocation was deferred */
-	crt_context_t   crt_ctx;     /** context on which bulk is to be created  */
-	bool            bound;       /** whether crt_bulk_bind() was used on it */
-	d_iov_t        *iovs;        /** original iovs */
 	d_sg_list_t     sgl;         /** original sgl */
+	d_iov_t        *iovs;        /** original iovs */
+	hg_bulk_t       hg_bulk_hdl; /** mercury bulk handle */
+	crt_context_t   crt_ctx;     /** context on which bulk is to be created  */
 	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
+	ATOMIC uint32_t refcount;    /** reference count for this struct */
+	bool            bound;       /** whether crt_bulk_bind() was used on it */
+	bool            deferred;    /** whether handle allocation was deferred */
 };
+
+#define CRT_METRIC_INC(ctx, name)                                                                  \
+	do {                                                                                       \
+		if (crt_gdata.cg_use_sensors) {                                                    \
+			d_tm_inc_counter(ctx->cc_metrics.name, 1);                                 \
+		}                                                                                  \
+	} while (0)
+
+#define CRT_METRIC_SET_GAUGE(ctx, name, value)                                                     \
+	do {                                                                                       \
+		if (crt_gdata.cg_use_sensors) {                                                    \
+			d_tm_set_gauge(ctx->cc_metrics.name, value);                               \
+		}                                                                                  \
+	} while (0)
+
+#define CRT_METRIC_INC_GAUGE(ctx, name, value)                                                     \
+	do {                                                                                       \
+		if (crt_gdata.cg_use_sensors) {                                                    \
+			d_tm_inc_gauge(ctx->cc_metrics.name, value);                               \
+		}                                                                                  \
+	} while (0)
+
+#define CRT_METRIC_DEC_GAUGE(ctx, name, value)                                                     \
+	do {                                                                                       \
+		if (crt_gdata.cg_use_sensors) {                                                    \
+			d_tm_dec_gauge(ctx->cc_metrics.name, value);                               \
+		}                                                                                  \
+	} while (0)
+
+/* List of metrics, CM_* for 'Cart Metrics' */
+#define CRT_METRICS_LIST                                                                           \
+	X(CM_URI_LOOKUP_TIMEDOUT, D_TM_COUNTER, "Total number of timed of URI lookups", "reqs")    \
+	X(CM_FAILED_ADDR, D_TM_COUNTER, "Total number of failed address resolution attempts",      \
+	  "reqs")                                                                                  \
+	X(CM_NET_GLITCHES, D_TM_COUNTER, "Total number of network glitch errors", "errors")        \
+	X(CM_SWIM_DELAY, D_TM_STATS_GAUGE, "SWIM delay measurements", "delay")                     \
+	X(CM_RPC_WAITQ_DEPTH, D_TM_GAUGE, "Current count of enqueued RPCs", "rpcs")                \
+	X(CM_RPC_QUOTA_EXCEEDED, D_TM_COUNTER, "Total number of exceeded RPC quota events",        \
+	  "events")                                                                                \
+	X(CM_RPC_RECV, D_TM_COUNTER, "Total number of RPCs received", "rpcs")                      \
+	X(CM_RPC_SENT, D_TM_COUNTER, "Total number of RPCs sent", "rpcs")                          \
+	X(CM_RPC_FWD, D_TM_COUNTER, "Total number of RPCs forwarded to another target", "rpcs")    \
+	X(CM_RPC_REPLIED, D_TM_COUNTER, "Total number of RPCs replied to", "rpcs")                 \
+	X(CM_RPC_REPLY_FAILED, D_TM_COUNTER, "Total number of failed replies", "rpcs")             \
+	X(CM_RPC_COMPLETED, D_TM_COUNTER, "Total number of RPCs completed successfully", "rpcs")   \
+	X(CM_RPC_COMPLETED_ERR, D_TM_COUNTER, "Total number of sent RPCs completed with error",    \
+	  "rpcs")                                                                                  \
+	X(CM_RPC_TIMEDOUT, D_TM_COUNTER, "Total number of timed out RPC send requests", "rpcs")    \
+	X(CM_RPC_DOUBLE_COMPLETE, D_TM_COUNTER,                                                    \
+	  "Total number of RPCs having a duplicate completion ", "rpcs")                           \
+	X(CM_BULK_CREATE, D_TM_COUNTER, "Total number of bulks created", "bulks")                  \
+	X(CM_BULK_CREATE_FAILED, D_TM_COUNTER, "Total number of bulks that failed to create",      \
+	  "bulks")                                                                                 \
+	X(CM_BULK_BOUND, D_TM_COUNTER, "Total number of bulks that were bound", "bulks")           \
+	X(CM_BULK_FREE, D_TM_COUNTER, "Total number of bulks that were freed", "bulks")            \
+	X(CM_CORPC_CREATED, D_TM_COUNTER, "Total number of corpcs that were created", "corpcs")    \
+	X(CM_CORPC_COMPLETED, D_TM_COUNTER, "Total number of corpcs that were completed",          \
+	  "corpcs")                                                                                \
+	X(CM_CORPC_COMPLETED_ERR, D_TM_COUNTER,                                                    \
+	  "Total number of corpcs that completed with error", "corpcs")
+
+#undef X
+#define X(name, type, desc, unit_desc) struct d_tm_node_t *name;
+
+struct crt_metric_t {
+	CRT_METRICS_LIST
+};
+
+#undef X
 
 /* crt_context */
 struct crt_context {
@@ -442,6 +554,10 @@ struct crt_context {
 	void			*cc_rpc_cb_arg;
 	crt_rpc_task_t		 cc_rpc_cb;	/** rpc callback */
 	crt_rpc_task_t		 cc_iv_resp_cb;
+
+	/* main progress */
+	int (*cc_prog_func)(struct crt_context *, int64_t);
+	int (*cc_prog_cond_func)(struct crt_context *, int64_t, crt_progress_cond_cb_t, void *);
 
 	/* progress callback */
 	void                    *cc_prog_cb_arg;
@@ -461,23 +577,14 @@ struct crt_context {
 	/** timeout per-context */
 	uint32_t                 cc_timeout_sec;
 
-	/** Per-context statistics (server-side only) */
-	/** Total number of timed out requests, of type counter */
-	struct d_tm_node_t	*cc_timedout;
-	/** Total number of timed out URI lookup requests, of type counter */
-	struct d_tm_node_t	*cc_timedout_uri;
-	/** Total number of failed address resolution, of type counter */
-	struct d_tm_node_t	*cc_failed_addr;
-	/** Counter for number of network glitches */
-	struct d_tm_node_t      *cc_net_glitches;
-	/** Stats gauge of reported SWIM delays */
-	struct d_tm_node_t      *cc_swim_delay;
-
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
 
 	/** Stores quotas */
 	struct crt_quotas	cc_quotas;
+
+	/** Stores metrics */
+	struct crt_metric_t      cc_metrics;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */

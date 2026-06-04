@@ -21,6 +21,12 @@ server_config:
       log_mask: ERR
       storage: auto
 
+job_manager:
+  class_name: Orterun
+  mpi_type: openmpi
+  manager_timeout: 1000
+
 daos_racer:
+  ppn: 4
   runtime: 7200
-  clush_timeout: 10080
+  daos_racer_timeout: 10080

@@ -1212,7 +1212,11 @@ class DmgCommand(DmgCommandBase):
         #         "uuid": "e7f2cb06-a111-4d55-a6a5-b494b70d62ab",
         #         "fabric_uri": "ofi+sockets://192.168.100.11:31416",
         #         "fabric_contexts": 17,
-        #         "info": ""
+        #         "secondary_fabric_uri": "",
+        #         "secondary_fabric_contexts": 0,
+        #         "info": "",
+        #         "last_update": "",
+        #         "incarnation": 10
         #     },
         #     {
         #         "addr": "10.8.1.74:10001",
@@ -1222,7 +1226,11 @@ class DmgCommand(DmgCommandBase):
         #         "uuid": "db36ab28-fdb0-4822-97e6-89547393ed03",
         #         "fabric_uri": "ofi+sockets://192.168.100.74:31416",
         #         "fabric_contexts": 17,
-        #         "info": ""
+        #         "secondary_fabric_uri": "",
+        #         "secondary_fabric_contexts": 0,
+        #         "info": "",
+        #         "last_update": "",
+        #         "incarnation": 12
         #     }
         #     ]
         # },
@@ -1546,6 +1554,18 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_json_result(("version",))
+
+    def server_version(self):
+        """Call dmg server-version.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the dmg server-version command fails.
+
+        """
+        return self._get_json_result(("server-version",))
 
     def check_enable(self, pool=None, stop=True):
         """Call dmg check enable.

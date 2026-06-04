@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,8 @@
 package security
 
 import (
+	"slices"
+
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -44,6 +46,7 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/StopRanks":                  {ComponentServer},
 	"/ctl.CtlSvc/ResetFormatRanks":           {ComponentServer},
 	"/ctl.CtlSvc/StartRanks":                 {ComponentServer},
+	"/ctl.CtlSvc/CheckEngineRepair":          {ComponentServer},
 	"/mgmt.MgmtSvc/Join":                     {ComponentServer},
 	"/mgmt.MgmtSvc/ClusterEvent":             {ComponentServer},
 	"/mgmt.MgmtSvc/LeaderQuery":              {ComponentAdmin},
@@ -74,7 +77,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/PoolRebuildStart":         {ComponentAdmin, ComponentServer},
 	"/mgmt.MgmtSvc/PoolRebuildStop":          {ComponentAdmin, ComponentServer},
 	"/mgmt.MgmtSvc/PoolSelfHealEval":         {ComponentAdmin, ComponentServer},
-	"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
+	"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAdmin, ComponentAgent},
 	"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
 	"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
 	"/mgmt.MgmtSvc/ContSetOwner":             {ComponentAdmin},
@@ -87,6 +90,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/SystemCheckSetPolicy":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckGetPolicy":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckRepair":        {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckEngineReport":  {ComponentServer},
 	"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
@@ -127,13 +131,7 @@ func (c Component) HasAccess(FullMethod string) bool {
 		return false
 	}
 
-	for _, comp := range compList {
-		if c == comp {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(compList, c)
 }
 
 // CommonNameToComponent returns the correct component based on the CommonName

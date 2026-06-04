@@ -180,7 +180,7 @@ func (db *Database) ShutdownRaft() error {
 		// run as many of them as possible in order to clean things
 		// up.
 		if shutdownErr == nil {
-			for _, cb := range db.onRaftShutdown {
+			for _, cb := range db.onRaftShutdownCbs() {
 				if cbErr := cb(); cbErr != nil {
 					db.log.Errorf("onRaftShutdown callback failed: %s", cbErr)
 				}

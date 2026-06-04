@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -275,7 +275,8 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 		Class:  storage.ClassRam,
 		Target: testTarget,
 		Ramdisk: &storage.RamdiskParams{
-			Size: 1024,
+			Size:             1024,
+			DisableHugepages: true,
 		},
 	})
 	if err != nil {
@@ -368,7 +369,8 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 		OwnerUID:   os.Getuid(),
 		OwnerGID:   os.Getgid(),
 		Ramdisk: &storage.RamdiskParams{
-			Size: 1,
+			Size:             1,
+			DisableHugepages: true,
 		},
 	})
 	if err != nil {

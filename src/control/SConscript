@@ -50,10 +50,13 @@ def get_build_flags(benv):
     """Return string of build flags"""
     if is_release_build(benv):
         return '-buildmode=pie'
+    # Disable optimizations and inlining for debugger support
+    flags = '-gcflags "all=-N -l"'
+    # enable AddressSanitizer to detect memory safety issues at runtime
     if 'SANITIZERS' in benv and benv['SANITIZERS'] != "":
-        return '-asan'
-    # enable race detector for non-release builds
-    return '-race'
+        return f'-asan {flags}'
+    # enable race detector to detect concurrent memory access issues
+    return f'-race {flags}'
 
 
 def gen_build_id():
@@ -123,7 +126,8 @@ def install_go_bin(env, name, libs=None, install_man=False):
         menv = env.Clone()
         # This runs code from the build area so needs LD_LIBRARY_PATH set.
         menv.d_enable_ld_path(["cart", "gurt", "client/api", "common", "client/dfs", "utils",
-                               "utils/self_test", "vos", "common/dav_v2", "bio", "utils/ddb"])
+                               "utils/self_test", "vos", "common/dav_v2", "bio", "utils/ddb",
+                               'mgmt'])
         menv.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
         menv.Install('$PREFIX/share/man/man8', build_path)
 
@@ -182,8 +186,6 @@ def scons():
         return
 
     senv = denv.Clone()
-
-    denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
