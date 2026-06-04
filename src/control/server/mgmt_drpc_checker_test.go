@@ -234,7 +234,7 @@ func TestServer_srvModule_handleCheckerDeregisterPool(t *testing.T) {
 			mic: &control.MockInvokerConfig{
 				UnaryResponse: &control.UnaryResponse{
 					Responses: []*control.HostResponse{{
-						Message: &sharedpb.CheckRegPoolResp{
+						Message: &sharedpb.CheckDeregPoolResp{
 							Status: daos.MiscError.Int32(),
 						},
 					}},
