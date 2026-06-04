@@ -759,8 +759,13 @@ class _Dfs():
         Using multiprocessing.Pool ensures propagation of errors in the workers and cleaning up
         resources, regardless of operation outcome.
 
-        It would be even better to use `concurrent.futures.ProcessPoolExecutor`, however
-        `initializer` and `initargs` arguments for it were added only in Python 3.6.
+        It would be even better to use `concurrent.futures.ProcessPoolExecutor`; however,
+        its `initializer` and `initargs` arguments are available only in Python 3.7+.
+
+        Although Python 3.6 is EOL, many distributions still ship it by default.
+        Keeping `_readdir_worker_init` and `_readdir_batch` as module-level functions
+        instead of private class methods, is a small price that allows us to support
+        a much broader range of platforms.
         """
 
         if path is None:
