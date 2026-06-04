@@ -1,0 +1,30 @@
+# (C) Copyright 2025 Intel Corporation.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+"""Build the DAOS cuFile plugin library (libdaos_cufile)."""
+
+import os
+
+
+def scons():
+    """Build libdaos_cufile.so — DAOS backend for NVIDIA cuFile API."""
+    Import('env', 'prereqs')
+
+    env_cufile = env.Clone()
+
+    # The plugin links against libdaos and libdfs
+    env_cufile.require('daos_common', 'daos')
+    env_cufile.AppendUnique(LIBS=['daos', 'dfs', 'gurt', 'pthread'])
+
+    # Build the shared library
+    cufile_src = ['cufile_plugin.c', 'cufile_daos.c']
+    daos_cufile = env_cufile.d_library('daos_cufile', cufile_src)
+    env_cufile.Install(os.path.join('$PREFIX', 'lib64'), daos_cufile)
+
+    # Build test/example programs
+    SConscript('tests/SConscript', exports=['env_cufile'])
+
+
+if __name__ == "SCons.Script":
+    scons()
