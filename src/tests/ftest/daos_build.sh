@@ -163,6 +163,7 @@ if [ "${debug}" = "true" ]; then
 fi
 
 # Build DAOS dependencies
+run_cmd "echo $PATH" || exit
 run_cmd "scons -C ${build_dir} --jobs ${build_jobs} --enable-virtualenv --build-deps=only" || exit
 
 if [[ -n ${mount_dir-} ]]; then
