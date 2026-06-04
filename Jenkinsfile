@@ -43,7 +43,6 @@ void updateRunStage() {
         'Build on EL 8',
         'Build on EL 9',
         'Build on Leap 15',
-        'Build on EL 9 with Bullseye',
         'Unit Tests',
         'Unit Test',
         'Unit Test bdev',
@@ -524,9 +523,6 @@ pipeline {
         booleanParam(name: 'Build on Leap 15',
                      defaultValue: true,
                      description: 'Run the build on Leap 15 stage.')
-        booleanParam(name: 'Build on EL 9 with Bullseye',
-                     defaultValue: true,
-                     description: 'Run the build on EL 9 with Bullseye stage.')
         booleanParam(name: 'Unit Tests',
                      defaultValue: true,
                      description: 'Run the Unit Tests stage.')
