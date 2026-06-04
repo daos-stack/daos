@@ -29,6 +29,8 @@ show_help() {
     echo "  -d, --distro <val>        Linux distribution for installing dependencies (default: el9)"
     echo "  -j, --build-jobs <val>    Number of parallel jobs for building DAOS (default: 30)"
     echo "  -r, --rebuild             Whether to skip setup of build and venv directories (default: false)"
+    echo "      --uv-index-url <val>  Optional URL for Python package index to use with uv (default: none)"
+    echo "      --debug               Whether to run additional debug checks (default: false)"
     echo "  -h, --help                Show this help message and exit"
 }
 
@@ -41,8 +43,8 @@ git_checkout="origin/master"
 distro="el9"
 build_jobs="30"
 rebuild="false"
-debug="false"
 uv_index_url=""
+debug="false"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
