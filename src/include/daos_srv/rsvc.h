@@ -168,7 +168,7 @@ void ds_rsvc_set_state(struct ds_rsvc *svc, enum ds_rsvc_state state);
 void ds_rsvc_begin_stepping_up(struct ds_rsvc *svc);
 int ds_rsvc_end_stepping_up(struct ds_rsvc *svc, int rc_in, enum ds_rsvc_state state);
 int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
-			   uint32_t vos_df_version);
+			   uint32_t vos_df_version, bool (*abort)(void *arg), void *abort_arg);
 int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ranks,
 			 size_t size, uint32_t vos_df_version, struct rsvc_hint *hint);
 int ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, bool destroy);
