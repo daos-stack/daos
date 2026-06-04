@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,6 +32,10 @@ class Mpi4pyCommand(ExecutableCommand):
             path (str): path to the macsio command.
         """
         super().__init__("/run/mpi4py/*", "test_io_daos.py", path)
+
+        # Do not run with python directly as this executable comes from the system install,
+        # not from the current python environment.
+        self._python = None
 
 
 class RomioCommand(ExecutableCommand):

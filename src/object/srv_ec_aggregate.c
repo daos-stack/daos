@@ -796,6 +796,7 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int                      err;
 	int			 rc = 0;
+	uint64_t                 ts = daos_gettime_coarse();
 
 	ap = container_of(entry, struct ec_agg_param, ap_agg_entry);
 
@@ -829,9 +830,14 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 			}
 			D_ASSERT(iod_csums != NULL);
 		}
+
+again1:
 		rc = vos_obj_update(ap->ap_cont_handle, entry->ae_oid,
 				    entry->ae_cur_stripe.as_hi_epoch, 0, VOS_OF_CRIT,
 				    &entry->ae_dkey, 1, &iod, iod_csums, &sgl);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", entry->ae_oid, again1);
+
 		if (csummer != NULL && iod_csums != NULL)
 			daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
@@ -844,8 +850,13 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 	recx.rx_nr         = ec_age2ss(entry);
 	epoch_range.epr_lo = ap->ap_epr.epr_lo;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+
+again2:
 	err = vos_obj_array_remove(ap->ap_cont_handle, entry->ae_oid, &epoch_range, &entry->ae_dkey,
 				   &entry->ae_akey, &recx);
+
+	OBJ_CHECK_EAGAIN(err, ts, "vos_obj_array_remove", entry->ae_oid, again2);
+
 	if (err)
 		D_ERROR("array_remove fails: " DF_RC "\n", DP_RC(err));
 	if (!rc && err)
@@ -1817,6 +1828,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	struct ec_agg_param	*agg_param;
 	int			 tid, rc = 0;
 	int			*status;
+	uint64_t                 ts = daos_gettime_coarse();
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
@@ -1868,10 +1880,15 @@ agg_process_holes(struct ec_agg_entry *entry)
 		if (iod->iod_nr) {
 			/* write the reps to vos */
 			entry->ae_sgl.sg_nr = 1;
+
+again1:
 			rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
 					    entry->ae_cur_stripe.as_hi_epoch, 0, VOS_OF_CRIT,
 					    &entry->ae_dkey, 1, iod, stripe_ud.asu_iod_csums,
 					    &entry->ae_sgl);
+
+			OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", entry->ae_oid, again1);
+
 			if (rc) {
 				DL_ERROR(rc, "vos_obj_update failed");
 				goto ev_out;
@@ -1884,10 +1901,13 @@ agg_process_holes(struct ec_agg_entry *entry)
 		recx.rx_nr = ec_age2cs(entry);
 		recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * recx.rx_nr) |
 			      PARITY_INDICATOR;
+
+again2:
 		rc = vos_obj_array_remove(agg_param->ap_cont_handle,
 					  entry->ae_oid, &epoch_range,
 					  &entry->ae_dkey, &entry->ae_akey,
 					  &recx);
+		OBJ_CHECK_EAGAIN(rc, rc, "vos_obj_array_remove", entry->ae_oid, again2);
 	} else {
 		D_DEBUG(DB_EPC, "no valid hole, set ae_process_partial flag\n");
 		entry->ae_process_partial = 1;
