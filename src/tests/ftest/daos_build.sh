@@ -29,7 +29,6 @@ show_help() {
     echo "  -d, --distro <val>        Linux distribution for installing dependencies (default: el9)"
     echo "  -j, --build-jobs <val>    Number of parallel jobs for building DAOS (default: 30)"
     echo "  -r, --rebuild             Whether to skip setup of build and venv directories (default: false)"
-    echo "      --uv-index-url <val>  Optional URL for Python package index to use with uv (default: none)"
     echo "      --debug               Whether to run additional debug checks (default: false)"
     echo "  -h, --help                Show this help message and exit"
 }
@@ -43,7 +42,6 @@ git_checkout="origin/master"
 distro="el9"
 build_jobs="30"
 rebuild="false"
-uv_index_url=""
 debug="false"
 
 # Parse arguments
@@ -80,10 +78,6 @@ while [[ $# -gt 0 ]]; do
     -r|--rebuild)
       rebuild="true"
       shift 1
-      ;;
-    --uv-index-url)
-      uv_index_url="$2"
-      shift 2
       ;;
     --debug)
       debug="true"
@@ -156,15 +150,6 @@ if [ "${rebuild}" = "false" ]; then
 
   run_cmd "python -m pip install pip --upgrade" || exit
   run_cmd "python -m pip install -r ${build_dir}/requirements-build.txt" || exit
-fi
-
-if [[ -n ${uv_index_url} ]]; then
-    # Set up the uv (for SPDK installer) to use the artifactory as the installation packages source
-  run_cmd "sudo mkdir -p /etc/uv" || exit
-  cat <<EOF | sudo tee /etc/uv/uv.toml
-index-url = "${uv_index_url}"
-native-tls = true
-EOF
 fi
 
 # Debug

@@ -125,10 +125,6 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    repo_url = os.environ.get('REPO_FILE_URL', 'https://artifactory.daos.hpc.amslabs.hpecorp.net/')
-    uv_index_url = '/'.join(
-        repo_url.split("/")[:3] + ['artifactory', 'api', 'pypi', 'pypi-proxy', 'simple'])
-
     command = " ".join([
         remote_env.to_export_str(),
         os.path.abspath(os.path.join(os.getcwd(), 'daos_build.sh')),
@@ -139,7 +135,6 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         f"--git-checkout {__get_daos_build_checkout(self)}",
         f"--distro {distro}",
         f"--build-jobs {build_jobs}",
-        f"--uv-index-url {uv_index_url}",
         "--debug"
     ])
     timeout = 10800  # 3 hours

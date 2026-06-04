@@ -119,6 +119,16 @@ pip install ./pydaos
 rm -rf pydaos
 deactivate
 
+# Set up uv (for SPDK installer) for the daos_build.py test
+index_url=$(pip config --global get global.index-url || echo "")
+if [[ -n ${index_url} ]]; then
+    sudo mkdir -p /etc/uv
+    cat <<EOF | sudo tee /etc/uv/uv.toml
+index-url = "${index_url}"
+native-tls = true
+EOF
+fi
+
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"
 if [ -z "$JENKINS_URL" ]; then
