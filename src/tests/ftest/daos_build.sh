@@ -42,6 +42,7 @@ distro="el9"
 build_jobs="30"
 rebuild="false"
 debug="false"
+uv_index_url=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -77,6 +78,10 @@ while [[ $# -gt 0 ]]; do
     -r|--rebuild)
       rebuild="true"
       shift 1
+      ;;
+    --uv-index-url)
+      uv_index_url="$2"
+      shift 2
       ;;
     --debug)
       debug="true"
@@ -130,7 +135,6 @@ if [ "${rebuild}" = "false" ]; then
     progress_bar = off
     no_color = true
     quiet = 0
-    verbose = 2
 EOF
 fi
 
@@ -150,6 +154,15 @@ if [ "${rebuild}" = "false" ]; then
 
   run_cmd "python -m pip install pip --upgrade" || exit
   run_cmd "python -m pip install -r ${build_dir}/requirements-build.txt" || exit
+fi
+
+if [[ -n ${uv_index_url} ]]; then
+    # Set up the uv (for SPDK installer) to use the artifactory as the installation packages source
+  run_cmd "sudo mkdir -p /etc/uv" || exit
+  cat <<EOF | sudo tee /etc/uv/uv.toml
+index-url = "${uv_index_url}"
+native-tls = true
+EOF
 fi
 
 # Debug
