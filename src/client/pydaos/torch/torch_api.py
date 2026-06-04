@@ -770,7 +770,7 @@ class _Dfs():
             raise ValueError("relative path is unacceptable")
 
         if readdir_batch_size <= 0:
-            raise ValueError("readdir batch size should be positive number")
+            raise ValueError("readdir batch size should be a positive number")
 
         if workers <= 0:
             raise ValueError("at least one worker is required for namespace scanning")
