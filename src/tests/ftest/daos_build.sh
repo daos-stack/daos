@@ -136,6 +136,7 @@ fi
 
 # Run in the python virtual environment for the rest of the script
 run_cmd "source ${venv_dir}/bin/activate" || exit
+run_cmd "export VIRTUAL_ENV=${venv_dir}" || exit
 
 # Clone the DAOS repository and install RPM dependencies for the build
 if [ "${rebuild}" = "false" ]; then

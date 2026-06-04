@@ -102,7 +102,6 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     mount_dir = dfuse.mount_dir.value
     build_dir = os.path.join(mount_dir, 'daos')
 
-    remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
     remote_env['COVFILE'] = os.environ['COVFILE']
     remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
     remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
