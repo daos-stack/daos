@@ -211,7 +211,7 @@ this PR (DAOS-18326).
 The default value for NA\_OFI\_UNEXPECTED\_TAG\_MSG was 1 until DAOS 2.6.4
 but has been changed to 0 in DAOS 2.6.5.
 In environments with different code versions on the clients and servers,
-the same value needs to be set to allow clients and servers to communicate. 
+the same value needs to be set to allow clients and servers to communicate.
 The preferred value for both is 0, so no action is needed on 2.6.5
 but NA\_OFI\_UNEXPECTED\_TAG\_MSG=0 must be explicitly set on 2.6.4
 or older (DAOS-18964).
