@@ -117,6 +117,7 @@ pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 cp -a "$PREFIX"/lib/daos/python pydaos
 pip install ./pydaos
 rm -rf pydaos
+deactivate
 
 # Set up uv (for SPDK installer) for the daos_build.py test
 if [[ -n ${TRUSTED_HOST} ]]; then
@@ -126,7 +127,6 @@ index-url = "${TRUSTED_HOST}/artifactory/api/pypi/pypi-proxy/simple"
 native-tls = true
 EOF
 fi
-deactivate
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"
