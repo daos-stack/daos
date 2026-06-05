@@ -1637,7 +1637,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	container_flags |= CONTAINER_F_DESTROYING;
 	d_iov_set(&val, &container_flags, sizeof(container_flags));
-	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
+	rc = rdb_tx_update_critical(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
 
 out_prop:
 	daos_prop_free(prop);

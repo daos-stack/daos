@@ -211,6 +211,22 @@ enum latency_type {
 	VOS_LATENCY,
 };
 
+#define OBJ_CHECK_EAGAIN(result, ts, func, oid, label)                                             \
+	do {                                                                                       \
+		if (unlikely((result) == -DER_AGAIN)) {                                            \
+			uint64_t now = daos_gettime_coarse();                                      \
+                                                                                                   \
+			if (now - ts > 30) {                                                       \
+				D_WARN("%s hit conflict on object " DF_UOID ", will retry.\n",     \
+				       func, DP_UOID(oid));                                        \
+				ts = now;                                                          \
+			}                                                                          \
+                                                                                                   \
+			ABT_thread_yield();                                                        \
+			goto label;                                                                \
+		}                                                                                  \
+	} while (0)
+
 static inline void
 obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_size)
 {
