@@ -10,6 +10,9 @@
  *
  * vos/vos_dtx.c
  */
+
+/* Only for test */
+
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos_srv/vos.h>
