@@ -552,10 +552,21 @@
    ...
 }
 {
-   Go syscall.
+   Go syscall write
    Memcheck:Param
    write(buf)
-   fun:syscall.Syscall.abi0
+   fun:internal/runtime/*Syscall6
+}
+{
+   Go syscall read
+   Memcheck:Param
+   read(buf)
+   fun:internal/runtime/*Syscall6
+}
+{
+   context Err()
+   Memcheck:Addr8
+   fun:context.(*valueCtx).Err
 }
 {
    Racecall cgo malloc
@@ -581,12 +592,6 @@
    DAOS-14680-4
    Memcheck:Value8
    fun:aeshashbody
-}
-{
-   DAOS-15159
-   Memcheck:Param
-   write(buf)
-   fun:internal/runtime/syscall.Syscall6
 }
 {
    DAOS-15548
@@ -695,12 +700,6 @@
    racecalladdr
    Memcheck:Addr8
    fun:racecalladdr
-}
-{
-   Syscall6 param
-   Memcheck:Param
-   read(buf)
-   fun:internal/runtime/syscall.Syscall6
 }
 {
    __tsan_go_atomic32_load
