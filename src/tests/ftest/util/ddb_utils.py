@@ -300,8 +300,9 @@ class DdbCommand(DdbCommandBase):
         """
         self.vos_path.value = '""'
         # "ddb prov_mem" takes db_path, but it doesn't use --db_path indicator, so set the member's
-        # value to None and set it to the cmd list. (db_path is a correct terminology according to
-        # the help doc.)
+        # value to None and set it to the cmd list. This db_path is handled differently from
+        # rm_pool's db_path, so we need to handle it in a strange way. i.e., We have self.db_path,
+        # but we're not using it and use single_command_2 instead.
         self.db_path.value = None
         cmd = ["prov_mem", db_path, tmpfs_mount]
         self.single_command_2.value = " ".join(cmd)
