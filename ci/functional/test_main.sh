@@ -119,6 +119,7 @@ if "$hardware_ok"; then
            STAGE_NAME=\"${STAGE_NAME}\"               \
            DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
            DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\"       \
+           TRUSTED_HOST=\"${TRUSTED_HOST:-}\"         \
            $(cat ci/functional/test_main_node.sh)"
     else
         ./ftest.sh "$test_tag" "$tnodes" "${FTEST_ARG:-}"

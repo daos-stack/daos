@@ -108,6 +108,7 @@ if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
      DAOS_FTEST_VENV=$DAOS_FTEST_VENV
      PYTHON_VERSION=${PYTHON_VERSION:-3.11}
      PREFIX=$PREFIX
+     TRUSTED_HOST=${TRUSTED_HOST:-}
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/setup_nodes.sh)"; then
     echo "Cluster setup (i.e. provisioning) failed"
     exit 1

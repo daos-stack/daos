@@ -15,7 +15,7 @@ export TEST_RPMS=true
 export REMOTE_ACCT=jenkins
 export WITH_VALGRIND="$WITH_VALGRIND"
 export STAGE_NAME="$STAGE_NAME"
-
 export DAOS_HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}"
 export DAOS_NO_PROXY="${DAOS_NO_PROXY:-}"
+export TRUSTED_HOST="${TRUSTED_HOST:-}"
 /usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"

@@ -119,11 +119,10 @@ pip install ./pydaos
 rm -rf pydaos
 
 # Set up uv (for SPDK installer) for the daos_build.py test
-index_url=$(pip config --global get global.index-url || echo "")
-if [[ -n ${index_url} ]]; then
+if [[ -n ${TRUSTED_HOST} ]]; then
     sudo mkdir -p /etc/uv
     cat <<EOF | sudo tee /etc/uv/uv.toml
-index-url = "${index_url}"
+index-url = "${TRUSTED_HOST}/artifactory/api/pypi/pypi-proxy/simple"
 native-tls = true
 EOF
 fi
