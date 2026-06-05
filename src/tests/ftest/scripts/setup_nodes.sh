@@ -119,6 +119,15 @@ pip install ./pydaos
 rm -rf pydaos
 deactivate
 
+# Set up uv (for SPDK installer) for the daos_build.py test
+if [[ -n ${TRUSTED_HOST} ]]; then
+    sudo mkdir -p /etc/uv
+    cat <<EOF | sudo tee /etc/uv/uv.toml
+index-url = "${TRUSTED_HOST}/artifactory/api/pypi/pypi-proxy/simple"
+native-tls = true
+EOF
+fi
+
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"
 if [ -z "$JENKINS_URL" ]; then
