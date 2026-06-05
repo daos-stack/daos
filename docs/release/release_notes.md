@@ -2,6 +2,221 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
+## DAOS Version 2.6.5 (2026-06-05)
+
+The DAOS 2.6.5 release includes the daos-2.6.5 RPM packages and their prerequisites.
+It contains the following updates on top of DAOS 2.6.4:
+
+* Libfabric has been updated to 1.22.0-5.
+* Mercury has been updated to version 2.4.1.
+* PMDK has been updated to version 2.1.3.
+
+### Bug fixes and improvements
+
+The DAOS 2.6.5 release includes fixes and improvements in the following areas:
+
+#### Mercury and Libfabric
+
+* OFI/Libfabric multi-receive is now enabled for supported providers.
+
+* The libfabric plugin for Mercury is now shipped in a separate `mercury-libfabric` RPM
+  (in previous releases, it was included in the base `mercury` RPM).
+
+#### Rebuild
+
+* Introduce a centralized migration resource manager per target that enforces global limits on
+  ULT count and DMA buffer usage across all pools, preventing overallocation during
+  concurrent multi-pool rebuilds (DAOS-18192).
+* Process migrated object IDs directly in main xstreams instead of routing through system
+  xstreams, eliminating expensive B+ tree operations in the previous round-trip path (DAOS-17928).
+* When the PS leader retries rebuild or reclaim on the same pool map version, bump the rebuild
+  generation so targets can distinguish the new attempt; also abort the object scan sooner
+  when rebuild is interrupted to allow faster failover (DAOS-18976).
+* Delay rebuild scheduling by 5 seconds so rapid sequences of pool map updates (e.g., multi-rank
+  exclude/drain) are merged into a single rebuild job instead of running serially (DAOS-18425).
+* Cache the object open handle per object for the rebuild puller instead of re-opening for
+  each dkey migration, saving repeated layout computation overhead (DAOS-17444).
+* Make pool\_discard non-blocking by spawning a ULT and returning immediately; also throttle
+  EC rebuild data consumption to one unit to avoid overwhelming targets (DAOS-18487).
+* Ensure the rebuild stable epoch is propagated via IV before migration starts,
+  fixing an assertion failure where mpt\_max\_eph could be zero (DAOS-18747).
+* Retry rebuild data fetch indefinitely on ENOMEM instead of failing the rebuild,
+  allowing the system to recover once memory pressure subsides (DAOS-18326).
+* When a single object rebuild fails, abort the entire rebuild early to prevent pool destroy
+  timeouts; transition the rank domain status from DOWN to DOWNOUT afterward (DAOS-17736).
+* Fix use of ec\_agg\_boundary before validity check, and retry failed EC aggregation peer
+  updates; also fix memory leaks of mo\_csum\_iov and mrones on error paths (DAOS-18368, DAOS-18544).
+* Clear stale IV cache entries before reintegration when a target is reintegrated without
+  reboot, and refine error handling in cont\_agg\_eph\_sync path (DAOS-18154).
+
+#### Object / Erasure Coding
+
+* When unordered conditional modifications on a DTX non-leader cause epoch conflicts
+  (DER\_TX\_RESTART), ask the client to retry with a random delay instead of immediately
+  restarting the DTX, reducing repeated epoch collisions (DAOS-18889).
+* On DTX non-leader, detect resent RPCs for transactions already in "prepared" state after
+  a leader switch, and reply directly to avoid misguiding lower-layer logic (DAOS-18785).
+* After engine restart, load the latest aggregation epoch from VOS instead of resetting to
+  zero, so EC aggregation skips unchanged containers; also use the persisted ec\_agg\_eph\_boundary
+  as the scan start epoch and prevent bumping the epoch after reset (DAOS-18161).
+* Fix two checksum bugs with non-power-of-2 chunk sizes on EC objects: align checksum
+  computation with VOS-space offsets during rebuild migration, and widen extent offset types
+  to uint64\_t to preserve the parity indicator bit in aggregation verification (DAOS-18524).
+* Yield the CPU more frequently during EC aggregation under space pressure to avoid holding
+  the xstream for too long; also increase RPC retry latency and send DTX RPCs from the
+  current ULT to reduce congestion from resent requests (DAOS-18607).
+* Fix incorrect object shard ID assembly in CPD RPC handler when punching multiple shards of
+  the same object on the same VOS target, which caused some shards to leak (DAOS-18641).
+* Skip key checksum verification during value enumeration, fixing a crash where a dummy IOD
+  passed to daos\_csummer\_verify\_iod caused ISA-L SHA-256 update to fail (DAOS-18356).
+
+#### Placement
+
+* Simplify the jump-map state machine for rebuild: properly set rebuilding/reintegrating flags
+  for all target transitions and remove the requirement for an extra target when rebuilding
+  DOWN-to-UP targets (DAOS-18487).
+* Remove expensive `_get_target/_get_dom` traversals in layout computation and use byte-level
+  bitmap skipping instead of bit-by-bit checking, significantly improving performance for
+  large objects (DAOS-17444).
+* Stop layout computation early for rebuild and EC aggregation—only; generate the layout for
+  the requested redundancy group rather than the full object, saving significant CPU (DAOS-18607).
+
+#### DTX (Distributed Transactions)
+
+* Allow a DTX participant whose target was in rebuild/reint at transaction time to become
+  the new DTX leader once its status returns to UPIN, resolving stuck transactions after
+  failover (DAOS-18728).
+* Add the ability to discard invalid DTX records discovered by the consistency checker (ddb),
+  enabling recovery from inconsistent transaction metadata (DAOS-16951).
+
+#### VOS (Versioned Object Store)
+
+* Cap the merged extent size at a defined threshold to prevent runaway memory consumption
+  during extent coalescing (DAOS-18901).
+* Lower the anti-fragmentation system space reservation: reduce min from 2 GB to 600 MB and
+  max from 10 GB to 6 GB while keeping the 5% ratio; also allow GC to use smaller credits
+  when encountering ENOSPACE to reclaim space in tighter conditions (DAOS-17345, DAOS-18690).
+* Update PMDK to fix a heap\_curr\_allocated accounting underflow that could produce spurious
+  "pool not closed" messages and incorrect free-space statistics (DAOS-18882).
+* Add missing btr\_node\_tx\_add() calls when changing btree node flags and during node splitting,
+  preventing potential metadata inconsistencies; also stop ignoring umem return codes that signal
+  a broken transaction, avoiding engine crashes (DAOS-18531, DAOS-17891).
+
+#### Pool / Container
+
+* Populate pool handles into the IV cache during PS leader step-up so that targets can access
+  handles immediately after all pool services restart (DAOS-17351).
+* Retry pool handle IV fetches on transient errors and ensure
+  ds\_pool\_iv\_conn\_hdls\_update is called even when no handles exist in the DB,
+  fixing invalid IV entries that returned unexpected DER\_NOTLEADER (DAOS-18613).
+* Make the checkpoint ULT always yield when it fails to acquire DMA buffers, preventing it
+  from blocking the xstream; also tune default checkpoint parameters (DAOS-18691, DAOS-18366).
+* Prevent ds\_rsvc\_start from inserting a pool service into the hash table while the ds\_pool
+  is stopping, fixing a hang during concurrent pool create and pool stop (DAOS-18552).
+* Allow a pool to start even when some shards are missing, so pool operations like
+  `dmg pool list` and `dmg pool query` remain functional during partial outages (DAOS-18036).
+* Break the infinite IV retry loop in cont\_track\_eph\_leader\_ult when the ULT needs to exit,
+  preventing pool service leader hangs after network outages (DAOS-18240).
+* When pool self\_heal is set to "exclude" (no rebuild), still allow admin-initiated manual
+  rebuilds; also support "none" as a valid self\_heal property value (DAOS-15993, DAOS-17973).
+* Treat a rank as failed in cont\_agg\_eph\_sync if all its targets are excluded, so the EC
+  aggregation boundary epoch is correctly propagated to other engines (DAOS-18157).
+
+#### DFS (DAOS File System)
+
+* Harden error handling and fix memory leaks across multiple DFS entry points including
+  lookup, readdir, and object attribute operations (DAOS-18697).
+* If dir-oclass is set to EC on container create, fall back to the default; `daos fs set-attr`
+  with an EC class now applies only to files while directories use the default (DAOS-18604).
+* Correctly display directory and file object classes in `daos fs get-attr`; also add DFS
+  chunk size selection for RF3 containers with 3-parity EC (DAOS-17523, DAOS-18171).
+
+#### CaRT (Transport)
+
+* Remove the logic that forces tagged unexpected messages for non-CXI/TCP providers, enabling
+  OFI multi-recv on InfiniBand and improving message throughput (DAOS-18484).
+* Add a tunable SWIM\_SUBGROUP\_SIZE environment variable to control the number of indirect-ping
+  targets; also log new SWIM suspicions at INFO level with origins for easier debugging
+  (DAOS-17405).
+* Remove legacy PSR (Primary Service Rank) code that was only used by CaRT tests and samples;
+  improve context destroy sequencing to avoid cleanup races (DAOS-17114, DAOS-13887).
+* Add resubmitted out-of-quota RPCs to the timeout tracking list so they can be properly
+  timed out; fix corpc error handling that caused double-reply or refcount leaks on middle
+  nodes (DAOS-17470, DAOS-17861).
+
+#### BIO (Block I/O)
+
+* Monitor inflight SPDK I/Os and raise a RAS event if any I/O is not completed within a
+  configurable timeout (120 s default via DAOS\_SPDK\_IO\_TIMEOUT),
+  marking the device as faulty (DAOS-17607).
+* Enable the auto-faulty reaction with default thresholds by default; previously it required
+  explicit opt-in via daos\_nvme.conf (DAOS-18337).
+* Flush the WAL header (persisting the last checkpointed ID) before unmapping the
+  checkpointed region, preventing stale WAL replay if the engine crashes in between
+  (DAOS-17628).
+* Remove the legacy si\_unused\_id rollback on WAL commit failure, which violated the invariant
+  that new transaction IDs must exceed the last checkpointed ID (DAOS-18615).
+
+#### Control Plane
+
+* Refuse to start daos\_server when Transparent Huge Pages (THP) are enabled, as THP causes
+  SPDK hugepage fragmentation and memory accounting issues (DAOS-17468).
+* Scale `dmg pool` command timeouts proportionally with the number of ranks in the system to
+  avoid premature timeouts on large clusters (DAOS-18366).
+* Restrict Excluded ranks to only transition to Joined or AdminExcluded states, preventing
+  confusing state changes when excluded engines SIGKILL themselves (DAOS-17643).
+* Remove stale SPDK lockfiles both on engine exit and before/after NVMe local scans to avoid
+  scan failures on restart (DAOS-17341, DAOS-17935).
+* Add ComponentServer gRPC authorization for dmg system drain/reintegrate/self-heal/rebuild
+  commands so server-to-server calls succeed in certificate mode (DAOS-18198).
+* Fix reintegration error handling: add "failout" to MGMT\_TGT\_CREATE CoRPC to avoid leaking
+  pools on ranks being reintegrated; also fix pool create cleanup logic (DAOS-17600, DAOS-18162).
+* Fail protocol query after all engines have been tried instead of retrying indefinitely,
+  avoiding an infinite flood of errors when engines are offline (DAOS-18167).
+* Improve engine start issue handling: skip stuck bio\_xsctxt\_free loops after SPDK init
+  failure, restrict nonexistent-child tolerance to CR mode, add a RAS event on pool start
+  failures, and skip pools during engine start if needed (DAOS-17442, DAOS-17305).
+
+#### Consistency Checker
+
+* When a dRPC upcall to the control plane fails, properly remove the pending interaction record
+  from the check instance tree before destroying it, preventing assertion failures; also fix
+  container label boundary checking for non-null-terminated buffers (DAOS-18587).
+* Handle rank death events from both SWIM and CaRT process group notifications to ensure no
+  event is missed during consistency repair operations (DAOS-18238).
+* Destroy check instance after check cleanup; filter out repeated pools in the check list to
+  avoid redundant processing (DAOS-18441, DAOS-17822).
+
+#### Utilities / Common
+
+* ddb: Replace device offline, zero-length key fix, interpret key by type (DAOS-17180, DAOS-16963,
+  DAOS-18625).
+* Fix rare DAV VOS heap chunk metadata state during engine restart that could cause
+  future allocations to abort with an assertion failure (DAOS-18195).
+* Redirect PMDK internal error and warning messages to VOS logging instead of stderr,
+  making them visible in the DAOS log with proper filtering (DAOS-16661).
+* Run vos\_pool\_create and vos\_pool\_open in deep-stack ULTs to prevent pmemobj\_create/open
+  from overflowing the caller's stack (DAOS-18296).
+
+### Known Issues
+
+An issue with memory registration handling in the libfabric cxi provider
+may cause DER\_NOMEM errors during rebuild. This issue is fixed in
+libfabric PR https://github.com/ofiwg/libfabric/pull/11908,
+which has been landed in libfabric but is not included in the libfabric
+version shipped with the current Slingshot Host Stack (SHS).
+The workaround is to install the latest libfabric, which includes
+this PR (DAOS-18326).
+
+The default value for NA\_OFI\_UNEXPECTED\_TAG\_MSG was 1 until DAOS 2.6.4
+but has been changed to 0 in DAOS 2.6.5.
+In environments with different code versions on the clients and servers,
+the same value needs to be set to allow clients and servers to communicate.
+The preferred value for both is 0, so no action is needed on 2.6.5
+but NA\_OFI\_UNEXPECTED\_TAG\_MSG=0 must be explicitly set on 2.6.4
+or older (DAOS-18964).
+
+
 ## DAOS Version 2.6.4 (2025-10-29, updated 2025-11-04)
 
 The DAOS 2.6.4 release includes the daos-2.6.4-7 RPM packages and their prerequisites.
