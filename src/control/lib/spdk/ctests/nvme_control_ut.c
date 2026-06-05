@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,7 +22,7 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
-static struct ret_t	*test_ret;
+static struct ret_t *test_ret;
 
 /**
  * ==============================
@@ -299,15 +299,11 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test_setup_teardown(test_discover_null_controllers,
-						setup, teardown),
-		cmocka_unit_test_setup_teardown(test_discover_set_controllers,
-						setup, teardown),
-		cmocka_unit_test_setup_teardown(test_discover_probe_fail, setup,
-						teardown),
-		cmocka_unit_test_setup_teardown(test_collect, setup, teardown),
-		cmocka_unit_test_setup_teardown(test_get_controller, setup,
-						teardown),
+	    cmocka_unit_test_setup_teardown(test_discover_null_controllers, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_discover_set_controllers, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_discover_probe_fail, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_collect, setup, teardown),
+	    cmocka_unit_test_setup_teardown(test_get_controller, setup, teardown),
 	};
 
 	return cmocka_run_group_tests_name("control_nvme_control_ut", tests,
