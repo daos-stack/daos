@@ -78,7 +78,7 @@ The DAOS 2.6.5 release includes fixes and improvements in the following areas:
 * Remove expensive `_get_target/_get_dom` traversals in layout computation and use byte-level
   bitmap skipping instead of bit-by-bit checking, significantly improving performance for
   large objects (DAOS-17444).
-* Stop layout computation early for rebuild and EC aggregation—only generate the layout for
+* Stop layout computation early for rebuild and EC aggregation—only; generate the layout for
   the requested redundancy group rather than the full object, saving significant CPU (DAOS-18607).
 
 #### DTX (Distributed Transactions)
