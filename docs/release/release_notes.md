@@ -29,6 +29,9 @@ The DAOS 2.6.5 release includes fixes and improvements in the following areas:
   concurrent multi-pool rebuilds (DAOS-18192).
 * Process migrated object IDs directly in main xstreams instead of routing through system
   xstreams, eliminating expensive B+ tree operations in the previous round-trip path (DAOS-17928).
+* When the PS leader retries rebuild or reclaim on the same pool map version, bump the rebuild
+  generation so targets can distinguish the new attempt; also abort the object scan sooner
+  when rebuild is interrupted to allow faster failover (DAOS-18976).
 * Delay rebuild scheduling by 5 seconds so rapid sequences of pool map updates (e.g., multi-rank
   exclude/drain) are merged into a single rebuild job instead of running serially (DAOS-18425).
 * Cache the object open handle per object for the rebuild puller instead of re-opening for
@@ -92,7 +95,7 @@ The DAOS 2.6.5 release includes fixes and improvements in the following areas:
   during extent coalescing (DAOS-18901).
 * Lower the anti-fragmentation system space reservation: reduce min from 2 GB to 600 MB and
   max from 10 GB to 6 GB while keeping the 5% ratio; also allow GC to use smaller credits
-  when encountering ENOSPACE to reclaim space in tighter conditions (DAOS-17345).
+  when encountering ENOSPACE to reclaim space in tighter conditions (DAOS-17345, DAOS-18690).
 * Update PMDK to fix a heap\_curr\_allocated accounting underflow that could produce spurious
   "pool not closed" messages and incorrect free-space statistics (DAOS-18882).
 * Add missing btr\_node\_tx\_add() calls when changing btree node flags and during node splitting,
