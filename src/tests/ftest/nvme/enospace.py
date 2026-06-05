@@ -701,7 +701,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.run_enospace_with_bg_job(self.client_log)
 
         # Read the same container which was written at the beginning.
-        self.container.uuid = baseline_cont_uuid
+        self.ior_cmd.dfs_cont.update(baseline_cont_uuid)
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
