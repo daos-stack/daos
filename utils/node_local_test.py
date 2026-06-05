@@ -456,6 +456,21 @@ def get_base_env(clean=False):
     return env
 
 
+def check_memcheck_build(conf):
+    """Fail early if the daos binary is not valgrind-tagged for a memcheck run.
+
+    memcheck-cart.supp no longer suppresses the Go runtime; that relies on the
+    binary being built with the Go 1.25+ "valgrind" tag (BUILD_VALGRIND=1).
+    """
+    daos_bin = join(conf['PREFIX'], 'bin', 'daos')
+    with open(daos_bin, 'rb') as fd:
+        if b'runtime.valgrindRegisterStack' not in fd.read():
+            raise NLTestFail(
+                f'{daos_bin} is not built with the Go "valgrind" tag (needs '
+                'Go 1.25+ and BUILD_VALGRIND=1), to run under memcheck.'
+                'Rebuild with: scons install BUILD_VALGRIND=1')
+
+
 class DaosPool():
     """Class to store data about daos pools"""
 
@@ -1051,6 +1066,7 @@ class DaosServer():
         exec_cmd.extend(cmd)
 
         cmd_env = get_base_env()
+        valgrind_hdl.add_memcheck_env(cmd_env)
 
         with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
                                          suffix='.log',
@@ -1293,6 +1309,13 @@ class ValgrindHelper():
             cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
         return cmd
+
+    def add_memcheck_env(self, env):
+        """Disable Go async preemption for a command run under memcheck."""
+        if not self.use_valgrind:
+            return
+        godebug = env.get('GODEBUG')
+        env['GODEBUG'] = f'{godebug},asyncpreemptoff=1' if godebug else 'asyncpreemptoff=1'
 
     def convert_xml(self):
         """Modify the xml file"""
@@ -1731,6 +1754,7 @@ def run_daos_cmd(conf,
     exec_cmd.extend(daos_cmd)
 
     cmd_env = get_base_env()
+    valgrind_hdl.add_memcheck_env(cmd_env)
 
     if conf.args.client_debug:
         cmd_env['D_LOG_MASK'] = conf.args.client_debug
@@ -6657,6 +6681,8 @@ def run(wf, args):
 
     conf.set_wf(wf)
     conf.set_args(args)
+    if args.memcheck != 'no':
+        check_memcheck_build(conf)
     setup_log_test(conf)
 
     fi_test = False

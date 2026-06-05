@@ -1,626 +1,13 @@
+# Go runtime
 {
-   dl init leaks
+   Go runtime: GC memory (valgrind integration entry point)
    Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:runtime.valgrindClientRequest*
    ...
-   fun:_dl_init
 }
 {
-    dl open leaks
-    Memcheck:Leak
-    ...
-    fun:_dl_open
-}
-{
-   _dl_fini leak
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   ...
-   fun:_dl_fini
-   ...
-}
-{
-   dlerror_run leak
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   ...
-   fun:_dlerror_run
-   ...
-}
-{
-   _dl_fixup leak
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   ...
-   fun:_dl_fixup
-   ...
-}
-{
-   FI leak 6
-   Memcheck:Leak
-   match-leak-kinds: possible
-   ...
-   fun:rdma_bind_addr
-   ...
-}
-{
-   FI leak 7
-   Memcheck:Leak
-   ...
-   fun:fi_ini
-   ...
-}
-{
-   access-0
-   Memcheck:Param
-   socketcall.sendto(msg)
-   ...
-   fun:send
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   ...
-   fun:x_cgo_thread_start
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:bufio.(*Reader).*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Value8
-   ...
-   fun:bufio.(*Reader).*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:bufio.(*Reader).*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:os.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   fun:bytes.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:bytes.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   fun:internal/bytealg*IndexByte*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr4
-   fun:internal/bytealg*IndexByte*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:internal/bytealg*IndexByte*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   fun:strings.(*Builder).*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:strings.(*Builder).*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   ...
-   fun:runtime.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:runtime.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr2
-   ...
-   fun:runtime.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr4
-   ...
-   fun:runtime.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:runtime.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:runtime.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr32
-   ...
-   fun:runtime.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Value8
-   ...
-   fun:runtime.*
-}
-{
-   Go conditional
-   Memcheck:Cond
-   src:*.go
-}
-{
-   Go addr1
-   Memcheck:Addr1
-   src:*.go
-}
-{
-   Go addr 2
-   Memcheck:Addr2
-   src:*.go
-}
-{
-   Go addr 4
-   Memcheck:Addr4
-   src:*.go
-}
-{
-   Go addr 8
-   Memcheck:Addr8
-   src:*.go
-}
-{
-   Go addr 16
-   Memcheck:Addr16
-   src:*.go
-}
-{
-   Go addr 32
-   Memcheck:Addr32
-   src:*.go
-}
-{
-   Ga value 8
-   Memcheck:Value8
-   src:*.go
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:internal*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:math.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:regexp*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr2
-   ...
-   fun:regexp*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr4
-   ...
-   fun:regexp*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:regexp*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:regexp*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:sort.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:encoding/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:encoding/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:encoding/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:hash/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr4
-   ...
-   fun:hash/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:hash/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Value8
-   ...
-   fun:hash/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:compress/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:compress/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:sync.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:sync.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   fun:aeshash*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:memeqbody
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   fun:memeqbody
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:main.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:main.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:main.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:fmt.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:github.com/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr4
-   ...
-   fun:github.com/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:github.com/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:github.com/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   ...
-   fun:*golang.org/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   ...
-   fun:*golang.org/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr4
-   ...
-   fun:*golang.org/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:*golang.org/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   ...
-   fun:*golang.org/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Value8
-   ...
-   fun:*golang.org/*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:reflect.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   fun:reflect.*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:unicode/utf8*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:strconv.Unquote
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:racecall
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   fun:racecalladdr
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:indexbytebody
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr32
-   ...
-   fun:indexbytebody
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   ...
-   fun:indexbytebody
-}
-{
-   go-cond-racecall
-   Memcheck:Cond
-   ...
-   fun:racecall
-}
-{
-   go-value8-write_racecall
-   Memcheck:Value8
-   fun:__tsan_write
-   fun:racecall
-}
-{
-   go-value8-racecall
-   Memcheck:Value8
-   fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
-   fun:racecall
-}
-{
-   MemoryRangeSet ShadowSet
-   Memcheck:Value8
-   fun:ShadowSet
-   fun:_ZN6__tsanL14MemoryRangeSetEmmNS_9RawShadowE
-   fun:racecall
-}
-{
-   FI leak 8
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:calloc
-   fun:_dlerror_run
-   fun:dlopen*
-   fun:_goboringcrypto_DLOPEN_OPENSSL
-   fun:_cgo_*_Cfunc__goboringcrypto_DLOPEN_OPENSSL
-   fun:runtime.asmcgocall
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:hg_dlog_mkcount32
-   ...
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:hg_dlog_mkcount64
-   ...
-}
-{
-   FI leak 9
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:calloc
-   fun:_dl_allocate_tls
-   fun:pthread_create*
-   ...
-   fun:na_ofi_initialize
-   fun:NA_Initialize_opt
-   fun:hg_core_init
-   fun:HG_Core_init_opt
-   fun:HG_Init_opt
-   fun:crt_hg_class_init
-}
-{
-   Tcp provider with ofi rxm
-   Memcheck:Param
-   sendmsg(msg.msg_iov[1])
-   ...
-   fun:ofi_bsock_sendv
-   ...
-}
-{
-   Tcp provider with ofi rxm 2
-   Memcheck:Param
-   sendmsg(msg.msg_iov[2])
-   ...
-   fun:ofi_bsock_sendv
-   ...
-}
-{
-   Go syscall write
-   Memcheck:Param
-   write(buf)
-   fun:internal/runtime/*Syscall6
-}
-{
-   Go syscall read
-   Memcheck:Param
-   read(buf)
-   fun:internal/runtime/*Syscall6
-}
-{
-   context Err()
-   Memcheck:Addr8
-   fun:context.(*valueCtx).Err
-}
-{
-   Racecall cgo malloc
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:_cgo_*_Cfunc__Cmalloc
-   fun:runtime.asmcgocall.abi0
-   ...
-   fun:racecall
-}
-{
-   DAOS-14680-2
-   Memcheck:Value8
-   fun:memeqbody
-}
-{
-   DAOS-14680-3
-   Memcheck:Cond
-   fun:aeshashbody
-}
-{
-   DAOS-14680-4
-   Memcheck:Value8
-   fun:aeshashbody
-}
-{
-   DAOS-15548
-   Memcheck:Addr1
-   fun:racecallatomic
-}
-{
-   __tsan_go_atomic64_load
-   Memcheck:Addr8
-   ...
-   fun:__tsan_go_atomic64_load
-   fun:racecall
-}
-{
-   __tsan_go_atomic64_store
-   Memcheck:Addr8
-   ...
-   fun:__tsan_go_atomic64_store
-   fun:racecall
-}
-{
-   __tsan_go_atomic64_compare_exchange
-   Memcheck:Addr8
-   ...
-   fun:__tsan_go_atomic64_compare_exchange
-   fun:racecall
-}
-{
-   Persistentalloc cgo malloc
+   Go runtime: persistentalloc (cgo malloc, never freed)
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
@@ -630,7 +17,7 @@
    fun:runtime.persistentalloc
 }
 {
-   Newproc cgo malloc
+   Go runtime: newproc (cgo malloc, never freed)
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
@@ -640,95 +27,7 @@
    fun:runtime.newproc.abi0
 }
 {
-   __tsan_write_pc
-   Memcheck:Value8
-   ...
-   fun:__tsan_write_pc
-   fun:racecall
-}
-{
-   __tsan_read_pc
-   Memcheck:Value8
-   ...
-   fun:__tsan_read_pc
-   fun:racecall
-}
-{
-   tsan::MemoryAccessRange
-   Memcheck:Value8
-   ...
-   fun:_ZN6__tsan18MemoryAccessRangeTILb0EEEvPNS_11ThreadStateEmmm
-   ...
-   fun:racecall
-}
-{
-   tsan::MemoryAccessRange
-   Memcheck:Value8
-   ...
-   fun:_ZN6__tsan18MemoryAccessRangeTILb1EEEvPNS_11ThreadStateEmmm
-   ...
-   fun:racecall
-}
-{
-   tsan::TraceRestartMemoryAccess
-   Memcheck:Value8
-   ...
-   fun:_ZN6__tsan24TraceRestartMemoryAccessEPNS_11ThreadStateEmmmm
-   ...
-   fun:racecall
-}
-{
-   __tsan_read
-   Memcheck:Value8
-   ...
-   fun:__tsan_read
-   fun:racecall
-}
-{
-   __tsan_write
-   Memcheck:Value8
-   ...
-   fun:__tsan_write
-   fun:racecall
-}
-{
-   racecallatomic
-   Memcheck:Addr8
-   fun:racecallatomic
-}
-{
-   racecalladdr
-   Memcheck:Addr8
-   fun:racecalladdr
-}
-{
-   __tsan_go_atomic32_load
-   Memcheck:Addr4
-   ...
-   fun:__tsan_go_atomic32_load
-   fun:racecall
-}
-{
-   __tsan_go_atomic32_store
-   Memcheck:Addr4
-   ...
-   fun:__tsan_go_atomic32_store
-   fun:racecall
-}
-{
-   __tsan_go_atomic32_compare_exchange
-   Memcheck:Addr4
-   ...
-   fun:__tsan_go_atomic32_compare_exchange
-   fun:racecall
-}
-{
-   racefuncenter
-   Memcheck:Addr8
-   fun:racefuncenter
-}
-{
-   Runtime bootstrap memory leak
+   Go runtime: bootstrap (cgo malloc, never freed)
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
@@ -737,68 +36,170 @@
    ...
    fun:runtime.rt0_go.abi0
 }
+# bytealg over-reads buffer ends by design; golang/go#27610
+# recommends this suppression
 {
-   bytealg.cmpbody 32-bit
-   Memcheck:Addr32
-   fun:cmpbody
-}
-{
-   bytealg.cmpbody 16-bit
-   Memcheck:Addr16
-   fun:cmpbody
-}
-{
-   bytealg.cmpbody 8-bit
+   golang/go#27610: bytealg indexbytebody over-read
    Memcheck:Addr8
-   fun:cmpbody
-}
-{
-   bytealg.cmpbody 1-bit
-   Memcheck:Addr1
-   fun:cmpbody
-}
-{
-   bytealg.indexbytebody
-   Memcheck:Addr16
+   ...
    fun:indexbytebody
 }
 {
-   bytealg.countbody
+   golang/go#27610: bytealg indexbytebody over-read
    Memcheck:Addr16
-   fun:countbody
-}
-{
-   __tsan_go_atomic32_fetch_add
-   Memcheck:Addr4
    ...
-   fun:__tsan_go_atomic32_fetch_add
-   fun:racecall
+   fun:indexbytebody
 }
 {
-   __tsan_go_atomic64_fetch_add
-   Memcheck:Addr8
+   golang/go#27610: bytealg indexbytebody over-read
+   Memcheck:Addr32
    ...
-   fun:__tsan_go_atomic64_fetch_add
-   fun:racecall
+   fun:indexbytebody
 }
 {
-   getpwnam_r() leak
+   golang/go#27610: bytealg indexbytebody over-read
+   Memcheck:Cond
+   ...
+   fun:indexbytebody
+}
+
+# glibc / loader / NSS
+{
+   glibc: per-thread TLS (dtv)
+   Memcheck:Leak
+   match-leak-kinds: possible,reachable
+   fun:calloc
+   ...
+   fun:_dl_allocate_tls
+   ...
+   fun:pthread_create*
+   ...
+}
+{
+   glibc: dl_init
+   Memcheck:Leak
+   ...
+   fun:_dl_init
+}
+{
+   glibc: dl_open
+   Memcheck:Leak
+   ...
+   fun:_dl_open
+}
+{
+   glibc: dl_fini
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fini
+   ...
+}
+{
+   glibc: dlerror_run
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dlerror_run
+   ...
+}
+{
+   glibc: dl_fixup
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fixup
+   ...
+}
+{
+   glibc: getpwnam_r (NSS)
    Memcheck:Leak
    fun:*alloc
    ...
    fun:getpwnam_r*
 }
 {
-   getpwuid_r() leak
+   glibc: getpwuid_r (NSS)
    Memcheck:Leak
    fun:calloc
    ...
    fun:getpwuid_r*
 }
 {
-   localtime() leak
+   glibc: localtime / tz data
    Memcheck:Leak
    fun:malloc
    ...
    fun:__tz_convert
+}
+
+# libfabric (OFI)
+{
+   libfabric: provider init (fi_ini)
+   Memcheck:Leak
+   ...
+   fun:fi_ini
+   ...
+}
+{
+   libfabric: rdma_bind_addr init
+   Memcheck:Leak
+   match-leak-kinds: possible
+   ...
+   fun:rdma_bind_addr
+   ...
+}
+{
+   libfabric: tcp/rxm sends uninitialized bytes (msg_iov[1])
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:ofi_bsock_sendv
+   ...
+}
+{
+   libfabric: tcp/rxm sends uninitialized bytes (msg_iov[2])
+   Memcheck:Param
+   sendmsg(msg.msg_iov[2])
+   ...
+   fun:ofi_bsock_sendv
+   ...
+}
+{
+   libfabric: send() uninitialized bytes
+   Memcheck:Param
+   socketcall.sendto(msg)
+   ...
+   fun:send
+}
+
+# Mercury (HG)
+{
+   mercury: hg_dlog_mkcount32
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:hg_dlog_mkcount32
+   ...
+}
+{
+   mercury: hg_dlog_mkcount64
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:hg_dlog_mkcount64
+   ...
+}
+
+# BoringCrypto / OpenSSL
+{
+   boringcrypto: dlopen of libssl
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlopen*
+   fun:_goboringcrypto_DLOPEN_OPENSSL
+   fun:_cgo_*_Cfunc__goboringcrypto_DLOPEN_OPENSSL
+   fun:runtime.asmcgocall
 }

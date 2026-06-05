@@ -579,6 +579,16 @@ pipeline {
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                            // Valgrind-tagged variant for the NLT memcheck stage,
+                            // stashed separately; the build above keeps -race for ftest.
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           build_deps: 'no',
+                                           scons_args: sconsArgs() +
+                                                      ' BUILD_VALGRIND=1 PREFIX=/opt/daos TARGET_TYPE=release'))
+                            sh label: 'Stash valgrind install tree for NLT',
+                                script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
+                            stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
                         }
                     }
                     post {
@@ -715,6 +725,8 @@ pipeline {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
+                        // NLT memchecks the valgrind-tagged build, not the shared -race one.
+                        unstash 'opt-daos-valgrind'
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
