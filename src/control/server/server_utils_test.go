@@ -511,7 +511,7 @@ func TestServer_prepBdevStorage_errors(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
+					sp, scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
 					mbp, nil),
 				srvCfg: cfg,
 			}
