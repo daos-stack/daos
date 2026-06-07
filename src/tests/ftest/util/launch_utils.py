@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -44,16 +44,14 @@ def fault_injection_enabled(logger):
     Returns:
         bool: whether or not fault injection is enabled
     """
-    # Workaround for SRE-3827. Needs to be reverted before the landing.
-    #
-    # logger.debug("-" * 80)
-    # logger.debug("Checking for fault injection enablement via 'fault_status':")
-    # if run_local(logger, "fault_status").passed:
-    #     logger.debug("  Fault injection is enabled")
-    #     return True
-    # # Command failed or yielded a non-zero return status
-    # logger.debug("  Fault injection is disabled")
-    return True
+    logger.debug("-" * 80)
+    logger.debug("Checking for fault injection enablement via 'fault_status':")
+    if run_local(logger, "fault_status").passed:
+        logger.debug("  Fault injection is enabled")
+        return True
+    # Command failed or yielded a non-zero return status
+    logger.debug("  Fault injection is disabled")
+    return False
 
 
 def setup_fuse_config(logger, hosts):
