@@ -37,8 +37,10 @@ static void
 rpc_handle_ping_front_q(const struct crt_cb_info *info)
 {
 	DBG_PRINT("Response from front queued rpc\n");
-	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n",
-		  info->cci_rc);
+	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n", info->cci_rc);
+
+	/* sent_count == resp_count means rpc didn't get queued in the front */
+	D_ASSERTF(sent_count != resp_count, "Send count matches response count\n");
 	sem_post(&test.tg_queue_front_token);
 }
 
@@ -130,8 +132,6 @@ test_run()
 		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
 		crtu_sem_timedwait(&test.tg_queue_front_token, 61, __LINE__);
-		D_ASSERTF(sent_count != resp_count,
-			"Send count matches response count\n");
 	}
 
 	DBG_PRINT("Waiting for responses to %d rpcs\n",
