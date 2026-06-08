@@ -1249,6 +1249,8 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 				rc = -DER_OP_CANCELED;
 				break;
 			}
+			DL_INFO(rc, "%s: retrying to create replica " RDB_F_RID, svc->s_name,
+				RDB_P_RID(id));
 			dss_sleep(d_backoff_seq_next(&backoff_seq) * 1000);
 		}
 		d_backoff_seq_fini(&backoff_seq);
