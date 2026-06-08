@@ -461,6 +461,7 @@ timestamp
 timestamps
 tmp
 tmpfs
+tempfile
 toolchain
 toplevel
 traceback
