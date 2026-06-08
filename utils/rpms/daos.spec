@@ -10,11 +10,8 @@
 %else
 %global daos_build_args client test
 %endif
-%if (0%{?suse_version} >= 1500)
-%global mercury_version   2.4.1-2.suse.lp155
-%else
 %global mercury_version   2.4.1-2
-%endif
+%global mercury_version_next   2.4.1-3
 %global libfabric_version 1.20
 %global argobots_version 1.2-3
 %global __python %{__python3}
@@ -41,6 +38,7 @@ BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
+BuildRequires: mercury-devel < %{mercury_version_next}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 %global openmpi openmpi
@@ -137,6 +135,7 @@ Requires: openssl
 # of mercury, at which time the autoprov shared library version should
 # suffice
 Requires: mercury-libfabric >= %{mercury_version}
+Requires: mercury-libfabric < %{mercury_version_next}
 
 
 %description
@@ -168,6 +167,7 @@ Requires: libpmemobj >= 2.1.3-2
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury-libfabric >= %{mercury_version}
+Requires: mercury-libfabric < %{mercury_version_next}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
@@ -189,6 +189,7 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury-libfabric >= %{mercury_version}
+Requires: mercury-libfabric < %{mercury_version_next}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
