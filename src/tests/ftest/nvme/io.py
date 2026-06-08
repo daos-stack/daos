@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -47,10 +48,13 @@ class NvmeIo(IorTestBase):
                 size_before_ior = self.pool.info
 
                 # Run ior with the parameters specified for this pass
-                self.ior_cmd.transfer_size.update(ior_param[1])
-                self.ior_cmd.block_size.update(ior_param[2])
-                self.ior_cmd.dfs_oclass.update(obj_type)
-                self.ior_cmd.set_daos_params(self.pool, self.container.identifier)
+                self.ior_cmd.update_params(
+                    transfer_size=ior_param[1],
+                    block_size=ior_param[2],
+                    dfs_oclass=obj_type,
+                    dfs_pool=self.pool.identifier,
+                    dfs_cont=self.container.identifier
+                )
                 self.run_ior(self.get_ior_job_manager_command(), ior_param[3])
 
                 # Verify IOR consumed the expected amount from the pool
