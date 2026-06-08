@@ -58,4 +58,4 @@ class CsumErrorLog(DaosCoreBase):
         self.log_step('Check checksum error logs')
         checksum_errs = self.get_checksum_error_value(t_start, t_end)
         self.log.info('Checksum Errors reported:  %d', checksum_errs)
-        self.assertTrue(checksum_errs > 0, 'Checksum Errors not detected')
+        self.assertGreater(checksum_errs, 0, 'Checksum Errors not detected')
