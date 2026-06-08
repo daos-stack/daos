@@ -2120,6 +2120,10 @@ obj_sgls_bulk_needed(struct obj_auxi_args *obj_auxi, d_sg_list_t *sgls, unsigned
 {
 	daos_size_t sgls_size;
 
+	/* GPU buffers cannot be inline-packed (CPU can't dereference them) */
+	if (obj_auxi->flags & ORF_GPU_DIRECT)
+		return true;
+
 	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
 	 * if need bulk transferring.
 	 */
@@ -6450,10 +6454,13 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	 */
 	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed)
 		args->sgls = obj_auxi->reasb_req.orr_sgls;
-	rc = obj_csum_update(obj, args, obj_auxi);
-	if (rc) {
-		D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
-		goto out_task;
+	/* Skip checksum for GPU buffers — CPU cannot dereference them */
+	if (!(obj_auxi->flags & ORF_GPU_DIRECT)) {
+		rc = obj_csum_update(obj, args, obj_auxi);
+		if (rc) {
+			D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
+			goto out_task;
+		}
 	}
 	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed && obj_auxi->reasb_req.orr_single_tgt)
 		args->sgls = obj_auxi->reasb_req.orr_usgls;

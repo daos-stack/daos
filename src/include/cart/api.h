@@ -1019,6 +1019,40 @@ crt_bulk_create_with_mem_attr(crt_context_t crt_ctx, d_sg_list_t *sgl,
 			      crt_bulk_t *bulk_hdl);
 
 /**
+ * Import a remote bulk handle from a pre-registered RDMA key.
+ *
+ * Creates a bulk handle from an externally-created RDMA memory registration
+ * key, without performing local memory registration. The resulting handle
+ * can be used as the remote/origin handle in crt_bulk_transfer().
+ *
+ * This is intended for importing RDMA descriptors from external systems
+ * (e.g., NVIDIA cuFile/GPUDirect Storage) where GPU memory is already
+ * registered by nvidia-fs/cuFileBufRegister and the serialized RDMA key
+ * is passed to the storage plugin via cufileRDMAInfo_t.
+ *
+ * Note: Not all transports support raw rkey import. UCX does not support it
+ * because nvidia-fs/cuFileBufRegister produces a raw RDMA registration, not
+ * the UCX-specific packed format. In that case, callers should fall back to
+ * normal bulk create with HMEM so UCX can register CUDA memory itself.
+ *
+ * \param[in] crt_ctx          CaRT context
+ * \param[in] rkey_iov         RDMA key buffer (transport-specific):
+ *                               - OFI: fi_mr_key (uint64_t) or raw key blob
+ *                               - UCX: not supported (returns -DER_NOSYS)
+ * \param[in] remote_addr      remote base virtual address of the memory region
+ * \param[in] remote_size      size of the remote memory region in bytes
+ * \param[in] bulk_perm        permission (CRT_BULK_RW or CRT_BULK_RO)
+ * \param[out] bulk_hdl        created bulk handle (remote-only)
+ *
+ * \return                     DER_SUCCESS on success, -DER_NOSYS if transport
+ *                             does not support rkey import, negative on error
+ */
+int
+crt_bulk_import_rkey(crt_context_t crt_ctx, d_iov_t *rkey_iov,
+		     uint64_t remote_addr, uint64_t remote_size,
+		     crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
+
+/**
  * Bind bulk handle to local context, to associate the origin address of the
  * local context to the bulk handle.
  *
