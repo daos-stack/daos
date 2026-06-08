@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -287,8 +288,69 @@ class OSAUtils(MdtestBase, IorTestBase):
                 "Detected container redundancy factor: %s",
                 self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
-            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
             self.container.oclass.update(None)
+
+    def get_random_test_ranks(self, total_ranks=2, join_ranks=True):
+        """Get random list of ranks for OSA tests.
+
+        Args:
+            total_ranks (list): Random rank list for testing. Defaults to 2.
+            join_ranks (bool): Stop ranks individual ranks. Defaults to True.
+
+        Returns:
+            list: a list of random ranks either as individual strings,
+            or one comma-separated string.
+
+        """
+        # Get a random rank(s) based on num_ranks input.
+        ranklist = list(self.server_managers[0].ranks.keys())
+        if join_ranks is True:
+            return list(map(str, self.random.sample(ranklist, k=total_ranks)))
+        return [",".join(map(str, self.random.sample(ranklist, k=total_ranks)))]
+
+    @fail_on(CommandFailure)
+    def get_ranks_with_pool_svc_leader(self, pool, total_ranks=2, join_ranks=True):
+        """Get test ranks that always include the current pool service leader.
+
+        Args:
+            pool (TestPool): Pool object to query for the current service leader.
+            total_ranks (int, optional): Number of ranks to return. Defaults to 2.
+            join_ranks (bool, optional): Return as individual rank strings when True,
+                else return one comma-separated rank string in a list.
+
+        Returns:
+            list: Rank selection including the current pool service leader.
+        """
+        if pool is None:
+            raise CommandFailure("Pool is required to select ranks with pool service leader")
+
+        output = self.dmg_command.pool_query(pool.identifier)
+        leader = int(output["response"]["svc_ldr"])
+        ranklist = list(self.server_managers[0].ranks.keys())
+
+        if total_ranks < 1:
+            raise CommandFailure("total_ranks must be at least 1")
+        if total_ranks > len(ranklist):
+            raise CommandFailure(
+                "Requested {} ranks but only {} are available".format(total_ranks, len(ranklist)))
+
+        remaining = [rank for rank in ranklist if rank != leader]
+        need = total_ranks - 1
+        if need > len(remaining):
+            raise CommandFailure(
+                "Unable to select {} additional non-leader ranks from {}".format(
+                    need, len(remaining)))
+
+        selected = [leader]
+        if need > 0:
+            selected.extend(self.random.sample(remaining, k=need))
+
+        self.log.info(
+            "Selected ranks including pool service leader %s: %s",
+            leader, selected)
+        if join_ranks:
+            return list(map(str, selected))
+        return [",".join(map(str, selected))]
 
     def assert_on_exception(self, out_queue=None):
         """Assert on exception while executing an application.
@@ -377,7 +439,6 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.pool, None)
         self.log.info("Redundancy Factor : %s", self.test_with_rf)
         self.ior_cmd.dfs_oclass.update(oclass)
-        self.ior_cmd.dfs_dir_oclass.update(oclass)
         if single_cont_read is True:
             # Prepare the containers created and use in a specific
             # way defined in prepare_cont_ior_write.
@@ -402,7 +463,6 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.log.info(
                 "Detected container redundancy factor: %s", self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
-            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
         # Run run_ior_with_pool without invoking the pool query method for
         # displaying pool space information (display_space=False)
         self.run_ior_with_pool(create_pool=False, create_cont=False,
