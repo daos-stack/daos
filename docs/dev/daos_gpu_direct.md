@@ -35,8 +35,11 @@ transfers.
 1. **No wire protocol changes** — No change to data structre used by wire-protocol.
 2. **Backward compatible** — Existing `daos_obj_fetch()`/`daos_obj_update()`
    APIs are unchanged. New GPU-aware wrappers are provided.
-3. **Transport agnostic** — Works with both libfabric (OFI) and UCX, as long as
-   the provider supports `FI_HMEM` (OFI) or memory type registration (UCX).
+3. **Transport agnostic** — Works with both libfabric (OFI) and UCX. OFI supports
+   rkey import for zero-copy from cuFile-registered GPU memory. UCX gracefully
+   falls back to its native HMEM registration (double-registration of GPU memory,
+   correct but slightly less optimal). Both paths support `FI_HMEM` (OFI) or UCX
+   memory type detection for CUDA memory.
 4. **Opt-in at build time** — `BUILD_GPU_DIRECT=yes` SCons option enables GPU
    support in dependencies. Runtime activation is automatic via cuFile.
 5. **CUDA first, extensible** — Initial implementation targets NVIDIA GPUs via
@@ -67,8 +70,10 @@ transfers.
 │  CaRT Transport Layer                                        │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │ crt_bulk_create_with_mem_attr()                         ││
-│  │   → HG_Bulk_create() with mem_type attribute            ││
-│  │   → Mercury registers GPU memory for RDMA               ││
+│  │   → If ma_rkey set: try HG_Bulk_import_rkey() (OFI)    ││
+│  │     → If not supported (UCX): fall back to HMEM path   ││
+│  │   → Else: HG_Bulk_create() with mem_type attribute     ││
+│  │   → Mercury registers GPU memory for RDMA              ││
 │  └──────────────────────────┬──────────────────────────────┘│
 └─────────────────────────────┼───────────────────────────────┘
                               │
@@ -115,8 +120,14 @@ typedef enum {
 typedef struct {
     daos_mem_type_t  ma_mem_type;   /**< Memory type of the buffers */
     int              ma_device_id;  /**< Device ordinal (e.g., CUDA device 0) */
+    d_iov_t          ma_rkey;       /**< Pre-registered RDMA key (optional) */
 } daos_mem_attr_t;
 ```
+
+The `ma_rkey` field enables importing an externally-registered RDMA key (e.g.,
+from nvidia-fs via cuFile's `rdma_info->desc_str`). When set, CaRT imports the
+key directly instead of re-registering the GPU memory with the NIC. When empty,
+CaRT falls back to normal HMEM registration.
 
 ### Public APIs
 
@@ -177,8 +188,11 @@ When `DAOS_OBJ_IO_GPU_DIRECT` flag is set, the client enforces:
 4. Client skips checksum computation (GPU buffers not host-readable)
 5. Client forces bulk transfer (no inline packing of GPU pointers)
 6. Client calls crt_bulk_create_with_mem_attr(sgl, mem_attr)
-7. CaRT forwards mem_type to Mercury: HG_Bulk_create() with CUDA attribute
-8. Mercury/libfabric registers GPU memory via nvidia-peermem for RDMA
+7. CaRT checks mem_attr->ma_rkey:
+   a. If rkey set → tries HG_Bulk_import_rkey() (zero-copy for OFI)
+   b. If import fails (UCX: -DER_NOSYS) → falls back to HMEM registration
+   c. If no rkey → normal HG_Bulk_create() with CUDA attribute
+8. Mercury/libfabric registers GPU memory for RDMA (if not imported)
 9. RPC sent to server with bulk handle (handle is opaque — no wire change)
 10. Server does HG_Bulk_transfer() — RDMA pulls directly from GPU memory
 11. Server writes to VOS/BIO as normal (data is now in server memory)
@@ -197,6 +211,62 @@ When `DAOS_OBJ_IO_GPU_DIRECT` flag is set, the client enforces:
 
 ---
 
+## RDMA Key Import
+
+### Problem
+
+When GPU memory is registered with the NIC by nvidia-fs (via `cuFileBufRegister()`),
+the resulting RDMA key is in `cufileRDMAInfo_t.desc_str`. Without rkey import,
+CaRT re-registers the same GPU memory → double NIC registration (expensive for
+pinned GPU memory).
+
+### Solution: Mercury Patch + CaRT API
+
+A Mercury patch (`deps/patches/mercury/0006_import_rkey.patch`) adds:
+- `NA_Mem_handle_import_rkey()` — NA layer API
+- `HG_Bulk_import_rkey()` — HG layer wrapper
+
+CaRT provides:
+- `crt_bulk_import_rkey()` — imports a raw RDMA key into a bulk handle
+- `crt_bulk_create_with_mem_attr()` — auto-routes via `ma_rkey` if set
+
+### Transport Behavior
+
+| Transport | Behavior |
+|-----------|----------|
+| OFI/verbs | Imports raw fi_mr_key → zero-copy (no re-registration) |
+| UCX | Returns `-DER_NOSYS` → CaRT falls back to normal HMEM registration |
+| SM/BMI/MPI/PSM | Returns `NA_OPNOTSUPPORTED` → fallback |
+
+UCX doesn't support raw rkey import because nvidia-fs produces raw verbs rkeys,
+not UCX's `ucp_rkey_pack()` format. The fallback is correct — UCX handles CUDA
+memory natively via `ucp_mem_map()`.
+
+### CaRT APIs
+
+```c
+/**
+ * Create a bulk handle with memory type attributes.
+ * If mem_attr->ma_rkey is set, attempts rkey import first.
+ * Falls back to normal HMEM registration if transport doesn't support it.
+ */
+int crt_bulk_create_with_mem_attr(crt_context_t crt_ctx,
+                                  d_sg_list_t *sgl,
+                                  crt_bulk_perm_t bulk_perm,
+                                  daos_mem_attr_t *mem_attr,
+                                  crt_bulk_t *bulk_hdl);
+
+/**
+ * Import a remote bulk handle from a pre-registered RDMA key.
+ * Returns: 0 on success, -DER_NOSYS if not supported, negative on error.
+ */
+int crt_bulk_import_rkey(crt_context_t crt_ctx, d_iov_t *rkey_iov,
+                         uint64_t remote_addr, uint64_t remote_size,
+                         crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
+```
+
+---
+
 ## Build System
 
 ```bash
@@ -210,6 +280,7 @@ scons install
 When `BUILD_GPU_DIRECT=yes`:
 - libfabric built with `--enable-hook_hmem --with-cuda=/usr/local/cuda`
 - Mercury built with `-DNA_OFI_GDR=ON`
+- Mercury patched with `0006_import_rkey.patch` for rkey import support
 - GDRCopy headers/libs expected at system paths
 
 ## Dependencies

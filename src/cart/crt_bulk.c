@@ -11,6 +11,7 @@
 #define D_LOGFAC	DD_FAC(bulk)
 
 #include "crt_internal.h"
+#include <mercury_bulk.h> /* for HG_Bulk_import_rkey */
 
 /** Check the validation of the d_sg_list_t parameter */
 static inline bool
@@ -123,6 +124,48 @@ crt_bulk_create_with_mem_attr(crt_context_t crt_ctx, d_sg_list_t *sgl,
 
 	ctx = crt_ctx;
 
+	/*
+	 * If a pre-registered RDMA key is provided, try to import it directly
+	 * rather than re-registering the buffer. Falls back to normal HMEM
+	 * registration if the transport doesn't support raw rkey import.
+	 */
+	if (mem_attr != NULL && mem_attr->ma_rkey.iov_buf != NULL &&
+	    mem_attr->ma_rkey.iov_len > 0) {
+		uint64_t addr = (uint64_t)(uintptr_t)sgl->sg_iovs[0].iov_buf;
+		uint64_t size = 0;
+		int      i;
+
+		for (i = 0; i < sgl->sg_nr; i++)
+			size += sgl->sg_iovs[i].iov_len;
+
+		if (crt_provider_is_ucx(ctx->cc_hg_ctx.chc_provider)) {
+			/*
+			 * UCX registers CUDA memory via ucp_mem_map(). The raw
+			 * RDMA registration produced by nvidia-fs /
+			 * cuFileBufRegister() cannot be imported through the
+			 * UCX path, so a buffer already registered by
+			 * nvidia-fs will be registered again by UCX.
+			 */
+			D_DEBUG(DB_TRACE,
+				"UCX does not support raw rkey import, "
+				"falling back to HMEM registration\n");
+		} else {
+			rc = crt_bulk_import_rkey(crt_ctx, &mem_attr->ma_rkey,
+						  addr, size, bulk_perm,
+						  bulk_hdl);
+			if (rc == 0)
+				return 0;
+			if (rc != -DER_NOSYS) {
+				D_ERROR("crt_bulk_import_rkey() failed: "
+					DF_RC "\n", DP_RC(rc));
+				return rc;
+			}
+			D_DEBUG(DB_TRACE,
+				"raw rkey import not supported by transport, "
+				"falling back to HMEM registration\n");
+		}
+	}
+
 	D_ALLOC_PTR(ret_hdl);
 	if (ret_hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -184,6 +227,84 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 {
 	return crt_bulk_create_with_mem_attr(crt_ctx, sgl, bulk_perm, NULL,
 					     bulk_hdl);
+}
+
+int
+crt_bulk_import_rkey(crt_context_t crt_ctx, d_iov_t *rkey_iov,
+		     uint64_t remote_addr, uint64_t remote_size,
+		     crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
+{
+	struct crt_context *ctx;
+	struct crt_bulk    *ret_hdl = NULL;
+	hg_class_t         *hg_class;
+	int                 rc = 0;
+
+	if (crt_ctx == CRT_CONTEXT_NULL || rkey_iov == NULL ||
+	    rkey_iov->iov_buf == NULL || rkey_iov->iov_len == 0 ||
+	    remote_size == 0 || bulk_hdl == NULL) {
+		D_ERROR("invalid parameter for crt_bulk_import_rkey\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	ctx = crt_ctx;
+
+	D_ALLOC_PTR(ret_hdl);
+	if (ret_hdl == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	ret_hdl->refcount = 1;
+	ret_hdl->deferred = false;
+	ret_hdl->crt_ctx  = crt_ctx;
+	ret_hdl->bound    = false;
+
+	/*
+	 * Imported rkey handles are remote-only (no local memory registration),
+	 * similar to decoded bulk handles. Track quota to match put on free.
+	 */
+	get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
+
+	hg_class = ctx->cc_hg_ctx.chc_hgcla;
+
+	{
+		unsigned long hg_flags;
+
+		switch (bulk_perm) {
+		case CRT_BULK_RW:
+			hg_flags = HG_BULK_READWRITE;
+			break;
+		case CRT_BULK_RO:
+			hg_flags = HG_BULK_READ_ONLY;
+			break;
+		case CRT_BULK_WO:
+			hg_flags = HG_BULK_WRITE_ONLY;
+			break;
+		default:
+			hg_flags = HG_BULK_READWRITE;
+			break;
+		}
+
+		rc = HG_Bulk_import_rkey(hg_class, rkey_iov->iov_buf,
+					rkey_iov->iov_len, remote_addr,
+					remote_size, hg_flags,
+					&ret_hdl->hg_bulk_hdl);
+	}
+	if (rc != HG_SUCCESS) {
+		put_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
+		D_FREE(ret_hdl);
+		D_DEBUG(DB_TRACE,
+			"HG_Bulk_import_rkey() returned %d — transport may "
+			"not support raw rkey import\n", rc);
+		D_GOTO(out, rc = -DER_NOSYS);
+	}
+
+	D_DEBUG(DB_TRACE, "imported rkey bulk handle %p (addr=0x%" PRIx64
+			  " size=%" PRIu64 ")\n",
+		ret_hdl, remote_addr, remote_size);
+
+out:
+	if (rc == 0 && bulk_hdl)
+		*bulk_hdl = ret_hdl;
+	return rc;
 }
 
 int

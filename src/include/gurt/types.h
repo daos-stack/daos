@@ -172,6 +172,15 @@ typedef struct {
 	daos_mem_type_t	ma_mem_type;
 	/** device ordinal (e.g., CUDA device index) */
 	uint64_t	ma_device_id;
+	/**
+	 * Pre-registered RDMA key for the GPU buffer (optional).
+	 * When non-empty (iov_buf != NULL && iov_len > 0), CaRT imports this
+	 * key instead of re-registering the SGL buffers. This avoids double
+	 * memory registration when the buffer is already registered by an
+	 * external system (e.g., NVIDIA cuFile/nvidia-fs via cuFileBufRegister).
+	 * When empty (zeroed), CaRT performs normal memory registration.
+	 */
+	d_iov_t		ma_rkey;
 } daos_mem_attr_t;
 
 #if defined(__cplusplus)
