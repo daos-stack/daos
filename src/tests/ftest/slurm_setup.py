@@ -182,18 +182,18 @@ class SlurmSetup():
 
         # Restart slurmctld on the control node
         self._restart_systemctl(
-            self.control, 'slurmctld', '/var/log/slurmctld.log', self.SLURM_CONF)
+            self.control, 'slurmctld', '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
 
         # Restart slurmd on all nodes
-        self._restart_systemctl(self.all_nodes, 'slurmd', '/var/log/slurmd.log', self.SLURM_CONF)
+        self._restart_systemctl(self.all_nodes, 'slurmd', '/var/log/slurm/slurmd.log', self.SLURM_CONF)
 
         # Update nodes to the idle state
         command = command_as_user(
             f'scontrol update nodename={str(self.nodes)} state=idle', self.root)
         result = run_remote(self.log, self.nodes, command)
         if not result.passed or debug:
-            self._display_debug(self.control, '/var/log/slurmctld.log', self.SLURM_CONF)
-            self._display_debug(self.all_nodes, '/var/log/slurmd.log', self.SLURM_CONF)
+            self._display_debug(self.control, '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
+            self._display_debug(self.all_nodes, '/var/log/slurm/slurmd.log', self.SLURM_CONF)
         if not result.passed:
             raise SlurmSetupException(f'Error setting nodes to idle on {self.nodes}')
 
