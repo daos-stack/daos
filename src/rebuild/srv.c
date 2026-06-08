@@ -527,9 +527,10 @@ out:
 	return rc;
 }
 
-void
-ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
-			 daos_epoch_t *stable_eph, uint32_t *generation)
+static void
+ds_rebuild_running_query_adv(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
+			     daos_epoch_t *stable_eph, uint32_t *generation, uint32_t *leader_rank,
+			     uint64_t *leader_term)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
 
@@ -539,6 +540,10 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 		*stable_eph = 0;
 	if (generation)
 		*generation = -1;
+	if (leader_rank)
+		*leader_rank = -1;
+	if (leader_term)
+		*leader_term = -1;
 	rpt = rpt_lookup(pool_uuid, opc, -1, -1);
 	if (rpt != NULL && !rpt->rt_global_done && !rpt->rt_abort) {
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild %p running eph/ver/gen "DF_X64"/%u/%u\n",
@@ -550,9 +555,20 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 			*upper_ver = rpt->rt_rebuild_ver;
 		if (generation)
 			*generation = rpt->rt_rebuild_gen;
+		if (leader_rank)
+			*leader_rank = rpt->rt_leader_rank;
+		if (leader_term)
+			*leader_term = rpt->rt_leader_term;
 	}
 	if (rpt)
 		rpt_put(rpt);
+}
+
+void
+ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
+			 daos_epoch_t *stable_eph, uint32_t *generation)
+{
+	ds_rebuild_running_query_adv(pool_uuid, opc, upper_ver, stable_eph, generation, NULL, NULL);
 }
 
 /*
@@ -1423,7 +1439,8 @@ static int
 rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
-	uint64_t	leader_term;
+	uint64_t        leader_term, rebuild_leader_term;
+	uint32_t        leader_rank, rebuild_leader_rank;
 	uint32_t	version;
 	uint32_t	generation;
 	int		rc;
@@ -1434,12 +1451,17 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 			DP_RC(rc));
 		return rc;
 	}
+	leader_rank = dss_self_rank();
 
-	/* If this happened due to leader switch, then do not need update
-	 * generation.
+	/* If this happened due to leader switch, then do not need update generation.
+	 * If on the same PS leader, it retry the rebuild/reclaim on same version, should bump
+	 * the generation.
 	 */
-	ds_rebuild_running_query(pool->sp_uuid, -1, &version, NULL, &generation);
-	if (version < task->dst_map_ver)
+	ds_rebuild_running_query_adv(pool->sp_uuid, -1, &version, NULL, &generation,
+				     &rebuild_leader_rank, &rebuild_leader_term);
+	if ((version < task->dst_map_ver) ||
+	    (version == task->dst_map_ver && leader_rank == rebuild_leader_rank &&
+	     leader_term == rebuild_leader_term))
 		generation = ++pool->sp_rebuild_gen;
 
 	rc = rebuild_prepare(pool, task->dst_map_ver, generation,
@@ -2327,8 +2349,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	struct rebuild_pool_tls	*pool_tls;
 	int			 rc;
 
-	D_INFO("finishing rebuild for "DF_UUID", map_ver=%u refcount %u\n",
-	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_refcount);
+	D_INFO(DF_RB "finishing rebuild, refcount %u\n", DP_RB_RPT(rpt), rpt->rt_refcount);
 
 	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuilding) > 0);
 	atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
@@ -2398,8 +2419,7 @@ rebuild_tgt_status_check_ult(void *arg)
 		rc = rebuild_tgt_query(rpt, &status);
 		ABT_mutex_free(&status.lock);
 		if (rc || status.status != 0) {
-			D_ERROR(DF_UUID" rebuild failed: "DF_RC"\n",
-				DP_UUID(rpt->rt_pool_uuid),
+			D_ERROR(DF_RB " rebuild failed: " DF_RC "\n", DP_RB_RPT(rpt),
 				DP_RC(rc == 0 ? status.status : rc));
 			if (status.status == 0)
 				status.status = rc;
@@ -2508,14 +2528,13 @@ rebuild_tgt_status_check_ult(void *arg)
 		}
 
 		if (check_cnt % log_cnt_intv == 0 || rpt->rt_global_done || rpt->rt_abort) {
-			D_INFO(DF_UUID " ver %d gen %u obj " DF_U64 "/" DF_U64 " rec " DF_U64
-				       " size " DF_U64 " scan done %d pull done %d scan gl done %d"
-				       " gl done %d status %d abort %s\n",
-			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
-			       rpt->rt_pool->sp_rebuild_gen, iv.riv_toberb_obj_count,
-			       iv.riv_obj_count, iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done,
-			       iv.riv_pull_done, rpt->rt_global_scan_done, rpt->rt_global_done,
-			       iv.riv_status, rpt->rt_abort ? "yes" : "no");
+			D_INFO(DF_RB " obj " DF_U64 "/" DF_U64 " rec " DF_U64 " size " DF_U64
+				     " scan done %d pull done %d scan gl done %d"
+				     " gl done %d status %d abort %s\n",
+			       DP_RB_RPT(rpt), iv.riv_toberb_obj_count, iv.riv_obj_count,
+			       iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done, iv.riv_pull_done,
+			       rpt->rt_global_scan_done, rpt->rt_global_done, iv.riv_status,
+			       rpt->rt_abort ? "yes" : "no");
 			log_cnt_intv = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
 		}
 		check_cnt++;
