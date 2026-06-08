@@ -10,7 +10,11 @@
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4.1
+%if (0%{?suse_version} >= 1500)
+%global mercury_version   2.4.1-2.suse.lp155
+%else
+%global mercury_version   2.4.1-2
+%endif
 %global libfabric_version 1.20
 %global argobots_version 1.2-3
 %global __python %{__python3}
