@@ -728,7 +728,7 @@ pipeline {
                         // NLT memchecks the valgrind-tagged build, not the shared -race one.
                         unstash 'opt-daos-valgrind'
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1').toInteger(),
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
@@ -736,7 +736,11 @@ pipeline {
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
-                                                  ' --class-name nlt all',
+                                                  ' --class-name nlt' +
+                                                  " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
+                                                  /* groovylint-disable-next-line LineLength */
+                                                  (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
+                                                  ' all',
                                      with_valgrind: 'memcheck',
                                      valgrind_pattern: '*memcheck.xml',
                                      always_script: 'ci/unit/test_nlt_post.sh',
