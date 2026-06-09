@@ -140,14 +140,28 @@ void updateRunStage() {
     if (params.CI_FULL_BULLSEYE_REPORT) {
         println("updateRunStage: Detected CI_FULL_BULLSEYE_REPORT, skipping unrelated stages")
         for (stage in runStage.keySet()) {
-            runStage[stage] = false
             if (stage in ['Build on EL 9 with Bullseye',
-                          'Unit Test', 'Unit Test bdev',
+                          'Unit Test',
+                          'Unit Test bdev',
                           'NLT with Bullseye',
                           'Functional on EL 9']) {
                 runStage[stage] = true
             } else if (stage.contains('Functional Hardware')) {
                 runStage[stage] = true
+            } else if (stage in ['Build on EL 8',
+                                 'Build on EL 9',
+                                 'Build on Leap 15',
+                                 'Unit Test with memcheck',
+                                 'Unit Test bdev with memcheck',
+                                 'Functional on EL 8.8 with Valgrind',
+                                 'Functional on EL 8',
+                                 'Functional on Leap 15',
+                                 'Functional on SLES 15',
+                                 'Functional on Ubuntu 20.04',
+                                 'Fault injection testing',
+                                 'Test RPMs on EL 9.6',
+                                 'Test RPMs on Leap 15.5']) {
+                runStage[stage] = false
             }
             reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
         }
