@@ -480,9 +480,7 @@ String getScriptOutput(String script, String args='') {
  *          distro              the shorthand distro name; defaults to 'el8'
  *          rpmDistro           the distro to use for rpm building; defaults to distro
  *          compiler            the compiler to use; defaults to 'gcc'
- *          runCondition        optional additional condition to determine if the stage runs, used
- *                                in conjunction with runBuildStage(distro, compiler); defaults
- *                                to true
+ *          runStage            Optional additional condition to determine if the stage runs
  *          buildRpms           whether or not to build rpms; defaults to true
  *          release             the DAOS RPM release value to use; defaults to env.DAOS_RELVAL
  *          dockerBuildArgs     optional docker build arguments
@@ -497,7 +495,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
     String distro = kwargs.get('distro', 'el8')
     String rpmDistro = kwargs.get('rpmDistro', distro)
     String compiler = kwargs.get('compiler', 'gcc')
-    Boolean runCondition = kwargs.get('runCondition', true)
+    Boolean runStage = kwargs.get('runStage', true)
     Boolean buildRpms = kwargs.get('buildRpms', true)
     String release = kwargs.get('release', env.DAOS_RELVAL)
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
@@ -511,48 +509,47 @@ def scriptedBuildStage(Map kwargs = [:]) {
     }
     return {
         stage("${name}") {
-            if (runBuildStage(distro, compiler, runCondition)) {
-                node('docker_runner') {
-                    println("[${name}] Check out from version control")
-                    checkoutScm(pruneStaleBranch: true)
-
-                    def dockerImage = docker.build(dockerTag, dockerBuildArgs)
-                    try {
-                        dockerImage.inside() {
-                            if (buildRpms) {
-                                sh label: 'Install RPMs',
-                                    script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
-                                // Avoid interpolation of sensitive environment variables
-                                sh label: 'Build deps',
-                                    script: "./ci/rpm/build_deps.sh ${bullseye}" + ' ${BULLSEYE_KEY}'
-                            }
-                            job_step_update(sconsBuild(sconsBuildArgs))
-                            if (buildRpms) {
-                                sh label: 'Generate RPMs',
-                                    script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release} ${bullseye}"
-                                // Success actions
-                                uploadNewRPMs(uploadTarget, 'success')
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Unsuccessful actions
-                        sh """if [ -f config.log ]; then
-                                mv config.log ${artifacts}
-                            fi"""
-                        archiveArtifacts artifacts: "${artifacts}", allowEmptyArchive: true
-                        throw e
-                    } finally {
-                        // Cleanup actions
-                        if (buildRpms) {
-                            uploadNewRPMs(uploadTarget, 'cleanup')
-                        }
-                        jobStatusUpdate(job_status_internal, name)
-                    }
-                }
-            }
-            else {
+            if (!runStage) {
                 println("[${name}] Marking build stage as skipped")
                 Utils.markStageSkippedForConditional("${name}")
+                return
+            }
+            node('docker_runner') {
+                println("[${name}] Check out from version control")
+                checkoutScm(pruneStaleBranch: true)
+
+                def dockerImage = docker.build(dockerTag, dockerBuildArgs)
+                try {
+                    dockerImage.inside() {
+                        if (buildRpms) {
+                            sh label: 'Install RPMs',
+                                script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
+                            // Avoid interpolation of sensitive environment variables
+                            sh label: 'Build deps',
+                                script: "./ci/rpm/build_deps.sh ${bullseye}" + ' ${BULLSEYE_KEY}'
+                        }
+                        job_step_update(sconsBuild(sconsBuildArgs))
+                        if (buildRpms) {
+                            sh label: 'Generate RPMs',
+                                script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release} ${bullseye}"
+                            // Success actions
+                            uploadNewRPMs(uploadTarget, 'success')
+                        }
+                    }
+                } catch (Exception e) {
+                    // Unsuccessful actions
+                    sh """if [ -f config.log ]; then
+                            mv config.log ${artifacts}
+                        fi"""
+                    archiveArtifacts artifacts: "${artifacts}", allowEmptyArchive: true
+                    throw e
+                } finally {
+                    // Cleanup actions
+                    if (buildRpms) {
+                        uploadNewRPMs(uploadTarget, 'cleanup')
+                    }
+                    jobStatusUpdate(job_status_internal, name)
+                }
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -568,7 +565,7 @@ def scriptedBuildStage(Map kwargs = [:]) {
  *          name                    the summary stage name
  *          distro                  the shorthand distro name; defaults to 'el8'
  *          compiler                the compiler to use; defaults to 'gcc'
- *          runCondition            Optional additional condition to determine if the stage runs
+ *          runStage                Optional additional condition to determine if the stage runs
  *          dockerBuildArgs         optional docker build arguments
  *          installScript           optional script to install RPMs
  *          runScriptArgs           Map of arguments to pass to runScriptWithStashes()
@@ -580,7 +577,7 @@ def scriptedSummaryStage(Map kwargs = [:]) {
     String name = kwargs.get('name', 'Unknown Summary Stage')
     String distro = kwargs.get('distro', 'el8')
     String compiler = kwargs.get('compiler', 'gcc')
-    Boolean runCondition = kwargs.get('runCondition', true)
+    Boolean runStage = kwargs.get('runStage', true)
     String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
     String installScript = kwargs.get('installScript', '')
     Map runScriptArgs = kwargs.get('runScriptArgs', [:])
@@ -590,35 +587,34 @@ def scriptedSummaryStage(Map kwargs = [:]) {
 
     return {
         stage("${name}") {
-            if (runCondition) {
-                node('docker_runner') {
-                    println("[${name}] Check out from version control")
-                    checkoutScm(pruneStaleBranch: true)
-
-                    def dockerImage = docker.build(dockerTag, dockerBuildArgs)
-                    try {
-                        dockerImage.inside() {
-                            if (installScript) {
-                                sh label: 'Install RPMs',
-                                    script: "${installScript} ${distro}"
-                            }
-                            job_step_update(runScriptWithStashes(runScriptArgs))
-                        }
-                    } finally {
-                        // Cleanup actions
-                        if (publishHtmlArgs) {
-                            publishHTML(publishHtmlArgs)
-                        }
-                        if (archiveArtifactsArgs) {
-                            archiveArtifacts(archiveArtifactsArgs)
-                        }
-                        jobStatusUpdate(job_status_internal, name)
-                    }
-                }
-            }
-            else {
+            if (!runStage) {
                 println("[${name}] Marking summary stage as skipped")
                 Utils.markStageSkippedForConditional("${name}")
+                return
+            }
+            node('docker_runner') {
+                println("[${name}] Check out from version control")
+                checkoutScm(pruneStaleBranch: true)
+
+                def dockerImage = docker.build(dockerTag, dockerBuildArgs)
+                try {
+                    dockerImage.inside() {
+                        if (installScript) {
+                            sh label: 'Install RPMs',
+                                script: "${installScript} ${distro}"
+                        }
+                        job_step_update(runScriptWithStashes(runScriptArgs))
+                    }
+                } finally {
+                    // Cleanup actions
+                    if (publishHtmlArgs) {
+                        publishHTML(publishHtmlArgs)
+                    }
+                    if (archiveArtifactsArgs) {
+                        archiveArtifacts(archiveArtifactsArgs)
+                    }
+                    jobStatusUpdate(job_status_internal, name)
+                }
             }
             println("[${name}] Finished with ${job_status_internal}")
         }
@@ -1049,7 +1045,7 @@ pipeline {
                             name: 'Build on EL 8',
                             distro:'el8',
                             compiler: 'gcc',
-                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
+                            runStage: runStage['Build on EL 8'],
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -1074,7 +1070,7 @@ pipeline {
                             name: 'Build on EL 9',
                             distro:'el9',
                             compiler: 'gcc',
-                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
+                            runStage: runStage['Build on EL 9'],
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -1100,7 +1096,7 @@ pipeline {
                             distro:'leap15',
                             rpmDistro: 'suse.lp156',
                             compiler: 'gcc',
-                            runCondition: !paramsValue('CI_FULL_BULLSEYE_REPORT', false),
+                            runStage: runStage['Build on Leap 15'],
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -1765,7 +1761,7 @@ pipeline {
                             name: 'Bullseye Report',
                             distro: 'el9',
                             compiler: 'covc',
-                            runCondition: runStage(['CI_BUILD_BULLSEYE': true]),
+                            runStage: withBullseye(),
                             nodeLabel: 'docker_runner',
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
