@@ -1278,7 +1278,6 @@ pipeline {
                                      testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     image_version: 'el9.7',
                                      prov_env_vars: 'VM_CPUS=14',
                                      ignore_failure: true,
                                      coverage_stash: 'nlt_bullseye'))
