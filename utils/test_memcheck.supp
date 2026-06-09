@@ -424,6 +424,12 @@
    fun:runtime/internal/syscall.Syscall6
 }
 {
+   go_runtime_syscall_param_linux
+   Memcheck:Param
+   write(buf)
+   fun:internal/runtime/syscall/linux.Syscall6
+}
+{
    go ShadowSet race
    Memcheck:Value8
    fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
@@ -434,7 +440,7 @@
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   fun:_cgo_b68ed06c1ed7_Cfunc__Cmalloc
+   fun:_cgo_*_Cfunc__Cmalloc
    fun:runtime.asmcgocall.abi0
    ...
    fun:runtime.persistentalloc
