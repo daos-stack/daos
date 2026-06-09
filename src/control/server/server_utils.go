@@ -769,14 +769,76 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 	})
 }
 
-// registerFollowerSubscriptions stops handling received forwarded (in addition
-// to local) events and starts forwarding events to the new MS leader.
-// Log events on the host that they were raised (and first published) on.
-// This is the initial behavior before leadership has been determined.
-func registerFollowerSubscriptions(srv *server) {
+// Handle local engine self termination and restart engine to rejoin system.
+func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RASEvent) error {
+	srv.log.Tracef("handling engine self termination")
+
+	if evt.IsForwarded() {
+		return errors.Errorf("unexpected forwarded engine_self_terminated event from %q",
+			evt.Hostname)
+	}
+	if srv.hostname != "" && evt.Hostname != "" && evt.Hostname != srv.hostname {
+		return errors.Errorf("unexpected non-local engine_self_terminated event from %q",
+			evt.Hostname)
+	}
+
+	// Check if automatic restart is disabled
+	if srv.cfg.DisableEngineAutoRestart {
+		srv.log.Debugf("automatic engine restart disabled by configuration")
+		return nil
+	}
+
+	ts, err := evt.GetTimestamp()
+	if err != nil {
+		return errors.Wrapf(err, "bad event timestamp %q", evt.Timestamp)
+	}
+
+	// Find the engine instance by rank
+	instances, err := srv.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", evt.Rank))
+	if err != nil {
+		return errors.Wrapf(err, "failed to find instance for rank %d", evt.Rank)
+	}
+
+	if len(instances) == 0 {
+		return errors.Errorf("no instance found for rank %d", evt.Rank)
+	}
+	if len(instances) > 1 {
+		return errors.Errorf("multiple instances found for rank %d", evt.Rank)
+	}
+	ei := instances[0]
+
+	srv.log.Noticef("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts,
+		evt.Hostname, evt.Rank, evt.Incarnation, ei.Index())
+
+	rank := ranklist.Rank(evt.Rank)
+
+	// Submit restart request to the restart manager
+	srv.restartMgr.requestRestart(rank, ei)
+
+	return nil
+}
+
+// subscribeEngineSelfTerminated creates a handler for engine self-termination events.
+func subscribeEngineSelfTerminated(srv *server) events.Handler {
+	return events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+		if evt.ID == events.RASEngineSelfTerminated {
+			if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+				srv.log.Errorf("handleEngineSelfTerminated: %s", err)
+			}
+		}
+	})
+}
+
+// registerSubscriptions doesn't handle received forwarded events but forwardable events are sent to
+// the MS leader. Received events are logged on the host that they were raised (and first published)
+// on. This is the initial behavior for all servers and only changes when leadership has been
+// determined (when we change subscribers via registerLeaderSubscriptions). A handler is subscribed
+// for local engine self-termination events.
+func registerSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly, subscribeEngineSelfTerminated(srv))
 }
 
 func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
@@ -840,8 +902,11 @@ func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
 	}
 }
 
-// registerLeaderSubscriptions stops forwarding events to MS and instead starts
-// handling received forwarded (and local) events.
+// registerLeaderSubscriptions doesn't forward events to MS but instead handles received events by
+// subscribing the management service membership and system-DB to StateChange event-type. Received
+// events are logged on the host that they were raised (and first published) on. This behavior is
+// triggered when a new leader steps-up. A handler is subscribed for local engine self-termination
+// events and another for handling forwarded rank-dead events.
 func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
@@ -854,6 +919,7 @@ func registerLeaderSubscriptions(srv *server) {
 				handleRankDead(ctx, srv, evt)
 			}
 		}))
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly, subscribeEngineSelfTerminated(srv))
 
 	// Add a debounce to throttle multiple SWIM Rank Dead events for the same rank/incarnation.
 	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {

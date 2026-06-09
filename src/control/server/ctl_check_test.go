@@ -116,7 +116,7 @@ func TestServer_ControlService_CheckEngineRepair(t *testing.T) {
 					t.Fatalf("setup error - wrong type for Engine (%T)", e)
 				}
 
-				setupTestEngine(t, srv, uint32(i), rankNums[i])
+				setupTestEngine(t, srv, rankNums[i])
 
 				drpcCfg := new(mockDrpcClientConfig)
 				drpcCfg.ConnectError = tc.drpcErr

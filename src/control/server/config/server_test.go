@@ -266,7 +266,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithHyperthreads(true). // hyper-threads disabled by default
 		WithSystemRamReserved(5).
 		WithAllowNumaImbalance(true).
-		WithAllowTHP(true)
+		WithAllowTHP(true).
+		WithDisableEngineAutoRestart(true).
+		WithEngineAutoRestartMinDelay(120)
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{
