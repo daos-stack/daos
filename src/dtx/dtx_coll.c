@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,6 +43,7 @@ struct dtx_coll_local_args {
 	struct dtx_id		 dcla_xid;
 	daos_epoch_t		 dcla_epoch;
 	uint32_t		 dcla_opc;
+	uint32_t                 dcla_ver;
 	int			*dcla_results;
 };
 
@@ -368,7 +369,7 @@ dtx_coll_local_one(void *args)
 		rc = vos_dtx_commit(cont->sc_hdl, &dcla->dcla_xid, 1, false, NULL);
 		break;
 	case DTX_COLL_ABORT:
-		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch);
+		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch, dcla->dcla_ver);
 		break;
 	case DTX_COLL_CHECK:
 		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, NULL, NULL, false);
@@ -404,7 +405,8 @@ out:
 
 int
 dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
-		    uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap, int **p_results)
+		    uint32_t version, uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap,
+		    int **p_results)
 {
 	struct dtx_coll_local_args	 dcla = { 0 };
 	struct dss_coll_ops		 coll_ops = { 0 };
@@ -419,6 +421,7 @@ dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epo
 	uuid_copy(dcla.dcla_co_uuid, co_uuid);
 	dcla.dcla_xid = *xid;
 	dcla.dcla_epoch = epoch;
+	dcla.dcla_ver = version;
 	dcla.dcla_opc = opc;
 
 	coll_ops.co_func = dtx_coll_local_one;
