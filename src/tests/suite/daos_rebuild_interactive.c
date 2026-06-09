@@ -224,6 +224,8 @@ int_rebuild_many_objects_with_failure(void **state)
 	int            rc;
 	int            i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 6))
 		return;
 
