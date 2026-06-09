@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -188,8 +188,8 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	if (ref_rc != 0) {
 		rc = ref_rc;
-		DL_WARN(rc, DF_UUID "bypass refresh, IV class id %d.",
-			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		DL_WARN(rc, DF_RB ", IV ns pool " DF_UUID "bypass refresh, IV class id %d.",
+			DP_RB_RPT(rpt), DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
 		goto out;
 	}
 
