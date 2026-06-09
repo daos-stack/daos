@@ -1020,10 +1020,8 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          with_valgrind: '',
-                                         FI: true
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/release%252F2.6',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
+                                         FI: true,
+                                         referenceJobName: 'daos-stack/daos/release%252F2.6'
                             archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
