@@ -1540,6 +1540,39 @@ int
 ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 {
 	struct mgmt_tgt_map_update_in  *in = crt_req_get(rpc);
+	d_rank_t                        self_rank = dss_self_rank();
+	uint64_t                        self_inc  = 0;
+	uint64_t                        map_inc   = 0;
+	const char                     *map_uri   = "<none>";
+	char                           *self_uri  = NULL;
+	int                             self_inc_rc;
+	int                             self_uri_rc;
+	bool                            map_has_self = false;
+	uint32_t                        i;
+
+	for (i = 0; i < in->tm_servers.ca_count; i++) {
+		if (in->tm_servers.ca_arrays[i].se_rank == self_rank) {
+			map_has_self = true;
+			map_inc      = in->tm_servers.ca_arrays[i].se_incarnation;
+			if (in->tm_servers.ca_arrays[i].se_uri != NULL)
+				map_uri = in->tm_servers.ca_arrays[i].se_uri;
+			break;
+		}
+	}
+
+	self_inc_rc = crt_self_incarnation_get(&self_inc);
+	self_uri_rc = crt_self_uri_get(0 /* tag */, &self_uri);
+
+	D_DEBUG(DB_MGMT,
+		"map update recv: version=%u self_rank=%u self_inc=%lu self_uri=%s "
+		"map_has_self=%d map_inc=%lu map_uri=%s nservers=" DF_U64
+		" self_inc_rc=%d self_uri_rc=%d\n",
+		in->tm_map_version, self_rank, (unsigned long)self_inc,
+		self_uri_rc == 0 ? self_uri : "<unavailable>", map_has_self, (unsigned long)map_inc,
+		map_uri, in->tm_servers.ca_count, self_inc_rc, self_uri_rc);
+
+	if (self_uri_rc == 0)
+		D_FREE(self_uri);
 
 	return ds_mgmt_group_update(in->tm_servers.ca_arrays, in->tm_servers.ca_count,
 				    in->tm_map_version);
