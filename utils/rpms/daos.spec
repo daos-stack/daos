@@ -10,8 +10,8 @@
 %else
 %global daos_build_args client test
 %endif
-%global mercury_version   2.4.1-2
-%global mercury_version_next   2.4.1-3
+%global mercury_version   2.4.1
+%global mercury_version_max   2.4.1-2
 %global libfabric_version 1.20
 %global argobots_version 1.2-3
 %global __python %{__python3}
@@ -38,7 +38,7 @@ BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
-BuildRequires: mercury-devel < %{mercury_version_next}
+BuildRequires: mercury-devel <= %{mercury_version_max}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 %global openmpi openmpi
@@ -136,6 +136,7 @@ Requires: openssl
 # suffice
 Requires: mercury-libfabric >= %{mercury_version}
 Requires: mercury-libfabric < %{mercury_version_next}
+
 
 
 %description
