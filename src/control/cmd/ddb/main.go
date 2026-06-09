@@ -383,8 +383,8 @@ func runDdb(ctx *DdbContext, args []string) error {
 		return nil
 	}
 
-	var log *logging.LeveledLogger
-	if log, err = newLogger(opts); err != nil {
+	log, err := newLogger(opts)
+	if err != nil {
 		return errors.Wrap(err, loggerInitErr)
 	}
 	log.Debug("Logging facilities initialized")
