@@ -976,6 +976,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
+                                         referenceJobName: 'daos-stack/daos/release%252F2.8',
                                          with_valgrind: '',
                                          FI: true
                             archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
