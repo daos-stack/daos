@@ -268,7 +268,7 @@ class SlurmSetup():
 
         # Update the config file with the slurm epilog file
         self._modify_slurm_config_file(
-            'epilog file', self.all_nodes, 's#EpilogSlurmctld=#EpilogSlurmctld={EPILOG_FILE}#g',
+            'epilog file', self.all_nodes, f's#EpilogSlurmctld=#EpilogSlurmctld={self.EPILOG_FILE}#g',
             self.root)
 
         # Update the config file with the slurm control node
@@ -280,7 +280,7 @@ class SlurmSetup():
                 not_updated.remove(
                     self._modify_slurm_config_file(
                         'slurm control node', results.passed_hosts,
-                        f's/{control_keyword}=linux0/{control_keyword}={str(self.control)}/g',
+                        f's/{control_keyword}=localhost/{control_keyword}={str(self.control)}/g',
                         self.root))
         if not_updated:
             raise SlurmSetupException(f'Slurm control node not updated on {not_updated}')
