@@ -97,9 +97,26 @@ func TestDdb_Cmds(t *testing.T) {
 		}
 	}
 
-	featureFnCheckingShow := func(t *testing.T, wantShow bool) func(string, string, string, string, bool) error {
-		return func(_, _, _, _ string, show bool) error {
+	string2FlagsCapturing := func(captured *string) func(string) (uint64, uint64, error) {
+		return func(s string) (uint64, uint64, error) {
+			*captured = s
+			return 0, 0, nil
+		}
+	}
+
+	featureFnChecking := func(t *testing.T, wantPath, wantDbPath string,
+		capturedEnable *string, capturedDisable *string, wantFlagValue string,
+		wantShow bool) func(string, string, string, string, bool) error {
+		return func(path, dbPath, enable, disable string, show bool) error {
 			fmt.Println("feature called")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "dbPath", wantDbPath, dbPath)
+			if capturedEnable != nil {
+				test.CmpAny(t, "enable", wantFlagValue, *capturedEnable)
+			}
+			if capturedDisable != nil {
+				test.CmpAny(t, "disable", wantFlagValue, *capturedDisable)
+			}
 			test.CmpAny(t, "show", wantShow, show)
 			return nil
 		}
@@ -200,45 +217,80 @@ func TestDdb_Cmds(t *testing.T) {
 		},
 
 		// --- feature command ---
-		// feature --show: verifies the show flag is forwarded to the C layer.
-		"feature show": {
+		"feature without flags": {
+			args:   []string{"feature"},
+			expErr: ddbTestErr(featureOnlyOneOptErr),
+		},
+		"feature with enable and disable flags": {
+			args:   []string{"feature", "--enable=a", "--disable=b"},
+			expErr: ddbTestErr(featureOnlyOneOptErr),
+		},
+		"feature with enable and show flags": {
+			args:   []string{"feature", "--enable=a", "--show"},
+			expErr: ddbTestErr(featureOnlyOneOptErr),
+		},
+		"feature with disable and show flags": {
+			args:   []string{"feature", "--disable=a", "--show"},
+			expErr: ddbTestErr(featureOnlyOneOptErr),
+		},
+		"feature with db_path but no path": {
+			args:   []string{"feature", "--db_path=/sysdb", "--show"},
+			expErr: ddbTestErr(vosPathMissErr),
+		},
+		"feature with long show flag": {
 			args: []string{"feature", "--show"},
 			setup: func(t *testing.T) {
-				ddb_run_feature_Fn = featureFnCheckingShow(t, true)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", nil, nil, "", true)
 			},
 			expStdout: []string{"feature called"},
 		},
-		// feature --enable: verifies that the enable string reaches ddb_feature_string2flags.
-		"feature enable": {
+		"feature with short show flag": {
+			args: []string{"feature", "-s"},
+			setup: func(t *testing.T) {
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", nil, nil, "", true)
+			},
+			expStdout: []string{"feature called"},
+		},
+		"feature with long enable flag": {
 			args: []string{"feature", "--enable=myflag"},
 			setup: func(t *testing.T) {
 				var capturedFlag string
-				ddb_feature_string2flags_Fn = func(s string) (uint64, uint64, error) {
-					capturedFlag = s
-					return 0, 0, nil
-				}
-				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
-					fmt.Println("feature called")
-					test.CmpAny(t, "enable flag string", "myflag", capturedFlag)
-					return nil
-				}
+				ddb_feature_string2flags_Fn = string2FlagsCapturing(&capturedFlag)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", &capturedFlag, nil, "myflag", false)
 			},
 			expStdout: []string{"feature called"},
 		},
-		// feature --disable: verifies that the disable string reaches ddb_feature_string2flags.
-		"feature disable": {
-			args: []string{"feature", "--disable=otherflag"},
+		"feature with short enable flag": {
+			args: []string{"feature", "-e", "myflag"},
 			setup: func(t *testing.T) {
 				var capturedFlag string
-				ddb_feature_string2flags_Fn = func(s string) (uint64, uint64, error) {
-					capturedFlag = s
-					return 0, 0, nil
-				}
-				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
-					fmt.Println("feature called")
-					test.CmpAny(t, "disable flag string", "otherflag", capturedFlag)
-					return nil
-				}
+				ddb_feature_string2flags_Fn = string2FlagsCapturing(&capturedFlag)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", &capturedFlag, nil, "myflag", false)
+			},
+			expStdout: []string{"feature called"},
+		},
+		"feature with long disable flag": {
+			args: []string{"feature", "--disable=myflag"},
+			setup: func(t *testing.T) {
+				var capturedFlag string
+				ddb_feature_string2flags_Fn = string2FlagsCapturing(&capturedFlag)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", nil, &capturedFlag, "myflag", false)
+			},
+			expStdout: []string{"feature called"},
+		},
+		"feature with short disable flag": {
+			args: []string{"feature", "-d", "myflag"},
+			setup: func(t *testing.T) {
+				var capturedFlag string
+				ddb_feature_string2flags_Fn = string2FlagsCapturing(&capturedFlag)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", nil, &capturedFlag, "myflag", false)
+			},
+			expStdout: []string{"feature called"},
+		},
+		"feature with cmd-level db_path": {
+			args: []string{"feature", "--db_path=/sysdb", "--show", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_feature_Fn = featureFnChecking(t, "/path/to/vos-0", "/sysdb", nil, nil, "", true)
 			},
 			expStdout: []string{"feature called"},
 		},
