@@ -1,3 +1,6 @@
+* Tue Jun 09 2026 Dalton Bohning <dalton.bohning@hpe.com> - 2.26.0-2
+* Patch to support older NASM versions
+
 * Fri May 08 2026 Tom Nabarro <thomas.nabarro@hpe.com> - 2.26.0-1
 * Update DAOS to 2.26 release to mirror SPDK v26.01 submodule
 
