@@ -1373,6 +1373,8 @@ rebuild_many_objects_with_failure(void **state)
 	int		rc;
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 6))
 		return;
 
@@ -1463,6 +1465,8 @@ rebuild_object_with_csum_error(void **state)
 	daos_size_t      block_size    = 200L * MB;
 	daos_size_t	io_count = block_size / transfer_size;
 	uint32_t	iterations = 2;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 3)) {
 		skip();
@@ -1749,6 +1753,8 @@ rebuild_with_dfs_inflight_append(void **state)
 	daos_obj_id_t	oid;
 	struct rebuild_cb_arg cb_arg;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 6))
 		return;
 
@@ -1809,6 +1815,8 @@ rebuild_with_dfs_inflight_punch(void **state)
 	struct rebuild_cb_arg cb_arg;
 	struct stat	st;
 	int		rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1893,6 +1901,8 @@ rebuild_with_dfs_inflight_append_punch(void **state)
 	struct rebuild_cb_arg cb_arg;
 	struct stat	st;
 	int		rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
