@@ -15,6 +15,10 @@ import (
 	"github.com/desertbit/grumble"
 )
 
+const vosPathMissErr = "Cannot use sys db path without a VOS path"
+const dtxAggrMutuallyExclusiveErr = "'--cmt_time' and '--cmt_date' options are mutually exclusive"
+const dtxAggrRequiredOptErr = "'--cmt_time' or '--cmt_date' option has to be defined"
+
 func addAppCommands(app *grumble.App, ctx *DdbContext) {
 	// Command: ls
 	app.AddCommand(&grumble.Command{
@@ -445,10 +449,10 @@ the path must include the extent, otherwise, it must not.`,
 			cmtTime := c.Flags.Uint64("cmt_time")
 			cmtDate := c.Flags.String("cmt_date")
 			if cmtTime != math.MaxUint64 && cmtDate != "" {
-				return fmt.Errorf("'--cmt_time' and '--cmt_date' options are mutually exclusive")
+				return fmt.Errorf(dtxAggrMutuallyExclusiveErr)
 			}
 			if cmtTime == math.MaxUint64 && cmtDate == "" {
-				return fmt.Errorf("'--cmt_time' or '--cmt_date' option has to be defined")
+				return fmt.Errorf(dtxAggrRequiredOptErr)
 			}
 			return ctx.DtxAggr(c.Args.String("path"), cmtTime, cmtDate)
 		},

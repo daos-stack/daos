@@ -46,12 +46,37 @@ func TestDdb_parseOpts(t *testing.T) {
 			expErr: errHelpRequested,
 		},
 		"Unknown commands with help": {
-			args:   []string{"foo", "--help"},
-			expErr: errUnknownCmd,
+			// With PassAfterNonOption, --help that appears after the subcommand name is no longer
+			// processed by go-flags. It lands in RunCmdArgs and is forwarded to grumble, which
+			// handles it (and returns an unknown-command error for "foo"). The full flow is
+			// exercised in TestDdb_runDdb.
+			args: []string{"foo", "--help"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.Args.RunCmd != "foo" {
+					return fmt.Errorf("expected RunCmd to be 'foo', got %q", opts.Args.RunCmd)
+				}
+				if len(opts.Args.RunCmdArgs) == 0 || opts.Args.RunCmdArgs[0] != "--help" {
+					return fmt.Errorf("expected RunCmdArgs[0] to be '--help', got %v", opts.Args.RunCmdArgs)
+				}
+				return nil
+			},
 		},
 		"Unknown commands with help and opt": {
-			args:   []string{"-w", "foo", "--help"},
-			expErr: errUnknownCmd,
+			// Same as above: -w is consumed globally (it appears before the subcommand),
+			// while --help after "foo" goes into RunCmdArgs.
+			args: []string{"-w", "foo", "--help"},
+			checkFunc: func(opts *cliOptions) error {
+				if !opts.WriteMode {
+					return fmt.Errorf("expected WriteMode to be true")
+				}
+				if opts.Args.RunCmd != "foo" {
+					return fmt.Errorf("expected RunCmd to be 'foo', got %q", opts.Args.RunCmd)
+				}
+				if len(opts.Args.RunCmdArgs) == 0 || opts.Args.RunCmdArgs[0] != "--help" {
+					return fmt.Errorf("expected RunCmdArgs[0] to be '--help', got %v", opts.Args.RunCmdArgs)
+				}
+				return nil
+			},
 		},
 		"Default option values": {
 			args: []string{"ls", "-d", "-r"},
