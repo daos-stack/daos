@@ -384,6 +384,152 @@ func TestServer_getSrxSetting(t *testing.T) {
 	}
 }
 
+func TestServer_prepBdevStorage_errors(t *testing.T) {
+	usrCurrent, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	username := usrCurrent.Username
+	if username == "root" {
+		t.Skip("test cannot be run as root user")
+	}
+
+	for name, tc := range map[string]struct {
+		srvCfgExtra   func(*config.Server) *config.Server
+		iommuDisabled bool
+		iommuCheckErr error
+		thpEnabled    bool
+		thpCheckErr   error
+		expPrepErr    error
+	}{
+		"vfio disabled; non-root user": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithDisableVFIO(true).
+					WithEngines(pmemEngine(0))
+			},
+			expPrepErr: FaultVfioDisabled,
+		},
+		"iommu check error": {
+			iommuCheckErr: errors.New("fail"),
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: errors.New("iommu check: fail"),
+		},
+		"iommu disabled": {
+			iommuDisabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: FaultIommuDisabled,
+		},
+		"thp check error": {
+			thpCheckErr: errors.New("fail"),
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: errors.New("transparent hugepage check: fail"),
+		},
+		"thp enabled": {
+			thpEnabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: FaultTransparentHugepageEnabled,
+		},
+		"uneven numa distribution": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugepages(16384).WithEngines(
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(pmemTier(0), nvmeTier(0)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(pmemTier(1), nvmeTier(1)),
+					engine.MockConfig().WithFabricInterfacePort(22000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(pmemTier(2), nvmeTier(2)),
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(pmemTier(3), nvmeTier(3)),
+				)
+			},
+			expPrepErr: errors.New("uneven distribution"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cfg := config.DefaultServer().
+				WithFabricProvider("ofi+verbs").
+				WithMgmtSvcReplicas("foo", "bar", "baz")
+			if tc.srvCfgExtra != nil {
+				cfg = tc.srvCfgExtra(cfg)
+			}
+
+			iommuChecker := mockIOMMUDetector{
+				enabled: !tc.iommuDisabled,
+				err:     tc.iommuCheckErr,
+			}
+			thpChecker := mockTHPDetector{
+				enabled: tc.thpEnabled,
+				err:     tc.thpCheckErr,
+			}
+
+			mockAffSrc := func(l logging.Logger, e *engine.Config) (uint, error) {
+				iface := e.Fabric.Interface
+				switch iface {
+				case "ib0":
+					return 0, nil
+				case "ib1":
+					return 1, nil
+				}
+				return 0, errors.Errorf("unrecognized fabric interface: %s", iface)
+			}
+
+			memInfo := &common.SysMemInfo{}
+			memInfo.MemTotalKiB = (50 * humanize.GiByte) / humanize.KiByte
+			memInfo.HugepageSizeKiB = 2048
+			memInfo.NumaNodes = []common.MemInfo{
+				{NumaNodeIndex: 0},
+				{NumaNodeIndex: 1},
+			}
+
+			mockIfLookup := func(string) (netInterface, error) {
+				return &mockInterface{
+					addrs: []net.Addr{&mockAddr{}},
+				}, nil
+			}
+
+			if err = processConfig(log, cfg, mockFabIfSet, memInfo, mockIfLookup,
+				mockAffSrc); err != nil {
+				t.Fatal(err)
+			}
+
+			srv, err := newServer(log, cfg, &system.FaultDomain{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			mbb := bdev.NewMockBackend(nil)
+			mbp := bdev.NewProvider(log, mbb)
+			sp := sysprov.NewMockSysProvider(log, nil)
+
+			srv.ctlSvc = &ControlService{
+				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
+					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
+					mbp, nil),
+				srvCfg: cfg,
+			}
+
+			gotPrepErr := prepBdevStorage(srv, memInfo, iommuChecker, thpChecker)
+
+			test.CmpErr(t, tc.expPrepErr, gotPrepErr)
+		})
+	}
+}
+
 func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 	usrCurrent, err := user.Current()
 	if err != nil {
@@ -425,22 +571,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 		bmbc            *bdev.MockBackendConfig
 		overrideUser    string
 		iommuDisabled   bool
-		iommuCheckErr   error
 		thpEnabled      bool
-		thpCheckErr     error
-		expPrepErr      error
 		expPrepCalls    []storage.BdevPrepareRequest
 		expMemSize      int
 		expHugepageSize int
 		expNotice       bool
 	}{
-		"vfio disabled; non-root user": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithDisableVFIO(true).
-					WithEngines(pmemEngine(0))
-			},
-			expPrepErr: FaultVfioDisabled,
-		},
 		"vfio disabled; root user": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableVFIO(true).
@@ -479,20 +615,6 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      16384,
 			expHugepageSize: 2,
 		},
-		"iommu check error": {
-			iommuCheckErr: errors.New("fail"),
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
-			},
-			expPrepErr: errors.New("iommu check: fail"),
-		},
-		"iommu disabled": {
-			iommuDisabled: true,
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
-			},
-			expPrepErr: FaultIommuDisabled,
-		},
 		"iommu disabled; root user": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -529,26 +651,14 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      16384,
 			expHugepageSize: 2,
 		},
-		"thp check error": {
-			thpCheckErr: errors.New("fail"),
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
-			},
-			expPrepErr: errors.New("transparent hugepage check: fail"),
-		},
-		"thp enabled": {
-			thpEnabled: true,
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
-			},
-			expPrepErr: FaultTransparentHugepageEnabled,
-		},
 		"thp enabled; override flag set": {
 			thpEnabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithAllowTHP(true).
 					WithEngines(pmemEngine(0), pmemEngine(1))
 			},
+			hugepagesFree:  8190,
+			hugepagesTotal: 8190,
 			expPrepCalls: []storage.BdevPrepareRequest{
 				defCleanDualEngine,
 				{
@@ -559,6 +669,7 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD: true,
 				},
 			},
+			expMemSize:      16384,
 			expHugepageSize: 2,
 			// Allocation change logged.
 			expNotice: true,
@@ -1025,8 +1136,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD:    true,
 				},
 			},
-			// mem_size engine parameter is hower "hugepagesFree" value
-			expMemSize:      16360,
+			// mem_size engine parameter (8192 * // 2MiB), > "hugepagesFree" value
+			expMemSize:      16384,
 			expHugepageSize: 2,
 			// No error returned, notice logged only, engine-side mem threshold
 			// validation instead.
@@ -1107,6 +1218,30 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      16384, // (16384 hugepages / 2 engines) * 2mib size
 			expHugepageSize: 2,
 		},
+		"config hugepages differs from target-based calculation": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				// Config specifies 10240 hugepages but engine has 16 targets.
+				// Memsize should be calculated from targets (16 * 1GiB / 2MiB = 8192),
+				// not from config value.
+				return sc.WithNrHugepages(10240).
+					WithEngines(pmemEngine(0))
+			},
+			hugepagesFree:  10240,
+			hugepagesTotal: 10240,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				defCleanSingleEngine,
+				{
+					TargetUser:   username,
+					PCIAllowList: test.MockPCIAddr(0),
+					HugeNodes:    "nodes_hp[0]=10240",
+					EnableVMD:    true,
+				},
+			},
+			// Memsize calculated from target count (16 targets * 1GiB/tgt / 2MiB = 8192 pages)
+			// 8192 hugepages * 2MiB = 16384 MiB, NOT from config's 10240 pages.
+			expMemSize:      16384,
+			expHugepageSize: 2,
+		},
 		// VMD not enabled in prepare request.
 		"non-nvme bdevs; vmd enabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -1164,35 +1299,6 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      8192, // 16384 pages * 2mib divided by 4 engines
 			expHugepageSize: 2,
 		},
-		"4 engines; uneven numa distribution": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugepages(16384).WithEngines(
-					engine.MockConfig().WithFabricInterfacePort(20000).
-						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(pmemTier(0), nvmeTier(0)),
-					engine.MockConfig().WithFabricInterfacePort(21000).
-						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(pmemTier(1), nvmeTier(1)),
-					engine.MockConfig().WithFabricInterfacePort(22000).
-						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(pmemTier(2), nvmeTier(2)),
-					engine.MockConfig().WithFabricInterfacePort(20000).
-						WithPinnedNumaNode(1).WithFabricInterface("ib1").
-						WithTargetCount(8).WithStorage(pmemTier(3), nvmeTier(3)),
-				)
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					CleanSpdkHugepages: true,
-					CleanSpdkLockfiles: true,
-					PCIAllowList: strings.Join([]string{
-						test.MockPCIAddr(0), test.MockPCIAddr(1), test.MockPCIAddr(2),
-						test.MockPCIAddr(3),
-					}, storage.BdevPciAddrSep),
-				},
-			},
-			expPrepErr: errors.New("uneven distribution"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -1208,11 +1314,9 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			// Defaults are IOMMU=ON and THP=OFF.
 			iommuChecker := mockIOMMUDetector{
 				enabled: !tc.iommuDisabled,
-				err:     tc.iommuCheckErr,
 			}
 			thpChecker := mockTHPDetector{
 				enabled: tc.thpEnabled,
-				err:     tc.thpCheckErr,
 			}
 
 			mockAffSrc := func(l logging.Logger, e *engine.Config) (uint, error) {
@@ -1319,9 +1423,9 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			}
 			mbb.RUnlock()
 
-			test.CmpErr(t, tc.expPrepErr, gotPrepErr)
-			if tc.expPrepErr != nil {
-				return
+			// All test cases in this function expect success (errors are in separate test)
+			if gotPrepErr != nil {
+				t.Fatalf("unexpected prepBdevStorage error: %v", gotPrepErr)
 			}
 
 			if len(srv.cfg.Engines) == 0 {
@@ -1331,7 +1435,10 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner, nil)
 
-			setEngineMemSize(srv, ei, tc.memInfo2)
+			err = setEngineMemSize(srv, ei, tc.memInfo2)
+			if err != nil {
+				t.Fatalf("setEngineMemSize failed: %v", err)
+			}
 
 			test.AssertEqual(t, tc.expMemSize, ei.runner.GetConfig().MemSize,
 				"unexpected memory size")
