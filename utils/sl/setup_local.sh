@@ -1,6 +1,7 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 #  * (C) Copyright 2025 Google LLC
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -87,13 +88,15 @@ added="/ /usr /usr/local"
 old_path="${PATH//:/ }"
 echo OLD_PATH is "${old_path}"
 for item in $list; do
-    in_list "${!item}" "${added}"
+    # shellcheck disable=SC2086
+    in_list "${!item}" ${added}
     if [ $? -eq 1 ]; then
         continue
     fi
     export "${item?}"
     added+=" ${!item}"
-    in_list "${!item}/bin" "${old_path}"
+    # shellcheck disable=SC2086
+    in_list "${!item}/bin" ${old_path}
     if [ $? -eq 1 ]; then
         continue
     fi
@@ -102,7 +105,8 @@ for item in $list; do
     fi
 done
 
-in_list "${SL_PREFIX}/bin" "${old_path}"
+# shellcheck disable=SC2086
+in_list "${SL_PREFIX}/bin" ${old_path}
 # shellcheck disable=SC2181
 if [ $? -eq 0 ]; then
     PATH=$SL_PREFIX/bin:$PATH
