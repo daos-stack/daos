@@ -621,6 +621,30 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	 daos_size_t *read_size, daos_event_t *ev);
 
 /**
+ * GPU direct read from a DFS file.
+ *
+ * Same as dfs_read but for GPU memory buffers. Uses daos_obj_fetch_gpu()
+ * internally with the provided memory attributes. The SGL buffers must be
+ * GPU device pointers (registered via cuFileBufRegister or cudaMalloc).
+ *
+ * Synchronous only (no event queue support).
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	sgl	Scatter/Gather list with GPU buffer pointers.
+ * \param[in]	off	Offset into the file to read from.
+ * \param[out]	read_size
+ *			How much data is actually read.
+ * \param[in]	mem_attr
+ *			GPU memory attributes (type, device, optional RDMA key).
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_read_gpu(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	     daos_size_t *read_size, daos_mem_attr_t *mem_attr);
+
+/**
  * Non-contiguous read interface to a DFS file.
  * Same as dfs_read with the ability to have a segmented file layout to read.
  *
@@ -656,6 +680,28 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl,
 int
 dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	  daos_event_t *ev);
+
+/**
+ * GPU direct write to a DFS file.
+ *
+ * Same as dfs_write but for GPU memory buffers. Uses daos_obj_update_gpu()
+ * internally with the provided memory attributes. The SGL buffers must be
+ * GPU device pointers (registered via cuFileBufRegister or cudaMalloc).
+ *
+ * Synchronous only (no event queue support).
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened file object.
+ * \param[in]	sgl	Scatter/Gather list with GPU buffer pointers.
+ * \param[in]	off	Offset into the file to write to.
+ * \param[in]	mem_attr
+ *			GPU memory attributes (type, device, optional RDMA key).
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_write_gpu(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	      daos_mem_attr_t *mem_attr);
 
 /**
  * Non-contiguous write interface to a DFS file.

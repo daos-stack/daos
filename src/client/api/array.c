@@ -176,6 +176,29 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 	args->th	= th;
 	args->iod	= iod;
 	args->sgl	= sgl;
+	args->mem_attr	= NULL;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_array_read_gpu(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		    d_sg_list_t *sgl, daos_mem_attr_t *mem_attr, daos_event_t *ev)
+{
+	daos_array_io_t	*args;
+	tse_task_t	*task;
+	int		 rc;
+
+	rc = dc_task_create(dc_array_read, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->th	= th;
+	args->iod	= iod;
+	args->sgl	= sgl;
+	args->mem_attr	= mem_attr;
 
 	return dc_task_schedule(task, true);
 }
@@ -197,6 +220,29 @@ daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 	args->th	= th;
 	args->iod	= iod;
 	args->sgl	= sgl;
+	args->mem_attr	= NULL;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_array_write_gpu(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		     d_sg_list_t *sgl, daos_mem_attr_t *mem_attr, daos_event_t *ev)
+{
+	daos_array_io_t	*args;
+	tse_task_t	*task;
+	int		 rc;
+
+	rc = dc_task_create(dc_array_write, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->oh	= oh;
+	args->th	= th;
+	args->iod	= iod;
+	args->sgl	= sgl;
+	args->mem_attr	= mem_attr;
 
 	return dc_task_schedule(task, true);
 }

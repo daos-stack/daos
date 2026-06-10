@@ -924,6 +924,8 @@ typedef struct {
 	daos_array_iod_t	*iod;
 	/** memory descriptors. */
 	d_sg_list_t		*sgl;
+	/** Optional memory attributes for GPU direct I/O. */
+	daos_mem_attr_t		*mem_attr;
 } daos_array_io_t;
 
 /** Array get size args */

@@ -267,6 +267,90 @@ int crt_bulk_import_rkey(crt_context_t crt_ctx, d_iov_t *rkey_iov,
 
 ---
 
+## DFS GPU APIs
+
+### Motivation
+
+The DFS array object layout maps file offsets to `(dkey, akey, recx)` with
+chunk boundary splitting. Without DFS GPU APIs, consumers (like the cuFile
+plugin) must duplicate this logic. The current implementation routes GPU DFS
+I/O through the array layer so the existing chunk decomposition and parallel
+per-dkey dispatch are reused.
+
+### APIs
+
+```c
+/**
+ * Read from a DFS file into GPU memory buffers.
+ * Synchronous only.
+ */
+int dfs_read_gpu(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl,
+                 daos_off_t off, daos_size_t *read_size,
+                 daos_mem_attr_t *mem_attr);
+
+/**
+ * Write to a DFS file from GPU memory buffers.
+ * Synchronous only.
+ */
+int dfs_write_gpu(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl,
+                  daos_off_t off, daos_mem_attr_t *mem_attr);
+```
+
+The DFS helpers now call `daos_array_read_gpu()` / `daos_array_write_gpu()`.
+Those APIs extend the array layer with `daos_mem_attr_t`, allowing the existing
+DFS/array decomposition to:
+
+1. split file ranges at chunk boundaries,
+2. group recxs by dkey,
+3. create one object sub-task per dkey, and
+4. dispatch those sub-tasks in parallel.
+
+This avoids the older per-chunk sequential loop model.
+
+### Array GPU APIs
+
+```c
+int daos_array_read_gpu(daos_handle_t oh, daos_handle_t th,
+                        daos_array_iod_t *iod, d_sg_list_t *sgl,
+                        daos_mem_attr_t *mem_attr, daos_event_t *ev);
+
+int daos_array_write_gpu(daos_handle_t oh, daos_handle_t th,
+                         daos_array_iod_t *iod, d_sg_list_t *sgl,
+                         daos_mem_attr_t *mem_attr, daos_event_t *ev);
+```
+
+These are GPU-aware variants of `daos_array_read()` / `daos_array_write()`.
+They preserve the existing array semantics and asynchronous model while passing
+GPU memory attributes down to the object layer.
+
+---
+
+## Limitations
+
+1. **EC objects not supported** — GPU direct I/O requires replicated object classes
+   only. EC encode/decode reads buffer content on the CPU, which segfaults on GPU
+   pointers. Returns `-DER_NOTSUPPORTED` for EC objects. Future work:
+   GPU-accelerated EC or bounce buffer for parity computation.
+
+2. **Checksums skipped** — Client-side checksum computation is bypassed for GPU
+   direct I/O because it requires reading buffer content (CPU can't dereference
+   GPU pointers). Server-side checksums on received data still work normally.
+
+3. **Inline transfer disabled** — Small I/O that would normally be inlined in
+   the RPC (< `DAOS_BULK_LIMIT`) is forced to use bulk transfer, since inlining
+   would memcpy GPU pointers during RPC encoding (segfault).
+
+4. **UCX rkey import not supported** — nvidia-fs produces raw verbs rkeys which
+   are incompatible with UCX's `ucp_rkey_pack()` format. On UCX, CaRT falls
+   back to normal HMEM registration (correct, slightly less optimal due to
+   double NIC registration). OFI/verbs gets zero-copy rkey import.
+
+5. **Synchronous DFS GPU APIs** — `dfs_read_gpu()`/`dfs_write_gpu()` are
+   synchronous only (no `daos_event_t` parameter). Async GPU I/O requires
+   calling `daos_obj_fetch_gpu()`/`daos_obj_update_gpu()` directly.
+
+---
+
 ## Build System
 
 ```bash
