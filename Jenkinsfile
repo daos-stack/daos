@@ -625,27 +625,20 @@ def scriptedSummaryStage(Map kwargs = [:]) {
 }
 
 // Determine if the Build with Bullseye was run and successful
-Boolean withBullseye() {
-    if (runStage['Build on EL 9 with Bullseye'] == false) {
-        println("withBullseye: Build on EL 9 with Bullseye stage was not selected to run")
-        return false
-    }
+Boolean bullseyeBuilt() {
     Map status = job_status_internal['Build_on_EL_9_with_Bullseye'] ?: [:]
-    println("withBullseye: status=${status}, status.result=${status.result}")
+    println("bullseyeBuilt: status=${status}, status.result=${status.result}")
     return status.result == 'SUCCESS'
 }
 
 // Get the inst_rpms argument for the unitTest method
-String unitTestInstRpms(String distro='el9') {
-    if (withBullseye()) {
-        return getScriptOutput("ci/unit/required_packages.sh ${distro} true")
-    }
-    return getScriptOutput("ci/unit/required_packages.sh ${distro}")
+String unitTestInstRpms(String distro='el9', Boolean bullseye=false) {
+    return getScriptOutput("ci/unit/required_packages.sh ${distro} ${bullseye.toString()}")
 }
 
 // Get the compiler argument for the unitTest method
-String unitTestCompiler() {
-    if (withBullseye()) {
+String unitTestCompiler(Boolean bullseye=false) {
+    if (bullseye) {
         return 'covc'
     }
     return 'gcc'
@@ -1169,9 +1162,9 @@ pipeline {
                             unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitTestInstRpms('el9'),
+                                     inst_rpms: unitTestInstRpms('el9', bullseyeBuilt()),
                                      image_version: 'el9.7',
-                                     compiler: unitTestCompiler(),
+                                     compiler: unitTestCompiler(bullseyeBuilt()),
                                      test_script: 'ci/unit/test_main.sh',
                                      always_script: 'ci/unit/test_post_always.sh unit_test_logs',
                                      coverage_stash: 'unit_test_bullseye'))
@@ -1179,7 +1172,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_logs/'],
-                                         compiler: unitTestCompiler()
+                                         compiler: unitTestCompiler(bullseyeBuilt())
                             job_status_update()
                         }
                     }
@@ -1197,9 +1190,9 @@ pipeline {
                             unitTest(timeout_time: 120,
                                      unstash_opt: true,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitTestInstRpms('el9'),
+                                     inst_rpms: unitTestInstRpms('el9', bullseyeBuilt()),
                                      image_version: 'el9.7',
-                                     compiler: unitTestCompiler(),
+                                     compiler: unitTestCompiler(bullseyeBuilt()),
                                      test_script: 'ci/unit/test_main.sh',
                                      always_script: 'ci/unit/test_post_always.sh unit_test_bdev_logs',
                                      coverage_stash: 'unit_test_bdev_bullseye'))
@@ -1207,7 +1200,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_bdev_logs/'],
-                                         compiler: unitTestCompiler()
+                                         compiler: unitTestCompiler(bullseyeBuilt())
                             job_status_update()
                         }
                     }
@@ -1224,7 +1217,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitTestInstRpms('el9'),
+                                     inst_rpms: unitTestInstRpms('el9', false),
                                      image_version: 'el9.7',
                                      compiler: 'gcc',
                                      test_script: 'ci/unit/test_nlt.sh' +
@@ -1280,7 +1273,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 150,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitTestInstRpms('el9'),
+                                     inst_rpms: unitTestInstRpms('el9', true),
                                      image_version: 'el9.7',
                                      compiler: 'covc',
                                      test_script: 'ci/unit/test_nlt.sh' +
@@ -1323,7 +1316,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 160,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitTestInstRpms('el9'),
+                                     inst_rpms: unitTestInstRpms('el9', false),
                                      image_version: 'el9.7',
                                      compiler: 'gcc',
                                      test_script: 'ci/unit/test_main.sh',
@@ -1352,7 +1345,7 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 180,
                                      inst_repos: daosRepos(),
-                                     inst_rpms: unitTestInstRpms('el9'),
+                                     inst_rpms: unitTestInstRpms('el9', false),
                                      image_version: 'el9.7',
                                      compiler: 'gcc',
                                      test_script: 'ci/unit/test_main.sh',
@@ -1773,7 +1766,7 @@ pipeline {
                             name: 'Bullseye Report',
                             distro: 'el9',
                             compiler: 'covc',
-                            runStage: withBullseye(),
+                            runStage: bullseyeBuilt(),
                             nodeLabel: 'docker_runner',
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
