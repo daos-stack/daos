@@ -434,7 +434,7 @@
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   fun:_cgo_b68ed06c1ed7_Cfunc__Cmalloc
+   fun:_cgo_*_Cfunc__Cmalloc
    fun:runtime.asmcgocall.abi0
    ...
    fun:runtime.persistentalloc

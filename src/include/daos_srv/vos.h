@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -913,8 +913,8 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
  * \param[in] nr	Number of I/O descriptors in \a ios.
  * \param[in,out] iods	Array of I/O descriptors. The returned record sizes are also restored in
  * 			this parameter.
- * \param[in] vos_flags	VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY or
- * 			VOS_OF_FETCH_RECX_LIST.
+ * \param[in] vos_flags	VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY,
+ * 			VOS_OF_FETCH_RECX_LIST or VOS_OF_FETCH_CSUM.
  * \param[in] shadows	Optional shadow recx/epoch lists, one for each iod.
  *			data of extents covered by these should not be returned
  *			by fetch function. Only used for EC obj degraded fetch.

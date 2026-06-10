@@ -1,5 +1,6 @@
 """
   (C) Copyright 2021-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -87,6 +88,9 @@ class HarnessCoreFilesTest(TestWithServers):
         finally:
             # Display the journalctl log for the process that was sent the signal
             self.server_managers[0].manager.dump_logs(host)
+
+        # The rank in the errored state may transition to excluded state; allow either in tearDown
+        self.server_managers[0].update_expected_states(ranks, ["Joined", "Errored", "Excluded"])
 
         self.log.info("Test passed")
 
