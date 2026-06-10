@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -522,6 +523,7 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 	}
 
 out:
+	free(opts.pci_allowed);
 	ret->rc = rc;
 	return ret;
 }
