@@ -392,6 +392,8 @@ co_properties(void **state)
 	char			*exp_owner_grp;
 	char			 str[37];
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
@@ -1041,6 +1043,8 @@ co_acl(void **state)
 	char			*user;
 	d_string_t		 name_to_remove = "friendlyuser@";
 	uint8_t			 type_to_remove = DAOS_ACL_USER;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("create container with access props, and verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -2613,6 +2617,8 @@ co_rf_simple(void **state)
 	daos_recx_t		 recx;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs 3 alive nodes after excluding 3 */
 	if (!test_runable(arg0, 6))
 		skip();
@@ -2845,6 +2851,8 @@ delet_container_during_aggregation(void **state)
 	int		 i;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* Prepare records */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 
@@ -3024,6 +3032,8 @@ co_redun_lvl(void **state)
 	int			 nrank_per_node, ndom;
 	d_rank_t		 ranks[3];
 	int			 i, rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg0, 8))
 		skip();
@@ -3848,6 +3858,8 @@ co_op_dup_timing(void **state)
 	double             t_fp_loop[NUM_FP];
 	int                rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* Create a separate pool with svc_ops_entry_age property (dummy workload duration). */
 	prop = daos_prop_alloc(3);
 	/* label - set arg->pool_label to use daos_pool_connect() */
@@ -4048,6 +4060,8 @@ co_open_destroying(void **state)
 	uuid_t        uuid;
 	daos_handle_t coh;
 	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	par_barrier(PAR_COMM_WORLD);
 
