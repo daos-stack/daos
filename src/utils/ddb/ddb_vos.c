@@ -1099,10 +1099,11 @@ dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod
 {
 	daos_handle_t       ioh;
 	struct dcs_ci_list *cil;
+	int                 cb_rc = 0;
 	int                 rc;
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
-	if (rc) {
+	if (!SUCCESS(rc)) {
 		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(rc));
 		goto out;
@@ -1110,17 +1111,19 @@ dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod
 
 	cil = vos_ioh2ci(ioh);
 
-	rc = dump_cb(cb_arg, NULL, cil);
-	if (!SUCCESS(rc))
-		D_ERROR("Csum dump callback for " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
-			DP_RC(rc));
+	cb_rc = dump_cb(cb_arg, NULL, cil);
+	if (!SUCCESS(cb_rc))
+		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(cb_rc));
 
-	rc = vos_fetch_end(ioh, NULL, rc);
-	if (rc != 0)
+	rc = vos_fetch_end(ioh, NULL, cb_rc);
+	if (!SUCCESS(rc) && rc != cb_rc)
 		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(rc));
 
 out:
+	if (!SUCCESS(cb_rc))
+		rc = cb_rc;
 	return rc;
 }
 
@@ -1131,10 +1134,11 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 	daos_handle_t             ioh;
 	struct dcs_ci_list       *cil;
 	struct daos_recx_ep_list *rel;
+	int                       cb_rc = 0;
 	int                       rc;
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
-	if (rc) {
+	if (!SUCCESS(rc)) {
 		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(rc));
 		goto out;
@@ -1143,19 +1147,21 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 	cil = vos_ioh2ci(ioh);
 	rel = vos_ioh2recx_list(ioh);
 
-	rc = dump_cb(cb_arg, rel, cil);
-	if (!SUCCESS(rc))
-		D_ERROR("Csum dump callback for " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
-			DP_RC(rc));
+	cb_rc = dump_cb(cb_arg, rel, cil);
+	if (!SUCCESS(cb_rc))
+		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(cb_rc));
 
 	/* rel ownership is transferred by vos_ioh2recx_list(); free before vos_fetch_end. */
 	daos_recx_ep_list_free(rel, iod->iod_nr);
-	rc = vos_fetch_end(ioh, NULL, rc);
-	if (rc != 0)
+	rc = vos_fetch_end(ioh, NULL, cb_rc);
+	if (!SUCCESS(rc) && rc != cb_rc)
 		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(rc));
 
 out:
+	if (!SUCCESS(cb_rc))
+		rc = cb_rc;
 	return rc;
 }
 
