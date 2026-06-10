@@ -121,23 +121,24 @@ void updateRunStage() {
         return
     }
 
-    // Handle user setting CI_RPM_TEST_VERSION
-    if (params.CI_RPM_TEST_VERSION) {
-        println("updateRunStage: Detected specific RPM version, skipping build/RPM test stages")
+    // Handle user setting CI_RPM_TEST_VERSION or RPM-test-version
+    if (rpmTestVersion()) {
+        println("updateRunStage: Detected RPM test version, skipping build/RPM test stages")
         for (stage in runStage.keySet()) {
             if (stage.contains('Build')
                     || stage.contains('Unit Tests')
                     || stage.contains('Test RPMs')) {
                 runStage[stage] = false
-                reasons[stage] = "specific RPM version"
+                reasons[stage] = "RPM test version"
             }
         }
         displayRunStage(reasons)
         return
     }
 
-    // Handle user setting CI_FULL_BULLSEYE_REPORT
-    if (params.CI_FULL_BULLSEYE_REPORT) {
+    // Handle user setting CI_FULL_BULLSEYE_REPORT or Full-bullseye-report
+    if (params.CI_FULL_BULLSEYE_REPORT
+            || commitPragmas.get('full-bullseye-report', 'false').toLowerCase() == 'true') {
         println("updateRunStage: Detected CI_FULL_BULLSEYE_REPORT, skipping unrelated stages")
         for (stage in runStage.keySet()) {
             if (stage in ['Build on EL 9 with Bullseye',
@@ -172,8 +173,9 @@ void updateRunStage() {
         return
     }
 
-    // Handle user setting CI_BUILD_PACKAGES_ONLY
-    if (params.CI_BUILD_PACKAGES_ONLY) {
+    // Handle user setting CI_BUILD_PACKAGES_ONLY or Build-packages-only
+    if (params.CI_BUILD_PACKAGES_ONLY
+            || commitPragmas.get('build-packages-only', 'false').toLowerCase() == 'true') {
         println("updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages")
         for (stage in runStage.keySet()) {
             if (stage.contains('Unit Tests')) {
