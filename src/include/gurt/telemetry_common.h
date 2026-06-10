@@ -1,5 +1,7 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -250,9 +252,10 @@ struct d_tm_nodeList_t {
  * Estimate of a metric size. This leans toward a large estimate, but is not the absolute maximum
  * possible size.
  */
-#define D_TM_METRIC_SIZE (sizeof(struct d_tm_node_t) + sizeof(struct d_tm_metric_t) + \
-			  D_TM_MAX_DESC_LEN + D_TM_MAX_NAME_LEN + D_TM_MAX_UNIT_LEN + \
-			  sizeof(struct d_tm_stats_t))
+#define D_TM_METRIC_SIZE                                                                           \
+	(sizeof(struct d_tm_node_t) + sizeof(struct d_tm_metric_t) + D_TM_MAX_DESC_LEN +           \
+	 D_TM_MAX_NAME_LEN + D_TM_MAX_UNIT_LEN + sizeof(struct d_tm_stats_t) +                     \
+	 sizeof(struct d_tm_histogram_t))
 
 /** Context for a telemetry instance */
 struct d_tm_context;
