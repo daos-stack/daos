@@ -84,7 +84,7 @@ void updateRunStage() {
         value = params.get(name, null)
         if (value instanceof Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
-            reasons[name] = "parameter selection/default"
+            reasons[name] = "parameter selection or default"
         }
     }
 
@@ -146,11 +146,14 @@ void updateRunStage() {
                           'NLT with Bullseye',
                           'Functional on EL 9']) {
                 runStage[stage] = true
+                reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
             } else if (stage.contains('Functional Hardware')) {
                 runStage[stage] = true
+                reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
             } else if (stage in ['Build on EL 8',
                                  'Build on EL 9',
                                  'Build on Leap 15',
+                                 'NLT',
                                  'Unit Test with memcheck',
                                  'Unit Test bdev with memcheck',
                                  'Functional on EL 8.8 with Valgrind',
@@ -162,8 +165,8 @@ void updateRunStage() {
                                  'Test RPMs on EL 9.6',
                                  'Test RPMs on Leap 15.5']) {
                 runStage[stage] = false
+                reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
             }
-            reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
         }
         displayRunStage(reasons)
         return
