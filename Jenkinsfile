@@ -1118,6 +1118,7 @@ pipeline {
                             name: 'Build on EL 9 with Bullseye',
                             distro:'el9',
                             compiler: 'covc',
+                            runStage: runStage['Build on EL 9 with Bullseye'],
                             buildRpms: true,
                             release: env.DAOS_RELVAL,
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
