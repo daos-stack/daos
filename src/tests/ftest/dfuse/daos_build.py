@@ -102,8 +102,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     mount_dir = dfuse.mount_dir.value
     build_dir = os.path.join(mount_dir, 'daos')
 
-    remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
-    remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
+    # remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
+    # remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
     remote_env['COVFILE'] = os.environ['COVFILE']
     remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
     remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
@@ -129,6 +129,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
+    venv_activate = os.path.join(mount_dir, 'venv', 'bin', 'activate')
     cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
@@ -146,6 +147,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             f'daos filesystem query {mount_dir}']
     for cmd in cmds:
         command = '{} {}'.format(preload_cmd, cmd)
+        if '-m venv' not in command:
+            command = f'source {venv_activate} && {command}'
         # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
         timeout = 10 * 60
         if cmd.startswith('scons'):
