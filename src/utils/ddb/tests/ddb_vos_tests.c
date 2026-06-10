@@ -1285,7 +1285,29 @@ check_csum_sv_cb_002(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci
 	assert_true(ci_is_valid(ci));
 	assert_int_equal(ci->cs_nr, 1);
 	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
-						   csum_ctx->dct_sv_ic->ic_data));
+						   csum_ctx->dct_sv_ics[0]->ic_data));
+
+	return 0;
+}
+
+static int
+check_csum_sv_cb_003(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx   *csum_ctx;
+	struct dcs_csum_info *ci;
+
+	assert_non_null(cb_args);
+	assert_null(rel);
+	assert_non_null(cil);
+
+	csum_ctx = cb_args;
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 1);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
+						   csum_ctx->dct_sv_ics[1]->ic_data));
 
 	return 0;
 }
@@ -1308,9 +1330,14 @@ dump_csum_sv_tests(void **state)
 	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_001, NULL);
 	assert_success(rc);
 
-	/* with csum info */
+	/* with csum info, epoch 1 returns the epoch-1 checksum */
 	path.vtp_oid = g_oids[1];
-	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_002, csum_ctx);
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, 1, check_csum_sv_cb_002, csum_ctx);
+	assert_success(rc);
+
+	/* with csum info, EPOCH_MAX returns the epoch-2 (latest) checksum */
+	path.vtp_oid = g_oids[1];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_003, csum_ctx);
 	assert_success(rc);
 
 	/* with csum info, without callback */

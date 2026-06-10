@@ -630,6 +630,9 @@ csum_test_sv_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t 
 	struct dt_csum_ctx *csum_ctx;
 	daos_iod_t          iod;
 	char               *buf;
+	char                filler;
+	int                 sv_idx;
+	daos_epoch_t        epoch;
 	int                 rc;
 
 	csum_ctx = tctx->dvt_extra;
@@ -653,18 +656,39 @@ csum_test_sv_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t 
 	if (rc != 0)
 		goto out_buf;
 
-	/* g_oids[1]: single value written with checksum */
-	memset(buf, 'b', csum_ctx->dct_sv_size);
-	d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_sv_size);
-	rc = daos_csummer_calc_iods(csum_ctx->dct_csummer, sgl, &iod, NULL, 1, false, NULL, 0,
-				    &csum_ctx->dct_sv_ic);
-	if (rc != 0)
-		goto out_buf;
-	rc =
-	    vos_obj_update(coh, g_oids[1], 1, 0, 0, &g_dkeys[0], 1, &iod, csum_ctx->dct_sv_ic, sgl);
-	if (rc != 0)
-		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ic);
+	/*
+	 * g_oids[1]: DVT_FAKE_SV_COUNT successive overwrites with distinct content and checksum.
+	 *   sv_idx 0: epoch 1, filler 'b'
+	 *   sv_idx 1: epoch 2, filler 'c'
+	 * Fetching at epoch N returns dct_sv_ics[N-1]; DAOS_EPOCH_MAX returns the last entry.
+	 */
+	epoch  = 1;
+	filler = 'b';
+	for (sv_idx = 0; sv_idx < DVT_FAKE_SV_COUNT; sv_idx++) {
+		memset(buf, filler, csum_ctx->dct_sv_size);
+		d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_sv_size);
 
+		rc = daos_csummer_calc_iods(csum_ctx->dct_csummer, sgl, &iod, NULL, 1, false, NULL,
+					    0, &csum_ctx->dct_sv_ics[sv_idx]);
+		if (rc != 0)
+			goto out_ics;
+		rc = vos_obj_update(coh, g_oids[1], epoch, 0, 0, &g_dkeys[0], 1, &iod,
+				    csum_ctx->dct_sv_ics[sv_idx], sgl);
+		if (rc != 0)
+			goto out_ics;
+
+		epoch++;
+		filler++;
+	}
+
+out_ics:
+	if (rc != 0) {
+		for (sv_idx = 0; sv_idx < DVT_FAKE_SV_COUNT; sv_idx++) {
+			if (csum_ctx->dct_sv_ics[sv_idx] == NULL)
+				break;
+			daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ics[sv_idx]);
+		}
+	}
 out_buf:
 	D_FREE(buf);
 out:
@@ -783,7 +807,7 @@ ddb_test_csum_setup(void **state)
 	csum_ctx->dct_recx_size  = DVT_FAKE_RECX_SIZE;
 	csum_ctx->dct_chunk_size = DVT_FAKE_CHUNK_SIZE;
 	csum_ctx->dct_csum_type  = DVT_FAKE_CSUM_TYPE;
-	csum_ctx->dct_sv_ic      = NULL;
+	memset(&csum_ctx->dct_sv_ics[0], 0, sizeof(csum_ctx->dct_sv_ics));
 	memset(&csum_ctx->dct_recx_ics[0], 0, sizeof(csum_ctx->dct_recx_ics));
 	rc = daos_csummer_init_with_type(&csum_ctx->dct_csummer, csum_ctx->dct_csum_type,
 					 csum_ctx->dct_chunk_size, 0);
@@ -853,7 +877,8 @@ ddb_test_csum_teardown(void **state)
 	if (rc != 0)
 		goto out;
 
-	daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ic);
+	for (ci_idx = 0; ci_idx < DVT_FAKE_SV_COUNT; ci_idx++)
+		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ics[ci_idx]);
 	for (ci_idx = 0; ci_idx < DVT_FAKE_RECX_COUNT; ci_idx++)
 		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_recx_ics[ci_idx]);
 	daos_csummer_destroy(&csum_ctx->dct_csummer);

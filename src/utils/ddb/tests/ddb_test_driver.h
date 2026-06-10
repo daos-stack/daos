@@ -46,6 +46,7 @@ struct dt_vos_pool_ctx {
 	void         *dvt_extra;
 };
 
+#define DVT_FAKE_SV_COUNT   (2)
 #define DVT_FAKE_RECX_COUNT (2)
 #define DVT_FAKE_SV_SIZE    (1u << 10)
 #define DVT_FAKE_RECX_SIZE  (1u << 13)
@@ -59,7 +60,7 @@ struct dt_csum_ctx {
 	enum DAOS_HASH_TYPE   dct_csum_type;
 	size_t                dct_chunk_size;
 	struct daos_csummer  *dct_csummer;
-	struct dcs_iod_csums *dct_sv_ic;
+	struct dcs_iod_csums *dct_sv_ics[DVT_FAKE_SV_COUNT];
 	struct dcs_iod_csums *dct_recx_ics[DVT_FAKE_RECX_COUNT];
 };
 

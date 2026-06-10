@@ -174,8 +174,9 @@ typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *rel,
  * @param poh      Open pool handle.
  * @param path     VOS tree path identifying the container, object, dkey, and akey.
  *                 For array akeys, path->vtp_recx selects the extent to inspect.
- * @param epoch    Epoch for the fetch. Only used for array akeys; single-value akeys
- *                 always fetch the latest epoch.
+ * @param epoch    Epoch for the fetch. For single-value akeys, controls which version is
+ *                 returned — pass DAOS_EPOCH_MAX to get the latest, or a snapshot epoch to
+ *                 access an earlier version. For array akeys, selects the visible extent set.
  * @param dump_cb  Callback invoked with the result. If NULL, the function returns 0
  *                 without opening the container or calling VOS.
  * @param cb_arg   Opaque argument forwarded to \a dump_cb.

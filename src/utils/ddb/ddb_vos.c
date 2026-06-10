@@ -1095,15 +1095,13 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 
 static int
 dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
-	     dv_dump_csum_cb dump_cb, void *cb_arg)
+	     daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
 {
 	daos_handle_t       ioh;
 	struct dcs_ci_list *cil;
 	int                 rc;
 
-	/* Single-value has one record per epoch; always fetch the latest. */
-	rc = vos_fetch_begin(coh, *oid, DAOS_EPOCH_MAX, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh,
-			     NULL);
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
 	if (rc) {
 		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(rc));
@@ -1190,7 +1188,8 @@ dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
 				    cb_arg);
 	} else {
 		iod.iod_type = DAOS_IOD_SINGLE;
-		rc = dump_csum_sv(coh, &path->vtp_dkey, &path->vtp_oid, &iod, dump_cb, cb_arg);
+		rc = dump_csum_sv(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, dump_cb,
+				  cb_arg);
 	}
 
 	vos_cont_close(coh);
