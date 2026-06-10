@@ -160,7 +160,6 @@ if [ "${debug}" = "true" ]; then
     fi
     run_cmd "which ${pkg}" || exit
   done
-  run_cmd "env | sort -n" || exit
 fi
 
 # Build DAOS dependencies
