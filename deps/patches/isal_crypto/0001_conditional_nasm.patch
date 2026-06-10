@@ -1,0 +1,200 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b8a895a..cbd7a95 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -84,6 +84,32 @@ if(CPU_X86_64)
+         set(CMAKE_ASM_NASM_FLAGS "-f elf64 -D LINUX")
+     endif()
+     set(USE_NASM ON)
++
++    set(NASM_VERSION_REQUIRED "2.14.01")
++    set(NASM_VERSION_SHA512NI "2.16.02")
++    set(NASM_KNOWS_SHA512NI OFF)
++
++    execute_process(
++        COMMAND "${CMAKE_ASM_NASM_COMPILER}" -v
++        OUTPUT_VARIABLE NASM_VERSION_OUTPUT
++        OUTPUT_STRIP_TRAILING_WHITESPACE
++    )
++    string(REGEX MATCH "NASM version ([0-9]+\\.[0-9]+(\\.[0-9]+)?)" NASM_VERSION
++                 "${NASM_VERSION_OUTPUT}")
++    if(NASM_VERSION)
++        if(${CMAKE_MATCH_1} VERSION_LESS ${NASM_VERSION_REQUIRED})
++            message(FATAL_ERROR "NASM version must be at least ${NASM_VERSION_REQUIRED}!")
++        endif()
++        message(STATUS "NASM version: ${CMAKE_MATCH_1}")
++        if(${CMAKE_MATCH_1} VERSION_LESS ${NASM_VERSION_SHA512NI})
++            message(NOTICE "Minimum required NASM version for SHA512-NI: ${NASM_VERSION_SHA512NI}. SHA512-NI code not compiled - update NASM.")
++        else()
++            set(NASM_KNOWS_SHA512NI ON)
++        endif()
++    else()
++        message(WARNING "Could not parse NASM version string: ${NASM_VERSION_OUTPUT}.\nPlease, be sure that ${CMAKE_ASM_NASM_COMPILER} version is >= ${NASM_VERSION_REQUIRED}")
++    endif()
++
+ elseif(CPU_AARCH64 OR CPU_RISCV64)
+     # Configure ASM for ARM and RISC-V (uses GAS with .S files)
+     set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} -D__ASSEMBLY__")
+@@ -138,6 +164,11 @@ if(FIPS_MODE)
+     endif()
+ endif()
+ 
++if(NASM_KNOWS_SHA512NI)
++    add_compile_definitions(HAVE_AS_KNOWS_SHA512NI)
++    set(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -DHAVE_AS_KNOWS_SHA512NI")
++endif()
++
+ # Library version (semantic versioning)
+ set(LIBISAL_CRYPTO_CURRENT 2)
+ set(LIBISAL_CRYPTO_REVISION 25)
+@@ -351,5 +382,6 @@ message(STATUS "  Build perf apps:      ${BUILD_PERF}")
+ message(STATUS "  Safe data:            ${SAFE_DATA}")
+ message(STATUS "  Safe param:           ${SAFE_PARAM}")
+ message(STATUS "  FIPS mode:            ${FIPS_MODE}")
++message(STATUS "  SHA512-NI support:    ${NASM_KNOWS_SHA512NI}")
+ message(STATUS "  Install prefix:       ${CMAKE_INSTALL_PREFIX}")
+ message(STATUS "")
+diff --git a/configure.ac b/configure.ac
+index f3ed13a..28519c5 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -202,10 +202,14 @@ int main(int argc, char **argv)
+       fi
+     fi
+ 
+-    AC_MSG_CHECKING([for optional nasm SHA512-NI support])
+-    AC_LANG_CONFTEST([AC_LANG_SOURCE([[vsha512rnds2 ymm2, ymm1, xmm0;]])])
+-    sed -i -e '/vsha512rnds2/!d' conftest.c
+-    if nasm -f elf64  conftest.c 2> /dev/null; then
++    AC_MSG_CHECKING([for optional nasm SHA512-NI support (NASM >= 2.16.02)])
++    nasm_ver=$(nasm -v 2>/dev/null | cut -d " " -f 3)
++    nasm_major=$(echo "$nasm_ver" | cut -d "." -f 1)
++    nasm_minor=$(echo "$nasm_ver" | cut -d "." -f 2 | cut -c 1-2)
++    nasm_rev=$(echo "$nasm_ver" | cut -d "." -f 3 | cut -c 1-2)
++    nasm_numeric=$(expr ${nasm_major:-0} \* 10000 + ${nasm_minor:-0} \* 100 + ${nasm_rev:-0})
++    nasm_min_sha512ni=$(expr 2 \* 10000 + 16 \* 100 + 2)
++    if test $nasm_numeric -ge $nasm_min_sha512ni; then
+       AC_MSG_RESULT([yes])
+       as_knows_sha512ni=yes
+     else
+@@ -259,10 +263,14 @@ int main(int argc, char **argv)
+       fi
+     fi
+ 
+-    AC_MSG_CHECKING([for optional nasm SHA512-NI support])
+-    AC_LANG_CONFTEST([AC_LANG_SOURCE([[vsha512rnds2 ymm2, ymm1, xmm0;]])])
+-    sed -i -e '/vsha512rnds2/!d' conftest.c
+-    if $AS -f elf64  conftest.c 2> /dev/null; then
++    AC_MSG_CHECKING([for optional nasm SHA512-NI support (NASM >= 2.16.02)])
++    nasm_ver=$(nasm -v 2>/dev/null | cut -d " " -f 3)
++    nasm_major=$(echo "$nasm_ver" | cut -d "." -f 1)
++    nasm_minor=$(echo "$nasm_ver" | cut -d "." -f 2 | cut -c 1-2)
++    nasm_rev=$(echo "$nasm_ver" | cut -d "." -f 3 | cut -c 1-2)
++    nasm_numeric=$(expr ${nasm_major:-0} \* 10000 + ${nasm_minor:-0} \* 100 + ${nasm_rev:-0})
++    nasm_min_sha512ni=$(expr 2 \* 10000 + 16 \* 100 + 2)
++    if test $nasm_numeric -ge $nasm_min_sha512ni; then
+       AC_MSG_RESULT([yes])
+       as_knows_sha512ni=yes
+     else
+@@ -271,7 +279,8 @@ int main(int argc, char **argv)
+ 
+   fi
+ 
+-  if test $as_feature_level -lt 10 ; then
++  nasm_min_req=$(expr 2 \* 10000 + 14 \* 100 + 1)
++  if test $nasm_numeric -lt $nasm_min_req ; then
+     AC_MSG_ERROR([No modern nasm found as required. Nasm should be v2.14.01 or later.])
+   fi
+ 
+diff --git a/make.inc b/make.inc
+index 1317e9a..780ec30 100644
+--- a/make.inc
++++ b/make.inc
+@@ -131,6 +131,55 @@ CFLAGS += -DFIPS_MODE
+ ASFLAGS += -DFIPS_MODE
+ endif
+ 
++ifneq ($(filter x86_%,$(host_cpu)),)
++# Detect NASM version (minimum required: 2.14.01)
++MINGW ?= $(shell $(CC) -dM -E - < /dev/null | grep -i mingw | wc -l | sed 's/^ *//')
++ifeq ($(MINGW),0)
++MULT = \*
++else
++MULT = \\*
++endif
++
++NASM_VERSION = $(shell $(AS) -v | cut -d " " -f 3)
++
++NASM_MAJOR_REQ = 2
++NASM_MINOR_REQ = 14
++NASM_REV_REQ   = 01
++NASM_MIN_REQ = $(shell expr $(NASM_MAJOR_REQ) $(MULT) 10000 + $(NASM_MINOR_REQ) $(MULT) 100 + $(NASM_REV_REQ))
++
++ifeq ($(NASM_VERSION),)
++$(error NASM is not installed! Minimum required version: $(NASM_MAJOR_REQ).$(NASM_MINOR_REQ).$(NASM_REV_REQ))
++else
++NASM_MAJOR_VER = $(shell echo $(NASM_VERSION) | cut -d "." -f 1)
++NASM_MINOR_VER = $(shell echo $(NASM_VERSION) | cut -d "." -f 2 | cut -c 1-2)
++NASM_REV_VER   = $(shell echo $(NASM_VERSION) | cut -d "." -f 3 | cut -c 1-2)
++ifeq ($(NASM_REV_VER),)
++NASM_REV_VER = 0
++endif
++NASM_VER = $(shell expr $(NASM_MAJOR_VER) $(MULT) 10000 + $(NASM_MINOR_VER) $(MULT) 100 + $(NASM_REV_VER))
++
++NASM_GE_REQ = $(shell [ $(NASM_VER) -ge $(NASM_MIN_REQ) ] && echo true)
++$(info NASM '$(AS)' version: $(NASM_VERSION))
++ifneq ($(NASM_GE_REQ),true)
++$(error Minimum required NASM version: $(NASM_MAJOR_REQ).$(NASM_MINOR_REQ).$(NASM_REV_REQ))
++endif # NASM_GE_REQ
++
++# Minimum version of NASM with SHA512-NI support: 2.16.02
++NASM_MAJOR_SHA512NI = 2
++NASM_MINOR_SHA512NI = 16
++NASM_REV_SHA512NI   = 02
++NASM_MIN_SHA512NI = $(shell expr $(NASM_MAJOR_SHA512NI) $(MULT) 10000 + $(NASM_MINOR_SHA512NI) $(MULT) 100 + $(NASM_REV_SHA512NI))
++
++NASM_SHA512NI_GE_REQ = $(shell [ $(NASM_VER) -ge $(NASM_MIN_SHA512NI) ] && echo true)
++ifneq ($(NASM_SHA512NI_GE_REQ),true)
++$(warning Minimum required NASM version for SHA512-NI: $(NASM_MAJOR_SHA512NI).$(NASM_MINOR_SHA512NI).$(NASM_REV_SHA512NI) SHA512-NI code not compiled - update NASM.)
++else
++CFLAGS  += -DHAVE_AS_KNOWS_SHA512NI
++ASFLAGS += -DHAVE_AS_KNOWS_SHA512NI
++endif # NASM_SHA512NI_GE_REQ
++endif # NASM_VERSION
++endif # x86
++
+ ifeq ($(filter aarch64 x86_%,$(host_cpu)),)
+   host_cpu=base_aliases
+ endif
+diff --git a/sha512_mb/sha512_multibinary.asm b/sha512_mb/sha512_multibinary.asm
+index 4406afa..df61e2f 100644
+--- a/sha512_mb/sha512_multibinary.asm
++++ b/sha512_mb/sha512_multibinary.asm
+@@ -129,9 +129,11 @@ extern _sha512_ctx_mgr_init_avx2
+ extern _sha512_ctx_mgr_submit_avx2
+ extern _sha512_ctx_mgr_flush_avx2
+ 
++%ifdef HAVE_AS_KNOWS_SHA512NI
+ extern _sha512_ctx_mgr_init_avx2_ni
+ extern _sha512_ctx_mgr_submit_avx2_ni
+ extern _sha512_ctx_mgr_flush_avx2_ni
++%endif
+ 
+ extern _sha512_ctx_mgr_init_base
+ extern _sha512_ctx_mgr_submit_base
+diff --git a/sm3_mb/sm3_multibinary.asm b/sm3_mb/sm3_multibinary.asm
+index 2a6bee6..69890ab 100644
+--- a/sm3_mb/sm3_multibinary.asm
++++ b/sm3_mb/sm3_multibinary.asm
+@@ -119,9 +119,11 @@ extern _sm3_ctx_mgr_init_avx2
+ extern _sm3_ctx_mgr_submit_avx2
+ extern _sm3_ctx_mgr_flush_avx2
+ 
++%ifdef HAVE_AS_KNOWS_SHA512NI
+ extern _sm3_ctx_mgr_init_avx2_ni
+ extern _sm3_ctx_mgr_submit_avx2_ni
+ extern _sm3_ctx_mgr_flush_avx2_ni
++%endif
+ 
+ extern _sm3_ctx_mgr_init_avx512
+ extern _sm3_ctx_mgr_submit_avx512
