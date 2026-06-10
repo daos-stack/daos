@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"syscall"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -74,6 +75,59 @@ func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
 	go func() {
 		ei.storageReady <- replaceRank
 	}()
+}
+
+// cleanupFailedJoinReplace cleans up storage after a join failure during replace operation.
+// This is called when format succeeded but the join to the system failed, leaving
+// the storage in a partially initialized state.
+func (ei *EngineInstance) cleanupFailedJoinReplace(ctx context.Context) error {
+	idx := ei.Index()
+	ei.log.Infof("instance %d: cleaning up after join failure during replace", idx)
+
+	storageProv := ei.GetStorage()
+
+	// Get SCM config to access mount point and class
+	scmCfg, err := storageProv.GetScmConfig()
+	if err != nil {
+		return errors.Wrap(err, "failed to get SCM config")
+	}
+
+	if scmCfg == nil {
+		ei.log.Debugf("instance %d: no SCM config, nothing to clean", idx)
+		return nil
+	}
+
+	if ei.IsStarted() {
+		ei.log.Infof("instance %d: stopping engine before cleanup", idx)
+		if err := ei.Stop(syscall.SIGKILL); err != nil {
+			return errors.Wrap(err, "failed to stop engine")
+		}
+
+		pollFn := func(e Engine) bool { return !e.IsStarted() }
+		if err := pollInstanceState(ctx, []Engine{ei}, pollFn); err != nil {
+			return errors.Wrap(err, "waiting for engine to stop")
+		}
+		ei.log.Debugf("instance %d: engine stopped successfully", idx)
+	}
+
+	// For RAM-based SCM (tmpfs), unmount to reset state
+	if scmCfg.Class == storage.ClassRam {
+		ei.log.Debugf("instance %d: unmounting tmpfs at %s", idx, scmCfg.Scm.MountPoint)
+		if err := storageProv.UnmountTmpfs(); err != nil {
+			ei.log.Errorf("instance %d: unmount failed: %v", idx, err)
+			// Continue anyway - log the error but don't fail the cleanup
+		} else {
+			ei.log.Debugf("instance %d: tmpfs unmounted successfully", idx)
+		}
+	}
+
+	// Removing superblock prevents subsequent join without reformat.
+	if err := ei.RemoveSuperblock(); err != nil {
+		return err
+	}
+
+	ei.log.Infof("instance %d: cleanup after join failure complete", idx)
+	return nil
 }
 
 func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {

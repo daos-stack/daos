@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -216,9 +216,24 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		Replace:              ei.replaceRank.Load(),
 	}
 
+	// Reset replaceRank state for instance after joinSystem() has been attempted.
+	defer ei.replaceRank.SetFalse()
+
 	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
+
+		// If this is a replace operation and join failed, clean up the formatted storage to
+		// prevent leaving the rank in a formatted state. This prevents the engine
+		// inadvertently being joined later with a new rank.
+		if ei.replaceRank.Load() {
+			ei.log.Infof("cleaning up after join failure during replace")
+			if cleanupErr := ei.cleanupFailedJoinReplace(ctx); cleanupErr != nil {
+				ei.log.Errorf("failed to cleanup after join failure: %v", cleanupErr)
+				// Don't override the original join error
+			}
+		}
+
 		return ranklist.NilRank, false, 0, err
 	}
 	switch resp.State {
@@ -236,9 +251,6 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		}
 	}
 	r = ranklist.Rank(resp.Rank)
-
-	// Reset replaceRank state for instance after joinSystem() has returned.
-	ei.replaceRank.SetFalse()
 
 	if !superblock.ValidRank || ready.Uri != superblock.URI {
 		ei.log.Noticef("updating rank %d URI to %s", resp.Rank, ready.Uri)

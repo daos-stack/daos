@@ -1029,7 +1029,20 @@ func TestSystem_Membership_Join(t *testing.T) {
 				FabricContexts:   curMember.PrimaryFabricContexts,
 				FaultDomain:      curMember.FaultDomain,
 			},
-			expErr: ErrJoinAdminExcluded(adminExcludedMember.UUID, 0),
+			expResp: &JoinResponse{
+				Created: false,
+				Member: func() *Member {
+					cm := *adminExcludedMember
+					cm.Rank = 0
+					cm.UUID = curMember.UUID
+					cm.State = MemberStateJoined
+					cm.Info = ""
+					return &cm
+				}(),
+				PrevState: MemberStateAdminExcluded,
+				// Extra map increment because of remove and add operations.
+				MapVersion: 3,
+			},
 		},
 		"successful replace; different UUID but otherwise identical member": {
 			req: &JoinRequest{
