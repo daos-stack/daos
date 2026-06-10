@@ -130,6 +130,17 @@ func (fc *FabricConfig) GetInterfaces() ([]string, error) {
 	return interfaces, nil
 }
 
+// GetAddrFormats parses the AddrFormat string into zero or more per-provider
+// address-family hints, matched one-to-one with the providers. Returns an empty
+// slice when addr_format is unset, which preserves the default behavior.
+func (fc *FabricConfig) GetAddrFormats() []string {
+	if fc == nil {
+		return nil
+	}
+
+	return splitMultiProviderStr(fc.AddrFormat)
+}
+
 // GetInterfacePorts parses the InterfacePort string to one or more ports.
 func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
 	if fc == nil {

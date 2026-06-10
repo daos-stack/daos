@@ -901,6 +901,47 @@ func TestFabricConfig_GetInterfaces(t *testing.T) {
 	}
 }
 
+func TestFabricConfig_GetAddrFormats(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg            *FabricConfig
+		expAddrFormats []string
+	}{
+		"nil": {
+			expAddrFormats: nil,
+		},
+		"unset": {
+			cfg:            &FabricConfig{},
+			expAddrFormats: []string{},
+		},
+		"single": {
+			cfg: &FabricConfig{
+				AddrFormat: "ipv6",
+			},
+			expAddrFormats: []string{"ipv6"},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				AddrFormat: multiProviderString("ipv6", "ipv4"),
+			},
+			expAddrFormats: []string{"ipv6", "ipv4"},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				AddrFormat: multiProviderString(" ipv6  ", "", "ipv4 "),
+			},
+			expAddrFormats: []string{"ipv6", "ipv4"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			addrFormats := tc.cfg.GetAddrFormats()
+
+			if diff := cmp.Diff(tc.expAddrFormats, addrFormats); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg          *FabricConfig

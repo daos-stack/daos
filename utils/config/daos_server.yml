@@ -144,6 +144,12 @@
 ## IPv4 preference would otherwise hide the only usable interfaces.
 ## Accepted values: unspec (default), ipv4, ipv6, native. For multi-provider
 ## configurations, supply a comma-separated list, one entry per provider.
+##
+## This value is also advertised to attaching clients (as D_ADDR_FORMAT in the
+## GetAttachInfo network hint), so clients select the same address family as
+## this system's engines without separate client configuration. A client or
+## agent attached to several systems picks up each system's family from that
+## system's hint.
 #
 #addr_format: ipv6
 #
