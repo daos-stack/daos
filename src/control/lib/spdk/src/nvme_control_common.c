@@ -138,6 +138,8 @@ free_ctrlr_fields(struct nvme_ctrlr_t *ctrlr)
 		free(ctrlr->vendor_id);
 	if (ctrlr->pci_type != NULL)
 		free(ctrlr->pci_type);
+	if (ctrlr->pci_addr != NULL)
+		free(ctrlr->pci_addr);
 }
 
 void
