@@ -160,10 +160,15 @@ if [ "${debug}" = "true" ]; then
     fi
     run_cmd "which ${pkg}" || exit
   done
+
+  run_cmd "cat /etc/uv/uv.toml" || true
+  run_cmd "which uv" || true
+  run_cmd "echo \$PATH" || true
+  run_cmd "echo \$VIRTUAL_ENV" || true
 fi
 
 # Build DAOS dependencies
-run_cmd "scons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
+run_cmd "python -m SCons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
 
 if [[ -n ${mount_dir-} ]]; then
   # Run filesystem tests to verify the build.
@@ -173,8 +178,8 @@ if [[ -n ${mount_dir-} ]]; then
 fi
 
 # Build and install DAOS
-run_cmd "scons -C ${build_dir} --jobs ${build_jobs}" || exit
-run_cmd "scons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
+run_cmd "python -m SCons -C ${build_dir} --jobs ${build_jobs}" || exit
+run_cmd "python -m SCons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
 
 if [[ -n ${mount_dir-} ]]; then
   run_cmd "daos filesystem query ${mount_dir}" || exit
