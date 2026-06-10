@@ -136,6 +136,18 @@
 #fabric_auth_key: foo:bar
 #
 #
+## CART: Fabric address family
+## Selects the preferred IP address family for fabric initialization,
+## forwarded to CaRT/Mercury as D_ADDR_FORMAT. Leave unset to keep the
+## historical default (the provider's own preference; IPv4 for verbs/RoCE).
+## Set to "ipv6" for IPv6-only fabric NIC deployments, where the default
+## IPv4 preference would otherwise hide the only usable interfaces.
+## Accepted values: unspec (default), ipv4, ipv6, native. For multi-provider
+## configurations, supply a comma-separated list, one entry per provider.
+#
+#addr_format: ipv6
+#
+#
 ## Core Dump Filter
 ## Optional filter to control which mappings are written to the core
 ## dump in the event of a crash. See the following URL for more detail:

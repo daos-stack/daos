@@ -693,6 +693,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithFabricProvider(provider).
 		WithFabricInterface(interfaceName).
 		WithFabricInterfacePort(interfacePort).
+		WithFabricAddrFormat("ipv6").
 		WithPinnedNumaNode(pinnedNumaNode).
 		WithBypassHealthChk(&bypass).
 		WithModules(modules).
@@ -727,6 +728,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"D_INTERFACE=" + interfaceName,
 		"D_PORT=" + strconv.Itoa(interfacePort),
 		"D_PROVIDER=" + provider,
+		"D_ADDR_FORMAT=ipv6",
 		"D_LOG_FILE=" + logFile,
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
