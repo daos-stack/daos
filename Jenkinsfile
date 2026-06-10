@@ -47,7 +47,6 @@ void updateRunStage() {
         'Unit Test',
         'Unit Test bdev',
         'NLT',
-        'NLT with Bullseye',
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
         'Test',
@@ -76,7 +75,7 @@ void updateRunStage() {
         value = params.get(name, null)
         if (value instanceof Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
-            reasons[name] = "parameter selection/default"
+            reasons[name] = "parameter selection or default"
         }
     }
 
@@ -114,15 +113,15 @@ void updateRunStage() {
         return
     }
 
-    // Handle user setting CI_RPM_TEST_VERSION
-    if (params.CI_RPM_TEST_VERSION) {
-        println("updateRunStage: Detected specific RPM version, skipping build/RPM test stages")
+    // Handle user setting CI_RPM_TEST_VERSION or specifying RPM-test-version
+    if (rpmTestVersion()) {
+        println("updateRunStage: Detected RPM test version, skipping build/RPM test stages")
         for (stage in runStage.keySet()) {
             if (stage.contains('Build')
                     || stage.contains('Unit Tests')
                     || stage.contains('Test RPMs')) {
                 runStage[stage] = false
-                reasons[stage] = "specific RPM version"
+                reasons[stage] = "RPM test version"
             }
         }
         displayRunStage(reasons)
@@ -535,9 +534,6 @@ pipeline {
         booleanParam(name: 'NLT',
                      defaultValue: true,
                      description: 'Run the NLT stage.')
-        booleanParam(name: 'NLT with Bullseye',
-                     defaultValue: true,
-                     description: 'Run the NLT with Bullseye stage.')
         booleanParam(name: 'Unit Test with memcheck',
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck stage.')
