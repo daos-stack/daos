@@ -89,15 +89,13 @@ old_path="${PATH//:/ }"
 echo OLD_PATH is "${old_path}"
 for item in $list; do
     # shellcheck disable=SC2086
-    in_list "${!item}" ${added}
-    if [ $? -eq 1 ]; then
+    if ! in_list "${!item}" ${added}; then
         continue
     fi
     export "${item?}"
     added+=" ${!item}"
     # shellcheck disable=SC2086
-    in_list "${!item}/bin" ${old_path}
-    if [ $? -eq 1 ]; then
+    if ! in_list "${!item}/bin" ${old_path}; then
         continue
     fi
     if [ -d "${!item}/bin" ]; then
@@ -106,9 +104,7 @@ for item in $list; do
 done
 
 # shellcheck disable=SC2086
-in_list "${SL_PREFIX}/bin" ${old_path}
-# shellcheck disable=SC2181
-if [ $? -eq 0 ]; then
+if in_list "${SL_PREFIX}/bin" ${old_path}; then
     PATH=$SL_PREFIX/bin:$PATH
 fi
 export PATH
