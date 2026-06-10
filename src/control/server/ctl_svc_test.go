@@ -12,7 +12,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -72,19 +71,10 @@ func newMockControlServiceFromBackends(t *testing.T, log logging.Logger, cfg *co
 	}
 
 	for idx, ec := range cfg.Engines {
-		trc := new(engine.TestRunnerConfig)
-		if started[idx] {
-			trc.Running.SetTrue()
-		}
-		runner := engine.NewTestRunner(trc, ec)
 		storProv := storage.MockProvider(log, 0, &ec.Storage, syp, sp, bp, nil)
-
-		ei := NewEngineInstance(log, storProv, nil, runner, nil)
-		ei.setSuperblock(&Superblock{
-			Rank: ranklist.NewRankPtr(uint32(idx)),
-		})
+		ei := NewEngineInstance(log, storProv, nil, nil, nil)
+		setupTestEngineWithConfig(t, ei, uint32(idx), ec, !started[idx])
 		if started[idx] {
-			ei.ready.SetTrue()
 			ei.setDrpcSocket("/dontcare")
 		}
 		if err := cs.harness.AddInstance(ei); err != nil {
