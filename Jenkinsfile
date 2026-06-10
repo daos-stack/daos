@@ -136,9 +136,8 @@ void updateRunStage() {
         return
     }
 
-    // Handle user setting CI_FULL_BULLSEYE_REPORT or Full-bullseye-report
-    if (params.CI_FULL_BULLSEYE_REPORT
-            || commitPragmas.get('full-bullseye-report', 'false').toLowerCase() == 'true') {
+    // Handle user setting CI_FULL_BULLSEYE_REPORT
+    if (params.CI_FULL_BULLSEYE_REPORT) {
         println("updateRunStage: Detected CI_FULL_BULLSEYE_REPORT, skipping unrelated stages")
         for (stage in runStage.keySet()) {
             if (stage in ['Build on EL 9 with Bullseye',
@@ -173,9 +172,8 @@ void updateRunStage() {
         return
     }
 
-    // Handle user setting CI_BUILD_PACKAGES_ONLY or Build-packages-only
-    if (params.CI_BUILD_PACKAGES_ONLY
-            || commitPragmas.get('build-packages-only', 'false').toLowerCase() == 'true') {
+    // Handle user setting CI_BUILD_PACKAGES_ONLY
+    if (params.CI_BUILD_PACKAGES_ONLY) {
         println("updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages")
         for (stage in runStage.keySet()) {
             if (stage.contains('Unit Tests')) {
