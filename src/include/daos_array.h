@@ -289,6 +289,19 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		d_sg_list_t *sgl, daos_event_t *ev);
 
 /**
+ * GPU direct variant of daos_array_read().
+ *
+ * \param[in]	mem_attr	Memory attributes describing the GPU buffer.
+ *				Pass NULL for host memory (equivalent to
+ *				daos_array_read).
+ *
+ * All other parameters are identical to daos_array_read().
+ */
+int
+daos_array_read_gpu(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		    d_sg_list_t *sgl, daos_mem_attr_t *mem_attr, daos_event_t *ev);
+
+/**
  * Write data to an array object.
  *
  * \param[in]	oh	Array object open handle.
@@ -314,6 +327,19 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 int
 daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		 d_sg_list_t *sgl, daos_event_t *ev);
+
+/**
+ * GPU direct variant of daos_array_write().
+ *
+ * \param[in]	mem_attr	Memory attributes describing the GPU buffer.
+ *				Pass NULL for host memory (equivalent to
+ *				daos_array_write).
+ *
+ * All other parameters are identical to daos_array_write().
+ */
+int
+daos_array_write_gpu(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
+		     d_sg_list_t *sgl, daos_mem_attr_t *mem_attr, daos_event_t *ev);
 
 /**
  * Query the number of records in the array object.
