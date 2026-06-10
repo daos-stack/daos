@@ -1172,6 +1172,8 @@ pipeline {
                                      inst_rpms: unitTestInstRpms('el9'),
                                      image_version: 'el9.7',
                                      compiler: unitTestCompiler(),
+                                     test_script: 'ci/unit/test_main.sh',
+                                     always_script: 'ci/unit/test_post_always.sh unit_test_logs',
                                      coverage_stash: 'unit_test_bullseye'))
                     }
                     post {
@@ -1198,6 +1200,8 @@ pipeline {
                                      inst_rpms: unitTestInstRpms('el9'),
                                      image_version: 'el9.7',
                                      compiler: unitTestCompiler(),
+                                     test_script: 'ci/unit/test_main.sh',
+                                     always_script: 'ci/unit/test_post_always.sh unit_test_bdev_logs',
                                      coverage_stash: 'unit_test_bdev_bullseye'))
                     }
                     post {
@@ -1322,6 +1326,8 @@ pipeline {
                                      inst_rpms: unitTestInstRpms('el9'),
                                      image_version: 'el9.7',
                                      compiler: 'gcc',
+                                     test_script: 'ci/unit/test_main.sh',
+                                     always_script: 'ci/unit/test_post_always.sh unit_test_memcheck_logs',
                                      unstash_opt: true,
                                      ignore_failure: true))
                     }
@@ -1349,6 +1355,8 @@ pipeline {
                                      inst_rpms: unitTestInstRpms('el9'),
                                      image_version: 'el9.7',
                                      compiler: 'gcc',
+                                     test_script: 'ci/unit/test_main.sh',
+                                     always_script: 'ci/unit/test_post_always.sh unit_test_memcheck_bdev_logs',
                                      unstash_opt: true,
                                      ignore_failure: true))
                     }
