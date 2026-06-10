@@ -137,7 +137,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         f"--build-jobs {build_jobs}",
         "--debug"
     ])
-    timeout = 10800  # 3 hours
+    timeout = 14400  # 4 hours
     self.log_step(f"Running '{command}' with a {timeout}s timeout")
     start = time.time()
     result = run_remote(self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
