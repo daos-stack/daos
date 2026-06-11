@@ -103,15 +103,38 @@ crt_prov_str_to_prov(const char *prov_str)
 {
 	int i = 0;
 
+	if (prov_str == NULL)
+		return CRT_PROV_UNKNOWN;
+
 	while (crt_na_dict[i].nad_str) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
+		if (crt_na_dict[i].nad_type == CRT_PROV_UCX && crt_provider_str_is_ucx(prov_str))
+			return crt_na_dict[i].nad_type;
 		i++;
 	}
 
 	return CRT_PROV_UNKNOWN;
+}
+
+static char *
+crt_provider_configured_name_get(crt_provider_t provider)
+{
+	int i;
+
+	if (crt_gdata.cg_primary_prov == provider &&
+	    crt_gdata.cg_prov_gdata_primary.cpg_na_config.noc_provider != NULL)
+		return crt_gdata.cg_prov_gdata_primary.cpg_na_config.noc_provider;
+
+	for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++) {
+		if (crt_gdata.cg_secondary_provs[i] == provider &&
+		    crt_gdata.cg_prov_gdata_secondary[i].cpg_na_config.noc_provider != NULL)
+			return crt_gdata.cg_prov_gdata_secondary[i].cpg_na_config.noc_provider;
+	}
+
+	return NULL;
 }
 
 /**
@@ -461,7 +484,11 @@ crt_get_na_dict_entry(crt_provider_t provider)
 char *
 crt_provider_name_get(crt_provider_t provider)
 {
+	char               *provider_name = crt_provider_configured_name_get(provider);
 	struct crt_na_dict *entry = crt_get_na_dict_entry(provider);
+
+	if (provider_name != NULL)
+		return provider_name;
 
 	return entry ? entry->nad_str : NULL;
 }
