@@ -1629,7 +1629,7 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { runStage['Functional Hardware'] }
+                expression { runStage['Test Hardware'] }
             }
             steps {
                 script {
