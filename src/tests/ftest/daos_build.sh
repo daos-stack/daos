@@ -172,7 +172,7 @@ if [ "${debug}" = "true" ]; then
 fi
 
 # Build DAOS dependencies
-scons="PYTHON=${venv_python} PYTHON3=${venv_python} ${venv_python} -m SCons"
+scons="${venv_python} -m SCons"
 run_cmd "${scons} -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
 
 if [[ -n ${mount_dir-} ]]; then
