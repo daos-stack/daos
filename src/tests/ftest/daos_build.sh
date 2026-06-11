@@ -99,8 +99,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-venv_python="${venv_dir}/bin/python"
-
 run_cmd() {
     local start_time end_time elapsed_seconds rc
     local cmd="$*"
@@ -138,6 +136,7 @@ fi
 
 # Run in the python virtual environment for the rest of the script
 run_cmd "source ${venv_dir}/bin/activate" || exit
+venv_python="${venv_dir}/bin/python"
 
 # Clone the DAOS repository and install RPM dependencies for the build
 if [ "${rebuild}" = "false" ]; then
@@ -173,7 +172,8 @@ if [ "${debug}" = "true" ]; then
 fi
 
 # Build DAOS dependencies
-run_cmd "PYTHON=${venv_python} PYTHON3=${venv_python} ${venv_python} -m SCons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
+scons="PYTHON=${venv_python} PYTHON3=${venv_python} ${venv_python} -m SCons"
+run_cmd "${scons} -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
 
 if [[ -n ${mount_dir-} ]]; then
   # Run filesystem tests to verify the build.
@@ -183,8 +183,8 @@ if [[ -n ${mount_dir-} ]]; then
 fi
 
 # Build and install DAOS
-run_cmd "PYTHON=${venv_python} PYTHON3=${venv_python} ${venv_python} -m SCons -C ${build_dir} --jobs ${build_jobs}" || exit
-run_cmd "PYTHON=${venv_python} PYTHON3=${venv_python} ${venv_python} -m SCons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
+run_cmd "${scons} -C ${build_dir} --jobs ${build_jobs}" || exit
+run_cmd "${scons} -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
 
 if [[ -n ${mount_dir-} ]]; then
   run_cmd "daos filesystem query ${mount_dir}" || exit
