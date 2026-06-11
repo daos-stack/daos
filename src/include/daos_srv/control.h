@@ -105,6 +105,7 @@ struct nvme_stats {
 	uint64_t	 unsafe_shutdowns;
 	uint64_t	 media_errs;
 	uint64_t	 err_log_entries;
+	uint8_t		 percentage_used;
 	/* I/O error counters */
 	uint32_t	 bio_read_errs;
 	uint32_t	 bio_write_errs;
