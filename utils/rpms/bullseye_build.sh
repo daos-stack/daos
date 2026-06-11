@@ -28,5 +28,3 @@ echo + sudo ./install --quiet --key "**********" --prefix "${SL_BULLSEYE_PREFIX}
 sudo ./install --quiet --key "${bullseye_key}" --prefix "${SL_BULLSEYE_PREFIX}"
 set -x
 popd
-# rm -rf bullseye.tar.xz bullseye
-# ls -alR "${SL_BULLSEYE_PREFIX}"

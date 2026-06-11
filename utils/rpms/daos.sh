@@ -416,7 +416,8 @@ EXTERNAL_DEPENDS+=("${ndctl_dev}")
 if [[ "${DISTRO:-el8}" =~ el ]]; then
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
-DEPENDS=( "${base_name}-client = ${VERSION}-${RELEASE}" "${base_name}-admin = ${VERSION}-${RELEASE}")
+DEPENDS=( "${base_name}-client = ${VERSION}-${RELEASE}")
+DEPENDS+=("${base_name}-admin = ${VERSION}-${RELEASE}")
 DEPENDS+=("${base_name}-devel = ${VERSION}-${RELEASE}")
 build_package "${base_name}-client-tests"
 

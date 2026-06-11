@@ -512,7 +512,7 @@ class PreReqComponent():
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
                               ['default', 'dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('COMPILER', "Set the compiler family to use", 'gcc',
-                              ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
+                              ['gcc', 'covc', 'clang'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
@@ -681,7 +681,6 @@ class PreReqComponent():
                 os.remove(covfile)
             commands = [['$COV01', '-1'],
                         ['$COV01', '-s'],
-                        ['$CVS', '--add', '!**/src/tests/'],
                         ['$CVS', '--add', '!**/src/bio/smd/tests/'],
                         ['$CVS', '--add', '!**/src/cart/crt_self_test.h'],
                         ['$CVS', '--add', '!**/src/cart/crt_self_test_client.c'],
@@ -700,6 +699,7 @@ class PreReqComponent():
                         ['$CVS', '--add', '!**/src/placement/tests/'],
                         ['$CVS', '--add', '!**/src/rdb/tests/'],
                         ['$CVS', '--add', '!**/src/security/tests/'],
+                        ['$CVS', '--add', '!**/src/tests/'],
                         ['$CVS', '--add', '!**/src/utils/daos_autotest.c'],
                         ['$CVS', '--add', '!**/src/utils/crt_launch/'],
                         ['$CVS', '--add', '!**/src/utils/ctl/'],

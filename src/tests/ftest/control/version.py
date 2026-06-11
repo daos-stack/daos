@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import json
-import re
 from getpass import getuser
 
 from apricot import TestWithServers
@@ -41,16 +40,16 @@ class DAOSVersion(TestWithServers):
         :avocado: tags=DAOSVersion,test_version
         """
         # Get RPM version.
-        rpm_command = "rpm -qa | grep daos-server"
+        rpm_command = ("rpm -q --queryformat '%{VERSION}\n' daos-server daos-bullseye-server "
+                       "2>/dev/null | grep -v 'not installed'")
         result = run_remote(self.log, self.hostlist_servers, rpm_command)
         if not result.passed:
             self.fail("Failed to list daos-server RPMs")
         if not result.homogeneous:
             self.fail("Non-homogenous daos-server RPMs")
-        match = re.findall(r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", result.joined_stdout)
-        if not match:
+        rpm_version = result.joined_stdout.strip()
+        if not rpm_version:
             self.fail("Failed to get version from daos-server RPMs")
-        rpm_version = match[0]
         self.log.info("RPM version = %s", rpm_version)
 
         # Get dmg version.
