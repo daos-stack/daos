@@ -1646,7 +1646,8 @@ pipeline {
                             nvme: 'auto',
                             job_status: job_status_internal,
                             coverage_stash: 'func_hw_medium_bullseye',
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
@@ -1660,7 +1661,8 @@ pipeline {
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal,
                             coverage_stash: 'func_hw_medium_md_on_ssd_bullseye',
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
@@ -1675,7 +1677,8 @@ pipeline {
                             nvme: 'auto',
                             job_status: job_status_internal,
                             coverage_stash: 'func_hw_medium_vmd_bullseye',
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
@@ -1690,7 +1693,8 @@ pipeline {
                             provider: 'ofi+verbs;ofi_rxm',
                             job_status: job_status_internal,
                             coverage_stash: 'func_hw_medium_verbs_provider_bullseye',
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
@@ -1705,7 +1709,8 @@ pipeline {
                             provider: 'ofi+verbs;ofi_rxm',
                             job_status: job_status_internal,
                             coverage_stash: 'func_hw_medium_verbs_provider_md_on_ssd_bullseye',
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
@@ -1720,7 +1725,8 @@ pipeline {
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             job_status: job_status_internal,
                             coverage_stash: 'func_hw_medium_ucx_provider_bullseye',
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
@@ -1734,7 +1740,8 @@ pipeline {
                             default_nvme: 'auto',
                             job_status: job_status_internal,
                             coverage_stash: 'func_hw_large_bullseye',
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
@@ -1748,7 +1755,8 @@ pipeline {
                             default_nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal,
                             coverage_stash: 'func_hw_large_md_on_ssd_bullseye',
-                            image_version: 'el9.7'
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                     )
                 }
