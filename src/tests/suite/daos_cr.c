@@ -3807,6 +3807,9 @@ cr_lost_rank0(void **state)
 	rc = dmg_system_exclude_rank(dmg_config_file, 0);
 	assert_rc_equal(rc, 0);
 
+	/* Wait a while for group membership synchornization. */
+	sleep(3);
+
 	rc = cr_pool_create(state, &pool, false, TCC_NONE);
 	assert_rc_equal(rc, 0);
 
