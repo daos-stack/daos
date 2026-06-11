@@ -281,9 +281,6 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
         # Compress any files larger than 1 MB
         return_code |= compress_files(logger, file_hosts, source, pattern, depth, test_result)
 
-    # Compress any files larger than 1 MB
-    return_code |= compress_files(logger, file_hosts, source, pattern, depth, test_result)
-
     # Move the test files to the test-results directory on this host
     return_code |= move_files(
         logger, file_hosts, source, pattern, destination, depth, timeout, test_result)
