@@ -247,10 +247,12 @@ class DmgCommand(DmgCommandBase):
 
         """
         saved_timeout = self.timeout
-        self.timeout = timeout
-        self._get_result(
-            ("storage", "format"), force=force, verbose=verbose)
-        self.timeout = saved_timeout
+        try:
+            self.timeout = timeout
+            self._get_result(
+                ("storage", "format"), force=force, verbose=verbose)
+        finally:
+            self.timeout = saved_timeout
         return self.result
 
     def storage_set_faulty(self, host, uuid, force=True):
