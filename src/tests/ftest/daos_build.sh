@@ -161,10 +161,12 @@ if [ "${debug}" = "true" ]; then
     run_cmd "which ${pkg}" || exit
   done
 
+  run_cmd "which python" || true
+  run_cmd "which python3" || true
   run_cmd "cat /etc/uv/uv.toml" || true
   run_cmd "which uv" || true
-  run_cmd "echo \$PATH" || true
-  run_cmd "echo \$VIRTUAL_ENV" || true
+  run_cmd "echo $PATH" || true
+  run_cmd "echo $VIRTUAL_ENV" || true
 fi
 
 # Build DAOS dependencies
