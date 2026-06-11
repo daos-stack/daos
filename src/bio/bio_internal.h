@@ -176,7 +176,7 @@ struct bio_dma_buffer {
 	  "Number of unsafe shutdowns (no notification prior to power loss)",  \
 	  "shutdowns", D_TM_COUNTER)					\
 	X(bdh_percentage_used, "percentage_used",			\
-	  "Percentage as canonical NAND-life indicator, hits 100 when the drive has consumed its rated endurance" \
+	  "Percentage as canonical NAND-life indicator, hits 100 when the drive has consumed its rated endurance",\
 	  "percents", D_TM_GAUGE)					\
 	X(bdh_temp, "temp/current",					\
 	  "Current SSD temperature",					\
