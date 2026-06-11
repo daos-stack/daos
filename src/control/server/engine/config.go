@@ -783,13 +783,13 @@ func (c *Config) WithLogSubsystems(subsystems string) *Config {
 	return c
 }
 
-// WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
+// WithMemSize sets the NVMe memory size in MiB for SPDK memory allocation on this instance.
 func (c *Config) WithMemSize(memsize int) *Config {
 	c.MemSize = memsize
 	return c
 }
 
-// WithHugepageSize sets the configured hugepage size on this instance.
+// WithHugepageSize sets the configured hugepage size in MiB on this instance.
 func (c *Config) WithHugepageSize(hugepagesz int) *Config {
 	c.HugepageSz = hugepagesz
 	return c
