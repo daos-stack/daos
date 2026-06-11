@@ -1,5 +1,5 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
+# (C) Copyright 2025-2026 Google LLC
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
@@ -22,7 +22,7 @@ RPM_CHANGELOG="daos-spdk.changelog"
 files=()
 TARGET_PATH="${bindir}"
 list_files files "${SL_SPDK_PREFIX}/bin/daos_spdk*"
-clean_bin "${files[@]}"
+NO_STRIP=y clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 BASE_PATH="${tmp}/${datadir}/daos/spdk"

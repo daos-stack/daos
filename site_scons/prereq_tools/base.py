@@ -1,5 +1,5 @@
 # Copyright 2016-2024 Intel Corporation
-# Copyright 2025 Google LLC
+# Copyright 2025-2026 Google LLC
 # Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -766,6 +766,8 @@ class PreReqComponent():
             build_env -- Environment variables to set for build
             skip_arch -- not required on this architecture
             static_libs -- Static libraries only, no published install
+            patch_rpath -- Patch the rpath in specified directories
+            patch_rpath_exclusions -- Exclude listed binaries from rpath patching
         """
         use_installed = False
         if not kw.get('static_libs', False):
@@ -992,7 +994,7 @@ class PreReqComponent():
         return self._configs.get(section, name)
 
 
-class _Component():
+class _Component():  # pylint: disable=too-many-instance-attributes
     """A class to define attributes of an external component
 
     Args:
@@ -1013,10 +1015,16 @@ class _Component():
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
         out_of_src_build -- Build from a different directory if set to True
-        patch_rpath -- Add appropriate relative rpaths to binaries
+        patch_rpath -- Patch the rpath in specified directories
+        patch_rpath_exclusions -- Exclude listed binaries from rpath patching
         build_env -- Environment variable(s) to add to build environment
         skip_arch -- not required on this platform
         static_libs -- Static libraries only, no public install
+
+    Note:
+        This class has 31 instance attributes which exceeds the pylint default
+        of 30. This is justified as it manages complex external component
+        configuration with many inter-related settings.
     """
 
     def __init__(self,
@@ -1043,6 +1051,7 @@ class _Component():
         self.required_progs = kw.get("required_progs", [])
         if kw.get("patch_rpath", []):
             self.required_progs.append("patchelf")
+        self.patch_rpath_exclusions = kw.get("patch_rpath_exclusions", [])
         self.defines = kw.get("defines", [])
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
@@ -1484,7 +1493,7 @@ class _Component():
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 res = RUNNER.run_commands([cmd])
                 if not res:
-                    if lib in ('libspdk.so', 'spdk_cli', 'spdk_rpc', 'spdk-mcp', 'spdk-sma'):
+                    if lib in self.patch_rpath_exclusions:
                         print(f'Skipped patching {full_lib}')
                     else:
                         raise BuildFailure(f'Error running patchelf on {full_lib}')
