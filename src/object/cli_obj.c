@@ -4158,7 +4158,7 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 
 			sub_anchor = &sub_anchors->sa_anchors[i].ssa_anchor;
 			if (!daos_anchor_is_eof(sub_anchor)) {
-				D_DEBUG(DB_REBUILD, "shard %d sub_anchor %d/%d non EOF",
+				D_DEBUG(DB_REBUILD, "shard %d sub_anchor %d/%d non EOF.",
 					sub_anchors->sa_anchors[i].ssa_shard, i,
 					sub_anchors->sa_anchors_nr);
 				break;
