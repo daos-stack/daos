@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,5 +66,22 @@ query_pil4dfs_path(void);
  */
 float
 query_libc_version(void);
+
+/**
+ * query the size and address of a variable in a loaded shared library with a reference function
+ *
+ * \param[in]	ref_func_addr	The address of a reference function
+ * \param[in]	ref_func_name	The name of a reference function
+ * \param[in]	var_name	The variable name
+ *
+ * \param[out]	var_size	The size of this variable
+ * \param[out]	var_addr	The address of the variable
+ *
+ * \return			0		success
+ *				otherwise	fail
+ */
+int
+query_var_addr_size(const void *ref_func_addr, const char *ref_func_name, const char *var_name,
+		    size_t *var_size, char **var_addr);
 
 #endif
