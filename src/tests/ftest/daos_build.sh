@@ -99,6 +99,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+venv_python="${venv_dir}/bin/python"
+
 run_cmd() {
     local start_time end_time elapsed_seconds rc
     local cmd="$*"
@@ -147,8 +149,8 @@ if [ "${rebuild}" = "false" ]; then
   run_cmd "cp ${build_dir}/utils/scripts/install-${distro}.sh /tmp/install.sh" || exit
   run_cmd "sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y" || exit
 
-  run_cmd "python -m pip install pip --upgrade" || exit
-  run_cmd "python -m pip install -r ${build_dir}/requirements-build.txt" || exit
+  run_cmd "${venv_python} -m pip install pip --upgrade" || exit
+  run_cmd "${venv_python} -m pip install -r ${build_dir}/requirements-build.txt" || exit
 fi
 
 # Debug
@@ -163,6 +165,7 @@ if [ "${debug}" = "true" ]; then
 
   run_cmd "which python" || true
   run_cmd "which python3" || true
+  run_cmd "${venv_python} -c 'import sys; print(sys.executable)'" || true
   run_cmd "cat /etc/uv/uv.toml" || true
   run_cmd "which uv" || true
   run_cmd "echo $PATH" || true
@@ -170,7 +173,7 @@ if [ "${debug}" = "true" ]; then
 fi
 
 # Build DAOS dependencies
-run_cmd "python -m SCons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
+run_cmd "PYTHON=${venv_python} PYTHON3=${venv_python} ${venv_python} -m SCons -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
 
 if [[ -n ${mount_dir-} ]]; then
   # Run filesystem tests to verify the build.
@@ -180,8 +183,8 @@ if [[ -n ${mount_dir-} ]]; then
 fi
 
 # Build and install DAOS
-run_cmd "python -m SCons -C ${build_dir} --jobs ${build_jobs}" || exit
-run_cmd "python -m SCons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
+run_cmd "PYTHON=${venv_python} PYTHON3=${venv_python} ${venv_python} -m SCons -C ${build_dir} --jobs ${build_jobs}" || exit
+run_cmd "PYTHON=${venv_python} PYTHON3=${venv_python} ${venv_python} -m SCons -C ${build_dir} --jobs ${build_jobs} install --implicit-deps-unchanged" || exit
 
 if [[ -n ${mount_dir-} ]]; then
   run_cmd "daos filesystem query ${mount_dir}" || exit
