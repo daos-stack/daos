@@ -1229,6 +1229,24 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 				D_ERROR("pointer-value props not supported\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
+		} else if (daos_prop_has_byteval(entry)) {
+			/* Empty leaves byteval = {0, NULL} from
+			 * mgmt__pool_property__init -- the right
+			 * protobuf "empty bytes" wire form.
+			 */
+			resp_props[j]->value_case = MGMT__POOL_PROPERTY__VALUE_BYTEVAL;
+			if (entry->dpe_val_ptr != NULL) {
+				struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+				resp_props[j]->byteval.len = bv->dpb_len;
+				if (bv->dpb_len > 0) {
+					D_ALLOC(resp_props[j]->byteval.data, bv->dpb_len);
+					if (resp_props[j]->byteval.data == NULL)
+						D_GOTO(out, rc = -DER_NOMEM);
+					memcpy(resp_props[j]->byteval.data, bv->dpb_data,
+					       bv->dpb_len);
+				}
+			}
 		} else {
 			resp_props[j]->numval = entry->dpe_val;
 			resp_props[j]->value_case =

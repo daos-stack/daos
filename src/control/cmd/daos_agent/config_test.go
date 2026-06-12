@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -120,8 +121,12 @@ exclude_fabric_ifaces: ["ib3"]
 			expErr: errors.New("yaml: unmarshal error"),
 		},
 		"empty config file": {
-			path:      emptyFile,
-			expResult: DefaultConfig(),
+			path: emptyFile,
+			expResult: func() *Config {
+				cfg := DefaultConfig()
+				cfg.NodeCertDir = defaultNodeCertDir(cfg.SystemName)
+				return cfg
+			}(),
 		},
 		"without optional items": {
 			path: withoutOptCfg,
@@ -137,6 +142,7 @@ exclude_fabric_ifaces: ["ib3"]
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
+				NodeCertDir: defaultNodeCertDir("shire"),
 			},
 		},
 		"bad log mask": {
@@ -173,6 +179,7 @@ exclude_fabric_ifaces: ["ib3"]
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
+				NodeCertDir:         defaultNodeCertDir("shire"),
 				ExcludeFabricIfaces: common.NewStringSet("ib3"),
 				FabricInterfaces: []*NUMAFabricConfig{
 					{
@@ -221,6 +228,13 @@ exclude_fabric_ifaces: ["ib3"]
 }
 
 func TestAgent_ReadConfig(t *testing.T) {
+	// validatedDefault returns a DefaultConfig with NodeCertDir populated
+	// as Validate() would set it.
+	validatedDefault := func() *Config {
+		cfg := DefaultConfig()
+		cfg.NodeCertDir = defaultNodeCertDir(cfg.SystemName)
+		return cfg
+	}
 	cfgWith := func(cfg *Config, xfrm func(*Config) *Config) *Config {
 		if xfrm != nil {
 			cfg = xfrm(cfg)
@@ -234,7 +248,7 @@ func TestAgent_ReadConfig(t *testing.T) {
 		expErr error
 	}{
 		"empty": {
-			expCfg: DefaultConfig(),
+			expCfg: validatedDefault(),
 		},
 		"telemetry enabled with no port": {
 			input: `
@@ -298,7 +312,7 @@ telemetry_retain: foo
 telemetry_port: 1234
 telemetry_enabled: true
 `,
-			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+			expCfg: cfgWith(validatedDefault(), func(cfg *Config) *Config {
 				cfg.Telemetry.Port = 1234
 				cfg.Telemetry.Enabled = true
 				return cfg
@@ -310,7 +324,7 @@ telemetry_port: 1234
 telemetry_enabled: true
 telemetry_retain: 10s
 `,
-			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+			expCfg: cfgWith(validatedDefault(), func(cfg *Config) *Config {
 				cfg.Telemetry.Port = 1234
 				cfg.Telemetry.Enabled = true
 				cfg.Telemetry.Retain = 10 * time.Second
@@ -323,7 +337,7 @@ telemetry_port: 1234
 telemetry_enabled: true
 telemetry_enabled_procs: ^foo$
 `,
-			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+			expCfg: cfgWith(validatedDefault(), func(cfg *Config) *Config {
 				cfg.Telemetry.Port = 1234
 				cfg.Telemetry.Enabled = true
 				cfg.Telemetry.RegPattern = (*ConfigRegexp)(regexp.MustCompile("^foo$"))

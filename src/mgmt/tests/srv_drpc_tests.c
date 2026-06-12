@@ -980,9 +980,66 @@ test_drpc_pool_set_prop_success(void **state)
 	D_FREE(resp.body.data);
 }
 
-/*
- * TODO (DAOS-18783): Add happy-path byteval test with new property.
- */
+static void
+test_drpc_pool_set_prop_byteval_success(void **state)
+{
+	Drpc__Call           call        = DRPC__CALL__INIT;
+	Drpc__Response       resp        = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq req         = MGMT__POOL_SET_PROP_REQ__INIT;
+	uint8_t              byte_data[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03};
+
+	req.id           = TEST_UUID;
+	req.properties   = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+
+	req.properties[0]->number       = DAOS_PROP_PO_POOL_CA;
+	req.properties[0]->byteval.data = byte_data;
+	req.properties[0]->byteval.len  = sizeof(byte_data);
+	req.properties[0]->value_case   = MGMT__POOL_PROPERTY__VALUE_BYTEVAL;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_success(&resp, DAOS_PROP_PO_POOL_CA, 0);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_set_prop_byteval_oversize(void **state)
+{
+	Drpc__Call           call = DRPC__CALL__INIT;
+	Drpc__Response       resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq req  = MGMT__POOL_SET_PROP_REQ__INIT;
+	uint8_t             *blob;
+	size_t               oversize = (size_t)DAOS_PROP_BYTEVAL_MAX_LEN + 1;
+
+	/* Real buffer over the cap so protobuf packing reads valid memory;
+	 * cap is enforced in daos_prop_entry_set_byteval, not at the wire. */
+	D_ALLOC(blob, oversize);
+	assert_non_null(blob);
+
+	req.id           = TEST_UUID;
+	req.properties   = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+
+	req.properties[0]->number       = DAOS_PROP_PO_POOL_CA;
+	req.properties[0]->byteval.data = blob;
+	req.properties[0]->byteval.len  = oversize;
+	req.properties[0]->value_case   = MGMT__POOL_PROPERTY__VALUE_BYTEVAL;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+	D_FREE(blob);
+}
 
 static void
 test_drpc_pool_set_prop_byteval_invalid_type(void **state)
@@ -1220,6 +1277,43 @@ test_drpc_pool_get_prop_svcl_success(void **state)
 
 	expect_drpc_pool_get_prop_str_success(&resp, prop_number, exp_val);
 
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_get_prop_byteval_empty_success(void **state)
+{
+	Drpc__Call             call        = DRPC__CALL__INIT;
+	Drpc__Response         resp        = DRPC__RESPONSE__INIT;
+	Mgmt__PoolGetPropReq   req         = MGMT__POOL_GET_PROP_REQ__INIT;
+	Mgmt__PoolGetPropResp *get_resp    = NULL;
+	int                    prop_number = DAOS_PROP_PO_POOL_CA;
+
+	ds_mgmt_pool_get_prop_out = daos_prop_alloc(1);
+	assert_non_null(ds_mgmt_pool_get_prop_out);
+	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_type    = prop_number;
+	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_val_ptr = NULL;
+
+	req.id                    = TEST_UUID;
+	req.properties            = alloc_prop_msg_list(1);
+	req.n_properties          = 1;
+	req.properties[0]->number = prop_number;
+	setup_pool_get_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_get_prop(&call, &resp);
+
+	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
+	get_resp = mgmt__pool_get_prop_resp__unpack(NULL, resp.body.len, resp.body.data);
+	assert_non_null(get_resp);
+	assert_int_equal(get_resp->n_properties, 1);
+	assert_int_equal(get_resp->properties[0]->number, prop_number);
+	assert_int_equal(get_resp->properties[0]->value_case, MGMT__POOL_PROPERTY__VALUE_BYTEVAL);
+	assert_int_equal(get_resp->properties[0]->byteval.len, 0);
+	assert_null(get_resp->properties[0]->byteval.data);
+
+	mgmt__pool_get_prop_resp__free_unpacked(get_resp, NULL);
 	free_prop_msg_list(req.properties, req.n_properties);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -3481,11 +3575,14 @@ main(void)
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_invalid_value_type),
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
+	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_byteval_success),
+	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_byteval_oversize),
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_byteval_invalid_type),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_bad_uuid),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_num_success),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_str_success),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_svcl_success),
+	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_byteval_empty_success),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_null_svcl),
 	    EXCLUDE_TEST(test_drpc_exclude_bad_uuid),
 	    EXCLUDE_TEST(test_drpc_exclude_mgmt_svc_fails),
