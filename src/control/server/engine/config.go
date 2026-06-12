@@ -48,7 +48,17 @@ type FabricConfig struct {
 	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
 	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
 	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
+	// AddrFormat selects the preferred IP address family for fabric init. It is
+	// forwarded verbatim to CaRT/Mercury via the D_ADDR_FORMAT environment
+	// variable. An empty value leaves the historical (IPv4-preferring) default
+	// untouched. For multi-provider configurations it accepts a comma-separated
+	// list, one entry per provider, matching the provider ordering.
+	AddrFormat string `yaml:"addr_format,omitempty" cmdEnv:"D_ADDR_FORMAT"`
 }
+
+// FabricAddrFormats enumerates the address-family hints accepted by addr_format,
+// mirroring the values parsed by CaRT's crt_str_to_addr_format().
+var FabricAddrFormats = []string{"unspec", "ipv4", "ipv6", "native"}
 
 // GetPrimaryProvider parses the primary provider from the Provider string.
 func (fc *FabricConfig) GetPrimaryProvider() (string, error) {
@@ -120,6 +130,17 @@ func (fc *FabricConfig) GetInterfaces() ([]string, error) {
 	return interfaces, nil
 }
 
+// GetAddrFormats parses the AddrFormat string into zero or more per-provider
+// address-family hints, matched one-to-one with the providers. Returns an empty
+// slice when addr_format is unset, which preserves the default behavior.
+func (fc *FabricConfig) GetAddrFormats() []string {
+	if fc == nil {
+		return nil
+	}
+
+	return splitMultiProviderStr(fc.AddrFormat)
+}
+
 // GetInterfacePorts parses the InterfacePort string to one or more ports.
 func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
 	if fc == nil {
@@ -156,6 +177,9 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	}
 	if fc.AuthKey == "" {
 		fc.AuthKey = other.AuthKey
+	}
+	if fc.AddrFormat == "" {
+		fc.AddrFormat = other.AddrFormat
 	}
 	if len(fc.NumSecondaryEndpoints) == 0 {
 		fc.setNumSecondaryEndpoints(other.NumSecondaryEndpoints)
@@ -200,6 +224,10 @@ func (fc *FabricConfig) Validate() error {
 		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
 	}
 
+	if err := fc.validateAddrFormat(numProv); err != nil {
+		return err
+	}
+
 	numSecProv := numProv - numPrimaryProviders
 	if numSecProv > 0 {
 		if len(fc.NumSecondaryEndpoints) != 0 && len(fc.NumSecondaryEndpoints) != numSecProv {
@@ -211,6 +239,31 @@ func (fc *FabricConfig) Validate() error {
 				return errors.Errorf("all values in secondary_provider_endpoints must be > 0")
 			}
 		}
+	}
+
+	return nil
+}
+
+// validateAddrFormat ensures every comma-separated addr_format entry is a
+// recognized address-family hint and that the count matches the number of
+// providers (one hint per provider, as with fabric_iface). An empty
+// addr_format is valid and preserves the default behavior.
+func (fc *FabricConfig) validateAddrFormat(numProv int) error {
+	if fc.AddrFormat == "" {
+		return nil
+	}
+
+	formats := splitMultiProviderStr(fc.AddrFormat)
+	for _, f := range formats {
+		if !common.Includes(FabricAddrFormats, f) {
+			return errors.Errorf("invalid addr_format %q, must be one of %v",
+				f, FabricAddrFormats)
+		}
+	}
+
+	if len(formats) != numProv {
+		return errors.Errorf("addr_format must include one value per provider, delimited by %q",
+			MultiProviderSeparator)
 	}
 
 	return nil
@@ -702,6 +755,14 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 // WithFabricAuthKey sets the fabric authorization key.
 func (c *Config) WithFabricAuthKey(key string) *Config {
 	c.Fabric.AuthKey = key
+	return c
+}
+
+// WithFabricAddrFormat sets the preferred IP address family for fabric init
+// (forwarded to CaRT/Mercury as D_ADDR_FORMAT). Accepted values are listed in
+// FabricAddrFormats; an empty value preserves the default behavior.
+func (c *Config) WithFabricAddrFormat(format string) *Config {
+	c.Fabric.AddrFormat = format
 	return c
 }
 
