@@ -2581,6 +2581,10 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct vos_iter_anchors	anchor = { 0 };
 	daos_handle_t		coh;
 	struct d_backoff_seq	backoff_seq;
+	uint64_t                  start_hlc     = d_hlc_get();
+	uint64_t                  last_warn_hlc = start_hlc;
+	uint64_t                  now_hlc;
+	unsigned int              retry_cnt = 0;
 	int			rc;
 
 	D_ASSERT(type == VOS_ITER_COUUID);
@@ -2619,15 +2623,28 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
-			DP_RC(rc), DP_UUID(entry->ie_couuid));
+		retry_cnt++;
+		now_hlc = d_hlc_get();
+		if (now_hlc - last_warn_hlc >= d_sec2hlc(300)) {
+			D_WARN(DF_UUID "/" DF_UUID ": discard still retrying after " DF_U64
+				       "s, retries=%u: " DF_RC "\n",
+			       DP_UUID(arg->ca_po_uuid), DP_UUID(entry->ie_couuid),
+			       d_hlc2sec(now_hlc - start_hlc), retry_cnt, DP_RC(rc));
+			last_warn_hlc = now_hlc;
+		}
+		D_DEBUG(DB_REBUILD,
+			DF_UUID "/" DF_UUID ": discard retry %u after " DF_U64 "s: " DF_RC "\n",
+			DP_UUID(arg->ca_po_uuid), DP_UUID(entry->ie_couuid), retry_cnt,
+			d_hlc2sec(now_hlc - start_hlc), DP_RC(rc));
 		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
 
 	d_backoff_seq_fini(&backoff_seq);
 	vos_cont_close(coh);
-	D_DEBUG(DB_TRACE, DF_UUID "/" DF_UUID " discard cont done: " DF_RC "\n",
-		DP_UUID(arg->ca_po_uuid), DP_UUID(entry->ie_couuid), DP_RC(rc));
+	D_DEBUG(DB_TRACE,
+		DF_UUID "/" DF_UUID " discard cont done after " DF_U64 "s, retries=%u: " DF_RC "\n",
+		DP_UUID(arg->ca_po_uuid), DP_UUID(entry->ie_couuid),
+		d_hlc2sec(d_hlc_get() - start_hlc), retry_cnt, DP_RC(rc));
 
 put:
 	ds_cont_child_put(cont);

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -44,7 +44,7 @@ class OSAOnlineReintegration(OSAUtils):
         self.daos_racer.run()
 
     def run_online_reintegration_test(self, num_pool, ranks, racer=False, server_boot=False,
-                                      oclass=None):
+                                      oclass=None, include_pool_svc_leader=False):
         """Run the Online reintegration without data.
 
         Args:
@@ -54,6 +54,8 @@ class OSAOnlineReintegration(OSAUtils):
                 Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank. Defaults to False.
             oclass (str) : daos object class string (eg: "RP_2G8"). Defaults to None.
+            include_pool_svc_leader (bool): Ensure selected exclude/reintegrate ranks include
+                the current pool service leader. Defaults to False.
         """
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -94,16 +96,26 @@ class OSAOnlineReintegration(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
+
+            # Preserve existing behavior unless explicitly requested by a test.
+            test_ranks = ranks
+            if include_pool_svc_leader:
+                join_ranks = not (len(ranks) == 1 and "," in str(ranks[0]))
+                total_ranks = len(ranks) if join_ranks else len(str(ranks[0]).split(","))
+                test_ranks = self.get_ranks_with_pool_svc_leader(
+                    self.pool, total_ranks=total_ranks, join_ranks=join_ranks)
+                self.log.info("Using leader-inclusive test ranks: %s", test_ranks)
+
             # Get initial total free space (scm+nvme)
             initial_free_space = self.pool.get_total_free_space(refresh=True)
             if server_boot is False:
-                output = self.pool.exclude(ranks)
+                output = self.pool.exclude(test_ranks)
             else:
-                output = self.dmg_command.system_stop(ranks=ranks, force=True)
+                output = self.dmg_command.system_stop(ranks=test_ranks, force=True)
                 self.pool.wait_for_rebuild_to_start()
                 self.pool.wait_for_rebuild_to_end()
                 self.log.info(output)
-                output = self.dmg_command.system_start(ranks=ranks)
+                output = self.dmg_command.system_start(ranks=test_ranks)
                 self.pool.wait_for_rebuild_to_start()
 
             self.print_and_assert_on_rebuild_failure(output)
@@ -117,7 +129,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.assertTrue(pver_exclude > (pver_begin + 8), "Pool Version Error:  After exclude")
             self.assertTrue(initial_free_space > free_space_after_exclude,
                             "Expected space after exclude is less than initial")
-            output = self.pool.reintegrate(ranks)
+            output = self.pool.reintegrate(test_ranks)
             self.print_and_assert_on_rebuild_failure(output)
             free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
 
@@ -236,4 +248,5 @@ class OSAOnlineReintegration(OSAUtils):
         """
         self.log.info("Online Reintegration : Multiple ranks")
         ranks = self.get_random_test_ranks(join_ranks=False)
-        self.run_online_reintegration_test(num_pool=1, oclass="RP_3G1", ranks=ranks)
+        self.run_online_reintegration_test(
+            num_pool=1, oclass="RP_3G1", ranks=ranks, include_pool_svc_leader=True)
