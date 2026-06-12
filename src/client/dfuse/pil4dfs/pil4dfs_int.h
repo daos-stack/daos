@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,9 +40,11 @@ struct file_obj {
 	struct dcache_rec *parent;
 	int                open_flag;
 	int                ref_count;
+	int                transient_refs;
 	unsigned int       st_ino;
 	int                idx_mmap;
 	off_t              offset;
+	bool               cleanup_pending;
 	char              *path;
 	char               item_name[DFS_MAX_NAME];
 };
@@ -91,5 +94,14 @@ struct dfs_mt {
 	char            *pool, *cont;
 	char            *fs_root;
 };
+
+struct file_obj *
+get_live_file_obj(int fd, int fd_directed, const char *caller);
+
+struct file_obj *
+get_live_file_obj_idx(int idx, const char *caller);
+
+void
+put_live_file_obj(struct file_obj *file_obj);
 
 #endif

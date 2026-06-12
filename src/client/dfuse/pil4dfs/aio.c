@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -257,13 +258,18 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 		req_args->sgl.sg_iovs   = &req_args->iov;
 
 		if (op == IO_CMD_PREAD) {
+			struct file_obj *file_obj = get_live_file_obj_idx(fd, "io_submit:PREAD");
+
+			if (file_obj == NULL)
+				D_GOTO(err_loop, rc = errno);
 			rc = daos_event_register_comp_cb(&ctx_ev->ev, aio_req_cb, req_args);
 			if (rc) {
 				DL_ERROR(rc, "daos_event_register_comp_cb() failed");
 				D_GOTO(err_loop, rc);
 			}
-			rc = dfs_read(d_file_list[fd]->dfs_mt->dfs, d_file_list[fd]->file,
-				      &req_args->sgl, ios[i]->u.c.offset, &read_size, &ctx_ev->ev);
+			rc = dfs_read(file_obj->dfs_mt->dfs, file_obj->file, &req_args->sgl,
+				      ios[i]->u.c.offset, &read_size, &ctx_ev->ev);
+			put_live_file_obj(file_obj);
 			if (rc) {
 				rc2 = daos_event_fini(&ctx_ev->ev);
 				if (rc2)
@@ -272,13 +278,18 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 			}
 		}
 		if (op == IO_CMD_PWRITE) {
+			struct file_obj *file_obj = get_live_file_obj_idx(fd, "io_submit:PWRITE");
+
+			if (file_obj == NULL)
+				D_GOTO(err_loop, rc = errno);
 			rc = daos_event_register_comp_cb(&ctx_ev->ev, aio_req_cb, req_args);
 			if (rc) {
 				DL_ERROR(rc, "daos_event_register_comp_cb() failed");
 				D_GOTO(err_loop, rc);
 			}
-			rc = dfs_write(d_file_list[fd]->dfs_mt->dfs, d_file_list[fd]->file,
-				       &req_args->sgl, ios[i]->u.c.offset, &ctx_ev->ev);
+			rc = dfs_write(file_obj->dfs_mt->dfs, file_obj->file, &req_args->sgl,
+				       ios[i]->u.c.offset, &ctx_ev->ev);
+			put_live_file_obj(file_obj);
 			if (rc) {
 				rc2 = daos_event_fini(&ctx_ev->ev);
 				if (rc2)
