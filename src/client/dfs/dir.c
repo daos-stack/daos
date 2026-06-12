@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2018-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -159,6 +159,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj
 	if (rc)
 		return rc;
 
+	D_ERROR("lxzlxz dfs_remove %s start, dfs %p, use_dtx %d\n", name, dfs, dfs->use_dtx);
 	if (dfs->use_dtx) {
 		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
 		if (rc) {
@@ -208,7 +209,11 @@ restart:
 		}
 	}
 
+	D_ERROR("lxzlxz dfs_remove %s, remove_entry, parent oid " DF_OID "\n", name,
+		DP_OID(parent->oid));
 	rc = remove_entry(dfs, th, parent->oh, name, len, entry);
+	D_ERROR("lxzlxz dfs_remove %s, remove_entry, parent oid " DF_OID ", rc %d\n", name,
+		DP_OID(parent->oid), rc);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -229,6 +234,7 @@ out:
 	rc = check_tx(th, rc);
 	if (rc == ERESTART)
 		goto restart;
+	D_ERROR("lxzlxz dfs %p, remove %s, rc %d\n", dfs, name, rc);
 	return rc;
 }
 

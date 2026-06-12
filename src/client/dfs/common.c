@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2018-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -308,6 +308,7 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *
 	if (rc)
 		return daos_der2errno(rc);
 
+	D_ERROR("lxzlxz name %s daos_obj_punch, oid " DF_OID "\n", name, DP_OID(entry.oid));
 	rc = daos_obj_punch(oh, th, 0, NULL);
 	if (rc) {
 		daos_obj_close(oh, NULL);
@@ -321,8 +322,10 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *
 punch_entry:
 	d_iov_set(&dkey, (void *)name, len);
 	/** we only need a conditional dkey punch if we are not using a DTX */
+	D_ERROR("lxzlxz name %s daos_obj_punch_dkeys start\n", name);
 	rc =
 	    daos_obj_punch_dkeys(parent_oh, th, dfs->use_dtx ? 0 : DAOS_COND_PUNCH, 1, &dkey, NULL);
+	D_ERROR("lxzlxz name %s daos_obj_punch_dkeys rc %d\n", name, rc);
 	return daos_der2errno(rc);
 }
 
@@ -385,7 +388,10 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	sgls[0].sg_nr_out = 0;
 	sgls[0].sg_iovs   = sg_iovs;
 
+	D_ERROR("lxzlxz file name %s start daos_obj_update, flags 0x" DF_X64 ", nr_iods %d\n", name,
+		flags, nr_iods);
 	rc = daos_obj_update(oh, th, flags, &dkey, nr_iods, iods, sgls, NULL);
+	D_ERROR("lxzlxz file name %s daos_obj_update rc %d\n", name, rc);
 	if (rc) {
 		/** don't log error if conditional failed */
 		if (rc != -DER_EXIST && rc != -DER_NO_PERM)
