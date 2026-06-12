@@ -1284,6 +1284,54 @@ test_gurt_alloc(void **state)
 	d_log_fini();
 }
 
+/* d_aligned_alloc must round size up to a multiple of alignment before calling
+ * aligned_alloc, which is required by the C11 standard.  Strict allocators such
+ * as ASAN abort when size is not a multiple of alignment. */
+static void
+test_gurt_aligned_alloc(void **state)
+{
+	char   zero_ref[512] = {0};
+	char  *ptr;
+	size_t alignment = 64;
+
+	/* Baseline: size already a multiple of alignment; verify alignment and
+	 * zero-initialisation. */
+	D_ALIGNED_ALLOC(ptr, alignment, sizeof(zero_ref));
+	assert_non_null(ptr);
+	assert_int_equal((uintptr_t)ptr % alignment, 0);
+	assert_memory_equal(ptr, &zero_ref[0], sizeof(zero_ref));
+	D_FREE(ptr);
+
+	/* Regression: size NOT a multiple of alignment (exact case from the
+	 * ticket: aligned_alloc(64, 516784) where 516784 % 64 == 48). */
+	D_ALIGNED_ALLOC(ptr, alignment, 516784);
+	assert_non_null(ptr);
+	assert_int_equal((uintptr_t)ptr % alignment, 0);
+	D_FREE(ptr);
+
+	/* size < alignment: rounded-up size equals alignment itself; verify
+	 * alignment and zero-initialisation. */
+	D_ALIGNED_ALLOC(ptr, alignment, 1);
+	assert_non_null(ptr);
+	assert_int_equal((uintptr_t)ptr % alignment, 0);
+	assert_memory_equal(ptr, &zero_ref[0], 1);
+	D_FREE(ptr);
+
+	/* size < alignment: rounded-up size equals alignment itself; verify
+	 * alignment and zero-initialisation. */
+	D_ALIGNED_ALLOC(ptr, alignment, alignment - 1);
+	assert_non_null(ptr);
+	assert_int_equal((uintptr_t)ptr % alignment, 0);
+	assert_memory_equal(ptr, &zero_ref[0], alignment - 1);
+	D_FREE(ptr);
+
+	/* Non-zero path (no zeroing) with unaligned size. */
+	D_ALIGNED_ALLOC_NZ(ptr, alignment, 513);
+	assert_non_null(ptr);
+	assert_int_equal((uintptr_t)ptr % alignment, 0);
+	D_FREE(ptr);
+}
+
 struct hash_thread_arg {
 	struct test_hash_entry	**entries;
 	struct d_hash_table	 *thtab;
@@ -2828,6 +2876,7 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
 	    cmocka_unit_test(test_gurt_hash_decref),
 	    cmocka_unit_test(test_gurt_alloc),
+	    cmocka_unit_test(test_gurt_aligned_alloc),
 	    cmocka_unit_test(test_gurt_hash_parallel_same_operations),
 	    cmocka_unit_test(test_gurt_hash_parallel_different_operations),
 	    cmocka_unit_test(test_gurt_hash_parallel_refcounting),
