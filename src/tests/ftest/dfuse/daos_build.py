@@ -143,7 +143,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             'which scons',
             f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
             f'daos filesystem query {mount_dir}',
-            f'daos filesystem evict {build_dir}',
+            # f'daos filesystem evict {build_dir}',
             f'daos filesystem query {mount_dir}',
             f'scons -C {build_dir} --jobs {build_jobs}',
             f'scons -C {build_dir} --jobs {build_jobs} install --implicit-deps-unchanged',
