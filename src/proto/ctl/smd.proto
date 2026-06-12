@@ -79,6 +79,7 @@ message BioHealthResp {
 	uint32 link_max_width = 51; // maximum width (number of lanes)
 	float  link_neg_speed = 52; // negotiated speed in transactions per second
 	uint32 link_neg_width = 53; // negotiated width (number of lanes)
+	uint32 percentage_used = 54;
 }
 
 enum NvmeDevState {

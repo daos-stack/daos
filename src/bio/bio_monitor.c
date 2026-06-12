@@ -512,6 +512,8 @@ populate_health_stats(struct bio_dev_health *bdh)
 	dev_state->unsafe_shutdowns	= page->unsafe_shutdowns[0];
 	d_tm_set_counter(bdh->bdh_unsafe_shutdowns,
 			 page->unsafe_shutdowns[0]);
+	dev_state->percentage_used = page->percentage_used;
+	d_tm_set_gauge(bdh->bdh_percentage_used, page->percentage_used);
 
 	/** temperature */
 	dev_state->warn_temp_time	= page->warning_temp_time;

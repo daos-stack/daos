@@ -352,6 +352,7 @@ populate_dev_health(struct nvme_stats *stats,
 	stats->read_only_warn = cw.bits.read_only ? true : false;
 	stats->volatile_mem_warn = cw.bits.volatile_memory_backup ?
 				   true : false;
+	stats->percentage_used = hp->percentage_used;
 
 	/* Intel Smart Information Attributes */
 	if ((cdata == NULL) || (cdata->vid != SPDK_PCI_VID_INTEL))
