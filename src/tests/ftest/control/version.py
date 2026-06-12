@@ -1,16 +1,17 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import json
-import re
+from getpass import getuser
 
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
+from command_utils_base import EnvironmentVariables
 from general_utils import append_error, report_errors
-from run_utils import run_remote
+from run_utils import command_as_user, run_remote
 from server_utils_base import DaosServerCommandRunner
 
 
@@ -39,16 +40,16 @@ class DAOSVersion(TestWithServers):
         :avocado: tags=DAOSVersion,test_version
         """
         # Get RPM version.
-        rpm_command = "rpm -qa | grep daos-server"
+        rpm_command = ("rpm -q --queryformat '%{VERSION}\n' daos-server daos-bullseye-server "
+                       "2>/dev/null | grep -v 'not installed'")
         result = run_remote(self.log, self.hostlist_servers, rpm_command)
         if not result.passed:
             self.fail("Failed to list daos-server RPMs")
         if not result.homogeneous:
             self.fail("Non-homogenous daos-server RPMs")
-        match = re.findall(r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", result.joined_stdout)
-        if not match:
+        rpm_version = result.joined_stdout.strip()
+        if not rpm_version:
             self.fail("Failed to get version from daos-server RPMs")
-        rpm_version = match[0]
         self.log.info("RPM version = %s", rpm_version)
 
         # Get dmg version.
@@ -63,7 +64,9 @@ class DAOSVersion(TestWithServers):
 
         # Get daos_agent version.
         daos_agent_version = None
-        daos_agent_cmd = "daos_agent --json version"
+        env = EnvironmentVariables()
+        self.test_env.add_to_env(env, 'bullseye_file')
+        daos_agent_cmd = command_as_user("daos_agent --json version", getuser(), env)
         result = run_remote(self.log, NodeSet(self.hostlist_servers[0]), daos_agent_cmd)
         if not result.passed:
             self.fail("Failed to get daos_agent version")

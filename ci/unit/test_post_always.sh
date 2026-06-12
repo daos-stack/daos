@@ -25,17 +25,11 @@ ssh "$SSH_KEY_ARGS" jenkins@"$NODE" \
   "DAOS_BASE=$DAOS_BASE             \
    $(cat "$mydir/test_post_always_node.sh")"
 
-case $STAGE_NAME in
-    *Bullseye*)
-	test_log_dir="covc_test_logs"
-	;;
-    *memcheck*)
-	test_log_dir="unit_test_memcheck_logs"
-	;;
-    *Unit*)
-	test_log_dir="unit_test_logs"
-	;;
-esac
+test_log_dir="${1:-}"
+if [ -z "$test_log_dir" ]; then
+    echo "test_post_always: The test log directory argument is missing!"
+    exit 1
+fi
 
 mkdir -p "$test_log_dir"
 

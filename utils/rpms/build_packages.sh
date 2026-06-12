@@ -13,5 +13,9 @@ if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/daos-spdk.sh
 fi
 if [[ "${build_type}" =~ daos|all ]]; then
-  utils/rpms/daos.sh
+  utils/rpms/daos.sh false
+fi
+if [[ "${build_type}" =~ bullseye ]]; then
+  utils/rpms/bullseye.sh
+  utils/rpms/daos.sh true
 fi
