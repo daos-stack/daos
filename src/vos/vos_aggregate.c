@@ -18,6 +18,11 @@
 
 unsigned int vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
 
+/* Forward declaration for per-object aggregation */
+static int
+vos_obj_aggregate_internal(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+			   struct vos_agg_param *agg_param);
+
 /*
  * EV tree sorted iterator returns logical entry in extent start order, and
  * the information like: physical entry it belongs to, visibility, is it the
@@ -2361,7 +2366,19 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	switch (type) {
 	case VOS_ITER_OBJ:
-		rc = vos_agg_obj(ih, entry, agg_param, acts);
+		if (!agg_param->ap_discard) {
+			/* Per-object aggregation: delegate to object-level internal function
+			 * and skip automatic recursion into dkeys.  This allows
+			 * vos_aggregate() to be built on top of per-object aggregation.
+			 */
+			agg_param->ap_oid = entry->ie_oid;
+			inc_agg_counter(agg_param, VOS_ITER_OBJ, AGG_OP_SCAN);
+			rc = vos_obj_aggregate_internal(param->ip_hdl, entry->ie_oid,
+							&param->ip_epr, agg_param);
+			*acts |= VOS_ITER_CB_SKIP;
+		} else {
+			rc = vos_agg_obj(ih, entry, agg_param, acts);
+		}
 		break;
 	case VOS_ITER_DKEY:
 		rc = vos_agg_dkey(ih, entry, agg_param, acts);
@@ -2535,6 +2552,7 @@ enum {
 	AGG_MODE_AGGREGATE,
 	AGG_MODE_DISCARD,
 	AGG_MODE_OBJ_DISCARD,
+	AGG_MODE_OBJ_AGGREGATE,
 };
 
 static int
@@ -2620,6 +2638,22 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 
 		cont->vc_obj_discard_count++;
 		break;
+	case AGG_MODE_OBJ_AGGREGATE:
+		/**
+		 * Per-object aggregation: allows concurrent per-object aggregation
+		 * within the same container, and may overlap with container-level
+		 * aggregation. Conflicts only with container-level discard.
+		 */
+		if (cont->vc_in_discard) {
+			D_ERROR(DF_CONT ": In discard epr[" DF_U64 ", " DF_U64 "], "
+					"cannot do obj aggregate\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
+			return -DER_BUSY;
+		}
+
+		cont->vc_obj_aggregate_count++;
+		break;
 	}
 
 	rc = vos_flush_wal_header(cont->vc_pool);
@@ -2657,6 +2691,10 @@ aggregate_exit(struct vos_container *cont, int agg_mode)
 	case AGG_MODE_OBJ_DISCARD:
 		D_ASSERT(cont->vc_obj_discard_count > 0);
 		cont->vc_obj_discard_count--;
+		break;
+	case AGG_MODE_OBJ_AGGREGATE:
+		D_ASSERT(cont->vc_obj_aggregate_count > 0);
+		cont->vc_obj_aggregate_count--;
 		break;
 	}
 }
@@ -2813,6 +2851,144 @@ free_agg_data:
 		if (vam && vam->vam_fail_count)
 			d_tm_inc_counter(vam->vam_fail_count, 1);
 	}
+	umem_heap_gc(&cont->vc_pool->vp_umm);
+
+	return rc;
+}
+
+/**
+ * Aggregate a single object within a container without acquiring container-level
+ * locks.  The caller is responsible for locking (via aggregate_enter/exit or
+ * via vos_obj_aggregate which wraps this).
+ *
+ * \param[in] coh	Container open handle
+ * \param[in] oid	Object ID to aggregate
+ * \param[in] epr	Epoch range for aggregation
+ * \param[in] agg_param	Initialized aggregation parameters (credits, yield, umm, etc.)
+ *
+ * \return		0 on success, negative on error
+ */
+static int
+vos_obj_aggregate_internal(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+			   struct vos_agg_param *agg_param)
+{
+	struct vos_container   *cont = vos_hdl2cont(coh);
+	vos_iter_param_t        iter_param;
+	struct vos_iter_anchors anchors;
+	int                     rc;
+
+	D_DEBUG(DB_EPC, DF_CONT ": Object " DF_UOID " aggregation epr " DF_X64 "-" DF_X64 "\n",
+		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), DP_UOID(oid), epr->epr_lo, epr->epr_hi);
+
+	memset(&iter_param, 0, sizeof(iter_param));
+	memset(&anchors, 0, sizeof(anchors));
+
+	/* Set iteration parameters: start at DKEY level for the given object */
+	iter_param.ip_hdl      = coh;
+	iter_param.ip_oid      = oid;
+	iter_param.ip_epr      = *epr;
+	iter_param.ip_epc_expr = VOS_IT_EPC_RR;
+	iter_param.ip_flags =
+	    VOS_IT_PUNCHED | VOS_IT_RECX_COVERED | VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
+	iter_param.ip_filter_cb  = vos_agg_filter;
+	iter_param.ip_filter_arg = agg_param;
+
+	/* Save current object ID so callbacks can reference it */
+	agg_param->ap_oid = oid;
+
+	rc = vos_iterate(&iter_param, VOS_ITER_DKEY, true, &anchors, vos_aggregate_pre_cb,
+			 vos_aggregate_post_cb, agg_param, NULL);
+
+	return rc;
+}
+
+int
+vos_obj_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr)
+{
+	return aggregate_enter(vos_hdl2cont(coh), AGG_MODE_OBJ_AGGREGATE, epr);
+}
+
+void
+vos_obj_aggregate_exit(daos_handle_t coh)
+{
+	aggregate_exit(vos_hdl2cont(coh), AGG_MODE_OBJ_AGGREGATE);
+}
+
+/**
+ * Aggregate epochs within a specified epoch range for a single object.
+ * Multiple objects in the same container can be aggregated concurrently
+ * by calling this function from different threads.
+ *
+ * \param coh	  [IN]		Container open handle
+ * \param oid	  [IN]		Object ID
+ * \param epr	  [IN]		Epoch range of aggregation
+ * \param yield_func [IN]	Pointer to customized yield function
+ * \param yield_arg  [IN]	Argument of yield function
+ * \param flags      [IN]	Aggregation flags
+ *
+ * \return			0 on success, negative on error
+ */
+int
+vos_obj_aggregate(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+		  int (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
+{
+	struct vos_container *cont = vos_hdl2cont(coh);
+	struct vos_agg_param  agg_param;
+	uint64_t              feats;
+	daos_epoch_t          agg_write;
+	bool                  has_agg_write;
+	int                   rc;
+	bool                  run_agg = false;
+
+	D_DEBUG(DB_TRACE, DF_CONT ": obj " DF_UOID " epr: %lu -> %lu\n",
+		DP_CONT(cont->vc_pool->vp_id, cont->vc_id), DP_UOID(oid), epr->epr_lo, epr->epr_hi);
+	D_ASSERT(epr != NULL);
+	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
+		  "epr_lo:" DF_U64 ", epr_hi:" DF_U64 "\n", epr->epr_lo, epr->epr_hi);
+
+	rc = aggregate_enter(cont, AGG_MODE_OBJ_AGGREGATE, epr);
+	if (rc)
+		return rc;
+
+	memset(&agg_param, 0, sizeof(agg_param));
+
+	if (flags & VOS_AGG_FL_FORCE_SCAN)
+		agg_param.ap_filter_epoch = epr->epr_lo;
+	else
+		agg_param.ap_filter_epoch = cont->vc_cont_df->cd_hae;
+
+	feats         = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
+	has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
+	if (has_agg_write && agg_write <= agg_param.ap_filter_epoch)
+		goto exit;
+
+	agg_param.ap_umm        = &cont->vc_pool->vp_umm;
+	agg_param.ap_coh        = coh;
+	agg_param.ap_discard    = 0;
+	agg_param.ap_yield_func = yield_func;
+	agg_param.ap_yield_arg  = yield_arg;
+	agg_param.ap_flags      = flags;
+	credits_set(cont->vc_pool, &agg_param.ap_credits, true);
+	merge_window_init(&agg_param.ap_window);
+	run_agg = true;
+
+	rc = vos_obj_aggregate_internal(coh, oid, epr, &agg_param);
+
+	if (rc != 0 || agg_param.ap_nospc_err) {
+		close_merge_window(&agg_param.ap_window, rc);
+	} else if (agg_param.ap_csum_err) {
+		rc = -DER_CSUM;
+		close_merge_window(&agg_param.ap_window, rc);
+	} else if (agg_param.ap_in_progress) {
+		/* Don't error out — just skip HAE update */
+	}
+
+exit:
+	aggregate_exit(cont, AGG_MODE_OBJ_AGGREGATE);
+
+	if (run_agg && merge_window_status(&agg_param.ap_window) != MW_CLOSED)
+		D_ASSERTF(false, "Per-object merge window resource leaked.\n");
+
 	umem_heap_gc(&cont->vc_pool->vp_umm);
 
 	return rc;
