@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/cache"
@@ -46,8 +47,9 @@ type (
 
 	// securityConfig defines configuration parameters for SecurityModule.
 	securityConfig struct {
-		credentials *security.CredentialConfig
-		transport   *security.TransportConfig
+		credentials    *security.CredentialConfig
+		transport      *security.TransportConfig
+		nodeCertLoader *security.NodeCertLoader
 	}
 
 	// SecurityModule is the security drpc module struct
@@ -165,12 +167,20 @@ func (m *SecurityModule) HandleCall(ctx context.Context, session *drpc.Session, 
 		return nil, drpc.UnknownMethodFailure()
 	}
 
-	return m.getCredential(ctx, session)
+	var req auth.GetCredReq
+	if len(body) > 0 {
+		if err := proto.Unmarshal(body, &req); err != nil {
+			m.log.Errorf("failed to unmarshal GetCredReq: %s", err)
+			// Fall through with empty req for backward compat
+		}
+	}
+
+	return m.getCredential(ctx, session, req.GetPoolId(), req.GetHandleUuid())
 }
 
-// getCredentials generates a signed user credential based on the data attached to
-// the Unix Domain Socket.
-func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Session) ([]byte, error) {
+// getCredential generates a signed user credential from the Unix Domain
+// Socket peer data. When poolID is set, also signs a per-pool node cert PoP.
+func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Session, poolID string, handleUUID []byte) ([]byte, error) {
 	if session == nil {
 		return nil, drpc.NewFailureWithMessage("session is nil")
 	}
@@ -220,6 +230,22 @@ func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Sessio
 	}
 
 	resp := &auth.GetCredResp{Cred: cred}
+
+	if poolID != "" && m.config.nodeCertLoader != nil {
+		cert, certPEM, pop, payload, err := getNodeCertAndPoP(m.log, m.config.nodeCertLoader, poolID, handleUUID)
+		if err != nil {
+			// Log but don't fail — server decides if cert is required
+			m.log.Tracef("no node cert for pool %s: %s", poolID, err)
+		} else {
+			m.log.Tracef("attaching node cert for pool %s (CN=%s, expires=%s, %d bytes PoP)",
+				poolID, cert.Cert.Subject.CommonName,
+				cert.Cert.NotAfter.Format("2006-01-02"), len(pop))
+			resp.NodeCert = certPEM
+			resp.NodeCertPop = pop
+			resp.NodeCertPayload = payload
+		}
+	}
+
 	return drpc.Marshal(resp)
 }
 
