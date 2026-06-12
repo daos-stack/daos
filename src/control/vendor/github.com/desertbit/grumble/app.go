@@ -30,7 +30,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/desertbit/closer/v3"
+	"github.com/desertbit/closer/v4"
 	shlex "github.com/desertbit/go-shlex"
 	"github.com/desertbit/readline"
 	"github.com/fatih/color"
@@ -388,7 +388,9 @@ func (a *App) RunWithReadline(rl *readline.Instance) (err error) {
 
 	// Assign readline instance
 	a.rl = rl
-	a.OnClose(a.rl.Close)
+	closer.Hook(a.Closer, func(h closer.H) {
+		h.OnCloseWithErr(a.rl.Close)
+	})
 
 	// Run the shell hook.
 	if a.shellHook != nil {
