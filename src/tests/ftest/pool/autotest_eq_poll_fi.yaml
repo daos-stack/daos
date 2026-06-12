@@ -1,0 +1,17 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 600
+setup:
+  start_servers_once: False
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
+pool:
+  size: 20G
+faults:
+  fault_list:
+    - DAOS_FAULT_EQ_POLL_FAIL
