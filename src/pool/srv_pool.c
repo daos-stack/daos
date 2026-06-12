@@ -45,6 +45,7 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_DATA_THRESH 3
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SRV_HDLS    4
 #define DAOS_POOL_GLOBAL_VERSION_WITH_OP_VAL_FIX  4
+#define DAOS_POOL_GLOBAL_VERSION_WITH_BYTEVAL_PROPS 5
 
 #define PS_OPS_PER_SEC                            4096
 
@@ -55,12 +56,15 @@
 uint32_t
 ds_pool_get_vos_df_version(uint32_t pool_global_version)
 {
-	if (pool_global_version == 4)
+	switch (pool_global_version) {
+	case 5:
+	case 4:
 		return VOS_POOL_DF_2_8;
-	if (pool_global_version == 3)
+	case 3:
 		return VOS_POOL_DF_2_6;
-	else if (pool_global_version == 2)
+	case 2:
 		return VOS_POOL_DF_2_4;
+	}
 	return 0;
 }
 
@@ -391,6 +395,69 @@ ds_pool_svc_rdb_path(const uuid_t pool_uuid)
 	return pool_svc_rdb_path_common(pool_uuid, "");
 }
 
+/* Write a byteval pool prop entry to RDB, deleting the key when the value
+ * is NULL or empty so reads don't have to distinguish "absent" from "empty".
+ */
+static int
+pool_prop_write_byteval(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key,
+			const struct daos_prop_entry *entry)
+{
+	struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+	d_iov_t                   value;
+	int                       rc;
+
+	if (bv != NULL && bv->dpb_len > 0) {
+		d_iov_set(&value, bv->dpb_data, bv->dpb_len);
+		rc = rdb_tx_update(tx, kvs, key, &value);
+	} else {
+		rc = rdb_tx_delete(tx, kvs, key);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+	}
+	return rc;
+}
+
+/* Read a byteval pool prop entry from RDB into a freshly-allocated
+ * daos_prop_byteval. Empty or missing keys yield a NULL dpe_val_ptr.
+ */
+static int
+pool_prop_read_byteval(struct rdb_tx *tx, const rdb_path_t *root, d_iov_t *key,
+		       struct daos_prop_entry *entry, uint32_t type)
+{
+	struct daos_prop_byteval *bv;
+	d_iov_t                   value;
+	int                       rc;
+
+	entry->dpe_type    = type;
+	entry->dpe_val_ptr = NULL;
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, root, key, &value);
+	if (rc == -DER_NONEXIST)
+		return 0;
+	if (rc != 0)
+		return rc;
+	if (value.iov_len == 0)
+		return 0;
+	if (value.iov_len > DAOS_PROP_BYTEVAL_MAX_LEN) {
+		D_ERROR("byteval prop %u in RDB: len %zu exceeds max %u\n", type, value.iov_len,
+			DAOS_PROP_BYTEVAL_MAX_LEN);
+		return -DER_INVAL;
+	}
+
+	D_ALLOC_PTR(bv);
+	if (bv == NULL)
+		return -DER_NOMEM;
+	D_ALLOC(bv->dpb_data, value.iov_len);
+	if (bv->dpb_data == NULL) {
+		D_FREE(bv);
+		return -DER_NOMEM;
+	}
+	memcpy(bv->dpb_data, value.iov_buf, value.iov_len);
+	bv->dpb_len        = value.iov_len;
+	entry->dpe_val_ptr = bv;
+	return 0;
+}
+
 /* copy \a prop to \a prop_def (duplicated default prop) */
 static int
 pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
@@ -413,6 +480,12 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
 		D_ASSERTF(entry_def != NULL, "type %d not found in "
 			  "default prop.\n", entry->dpe_type);
+		if (daos_prop_has_byteval(entry)) {
+			rc = daos_prop_entry_copy(entry, entry_def);
+			if (rc)
+				return rc;
+			continue;
+		}
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			D_FREE(entry_def->dpe_str);
@@ -746,6 +819,16 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			val32 = entry->dpe_val;
 			d_iov_set(&value, &val32, sizeof(val32));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_ops_age, &value);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_PO_POOL_CA:
+			rc = pool_prop_write_byteval(tx, kvs, &ds_pool_prop_pool_ca, entry);
+			if (rc)
+				return rc;
+			break;
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			rc = pool_prop_write_byteval(tx, kvs, &ds_pool_prop_cert_watermarks, entry);
 			if (rc)
 				return rc;
 			break;
@@ -3168,14 +3251,6 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	uint32_t	 idx = 0, nr = 0, val32 = 0, global_ver;
 	int		 rc;
 
-	for (bit = DAOS_PO_QUERY_PROP_BIT_START;
-	     bit <= DAOS_PO_QUERY_PROP_BIT_END; bit++) {
-		if (bits & (1L << bit))
-			nr++;
-	}
-	if (nr == 0)
-		return 0;
-
 	/* get pool global version */
 	d_iov_set(&value, &val32, sizeof(val32));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_global_version,
@@ -3186,6 +3261,20 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		global_ver = 0;
 	else
 		global_ver = val32;
+
+	/* Pre-v5 pools never carry byteval props on the wire; drop the bits so
+	 * the entry walk below skips them and nr is sized accordingly.
+	 */
+	if (global_ver < DAOS_POOL_GLOBAL_VERSION_WITH_BYTEVAL_PROPS)
+		bits &= ~(DAOS_PO_QUERY_PROP_POOL_CA | DAOS_PO_QUERY_PROP_CERT_WATERMARKS);
+
+	for (bit = DAOS_PO_QUERY_PROP_BIT_START;
+	     bit <= DAOS_PO_QUERY_PROP_BIT_END; bit++) {
+		if (bits & (1L << bit))
+			nr++;
+	}
+	if (nr == 0)
+		return 0;
 
 	prop = daos_prop_alloc(nr);
 	if (prop == NULL)
@@ -3634,6 +3723,22 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE;
 		prop->dpp_entries[idx].dpe_val  = val32;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_POOL_CA) {
+		D_ASSERT(idx < nr);
+		rc = pool_prop_read_byteval(tx, &svc->ps_root, &ds_pool_prop_pool_ca,
+					    &prop->dpp_entries[idx], DAOS_PROP_PO_POOL_CA);
+		if (rc != 0)
+			D_GOTO(out_prop, rc);
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_CERT_WATERMARKS) {
+		D_ASSERT(idx < nr);
+		rc = pool_prop_read_byteval(tx, &svc->ps_root, &ds_pool_prop_cert_watermarks,
+					    &prop->dpp_entries[idx], DAOS_PROP_PO_CERT_WATERMARKS);
+		if (rc != 0)
+			D_GOTO(out_prop, rc);
 		idx++;
 	}
 
@@ -5440,6 +5545,9 @@ pool_query_handler(crt_rpc_t *rpc, int handler_version)
 
 		for (i = 0; i < prop->dpp_nr; i++) {
 			entry = &prop->dpp_entries[i];
+			/* Byteval props are not in the IV bundle. */
+			if (daos_prop_has_byteval(entry))
+				continue;
 			iv_entry = daos_prop_entry_get(iv_prop,
 						       entry->dpe_type);
 			D_ASSERT(iv_entry != NULL);
@@ -5807,6 +5915,22 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 		D_ERROR(DF_UUID": invalid properties input\n",
 			DP_UUID(in->psi_op.pi_uuid));
 		D_GOTO(out_svc, rc = -DER_INVAL);
+	}
+
+	if (svc->ps_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_BYTEVAL_PROPS) {
+		int i;
+
+		for (i = 0; i < prop_in->dpp_nr; i++) {
+			if (daos_prop_has_byteval(&prop_in->dpp_entries[i])) {
+				D_ERROR(DF_UUID ": byteval prop %u requires pool version %u "
+					        "(pool is at %u); upgrade the pool first\n",
+					DP_UUID(in->psi_op.pi_uuid),
+					prop_in->dpp_entries[i].dpe_type,
+					DAOS_POOL_GLOBAL_VERSION_WITH_BYTEVAL_PROPS,
+					svc->ps_global_version);
+				D_GOTO(out_svc, rc = -DER_NOTSUPPORTED);
+			}
+		}
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);

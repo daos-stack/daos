@@ -96,6 +96,10 @@ const (
 	PoolPropertyReintMode      = C.DAOS_PROP_PO_REINT_MODE
 	PoolPropertySvcOpsEnabled  = C.DAOS_PROP_PO_SVC_OPS_ENABLED
 	PoolPropertySvcOpsEntryAge = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE
+	// PoolPropertyPoolCA is the PEM intermediate CA for per-pool node auth.
+	PoolPropertyPoolCA = C.DAOS_PROP_PO_POOL_CA
+	// PoolPropertyCertWatermarks is an opaque JSON blob of per-CN cert revocation watermarks.
+	PoolPropertyCertWatermarks = C.DAOS_PROP_PO_CERT_WATERMARKS
 )
 
 const (
@@ -724,6 +728,7 @@ func PoolProperties() PoolPropertyMap {
 				"incremental":  PoolReintModeIncremental,
 			},
 		},
+		// pool_ca and cert_watermarks are managed via dedicated RPCs, same as ACL.
 	}
 }
 
