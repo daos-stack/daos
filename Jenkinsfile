@@ -451,9 +451,16 @@ String sconsArgs() {
  * Update default commit pragmas based on files modified.
  */
 Map update_default_commit_pragmas() {
-    String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
-                                    returnStdout: true).trim()
-    println('pragmas from gen_commit_pragmas.py:')
+    String default_pragmas_str = ''
+    if (params.CI_FULL_BULLSEYE_REPORT) {
+        default_pragmas_str = 'Test-tag: pr daily_regression full_regression'
+        println('pragmas for full Bullseye report:')
+    } else {
+        default_pragmas_str = sh(
+            script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
+            returnStdout: true).trim()
+        println('pragmas from gen_commit_pragmas.py:')
+    }
     println(default_pragmas_str)
     if (default_pragmas_str) {
         updatePragmas(default_pragmas_str, false)
@@ -660,45 +667,6 @@ String functionalInstRpms(String otherPackages, Boolean bullseye=false, String r
     }
     return packages
 }
-
-// Boolean skip_pragma_set(String name, String def_val='false') {
-//     // Return whether or not the skip pragma is set
-//     return cachedCommitPragma("Skip-${name}", def_val).toLowerCase() == 'true'
-// }
-
-// Boolean skip_build_stage(String distro='', String compiler='gcc') {
-//     // Skip the stage if the CI_<distro>_NOBUILD parameter is set
-//     if (distro) {
-//         if (startedByUser() && paramsValue("CI_${distro}_NOBUILD", false)) {
-//             println("[${env.STAGE_NAME}] Skipping build stage due to CI_${distro}_NOBUILD")
-//             return true
-//         }
-//     }
-
-//     // Skip the stage if any Skip-build[-<distro>-<compiler>] pragmas are true
-//     List<String> pragma_names = ['build']
-//     if (distro && compiler) {
-//         pragma_names << "build-${distro}-${compiler}"
-//     }
-//     Boolean any_pragma_skip = pragma_names.any { name ->
-//         if (skip_pragma_set(name)) {
-//             println("[${env.STAGE_NAME}] Skipping build stage due to \"Skip-${name}: true\" pragma")
-//             return true
-//         }
-//     }
-//     if (any_pragma_skip) {
-//         return true
-//     }
-
-//     // Skip the stage if a specific DAOS RPM version is specified
-//     if (rpmTestVersion() != '') {
-//         println("[${env.STAGE_NAME}] Skipping build stage for due to specific DAOS RPM version")
-//         return true
-//     }
-
-//     // Otherwise run the build stage
-//     return false
-// }
 
 pipeline {
     agent { label 'lightweight' }
