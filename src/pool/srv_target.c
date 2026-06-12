@@ -1181,6 +1181,8 @@ eph_report_ult(void *data)
 				sleep_intvl = EPH_REPORT_RETRY_INTVL;
 			} else {
 				pool->sp_hdl_fetched = true;
+				D_INFO(DF_UUID ": connection handles fetched\n",
+				       DP_UUID(pool->sp_uuid));
 			}
 
 			if (eph_report_exiting(pool))
@@ -1211,6 +1213,8 @@ eph_report_ult(void *data)
 						 DP_UUID(pool->sp_uuid));
 				} else {
 					srv_hdl_fetched = true;
+					D_INFO(DF_UUID ": srv open handles fetched\n",
+					       DP_UUID(pool->sp_uuid));
 				}
 			}
 
@@ -1219,7 +1223,10 @@ eph_report_ult(void *data)
 		}
 
 		/* Report EC agg epoch boundary */
+		D_INFO(DF_UUID ": ds_cont_eph_report: begin\n", DP_UUID(pool->sp_uuid));
 		rc = ds_cont_eph_report(pool);
+		D_INFO(DF_UUID ": ds_cont_eph_report: end: " DF_RC "\n", DP_UUID(pool->sp_uuid),
+		       DP_RC(rc));
 		if (rc) {
 			DL_ERROR(rc, "Failed to report EC agg epoch.");
 			sleep_intvl = EPH_REPORT_RETRY_INTVL;
