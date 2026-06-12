@@ -25,7 +25,7 @@
 /** types of placement maps */
 typedef enum {
 	PL_TYPE_UNKNOWN,
-	/** only support ring map for the time being */
+	/** ring map is obsolete, just keep it ID */
 	PL_TYPE_RING,
 	/**Prototype placement map*/
 	PL_TYPE_JUMP_MAP,
