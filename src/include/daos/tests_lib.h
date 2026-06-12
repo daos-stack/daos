@@ -14,6 +14,7 @@
 #include <daos_mgmt.h>
 #include <daos/object.h>
 #include <daos/credit.h>
+#include <daos/control_types.h>
 
 #define assert_rc_equal(rc, expected_rc)                                                           \
 	do {                                                                                       \
@@ -84,19 +85,6 @@ tsc_create_cont(struct credit_context *tsc)
 	/* Can't skip container if pool isn't also skipped */
 	return tsc_create_pool(tsc) || !tsc->tsc_skip_cont_create;
 }
-
-/* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
-#define MAX_TEST_TARGETS_PER_DEVICE 48
-#define DSS_HOSTNAME_MAX_LEN	255
-
-typedef struct {
-	uuid_t		device_id;
-	char		state[10];
-	int		rank;
-	char		host[DSS_HOSTNAME_MAX_LEN];
-	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
-	int		n_tgtidx;
-}  device_list;
 
 enum test_cr_start_flags {
 	TCSF_NONE	= 0,
@@ -190,33 +178,6 @@ enum test_cr_action {
 	TCA_TRUST_OLDEST    = 10,
 	TCA_TRUST_EC_PARITY = 11,
 	TCA_TRUST_EC_DATA   = 12,
-};
-
-struct daos_check_pool_info {
-	uuid_t		 dcpi_uuid;
-	char		*dcpi_status;
-	char		*dcpi_phase;
-};
-
-struct daos_check_report_info {
-	uuid_t   dcri_uuid;
-	uint64_t dcri_seq;
-	uint32_t dcri_class;
-	uint32_t dcri_act;
-	int      dcri_rank;
-	int      dcri_result;
-	int      dcri_option_nr;
-	int      dcri_options[3];
-};
-
-struct daos_check_info {
-	char                          *dci_status;
-	char                          *dci_phase;
-	int                            dci_leader;
-	int                            dci_pool_nr;
-	int                            dci_report_nr;
-	struct daos_check_pool_info   *dci_pools;
-	struct daos_check_report_info *dci_reports;
 };
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers
@@ -529,10 +490,9 @@ int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
  * \param host	[IN]	Nvme set to faulty on host name provided. Only single
 					disk can be set to fault for now.
  * \param uuid	[IN]	UUID of the device.
- * \param force	[IN]	Do not require confirmation
  */
-int dmg_storage_set_nvme_fault(const char *dmg_config_file,
-			       char *host, const uuid_t uuid, int force);
+int
+dmg_storage_set_nvme_fault(const char *dmg_config_file, char *host, const uuid_t uuid);
 /**
  * Get NVMe Device health stats.
  *
@@ -540,10 +500,15 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  * \param[in] host		Get device health from the given host.
  * \param[in] uuid		UUID of the device.
  * \param[in,out] stats		[in] Health stats for which to get counter value.
- *				[out] Stats counter value.
+ *				[out] Stats counter value (NUL-terminated,
+ *				truncated to \a stats_len - 1 if longer).
+ * \param[in] stats_len		Size of the \a stats buffer in bytes. Must be
+ *				large enough to hold both the longest key
+ *				name and any value the caller cares about.
  */
-int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
-				    char *stats, const uuid_t uuid);
+int
+    dmg_storage_query_device_health(const char *dmg_config_file, char *host, char *stats,
+				    size_t stats_len, const uuid_t uuid);
 
 /**
  * Verify the assumed blobstore device state with the actual enum definition
@@ -725,5 +690,22 @@ int
  * \return		Zero on success, negative value if error.
  */
 int dmg_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *policies);
+
+/**
+ * Initialize the DMG control context.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file path.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+dmg_init(const char *dmg_config_file);
+
+/**
+ * Finalize the DMG control context.
+ */
+void
+dmg_fini(void);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

@@ -568,6 +568,7 @@ fi
 %{daoshome}/TESTING
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
 %{_bindir}/hello_drpc
+%{_libdir}/libdaos_control.so
 %{_libdir}/libdaos_tests.so
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests

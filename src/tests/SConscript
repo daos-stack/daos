@@ -92,6 +92,8 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../vos')])
     denv.AppendUnique(LIBPATH=[Dir('../bio')])
     denv.AppendUnique(LIBPATH=[Dir('../utils/wrap/mpi')])
+    denv.AppendUnique(LIBPATH=[Dir('../control/lib/control/c')])
+    denv.d_add_build_rpath('../control/lib/control/c')
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
@@ -106,6 +108,8 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
     denv.AppendUnique(LIBPATH=[Dir('../cart')])
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
+    denv.AppendUnique(LIBPATH=[Dir('../control/lib/control/c')])
+    denv.d_add_build_rpath('../control/lib/control/c')
 
     libs_client = ['daos_tests', 'daos', 'daos_common', 'cart', 'gurt', 'uuid', 'dfs']
 
