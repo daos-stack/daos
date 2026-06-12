@@ -870,8 +870,56 @@ def launch_server_stop_start(self, pools, name, results, args):
     if name == "SVR_STOP":
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
-        # Exclude one rank.
-        rank = self.random.randint(0, exclude_servers)
+
+        # Query all targets for every rank on the harasser pool (pools[1])
+        # and log per-target space info. For each rank, sum the NVMe free space
+        # across all its targets. Select the rank with the smallest aggregate
+        # NVMe free space to drain, so the rebuild relocates the most data.
+        total_ranks = exclude_servers + 1
+        rank_nvme_free_total = {}
+        harasser_pool = pools[1] if len(pools) > 1 else pools[0]
+        self.log.info(
+            "<<<PASS %s: %s - querying pool %s target space before drain >>>",
+            self.loop, name, harasser_pool.identifier)
+        for qrank in range(total_ranks):
+            try:
+                result = harasser_pool.query_targets(rank=qrank)
+                nvme_free_sum = 0
+                for tgt_idx, tgt_info in enumerate(result['response']['Infos']):
+                    for tier in tgt_info['space']:
+                        self.log.info(
+                            "  Pool %s rank %d target %d %s: total=%d free=%d used=%d",
+                            harasser_pool.identifier, qrank, tgt_idx,
+                            tier['media_type'],
+                            tier['total'], tier['free'],
+                            tier['total'] - tier['free'])
+                        if tier['media_type'] == 'nvme':
+                            nvme_free_sum += tier['free']
+                rank_nvme_free_total[qrank] = nvme_free_sum
+                self.log.info(
+                    "  Pool %s rank %d aggregate NVMe free: %d bytes",
+                    harasser_pool.identifier, qrank, nvme_free_sum)
+            except (TestFail, CommandFailure) as error:
+                self.log.warning(
+                    "  Pool %s query-targets rank %d failed: %s",
+                    harasser_pool.identifier, qrank, error)
+
+        # Select the rank with the least aggregate NVMe free space to drain,
+        # maximizing the amount of data relocated during rebuild.
+        if rank_nvme_free_total:
+            rank = min(rank_nvme_free_total, key=rank_nvme_free_total.get)
+            self.log.info(
+                "<<<PASS %s: %s - selecting rank %d for drain "
+                "(lowest aggregate NVMe free: %d bytes) >>>",
+                self.loop, name, rank, rank_nvme_free_total[rank])
+        else:
+            # Fallback to random selection if query-targets failed
+            rank = self.random.randint(0, exclude_servers)
+            self.log.info(
+                "<<<PASS %s: %s - query-targets unavailable, "
+                "falling back to random rank %d >>>",
+                self.loop, name, rank)
+
         # init the status dictionary
         params = {"name": name,
                   "status": status,
