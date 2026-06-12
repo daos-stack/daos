@@ -122,6 +122,18 @@ Reviewed-by: User Name <user@domain.com>
 CC: User Name <user@domain.com>
 ```
 
+### Commit Message Template
+
+A [template](../../.gitcommittemplate.txt) is provided to simplify commit
+message editing. The commit message template is used every time whenever
+the `git commit` command does not provide the message directly via `-m` parameter.
+
+To install this template, run the following command in your local repository folder:
+`git config commit.template ./.gitcommittemplate.txt`.
+
+Ref: https://git-scm.com/docs/git-config#Documentation/git-config.txt-committemplate
+
+
 ## Pull Requests (PR)
 
 DAOS uses the common fork & merge workflow used by most GitHub-hosted projects.
