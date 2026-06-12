@@ -1116,7 +1116,7 @@ dv_test_csum_setup(void **state)
 static int
 dv_test_csum_teardown(void **state)
 {
-	assert_success(ddb_test_csum_teardown(state));
+	ddb_test_csum_teardown(state);
 	assert_success(dv_test_teardown(state));
 
 	return 0;

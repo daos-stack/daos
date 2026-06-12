@@ -785,12 +785,17 @@ out:
 	return rc;
 }
 
+/*
+ * Populate the VOS pool with test data for checksum tests.
+ *
+ * Requires tctx->dvt_poh to be a valid open pool handle. The caller is responsible for opening and
+ * closing that handle.
+ */
 int
 ddb_test_csum_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx;
 	struct dt_csum_ctx     *csum_ctx;
-	daos_handle_t           poh;
 	daos_handle_t           coh;
 	d_sg_list_t             sgl;
 	int                     rc;
@@ -815,17 +820,13 @@ ddb_test_csum_setup(void **state)
 		goto out_csum_ctx;
 	tctx->dvt_extra = csum_ctx;
 
-	rc = vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &poh);
-	if (rc != 0)
-		goto out_csummer;
-
 	rc = uuid_parse(g_csum_uuid_str, csum_ctx->dct_cont_uuid);
 	if (rc != 0)
-		goto out_pool;
-	rc = vos_cont_create(poh, csum_ctx->dct_cont_uuid);
+		goto out_csummer;
+	rc = vos_cont_create(tctx->dvt_poh, csum_ctx->dct_cont_uuid);
 	if (rc != 0)
-		goto out_pool;
-	rc = vos_cont_open(poh, csum_ctx->dct_cont_uuid, &coh);
+		goto out_csummer;
+	rc = vos_cont_open(tctx->dvt_poh, csum_ctx->dct_cont_uuid, &coh);
 	if (rc != 0)
 		goto out_cont_destroy;
 
@@ -844,9 +845,7 @@ out_cont_close:
 	vos_cont_close(coh);
 out_cont_destroy:
 	if (rc != 0)
-		vos_cont_destroy(poh, csum_ctx->dct_cont_uuid);
-out_pool:
-	vos_pool_close(poh);
+		vos_cont_destroy(tctx->dvt_poh, csum_ctx->dct_cont_uuid);
 out_csummer:
 	if (rc != 0)
 		daos_csummer_destroy(&csum_ctx->dct_csummer);
@@ -859,23 +858,23 @@ out:
 	return rc;
 }
 
-int
+/*
+ * Clean up the VOS pool state created by ddb_test_csum_setup().
+ *
+ * Requires tctx->dvt_poh to be the same valid open pool handle that was provided to
+ * ddb_test_csum_setup(). The caller retains ownership of the handle.
+ */
+void
 ddb_test_csum_teardown(void **state)
 {
 	struct dt_vos_pool_ctx *tctx;
 	struct dt_csum_ctx     *csum_ctx;
-	daos_handle_t           poh;
 	int                     ci_idx;
-	int                     rc = 0;
 
 	tctx     = *state;
 	csum_ctx = tctx->dvt_extra;
 	if (csum_ctx == NULL)
-		goto out;
-
-	rc = vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &poh);
-	if (rc != 0)
-		goto out;
+		return;
 
 	for (ci_idx = 0; ci_idx < DVT_FAKE_SV_COUNT; ci_idx++)
 		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ics[ci_idx]);
@@ -883,13 +882,9 @@ ddb_test_csum_teardown(void **state)
 		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_recx_ics[ci_idx]);
 	daos_csummer_destroy(&csum_ctx->dct_csummer);
 
-	vos_cont_destroy(poh, csum_ctx->dct_cont_uuid);
+	vos_cont_destroy(tctx->dvt_poh, csum_ctx->dct_cont_uuid);
 
 	D_FREE(csum_ctx);
-
-	vos_pool_close(poh);
-out:
-	return rc;
 }
 
 /*

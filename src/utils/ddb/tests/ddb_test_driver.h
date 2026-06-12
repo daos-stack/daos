@@ -78,9 +78,12 @@ void dvt_iov_alloc_str(d_iov_t *iov, const char *str);
 int ddb_test_setup_vos(void **state);
 int ddb_teardown_vos(void **state);
 
+/* Requires tctx->dvt_poh to be a valid open pool handle (caller-owned). */
 int
 ddb_test_csum_setup(void **state);
-int
+/* Requires tctx->dvt_poh to be the same valid open pool handle as provided to
+ * ddb_test_csum_setup(). */
+void
     ddb_test_csum_teardown(void **state);
 
 int ddb_parse_tests_run(void);
