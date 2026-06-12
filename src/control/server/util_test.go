@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -289,4 +289,49 @@ func newTestMgmtSvcNonReplica(t *testing.T, log logging.Logger) *mgmtSvc {
 	svc := newTestMgmtSvc(t, log)
 	svc.sysdb = raft.MockDatabaseWithAddr(t, log, nil)
 	return svc
+}
+
+// setupTestEngineWithConfig configures an EngineInstance with a custom engine config.
+// If cfg is nil, uses engine.MockConfig(). If rank is 0, no rank is assigned.
+func setupTestEngineWithConfig(t *testing.T, ei *EngineInstance, rank uint32, cfg *engine.Config, stopped ...bool) {
+	if ei._superblock == nil {
+		ei._superblock = &Superblock{}
+	}
+	ei._superblock.Rank = ranklist.NewRankPtr(rank)
+	ei._superblock.ValidRank = true
+
+	trc := &engine.TestRunnerConfig{}
+	if len(stopped) == 0 || !stopped[0] {
+		trc.Running.SetTrue()
+		ei.ready.SetTrue()
+	}
+
+	if cfg == nil {
+		cfg = engine.MockConfig()
+	}
+	ei.runner = engine.NewTestRunner(trc, cfg)
+}
+
+// setupTestEngine configures an EngineInstance for testing with the specified rank and state.
+// If stopped is true (or provided), the engine is marked as stopped, otherwise as running.
+// If rank is 0, no rank is assigned to the superblock.
+func setupTestEngine(t *testing.T, ei *EngineInstance, rank uint32, stopped ...bool) {
+	setupTestEngineWithConfig(t, ei, rank, nil, stopped...)
+}
+
+// setupAddTestEngine adds test engine to harness with specified ranks and running state.
+func setupAddTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRunning bool, ranks ...uint32) {
+	t.Helper()
+
+	rank := uint32(1)
+	if len(ranks) != 0 {
+		rank = ranks[0]
+	}
+
+	ei := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+	setupTestEngine(t, ei, rank, !isRunning)
+
+	if err := h.AddInstance(ei); err != nil {
+		t.Fatal(err)
+	}
 }

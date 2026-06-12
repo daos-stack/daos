@@ -198,9 +198,6 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 		return nil, err
 	}
 
-	if cm.State == MemberStateAdminExcluded {
-		return nil, ErrJoinAdminExcluded(cm.UUID, cm.Rank)
-	}
 	memberToReplace := &Member{}
 	*memberToReplace = *cm
 

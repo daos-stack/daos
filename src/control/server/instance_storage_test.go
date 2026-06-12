@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -555,6 +558,137 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			if diff := cmp.Diff(expDescription, tly1.evtDesc); diff != "" {
 				t.Fatalf("unexpected event description (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestEngineInstance_clearFormat(t *testing.T) {
+	defStopEngine := func(_ context.Context, _ *EngineInstance) error {
+		return errors.New("stop failed")
+	}
+
+	for name, tc := range map[string]struct {
+		scmClass      storage.Class
+		getSCMErr     error
+		unmountErr    error
+		engineStarted bool
+		stopEngine    func(context.Context, *EngineInstance) error
+		expErr        error
+		expSBCreated  bool
+		expSBRemoved  bool
+	}{
+		"no SCM config": {
+			scmClass: "",
+			expErr:   errors.New("expected exactly 1 SCM tier"),
+		},
+		"get SCM config fails": {
+			getSCMErr: errors.New("mock config error"),
+			expErr:    errors.New("failed to get SCM config"),
+		},
+		"RAM class not started": {
+			scmClass:     storage.ClassRam,
+			expErr:       nil,
+			expSBRemoved: true,
+		},
+		"DCPM class not started": {
+			scmClass: storage.ClassDcpm,
+			expErr:   nil,
+		},
+		"RAM class engine started": {
+			scmClass:      storage.ClassRam,
+			engineStarted: true,
+			stopEngine: func(_ context.Context, _ *EngineInstance) error {
+				return nil
+			},
+			expErr: nil,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testDir, cleanup := test.CreateTestDir(t)
+			defer cleanup()
+
+			mnt := "/mnt/daos0"
+			testMountPoint := filepath.Join(testDir, mnt)
+			if err := os.MkdirAll(testMountPoint, 0777); err != nil {
+				t.Fatal(err)
+			}
+
+			storageCfg := storage.Config{
+				Tiers: storage.TierConfigs{},
+			}
+
+			if tc.scmClass != "" {
+				storageCfg.Tiers = append(storageCfg.Tiers, &storage.TierConfig{
+					Class: tc.scmClass,
+					Scm: storage.ScmConfig{
+						MountPoint: mnt, //testMountPoint,
+					},
+				})
+				if tc.scmClass == storage.ClassRam {
+					storageCfg.ControlMetadata = storage.ControlMetadata{
+						Path: "control_meta",
+					}
+				}
+			}
+
+			sysCfg := &sysprov.MockSysConfig{}
+			sysProv := sysprov.NewMockSysProvider(log, sysCfg)
+			scmProv := scm.DefaultMockProvider(log)
+			metaProv := &storage.MockMetadataProvider{
+				UnmountErr: tc.unmountErr,
+			}
+
+			ec := engine.MockConfig().WithStorage(storageCfg.Tiers...)
+			storProv := storage.MockProvider(log, 0, &storageCfg, sysProv, scmProv, nil,
+				metaProv)
+
+			ei := NewEngineInstance(log, storProv, nil, nil, nil)
+			ei.fsRoot = testDir
+			setupTestEngineWithConfig(t, ei, uint32(0), ec, !tc.engineStarted)
+
+			testSBPath := ei.superblockPath()
+			t.Logf("SB path: %s", testSBPath)
+			if err := os.MkdirAll(filepath.Dir(testSBPath), 0777); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := os.Stat(testSBPath); err == nil {
+				t.Fatalf("unexpected superblock exists (%s)", err)
+			} else if !os.IsNotExist(err) {
+				t.Fatalf("unexpected error %s", err)
+			}
+			if len(storageCfg.Tiers) != 0 {
+				if err := ei.WriteSuperblock(); err != nil {
+					//storage.FormatControlMetadata([]uint{0}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := os.Stat(testSBPath); tc.expSBCreated && err != nil {
+				t.Fatalf("superblock missing (%s)", err)
+			}
+
+			if tc.stopEngine == nil {
+				tc.stopEngine = defStopEngine
+			}
+
+			test.CmpErr(t, tc.expErr, ei.clearFormat(test.Context(t), tc.stopEngine))
+
+			// Check log output for unexpected unmount call
+			logOutput := buf.String()
+			unmountCalled := strings.Contains(logOutput, "unmounting tmpfs")
+			if unmountCalled {
+				t.Error("unexpected unmount call")
+			}
+
+			if !tc.expSBCreated {
+				return
+			}
+
+			_, err := os.Stat(testSBPath)
+			test.AssertEqual(t, tc.expSBRemoved, os.IsNotExist(err), "is superblock removed")
 		})
 	}
 }

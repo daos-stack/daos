@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"syscall"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -74,6 +75,63 @@ func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
 	go func() {
 		ei.storageReady <- replaceRank
 	}()
+}
+
+func (ei *EngineInstance) clearFormat(ctx context.Context, stopEngineFn func(context.Context, *EngineInstance) error) error {
+	idx := ei.Index()
+	ei.log.Infof("instance %d: cleaning up after join failure during replace", idx)
+
+	storageProv := ei.GetStorage()
+
+	// Get SCM config to access mount point and class
+	scmCfg, err := storageProv.GetScmConfig()
+	if err != nil {
+		return errors.Wrap(err, "failed to get SCM config")
+	}
+
+	if scmCfg == nil {
+		ei.log.Debugf("instance %d: no SCM config, nothing to clean", idx)
+		return nil
+	}
+
+	if ei.IsStarted() {
+		ei.log.Infof("instance %d: stopping engine before cleanup", idx)
+		if err := stopEngineFn(ctx, ei); err != nil {
+			return err
+		}
+		ei.log.Debugf("instance %d: engine stopped successfully", idx)
+	}
+
+	// On RAM-based SCM (tmpfs) unmount here unnecessary as will be done on engine exit
+
+	// Removing superblock prevents subsequent join without reformat.
+	if err := ei.RemoveSuperblock(); err != nil {
+		return err
+	}
+
+	ei.log.Infof("instance %d: cleanup after join failure complete", idx)
+	return nil
+}
+
+// Production implementation of stopEngineFn.
+func stopEngine(ctx context.Context, ei *EngineInstance) error {
+	if err := ei.Stop(syscall.SIGKILL); err != nil {
+		return errors.Wrap(err, "failed to stop engine")
+	}
+
+	pollFn := func(e Engine) bool { return !e.IsStarted() }
+	if err := pollInstanceState(ctx, []Engine{ei}, pollFn); err != nil {
+		return errors.Wrap(err, "waiting for engine to stop")
+	}
+
+	return nil
+}
+
+// cleanupFailedJoinReplace cleans up storage after a join failure during replace operation.
+// This is called when format succeeded but the join to the system failed, leaving
+// the storage in a partially initialized state.
+func (ei *EngineInstance) cleanupFailedJoinReplace(ctx context.Context) error {
+	return ei.clearFormat(ctx, stopEngine)
 }
 
 func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {

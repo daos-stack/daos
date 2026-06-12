@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -856,10 +856,10 @@ type formatScmReq struct {
 }
 
 func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatResp) (map[int]string, map[int]bool, error) {
-	needFormat := make(map[int]bool)
+	needScmFormat := make(map[int]bool)
 	emptyTmpfs := make(map[int]bool)
 	scmCfgs := make(map[int]*storage.TierConfig)
-	allNeedFormat := true
+	allNeedScmFormat := true
 
 	for idx, ei := range req.instances {
 		needs, err := ei.GetStorage().ScmNeedsFormat()
@@ -867,9 +867,9 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 			return nil, nil, errors.Wrap(err, "detecting if SCM format is needed")
 		}
 		if needs {
-			needFormat[idx] = true
+			needScmFormat[idx] = true
 		} else {
-			allNeedFormat = false
+			allNeedScmFormat = false
 		}
 
 		scmCfg, err := ei.GetStorage().GetScmConfig()
@@ -882,19 +882,20 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 		if scmCfg.Class == storage.ClassRam && !needs {
 			info, err := ei.GetStorage().GetScmUsage()
 			if err != nil {
-				return nil, nil, errors.Wrapf(err, "failed to check SCM usage for instance %d", idx)
+				return nil, nil, errors.Wrapf(err,
+					"failed to check SCM usage for instance %d", idx)
 			}
 			emptyTmpfs[idx] = info.TotalBytes-info.AvailBytes == 0
 		}
 	}
 
-	if req.replace && len(needFormat) == 0 {
+	if req.replace && len(needScmFormat) == 0 {
 		// Only valid if at least one engine requires format.
-		return nil, nil, errors.New("format replace option only valid if at " +
-			"least one engine requires format but no engines need format")
+		return nil, nil, errors.New("format replace option only valid if at least one " +
+			"engine requires scm-format but currently no engines need scm-format")
 	}
 
-	if allNeedFormat {
+	if allNeedScmFormat {
 		// Check available RAM is sufficient before formatting SCM on engines.
 		if err := checkTmpfsMem(req.log, scmCfgs, req.getSysMemInfo); err != nil {
 			return nil, nil, err
@@ -907,7 +908,7 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 	formatting := 0
 
 	for idx, ei := range req.instances {
-		if needFormat[idx] || req.reformat {
+		if needScmFormat[idx] || req.reformat {
 			formatting++
 			go func(e Engine) {
 				scmChan <- e.StorageFormatSCM(ctx, req.reformat)
