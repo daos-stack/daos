@@ -102,11 +102,10 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     mount_dir = dfuse.mount_dir.value
     build_dir = os.path.join(mount_dir, 'daos')
 
-    remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
-    remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
     remote_env['COVFILE'] = os.environ['COVFILE']
     remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
     remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
+    remote_env['SCONS_ENV'] = 'full'
 
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
@@ -119,8 +118,6 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             remote_env['D_IL_COMPATIBLE'] = '1'
             remote_env['D_IL_MAX_EQ'] = '0'
 
-    preload_cmd = remote_env.to_export_str()
-
     # Set the distro version for the utils/scripts/install-*.sh file
     distro_info = detect()
     distro = f"el{distro_info.version}"
@@ -129,41 +126,29 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
-            f'git clone https://github.com/daos-stack/daos.git {build_dir}',
-            f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
-            f'git -C {build_dir} submodule update --init --recursive',
-            f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
-            'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
-            'python3 -m pip install pip --upgrade',
-            f'python3 -m pip install -r {build_dir}/requirements-build.txt',
-            f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
-            f'daos filesystem query {mount_dir}',
-            f'daos filesystem evict {build_dir}',
-            f'daos filesystem query {mount_dir}',
-            f'scons -C {build_dir} --jobs {build_jobs}',
-            f'scons -C {build_dir} --jobs {build_jobs} install --implicit-deps-unchanged',
-            f'daos filesystem query {mount_dir}']
-    for cmd in cmds:
-        command = '{} {}'.format(preload_cmd, cmd)
-        # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
-        timeout = 10 * 60
-        if cmd.startswith('scons'):
-            timeout = build_time * 60
-        elif cmd.endswith('install.sh -y'):
-            timeout *= 2
-        self.log_step(f"Running '{cmd}' with a {timeout}s timeout")
-        start = time.time()
-        result = run_remote(
-            self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
-        elapsed = time.time() - start
-        (minutes, seconds) = divmod(elapsed, 60)
-        self.log.info(
-            'Command %s completed in %d:%02d (%d%% of timeout)',
-            command, minutes, seconds, elapsed / timeout * 100)
-        if result.passed:
-            continue
-
+    command = " ".join([
+        remote_env.to_export_str(),
+        os.path.abspath(os.path.join(os.getcwd(), 'daos_build.sh')),
+        f"--python-cmd python{sys.version_info.major}.{sys.version_info.minor}",
+        f"--venv-dir {mount_dir}/venv",
+        f"--build-dir {build_dir}",
+        f"--mount-dir {mount_dir}",
+        f"--git-checkout {__get_daos_build_checkout(self)}",
+        f"--distro {distro}",
+        f"--build-jobs {build_jobs}",
+        "--debug"
+    ])
+    timeout = 14400  # 4 hours
+    self.log_step(f"Running '{command}' with a {timeout}s timeout")
+    start = time.time()
+    result = run_remote(
+        self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
+    elapsed = time.time() - start
+    (minutes, seconds) = divmod(elapsed, 60)
+    self.log.info(
+        'Command %s completed in %d:%02d (%d%% of timeout)',
+        command, minutes, seconds, elapsed / timeout * 100)
+    if not result.passed:
         self.log.info('Failure detected - debug information:')
         fail_type = 'Failure to build'
         if result.timeout:
@@ -172,9 +157,9 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             fail_type = 'Timeout building'
 
         self.log.error('BuildDaos Test Failed')
-        if cmd.startswith('scons'):
+        if 'scons' in result.all_stdout:
             run_remote(
-                self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir), timeout=30)
+                self.log, self.hostlist_clients, f'cat {build_dir}/config.log', timeout=30)
         if il_lib is not None:
             self.fail(f'{fail_type} over dfuse with il in mode {cache_mode}')
         else:
