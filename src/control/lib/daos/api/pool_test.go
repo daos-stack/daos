@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -837,6 +838,12 @@ func TestAPI_PoolHandleMethods(t *testing.T) {
 			expResults = 2
 		case "DestroyContainer":
 			methArgs = append(methArgs, reflect.ValueOf("foo"), reflect.ValueOf(true))
+			expResults = 1
+		case "DestroyContainerAtPath":
+			methArgs = append(methArgs, reflect.ValueOf("/mnt/daos/path"))
+			expResults = 1
+		case "LinkContainerAtPath":
+			methArgs = append(methArgs, reflect.ValueOf("container-id"), reflect.ValueOf("/mnt/daos/path"))
 			expResults = 1
 		case "QueryContainer":
 			methArgs = append(methArgs, reflect.ValueOf("foo"))
