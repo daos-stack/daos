@@ -1,5 +1,5 @@
-#  (C) Copyright 2023-2024 Intel Corporation.
-#  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
+#  Copyright 2023-2024 Intel Corporation.
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 - name: common
@@ -188,6 +188,7 @@
     - cmd: ["bin/nvme_control_ctests"]
       warn_if_missing: "bin/nvme_control_ctests is missing, SPDK_SRC not available when built?"
 - name: ddb
+  gha: True
   base: "PREFIX"
   tests:
     - cmd: ["bin/ddb_tests"]
