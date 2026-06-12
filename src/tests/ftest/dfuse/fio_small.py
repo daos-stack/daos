@@ -5,7 +5,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
+
 from dfuse_utils import get_dfuse, start_dfuse
+from file_utils import create_directory
 from fio_test_base import FioBase
 
 
@@ -38,13 +41,17 @@ class FioSmall(FioBase):
             self.log_step('Start dfuse')
             dfuse = get_dfuse(self, self.hostlist_clients)
             start_dfuse(self, dfuse, pool, container)
-            self.fio_cmd.update_directory(dfuse.mount_dir.value)
 
             # Run with various fio parameters
             for variant in self.params.get("variants", '/run/fio/global/*'):
                 self.log_step(
                     f'Run fio with direct={variant[0]}, blocksize={variant[1]}, '
                     f'size={variant[2]}, rw={variant[3]}')
+                fio_dir = os.path.join(dfuse.mount_dir.value, 'dir')
+                result = create_directory(self.log, self.hostlist_clients[:1], fio_dir)
+                if not result.passed:
+                    self.fail(f"Error creating {fio_dir} on {result.failed_hosts}")
+                self.fio_cmd.update_directory(self.label_generator.get_label(fio_dir))
                 self.fio_cmd.update('global', 'direct', variant[0], 'global.direct')
                 self.fio_cmd.update('global', 'blocksize', variant[1], 'global.blocksize')
                 self.fio_cmd.update('global', 'size', variant[2], 'global.size')
