@@ -1,7 +1,9 @@
 hosts:
   test_servers: 1
   test_clients: 1
+
 timeout: 300
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -9,5 +11,17 @@ server_config:
     0:
       storage: auto
   system_ram_reserved: 32
+
 pool:
   size: 90%
+
+container:
+  type: POSIX
+
+ior_write:
+  ppn: 16
+  flags: "-k -v -w -W -G 1"
+  api: DFS
+  transfer_size: 1M
+  block_size: 64M  # Aggregate 1G
+  dfs_oclass: SX
