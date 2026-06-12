@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -498,6 +498,24 @@ kv_put(daos_handle_t oh, daos_size_t size)
 				}
 			}
 
+			/**
+			 * DAOS-18859 diagnostic: when rc < 0, evp was NOT
+			 * updated by daos_eq_poll — it is stale.
+			 */
+			if (rc < 0) {
+				D_ERROR("DAOS-18859 kv_put: daos_eq_poll "
+					"returned " DF_RC ", evp is stale"
+					" — will dereference invalid"
+					" pointer!\n",
+					DP_RC(rc));
+				fprintf(stderr,
+					"DAOS-18859 kv_put:"
+					" daos_eq_poll returned %d, evp is"
+					" stale — will dereference invalid"
+					" pointer!\n",
+					rc);
+			}
+
 			/** Check if completed operation failed */
 			if (evp->ev_error != DER_SUCCESS) {
 				rc = evp->ev_error;
@@ -636,6 +654,24 @@ kv_get(daos_handle_t oh, daos_size_t size)
 					rc = -DER_IO;
 					break;
 				}
+			}
+
+			/**
+			 * DAOS-18859 diagnostic: when rc < 0, evp was NOT
+			 * updated by daos_eq_poll — it is stale.
+			 */
+			if (rc < 0) {
+				D_ERROR("DAOS-18859 kv_get: daos_eq_poll "
+					"returned " DF_RC ", evp is stale"
+					" — will dereference invalid"
+					" pointer!\n",
+					DP_RC(rc));
+				fprintf(stderr,
+					"DAOS-18859 kv_get:"
+					" daos_eq_poll returned %d, evp is"
+					" stale — will dereference invalid"
+					" pointer!\n",
+					rc);
 			}
 
 			/** Check if completed operation failed */
