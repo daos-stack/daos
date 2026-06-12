@@ -9,6 +9,9 @@
  *
  * tests/suite/daos_base_tx.c
  */
+
+/* only for test */
+
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_test.h"
