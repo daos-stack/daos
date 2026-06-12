@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -235,6 +236,12 @@ FAULTS = {
         'probability_y': '100',
         'interval': '1',
         'max_faults': '1'},
+    'DAOS_FAULT_EQ_POLL_FAIL': {
+        'id': '135168',
+        'probability_x': '1000',
+        'probability_y': '100',
+        'interval': '100',
+        'max_faults': '5'},
 }
 
 
