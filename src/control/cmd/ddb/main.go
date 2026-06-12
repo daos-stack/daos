@@ -92,9 +92,11 @@ shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
 the '-w' option must be included.
 
-If the command requires it, the VOS file must be provided with the parameter 
---vos-path. The VOS file will be opened before any commands are executed. See
-the command‑specific help for details.
+If the command requires it, the VOS file must be provided with the parameter
+--vos_path. The VOS file will be opened before any commands are executed,
+except for commands that manage their own pool lifecycle (open, close, feature,
+rm_pool, prov_mem, smd_sync, dev_list, dev_replace). See the command-specific
+help for details.
 
 A DAOS file system can operate in different modes depending on the available hardware resources.
 The two primary modes are MD-on-SSD and PMEM. In MD-on-SSD mode (the default), metadata is stored
@@ -104,7 +106,6 @@ MODE section of the manpage for details.
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
 const runCmdArgsErr = "Cannot use both command file and a command string"
-const vosPathMissErr = "Cannot use sys db path without a VOS path"
 const loggerInitErr = "Logging facilities cannot be initialized"
 const ctxInitErr = "DDB Context cannot be initialized"
 const vosPathOpenErr = "Error opening VOS path '%s'"
@@ -286,7 +287,7 @@ func closePoolIfOpen(ctx *DdbContext, log *logging.LeveledLogger) {
 
 func parseOpts(args []string, ctx *DdbContext) (cliOptions, *flags.Parser, error) {
 	var opts cliOptions
-	parser := flags.NewParser(&opts, flags.HelpFlag|flags.IgnoreUnknown)
+	parser := flags.NewParser(&opts, flags.HelpFlag|flags.IgnoreUnknown|flags.PassAfterNonOption)
 	parser.Name = "ddb"
 	parser.Usage = "[OPTIONS]"
 	parser.ShortDescription = "daos debug tool"
@@ -365,6 +366,33 @@ func run(ctx *DdbContext, log *logging.LeveledLogger, opts cliOptions, parser *f
 	return result
 }
 
+// runDdb contains the core ddb execution logic. It is separate from main() so
+// that it can be tested without triggering os.Exit. main() handles only
+// OS-level setup (traceback, stdout buffering) and calls exitWithError on
+// failure; runDdb returns errors instead.
+func runDdb(ctx *DdbContext, args []string) error {
+	opts, parser, err := parseOpts(args, ctx)
+	if errors.Is(err, errHelpRequested) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if opts.Version {
+		fmt.Printf("ddb version %s\n", build.DaosVersion)
+		return nil
+	}
+
+	log, err := newLogger(opts)
+	if err != nil {
+		return errors.Wrap(err, loggerInitErr)
+	}
+	log.Debug("Logging facilities initialized")
+
+	return run(ctx, log, opts, parser)
+}
+
 func main() {
 	// Set the traceback level such that a crash results in
 	// a coredump (when ulimit -c is set appropriately).
@@ -376,26 +404,7 @@ func main() {
 	}
 
 	ctx := &DdbContext{}
-	opts, parser, err := parseOpts(os.Args[1:], ctx)
-	if errors.Is(err, errHelpRequested) {
-		return
-	}
-	if err != nil {
-		exitWithError(err)
-	}
-
-	if opts.Version {
-		fmt.Printf("ddb version %s\n", build.DaosVersion)
-		return
-	}
-
-	log, err := newLogger(opts)
-	if err != nil {
-		exitWithError(errors.Wrap(err, loggerInitErr))
-	}
-	log.Debug("Logging facilities initialized")
-
-	if err = run(ctx, log, opts, parser); err != nil {
+	if err := runDdb(ctx, os.Args[1:]); err != nil {
 		exitWithError(err)
 	}
 }

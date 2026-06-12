@@ -4,11 +4,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
+from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
 from recovery_utils import wait_for_check_complete
 from run_utils import command_as_user, run_remote
@@ -19,6 +21,11 @@ class PoolListConsolidationTest(TestWithServers):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a DdbTest object."""
+        super().__init__(*args, **kwargs)
+        self.tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
 
     def chk_dist_checker(self, inconsistency, policies=None):
         """Run DAOS checker with kinds of options.
@@ -98,6 +105,25 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.check_disable()
 
         return errors
+
+    def run_cmd_check_result(self, command):
+        """Run given command as root and check its result.
+
+        Args:
+            command (str): Command to execute.
+        """
+        command_root = command_as_user(command=command, user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+        if not result.passed:
+            self.fail(f"{command} failed on {result.failed_hosts}!")
+
+    def clean_mounts(self):
+        """Unmount and remove the tmpfs directory used for MD-on-SSD testing.
+        """
+        self.log_step(f"MD-on-SSD: Clean {self.tmpfs_mounts} on {self.hostlist_servers}")
+        for tmpfs_mount in self.tmpfs_mounts:
+            self.run_cmd_check_result(command=f"umount {tmpfs_mount}")
+            self.run_cmd_check_result(command=f"rm -rf {tmpfs_mount}")
 
     def test_dangling_pool(self):
         """Test dangling pool.
@@ -280,9 +306,8 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
-        if self.server_managers[0].manager.job.using_control_metadata:
-            self.log.info("MD-on-SSD cluster. It will be supported later.")
-            self.cancelForTicket('DAOS-18395')
+        hosts = list(set(self.server_managers[0].ranks.values()))
+        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
 
         self.log_step("Create a pool with --nsvc=3.")
         # We can generalize this test more. For example, use
@@ -293,41 +318,138 @@ class PoolListConsolidationTest(TestWithServers):
         # simple.
         pool = self.get_pool(svcn=3)
 
-        self.log_step("Stop servers")
-        dmg_command = self.get_dmg_command()
-        dmg_command.system_stop()
+        # This is where we store the original rdb-pool paths that are created during dmg pool
+        # create. e.g.,
+        # /mnt/daos1/$POOL/rdb-pool
+        orig_rdb_pool_paths = []
 
-        self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
-        rdb_pool_paths = []
-        for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
-            scm_mount = engine_params.get_value('scm_mount')
-            rdb_pool_path = f"{scm_mount}/{pool.uuid.lower()}/rdb-pool"
-            rdb_pool_paths.append(rdb_pool_path)
-        self.log.info("rdb_pool_paths = %s", rdb_pool_paths)
-        hosts = list(set(self.server_managers[0].ranks.values()))
-        count = 0
-        # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
-        for host in hosts:
-            for rdb_pool_path in rdb_pool_paths:
-                node = NodeSet(host)
-                check_out = check_file_exists(
-                    hosts=node, filename=rdb_pool_path, sudo=True)
-                if check_out[0]:
-                    command = f"rm {rdb_pool_path}"
-                    command_root = command_as_user(command=command, user="root")
-                    if not run_remote(log=self.log, hosts=node, command=command_root).passed:
-                        self.fail(f'Failed to remove {rdb_pool_path} on {host}')
-                    self.log.info("Remove %s from %s", rdb_pool_path, str(node))
-                    count += 1
+        self.log_step("Stop servers")
+        self.get_dmg_command().system_stop()
+
+        if md_on_ssd:
+            # MD-on-SSD case is more complex that PMEM case because we need to first load the pool
+            # dir to the new mount points. Then we'll iterate the new mount points to search for
+            # rdb-pool. Removing rdb-pool is also more complex than PMEM because in PMEM, we'll just
+            # use rm <rdb-pool_path>, but in MD-on-SSD, we need to use "ddb rm_pool" and it takes
+            # db_path, so we need to keep the mapping between rdb-pool path and db_path.
+
+            # Prepare dictionaries to determine the arguments used in prov_mem and rm_pool.
+            # Used for --db_path in prov_mem and rm_pool.
+            db_path_0 = os.path.join(self.log_dir, "control_metadata", "daos_control", "engine0")
+            db_path_1 = os.path.join(self.log_dir, "control_metadata", "daos_control", "engine1")
+
+            # Create the map of original mount points to the new mount points where the pool will be
+            # loaded.
+            orig_load_mount = {}
+            for i, engine_params in enumerate(
+                    self.server_managers[0].manager.job.yaml.engine_params):
+                scm_mount = engine_params.get_value('scm_mount')
+                orig_load_mount[scm_mount] = self.tmpfs_mounts[i]
+            self.log.info("orig_load_mount = %s", orig_load_mount)
+
+            # When we call rm_pool, we need to know the right --db_path value for a given rdb-pool
+            # path to remove, so prepare an intermediate dictionary.
+            mount_to_db_path = {self.tmpfs_mounts[0]: db_path_0, self.tmpfs_mounts[1]: db_path_1}
+            self.log.info("mount_to_db_path = %s", mount_to_db_path)
+
+            # This is where we store the new rdb-pool paths in the loaded dir. e.g.,
+            # /mnt/daos3/$POOL/rdb-pool
+            new_rdb_pool_paths = []
+
+            # When we call rm_pool, we'll check whether a particular rdb-pool path exists. If found,
+            # we'll use rm_pool to remove it. When we call the command, we also need to know db_path
+            # that maps to this rdb-pool path, so prepare a dictionary. e.g.,
+            # /mnt/daos3/$POOL/rdb-pool: /var/tmp/daos_testing/control_metadata/daos_control/engine1
+            new_rdb_to_db_path = {}
+
+            for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
+                # Iterate the server config and get the scm_mount values. Usually /mnt/daos0 and
+                # /mnt/daos1.
+                scm_mount = engine_params.get_value('scm_mount')
+
+                # Determine the new rdb-pool path from the new scm_mount. e.g., If the new scm_mount
+                # is /mnt/daos1, new rdb-pool path would be /mnt/daos3/$POOL/rdb-pool
+                new_mount = orig_load_mount[scm_mount]
+
+                # Create the mapping between the new rdb-pool path and the associated db_path. For
+                # example, if scm_mount is /mnt/daos1, the mapping would be
+                # /mnt/daos1/$POOL/rdb-pool:
+                # /var/tmp/daos_testing/control_metadata/daos_control/engine1
+                new_rdb_pool_path = f"{new_mount}/{pool.uuid.lower()}/rdb-pool"
+                new_rdb_pool_paths.append(new_rdb_pool_path)
+                orig_rdb_pool_path = f"{scm_mount}/{pool.uuid.lower()}/rdb-pool"
+                # orig_rdb_pool_paths is needed when we check if rdb-pools are recovered at the end.
+                orig_rdb_pool_paths.append(orig_rdb_pool_path)
+                new_rdb_to_db_path[new_rdb_pool_path] = mount_to_db_path[new_mount]
+
+            self.log.info("new_rdb_pool_paths = %s", new_rdb_pool_paths)
+            self.log.info("rdb_to_db_path = %s", new_rdb_to_db_path)
+
+            self.log_step(
+                "MD-on-SSD: Create a directory to load pool data under /mnt in all servers.")
+            command = "mkdir -p /mnt/daos2 /mnt/daos3"
+            result = run_remote(
+                log=self.log, hosts=self.hostlist_servers,
+                command=command_as_user(command=command, user="root"))
+            if not result.passed:
+                self.fail(f"{command} failed on {result.failed_hosts}!")
+
+            self.log_step("MD-on-SSD: Load pool dir to /mnt/daos2 and daos3 for all servers.")
+            for host in hosts:
+                # We need to call ddb prov_mem for all servers, so use new DdbCommand object with
+                # each host.
+                ddb_command = DdbCommand(server_host=host, path=self.bin, vos_path='""')
+                ddb_command.prov_mem(db_path=db_path_0, tmpfs_mount=self.tmpfs_mounts[0])
+                ddb_command.prov_mem(db_path=db_path_1, tmpfs_mount=self.tmpfs_mounts[1])
+
+            self.log_step("Remove rdb-pool from 2 out of 3 ranks from /mnt/daos2 and /mnt/daos3")
+            count = 0
+            # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
+            for host in hosts:
+                for rdb_pool_path in new_rdb_pool_paths:
                     if count == 2:
                         break
-            if count == 2:
-                break
+                    node = NodeSet(host)
+                    # rdb_pool_path is something like "/mnt/daos2/$POOL/rdb-pool". Check if it
+                    # exists in this host.
+                    check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
+                    if check_out[0]:
+                        # As in prov_mem, we're calling ddb rm_pool in this particular host, so use
+                        # a new object with this particular host.
+                        ddb_command = DdbCommand(server_host=host, path=self.bin, vos_path=None)
+                        # Get the corresponding db_path from the rdb-pool path we're removing.
+                        db_path = new_rdb_to_db_path[rdb_pool_path]
+                        self.log.info("Remove %s from %s", rdb_pool_path, str(node))
+                        ddb_command.rm_pool(db_path=db_path, removing_path=rdb_pool_path)
+                        count += 1
+
+        else:
+            # PMEM case.
+            self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
+            for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
+                scm_mount = engine_params.get_value('scm_mount')
+                rdb_pool_path = f"{scm_mount}/{pool.uuid.lower()}/rdb-pool"
+                orig_rdb_pool_paths.append(rdb_pool_path)
+            self.log.info("orig_rdb_pool_paths = %s", orig_rdb_pool_paths)
+            count = 0
+            # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
+            for host in hosts:
+                for rdb_pool_path in orig_rdb_pool_paths:
+                    if count == 2:
+                        break
+                    node = NodeSet(host)
+                    check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
+                    if check_out[0]:
+                        command = f"rm {rdb_pool_path}"
+                        command_root = command_as_user(command=command, user="root")
+                        if not run_remote(log=self.log, hosts=node, command=command_root).passed:
+                            self.fail(f'Failed to remove {rdb_pool_path} on {host}')
+                        self.log.info("Remove %s from %s", rdb_pool_path, str(node))
+                        count += 1
 
         self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
-        errors = self.chk_dist_checker(
-            inconsistency="corrupted pool without quorum")
+        errors = self.chk_dist_checker(inconsistency="corrupted pool without quorum")
 
         self.log_step("Try creating a container. It should succeed.")
         cont_create_success = False
@@ -338,22 +460,18 @@ class PoolListConsolidationTest(TestWithServers):
                 cont_create_success = True
                 break
             except TestFail as error:
-                msg = f"Container create failed after running checker! error = {error}"
-                self.log.debug(msg)
+                self.log.info("Container create failed after running checker! error = %s", error)
 
         if not cont_create_success:
             errors.append("Container create failed after running checker!")
 
-        msg = ("Show that rdb-pool are recovered. i.e., three out of four ranks should "
-               "have rdb-pool.")
-        self.log_step(msg)
-        hosts = list(set(self.server_managers[0].ranks.values()))
+        self.log_step(
+            "Show that rdb-pool are recovered. i.e., three out of four ranks should have rdb-pool.")
         count = 0
         for host in hosts:
-            for rdb_pool_path in rdb_pool_paths:
+            for rdb_pool_path in orig_rdb_pool_paths:
                 node = NodeSet(host)
-                check_out = check_file_exists(
-                    hosts=node, filename=rdb_pool_path, sudo=True)
+                check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
                 if check_out[0]:
                     count += 1
                     self.log.info("rdb-pool found at %s: %s", str(node), rdb_pool_path)
@@ -361,6 +479,9 @@ class PoolListConsolidationTest(TestWithServers):
         self.log.info("rdb-pool count = %d", count)
         if count != 3:
             errors.append(f"Unexpected number of rdb-pool after repair! - {count} ranks")
+
+        if md_on_ssd:
+            self.clean_mounts()
 
         report_errors(test=self, errors=errors)
 

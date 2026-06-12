@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -147,6 +147,16 @@ func CmpAny(t *testing.T, desc string, want, got any, cmpOpts ...cmp.Option) {
 
 	if diff := cmp.Diff(want, got, cmpOpts...); diff != "" {
 		t.Fatalf("unexpected %s (-want, +got):\n%s\n", desc, diff)
+	}
+}
+
+// AssertStringContains asserts that s contains each of the provided substrings.
+func AssertStringContains(t *testing.T, s string, substrings ...string) {
+	t.Helper()
+	for _, sub := range substrings {
+		if !strings.Contains(s, sub) {
+			t.Fatalf("expected string to contain %q: got\n%s", sub, s)
+		}
 	}
 }
 
