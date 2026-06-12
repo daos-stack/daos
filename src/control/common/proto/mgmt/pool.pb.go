@@ -250,6 +250,55 @@ func (PoolQueryTargetInfo_TargetState) EnumDescriptor() ([]byte, []int) {
 	return file_mgmt_pool_proto_rawDescGZIP(), []int{30, 0}
 }
 
+type PoolRevokeClientReq_EvictMode int32
+
+const (
+	PoolRevokeClientReq_EVICT_DEFAULT   PoolRevokeClientReq_EvictMode = 0 // per-CN for node:, pool-wide for tenant:
+	PoolRevokeClientReq_EVICT_POOL_WIDE PoolRevokeClientReq_EvictMode = 1 // always evict all handles on the pool
+	PoolRevokeClientReq_EVICT_NONE      PoolRevokeClientReq_EvictMode = 2 // advance watermark, leave handles alive
+)
+
+// Enum value maps for PoolRevokeClientReq_EvictMode.
+var (
+	PoolRevokeClientReq_EvictMode_name = map[int32]string{
+		0: "EVICT_DEFAULT",
+		1: "EVICT_POOL_WIDE",
+		2: "EVICT_NONE",
+	}
+	PoolRevokeClientReq_EvictMode_value = map[string]int32{
+		"EVICT_DEFAULT":   0,
+		"EVICT_POOL_WIDE": 1,
+		"EVICT_NONE":      2,
+	}
+)
+
+func (x PoolRevokeClientReq_EvictMode) Enum() *PoolRevokeClientReq_EvictMode {
+	p := new(PoolRevokeClientReq_EvictMode)
+	*p = x
+	return p
+}
+
+func (x PoolRevokeClientReq_EvictMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PoolRevokeClientReq_EvictMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_mgmt_pool_proto_enumTypes[4].Descriptor()
+}
+
+func (PoolRevokeClientReq_EvictMode) Type() protoreflect.EnumType {
+	return &file_mgmt_pool_proto_enumTypes[4]
+}
+
+func (x PoolRevokeClientReq_EvictMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PoolRevokeClientReq_EvictMode.Descriptor instead.
+func (PoolRevokeClientReq_EvictMode) EnumDescriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{43, 0}
+}
+
 // PoolCreateReq supplies new pool parameters.
 type PoolCreateReq struct {
 	state         protoimpl.MessageState
@@ -2957,6 +3006,697 @@ func (x *PoolSelfHealEvalReq) GetSvcRanks() []uint32 {
 	return nil
 }
 
+// PoolGetCAReq fetches the pool's CA bundle.
+type PoolGetCAReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys      string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
+	Id       string   `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	SvcRanks []uint32 `protobuf:"varint,3,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"`
+}
+
+func (x *PoolGetCAReq) Reset() {
+	*x = PoolGetCAReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[35]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolGetCAReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolGetCAReq) ProtoMessage() {}
+
+func (x *PoolGetCAReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[35]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolGetCAReq.ProtoReflect.Descriptor instead.
+func (*PoolGetCAReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *PoolGetCAReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *PoolGetCAReq) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PoolGetCAReq) GetSvcRanks() []uint32 {
+	if x != nil {
+		return x.SvcRanks
+	}
+	return nil
+}
+
+type PoolGetCAResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status   int32  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	CaBundle []byte `protobuf:"bytes,2,opt,name=ca_bundle,json=caBundle,proto3" json:"ca_bundle,omitempty"`
+	PoolUuid string `protobuf:"bytes,3,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`
+}
+
+func (x *PoolGetCAResp) Reset() {
+	*x = PoolGetCAResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[36]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolGetCAResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolGetCAResp) ProtoMessage() {}
+
+func (x *PoolGetCAResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[36]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolGetCAResp.ProtoReflect.Descriptor instead.
+func (*PoolGetCAResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *PoolGetCAResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *PoolGetCAResp) GetCaBundle() []byte {
+	if x != nil {
+		return x.CaBundle
+	}
+	return nil
+}
+
+func (x *PoolGetCAResp) GetPoolUuid() string {
+	if x != nil {
+		return x.PoolUuid
+	}
+	return ""
+}
+
+// PoolAddCAReq appends a CA certificate to the pool's CA bundle.
+type PoolAddCAReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys      string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
+	Id       string   `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	CertPem  []byte   `protobuf:"bytes,3,opt,name=cert_pem,json=certPem,proto3" json:"cert_pem,omitempty"`
+	SvcRanks []uint32 `protobuf:"varint,4,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"`
+	Replace  bool     `protobuf:"varint,5,opt,name=replace,proto3" json:"replace,omitempty"` // clear existing bundle before append
+}
+
+func (x *PoolAddCAReq) Reset() {
+	*x = PoolAddCAReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[37]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolAddCAReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolAddCAReq) ProtoMessage() {}
+
+func (x *PoolAddCAReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[37]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolAddCAReq.ProtoReflect.Descriptor instead.
+func (*PoolAddCAReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *PoolAddCAReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *PoolAddCAReq) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PoolAddCAReq) GetCertPem() []byte {
+	if x != nil {
+		return x.CertPem
+	}
+	return nil
+}
+
+func (x *PoolAddCAReq) GetSvcRanks() []uint32 {
+	if x != nil {
+		return x.SvcRanks
+	}
+	return nil
+}
+
+func (x *PoolAddCAReq) GetReplace() bool {
+	if x != nil {
+		return x.Replace
+	}
+	return false
+}
+
+type PoolAddCAResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status   int32  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	PoolUuid string `protobuf:"bytes,2,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`
+}
+
+func (x *PoolAddCAResp) Reset() {
+	*x = PoolAddCAResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[38]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolAddCAResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolAddCAResp) ProtoMessage() {}
+
+func (x *PoolAddCAResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[38]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolAddCAResp.ProtoReflect.Descriptor instead.
+func (*PoolAddCAResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *PoolAddCAResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *PoolAddCAResp) GetPoolUuid() string {
+	if x != nil {
+		return x.PoolUuid
+	}
+	return ""
+}
+
+// PoolRemoveCAReq removes one or all CAs from the pool's CA bundle.
+type PoolRemoveCAReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys         string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
+	Id          string   `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Fingerprint string   `protobuf:"bytes,3,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"` // SHA-256 hex of the CA cert to remove
+	All         bool     `protobuf:"varint,4,opt,name=all,proto3" json:"all,omitempty"`                // remove every CA in the bundle
+	SvcRanks    []uint32 `protobuf:"varint,5,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"`
+}
+
+func (x *PoolRemoveCAReq) Reset() {
+	*x = PoolRemoveCAReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[39]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolRemoveCAReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolRemoveCAReq) ProtoMessage() {}
+
+func (x *PoolRemoveCAReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[39]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolRemoveCAReq.ProtoReflect.Descriptor instead.
+func (*PoolRemoveCAReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *PoolRemoveCAReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *PoolRemoveCAReq) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PoolRemoveCAReq) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *PoolRemoveCAReq) GetAll() bool {
+	if x != nil {
+		return x.All
+	}
+	return false
+}
+
+func (x *PoolRemoveCAReq) GetSvcRanks() []uint32 {
+	if x != nil {
+		return x.SvcRanks
+	}
+	return nil
+}
+
+type PoolRemoveCAResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status       int32  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	CertsRemoved int32  `protobuf:"varint,2,opt,name=certs_removed,json=certsRemoved,proto3" json:"certs_removed,omitempty"`
+	PoolUuid     string `protobuf:"bytes,3,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`
+}
+
+func (x *PoolRemoveCAResp) Reset() {
+	*x = PoolRemoveCAResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[40]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolRemoveCAResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolRemoveCAResp) ProtoMessage() {}
+
+func (x *PoolRemoveCAResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[40]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolRemoveCAResp.ProtoReflect.Descriptor instead.
+func (*PoolRemoveCAResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *PoolRemoveCAResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *PoolRemoveCAResp) GetCertsRemoved() int32 {
+	if x != nil {
+		return x.CertsRemoved
+	}
+	return 0
+}
+
+func (x *PoolRemoveCAResp) GetPoolUuid() string {
+	if x != nil {
+		return x.PoolUuid
+	}
+	return ""
+}
+
+// PoolGetCertWatermarksReq fetches the per-CN revocation watermarks blob.
+type PoolGetCertWatermarksReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys      string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
+	Id       string   `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	SvcRanks []uint32 `protobuf:"varint,3,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"`
+}
+
+func (x *PoolGetCertWatermarksReq) Reset() {
+	*x = PoolGetCertWatermarksReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[41]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolGetCertWatermarksReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolGetCertWatermarksReq) ProtoMessage() {}
+
+func (x *PoolGetCertWatermarksReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[41]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolGetCertWatermarksReq.ProtoReflect.Descriptor instead.
+func (*PoolGetCertWatermarksReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *PoolGetCertWatermarksReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *PoolGetCertWatermarksReq) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PoolGetCertWatermarksReq) GetSvcRanks() []uint32 {
+	if x != nil {
+		return x.SvcRanks
+	}
+	return nil
+}
+
+type PoolGetCertWatermarksResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status     int32  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	Watermarks []byte `protobuf:"bytes,2,opt,name=watermarks,proto3" json:"watermarks,omitempty"` // JSON blob, may be empty
+	PoolUuid   string `protobuf:"bytes,3,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`
+}
+
+func (x *PoolGetCertWatermarksResp) Reset() {
+	*x = PoolGetCertWatermarksResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[42]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolGetCertWatermarksResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolGetCertWatermarksResp) ProtoMessage() {}
+
+func (x *PoolGetCertWatermarksResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[42]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolGetCertWatermarksResp.ProtoReflect.Descriptor instead.
+func (*PoolGetCertWatermarksResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *PoolGetCertWatermarksResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *PoolGetCertWatermarksResp) GetWatermarks() []byte {
+	if x != nil {
+		return x.Watermarks
+	}
+	return nil
+}
+
+func (x *PoolGetCertWatermarksResp) GetPoolUuid() string {
+	if x != nil {
+		return x.PoolUuid
+	}
+	return ""
+}
+
+// PoolRevokeClientReq advances the pool's revocation watermark for a CN.
+type PoolRevokeClientReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys       string                        `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
+	Id        string                        `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Cn        string                        `protobuf:"bytes,3,opt,name=cn,proto3" json:"cn,omitempty"`
+	SvcRanks  []uint32                      `protobuf:"varint,4,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"`
+	EvictMode PoolRevokeClientReq_EvictMode `protobuf:"varint,5,opt,name=evict_mode,json=evictMode,proto3,enum=mgmt.PoolRevokeClientReq_EvictMode" json:"evict_mode,omitempty"`
+}
+
+func (x *PoolRevokeClientReq) Reset() {
+	*x = PoolRevokeClientReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[43]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolRevokeClientReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolRevokeClientReq) ProtoMessage() {}
+
+func (x *PoolRevokeClientReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[43]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolRevokeClientReq.ProtoReflect.Descriptor instead.
+func (*PoolRevokeClientReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *PoolRevokeClientReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *PoolRevokeClientReq) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PoolRevokeClientReq) GetCn() string {
+	if x != nil {
+		return x.Cn
+	}
+	return ""
+}
+
+func (x *PoolRevokeClientReq) GetSvcRanks() []uint32 {
+	if x != nil {
+		return x.SvcRanks
+	}
+	return nil
+}
+
+func (x *PoolRevokeClientReq) GetEvictMode() PoolRevokeClientReq_EvictMode {
+	if x != nil {
+		return x.EvictMode
+	}
+	return PoolRevokeClientReq_EVICT_DEFAULT
+}
+
+type PoolRevokeClientResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status              int32  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	WatermarkRfc3339    string `protobuf:"bytes,2,opt,name=watermark_rfc3339,json=watermarkRfc3339,proto3" json:"watermark_rfc3339,omitempty"` // committed watermark in RFC3339 UTC
+	PoolUuid            string `protobuf:"bytes,3,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`
+	HandlesEvictedCount int32  `protobuf:"varint,4,opt,name=handles_evicted_count,json=handlesEvictedCount,proto3" json:"handles_evicted_count,omitempty"`
+	EvictScope          string `protobuf:"bytes,5,opt,name=evict_scope,json=evictScope,proto3" json:"evict_scope,omitempty"` // "machine" | "pool" | "none"
+}
+
+func (x *PoolRevokeClientResp) Reset() {
+	*x = PoolRevokeClientResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_pool_proto_msgTypes[44]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PoolRevokeClientResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolRevokeClientResp) ProtoMessage() {}
+
+func (x *PoolRevokeClientResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[44]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolRevokeClientResp.ProtoReflect.Descriptor instead.
+func (*PoolRevokeClientResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *PoolRevokeClientResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *PoolRevokeClientResp) GetWatermarkRfc3339() string {
+	if x != nil {
+		return x.WatermarkRfc3339
+	}
+	return ""
+}
+
+func (x *PoolRevokeClientResp) GetPoolUuid() string {
+	if x != nil {
+		return x.PoolUuid
+	}
+	return ""
+}
+
+func (x *PoolRevokeClientResp) GetHandlesEvictedCount() int32 {
+	if x != nil {
+		return x.HandlesEvictedCount
+	}
+	return 0
+}
+
+func (x *PoolRevokeClientResp) GetEvictScope() string {
+	if x != nil {
+		return x.EvictScope
+	}
+	return ""
+}
+
 type ListPoolsResp_Pool struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -2972,7 +3712,7 @@ type ListPoolsResp_Pool struct {
 func (x *ListPoolsResp_Pool) Reset() {
 	*x = ListPoolsResp_Pool{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_pool_proto_msgTypes[35]
+		mi := &file_mgmt_pool_proto_msgTypes[45]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2985,7 +3725,7 @@ func (x *ListPoolsResp_Pool) String() string {
 func (*ListPoolsResp_Pool) ProtoMessage() {}
 
 func (x *ListPoolsResp_Pool) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[35]
+	mi := &file_mgmt_pool_proto_msgTypes[45]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3047,7 +3787,7 @@ type ListContResp_Cont struct {
 func (x *ListContResp_Cont) Reset() {
 	*x = ListContResp_Cont{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_pool_proto_msgTypes[36]
+		mi := &file_mgmt_pool_proto_msgTypes[46]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -3060,7 +3800,7 @@ func (x *ListContResp_Cont) String() string {
 func (*ListContResp_Cont) ProtoMessage() {}
 
 func (x *ListContResp_Cont) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[36]
+	mi := &file_mgmt_pool_proto_msgTypes[46]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3436,20 +4176,100 @@ var file_mgmt_pool_proto_rawDesc = []byte{
 	0x73, 0x79, 0x73, 0x5f, 0x70, 0x72, 0x6f, 0x70, 0x5f, 0x76, 0x61, 0x6c, 0x18, 0x04, 0x20, 0x01,
 	0x28, 0x09, 0x52, 0x0a, 0x73, 0x79, 0x73, 0x50, 0x72, 0x6f, 0x70, 0x56, 0x61, 0x6c, 0x12, 0x1b,
 	0x0a, 0x09, 0x73, 0x76, 0x63, 0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28,
-	0x0d, 0x52, 0x08, 0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x2a, 0x25, 0x0a, 0x10, 0x53,
-	0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x4d, 0x65, 0x64, 0x69, 0x61, 0x54, 0x79, 0x70, 0x65, 0x12,
-	0x07, 0x0a, 0x03, 0x53, 0x43, 0x4d, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x56, 0x4d, 0x45,
-	0x10, 0x01, 0x2a, 0x5d, 0x0a, 0x10, 0x50, 0x6f, 0x6f, 0x6c, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63,
-	0x65, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0c, 0x0a, 0x08, 0x43, 0x72, 0x65, 0x61, 0x74, 0x69,
-	0x6e, 0x67, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x52, 0x65, 0x61, 0x64, 0x79, 0x10, 0x01, 0x12,
-	0x0e, 0x0a, 0x0a, 0x44, 0x65, 0x73, 0x74, 0x72, 0x6f, 0x79, 0x69, 0x6e, 0x67, 0x10, 0x02, 0x12,
-	0x13, 0x0a, 0x0f, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x73, 0x45, 0x78, 0x63, 0x6c, 0x75, 0x64,
-	0x65, 0x64, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10,
-	0x04, 0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
-	0x64, 0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f,
-	0x73, 0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d,
-	0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x0d, 0x52, 0x08, 0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x22, 0x4d, 0x0a, 0x0c, 0x50,
+	0x6f, 0x6f, 0x6c, 0x47, 0x65, 0x74, 0x43, 0x41, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73,
+	0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x0e, 0x0a,
+	0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x1b, 0x0a,
+	0x09, 0x73, 0x76, 0x63, 0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0d,
+	0x52, 0x08, 0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x22, 0x61, 0x0a, 0x0d, 0x50, 0x6f,
+	0x6f, 0x6c, 0x47, 0x65, 0x74, 0x43, 0x41, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73,
+	0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61,
+	0x74, 0x75, 0x73, 0x12, 0x1b, 0x0a, 0x09, 0x63, 0x61, 0x5f, 0x62, 0x75, 0x6e, 0x64, 0x6c, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x08, 0x63, 0x61, 0x42, 0x75, 0x6e, 0x64, 0x6c, 0x65,
+	0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6f, 0x6f, 0x6c, 0x5f, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x6f, 0x6c, 0x55, 0x75, 0x69, 0x64, 0x22, 0x82, 0x01,
+	0x0a, 0x0c, 0x50, 0x6f, 0x6f, 0x6c, 0x41, 0x64, 0x64, 0x43, 0x41, 0x52, 0x65, 0x71, 0x12, 0x10,
+	0x0a, 0x03, 0x73, 0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73,
+	0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64,
+	0x12, 0x19, 0x0a, 0x08, 0x63, 0x65, 0x72, 0x74, 0x5f, 0x70, 0x65, 0x6d, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x0c, 0x52, 0x07, 0x63, 0x65, 0x72, 0x74, 0x50, 0x65, 0x6d, 0x12, 0x1b, 0x0a, 0x09, 0x73,
+	0x76, 0x63, 0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0d, 0x52, 0x08,
+	0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x70, 0x6c,
+	0x61, 0x63, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x72, 0x65, 0x70, 0x6c, 0x61,
+	0x63, 0x65, 0x22, 0x44, 0x0a, 0x0d, 0x50, 0x6f, 0x6f, 0x6c, 0x41, 0x64, 0x64, 0x43, 0x41, 0x52,
+	0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x1b, 0x0a, 0x09, 0x70,
+	0x6f, 0x6f, 0x6c, 0x5f, 0x75, 0x75, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
+	0x70, 0x6f, 0x6f, 0x6c, 0x55, 0x75, 0x69, 0x64, 0x22, 0x84, 0x01, 0x0a, 0x0f, 0x50, 0x6f, 0x6f,
+	0x6c, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x41, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03,
+	0x73, 0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x0e,
+	0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x20,
+	0x0a, 0x0b, 0x66, 0x69, 0x6e, 0x67, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x0b, 0x66, 0x69, 0x6e, 0x67, 0x65, 0x72, 0x70, 0x72, 0x69, 0x6e, 0x74,
+	0x12, 0x10, 0x0a, 0x03, 0x61, 0x6c, 0x6c, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x03, 0x61,
+	0x6c, 0x6c, 0x12, 0x1b, 0x0a, 0x09, 0x73, 0x76, 0x63, 0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18,
+	0x05, 0x20, 0x03, 0x28, 0x0d, 0x52, 0x08, 0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x22,
+	0x6c, 0x0a, 0x10, 0x50, 0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x41, 0x52,
+	0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x23, 0x0a, 0x0d, 0x63,
+	0x65, 0x72, 0x74, 0x73, 0x5f, 0x72, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x64, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x05, 0x52, 0x0c, 0x63, 0x65, 0x72, 0x74, 0x73, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x64,
+	0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6f, 0x6f, 0x6c, 0x5f, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x6f, 0x6c, 0x55, 0x75, 0x69, 0x64, 0x22, 0x59, 0x0a,
+	0x18, 0x50, 0x6f, 0x6f, 0x6c, 0x47, 0x65, 0x74, 0x43, 0x65, 0x72, 0x74, 0x57, 0x61, 0x74, 0x65,
+	0x72, 0x6d, 0x61, 0x72, 0x6b, 0x73, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x79, 0x73,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x0e, 0x0a, 0x02, 0x69,
+	0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x1b, 0x0a, 0x09, 0x73,
+	0x76, 0x63, 0x5f, 0x72, 0x61, 0x6e, 0x6b, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0d, 0x52, 0x08,
+	0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b, 0x73, 0x22, 0x70, 0x0a, 0x19, 0x50, 0x6f, 0x6f, 0x6c,
+	0x47, 0x65, 0x74, 0x43, 0x65, 0x72, 0x74, 0x57, 0x61, 0x74, 0x65, 0x72, 0x6d, 0x61, 0x72, 0x6b,
+	0x73, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x1e, 0x0a,
+	0x0a, 0x77, 0x61, 0x74, 0x65, 0x72, 0x6d, 0x61, 0x72, 0x6b, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0c, 0x52, 0x0a, 0x77, 0x61, 0x74, 0x65, 0x72, 0x6d, 0x61, 0x72, 0x6b, 0x73, 0x12, 0x1b, 0x0a,
+	0x09, 0x70, 0x6f, 0x6f, 0x6c, 0x5f, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x08, 0x70, 0x6f, 0x6f, 0x6c, 0x55, 0x75, 0x69, 0x64, 0x22, 0xed, 0x01, 0x0a, 0x13, 0x50,
+	0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x76, 0x6f, 0x6b, 0x65, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x52,
+	0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x03, 0x73, 0x79, 0x73, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x02, 0x69, 0x64, 0x12, 0x0e, 0x0a, 0x02, 0x63, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x02, 0x63, 0x6e, 0x12, 0x1b, 0x0a, 0x09, 0x73, 0x76, 0x63, 0x5f, 0x72, 0x61, 0x6e, 0x6b,
+	0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0d, 0x52, 0x08, 0x73, 0x76, 0x63, 0x52, 0x61, 0x6e, 0x6b,
+	0x73, 0x12, 0x42, 0x0a, 0x0a, 0x65, 0x76, 0x69, 0x63, 0x74, 0x5f, 0x6d, 0x6f, 0x64, 0x65, 0x18,
+	0x05, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x23, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x50, 0x6f, 0x6f,
+	0x6c, 0x52, 0x65, 0x76, 0x6f, 0x6b, 0x65, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x52, 0x65, 0x71,
+	0x2e, 0x45, 0x76, 0x69, 0x63, 0x74, 0x4d, 0x6f, 0x64, 0x65, 0x52, 0x09, 0x65, 0x76, 0x69, 0x63,
+	0x74, 0x4d, 0x6f, 0x64, 0x65, 0x22, 0x43, 0x0a, 0x09, 0x45, 0x76, 0x69, 0x63, 0x74, 0x4d, 0x6f,
+	0x64, 0x65, 0x12, 0x11, 0x0a, 0x0d, 0x45, 0x56, 0x49, 0x43, 0x54, 0x5f, 0x44, 0x45, 0x46, 0x41,
+	0x55, 0x4c, 0x54, 0x10, 0x00, 0x12, 0x13, 0x0a, 0x0f, 0x45, 0x56, 0x49, 0x43, 0x54, 0x5f, 0x50,
+	0x4f, 0x4f, 0x4c, 0x5f, 0x57, 0x49, 0x44, 0x45, 0x10, 0x01, 0x12, 0x0e, 0x0a, 0x0a, 0x45, 0x56,
+	0x49, 0x43, 0x54, 0x5f, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x02, 0x22, 0xcd, 0x01, 0x0a, 0x14, 0x50,
+	0x6f, 0x6f, 0x6c, 0x52, 0x65, 0x76, 0x6f, 0x6b, 0x65, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x52,
+	0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x2b, 0x0a, 0x11, 0x77,
+	0x61, 0x74, 0x65, 0x72, 0x6d, 0x61, 0x72, 0x6b, 0x5f, 0x72, 0x66, 0x63, 0x33, 0x33, 0x33, 0x39,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x10, 0x77, 0x61, 0x74, 0x65, 0x72, 0x6d, 0x61, 0x72,
+	0x6b, 0x52, 0x66, 0x63, 0x33, 0x33, 0x33, 0x39, 0x12, 0x1b, 0x0a, 0x09, 0x70, 0x6f, 0x6f, 0x6c,
+	0x5f, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x70, 0x6f, 0x6f,
+	0x6c, 0x55, 0x75, 0x69, 0x64, 0x12, 0x32, 0x0a, 0x15, 0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x73,
+	0x5f, 0x65, 0x76, 0x69, 0x63, 0x74, 0x65, 0x64, 0x5f, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x04,
+	0x20, 0x01, 0x28, 0x05, 0x52, 0x13, 0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x73, 0x45, 0x76, 0x69,
+	0x63, 0x74, 0x65, 0x64, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x12, 0x1f, 0x0a, 0x0b, 0x65, 0x76, 0x69,
+	0x63, 0x74, 0x5f, 0x73, 0x63, 0x6f, 0x70, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a,
+	0x65, 0x76, 0x69, 0x63, 0x74, 0x53, 0x63, 0x6f, 0x70, 0x65, 0x2a, 0x25, 0x0a, 0x10, 0x53, 0x74,
+	0x6f, 0x72, 0x61, 0x67, 0x65, 0x4d, 0x65, 0x64, 0x69, 0x61, 0x54, 0x79, 0x70, 0x65, 0x12, 0x07,
+	0x0a, 0x03, 0x53, 0x43, 0x4d, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04, 0x4e, 0x56, 0x4d, 0x45, 0x10,
+	0x01, 0x2a, 0x5d, 0x0a, 0x10, 0x50, 0x6f, 0x6f, 0x6c, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65,
+	0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0c, 0x0a, 0x08, 0x43, 0x72, 0x65, 0x61, 0x74, 0x69, 0x6e,
+	0x67, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x52, 0x65, 0x61, 0x64, 0x79, 0x10, 0x01, 0x12, 0x0e,
+	0x0a, 0x0a, 0x44, 0x65, 0x73, 0x74, 0x72, 0x6f, 0x79, 0x69, 0x6e, 0x67, 0x10, 0x02, 0x12, 0x13,
+	0x0a, 0x0f, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x73, 0x45, 0x78, 0x63, 0x6c, 0x75, 0x64, 0x65,
+	0x64, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10, 0x04,
+	0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64,
+	0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73,
+	0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f,
+	0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -3464,73 +4284,85 @@ func file_mgmt_pool_proto_rawDescGZIP() []byte {
 	return file_mgmt_pool_proto_rawDescData
 }
 
-var file_mgmt_pool_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_mgmt_pool_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_mgmt_pool_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_mgmt_pool_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_mgmt_pool_proto_goTypes = []interface{}{
 	(StorageMediaType)(0),                // 0: mgmt.StorageMediaType
 	(PoolServiceState)(0),                // 1: mgmt.PoolServiceState
 	(PoolRebuildStatus_State)(0),         // 2: mgmt.PoolRebuildStatus.State
 	(PoolQueryTargetInfo_TargetState)(0), // 3: mgmt.PoolQueryTargetInfo.TargetState
-	(*PoolCreateReq)(nil),                // 4: mgmt.PoolCreateReq
-	(*PoolCreateResp)(nil),               // 5: mgmt.PoolCreateResp
-	(*PoolDestroyReq)(nil),               // 6: mgmt.PoolDestroyReq
-	(*PoolDestroyResp)(nil),              // 7: mgmt.PoolDestroyResp
-	(*PoolEvictReq)(nil),                 // 8: mgmt.PoolEvictReq
-	(*PoolEvictResp)(nil),                // 9: mgmt.PoolEvictResp
-	(*PoolExcludeReq)(nil),               // 10: mgmt.PoolExcludeReq
-	(*PoolExcludeResp)(nil),              // 11: mgmt.PoolExcludeResp
-	(*PoolDrainReq)(nil),                 // 12: mgmt.PoolDrainReq
-	(*PoolDrainResp)(nil),                // 13: mgmt.PoolDrainResp
-	(*PoolExtendReq)(nil),                // 14: mgmt.PoolExtendReq
-	(*PoolExtendResp)(nil),               // 15: mgmt.PoolExtendResp
-	(*PoolReintReq)(nil),                 // 16: mgmt.PoolReintReq
-	(*PoolReintResp)(nil),                // 17: mgmt.PoolReintResp
-	(*ListPoolsReq)(nil),                 // 18: mgmt.ListPoolsReq
-	(*ListPoolsResp)(nil),                // 19: mgmt.ListPoolsResp
-	(*ListContReq)(nil),                  // 20: mgmt.ListContReq
-	(*ListContResp)(nil),                 // 21: mgmt.ListContResp
-	(*PoolQueryReq)(nil),                 // 22: mgmt.PoolQueryReq
-	(*StorageUsageStats)(nil),            // 23: mgmt.StorageUsageStats
-	(*PoolRebuildStatus)(nil),            // 24: mgmt.PoolRebuildStatus
-	(*PoolQueryResp)(nil),                // 25: mgmt.PoolQueryResp
-	(*PoolProperty)(nil),                 // 26: mgmt.PoolProperty
-	(*PoolSetPropReq)(nil),               // 27: mgmt.PoolSetPropReq
-	(*PoolSetPropResp)(nil),              // 28: mgmt.PoolSetPropResp
-	(*PoolGetPropReq)(nil),               // 29: mgmt.PoolGetPropReq
-	(*PoolGetPropResp)(nil),              // 30: mgmt.PoolGetPropResp
-	(*PoolUpgradeReq)(nil),               // 31: mgmt.PoolUpgradeReq
-	(*PoolQueryTargetReq)(nil),           // 32: mgmt.PoolQueryTargetReq
-	(*StorageTargetUsage)(nil),           // 33: mgmt.StorageTargetUsage
-	(*PoolQueryTargetInfo)(nil),          // 34: mgmt.PoolQueryTargetInfo
-	(*PoolQueryTargetResp)(nil),          // 35: mgmt.PoolQueryTargetResp
-	(*PoolRebuildStartReq)(nil),          // 36: mgmt.PoolRebuildStartReq
-	(*PoolRebuildStopReq)(nil),           // 37: mgmt.PoolRebuildStopReq
-	(*PoolSelfHealEvalReq)(nil),          // 38: mgmt.PoolSelfHealEvalReq
-	(*ListPoolsResp_Pool)(nil),           // 39: mgmt.ListPoolsResp.Pool
-	(*ListContResp_Cont)(nil),            // 40: mgmt.ListContResp.Cont
+	(PoolRevokeClientReq_EvictMode)(0),   // 4: mgmt.PoolRevokeClientReq.EvictMode
+	(*PoolCreateReq)(nil),                // 5: mgmt.PoolCreateReq
+	(*PoolCreateResp)(nil),               // 6: mgmt.PoolCreateResp
+	(*PoolDestroyReq)(nil),               // 7: mgmt.PoolDestroyReq
+	(*PoolDestroyResp)(nil),              // 8: mgmt.PoolDestroyResp
+	(*PoolEvictReq)(nil),                 // 9: mgmt.PoolEvictReq
+	(*PoolEvictResp)(nil),                // 10: mgmt.PoolEvictResp
+	(*PoolExcludeReq)(nil),               // 11: mgmt.PoolExcludeReq
+	(*PoolExcludeResp)(nil),              // 12: mgmt.PoolExcludeResp
+	(*PoolDrainReq)(nil),                 // 13: mgmt.PoolDrainReq
+	(*PoolDrainResp)(nil),                // 14: mgmt.PoolDrainResp
+	(*PoolExtendReq)(nil),                // 15: mgmt.PoolExtendReq
+	(*PoolExtendResp)(nil),               // 16: mgmt.PoolExtendResp
+	(*PoolReintReq)(nil),                 // 17: mgmt.PoolReintReq
+	(*PoolReintResp)(nil),                // 18: mgmt.PoolReintResp
+	(*ListPoolsReq)(nil),                 // 19: mgmt.ListPoolsReq
+	(*ListPoolsResp)(nil),                // 20: mgmt.ListPoolsResp
+	(*ListContReq)(nil),                  // 21: mgmt.ListContReq
+	(*ListContResp)(nil),                 // 22: mgmt.ListContResp
+	(*PoolQueryReq)(nil),                 // 23: mgmt.PoolQueryReq
+	(*StorageUsageStats)(nil),            // 24: mgmt.StorageUsageStats
+	(*PoolRebuildStatus)(nil),            // 25: mgmt.PoolRebuildStatus
+	(*PoolQueryResp)(nil),                // 26: mgmt.PoolQueryResp
+	(*PoolProperty)(nil),                 // 27: mgmt.PoolProperty
+	(*PoolSetPropReq)(nil),               // 28: mgmt.PoolSetPropReq
+	(*PoolSetPropResp)(nil),              // 29: mgmt.PoolSetPropResp
+	(*PoolGetPropReq)(nil),               // 30: mgmt.PoolGetPropReq
+	(*PoolGetPropResp)(nil),              // 31: mgmt.PoolGetPropResp
+	(*PoolUpgradeReq)(nil),               // 32: mgmt.PoolUpgradeReq
+	(*PoolQueryTargetReq)(nil),           // 33: mgmt.PoolQueryTargetReq
+	(*StorageTargetUsage)(nil),           // 34: mgmt.StorageTargetUsage
+	(*PoolQueryTargetInfo)(nil),          // 35: mgmt.PoolQueryTargetInfo
+	(*PoolQueryTargetResp)(nil),          // 36: mgmt.PoolQueryTargetResp
+	(*PoolRebuildStartReq)(nil),          // 37: mgmt.PoolRebuildStartReq
+	(*PoolRebuildStopReq)(nil),           // 38: mgmt.PoolRebuildStopReq
+	(*PoolSelfHealEvalReq)(nil),          // 39: mgmt.PoolSelfHealEvalReq
+	(*PoolGetCAReq)(nil),                 // 40: mgmt.PoolGetCAReq
+	(*PoolGetCAResp)(nil),                // 41: mgmt.PoolGetCAResp
+	(*PoolAddCAReq)(nil),                 // 42: mgmt.PoolAddCAReq
+	(*PoolAddCAResp)(nil),                // 43: mgmt.PoolAddCAResp
+	(*PoolRemoveCAReq)(nil),              // 44: mgmt.PoolRemoveCAReq
+	(*PoolRemoveCAResp)(nil),             // 45: mgmt.PoolRemoveCAResp
+	(*PoolGetCertWatermarksReq)(nil),     // 46: mgmt.PoolGetCertWatermarksReq
+	(*PoolGetCertWatermarksResp)(nil),    // 47: mgmt.PoolGetCertWatermarksResp
+	(*PoolRevokeClientReq)(nil),          // 48: mgmt.PoolRevokeClientReq
+	(*PoolRevokeClientResp)(nil),         // 49: mgmt.PoolRevokeClientResp
+	(*ListPoolsResp_Pool)(nil),           // 50: mgmt.ListPoolsResp.Pool
+	(*ListContResp_Cont)(nil),            // 51: mgmt.ListContResp.Cont
 }
 var file_mgmt_pool_proto_depIdxs = []int32{
-	26, // 0: mgmt.PoolCreateReq.properties:type_name -> mgmt.PoolProperty
-	39, // 1: mgmt.ListPoolsResp.pools:type_name -> mgmt.ListPoolsResp.Pool
-	40, // 2: mgmt.ListContResp.containers:type_name -> mgmt.ListContResp.Cont
+	27, // 0: mgmt.PoolCreateReq.properties:type_name -> mgmt.PoolProperty
+	50, // 1: mgmt.ListPoolsResp.pools:type_name -> mgmt.ListPoolsResp.Pool
+	51, // 2: mgmt.ListContResp.containers:type_name -> mgmt.ListContResp.Cont
 	0,  // 3: mgmt.StorageUsageStats.media_type:type_name -> mgmt.StorageMediaType
 	2,  // 4: mgmt.PoolRebuildStatus.state:type_name -> mgmt.PoolRebuildStatus.State
 	2,  // 5: mgmt.PoolRebuildStatus.derived_state:type_name -> mgmt.PoolRebuildStatus.State
-	24, // 6: mgmt.PoolQueryResp.rebuild:type_name -> mgmt.PoolRebuildStatus
-	23, // 7: mgmt.PoolQueryResp.tier_stats:type_name -> mgmt.StorageUsageStats
+	25, // 6: mgmt.PoolQueryResp.rebuild:type_name -> mgmt.PoolRebuildStatus
+	24, // 7: mgmt.PoolQueryResp.tier_stats:type_name -> mgmt.StorageUsageStats
 	1,  // 8: mgmt.PoolQueryResp.state:type_name -> mgmt.PoolServiceState
-	26, // 9: mgmt.PoolSetPropReq.properties:type_name -> mgmt.PoolProperty
-	26, // 10: mgmt.PoolGetPropReq.properties:type_name -> mgmt.PoolProperty
-	26, // 11: mgmt.PoolGetPropResp.properties:type_name -> mgmt.PoolProperty
+	27, // 9: mgmt.PoolSetPropReq.properties:type_name -> mgmt.PoolProperty
+	27, // 10: mgmt.PoolGetPropReq.properties:type_name -> mgmt.PoolProperty
+	27, // 11: mgmt.PoolGetPropResp.properties:type_name -> mgmt.PoolProperty
 	0,  // 12: mgmt.StorageTargetUsage.media_type:type_name -> mgmt.StorageMediaType
 	3,  // 13: mgmt.PoolQueryTargetInfo.state:type_name -> mgmt.PoolQueryTargetInfo.TargetState
-	33, // 14: mgmt.PoolQueryTargetInfo.space:type_name -> mgmt.StorageTargetUsage
-	34, // 15: mgmt.PoolQueryTargetResp.infos:type_name -> mgmt.PoolQueryTargetInfo
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	34, // 14: mgmt.PoolQueryTargetInfo.space:type_name -> mgmt.StorageTargetUsage
+	35, // 15: mgmt.PoolQueryTargetResp.infos:type_name -> mgmt.PoolQueryTargetInfo
+	4,  // 16: mgmt.PoolRevokeClientReq.evict_mode:type_name -> mgmt.PoolRevokeClientReq.EvictMode
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_mgmt_pool_proto_init() }
@@ -3960,7 +4792,7 @@ func file_mgmt_pool_proto_init() {
 			}
 		}
 		file_mgmt_pool_proto_msgTypes[35].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ListPoolsResp_Pool); i {
+			switch v := v.(*PoolGetCAReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3972,6 +4804,126 @@ func file_mgmt_pool_proto_init() {
 			}
 		}
 		file_mgmt_pool_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolGetCAResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolAddCAReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[38].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolAddCAResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[39].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolRemoveCAReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[40].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolRemoveCAResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[41].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolGetCertWatermarksReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[42].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolGetCertWatermarksResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[43].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolRevokeClientReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[44].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PoolRevokeClientResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[45].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListPoolsResp_Pool); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_pool_proto_msgTypes[46].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ListContResp_Cont); i {
 			case 0:
 				return &v.state
@@ -3994,8 +4946,8 @@ func file_mgmt_pool_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_mgmt_pool_proto_rawDesc,
-			NumEnums:      4,
-			NumMessages:   37,
+			NumEnums:      5,
+			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

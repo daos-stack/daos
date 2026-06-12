@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -348,5 +349,28 @@ ds_sec_get_admin_cont_capabilities(void);
  */
 int
 ds_sec_creds_are_same_user(d_iov_t *cred_x, d_iov_t *cred_y);
+
+/**
+ * Validate a per-pool node certificate and proof-of-possession against the
+ * pool's CA bundle and per-CN revocation watermarks via control-plane dRPC.
+ *
+ * \param[in]	pool_uuid		Pool UUID
+ * \param[in]	pool_ca			PEM-encoded pool intermediate CA bundle (required)
+ * \param[in]	machine			Credential machine name for CN cross-check (may be NULL)
+ * \param[in]	cert_watermarks		Per-CN revocation watermarks (may be NULL)
+ * \param[in]	node_cert		PEM-encoded node certificate (NULL/empty → -DER_NO_CERT)
+ * \param[in]	node_cert_pop		PoP signature (required)
+ * \param[in]	node_cert_payload	Signed PoP payload (required)
+ *
+ * \return	0		Success
+ *		-DER_NO_CERT	No node certificate presented
+ *		-DER_BAD_CERT	Chain validation failed or cert revoked
+ *		-DER_NO_PERM	PoP verification failed
+ *		-DER_*		Other dRPC transport or unmarshal errors
+ */
+int
+ds_sec_validate_node_cert(uuid_t pool_uuid, d_iov_t *pool_ca, const char *machine,
+			  d_iov_t *cert_watermarks, d_iov_t *node_cert, d_iov_t *node_cert_pop,
+			  d_iov_t *node_cert_payload);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */

@@ -1,3 +1,7 @@
+# (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 # DAOS agent configuration file.
 #
 # Location of this configuration file is determined by first checking for the
@@ -183,3 +187,8 @@
 #  -
 #    iface: ib3
 #    domain: mlx5_3
+
+## Directory containing per-pool node certificates.
+## Agent looks for <pool_uuid>.crt and <pool_uuid>.key in this directory.
+## Default: /etc/daos/certs/<system_name>/node_certs/
+#node_cert_dir: /etc/daos/certs/daos_server/node_certs/

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package security
 
 import (
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -24,7 +26,59 @@ const (
 	MaxGroupKeyPerm    os.FileMode = 0440
 	MaxCertPerm        os.FileMode = 0664
 	MaxDirPerm         os.FileMode = 0750
+
+	// CertCNPrefixNode marks a node-scoped pool cert; suffix must match
+	// the local machine name.
+	CertCNPrefixNode = "node:"
+	// CertCNPrefixTenant marks a tenant-scoped pool cert shared across nodes.
+	CertCNPrefixTenant = "tenant:"
+	// CertCNSuffixMaxLen caps the portion of a pool cert CN after the
+	// prefix, matching the RFC 1035 maximum DNS name length.
+	CertCNSuffixMaxLen = 253
 )
+
+// ValidatePoolCertCN parses a pool cert CN ("node:<suffix>" or
+// "tenant:<suffix>"). Suffix is restricted to DNS-compatible chars to
+// stop hostile values reaching cert-gen or watermark paths.
+func ValidatePoolCertCN(cn string) (prefix, suffix string, err error) {
+	switch {
+	case strings.HasPrefix(cn, CertCNPrefixNode):
+		prefix = CertCNPrefixNode
+	case strings.HasPrefix(cn, CertCNPrefixTenant):
+		prefix = CertCNPrefixTenant
+	default:
+		return "", "", fmt.Errorf("CN %q must start with %q or %q",
+			cn, CertCNPrefixNode, CertCNPrefixTenant)
+	}
+	suffix = cn[len(prefix):]
+	if suffix == "" {
+		return "", "", fmt.Errorf("CN %q has empty suffix", cn)
+	}
+	if len(suffix) > CertCNSuffixMaxLen {
+		return "", "", fmt.Errorf("CN suffix %q exceeds max length %d",
+			suffix, CertCNSuffixMaxLen)
+	}
+	isAlnum := func(c byte) bool {
+		return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+	}
+	if !isAlnum(suffix[0]) || !isAlnum(suffix[len(suffix)-1]) {
+		return "", "", fmt.Errorf("CN suffix %q must start and end with an alphanumeric", suffix)
+	}
+	for i := 0; i < len(suffix); i++ {
+		c := suffix[i]
+		switch {
+		case isAlnum(c):
+		case c == '.' || c == '-' || c == '_':
+			if i > 0 && !isAlnum(suffix[i-1]) {
+				return "", "", fmt.Errorf("CN suffix %q has consecutive separators", suffix)
+			}
+		default:
+			return "", "", fmt.Errorf("CN suffix %q contains disallowed character %q",
+				suffix, c)
+		}
+	}
+	return prefix, suffix, nil
+}
 
 type badPermsError struct {
 	filename string
@@ -193,8 +247,9 @@ func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err == nil {
 		switch key := key.(type) {
-		// TODO: Support key types other than RSA
 		case *rsa.PrivateKey:
+			return key, nil
+		case *ecdsa.PrivateKey:
 			return key, nil
 		default:
 			return nil, fmt.Errorf("%s contains an unsupported private key type",
