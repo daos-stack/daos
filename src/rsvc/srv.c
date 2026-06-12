@@ -1223,6 +1223,8 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 		if (rc != 0)
 			break;
 
+		D_INFO("%s: adding replica " RDB_F_RID "\n", svc->s_name, RDB_P_RID(id));
+
 		create_params.scp_bootstrap      = false;
 		create_params.scp_size           = size;
 		create_params.scp_vos_df_version = vos_df_version;
