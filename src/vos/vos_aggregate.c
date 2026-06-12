@@ -2819,6 +2819,134 @@ free_agg_data:
 }
 
 int
+vos_aggregate_obj(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_range_t *epr,
+		  int (*yield_func)(void *arg), void *yield_arg, uint32_t flags,
+		  unsigned int *out_flags)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_agg_metrics	*vam  = agg_cont2metrics(cont);
+	struct agg_data		*ad;
+	int			 rc;
+	bool			 run_agg = false;
+	int			 blocks  = 0;
+
+	D_DEBUG(DB_EPC, "Aggregate "DF_UOID" epr: "DF_X64" -> "DF_X64"\n",
+		DP_UOID(oid), epr->epr_lo, epr->epr_hi);
+	D_ASSERT(epr != NULL);
+	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
+		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
+		  epr->epr_lo, epr->epr_hi);
+
+	D_ALLOC_PTR(ad);
+	if (ad == NULL)
+		return -DER_NOMEM;
+
+	rc = aggregate_enter(cont, AGG_MODE_AGGREGATE, epr);
+	if (rc)
+		goto free_agg_data;
+
+	if (flags & VOS_AGG_FL_FORCE_SCAN)
+		ad->ad_agg_param.ap_filter_epoch = epr->epr_lo;
+	else
+		ad->ad_agg_param.ap_filter_epoch = cont->vc_cont_df->cd_hae;
+
+	/* Set iteration parameters: scope to a single OID, recurse from DKEY. */
+	ad->ad_iter_param.ip_hdl = coh;
+	ad->ad_iter_param.ip_oid = oid;
+	ad->ad_iter_param.ip_epr = *epr;
+	ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_RR;
+	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_COVERED;
+	ad->ad_iter_param.ip_filter_cb = vos_agg_filter;
+	ad->ad_iter_param.ip_filter_arg = &ad->ad_agg_param;
+
+	/* Set aggregation parameters */
+	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
+	ad->ad_agg_param.ap_coh = coh;
+	/* OBJ-level pre-cb (vos_agg_obj) will not run since iteration starts
+	 * at DKEY; set the current OID explicitly so SV/EV aggregation knows
+	 * which object it is operating on.
+	 */
+	ad->ad_agg_param.ap_oid = oid;
+	credits_set(cont->vc_pool, &ad->ad_agg_param.ap_credits, true);
+	ad->ad_agg_param.ap_discard = 0;
+	ad->ad_agg_param.ap_yield_func = yield_func;
+	ad->ad_agg_param.ap_yield_arg = yield_arg;
+	run_agg = true;
+	merge_window_init(&ad->ad_agg_param.ap_window);
+	ad->ad_agg_param.ap_flags = flags;
+
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
+retry:
+	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_DKEY, true, &ad->ad_anchors,
+			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
+			 &ad->ad_agg_param, NULL);
+	if (rc == -DER_BUSY) {
+		/* Hit a conflict with obj_discard. Yield and retry. */
+		if (vam && vam->vam_agg_blocked)
+			d_tm_inc_counter(vam->vam_agg_blocked, 1);
+		blocks++;
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
+			 "VOS aggregation hit conflict (nr=%d), retrying...\n", blocks);
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
+		vos_aggregate_yield(&ad->ad_agg_param);
+		goto retry;
+	} else if (rc != 0 || ad->ad_agg_param.ap_nospc_err) {
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
+	} else if (ad->ad_agg_param.ap_csum_err) {
+		rc = -DER_CSUM;
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
+	}
+
+	/*
+	 * Note: cd_hae is intentionally NOT advanced here. A per-object
+	 * aggregation call cannot safely advance the container barrier
+	 * because other objects in the same epoch range may not have been
+	 * processed yet. The caller is responsible for advancing cd_hae
+	 * via vos_aggregate_advance_hae() once it has driven aggregation
+	 * across all objects in the window and observed no IN_PROGRESS
+	 * (uncommitted DTX) condition.
+	 */
+	if (out_flags != NULL && ad->ad_agg_param.ap_in_progress)
+		*out_flags |= VOS_AGG_OUT_IN_PROGRESS;
+
+	aggregate_exit(cont, AGG_MODE_AGGREGATE);
+
+	if (run_agg && merge_window_status(&ad->ad_agg_param.ap_window) != MW_CLOSED)
+		D_ASSERTF(false, "Merge window resource leaked.\n");
+
+free_agg_data:
+	D_FREE(ad);
+
+	if (rc < 0) {
+		if (vam && vam->vam_fail_count)
+			d_tm_inc_counter(vam->vam_fail_count, 1);
+	}
+	umem_heap_gc(&cont->vc_pool->vp_umm);
+
+	return rc;
+}
+
+int
+vos_aggregate_advance_hae(daos_handle_t coh, daos_epoch_t epoch)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+
+	if (cont == NULL)
+		return -DER_NO_HDL;
+
+	/*
+	 * cd_hae is monotonic: advance only. When aggregating for snapshot
+	 * deletion, the requested epoch may be smaller than the current
+	 * cd_hae and is silently ignored, mirroring the behavior of
+	 * vos_aggregate() which only advances when epr->epr_hi > cd_hae.
+	 */
+	if (cont->vc_cont_df->cd_hae < epoch)
+		cont->vc_cont_df->cd_hae = epoch;
+
+	return 0;
+}
+
+int
 vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    int (*yield_func)(void *arg), void *yield_arg)
 {
