@@ -18,6 +18,11 @@ ftest-only: &ftest-only
   stop_on_match: True
   need-unit-test: False
 
+# Run only cart ftest for cart ftest C utilities
+src/tests/ftest/cart/*.[ch]:
+  test-tag: cart
+  <<: *ftest-only
+
 # Special handling for ftest, defaulting to pr
 src/tests/ftest*:
   <<: *ftest-only
@@ -180,8 +185,14 @@ src/tests/suite/:
 
 
 # Individual code areas
+src/cart:
+  test-tag: cart
+
 src/client/dfs/:
   test-tag: dfs
+
+src/client/pydaos/torch/:
+  test-tag: pytorch
 
 # Everything runs pr unless a previous entry was matched with stop_on_match
 .*:
