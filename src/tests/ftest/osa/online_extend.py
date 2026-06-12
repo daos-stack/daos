@@ -1,5 +1,6 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  Copyright 2020-2023 Intel Corporation.
+  Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -79,7 +80,7 @@ class OSAOnlineExtend(OSAUtils):
 
             # Start the additional servers and extend the pool
             self.log.info("Extra Servers = %s", self.extra_servers)
-            self.start_additional_servers(self.extra_servers)
+            self.start_additional_servers(self.extra_servers, format_storage=False)
             if self.test_during_aggregation is True:
                 for _ in range(0, 2):
                     self.run_ior_thread("Write", oclass, test_seq)
