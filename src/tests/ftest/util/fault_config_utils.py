@@ -1,5 +1,6 @@
 """
-  (C) Copyright 2019-2024 Intel Corporation.
+  Copyright 2019-2024 Intel Corporation.
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -235,6 +236,66 @@ FAULTS = {
         'probability_y': '100',
         'interval': '1',
         'max_faults': '1'},
+    'DLCK_FAULT_CREATE_LOG_DIR': {
+        'id': '131328',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_CREATE_POOL_DIR': {
+        'id': '131329',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_START': {
+        'id': '131330',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_EXEC': {
+        'id': '131331',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_JOIN': {
+        'id': '131332',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_STOP': {
+        'id': '131333',
+        'interval': '1',
+        'max_faults': '1'},
+    'DAOS_FAULT_POOL_NVME_HEALTH': {
+        'id': '131584',
+        'interval': '2',  # skip sys_db
+        'max_faults': '1'},
+    'DAOS_FAULT_POOL_OPEN_BIO': {
+        'id': '131585'},
+    'DAOS_FAULT_POOL_OPEN_UMEM': {
+        'id': '131586',
+        'interval': '2'},  # skip sys_db
+    'DAOS_FAULT_POOL_OPEN_MAGIC': {
+        'id': '131587',
+        'interval': '2'},  # skip sys_db
+    'DAOS_FAULT_POOL_OPEN_VERSION': {
+        'id': '131588',
+        'interval': '2'},  # skip sys_db
+    'DAOS_FAULT_POOL_OPEN_UUID': {
+        'id': '131589',
+        'interval': '2'},  # skip sys_db
+    'DAOS_FAULT_BTREE_OPEN_INV_CLASS': {
+        'id': '131590',
+        'interval': '28',  # containers tree fine-tuned
+        'max_faults': '1'},
+    'DAOS_FAULT_BTREE_OPEN_UNREG_CLASS': {
+        'id': '131591',
+        'interval': '29',
+        'max_faults': '1'},
+    'DAOS_FAULT_BTREE_FEATURES': {
+        'id': '131592',
+        'interval': '28',
+        'max_faults': '1'},
+    'DAOS_FAULT_POOL_EXT_PADDING': {
+        'id': '131593',
+        'interval': '1'},
+    'DAOS_FAULT_POOL_EXT_RESERVED': {
+        'id': '131594',
+        'interval': '1'},
 }
 
 
@@ -254,6 +315,12 @@ class FaultInjection():
         self.fault_file = None
         self._test_dir = None
         self._fault_list = []
+
+    def get_faults_dict(self):
+        """Get the predefined fault dictionary.
+        Returns: dict: The fault dictionary
+        """
+        return FAULTS
 
     def write_fault_file(self, on_the_fly_fault=None):
         """Write out a fault injection config file.
