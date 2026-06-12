@@ -29,9 +29,9 @@ class StorageTiers(TestWithServers):
             Does not test or rely on actual hardware being present.
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=server,storage,storage_tiers
-        :avocado: tags=StorageTiers,test_tiers
+        :avocado: tags=StorageTiers,test_tiers,stage_ftest
         """
         expected = []
         for engine in range(2):
