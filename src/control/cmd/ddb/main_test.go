@@ -46,12 +46,37 @@ func TestDdb_parseOpts(t *testing.T) {
 			expErr: errHelpRequested,
 		},
 		"Unknown commands with help": {
-			args:   []string{"foo", "--help"},
-			expErr: errUnknownCmd,
+			// With PassAfterNonOption, --help that appears after the subcommand name is no longer
+			// processed by go-flags. It lands in RunCmdArgs and is forwarded to grumble, which
+			// handles it (and returns an unknown-command error for "foo"). The full flow is
+			// exercised in TestDdb_runDdb.
+			args: []string{"foo", "--help"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.Args.RunCmd != "foo" {
+					return fmt.Errorf("expected RunCmd to be 'foo', got %q", opts.Args.RunCmd)
+				}
+				if len(opts.Args.RunCmdArgs) == 0 || opts.Args.RunCmdArgs[0] != "--help" {
+					return fmt.Errorf("expected RunCmdArgs[0] to be '--help', got %v", opts.Args.RunCmdArgs)
+				}
+				return nil
+			},
 		},
 		"Unknown commands with help and opt": {
-			args:   []string{"-w", "foo", "--help"},
-			expErr: errUnknownCmd,
+			// Same as above: -w is consumed globally (it appears before the subcommand),
+			// while --help after "foo" goes into RunCmdArgs.
+			args: []string{"-w", "foo", "--help"},
+			checkFunc: func(opts *cliOptions) error {
+				if !opts.WriteMode {
+					return fmt.Errorf("expected WriteMode to be true")
+				}
+				if opts.Args.RunCmd != "foo" {
+					return fmt.Errorf("expected RunCmd to be 'foo', got %q", opts.Args.RunCmd)
+				}
+				if len(opts.Args.RunCmdArgs) == 0 || opts.Args.RunCmdArgs[0] != "--help" {
+					return fmt.Errorf("expected RunCmdArgs[0] to be '--help', got %v", opts.Args.RunCmdArgs)
+				}
+				return nil
+			},
 		},
 		"Default option values": {
 			args: []string{"ls", "-d", "-r"},
@@ -193,6 +218,36 @@ func TestDdb_parseOpts(t *testing.T) {
 				}
 				return nil
 			},
+		},
+		// PassAfterNonOption regression: a known global flag (--db_path) that appears AFTER
+		// the subcommand name must NOT be consumed by go-flags.  It should land in RunCmdArgs
+		// so grumble can process it as a command-level flag.
+		"cmd-level --db_path after subcommand not consumed globally": {
+			args: []string{"rm_pool", "--db_path", "/sysdb", "/mnt/pool/rdb-pool"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.SysdbPath != "" {
+					return fmt.Errorf("SysdbPath should be empty (PassAfterNonOption), got %q", opts.SysdbPath)
+				}
+				if opts.Args.RunCmd != "rm_pool" {
+					return fmt.Errorf("expected RunCmd to be 'rm_pool', got %q", opts.Args.RunCmd)
+				}
+				want := []string{"--db_path", "/sysdb", "/mnt/pool/rdb-pool"}
+				if len(opts.Args.RunCmdArgs) != len(want) {
+					return fmt.Errorf("expected RunCmdArgs %v, got %v", want, opts.Args.RunCmdArgs)
+				}
+				for i, w := range want {
+					if opts.Args.RunCmdArgs[i] != w {
+						return fmt.Errorf("RunCmdArgs[%d]: want %q, got %q", i, w, opts.Args.RunCmdArgs[i])
+					}
+				}
+				return nil
+			},
+		},
+		// PassAfterNonOption does not affect flags that appear BEFORE the subcommand: those
+		// are still consumed globally, so the existing vosPathMissErr validation still fires.
+		"global --db_path before subcommand still consumed and validation fires": {
+			args:   []string{"--db_path=/sysdb", "rm_pool", "/mnt/pool/rdb-pool"},
+			expErr: ddbTestErr(vosPathMissErr),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -337,6 +392,36 @@ func TestDdb_runDdb(t *testing.T) {
 		},
 		"No auto-open for smd_sync": {
 			args: []string{"-s", "/foo/vos-0", "smd_sync"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnMustNotBeCalled
+			},
+		},
+		"No auto-open for rm_pool": {
+			args: []string{"-s", "/foo/vos-0", "rm_pool", "/mnt/rdb-pool"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnMustNotBeCalled
+			},
+		},
+		"No auto-open for close": {
+			args: []string{"-s", "/foo/vos-0", "close"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnMustNotBeCalled
+			},
+		},
+		"No auto-open for prov_mem": {
+			args: []string{"-s", "/foo/vos-0", "prov_mem", "/db", "/mnt"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnMustNotBeCalled
+			},
+		},
+		"No auto-open for dev_list": {
+			args: []string{"-s", "/foo/vos-0", "dev_list", "/db"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnMustNotBeCalled
+			},
+		},
+		"No auto-open for dev_replace": {
+			args: []string{"-s", "/foo/vos-0", "dev_replace", "/db", "old-uuid", "new-uuid"},
 			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnMustNotBeCalled
 			},
