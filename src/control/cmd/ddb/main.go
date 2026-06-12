@@ -365,6 +365,33 @@ func run(ctx *DdbContext, log *logging.LeveledLogger, opts cliOptions, parser *f
 	return result
 }
 
+// runDdb contains the core ddb execution logic. It is separate from main() so
+// that it can be tested without triggering os.Exit. main() handles only
+// OS-level setup (traceback, stdout buffering) and calls exitWithError on
+// failure; runDdb returns errors instead.
+func runDdb(ctx *DdbContext, args []string) error {
+	opts, parser, err := parseOpts(args, ctx)
+	if errors.Is(err, errHelpRequested) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if opts.Version {
+		fmt.Printf("ddb version %s\n", build.DaosVersion)
+		return nil
+	}
+
+	var log *logging.LeveledLogger
+	if log, err = newLogger(opts); err != nil {
+		return errors.Wrap(err, loggerInitErr)
+	}
+	log.Debug("Logging facilities initialized")
+
+	return run(ctx, log, opts, parser)
+}
+
 func main() {
 	// Set the traceback level such that a crash results in
 	// a coredump (when ulimit -c is set appropriately).
@@ -376,26 +403,7 @@ func main() {
 	}
 
 	ctx := &DdbContext{}
-	opts, parser, err := parseOpts(os.Args[1:], ctx)
-	if errors.Is(err, errHelpRequested) {
-		return
-	}
-	if err != nil {
-		exitWithError(err)
-	}
-
-	if opts.Version {
-		fmt.Printf("ddb version %s\n", build.DaosVersion)
-		return
-	}
-
-	log, err := newLogger(opts)
-	if err != nil {
-		exitWithError(errors.Wrap(err, loggerInitErr))
-	}
-	log.Debug("Logging facilities initialized")
-
-	if err = run(ctx, log, opts, parser); err != nil {
+	if err := runDdb(ctx, os.Args[1:]); err != nil {
 		exitWithError(err)
 	}
 }

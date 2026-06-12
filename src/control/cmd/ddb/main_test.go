@@ -1,0 +1,616 @@
+//
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+//go:build test_stubs
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/engine"
+)
+
+func TestDdb_parseOpts(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args      []string
+		checkFunc func(opts *cliOptions) error
+		expStdout []string
+		expErr    error
+	}{
+		"General help message": {
+			args: []string{"--help"},
+			expStdout: []string{
+				"Usage:\n  ddb [OPTIONS] [ddb_command] [ddb_command_args...]\n",
+				"VOS Paths:\n",
+				"Available Commands:\n",
+			},
+			expErr: errHelpRequested,
+		},
+		"General help message with opt": {
+			args: []string{"-w", "--help"},
+			expStdout: []string{
+				"Usage:\n  ddb [OPTIONS] [ddb_command] [ddb_command_args...]\n",
+				"VOS Paths:\n",
+				"Available Commands:\n",
+			},
+			expErr: errHelpRequested,
+		},
+		"Unknown commands with help": {
+			args:   []string{"foo", "--help"},
+			expErr: errUnknownCmd,
+		},
+		"Unknown commands with help and opt": {
+			args:   []string{"-w", "foo", "--help"},
+			expErr: errUnknownCmd,
+		},
+		"Default option values": {
+			args: []string{"ls", "-d", "-r"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.Debug != "" {
+					return fmt.Errorf("expected Debug to be empty, got %q", opts.Debug)
+				}
+				if opts.WriteMode {
+					return fmt.Errorf("expected WriteMode to be false")
+				}
+				if opts.CmdFile != "" {
+					return fmt.Errorf("expected CmdFile to be empty")
+				}
+				if opts.SysdbPath != "" {
+					return fmt.Errorf("expected SysdbPath to be empty")
+				}
+				if opts.VosPath != "" {
+					return fmt.Errorf("expected VosPath to be empty")
+				}
+				if opts.Args.RunCmd != "ls" {
+					return fmt.Errorf("expected RunCmd to be 'ls', got %q", opts.Args.RunCmd)
+				}
+				if opts.Args.RunCmdArgs[0] != "-d" {
+					return fmt.Errorf("expected first RunCmdArgs to be '-d', got %q", opts.Args.RunCmdArgs[0])
+				}
+				if opts.Args.RunCmdArgs[1] != "-r" {
+					return fmt.Errorf("expected second RunCmdArgs to be '-r', got %q", opts.Args.RunCmdArgs[1])
+				}
+				return nil
+			},
+		},
+		"Short miss vos path error": {
+			args:   []string{"-p", "/foo", "ls"},
+			expErr: ddbTestErr(vosPathMissErr),
+		},
+		"Long miss vos path error": {
+			args:   []string{"--db_path=/bar", "ls"},
+			expErr: ddbTestErr(vosPathMissErr),
+		},
+		"Short cmd args error": {
+			args:   []string{"-f", "/foo/bar.cmd", "ls"},
+			expErr: ddbTestErr(runCmdArgsErr),
+		},
+		"Long cmd args error": {
+			args:   []string{"--cmd_file=/foo/bar.cmd", "ls"},
+			expErr: ddbTestErr(runCmdArgsErr),
+		},
+		"Short vos path miss error": {
+			args:   []string{"-p", "/foo"},
+			expErr: ddbTestErr(vosPathMissErr),
+		},
+		"Long vos path miss error": {
+			args:   []string{"--db_path=/foo"},
+			expErr: ddbTestErr(vosPathMissErr),
+		},
+		"Long debug option": {
+			args: []string{"--debug=DEBUG", "ls"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.Debug != "DEBUG" {
+					return fmt.Errorf("expected Debug to be 'DEBUG', got %q", opts.Debug)
+				}
+				return nil
+			},
+		},
+		"Short write option": {
+			args: []string{"-w", "ls"},
+			checkFunc: func(opts *cliOptions) error {
+				if !opts.WriteMode {
+					return fmt.Errorf("expected WriteMode to be true")
+				}
+				return nil
+			},
+		},
+		"Long write option": {
+			args: []string{"--write_mode", "ls"},
+			checkFunc: func(opts *cliOptions) error {
+				if !opts.WriteMode {
+					return fmt.Errorf("expected WriteMode to be true")
+				}
+				return nil
+			},
+		},
+		"Short vos path option": {
+			args: []string{"-s", "/foo/vos-0", "ls"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.VosPath != "/foo/vos-0" {
+					return fmt.Errorf("expected VosPath to be '/foo/vos-0', got %q", opts.VosPath)
+				}
+				return nil
+			},
+		},
+		"Long vos path option": {
+			args: []string{"--vos_path=/foo/vos-0", "ls"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.VosPath != "/foo/vos-0" {
+					return fmt.Errorf("expected VosPath to be '/foo/vos-0', got %q", opts.VosPath)
+				}
+				return nil
+			},
+		},
+		"Short db path option": {
+			args: []string{"-s", "/foo/vos-0", "-p", "/bar", "ls"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.VosPath != "/foo/vos-0" {
+					return fmt.Errorf("expected VosPath to be '/foo/vos-0', got %q", opts.VosPath)
+				}
+				if opts.SysdbPath != "/bar" {
+					return fmt.Errorf("expected SysdbPath to be '/bar', got %q", opts.SysdbPath)
+				}
+				return nil
+			},
+		},
+		"Long db path option": {
+			args: []string{"--vos_path=/foo/vos-0", "--db_path=/bar", "ls"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.VosPath != "/foo/vos-0" {
+					return fmt.Errorf("expected VosPath to be '/foo/vos-0', got %q", opts.VosPath)
+				}
+				if opts.SysdbPath != "/bar" {
+					return fmt.Errorf("expected SysdbPath to be '/bar', got %q", opts.SysdbPath)
+				}
+				return nil
+			},
+		},
+		"Short version option": {
+			args: []string{"-v"},
+			checkFunc: func(opts *cliOptions) error {
+				if !opts.Version {
+					return fmt.Errorf("expected Version to be true")
+				}
+				return nil
+			},
+		},
+		"Long version option": {
+			args: []string{"--version"},
+			checkFunc: func(opts *cliOptions) error {
+				if !opts.Version {
+					return fmt.Errorf("expected Version to be true")
+				}
+				return nil
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := newTestContext(t)
+
+			opts, stdout, err := runCmdToStdout(ctx, tc.args)
+			test.CmpErr(t, tc.expErr, err)
+
+			for _, msg := range tc.expStdout {
+				test.AssertTrue(t, strings.Contains(stdout, msg),
+					fmt.Sprintf("expected stdout to contain %q: got\n%s", msg, stdout))
+			}
+
+			if tc.expErr != nil {
+				return
+			}
+
+			if tc.checkFunc != nil {
+				if err := tc.checkFunc(&opts); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// openFnChecking returns a ddb_run_open_Fn stub that verifies the vos path and
+// sysdb path arguments passed to the open call. called is set to true when the
+// stub is invoked, allowing the caller to assert that open was called.
+func openFnChecking(t *testing.T, wantPath, wantDbPath string, called *bool) func(string, string, bool) error {
+	return func(path, dbPath string, _ bool) error {
+		*called = true
+		test.CmpAny(t, "vos path", wantPath, path)
+		test.CmpAny(t, "sysdb path", wantDbPath, dbPath)
+		return nil
+	}
+}
+
+// openFnCheckingWriteMode returns a ddb_run_open_Fn stub that verifies the
+// write_mode argument passed to the open call. called is set to true when the
+// stub is invoked, allowing the caller to assert that open was called.
+func openFnCheckingWriteMode(t *testing.T, wantWriteMode bool, called *bool) func(string, string, bool) error {
+	return func(_ string, _ string, writeMode bool) error {
+		*called = true
+		test.CmpAny(t, "write_mode", wantWriteMode, writeMode)
+		return nil
+	}
+}
+
+// openFnMustNotBeCalled is a ddb_run_open_Fn stub that fails the test if
+// the open function is called at all (used to verify no-auto-open behavior).
+func openFnMustNotBeCalled(_ string, _ string, _ bool) error {
+	return fmt.Errorf("open should not have been called")
+}
+
+// openFnAllowedOnce returns a ddb_run_open_Fn stub that allows the open
+// function to be called exactly once (used to verify the 'open' command
+// itself calls open but the CLI does not pre-open).
+func openFnAllowedOnce() func(string, string, bool) error {
+	count := 0
+	return func(_ string, _ string, _ bool) error {
+		count++
+		if count > 1 {
+			return fmt.Errorf("open pre-opened by CLI (called %d times)", count)
+		}
+		return nil
+	}
+}
+
+// openFnFailing is a ddb_run_open_Fn stub that always returns an error,
+// used to verify that open failures are propagated correctly.
+func openFnFailing(_ string, _ string, _ bool) error {
+	return fmt.Errorf("simulated open failure")
+}
+
+// TestRun covers the non-interactive command-line execution paths of runDdb().
+// Interactive mode is intentionally not tested: it delegates entirely to
+// grumble's app.Run(), which requires a real terminal and is hard to automate.
+func TestDdb_runDdb(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args      []string
+		setup     func(*testing.T)
+		expStdout []string
+		expErr    error
+	}{
+		"Version output": {
+			args:      []string{"-v"},
+			expStdout: []string{"ddb version"},
+		},
+		"Long version output": {
+			args:      []string{"--version"},
+			expStdout: []string{"ddb version"},
+		},
+		"Unknown command": {
+			args:   []string{"foo"},
+			expErr: errUnknownCmd,
+		},
+		"Unknown command with write option": {
+			args:   []string{"-w", "foo"},
+			expErr: errUnknownCmd,
+		},
+		"Open called with short vos path and db path": {
+			args: []string{"-s", "/foo/vos-0", "-p", "/bar", "ls"},
+			setup: func(t *testing.T) {
+				var called bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
+			},
+		},
+		"Open called with long vos path and db path": {
+			args: []string{"--vos_path=/foo/vos-0", "--db_path=/bar", "ls"},
+			setup: func(t *testing.T) {
+				var called bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
+			},
+		},
+		"Open called with write mode": {
+			args: []string{"-w", "-s", "/foo/vos-0", "ls"},
+			setup: func(t *testing.T) {
+				var called bool
+				ddb_run_open_Fn = openFnCheckingWriteMode(t, true, &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
+			},
+		},
+		"No auto-open for feature command": {
+			// noAutoOpen is keyed on opts.Args.RunCmd which is empty in command-file
+			// mode, so this case only applies to command-line mode.
+			args: []string{"-s", "/foo/vos-0", "feature", "--show"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnMustNotBeCalled
+			},
+		},
+		"No auto-open for open command": {
+			// The CLI should NOT pre-open when the 'open' command is issued; only the
+			// command itself should call ctx.Open (exactly once).
+			// Only valid for command-line mode (see note above).
+			args: []string{"-s", "/foo/vos-0", "open", "/foo/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnAllowedOnce()
+			},
+		},
+		"No auto-open for smd_sync": {
+			args: []string{"-s", "/foo/vos-0", "smd_sync"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnMustNotBeCalled
+			},
+		},
+		"Init failure": {
+			args:   []string{"ls"},
+			expErr: ddbTestErr(ctxInitErr),
+			setup: func(t *testing.T) {
+				ddb_init_RC = -1 // non-zero triggers DER_UNKNOWN
+			},
+		},
+		"Open failure": {
+			args:   []string{"-s", "/foo/vos-0", "ls"},
+			expErr: ddbTestErr("Error opening VOS path"),
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnFailing
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := newTestContext(t)
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+			stdout, err := captureStdout(func() error {
+				return runDdb(ctx, tc.args)
+			})
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr == nil {
+				test.AssertStringContains(t, stdout, tc.expStdout...)
+			}
+		})
+	}
+}
+
+// TestRunCommandFile covers command-file execution paths of runDdb().
+// It exercises the same behavior as TestRun for cases where command-file
+// mode produces the same result as command-line mode.
+func TestDdb_runDdbCommandFile(t *testing.T) {
+	for name, tc := range map[string]struct {
+		flags     []string // CLI flags (before --cmd_file)
+		cmdLine   string   // line written to the temporary command file
+		setup     func(*testing.T)
+		expStdout []string
+		expErr    error
+	}{
+		"Unknown command": {
+			cmdLine: "foo",
+			expErr:  errUnknownCmd,
+		},
+		"Unknown command with write option": {
+			flags:   []string{"-w"},
+			cmdLine: "foo",
+			expErr:  errUnknownCmd,
+		},
+		"Open called with short vos path and db path": {
+			flags:   []string{"-s", "/foo/vos-0", "-p", "/bar"},
+			cmdLine: "ls",
+			setup: func(t *testing.T) {
+				var called bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
+			},
+		},
+		"Open called with long vos path and db path": {
+			flags:   []string{"--vos_path=/foo/vos-0", "--db_path=/bar"},
+			cmdLine: "ls",
+			setup: func(t *testing.T) {
+				var called bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
+			},
+		},
+		"Open called with write mode": {
+			flags:   []string{"-w", "-s", "/foo/vos-0"},
+			cmdLine: "ls",
+			setup: func(t *testing.T) {
+				var called bool
+				ddb_run_open_Fn = openFnCheckingWriteMode(t, true, &called)
+				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			cmdFile := filepath.Join(tmpDir, "cmds.txt")
+			if err := os.WriteFile(cmdFile, []byte(tc.cmdLine), 0644); err != nil {
+				t.Fatalf("failed to write command file: %v", err)
+			}
+			ctx := newTestContext(t)
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+			args := append(tc.flags, "--cmd_file="+cmdFile)
+			stdout, err := captureStdout(func() error {
+				return runDdb(ctx, args)
+			})
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr == nil {
+				test.AssertStringContains(t, stdout, tc.expStdout...)
+			}
+		})
+	}
+}
+
+// TestRunMultiLineCommandFile verifies that runFileCmds iterates over multiple
+// lines in a command file, executing each one in sequence.
+func TestDdb_runFileCmds(t *testing.T) {
+	ctx := newTestContext(t)
+	var lsCalled, versionCalled bool
+	ddb_run_ls_Fn = func(path string, recursive bool, details bool) error {
+		lsCalled = true
+		return nil
+	}
+	ddb_run_version_Fn = func() error {
+		versionCalled = true
+		return nil
+	}
+
+	tmpDir := t.TempDir()
+	cmdFile := filepath.Join(tmpDir, "cmds.txt")
+	if err := os.WriteFile(cmdFile, []byte("ls\nversion\n"), 0644); err != nil {
+		t.Fatalf("failed to write command file: %v", err)
+	}
+
+	if err := runDdb(ctx, []string{"--cmd_file=" + cmdFile}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	test.AssertTrue(t, lsCalled, "ls was not called")
+	test.AssertTrue(t, versionCalled, "version was not called")
+}
+
+func TestDdb_strToLogLevels(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input          string
+		expCliLevel    logging.LogLevel
+		expEngineLevel engine.LogLevel
+		expErr         bool
+	}{
+		"TRACE":  {input: "TRACE", expCliLevel: logging.LogLevelTrace, expEngineLevel: engine.LogLevelDbug},
+		"DEBUG":  {input: "DEBUG", expCliLevel: logging.LogLevelDebug, expEngineLevel: engine.LogLevelDbug},
+		"DBUG":   {input: "DBUG", expCliLevel: logging.LogLevelDebug, expEngineLevel: engine.LogLevelDbug},
+		"INFO":   {input: "INFO", expCliLevel: logging.LogLevelInfo, expEngineLevel: engine.LogLevelInfo},
+		"NOTE":   {input: "NOTE", expCliLevel: logging.LogLevelNotice, expEngineLevel: engine.LogLevelNote},
+		"NOTICE": {input: "NOTICE", expCliLevel: logging.LogLevelNotice, expEngineLevel: engine.LogLevelNote},
+		"WARN":   {input: "WARN", expCliLevel: logging.LogLevelNotice, expEngineLevel: engine.LogLevelWarn},
+		"ERROR":  {input: "ERROR", expCliLevel: logging.LogLevelError, expEngineLevel: engine.LogLevelErr},
+		"ERR":    {input: "ERR", expCliLevel: logging.LogLevelError, expEngineLevel: engine.LogLevelErr},
+		"CRIT":   {input: "CRIT", expCliLevel: logging.LogLevelError, expEngineLevel: engine.LogLevelCrit},
+		"ALRT":   {input: "ALRT", expCliLevel: logging.LogLevelError, expEngineLevel: engine.LogLevelAlrt},
+		"FATAL":  {input: "FATAL", expCliLevel: logging.LogLevelError, expEngineLevel: engine.LogLevelEmrg},
+		"EMRG":   {input: "EMRG", expCliLevel: logging.LogLevelError, expEngineLevel: engine.LogLevelEmrg},
+		"EMIT":   {input: "EMIT", expCliLevel: logging.LogLevelError, expEngineLevel: engine.LogLevelEmit},
+		"lowercase debug": {
+			input: "debug", expCliLevel: logging.LogLevelDebug, expEngineLevel: engine.LogLevelDbug,
+		},
+		"invalid level": {input: "INVALID", expErr: true},
+		"empty string":  {input: "", expErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cliLevel, engineLevel, err := strToLogLevels(tc.input)
+			if tc.expErr {
+				if err == nil {
+					t.Fatalf("expected an error for input %q: got nil", tc.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for input %q: %v", tc.input, err)
+			}
+			test.AssertTrue(t, cliLevel == tc.expCliLevel,
+				fmt.Sprintf("unexpected CLI log level for input %q: want %v, got %v", tc.input, tc.expCliLevel, cliLevel))
+			test.AssertTrue(t, engineLevel == tc.expEngineLevel,
+				fmt.Sprintf("unexpected engine log level for input %q: want %v, got %v", tc.input, tc.expEngineLevel, engineLevel))
+		})
+	}
+}
+
+// TestNewLogger verifies the newLogger code paths: default level, explicit debug
+// level, invalid level, and all three LogDir branches (valid dir, non-existent
+// path, path that is a file rather than a directory).
+func TestDdb_newLogger(t *testing.T) {
+	t.Run("no LogDir default level", func(t *testing.T) {
+		log, err := newLogger(cliOptions{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if log == nil {
+			t.Fatal("expected non-nil logger")
+		}
+	})
+
+	t.Run("explicit valid debug level", func(t *testing.T) {
+		log, err := newLogger(cliOptions{Debug: "DEBUG"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if log == nil {
+			t.Fatal("expected non-nil logger")
+		}
+	})
+
+	t.Run("invalid debug level", func(t *testing.T) {
+		_, err := newLogger(cliOptions{Debug: "INVALID"})
+		if err == nil {
+			t.Fatal("expected error for invalid log level, got nil")
+		}
+	})
+
+	t.Run("valid LogDir", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		log, err := newLogger(cliOptions{LogDir: tmpDir})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if log == nil {
+			t.Fatal("expected non-nil logger")
+		}
+	})
+
+	t.Run("non-existent LogDir", func(t *testing.T) {
+		_, err := newLogger(cliOptions{LogDir: "/non/existent/path"})
+		if err == nil {
+			t.Fatal("expected error for non-existent log dir, got nil")
+		}
+	})
+
+	t.Run("LogDir is a file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "not-a-dir")
+		if err := os.WriteFile(tmpFile, []byte(""), 0644); err != nil {
+			t.Fatalf("failed to create temp file: %v", err)
+		}
+		_, err := newLogger(cliOptions{LogDir: tmpFile})
+		if err == nil {
+			t.Fatal("expected error when LogDir is a file, got nil")
+		}
+	})
+}
+
+// TestClosePoolIfOpen verifies that closePoolIfOpen only calls Close when the
+// pool is actually open, and that it tolerates a Close error (log only, no panic).
+func TestDdb_closePoolIfOpen(t *testing.T) {
+	log := logging.NewCommandLineLogger()
+
+	t.Run("pool not open, close not called", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_pool_is_open_RC = false
+		ddb_run_close_Fn = func() error {
+			t.Fatal("Close should not be called when pool is not open")
+			return nil
+		}
+		closePoolIfOpen(ctx, log)
+	})
+
+	t.Run("pool open, close called", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_pool_is_open_RC = true
+		closeCalled := false
+		ddb_run_close_Fn = func() error {
+			closeCalled = true
+			return nil
+		}
+		closePoolIfOpen(ctx, log)
+		test.AssertTrue(t, closeCalled, "expected Close to have been called when pool is open")
+	})
+
+	t.Run("pool open, close returns error", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_pool_is_open_RC = true
+		ddb_run_close_Fn = func() error {
+			return fmt.Errorf("close failed")
+		}
+		// Should not panic; the error is only logged.
+		closePoolIfOpen(ctx, log)
+	})
+}
