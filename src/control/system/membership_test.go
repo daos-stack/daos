@@ -992,6 +992,19 @@ func TestSystem_Membership_Join(t *testing.T) {
 				MapVersion: expMapVer,
 			},
 		},
+		"join with all fields matching except UUID; needs --replace": {
+			req: &JoinRequest{
+				Rank:                    NilRank,
+				UUID:                    newUUID,
+				ControlAddr:             curMember.Addr,
+				PrimaryFabricURI:        curMember.PrimaryFabricURI,
+				SecondaryFabricURIs:     curMember.SecondaryFabricURIs,
+				FabricContexts:          curMember.PrimaryFabricContexts,
+				SecondaryFabricContexts: curMember.SecondaryFabricContexts,
+				FaultDomain:             curMember.FaultDomain,
+			},
+			expErr: FaultJoinMemberExists(newUUID, curMember.UUID),
+		},
 		"replace; nil rank in request": {
 			req: &JoinRequest{
 				Replace:          true,
@@ -1052,8 +1065,8 @@ func TestSystem_Membership_Join(t *testing.T) {
 				MapVersion: expMapVer + 1,
 			},
 		},
-		// DAOS-15947 TODO: This should probably be refused as duplicate addresses/URIs
-		//                  rather than joining a new rank.
+		// Fixed DAOS-15947: Now refused as duplicate addresses/URIs with different UUID
+		//                   requiring --replace option.
 		"rejoin identical member with new UUID and nil rank; replace not set": {
 			req: &JoinRequest{
 				Rank:             NilRank,
@@ -1062,17 +1075,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				PrimaryFabricURI: curMember.Addr.String(),
 				FaultDomain:      curMember.FaultDomain,
 			},
-			expResp: &JoinResponse{
-				Created: true,
-				Member: func() *Member {
-					cm := *defaultCurMembers[0]
-					cm.UUID = newUUID
-					cm.Rank = 2
-					return &cm
-				}(),
-				PrevState:  MemberStateUnknown,
-				MapVersion: expMapVer,
-			},
+			expErr: FaultJoinMemberExists(newUUID, curMember.UUID),
 		},
 		"new member with bad fault domain depth": {
 			req: &JoinRequest{

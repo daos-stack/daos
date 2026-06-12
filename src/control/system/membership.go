@@ -90,6 +90,30 @@ func (m *Membership) Add(member *Member) (int, error) {
 	return count, nil
 }
 
+// memberFieldsMatch checks if a member matches all join request fields
+// (excluding UUID). Returns true if all fields match.
+func memberFieldsMatch(cm *Member, req *JoinRequest) bool {
+	if cm.Addr.String() != req.ControlAddr.String() {
+		return false
+	}
+	if cm.PrimaryFabricURI != req.PrimaryFabricURI {
+		return false
+	}
+	if !slices.Equal(cm.SecondaryFabricURIs, req.SecondaryFabricURIs) {
+		return false
+	}
+	if cm.PrimaryFabricContexts != req.FabricContexts {
+		return false
+	}
+	if !slices.Equal(cm.SecondaryFabricContexts, req.SecondaryFabricContexts) {
+		return false
+	}
+	if !cm.FaultDomain.Equals(req.FaultDomain) {
+		return false
+	}
+	return true
+}
+
 // Count returns the number of members.
 func (m *Membership) Count() (int, error) {
 	return m.db.MemberCount()
@@ -114,27 +138,27 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 	rank := NilRank
 	for _, cm := range currentMembers {
 		// Only match identical member with different UUID.
-		var missing []string
-		if cm.Addr.String() != req.ControlAddr.String() {
-			missing = append(missing, "control address")
-		}
-		if cm.PrimaryFabricURI != req.PrimaryFabricURI {
-			missing = append(missing, "primary fabric address")
-		}
-		if !slices.Equal(cm.SecondaryFabricURIs, req.SecondaryFabricURIs) {
-			missing = append(missing, "secondary fabric addresses")
-		}
-		if cm.PrimaryFabricContexts != req.FabricContexts {
-			missing = append(missing, "primary fabric contexts")
-		}
-		if !slices.Equal(cm.SecondaryFabricContexts, req.SecondaryFabricContexts) {
-			missing = append(missing, "secondary fabric contexts")
-		}
-		if !cm.FaultDomain.Equals(req.FaultDomain) {
-			missing = append(missing, "Fault domain")
-		}
-
-		if len(missing) != 0 {
+		if !memberFieldsMatch(cm, req) {
+			// Track which fields didn't match for better error reporting
+			var missing []string
+			if cm.Addr.String() != req.ControlAddr.String() {
+				missing = append(missing, "control address")
+			}
+			if cm.PrimaryFabricURI != req.PrimaryFabricURI {
+				missing = append(missing, "primary fabric address")
+			}
+			if !slices.Equal(cm.SecondaryFabricURIs, req.SecondaryFabricURIs) {
+				missing = append(missing, "secondary fabric addresses")
+			}
+			if cm.PrimaryFabricContexts != req.FabricContexts {
+				missing = append(missing, "primary fabric contexts")
+			}
+			if !slices.Equal(cm.SecondaryFabricContexts, req.SecondaryFabricContexts) {
+				missing = append(missing, "secondary fabric contexts")
+			}
+			if !cm.FaultDomain.Equals(req.FaultDomain) {
+				missing = append(missing, "Fault domain")
+			}
 			if minMissing == nil || len(missing) < len(minMissing) {
 				minMissing = missing
 			}
@@ -327,6 +351,12 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		return nil, err
 	}
 
+	// Before adding a new member, check if an existing member matches all fields except UUID.
+	// This prevents a rank from joining if it appears to be a replacement that needs --replace.
+	if err := m.checkForMatchingMember(req); err != nil {
+		return nil, err
+	}
+
 	// Process join request for a new rank.
 	newMember := &Member{
 		Rank:                    req.Rank,
@@ -360,6 +390,32 @@ func (m *Membership) checkReqFaultDomain(req *JoinRequest) error {
 	if currentDepth > 0 && newDepth != currentDepth-1 {
 		return FaultBadFaultDomainDepth(req.FaultDomain, currentDepth-1)
 	}
+	return nil
+}
+
+// checkForMatchingMember checks if an existing member matches all fields in the join request
+// except the UUID. This prevents a rank from joining when it appears to be attempting to
+// replace an existing member without using the --replace option.
+func (m *Membership) checkForMatchingMember(req *JoinRequest) error {
+	currentMembers, err := m.Members(nil, AllMemberFilter)
+	if err != nil {
+		return errors.Wrap(err, "failed to get all system members")
+	}
+
+	for _, cm := range currentMembers {
+		// Check if all fields match except UUID
+		if cm.UUID == req.UUID {
+			continue // Same UUID, not a problem
+		}
+
+		if !memberFieldsMatch(cm, req) {
+			continue // Fields don't match, not a problem
+		}
+
+		// All fields match except UUID - this rank needs to use --replace
+		return FaultJoinMemberExists(req.UUID, cm.UUID)
+	}
+
 	return nil
 }
 
