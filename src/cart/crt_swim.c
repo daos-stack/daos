@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1019,10 +1019,10 @@ crt_metrics_sample_delay(crt_context_t crt_ctx, uint64_t delay, bool glitch)
 
 	ctx = crt_ctx;
 
-	d_tm_set_gauge(ctx->cc_swim_delay, delay);
+	CRT_METRIC_SET_GAUGE(ctx, CM_SWIM_DELAY, delay);
 
 	if (glitch)
-		d_tm_inc_counter(ctx->cc_net_glitches, 1);
+		CRT_METRIC_INC(ctx, CM_NET_GLITCHES);
 }
 
 static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, void *arg)

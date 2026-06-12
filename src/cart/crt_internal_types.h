@@ -431,6 +431,75 @@ struct crt_bulk {
 	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
 };
 
+#define CRT_METRIC_INC(ctx, name)                                                                  \
+	do {                                                                                       \
+		if (crt_gdata.cg_use_sensors) {                                                    \
+			d_tm_inc_counter(ctx->cc_metrics.name, 1);                                 \
+		}                                                                                  \
+	} while (0)
+
+#define CRT_METRIC_SET_GAUGE(ctx, name, value)                                                     \
+	do {                                                                                       \
+		if (crt_gdata.cg_use_sensors) {                                                    \
+			d_tm_set_gauge(ctx->cc_metrics.name, value);                               \
+		}                                                                                  \
+	} while (0)
+
+#define CRT_METRIC_INC_GAUGE(ctx, name, value)                                                     \
+	do {                                                                                       \
+		if (crt_gdata.cg_use_sensors) {                                                    \
+			d_tm_inc_gauge(ctx->cc_metrics.name, value);                               \
+		}                                                                                  \
+	} while (0)
+
+#define CRT_METRIC_DEC_GAUGE(ctx, name, value)                                                     \
+	do {                                                                                       \
+		if (crt_gdata.cg_use_sensors) {                                                    \
+			d_tm_dec_gauge(ctx->cc_metrics.name, value);                               \
+		}                                                                                  \
+	} while (0)
+
+/* List of metrics, CM_* for 'Cart Metrics' */
+#define CRT_METRICS_LIST                                                                           \
+	X(CM_URI_LOOKUP_TIMEDOUT, D_TM_COUNTER, "Total number of timed of URI lookups", "reqs")    \
+	X(CM_FAILED_ADDR, D_TM_COUNTER, "Total number of failed address resolution attempts",      \
+	  "reqs")                                                                                  \
+	X(CM_NET_GLITCHES, D_TM_COUNTER, "Total number of network glitch errors", "errors")        \
+	X(CM_SWIM_DELAY, D_TM_STATS_GAUGE, "SWIM delay measurements", "delay")                     \
+	X(CM_RPC_WAITQ_DEPTH, D_TM_GAUGE, "Current count of enqueued RPCs", "rpcs")                \
+	X(CM_RPC_QUOTA_EXCEEDED, D_TM_COUNTER, "Total number of exceeded RPC quota events",        \
+	  "events")                                                                                \
+	X(CM_RPC_RECV, D_TM_COUNTER, "Total number of RPCs received", "rpcs")                      \
+	X(CM_RPC_SENT, D_TM_COUNTER, "Total number of RPCs sent", "rpcs")                          \
+	X(CM_RPC_FWD, D_TM_COUNTER, "Total number of RPCs forwarded to another target", "rpcs")    \
+	X(CM_RPC_REPLIED, D_TM_COUNTER, "Total number of RPCs replied to", "rpcs")                 \
+	X(CM_RPC_REPLY_FAILED, D_TM_COUNTER, "Total number of failed replies", "rpcs")             \
+	X(CM_RPC_COMPLETED, D_TM_COUNTER, "Total number of RPCs completed successfully", "rpcs")   \
+	X(CM_RPC_COMPLETED_ERR, D_TM_COUNTER, "Total number of sent RPCs completed with error",    \
+	  "rpcs")                                                                                  \
+	X(CM_RPC_TIMEDOUT, D_TM_COUNTER, "Total number of timed out RPC send requests", "rpcs")    \
+	X(CM_RPC_DOUBLE_COMPLETE, D_TM_COUNTER,                                                    \
+	  "Total number of RPCs having a duplicate completion ", "rpcs")                           \
+	X(CM_BULK_CREATE, D_TM_COUNTER, "Total number of bulks created", "bulks")                  \
+	X(CM_BULK_CREATE_FAILED, D_TM_COUNTER, "Total number of bulks that failed to create",      \
+	  "bulks")                                                                                 \
+	X(CM_BULK_BOUND, D_TM_COUNTER, "Total number of bulks that were bound", "bulks")           \
+	X(CM_BULK_FREE, D_TM_COUNTER, "Total number of bulks that were freed", "bulks")            \
+	X(CM_CORPC_CREATED, D_TM_COUNTER, "Total number of corpcs that were created", "corpcs")    \
+	X(CM_CORPC_COMPLETED, D_TM_COUNTER, "Total number of corpcs that were completed",          \
+	  "corpcs")                                                                                \
+	X(CM_CORPC_COMPLETED_ERR, D_TM_COUNTER,                                                    \
+	  "Total number of corpcs that completed with error", "corpcs")
+
+#undef X
+#define X(name, type, desc, unit_desc) struct d_tm_node_t *name;
+
+struct crt_metric_t {
+	CRT_METRICS_LIST
+};
+
+#undef X
+
 /* crt_context */
 struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
@@ -461,23 +530,14 @@ struct crt_context {
 	/** timeout per-context */
 	uint32_t                 cc_timeout_sec;
 
-	/** Per-context statistics (server-side only) */
-	/** Total number of timed out requests, of type counter */
-	struct d_tm_node_t	*cc_timedout;
-	/** Total number of timed out URI lookup requests, of type counter */
-	struct d_tm_node_t	*cc_timedout_uri;
-	/** Total number of failed address resolution, of type counter */
-	struct d_tm_node_t	*cc_failed_addr;
-	/** Counter for number of network glitches */
-	struct d_tm_node_t      *cc_net_glitches;
-	/** Stats gauge of reported SWIM delays */
-	struct d_tm_node_t      *cc_swim_delay;
-
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
 
 	/** Stores quotas */
 	struct crt_quotas	cc_quotas;
+
+	/** Stores metrics */
+	struct crt_metric_t      cc_metrics;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
