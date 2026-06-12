@@ -589,6 +589,47 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 }
 
 int
+dfs_lookup_rel_entry(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t *mode,
+		     daos_obj_id_t *oid)
+{
+	struct dfs_entry entry = {0};
+	bool             exists;
+	size_t           len;
+	int              rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (mode == NULL || oid == NULL)
+		return EINVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+
+	rc = check_name(name, &len);
+	if (rc)
+		return rc;
+
+	/*
+	 * Only fetch the inode entry; no object/array open is performed and the symlink value is
+	 * not read, since the caller only needs the entry type and object ID.
+	 */
+	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, name, len, false, &exists, &entry,
+			 0, NULL, NULL, NULL);
+	if (rc)
+		return rc;
+	if (!exists)
+		return ENOENT;
+
+	*mode = entry.mode;
+	oid_cp(oid, entry.oid);
+
+	/* entry.value is only allocated when fetch_sym is requested, but free it to be safe. */
+	D_FREE(entry.value);
+	return 0;
+}
+
+int
 dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_t **obj,
 	    mode_t *mode, struct stat *stbuf, int xnr, char *xnames[], void *xvals[],
 	    daos_size_t *xsizes)
