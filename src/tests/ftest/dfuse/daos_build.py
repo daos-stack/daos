@@ -240,7 +240,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfs,dfuse,daos_cmd
+        :avocado: tags=build,daosio,dfs,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         run_build_test(self, "writeback")
@@ -256,7 +256,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt
         """
         run_build_test(self, "writethrough")
@@ -272,7 +272,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_metadata
         """
         run_build_test(self, "metadata")
@@ -288,7 +288,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_data
         """
         run_build_test(self, "data")
@@ -304,7 +304,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
         """
         run_build_test(self, "nocache")

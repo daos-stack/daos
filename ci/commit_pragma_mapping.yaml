@@ -179,9 +179,30 @@ src/tests/suite/:
   <<: *ftest-only
 
 
-# Individual code areas
+# DFS code area
 src/client/dfs/:
   test-tag: dfs
+
+# Packaging
+ci/rpm/:
+  test-tag: build
+  need-rpm-test: True
+
+# Packaging
+utils/rpms/:
+  test-tag: build
+  need-rpm-test: True
+
+# Build files
+SConscript:
+  test-tag: build
+  need-rpm-test: True
+
+# Build files
+SConstruct:
+  test-tag: build
+  need-rpm-test: True
+
 
 # Everything runs pr unless a previous entry was matched with stop_on_match
 .*:

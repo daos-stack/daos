@@ -115,7 +115,7 @@ def read_commit_pragma_mapping():
                     raise TypeError(
                         f'Expected {str} for tags, not '
                         f'{type(config[path_match][pragma_key]["tags"])}')
-            elif pragma_key == 'need-unit-test':
+            elif pragma_key in ('need-unit-test', 'need-rpm-test'):
                 _type = type(pragma_config)
                 if _type not in (bool, dict):
                     raise TypeError(f'Expected {bool} or {dict}, not {_type}')
@@ -197,13 +197,14 @@ def __get_test_tag(commit_pragma_mapping, paths, default='pr'):
     return ' '.join(sorted(all_tags))
 
 
-def __get_need_unit_test(commit_pragma_mapping, paths, default=True):
+def __get_need_bool(commit_pragma_mapping, key, paths, default=True):
     """Determine whether we need to run unit tests for these paths.
 
     Args:
         commit_pragma_mapping (dict): full commit pragma mapping config
+        key (str): entry to get from the commit pragma mapping
         paths (list): paths to match on
-        default (bool): default value to use if a path does not have a need-unit-test config
+        default (bool): default value to use if a path does not have an entry
 
     Returns:
         bool: whether we need to run unit tests for these paths
@@ -211,16 +212,16 @@ def __get_need_unit_test(commit_pragma_mapping, paths, default=True):
     for path in paths:
         for _pattern, config in commit_pragma_mapping.items():
             if re.search(rf'{_pattern}', path):
-                unit_test_config = config.get('need-unit-test', default)
-                if isinstance(unit_test_config, bool):
-                    unit_test_config = {
-                        'val': unit_test_config
+                bool_config = config.get(key, default)
+                if isinstance(bool_config, bool):
+                    bool_config = {
+                        'val': bool_config
                     }
-                if unit_test_config['val']:
+                if bool_config['val']:
                     # If any path matches with a True value, we need to run unit tests
                     return True
 
-                if unit_test_config.get('stop_on_match', config.get('stop_on_match', False)):
+                if bool_config.get('stop_on_match', config.get('stop_on_match', False)):
                     # Don't process further entries for this path
                     break
 
@@ -255,10 +256,14 @@ def gen_commit_pragmas(target):
     if test_tag:
         pragmas['Test-tag'] = test_tag
 
-    need_unit_test = __get_need_unit_test(commit_pragma_mapping, modified_files)
+    need_unit_test = __get_need_bool(commit_pragma_mapping, 'need-unit-test', modified_files)
     if modified_files and not need_unit_test:
         pragmas['Skip-unit-tests'] = True
         pragmas['Skip-fault-injection-test'] = True
+
+    need_rpm_test = __get_need_bool(commit_pragma_mapping, 'need-rpm-test', modified_files)
+    if modified_files and not need_rpm_test:
+        pragmas['Skip-test-rpms'] = False
 
     return pragmas
 
