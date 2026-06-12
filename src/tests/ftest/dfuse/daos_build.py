@@ -102,8 +102,10 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     mount_dir = dfuse.mount_dir.value
     build_dir = os.path.join(mount_dir, 'daos')
 
-    remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
-    remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
+    virtual_env = os.environ['VIRTUAL_ENV']
+    virtual_env_vin = os.path.join(virtual_env, 'bin')
+    remote_env['PATH'] = f"{virtual_env_vin}:$PATH"
+    remote_env['VIRTUAL_ENV'] = virtual_env
     remote_env['COVFILE'] = os.environ['COVFILE']
     remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
     remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
@@ -115,7 +117,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         remote_env['DD_SUBSYS'] = 'all'
         remote_env['D_LOG_MASK'] = 'WARN,IL=WARN'
         if il_lib == 'libpil4dfs.so':
-            remote_env['D_IL_NO_BYPASS'] = '1'
+            # remote_env['D_IL_NO_BYPASS'] = '1'
             remote_env['D_IL_COMPATIBLE'] = '1'
             remote_env['D_IL_MAX_EQ'] = '0'
 
@@ -129,14 +131,16 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
-            f'git clone https://github.com/daos-stack/daos.git {build_dir}',
+    # venv_activate = os.path.join(mount_dir, 'venv', 'bin', 'activate')
+    # f'{sys.executable} -m venv {mount_dir}/venv',
+    cmds = [f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
             f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
             'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
-            'python3 -m pip install pip --upgrade',
-            f'python3 -m pip install -r {build_dir}/requirements-build.txt',
+            f'{sys.executable} -m pip install pip --upgrade',
+            f'{sys.executable} -m pip install -r {build_dir}/requirements-build.txt',
+            'which scons',
             f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
             f'daos filesystem query {mount_dir}',
             f'daos filesystem evict {build_dir}',
@@ -146,6 +150,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             f'daos filesystem query {mount_dir}']
     for cmd in cmds:
         command = '{} {}'.format(preload_cmd, cmd)
+        # if '-m venv' not in command:
+        #     command = f'source {venv_activate} && {command}'
         # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
         timeout = 10 * 60
         if cmd.startswith('scons'):
