@@ -352,7 +352,9 @@ pipeline {
         booleanParam(name: 'CI_md_on_ssd_ftest_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box FTest test stage')
-
+        booleanParam(name: 'CI_md_on_ssd_daos_test_rebuild_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box daos_test_rebuild test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
