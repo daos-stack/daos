@@ -25,7 +25,7 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-: "${SCONS_FAULTS_ARGS:=BUILD_TYPE=dev}"
+: "${SCONS_FAULTS_ARGS:=BUILD_TYPE=release}"
 SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 : "${CHROOT_NAME:='rocky+epel-8-x86_64'}"
