@@ -19,7 +19,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
-
 // The trusted-pipeline-lib daosLatestVersion() method will convert this into a number
 /* groovylint-disable-next-line CompileStatic, VariableName */
 String next_version() {
@@ -923,6 +922,30 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Leap 15')
+                stage('Functional on SLES 15') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('Leap15')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+										   ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'sles15.7'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } // post
+                } // stage('Functional on SLES 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
