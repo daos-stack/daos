@@ -6684,8 +6684,8 @@ shard_list_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 		D_ASSERT(obj_auxi->is_ec_obj);
 		rc = obj_shard_list_prep(obj_auxi, obj, shard_arg);
 		if (rc) {
-			D_ERROR(DF_OID" shard list %d prep: %d\n",
-				DP_OID(obj->cob_md.omd_id), grp_idx, rc);
+			D_ERROR(DF_OID " shard list %d prep: %d.\n", DP_OID(obj->cob_md.omd_id),
+				grp_idx, rc);
 			return rc;
 		}
 	} else {
