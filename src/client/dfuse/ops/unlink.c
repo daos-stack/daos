@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,7 +75,7 @@ dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	int                rc;
 	daos_obj_id_t      oid = {};
 
-	dfuse_cache_evict_dir(dfuse_info, parent);
+	dfuse_cache_evict_dir(parent);
 
 	rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name, false, &oid);
 	if (rc != 0) {

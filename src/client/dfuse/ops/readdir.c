@@ -26,28 +26,6 @@ struct iterate_data {
 	struct dfuse_readdir_hdl *id_hdl;
 };
 
-/* Mark a directory change so that any cache can be evicted.  The kernel pagecache is already
- * wiped on unlink if the directory isn't open, if it is then already open handles will return
- * the unlinked file, and a inval() call here does not change that.
- */
-void
-dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
-{
-	uint32_t open_count = atomic_load_relaxed(&ie->ie_open_count);
-
-	if (open_count != 0)
-		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
-
-	D_SPIN_LOCK(&dfuse_info->di_lock);
-	if (ie->ie_rd_hdl) {
-		DFUSE_TRA_DEBUG(ie, "Setting shared readdir handle as invalid");
-		ie->ie_rd_hdl->drh_valid = false;
-	}
-	D_SPIN_UNLOCK(&dfuse_info->di_lock);
-
-	dfuse_cache_evict(ie);
-}
-
 static int
 filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 {
@@ -146,7 +124,7 @@ dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	oh->doh_rd_nextc = NULL;
 
 	/* Lock is to protect oh->doh_ie->ie_rd_hdl between readdir/closedir calls */
-	D_SPIN_LOCK(&dfuse_info->di_lock);
+	D_SPIN_LOCK(&oh->doh_ie->ie_active->lock);
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
@@ -157,8 +135,8 @@ dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	DFUSE_TRA_DEBUG(hdl, "Ref was 1, freeing");
 
 	/* Check for common */
-	if (hdl == oh->doh_ie->ie_rd_hdl)
-		oh->doh_ie->ie_rd_hdl = NULL;
+	if (hdl == oh->doh_ie->ie_active->rd_hdl)
+		oh->doh_ie->ie_active->rd_hdl = NULL;
 
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
 		/** Verify offset/next_offset are consistent in the entry cache list */
@@ -172,7 +150,7 @@ dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	}
 	D_FREE(hdl);
 unlock:
-	D_SPIN_UNLOCK(&dfuse_info->di_lock);
+	D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
 }
 
 static int
@@ -299,31 +277,35 @@ dfuse_readdir_reset(struct dfuse_readdir_hdl *hdl)
 static int
 ensure_rd_handle(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 {
+	int rc = 0;
+
 	if (oh->doh_rd != NULL)
 		return 0;
 
-	D_SPIN_LOCK(&dfuse_info->di_lock);
+	D_SPIN_LOCK(&oh->doh_ie->ie_active->lock);
 
-	if (oh->doh_ie->ie_rd_hdl && oh->doh_ie->ie_rd_hdl->drh_valid) {
-		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
+	if (oh->doh_ie->ie_active->rd_hdl &&
+	    atomic_load_relaxed(&oh->doh_ie->ie_active->rd_hdl->drh_valid)) {
+		oh->doh_rd = oh->doh_ie->ie_active->rd_hdl;
 		atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
 		DFUSE_TRA_DEBUG(oh, "Sharing readdir handle %p with existing readers", oh->doh_rd);
 	} else {
 		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 		if (oh->doh_rd == NULL) {
-			D_SPIN_UNLOCK(&dfuse_info->di_lock);
-			return ENOMEM;
+			D_GOTO(out, rc = ENOMEM);
 		}
 
 		DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 
-		if (oh->doh_ie->ie_rd_hdl == NULL && oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
+		if (oh->doh_ie->ie_active->rd_hdl == NULL &&
+		    oh->doh_ie->ie_dfs->dfc_dentry_timeout > 0) {
 			oh->doh_rd->drh_caching = true;
-			oh->doh_ie->ie_rd_hdl   = oh->doh_rd;
+			oh->doh_ie->ie_active->rd_hdl = oh->doh_rd;
 		}
 	}
-	D_SPIN_UNLOCK(&dfuse_info->di_lock);
-	return 0;
+out:
+	D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
+	return rc;
 }
 
 #define FADP fuse_add_direntry_plus
