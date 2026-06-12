@@ -1,0 +1,59 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+timeout: 850
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      targets: 8
+      nr_xs_helpers: 4
+      first_core: 0
+      pinned_numa_node: 0
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: ERR
+      env_vars:
+        - RDB_COMPACT_THRESHOLD=64
+        - DD_MASK=group_metadata_only
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+    1:
+      targets: 8
+      nr_xs_helpers: 4
+      first_core: 0
+      pinned_numa_node: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: ERR
+      env_vars:
+        - RDB_COMPACT_THRESHOLD=64
+        - DD_MASK=group_metadata_only
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+pool:
+  scm_size: 10G
+  label: pool
+  set_logmasks: False
+  properties: svc_ops_entry_age:150
+# Uncomment the following for manual test with different svc_ops_entry_age value
+#   properties: svc_ops_entry_age:60
+#   properties: svc_ops_entry_age:300
+#   properties: svc_ops_entry_age:600
+container:
+  control_method: API
+  silent: true
+metadata:
+  number_thread: 1
+  workload_test_cycles: 5000
+  test_loops: 20
+  threshold_factor: 2.5
