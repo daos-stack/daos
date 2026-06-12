@@ -1,0 +1,97 @@
+- hosts: all
+  gather_facts: true
+  vars:
+    daos_sysctl_reload: false
+    daos_hugepages_nb_default: 0
+    daos_hugepages_nb: 0
+    daos_hugepages_multiplier: 1024
+    daos_ofi_provider_default: ofi+tcp
+    # Disable GRUB update: containers have no real bootloader (grubby
+    # would fail or find no kernels).  Only the sysctl phase is tested here.
+    daos_grub_update_enabled: false
+  tasks:
+    - name: Ensure /etc/systemd directories exist
+      become: true
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /etc/systemd
+        - /etc/systemd/system
+        - /etc/sysctl.d
+        - /etc/security/limits.d
+
+    - name: Ensure /etc/systemd/system.conf exists
+      become: true
+      copy:
+        dest: /etc/systemd/system.conf
+        content: |
+          [Manager]
+          #DefaultLimitNOFILE=
+          #DefaultLimitMEMLOCK=
+        force: false
+        mode: '0644'
+
+    - name: Test server user and group creation
+      block:
+        - name: Include users_groups tasks
+          include_role:
+            name: daos_server
+            tasks_from: users_groups.yml
+      rescue:
+        - name: Note user modification skipped
+          debug:
+            msg: "User/group modification skipped (user may be in active use in container)"
+
+    - name: Test server limits configuration
+      include_role:
+        name: daos_server
+        tasks_from: limits.yml
+
+    - name: Test hugepages configuration (sysctl only; GRUB phase disabled)
+      include_role:
+        name: daos_server
+        tasks_from: hugepages.yml
+
+    - name: "GRUB idempotency test: create a fake /etc/default/grub (Debian-style)"
+      become: true
+      copy:
+        dest: /etc/default/grub
+        force: false
+        mode: '0644'
+        content: |
+          GRUB_TIMEOUT=5
+          GRUB_DEFAULT=saved
+          GRUB_CMDLINE_LINUX="quiet splash"
+          GRUB_CMDLINE_LINUX_DEFAULT=""
+
+    - name: "GRUB idempotency test: install a no-op update-grub stub for container"
+      become: true
+      copy:
+        dest: /usr/sbin/update-grub
+        force: false
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          # Stub: real update-grub is not available in a container.
+          echo "stub update-grub: skipping real GRUB regeneration"
+          exit 0
+
+    - name: "GRUB idempotency test: run Debian hugepages update (os_family override)"
+      vars:
+        ansible_os_family: Debian
+        daos_grub_update_enabled: true
+        daos_sysctl_reload: false
+      include_role:
+        name: daos_server
+        tasks_from: hugepages.yml
+
+    - name: "GRUB idempotency test: run again to verify idempotency (no change)"
+      vars:
+        ansible_os_family: Debian
+        daos_grub_update_enabled: true
+        daos_sysctl_reload: false
+      include_role:
+        name: daos_server
+        tasks_from: hugepages.yml

@@ -1,0 +1,17 @@
+# yamllint disable rule:line-length
+- name: Install DAOS server dependency packages
+  become: true
+  dnf:
+    state: present
+    update_cache: true
+    disablerepo:
+      - appstream
+    name: "{{ daos_server_deps.rpms }}"
+
+- name: Install MOFED packages for verbs network provider
+  become: true
+  dnf:
+    state: present
+    update_cache: true
+    name: "{{ mlnx_deps.rpms }}"
+  when: daos_ofi_provider | default(daos_ofi_provider_default) is search('verbs')

@@ -1,0 +1,26 @@
+- name: Create DAOS system groups
+  become: true
+  group:
+    name: "{{ item.name }}"
+    gid: "{{ item.gid }}"
+    system: true
+    state: present
+  loop:
+    - {name: daos_server, gid: 666}
+    - {name: daos_daemons, gid: 668}
+    - {name: daos_metrics, gid: 669}
+
+- name: Create daos_server system user
+  become: true
+  user:
+    name: daos_server
+    uid: 666
+    group: daos_server
+    groups:
+      - daos_daemons
+      - daos_metrics
+    append: true
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    state: present

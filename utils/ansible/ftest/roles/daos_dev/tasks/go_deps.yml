@@ -1,0 +1,30 @@
+# yamllint disable rule:line-length
+- name: Read go.mod before pre-downloading Go module dependencies
+  slurp:
+    src: "{{ daos_source_dir }}/src/control/go.mod"
+  register: daos_gomod_original
+
+- name: Pre-download Go module dependencies
+  command:
+    cmd: go mod download
+    chdir: "{{ daos_source_dir }}/src/control"
+  changed_when: false
+  failed_when: false
+  register: daos_go_mod_result
+  environment: "{{ daos_proxy_env | combine({'GOPROXY': daos_goproxy | default('direct')}) }}"
+
+- name: Restore go.mod after pre-download (prevent Go toolchain auto-update)
+  copy:
+    content: "{{ daos_gomod_original.content | b64decode }}"
+    dest: "{{ daos_source_dir }}/src/control/go.mod"
+    mode: '0644'
+  changed_when: false
+
+- name: Warn if Go module pre-download failed
+  debug:
+    msg: >-
+      WARNING: 'go mod download' failed (rc={{ daos_go_mod_result.rc }}).
+      The Go module cache may be incomplete; DAOS builds that need missing
+      modules will fail. Set daos_goproxy in the inventory to a reachable
+      Go module proxy (e.g. https://proxy.golang.org,direct).
+  when: daos_go_mod_result.rc != 0

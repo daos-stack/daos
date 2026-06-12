@@ -1,0 +1,3 @@
+# Mock requirements-utest.txt for molecule testing.
+# Only includes packages available in the container image without network access.
+distro
