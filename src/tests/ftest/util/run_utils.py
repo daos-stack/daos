@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -447,7 +447,7 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
 
 
 def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False,
-               fanout=None, ssh_options="-oForwardAgent=yes"):
+               fanout=None):
     """Run the command on the remote hosts.
 
     Args:
@@ -473,7 +473,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
         fanout = max(task.info('fanout'), len(os.sched_getaffinity(0)))
     task.set_info('fanout', fanout)
     # Enable forwarding of the ssh authentication agent connection
-    task.set_info("ssh_options", ssh_options)
+    task.set_info("ssh_options", "-oForwardAgent=yes")
     if verbose:
         if timeout is None:
             log.debug("Running on %s without a timeout: %s", hosts, command)

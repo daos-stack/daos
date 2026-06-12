@@ -141,8 +141,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     self.log_step(f"Running '{command}' with a {timeout}s timeout")
     start = time.time()
     result = run_remote(
-        self.log, self.hostlist_clients, command, verbose=True, timeout=timeout,
-        ssh_options="-oForwardAgent=yes -t -t")
+        self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
     elapsed = time.time() - start
     (minutes, seconds) = divmod(elapsed, 60)
     self.log.info(
