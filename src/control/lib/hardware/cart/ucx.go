@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -50,11 +51,6 @@ func getProviderSetFromUCXTransport(transport string) *hardware.FabricProviderSe
 			Priority: priority,
 		})
 	}
-	// Any interface with at least one provider should allow ucx+all
-	providers.Add(&hardware.FabricProvider{
-		Name:     "ucx+all",
-		Priority: ucxCatchallPriority,
-	})
 	return providers
 }
 

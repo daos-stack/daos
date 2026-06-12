@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -180,10 +181,6 @@ func TestCart_Provider_GetFabricInterfaces(t *testing.T) {
 						&hardware.FabricProvider{
 							Name: "ucx+ud",
 						},
-						&hardware.FabricProvider{
-							Name:     "ucx+all",
-							Priority: ucxCatchallPriority,
-						},
 					),
 				},
 				&hardware.FabricInterface{
@@ -197,10 +194,6 @@ func TestCart_Provider_GetFabricInterfaces(t *testing.T) {
 						&hardware.FabricProvider{
 							Name:     "ucx+tcp",
 							Priority: ucxTCPPriority,
-						},
-						&hardware.FabricProvider{
-							Name:     "ucx+all",
-							Priority: ucxCatchallPriority,
 						},
 					),
 				},
