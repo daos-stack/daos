@@ -554,6 +554,226 @@ remap_gpu_alloc_one(d_list_t *remap_list, uint8_t *dom_cur_grp_used,
  */
 #define	LOCAL_DOM_ARRAY_SIZE	2
 #define	LOCAL_TGT_ARRAY_SIZE	4
+
+/**
+ * Fast path for GX objects - pre-shuffle domain sequence
+ * to avoid expensive hash collision handling in non-leaf layers.
+ *
+ * For GX objects with grp_nr ~= target_nr, the traditional hash-based domain
+ * selection causes O(grp_nr * dom_nr) collision checks. This function creates
+ * a randomized domain sequence based on OID, allowing O(1) domain selection.
+ */
+static int
+get_object_layout_gx_fast(struct pl_jump_map *jmap, uint32_t layout_ver,
+			  struct pl_obj_layout *layout, struct jm_obj_placement *jmop,
+			  d_list_t *out_list, uint32_t allow_version,
+			  enum layout_gen_mode gen_mode, struct daos_obj_md *md,
+			  bool *is_extending)
+{
+	struct pool_domain      *root, *fdom_children;
+	struct pool_target      *target;
+	daos_obj_id_t           oid;
+	uint8_t                 *tgts_used = NULL;
+	uint8_t			*dom_used_bitmap = NULL;
+	uint8_t			tgts_used_array[LOCAL_TGT_ARRAY_SIZE] = { 0 };
+	uint32_t		*dom_sequence = NULL;
+	uint64_t                base_key;
+	uint32_t		dom_idx = 0;
+	uint32_t		fail_tgt_cnt = 0;
+	uint32_t		fdom_count = 0;
+	d_list_t		remap_list;
+	int			fdom_lvl;
+	int			i, j, k;
+	int			rc = 0;
+
+	layout->ol_ver = allow_version;
+	D_DEBUG(DB_PL, "GX fast path: grp_nr=%u, dom_nr=%u\n",
+		jmop->jmop_grp_nr, jmop->jmop_dom_nr);
+
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
+				  PO_COMP_ID_ALL, &root);
+	if (rc == 0) {
+		D_ERROR("Could not find root node in pool map.\n");
+		return -DER_NONEXIST;
+	}
+
+	fdom_lvl = pool_map_failure_domain_level(jmap->jmp_map.pl_poolmap,
+						 jmop->jmop_fdom_lvl);
+	D_ASSERT(fdom_lvl > 0);
+
+	/* Find fault domain children */
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, jmop->jmop_fdom_lvl,
+				  PO_COMP_ID_ALL, &fdom_children);
+	if (rc <= 0) {
+		D_ERROR("Failed to find fault domain level\n");
+		return rc == 0 ? -DER_NONEXIST : rc;
+	}
+	fdom_count = rc;
+	rc = 0;
+
+	D_INIT_LIST_HEAD(&remap_list);
+
+	/* Allocate domain sequence array */
+	D_ALLOC_ARRAY(dom_sequence, fdom_count);
+	if (dom_sequence == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* Allocate domain usage bitmap for tracking */
+	D_ALLOC_ARRAY(dom_used_bitmap, (fdom_count / NBBY) + 1);
+	if (dom_used_bitmap == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* Allocate target tracking bitmap */
+	if (root->do_target_nr / NBBY + 1 > LOCAL_TGT_ARRAY_SIZE)
+		D_ALLOC_ARRAY(tgts_used, (root->do_target_nr / NBBY) + 1);
+	else
+		tgts_used = tgts_used_array;
+
+	if (tgts_used == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	oid = md->omd_id;
+	base_key = jm_oid_hash(layout_ver, oid);
+
+	/* Create a shuffled domain sequence based on OID hash */
+	for (i = 0; i < fdom_count; i++)
+		dom_sequence[i] = i;
+
+	/* Fisher-Yates shuffle using OID-based random */
+	for (i = fdom_count - 1; i > 0; i--) {
+		uint64_t rand_key = jm_crc(base_key, i, 0xFa57Da7a);
+		uint32_t j_swap = d_hash_jump(rand_key, i + 1);
+		uint32_t tmp = dom_sequence[i];
+		dom_sequence[i] = dom_sequence[j_swap];
+		dom_sequence[j_swap] = tmp;
+	}
+
+	/* Place each shard using the pre-shuffled domain sequence */
+	for (i = 0, k = 0; i < jmop->jmop_grp_nr; i++) {
+		/* Reset domain usage bitmap every dom_nr groups to allow reuse */
+		if (i > 0 && i % fdom_count == 0) {
+			memset(dom_used_bitmap, 0, (fdom_count / NBBY) + 1);
+		}
+
+		for (j = 0; j < jmop->jmop_grp_size; j++, k++) {
+			uint32_t tries = 0;
+			uint32_t selected_dom_seq_idx;
+			uint32_t selected_dom_idx;
+			struct pool_domain *selected_dom;
+			uint64_t shard_key;
+			uint32_t selected_tgt_idx, tgt_idx;
+
+			/* Find next unused domain in the sequence */
+			selected_dom_seq_idx = dom_idx % fdom_count;
+			while (isset(dom_used_bitmap, dom_sequence[selected_dom_seq_idx]) &&
+			       tries < fdom_count) {
+				selected_dom_seq_idx = (selected_dom_seq_idx + 1) % fdom_count;
+				tries++;
+			}
+
+			if (tries >= fdom_count) {
+				/* All domains used in this group, allow reuse */
+				selected_dom_seq_idx = dom_idx % fdom_count;
+			}
+
+			selected_dom_idx = dom_sequence[selected_dom_seq_idx];
+			selected_dom = &fdom_children[selected_dom_idx];
+			setbit(dom_used_bitmap, selected_dom_idx);
+			dom_idx++;
+
+			/* Hash within the selected domain to pick a target */
+			shard_key = jm_crc(base_key, k, 0xFa57C0de);
+
+			if (selected_dom->do_target_nr == 0) {
+				layout->ol_shards[k].po_target = -1;
+				layout->ol_shards[k].po_shard = -1;
+				layout->ol_shards[k].po_fseq = 0;
+				continue;
+			}
+
+			selected_tgt_idx = d_hash_jump(shard_key, selected_dom->do_target_nr);
+			target = &selected_dom->do_targets[selected_tgt_idx % selected_dom->do_target_nr];
+			tgt_idx = target - root->do_targets;
+
+			/* Linear probe if target already used */
+			tries = 0;
+			while (isset(tgts_used, tgt_idx) && tries < selected_dom->do_target_nr) {
+				selected_tgt_idx = (selected_tgt_idx + 1) % selected_dom->do_target_nr;
+				target = &selected_dom->do_targets[selected_tgt_idx];
+				tgt_idx = target - root->do_targets;
+				tries++;
+			}
+
+			if (tries >= selected_dom->do_target_nr && isset(tgts_used, tgt_idx)) {
+				/* All targets in this domain are used, mark as no target */
+				layout->ol_shards[k].po_target = -1;
+				layout->ol_shards[k].po_shard = -1;
+				layout->ol_shards[k].po_fseq = 0;
+				continue;
+			}
+
+			setbit(tgts_used, tgt_idx);
+
+			layout->ol_shards[k].po_target = target->ta_comp.co_id;
+			layout->ol_shards[k].po_fseq = target->ta_comp.co_fseq;
+			layout->ol_shards[k].po_shard = k;
+			layout->ol_shards[k].po_rank = target->ta_comp.co_rank;
+			layout->ol_shards[k].po_index = target->ta_comp.co_index;
+
+			/* Queue for remap if target is failed */
+			if (need_remap_comp(&target->ta_comp, allow_version, gen_mode)) {
+				fail_tgt_cnt++;
+				rc = remap_alloc_one(&remap_list, k, target, false, NULL);
+				if (rc)
+					D_GOTO(out, rc);
+			} else {
+				if (pool_target_down(target))
+					layout->ol_shards[k].po_rebuilding = 1;
+			}
+
+			if (is_extending != NULL && pool_target_is_up_or_drain(target))
+				*is_extending = true;
+		}
+	}
+
+	if (fail_tgt_cnt > 0) {
+		/* For failed targets, fall back to normal remap path */
+		uint8_t *dom_used = NULL, *dom_full = NULL;
+		uint32_t dom_size = (struct pool_domain *)(root->do_targets) - root + 1;
+		uint32_t dom_array_size = dom_size / NBBY + 1;
+
+		D_ALLOC_ARRAY(dom_used, dom_array_size);
+		D_ALLOC_ARRAY(dom_full, dom_array_size);
+		if (dom_used == NULL || dom_full == NULL) {
+			D_FREE(dom_used);
+			D_FREE(dom_full);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		rc = obj_remap_shards(jmap, layout_ver, md, layout, jmop, &remap_list,
+				      out_list, allow_version, gen_mode, tgts_used,
+				      dom_used, dom_full, fail_tgt_cnt, is_extending,
+				      fdom_lvl);
+		D_FREE(dom_used);
+		D_FREE(dom_full);
+	}
+
+out:
+	if (rc)
+		D_ERROR("GX fast path failed, rc "DF_RC"\n", DP_RC(rc));
+
+	remap_list_free_all(&remap_list);
+
+	if (dom_sequence)
+		D_FREE(dom_sequence);
+	if (dom_used_bitmap)
+		D_FREE(dom_used_bitmap);
+	if (tgts_used && tgts_used != tgts_used_array)
+		D_FREE(tgts_used);
+
+	return rc;
+}
+
 static int
 get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_layout *layout,
 		  struct jm_obj_placement *jmop, uint32_t allow_version,
@@ -585,6 +805,24 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 	int			fdom_lvl;
 	int			i, j, k;
 	int			rc = 0;
+
+	/*
+	 * Use GX fast path for objects with very large grp_nr.
+	 * Introduced in layout version 3.
+	 * Threshold: grp_nr >= 1.5 * dom_nr (tuned for real-world EC workloads).
+	 * Example: 500 nodes, EC16P3GX with 16k targets → grp_nr=842, triggers at 500*1.5=750
+	 * Fast path uses pre-shuffled domain sequence to avoid O(grp_nr * dom_nr)
+	 * collision handling in the traditional hash-based approach.
+	 */
+	oid = md->omd_id;
+	if (layout_ver >= 3 && jmop->jmop_grp_nr >= jmop->jmop_dom_nr + jmop->jmop_dom_nr / 2 &&
+	    !daos_obj_is_srank(oid)) {
+		D_DEBUG(DB_PL, "Using GX fast path for "DF_OID" grp_nr=%u dom_nr=%u\n",
+			DP_OID(oid), jmop->jmop_grp_nr, jmop->jmop_dom_nr);
+		return get_object_layout_gx_fast(jmap, layout_ver, layout, jmop,
+						 out_list, allow_version, gen_mode,
+						 md, is_extending);
+	}
 
 	/* Set the pool map version */
 	layout->ol_ver = allow_version;
@@ -635,6 +873,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 
 	fdom_lvl = pool_map_failure_domain_level(jmap->jmp_map.pl_poolmap, jmop->jmop_fdom_lvl);
 	D_ASSERT(fdom_lvl > 0);
+
 	for (i = 0, k = 0; i < jmop->jmop_grp_nr; i++) {
 		struct dom_grp_used  *remap_grp_used = NULL;
 
