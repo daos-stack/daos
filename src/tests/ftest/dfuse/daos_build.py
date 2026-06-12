@@ -16,7 +16,7 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
 from dfuse_utils import get_dfuse, start_dfuse
 from distro_utils import detect
-from run_utils import run_remote
+from run_utils import run_local, run_remote
 
 
 def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
@@ -160,8 +160,9 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             timeout *= 2
         self.log_step(f"Running '{cmd}' with a {timeout}s timeout")
         start = time.time()
-        result = run_remote(
-            self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
+        result = run_local(self.log, command, verbose=True, timeout=timeout)
+        # result = run_remote(
+        #     self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
         elapsed = time.time() - start
         (minutes, seconds) = divmod(elapsed, 60)
         self.log.info(
