@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -212,10 +212,14 @@ struct crt_lookup_item {
 	d_list_t		 li_link;
 	/* point back to grp_priv */
 	struct crt_grp_priv	*li_grp_priv;
+	/* packed lookup key: low 24 bits of rank + 8 bits of tag */
+	uint32_t                 li_key;
 	/* rank of the target */
 	d_rank_t		 li_rank;
+	/* tag index for the target */
+	uint32_t                 li_tag;
 	/* connected HG addr */
-	hg_addr_t		 li_tag_addr[CRT_SRV_CONTEXT_NUM];
+	hg_addr_t                li_tag_addr;
 
 	/* reference count */
 	ATOMIC uint32_t		 li_ref;
