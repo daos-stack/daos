@@ -34,9 +34,8 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 6000000000
-  nvme_size: 54000000000
-  svcn: 4
+  size: 60%
+  svcn: 3
 
 container:
   type: POSIX
