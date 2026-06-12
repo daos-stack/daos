@@ -45,11 +45,29 @@ pip install /opt/daos/lib/daos/python/
 sudo prlimit --nofile=1024:262144 --pid $$
 prlimit -n
 
+: "${BULLSEYE_DIR:=/opt/BullseyeCoverage}"
+if [ -d "${BULLSEYE_DIR}" ]; then
+    export COVFILE="/tmp/test.cov"
+    export PATH="${BULLSEYE_DIR}/bin:$PATH"
+    cp "${BULLSEYE_DIR}/daos/test.cov" "${COVFILE}"
+    ls -al "${COVFILE}"
+fi
+
 mkdir -p nlt_logs
 sudo mount -t tmpfs tmpfs nlt_logs
 sudo chown jenkins:jenkins nlt_logs
+
+if [ -e "${COVFILE:-}" ]; then
+    echo "Code coverage before running unit tests:"
+    /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+fi
 
 TMPDIR="$(pwd)/nlt_logs" \
     HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
     NO_PROXY="${DAOS_NO_PROXY:-}" \
     exec ./utils/node_local_test.py "$@"
+
+if [ -e "${COVFILE:-}" ]; then
+    echo "Code coverage after running unit tests:"
+    /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true
+fi
