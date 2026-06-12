@@ -125,7 +125,8 @@ crt_proc_crt_bulk_t_deferred(struct crt_bulk *bulk)
 	ctx = bulk->crt_ctx;
 	D_ASSERT(ctx != NULL);
 
-	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl, bulk->bulk_perm, &bulk->hg_bulk_hdl);
+	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, &bulk->sgl, bulk->bulk_perm,
+				&bulk->mem_attr, &bulk->hg_bulk_hdl);
 	if (rc != DER_SUCCESS)
 		return rc;
 
@@ -202,6 +203,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 					  .iovs        = NULL,
 					  .sgl         = {0},
 					  .bulk_perm   = 0, /* unused */
+					  .mem_attr    = {0},
 					  .refcount    = 1,
 					  .bound       = false,
 					  .deferred    = false};

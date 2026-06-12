@@ -118,6 +118,23 @@ static int
 crt_na_config_init(bool primary, crt_provider_t provider, const char *interface, const char *domain,
 		   const char *port, const char *auth_key, bool port_auto_adjust);
 
+static bool
+crt_mem_device_enabled(crt_init_options_t *opt)
+{
+	unsigned int gpu_direct = 0;
+	bool	     mem_device = false;
+
+	if (opt != NULL && opt->cio_mem_device)
+		return true;
+
+	crt_env_get(D_MEM_DEVICE, &mem_device);
+	if (mem_device)
+		return true;
+
+	crt_env_get(D_GPU_DIRECT, &gpu_direct);
+	return gpu_direct != 0;
+}
+
 /* Workaround for CART-890 */
 static void
 mem_pin_workaround(void)
@@ -739,8 +756,10 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	CRT_ENV_OPT_GET(opt, progress_busy, D_PROGRESS_BUSY);
 	crt_gdata.cg_progress_busy = progress_busy;
 
-	CRT_ENV_OPT_GET(opt, mem_device, D_MEM_DEVICE);
+	mem_device = crt_mem_device_enabled(opt);
 	crt_gdata.cg_mem_device = mem_device;
+	if (mem_device)
+		D_INFO("Enabling heterogeneous memory device support\n");
 
 	CRT_ENV_OPT_GET(opt, progress_legacy, D_PROGRESS_LEGACY);
 	crt_gdata.cg_progress_legacy = progress_legacy;

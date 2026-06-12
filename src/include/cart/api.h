@@ -1002,6 +1002,23 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
 
 /**
+ * Create a bulk handle with optional side-channel memory attributes.
+ *
+ * \param[in] crt_ctx          CRT transport context
+ * \param[in] sgl              pointer to buffer segment list
+ * \param[in] bulk_perm        bulk permission, See \ref crt_bulk_perm_t
+ * \param[in] mem_attr         optional memory attributes for GPU-direct buffers
+ * \param[out] bulk_hdl        created bulk handle
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_bulk_create_with_mem_attr(crt_context_t crt_ctx, d_sg_list_t *sgl,
+			      crt_bulk_perm_t bulk_perm,
+			      daos_mem_attr_t *mem_attr,
+			      crt_bulk_t *bulk_hdl);
+
+/**
  * Bind bulk handle to local context, to associate the origin address of the
  * local context to the bulk handle.
  *

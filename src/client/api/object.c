@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -172,6 +172,28 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
+daos_obj_fetch_gpu(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		   daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		   d_sg_list_t *sgls, daos_mem_attr_t *mem_attrs,
+		   daos_iom_t *maps, daos_event_t *ev)
+{
+	daos_obj_fetch_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	rc = dc_obj_fetch_task_create(oh, th, flags | DAOS_OBJ_IO_GPU_DIRECT,
+				      dkey, nr, 0, iods, sgls, maps, NULL, NULL,
+				      ev, NULL, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->mem_attrs = mem_attrs;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		d_sg_list_t *sgls, daos_event_t *ev)
@@ -183,6 +205,27 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 				       ev, NULL, &task);
 	if (rc)
 		return rc;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_obj_update_gpu(daos_handle_t oh, daos_handle_t th, uint64_t flags,
+		    daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		    d_sg_list_t *sgls, daos_mem_attr_t *mem_attrs,
+		    daos_event_t *ev)
+{
+	daos_obj_update_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	rc = dc_obj_update_task_create(oh, th, flags | DAOS_OBJ_IO_GPU_DIRECT,
+				       dkey, nr, iods, sgls, ev, NULL, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->mem_attrs = mem_attrs;
 
 	return dc_task_schedule(task, true);
 }
@@ -879,6 +922,7 @@ oit_filter_list_cb(tse_task_t *task, void *args)
 	fargs->extra_flags	= 0;
 	fargs->iods		= oa->oa_fiods + oa->oa_listed_nr;
 	fargs->sgls		= oa->oa_fsgls + oa->oa_listed_nr;
+	fargs->mem_attrs	= NULL;
 	fargs->ioms		= NULL;
 	fargs->extra_arg	= NULL;
 	fargs->csum_iov		= NULL;

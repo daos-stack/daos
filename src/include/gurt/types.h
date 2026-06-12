@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -89,6 +90,15 @@ struct d_uuid {
 	uuid_t		uuid;
 };
 
+/** Memory type for heterogeneous memory (GPU direct) support */
+typedef enum {
+	DAOS_MEM_TYPE_HOST		= 0, /**< System/host memory (default) */
+	DAOS_MEM_TYPE_CUDA		= 1, /**< NVIDIA CUDA device memory */
+	DAOS_MEM_TYPE_CUDA_MANAGED	= 2, /**< NVIDIA CUDA managed/unified memory */
+	DAOS_MEM_TYPE_ROCM		= 3, /**< AMD ROCm device memory */
+	DAOS_MEM_TYPE_ZE		= 4, /**< Intel Level Zero device memory */
+} daos_mem_type_t;
+
 /** iovec for memory buffer */
 typedef struct {
 	/** buffer address */
@@ -151,6 +161,18 @@ d_iov_set(d_iov_t *iov, void *buf, size_t size)
 	iov->iov_buf = buf;
 	iov->iov_len = iov->iov_buf_len = size;
 }
+
+/**
+ * Side-channel memory attributes for GPU direct I/O.
+ * Used alongside d_sg_list_t to describe memory type without changing
+ * the d_iov_t wire format. Only consumed locally for bulk handle creation.
+ */
+typedef struct {
+	/** memory type of all buffers in the associated sgl */
+	daos_mem_type_t	ma_mem_type;
+	/** device ordinal (e.g., CUDA device index) */
+	uint64_t	ma_device_id;
+} daos_mem_attr_t;
 
 #if defined(__cplusplus)
 }
