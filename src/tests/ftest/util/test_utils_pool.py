@@ -630,7 +630,7 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_delete_acl(self.identifier, principal=principal)
 
     @fail_on(CommandFailure)
-    def drain(self, ranks, tgt_idx=None):
+    def drain(self, ranks, tgt_idx=None, wait=False):
         """Use dmg to drain the rank and targets from this pool.
 
         Only supported with the dmg control method.
@@ -640,12 +640,18 @@ class TestPool(TestDaosApiBase):
                 "0,2-5".
             tgt_idx (list, optional): targets to drain on ranks e.g. "1,2".
                 Defaults to None.
+            wait (bool, optional): if True, block until the triggered rebuild
+                completes (passes --wait to dmg). Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_drain(self.identifier, ranks, tgt_idx)
+        try:
+            return self.dmg.pool_drain(self.identifier, ranks, tgt_idx, wait=wait)
+        finally:
+            # Pool state changed; invalidate the cached dmg pool query data.
+            self.query_data = {}
 
     @fail_on(CommandFailure)
     def disable_aggregation(self):
@@ -670,7 +676,7 @@ class TestPool(TestDaosApiBase):
                 self.connected = False
 
     @fail_on(CommandFailure)
-    def exclude(self, ranks, tgt_idx=None, force=True):
+    def exclude(self, ranks, tgt_idx=None, force=True, wait=False):
         """Manually exclude a rank from this pool.
 
         Args:
@@ -679,26 +685,38 @@ class TestPool(TestDaosApiBase):
             tgt_idx (list, optional): targets to exclude on ranks e.g. "1,2".
                 Defaults to None.
             force (bool, optional): force exclusion regardless of data loss. Defaults to true
+            wait (bool, optional): if True, block until the triggered rebuild
+                completes (passes --wait to dmg). Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx, force=force)
+        try:
+            return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx, force=force, wait=wait)
+        finally:
+            # Pool state changed; invalidate the cached dmg pool query data.
+            self.query_data = {}
 
     @fail_on(CommandFailure)
-    def extend(self, ranks):
+    def extend(self, ranks, wait=False):
         """Extend the pool to additional ranks.
 
         Args:
             ranks (str): Comma separated daos_server-rank ranges to extend e.g.
                 "0,2-5".
+            wait (bool, optional): if True, block until the triggered rebuild
+                completes (passes --wait to dmg). Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_extend(self.identifier, ranks)
+        try:
+            return self.dmg.pool_extend(self.identifier, ranks, wait=wait)
+        finally:
+            # Pool state changed; invalidate the cached dmg pool query data.
+            self.query_data = {}
 
     def get_acl(self):
         """Get ACL from a DAOS pool.
@@ -836,7 +854,7 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_query_targets(self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
-    def reintegrate(self, ranks, tgt_idx=None):
+    def reintegrate(self, ranks, tgt_idx=None, wait=False):
         """Use dmg to reintegrate the rank and targets into this pool.
 
         Args:
@@ -844,12 +862,18 @@ class TestPool(TestDaosApiBase):
                 e.g. "0,2-5".
             tgt_idx (list, optional): targets to reintegrate on ranks e.g. "1,2".
                 Defaults to None.
+            wait (bool, optional): if True, block until the triggered rebuild
+                completes (passes --wait to dmg). Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx)
+        try:
+            return self.dmg.pool_reintegrate(self.identifier, ranks, tgt_idx, wait=wait)
+        finally:
+            # Pool state changed; invalidate the cached dmg pool query data.
+            self.query_data = {}
 
     def rebuild_start(self, *args, **kwargs):
         """Use dmg to start rebuild on this pool.

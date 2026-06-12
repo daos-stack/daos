@@ -538,7 +538,20 @@ func (cmd *poolEvictCmd) Execute(args []string) error {
 // processed.
 type poolRanksCmd struct {
 	poolCmd
+	waitCmd
 	RankList ui.RankSetFlag `long:"ranks" required:"1" description:"Comma-separated list of rank-range strings to operate on for a single pool"`
+}
+
+// maybeWaitForRebuild blocks until the rebuild triggered by this command
+// completes, when --wait was supplied and rebuildTriggered is true.
+func (cmd *poolRanksCmd) maybeWaitForRebuild(rebuildTriggered bool) error {
+	if !cmd.Wait || !rebuildTriggered {
+		return nil
+	}
+	if err := control.WaitForPoolRebuild(cmd.MustLogCtx(), cmd.ctlInvoker, cmd.PoolID().String()); err != nil {
+		return errors.Wrap(err, "waiting for rebuild")
+	}
+	return nil
 }
 
 // poolExcludeCmd is the struct representing the command to exclude a DAOS target.
@@ -564,6 +577,10 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 
 	resp, err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
+		return err
+	}
+
+	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
 		return err
 	}
 
@@ -606,6 +623,10 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 		return err
 	}
 
+	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
+		return err
+	}
+
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
@@ -628,21 +649,20 @@ type poolExtendCmd struct {
 
 // Execute is run when PoolExtendCmd subcommand is activated
 func (cmd *poolExtendCmd) Execute(args []string) error {
-	msg := "succeeded"
-
 	req := &control.PoolExtendReq{
 		ID:    cmd.PoolID().String(),
 		Ranks: cmd.RankList.Ranks(),
 	}
 
-	err := control.PoolExtend(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-	if err != nil {
-		msg = errors.WithMessage(err, "failed").Error()
+	if err := control.PoolExtend(cmd.MustLogCtx(), cmd.ctlInvoker, req); err != nil {
+		return errors.Wrap(err, "Pool-extend")
+	}
+	if err := cmd.maybeWaitForRebuild(true); err != nil {
+		return err
 	}
 
-	cmd.Infof("Extend command %s\n", msg)
-
-	return err
+	cmd.Info("Pool-extend command succeeded")
+	return nil
 }
 
 // poolReintegrateCmd is the struct representing the command to Add a DAOS target.
@@ -666,6 +686,10 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 
 	resp, err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
+		return err
+	}
+
+	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
 		return err
 	}
 

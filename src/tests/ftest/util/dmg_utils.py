@@ -674,7 +674,7 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "destroy"), pool=pool, force=force, recursive=recursive)
 
-    def pool_drain(self, pool, ranks, tgt_idx=None):
+    def pool_drain(self, pool, ranks, tgt_idx=None, wait=False):
         """Drain a daos_server from the pool.
 
         Args:
@@ -683,6 +683,8 @@ class DmgCommand(DmgCommandBase):
                 "0,2-5".
             tgt_idx (list, optional): targets to drain on ranks e.g. "1,2".
                 Defaults to None.
+            wait (bool, optional): if True, pass --wait so dmg blocks until the
+                triggered rebuild completes. Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -693,7 +695,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "drain"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
+            ("pool", "drain"), pool=pool, ranks=ranks, tgt_idx=tgt_idx, wait=wait)
 
     def pool_evict(self, pool):
         """Evict a pool.
@@ -711,7 +713,7 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "evict"), pool=pool)
 
-    def pool_exclude(self, pool, ranks, tgt_idx=None, force=False):
+    def pool_exclude(self, pool, ranks, tgt_idx=None, force=False, wait=False):
         """Exclude a daos_server from the pool.
 
         Args:
@@ -721,6 +723,8 @@ class DmgCommand(DmgCommandBase):
             tgt_idx (list, optional): targets to exclude on ranks e.g. "1,2".
                 Defaults to None.
             force (bool, optional): force exclusion regardless of data loss. Defaults to False
+            wait (bool, optional): if True, pass --wait so dmg blocks until the
+                triggered rebuild completes. Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -731,15 +735,18 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "exclude"), pool=pool, ranks=ranks, tgt_idx=tgt_idx, force=force)
+            ("pool", "exclude"), pool=pool, ranks=ranks, tgt_idx=tgt_idx, force=force,
+            wait=wait)
 
-    def pool_extend(self, pool, ranks):
+    def pool_extend(self, pool, ranks, wait=False):
         """Extend the daos_server pool.
 
         Args:
             pool (str): Pool uuid.
             ranks (str): Comma separated daos_server-rank ranges to extend e.g.
                 "0,2-5".
+            wait (bool, optional): if True, pass --wait so dmg blocks until the
+                triggered rebuild completes. Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -750,7 +757,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "extend"), pool=pool, ranks=ranks)
+            ("pool", "extend"), pool=pool, ranks=ranks, wait=wait)
 
     def pool_get_acl(self, pool):
         """Get the ACL for a given pool.
@@ -926,7 +933,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("pool", "query-targets"), pool=pool,
                                      rank=rank, target_idx=target_idx)
 
-    def pool_reintegrate(self, pool, ranks, tgt_idx=None):
+    def pool_reintegrate(self, pool, ranks, tgt_idx=None, wait=False):
         """Reintegrate a daos_server to the pool.
 
         Args:
@@ -935,6 +942,8 @@ class DmgCommand(DmgCommandBase):
                 e.g. "0,2-5".
             tgt_idx (list, optional): targets to reintegrate on ranks e.g. "1,2".
                 Defaults to None.
+            wait (bool, optional): if True, pass --wait so dmg blocks until the
+                triggered rebuild completes. Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -945,7 +954,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "reintegrate"), pool=pool, ranks=ranks, tgt_idx=tgt_idx)
+            ("pool", "reintegrate"), pool=pool, ranks=ranks, tgt_idx=tgt_idx, wait=wait)
 
     def pool_rebuild_start(self, pool):
         """Rebuild start request submitted to pool.
