@@ -761,6 +761,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	     unsigned int n_events, struct daos_event **events)
 {
 	struct eq_progress_arg	epa;
+	struct d_fault_attr_t  *fa;
 	int			rc;
 
 	if (n_events == 0 || events == NULL)
@@ -777,6 +778,13 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	epa.events	= events;
 	epa.wait_running = wait_running;
 	epa.count	= 0;
+
+	/* Fault injection: crt_progress failure BEFORE dequeue; caller's evp remains stale. */
+	fa = d_fault_attr_lookup(DAOS_FAULT_EQ_POLL_FAIL);
+	if (fa != NULL && D_SHOULD_FAIL(fa)) {
+		daos_eq_putref(epa.eqx);
+		return -DER_HG;
+	}
 
 	/* pass the timeout to crt_progress() with a conditional callback */
 	rc = crt_progress_cond(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
