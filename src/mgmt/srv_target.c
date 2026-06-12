@@ -15,6 +15,7 @@
 #include <sys/sysinfo.h>
 #include <ftw.h>
 #include <dirent.h>
+#include <string.h>
 
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
@@ -1540,6 +1541,51 @@ int
 ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 {
 	struct mgmt_tgt_map_update_in  *in = crt_req_get(rpc);
+	d_rank_t                        self_rank = dss_self_rank();
+	uint64_t                        self_inc  = 0;
+	uint64_t                        map_inc   = 0;
+	const char                     *map_uri   = "<none>";
+	char                           *self_uri  = NULL;
+	int                             self_inc_rc;
+	int                             self_uri_rc;
+	bool                            map_has_self = false;
+	bool                            inc_mismatch = false;
+	bool                            uri_mismatch = false;
+	bool                            warn;
+	const char                     *warn_prefix;
+	uint32_t                        i;
+
+	for (i = 0; i < in->tm_servers.ca_count; i++) {
+		if (in->tm_servers.ca_arrays[i].se_rank == self_rank) {
+			map_has_self = true;
+			map_inc      = in->tm_servers.ca_arrays[i].se_incarnation;
+			if (in->tm_servers.ca_arrays[i].se_uri != NULL)
+				map_uri = in->tm_servers.ca_arrays[i].se_uri;
+			break;
+		}
+	}
+
+	self_inc_rc = crt_self_incarnation_get(&self_inc);
+	self_uri_rc = crt_self_uri_get(0 /* tag */, &self_uri);
+
+	if (map_has_self && self_inc_rc == 0)
+		inc_mismatch = self_inc != map_inc;
+	if (map_has_self && self_uri_rc == 0 && map_uri != NULL)
+		uri_mismatch = strcmp(self_uri, map_uri) != 0;
+
+	warn        = !map_has_self || inc_mismatch || uri_mismatch;
+	warn_prefix = warn ? "MISMATCH " : "";
+	D_CDEBUG(warn, DLOG_WARN, DB_MGMT,
+		 "%smap update recv: version=%u self_rank=%u self_inc=%lu self_uri=%s "
+		 "map_has_self=%d map_inc=%lu map_uri=%s nservers=" DF_U64
+		 " self_inc_rc=%d self_uri_rc=%d\n",
+		 warn_prefix, in->tm_map_version, self_rank, (unsigned long)self_inc,
+		 self_uri_rc == 0 ? self_uri : "<unavailable>", map_has_self,
+		 (unsigned long)map_inc, map_uri, in->tm_servers.ca_count, self_inc_rc,
+		 self_uri_rc);
+
+	if (self_uri_rc == 0)
+		D_FREE(self_uri);
 
 	return ds_mgmt_group_update(in->tm_servers.ca_arrays, in->tm_servers.ca_count,
 				    in->tm_map_version);
@@ -1571,6 +1617,17 @@ ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 {
 	struct mgmt_tgt_map_update_out *out_source = crt_reply_get(source);
 	struct mgmt_tgt_map_update_out *out_result = crt_reply_get(result);
+	d_rank_t                        src_rank   = CRT_NO_RANK;
+	int                             rc;
+
+	rc = crt_req_src_rank_get(source, &src_rank);
+	if (rc != 0)
+		src_rank = CRT_NO_RANK;
+
+	if (out_source->tm_rc != 0) {
+		D_WARN("map update aggregate member error: src_rank=%u tm_rc=%d\n", src_rank,
+		       out_source->tm_rc);
+	}
 
 	out_result->tm_rc += out_source->tm_rc;
 	return 0;

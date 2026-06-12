@@ -50,6 +50,7 @@ server_config:
         - D_LOG_FILE_APPEND_RANK=1
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
+        - DAOS_MAP_UPDATE_VERBOSE=1
         - D_LOG_STDERR_IN_LOG=1
       storage: auto
     1:
@@ -63,6 +64,7 @@ server_config:
         - D_LOG_FILE_APPEND_RANK=1
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
+        - DAOS_MAP_UPDATE_VERBOSE=1
         - D_LOG_STDERR_IN_LOG=1
       storage: auto
   transport_config:

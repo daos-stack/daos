@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,6 +141,20 @@ free_server_list(struct server_entry *list, int len)
 	D_FREE(list);
 }
 
+static bool
+map_update_verbose_enabled(void)
+{
+	static bool initialized;
+	static bool enabled;
+
+	if (!initialized) {
+		d_getenv_bool("DAOS_MAP_UPDATE_VERBOSE", &enabled);
+		initialized = true;
+	}
+
+	return enabled;
+}
+
 static struct server_entry *
 dup_server_list(struct server_entry *in, int in_len)
 {
@@ -221,10 +236,27 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 	struct mgmt_tgt_map_update_out *out;
 	crt_opcode_t			opc;
 	crt_rpc_t		       *rpc;
+	int                             i;
 	int				rc;
+	bool                            verbose;
 
+	verbose = map_update_verbose_enabled();
 	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d\n", map_version,
 		nservers);
+	if (verbose) {
+		for (i = 0; i < nservers; i++) {
+			const char *uri = "<none>";
+
+			if (servers[i].se_uri != NULL)
+				uri = servers[i].se_uri;
+
+			D_DEBUG(DB_MGMT, "map[%d/%d]: rank=%u inc=%lu uri=%s flags=%u nctxs=%u\n",
+				i + 1, nservers, servers[i].se_rank,
+				(unsigned long)servers[i].se_incarnation, uri,
+				(unsigned int)servers[i].se_flags,
+				(unsigned int)servers[i].se_nctxs);
+		}
+	}
 
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
@@ -254,8 +286,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: "DF_RC"\n",
-		map_version, nservers, DP_RC(rc));
+	DL_CDEBUG(rc, DLOG_WARN, DB_MGMT, rc, "map update bcast: version=%u nservers=%d",
+		  map_version, nservers);
 	return rc;
 }
 
