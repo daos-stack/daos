@@ -552,17 +552,28 @@
    ...
 }
 {
-   Go syscall.
+   Go syscall write
    Memcheck:Param
    write(buf)
-   fun:syscall.Syscall.abi0
+   fun:internal/runtime/*Syscall6
 }
 {
-   DAOS-14680-1
+   Go syscall read
+   Memcheck:Param
+   read(buf)
+   fun:internal/runtime/*Syscall6
+}
+{
+   context Err()
+   Memcheck:Addr8
+   fun:context.(*valueCtx).Err
+}
+{
+   Racecall cgo malloc
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   fun:_cgo_0edd79296193_Cfunc__Cmalloc
+   fun:_cgo_*_Cfunc__Cmalloc
    fun:runtime.asmcgocall.abi0
    ...
    fun:racecall
@@ -583,25 +594,9 @@
    fun:aeshashbody
 }
 {
-   DAOS-15159
-   Memcheck:Param
-   write(buf)
-   fun:internal/runtime/syscall.Syscall6
-}
-{
    DAOS-15548
    Memcheck:Addr1
    fun:racecallatomic
-}
-{
-   Go runtime cgo malloc
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:_cgo_b68ed06c1ed7_Cfunc__Cmalloc
-   fun:runtime.asmcgocall.abi0
-   ...
-   fun:racecall
 }
 {
    __tsan_go_atomic64_load
@@ -625,14 +620,24 @@
    fun:racecall
 }
 {
-   DAOS-16052
+   Persistentalloc cgo malloc
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   fun:_cgo_b68ed06c1ed7_Cfunc__Cmalloc
+   fun:_cgo_*_Cfunc__Cmalloc
    fun:runtime.asmcgocall.abi0
    ...
    fun:runtime.persistentalloc
+}
+{
+   Newproc cgo malloc
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_cgo_*_Cfunc__Cmalloc
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:runtime.newproc.abi0
 }
 {
    __tsan_write_pc
@@ -695,12 +700,6 @@
    racecalladdr
    Memcheck:Addr8
    fun:racecalladdr
-}
-{
-   Syscall6 param
-   Memcheck:Param
-   read(buf)
-   fun:internal/runtime/syscall.Syscall6
 }
 {
    __tsan_go_atomic32_load

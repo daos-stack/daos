@@ -1045,7 +1045,7 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being destroying (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
 			cont_child->sc_destroying);
-		rc = -DER_CONT_NONEXIST;
+		rc = -DER_CONT_DESTROYING;
 	} else if (cont_child->sc_stopping) {
 		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being stopped (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
@@ -1503,14 +1503,10 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		return rc;
 
-	/**
-	 * Return -DER_CONT_NONEXIST to simplify caller-side handling.
-	 * This may return -DER_CONT_DESTROYING in the future if needed.
-	 **/
 	if ((*ds_cont)->sc_destroying) {
 		cont_child_put(tls->dt_cont_cache, *ds_cont);
 		*ds_cont = NULL;
-		return -DER_CONT_NONEXIST;
+		return -DER_CONT_DESTROYING;
 	}
 
 	if ((*ds_cont)->sc_stopping) {
@@ -1530,8 +1526,11 @@ static int
 cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, bool locked,
 			bool *started, struct ds_cont_child **cont_out)
 {
-	struct ds_pool_child	*pool_child;
-	int rc;
+	struct ds_pool_child *pool_child;
+	uint64_t              sched_seq1;
+	uint64_t              sched_seq2 = 0;
+	bool                  destroy    = true;
+	int                   rc;
 
 	pool_child = ds_pool_child_lookup(pool_uuid);
 	if (pool_child == NULL) {
@@ -1552,26 +1551,36 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 		return rc;
 	}
 
+	sched_seq1 = sched_cur_seq();
+
 	/* Hold sp_recov_lock to control the race with recovering container for pool. */
-	if (!locked)
+	if (!locked) {
 		ABT_rwlock_rdlock(pool_child->spc_pool->sp_recov_lock);
+		sched_seq2 = sched_cur_seq();
+	}
 
 	D_DEBUG(DB_MD, DF_CONT": creating new vos container\n",
 		DP_CONT(pool_uuid, cont_uuid));
 
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
+	if (unlikely(rc == -DER_EXIST && !locked)) {
+		D_ASSERT(sched_seq1 != sched_seq2);
+		rc      = 0;
+		destroy = false;
+	}
+
 	if (!rc) {
 		rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 		if (rc == 0) {
 			if (cont_out != NULL)
 				(*cont_out)->sc_status_pm_ver = pm_ver;
-			else
+			else if (destroy)
 				D_DEBUG(DB_REBUILD,
 					"Re-create container " DF_UUID " in the pool " DF_UUID
 					" on the target %u/%u\n",
 					DP_UUID(cont_uuid), DP_UUID(pool_uuid), dss_self_rank(),
 					dss_get_module_info()->dmi_tgt_id);
-		} else {
+		} else if (destroy) {
 			int rc_tmp;
 
 			rc_tmp = vos_cont_destroy(pool_child->spc_hdl, cont_uuid);
@@ -1990,8 +1999,10 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid), cont_child->sc_open,
 		DP_UUID(cont_hdl_uuid));
 
+	ABT_mutex_lock(hdl->sch_cont->sc_open_mutex);
 	D_ASSERT(cont_child->sc_open > 0);
 	cont_child->sc_open--;
+	ABT_mutex_unlock(hdl->sch_cont->sc_open_mutex);
 	if (cont_child->sc_open == 0)
 		dtx_cont_close(cont_child, false);
 
@@ -2529,15 +2540,20 @@ out:
 void
 ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 {
-	struct cont_op_in	*in = crt_req_get(rpc);
-	struct cont_op_out	*out = crt_reply_get(rpc);
-	struct ds_pool_hdl	*pool_hdl;
-	crt_opcode_t		opc = opc_get(rpc->cr_opc);
-	int			rc;
+	struct cont_op_in  *in  = crt_req_get(rpc);
+	struct cont_op_out *out = crt_reply_get(rpc);
+	uuid_t              pool_uuid;
+	struct ds_pool_hdl *pool_hdl;
+	crt_opcode_t        opc = opc_get(rpc->cr_opc);
+	int                 rc;
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	cont_op_in_get_pool_uuid(rpc, pool_uuid);
+	rc = ds_pool_hdl_lookup(pool_uuid, in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_CONT ": failed to lookup pool handle: " DF_RC "\n",
+			DP_CONT(pool_uuid, in->ci_uuid), DP_RC(rc));
+		goto out;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
