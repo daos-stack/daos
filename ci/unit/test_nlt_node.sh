@@ -67,6 +67,8 @@ TMPDIR="$(pwd)/nlt_logs" \
     NO_PROXY="${DAOS_NO_PROXY:-}" \
     exec ./utils/node_local_test.py "$@"
 
+ls -al /tmp
+
 if [ -e "${COVFILE:-}" ]; then
     echo "Code coverage after running unit tests:"
     /opt/BullseyeCoverage/bin/covdir --file "${COVFILE}" || true

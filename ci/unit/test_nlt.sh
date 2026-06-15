@@ -17,3 +17,5 @@ ssh -T "$SSH_KEY_ARGS" jenkins@"$NODE" \
     "DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
      DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\" \
      bash -s -- $*" < "$mydir/test_nlt_node.sh"
+
+ls -al /tmp

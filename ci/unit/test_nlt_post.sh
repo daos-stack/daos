@@ -13,6 +13,8 @@ if [ -z "$test_log_dir" ]; then
     exit 1
 fi
 
+ls -al /tmp
+
 rm -rf "$test_log_dir"
 mkdir "$test_log_dir"
 
@@ -25,12 +27,16 @@ mkdir "$test_log_dir"
 rsync -v -rlpt -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":"build/${test_log_dir}/" \
       --filter="include dnt*.log" --filter="include dnt*.log.bz2" \
       --filter="include dnt_fi_*_logs" --filter="include */" \
-      --filter="include test.cov" --filter="exclude *" "${test_log_dir}/"
+      --filter="exclude *" "${test_log_dir}/"
 
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
       --filter="include nlt*.json" --filter="include dnt*.xml" \
       --filter="include nltir*.xml" --filter="include nltr*.json" \
       --filter="include nlt-junit.xml" --filter="exclude *" ./
+
+# Collect any code coverage files if they exist.
+rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/" \
+      --filter="include test.cov" --filter="exclude *" "${test_log_dir}/"
 
 mkdir -p vm_test
 mv nlt-errors.json vm_test/
