@@ -359,7 +359,9 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         self.log_step(msg)
         query_reports = None
         for _ in range(8):
-            check_query_out = dmg_command.check_query()
+            # Scope by pool UUID: resolved findings from prior checker instances survive
+            # disable/enable and reuse pool labels (DAOS-18773).
+            check_query_out = dmg_command.check_query(pool=pool_1.uuid)
             # Status becomes RUNNING immediately, but it may take a while to detect the
             # inconsistency. If detected, "reports" field is filled.
             if check_query_out["response"]["status"] == "RUNNING":
@@ -392,26 +394,22 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         dmg_command.check_start(pool=corrupted_diff)
 
         self.log_step("Wait for checker to detect inconsistent container label for pool_2 pool_3.")
-        query_reports = None
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            # Status becomes RUNNING immediately, but it may take a while to detect the
-            # inconsistency. If detected, "reports" field is filled.
-            if check_query_out["response"]["status"] == "RUNNING":
-                query_reports = check_query_out["response"]["reports"]
-                # We have three corrupted pools, so wait for three reports.
-                if query_reports and len(query_reports) == 3:
-                    break
-            time.sleep(5)
-        if not query_reports:
-            self.fail("Checker didn't detect any inconsistency!")
-        if len(query_reports) < 3:
-            self.fail(f"Checker only detected {len(query_reports)}/3 consistencies!")
-        # Obtain the seq nums (ID) to repair.
         seq_nums = []
-        for query_report in query_reports:
-            if query_report["pool_label"] in (pool_2.label.value, pool_3.label.value):
-                seq_nums.append(str(query_report["seq"]))
+        for pool in (pool_2, pool_3):
+            query_reports = None
+            for _ in range(8):
+                check_query_out = dmg_command.check_query(pool=pool.uuid)
+                # Status becomes RUNNING immediately, but it may take a while to detect the
+                # inconsistency. If detected, "reports" field is filled.
+                if check_query_out["response"]["status"] == "RUNNING":
+                    query_reports = check_query_out["response"]["reports"]
+                    if query_reports:
+                        break
+                time.sleep(5)
+            if not query_reports:
+                self.fail(f"Checker didn't detect any inconsistency in {pool.identifier}!")
+            # Obtain the seq num (ID) to repair.
+            seq_nums.append(str(query_reports[0]["seq"]))
 
         self.log_step("Repair with option 2 for pool_2 pool_3.")
         for seq_num in seq_nums:
