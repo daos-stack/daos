@@ -164,7 +164,6 @@ if [ "${debug}" = "true" ]; then
 
   run_cmd "which python" || true
   run_cmd "which python3" || true
-  run_cmd "${venv_python} -c 'import sys; print(sys.executable)'" || true
   run_cmd "cat /etc/uv/uv.toml" || true
   run_cmd "which uv" || true
   run_cmd "echo $PATH" || true
@@ -172,7 +171,7 @@ if [ "${debug}" = "true" ]; then
 fi
 
 # Build DAOS dependencies
-scons="${venv_python} -m SCons --enable-virtualenv"
+scons="${venv_python} -m SCons"
 run_cmd "${scons} -C ${build_dir} --jobs ${build_jobs} --build-deps=only" || exit
 
 if [[ -n ${mount_dir-} ]]; then
