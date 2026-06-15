@@ -46,11 +46,8 @@ def fault_injection_enabled(logger):
     """
     logger.debug("-" * 80)
     logger.debug("Checking if 'fault_status' utility is available:")
-    if run_local(logger, "which fault_status").passed:
-        logger.debug("  fault_status is available")
-    else:
-        logger.debug("  fault_status is not available")
-        logger.debug("Assuming fault injection is enabled")
+    if not run_local(logger, "which fault_status").passed:
+        logger.debug("  Missing 'fault_status' command; assuming fault injection is enabled")
         return True
     logger.debug("Checking for fault injection enablement via 'fault_status':")
     if run_local(logger, "fault_status").passed:
