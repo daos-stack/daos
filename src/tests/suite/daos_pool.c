@@ -744,9 +744,7 @@ pool_op_retry(void **state)
 		      orig_self_heal);
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "none");
 	assert_rc_equal(rc, 0);
-	char *orig_self_heal_escaped = test_escape_self_heal(orig_self_heal);
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", orig_self_heal_escaped);
-	free(orig_self_heal_escaped);
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", orig_self_heal);
 	assert_rc_equal(rc, 0);
 	print_message("success (restored self_heal to %s)\n", orig_self_heal);
 	free(orig_self_heal);
