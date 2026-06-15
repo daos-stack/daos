@@ -29,18 +29,19 @@
 #define DTX_UMOFF_TYPES		(DTX_UMOFF_ILOG | DTX_UMOFF_SVT | DTX_UMOFF_EVT)
 #define DTX_INDEX_INVAL		(int32_t)(-1)
 
-#define dtx_evict_lid(cont, dae)							\
-	do {										\
-		if (dae->dae_dth != NULL && dae->dae_dth->dth_ent != NULL) {		\
-			D_ASSERT(dae->dae_dth->dth_ent == dae);				\
-			dae->dae_dth->dth_ent = NULL;					\
-		}									\
-		D_DEBUG(DB_IO, "Evicting DTX "DF_DTI": lid=%x\n",			\
-			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));				\
-		d_list_del_init(&dae->dae_link);					\
-		lrua_evictx(cont->vc_dtx_array,						\
-			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,	\
-			    DAE_EPOCH(dae));						\
+#define dtx_evict_lid(cont, dae)                                                                   \
+	do {                                                                                       \
+		if (dae->dae_dth != NULL && dae->dae_dth->dth_ent != NULL) {                       \
+			D_ASSERT(dae->dae_dth->dth_ent == dae);                                    \
+			dae->dae_dth->dth_need_validation = 1;                                     \
+			dae->dae_dth->dth_ent             = NULL;                                  \
+		}                                                                                  \
+		D_DEBUG(DB_IO, "Evicting DTX " DF_DTI ": lid = %x\n", DP_DTI(&DAE_XID(dae)),       \
+			DAE_LID(dae));                                                             \
+		d_list_del_init(&dae->dae_link);                                                   \
+		lrua_evictx(cont->vc_dtx_array,                                                    \
+			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,                 \
+			    DAE_EPOCH(dae));                                                       \
 	} while (0)
 
 bool vos_skip_old_partial_dtx;
@@ -2687,6 +2688,8 @@ vos_dtx_post_handle(struct vos_container *cont,
 	}
 
 	for (i = 0; i < count; i++) {
+		struct vos_dtx_act_ent *dae = NULL;
+
 		if (daes[i] == NULL)
 			continue;
 
@@ -2703,9 +2706,18 @@ vos_dtx_post_handle(struct vos_container *cont,
 		}
 
 		d_iov_set(&kiov, &DAE_XID(daes[i]), sizeof(DAE_XID(daes[i])));
-		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
-				   &kiov, NULL);
+		/*
+		 * For abort case, set @args as NULL, then related vos object will be evicted from
+		 * cache via dbtree_delete().
+		 */
+		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov,
+				   abort ? NULL : &dae);
 		if (rc == 0 || rc == -DER_NONEXIST) {
+			if (dae != NULL) {
+				D_ASSERT(dae == daes[i]);
+				dtx_act_ent_cleanup(cont, dae, false, false);
+			}
+
 			dtx_evict_lid(cont, daes[i]);
 		} else {
 			/* The DTX entry has been committed or aborted, but we

@@ -267,6 +267,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithSystemRamReserved(5).
 		WithAllowNumaImbalance(true).
 		WithAllowTHP(true).
+		WithDisableEngineAutoRestart(true).
+		WithEngineAutoRestartMinDelay(120).
 		WithKernelConfigPath("/host/boot/config")
 
 	// add engines explicitly to test functionality applied in WithEngines()

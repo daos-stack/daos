@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,61 +24,7 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a TelemetryPoolSpaceMetrics object."""
-        super().__init__(*args, **kwargs)
-
-        self.metric_names = [
-            'engine_pool_vos_space_scm_used',
-            'engine_pool_vos_space_nvme_used']
-        self.data_size = 0
-        self.scm_data_size_percent = None
-        self.scm_metadata_max_size = 0
-        self.pool_space_metrics_minmax = None
-
-    def setUp(self):
-        """Set up each test case."""
-        # Start the servers and agents
-        super().setUp()
-
-        self.data_size = self.ior_cmd.block_size.value
-        self.scm_metadata_max_size = self.params.get(
-            "metadata_max_size", "/run/scm_metric_thresholds/*")
-        self.pool_space_metrics_minmax = {
-            "/run/pool_scm/*": {
-                "engine_pool_vos_space_scm_used": (
-                    self.data_size,
-                    self.data_size + self.scm_metadata_max_size
-                ),
-                "engine_pool_vos_space_nvme_used": (0, 0)
-            },
-            "/run/pool_scm_nvme/*": {
-                "engine_pool_vos_space_scm_used": (1, self.scm_metadata_max_size),
-                "engine_pool_vos_space_nvme_used": (self.data_size, self.data_size)
-            }
-        }
-
-    def get_expected_values_range(self, namespace):
-        """Return the expected metrics value output.
-
-        This function returns a hash map of pairs defining min and max values of each tested
-        telemetry metrics.  The hash map of pairs returned depends on the pool created with the
-        given namespace and the size of the data written in it.
-
-        Args:
-            namespace (string): Namespace of the last created pool.
-
-        Returns:
-            expected_values (dict): Dictionary of the expected metrics value output.
-        """
-
-        self.assertIn(
-            namespace, self.pool_space_metrics_minmax,
-            "Invalid pool namespace: {}".format(namespace))
-
-        return self.pool_space_metrics_minmax[namespace]
-
-    def get_metrics(self, names):
+    def __get_metrics(self, names):
         """Obtain the specified metrics information.
 
         Args:
@@ -113,46 +60,69 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=telemetry
+        :avocado: tags=telemetry,pool
         :avocado: tags=TelemetryPoolSpaceMetrics,test_telemetry_pool_space_metrics
         """
+        metric_names = [
+            'engine_pool_vos_space_scm_used',
+            'engine_pool_vos_space_nvme_used']
+
+        data_size = self.ior_cmd.block_size.value
+        scm_metadata_max_size = self.params.get(
+            "metadata_max_size", "/run/scm_metric_thresholds/*")
+        pool_space_metrics_minmax = {
+            "/run/pool_scm/*": {
+                "engine_pool_vos_space_scm_used": (
+                    data_size,
+                    data_size + scm_metadata_max_size
+                ),
+                "engine_pool_vos_space_nvme_used": (0, 0)
+            },
+            "/run/pool_scm_nvme/*": {
+                "engine_pool_vos_space_scm_used": (1, scm_metadata_max_size),
+                "engine_pool_vos_space_nvme_used": (data_size, data_size)
+            }
+        }
 
         test_timeouts = {}
         for namespace in ["/run/pool_scm/*", "/run/pool_scm_nvme/*"]:
+            if namespace not in pool_space_metrics_minmax:
+                self.fail(f"Invalid pool namespace: {namespace}")
+            expected_values = pool_space_metrics_minmax[namespace]
             test_name = namespace.split("/")[2]
-            self.log.debug("Starting test %s", test_name)
 
-            # create pool and container
-            self.add_pool(namespace=namespace, create=True, connect=False)
+            self.log_step(f"Starting test {test_name} with pool namespace {namespace}")
+            self.pool = self.get_pool(namespace=namespace, connect=False)
             self.pool.disable_aggregation()
-            self.add_container(pool=self.pool)
+            self.container = self.get_container(pool=self.pool)
 
-            # Run ior command.
+            self.log_step("Run IOR to write data to the container")
             self.update_ior_cmd_with_pool(create_cont=False)
-            self.run_ior_with_pool(
-                timeout=200, create_pool=False, create_cont=False)
+            self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
 
-            # Testing VOS space metrics
-            expected_values = self.get_expected_values_range(namespace)
+            self.log_step("Verify the metrics values")
             test_counter = 0
             timeout = TIMEOUT_DEADLINE
             while timeout > 0:
-                metrics = self.get_metrics(self.metric_names)
+                metrics = self.__get_metrics(metric_names)
 
                 is_metric_ok = True
-                for name in self.metric_names:
+                for name in metric_names:
+                    if name not in expected_values:
+                        self.fail(f"Invalid metric name: {name}")
                     val = metrics[name]
                     min_val, max_val = expected_values[name]
-                    is_metric_ok &= min_val <= val <= max_val
+                    is_this_metric_ok = min_val <= val <= max_val
+                    is_metric_ok &= is_this_metric_ok
                     self.log.debug(
                         "Check of the metric %s: got=%d, wait_in=[%d, %d], ok=%r, timeout=%d",
-                        name, val, min_val, max_val, is_metric_ok, timeout)
+                        name, val, min_val, max_val, is_this_metric_ok, timeout)
                 test_counter = (test_counter + 1) if is_metric_ok else 0
 
                 if test_counter >= 2:
-                    self.log.info(
-                        "Test %s successfully completed in %d sec",
-                        test_name, TIMEOUT_DEADLINE - timeout)
+                    self.log_step(
+                        f"Test {test_name} successfully completed "
+                        f"in {TIMEOUT_DEADLINE - timeout} sec")
                     break
 
                 time.sleep(1)
@@ -160,8 +130,8 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
 
             test_timeouts[test_name] = timeout
 
-            self.destroy_containers(self.container)
-            self.destroy_pools(self.pool)
+            self.container.destroy()
+            self.pool.destroy()
 
         self.log.info("\n############ Test Results ############")
         for test_name, timeout in test_timeouts.items():

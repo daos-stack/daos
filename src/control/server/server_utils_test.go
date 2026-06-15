@@ -8,12 +8,16 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"os/user"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -21,7 +25,10 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -377,6 +384,152 @@ func TestServer_getSrxSetting(t *testing.T) {
 	}
 }
 
+func TestServer_prepBdevStorage_errors(t *testing.T) {
+	usrCurrent, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	username := usrCurrent.Username
+	if username == "root" {
+		t.Skip("test cannot be run as root user")
+	}
+
+	for name, tc := range map[string]struct {
+		srvCfgExtra   func(*config.Server) *config.Server
+		iommuDisabled bool
+		iommuCheckErr error
+		thpEnabled    bool
+		thpCheckErr   error
+		expPrepErr    error
+	}{
+		"vfio disabled; non-root user": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithDisableVFIO(true).
+					WithEngines(pmemEngine(0))
+			},
+			expPrepErr: FaultVfioDisabled,
+		},
+		"iommu check error": {
+			iommuCheckErr: errors.New("fail"),
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: errors.New("iommu check: fail"),
+		},
+		"iommu disabled": {
+			iommuDisabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: FaultIommuDisabled,
+		},
+		"thp check error": {
+			thpCheckErr: errors.New("fail"),
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: errors.New("transparent hugepage check: fail"),
+		},
+		"thp enabled": {
+			thpEnabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
+			},
+			expPrepErr: FaultTransparentHugepageEnabled,
+		},
+		"uneven numa distribution": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugepages(16384).WithEngines(
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(pmemTier(0), nvmeTier(0)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(pmemTier(1), nvmeTier(1)),
+					engine.MockConfig().WithFabricInterfacePort(22000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(pmemTier(2), nvmeTier(2)),
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(pmemTier(3), nvmeTier(3)),
+				)
+			},
+			expPrepErr: errors.New("uneven distribution"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cfg := config.DefaultServer().
+				WithFabricProvider("ofi+verbs").
+				WithMgmtSvcReplicas("foo", "bar", "baz")
+			if tc.srvCfgExtra != nil {
+				cfg = tc.srvCfgExtra(cfg)
+			}
+
+			iommuChecker := mockIOMMUDetector{
+				enabled: !tc.iommuDisabled,
+				err:     tc.iommuCheckErr,
+			}
+			thpChecker := mockTHPDetector{
+				enabled: tc.thpEnabled,
+				err:     tc.thpCheckErr,
+			}
+
+			mockAffSrc := func(l logging.Logger, e *engine.Config) (uint, error) {
+				iface := e.Fabric.Interface
+				switch iface {
+				case "ib0":
+					return 0, nil
+				case "ib1":
+					return 1, nil
+				}
+				return 0, errors.Errorf("unrecognized fabric interface: %s", iface)
+			}
+
+			memInfo := &common.SysMemInfo{}
+			memInfo.MemTotalKiB = (50 * humanize.GiByte) / humanize.KiByte
+			memInfo.HugepageSizeKiB = 2048
+			memInfo.NumaNodes = []common.MemInfo{
+				{NumaNodeIndex: 0},
+				{NumaNodeIndex: 1},
+			}
+
+			mockIfLookup := func(string) (netInterface, error) {
+				return &mockInterface{
+					addrs: []net.Addr{&mockAddr{}},
+				}, nil
+			}
+
+			if err = processConfig(log, cfg, mockFabIfSet, memInfo, mockIfLookup,
+				mockAffSrc); err != nil {
+				t.Fatal(err)
+			}
+
+			srv, err := newServer(log, cfg, &system.FaultDomain{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			mbb := bdev.NewMockBackend(nil)
+			mbp := bdev.NewProvider(log, mbb)
+			sp := sysprov.NewMockSysProvider(log, nil)
+
+			srv.ctlSvc = &ControlService{
+				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
+					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
+					mbp, nil),
+				srvCfg: cfg,
+			}
+
+			gotPrepErr := prepBdevStorage(srv, memInfo, iommuChecker, thpChecker)
+
+			test.CmpErr(t, tc.expPrepErr, gotPrepErr)
+		})
+	}
+}
+
 func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 	usrCurrent, err := user.Current()
 	if err != nil {
@@ -418,22 +571,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 		bmbc            *bdev.MockBackendConfig
 		overrideUser    string
 		iommuDisabled   bool
-		iommuCheckErr   error
 		thpEnabled      bool
-		thpCheckErr     error
-		expPrepErr      error
 		expPrepCalls    []storage.BdevPrepareRequest
 		expMemSize      int
 		expHugepageSize int
 		expNotice       bool
 	}{
-		"vfio disabled; non-root user": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithDisableVFIO(true).
-					WithEngines(pmemEngine(0))
-			},
-			expPrepErr: FaultVfioDisabled,
-		},
 		"vfio disabled; root user": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableVFIO(true).
@@ -472,20 +615,6 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      16384,
 			expHugepageSize: 2,
 		},
-		"iommu check error": {
-			iommuCheckErr: errors.New("fail"),
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
-			},
-			expPrepErr: errors.New("iommu check: fail"),
-		},
-		"iommu disabled": {
-			iommuDisabled: true,
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
-			},
-			expPrepErr: FaultIommuDisabled,
-		},
 		"iommu disabled; root user": {
 			iommuDisabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -522,26 +651,14 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      16384,
 			expHugepageSize: 2,
 		},
-		"thp check error": {
-			thpCheckErr: errors.New("fail"),
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
-			},
-			expPrepErr: errors.New("transparent hugepage check: fail"),
-		},
-		"thp enabled": {
-			thpEnabled: true,
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(pmemEngine(0), pmemEngine(1))
-			},
-			expPrepErr: FaultTransparentHugepageEnabled,
-		},
 		"thp enabled; override flag set": {
 			thpEnabled: true,
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithAllowTHP(true).
 					WithEngines(pmemEngine(0), pmemEngine(1))
 			},
+			hugepagesFree:  8190,
+			hugepagesTotal: 8190,
 			expPrepCalls: []storage.BdevPrepareRequest{
 				defCleanDualEngine,
 				{
@@ -552,6 +669,7 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD: true,
 				},
 			},
+			expMemSize:      16384,
 			expHugepageSize: 2,
 			// Allocation change logged.
 			expNotice: true,
@@ -1018,8 +1136,8 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 					EnableVMD:    true,
 				},
 			},
-			// mem_size engine parameter is hower "hugepagesFree" value
-			expMemSize:      16360,
+			// mem_size engine parameter (8192 * // 2MiB), > "hugepagesFree" value
+			expMemSize:      16384,
 			expHugepageSize: 2,
 			// No error returned, notice logged only, engine-side mem threshold
 			// validation instead.
@@ -1100,6 +1218,30 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      16384, // (16384 hugepages / 2 engines) * 2mib size
 			expHugepageSize: 2,
 		},
+		"config hugepages differs from target-based calculation": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				// Config specifies 10240 hugepages but engine has 16 targets.
+				// Memsize should be calculated from targets (16 * 1GiB / 2MiB = 8192),
+				// not from config value.
+				return sc.WithNrHugepages(10240).
+					WithEngines(pmemEngine(0))
+			},
+			hugepagesFree:  10240,
+			hugepagesTotal: 10240,
+			expPrepCalls: []storage.BdevPrepareRequest{
+				defCleanSingleEngine,
+				{
+					TargetUser:   username,
+					PCIAllowList: test.MockPCIAddr(0),
+					HugeNodes:    "nodes_hp[0]=10240",
+					EnableVMD:    true,
+				},
+			},
+			// Memsize calculated from target count (16 targets * 1GiB/tgt / 2MiB = 8192 pages)
+			// 8192 hugepages * 2MiB = 16384 MiB, NOT from config's 10240 pages.
+			expMemSize:      16384,
+			expHugepageSize: 2,
+		},
 		// VMD not enabled in prepare request.
 		"non-nvme bdevs; vmd enabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -1157,35 +1299,6 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			expMemSize:      8192, // 16384 pages * 2mib divided by 4 engines
 			expHugepageSize: 2,
 		},
-		"4 engines; uneven numa distribution": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugepages(16384).WithEngines(
-					engine.MockConfig().WithFabricInterfacePort(20000).
-						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(pmemTier(0), nvmeTier(0)),
-					engine.MockConfig().WithFabricInterfacePort(21000).
-						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(pmemTier(1), nvmeTier(1)),
-					engine.MockConfig().WithFabricInterfacePort(22000).
-						WithPinnedNumaNode(0).WithFabricInterface("ib0").
-						WithTargetCount(8).WithStorage(pmemTier(2), nvmeTier(2)),
-					engine.MockConfig().WithFabricInterfacePort(20000).
-						WithPinnedNumaNode(1).WithFabricInterface("ib1").
-						WithTargetCount(8).WithStorage(pmemTier(3), nvmeTier(3)),
-				)
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					CleanSpdkHugepages: true,
-					CleanSpdkLockfiles: true,
-					PCIAllowList: strings.Join([]string{
-						test.MockPCIAddr(0), test.MockPCIAddr(1), test.MockPCIAddr(2),
-						test.MockPCIAddr(3),
-					}, storage.BdevPciAddrSep),
-				},
-			},
-			expPrepErr: errors.New("uneven distribution"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -1201,11 +1314,9 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			// Defaults are IOMMU=ON and THP=OFF.
 			iommuChecker := mockIOMMUDetector{
 				enabled: !tc.iommuDisabled,
-				err:     tc.iommuCheckErr,
 			}
 			thpChecker := mockTHPDetector{
 				enabled: tc.thpEnabled,
-				err:     tc.thpCheckErr,
 			}
 
 			mockAffSrc := func(l logging.Logger, e *engine.Config) (uint, error) {
@@ -1312,9 +1423,9 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			}
 			mbb.RUnlock()
 
-			test.CmpErr(t, tc.expPrepErr, gotPrepErr)
-			if tc.expPrepErr != nil {
-				return
+			// All test cases in this function expect success (errors are in separate test)
+			if gotPrepErr != nil {
+				t.Fatalf("unexpected prepBdevStorage error: %v", gotPrepErr)
 			}
 
 			if len(srv.cfg.Engines) == 0 {
@@ -1324,7 +1435,10 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner, nil)
 
-			setEngineMemSize(srv, ei, tc.memInfo2)
+			err = setEngineMemSize(srv, ei, tc.memInfo2)
+			if err != nil {
+				t.Fatalf("setEngineMemSize failed: %v", err)
+			}
 
 			test.AssertEqual(t, tc.expMemSize, ei.runner.GetConfig().MemSize,
 				"unexpected memory size")
@@ -1979,5 +2093,752 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 	if diff := cmp.Diff(expOut, sb.String()); diff != "" {
 		t.Fatalf("unexpected output format (-want, +got):\n%s\n", diff)
+	}
+}
+
+const (
+	testContextTimeout     = 1 * time.Second
+	testHandlerTimeout     = 1 * time.Second
+	testRestartRequestWait = 5 * time.Second
+	testSubscriptionDelay  = 50 * time.Millisecond
+	testProcessingDelay    = 100 * time.Millisecond
+)
+
+func setupAddTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRunning bool, ranks ...uint32) {
+	t.Helper()
+
+	rank := uint32(1)
+	if len(ranks) != 0 {
+		rank = ranks[0]
+	}
+
+	ei := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+	setupTestEngine(t, ei, rank, !isRunning)
+
+	if err := h.AddInstance(ei); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestServer_handleEngineSelfTerminated(t *testing.T) {
+	testRank := ranklist.Rank(1)
+	testIncarnation := uint64(42)
+	testHostname := "test-host-1"
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	for name, tc := range map[string]struct {
+		evt                      *events.RASEvent
+		setupEngines             func(*testing.T, logging.Logger, *EngineHarness)
+		disableEngineAutoRestart bool
+		engineAutoRestartDelay   int
+		serverHostname           string
+		expErr                   error
+		expRestartRequested      bool
+		expLogContains           []string
+	}{
+		"forwarded event refused": {
+			evt: (&events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			}).WithForwarded(true),
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupAddTestEngine(t, log, h, false)
+			},
+			serverHostname:      testHostname,
+			expRestartRequested: false,
+			expErr:              errors.New("forwarded engine_self_terminated event"),
+		},
+		"non-local event refused": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    "other-host",
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupAddTestEngine(t, log, h, false)
+			},
+			serverHostname:      testHostname,
+			expRestartRequested: false,
+			expErr:              errors.New("non-local engine_self_terminated event"),
+		},
+		"auto restart disabled by config": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupAddTestEngine(t, log, h, false)
+			},
+			disableEngineAutoRestart: true,
+			expRestartRequested:      false,
+			expLogContains: []string{
+				"automatic engine restart disabled",
+			},
+		},
+		"nil event timestamp": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   "",
+			},
+			expErr:              errors.New("bad event timestamp"),
+			expRestartRequested: false,
+		},
+		"invalid event timestamp": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   "not-a-valid-timestamp",
+			},
+			expErr:              errors.New("bad event timestamp"),
+			expRestartRequested: false,
+		},
+		"rank not found in harness": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        99, // Non-existent rank
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+				e._superblock.Rank = ranklist.NewRankPtr(1)
+				if err := h.AddInstance(e); err != nil {
+					t.Fatal(err)
+				}
+			},
+			expErr:              errors.New("no instance found for rank 99"),
+			expRestartRequested: false,
+		},
+		"filter instances error - nil superblock": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				e := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+				e._superblock = nil
+				if err := h.AddInstance(e); err != nil {
+					t.Fatal(err)
+				}
+			},
+			expErr:              errors.New("no instance found for rank"),
+			expRestartRequested: false,
+		},
+		"successful restart request - engine already stopped": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupAddTestEngine(t, log, h, false)
+			},
+			expRestartRequested: true,
+			expLogContains: []string{
+				fmt.Sprintf("rank %d:%d (instance 0) self terminated", testRank, testIncarnation),
+				testHostname,
+			},
+		},
+		"successful restart request - engine still running": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        uint32(testRank),
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				setupAddTestEngine(t, log, h, true)
+			},
+			expRestartRequested: false,
+			expLogContains: []string{
+				fmt.Sprintf("rank %d:%d (instance 0) self terminated", testRank, testIncarnation),
+			},
+		},
+		"multiple engines - restart correct one": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        2,
+				Incarnation: testIncarnation,
+				Hostname:    testHostname,
+				Timestamp:   validTimestamp,
+			},
+			setupEngines: func(t *testing.T, log logging.Logger, h *EngineHarness) {
+				for i := 0; i < 3; i++ {
+					setupAddTestEngine(t, log, h, false, uint32(i))
+				}
+			},
+			expRestartRequested: true,
+			expLogContains: []string{
+				"rank 2:42 (instance 2) self terminated",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx, cancel := context.WithTimeout(test.Context(t), testContextTimeout)
+			defer cancel()
+
+			harness := NewEngineHarness(log)
+
+			if tc.setupEngines != nil {
+				tc.setupEngines(t, log, harness)
+			}
+
+			cfg := &config.Server{
+				DisableEngineAutoRestart:  tc.disableEngineAutoRestart,
+				EngineAutoRestartMinDelay: tc.engineAutoRestartDelay,
+			}
+
+			restartMgr := newEngineRestartManager(log, cfg)
+			restartMgr.start(ctx)
+			defer restartMgr.stop()
+
+			srv := &server{
+				log:        log,
+				hostname:   tc.serverHostname,
+				harness:    harness,
+				cfg:        cfg,
+				restartMgr: restartMgr,
+			}
+
+			var wg sync.WaitGroup
+			var restartRequested atomic.Bool
+
+			// Run go-routines for each engine which consume from startRequested channel
+			// otherwise the requestStart() instance methods would block.
+			if len(harness.instances) > 0 {
+				targetRank := ranklist.Rank(tc.evt.Rank)
+				for _, inst := range harness.instances {
+					rank, err := inst.GetRank()
+					if err != nil || rank != targetRank {
+						continue
+					}
+
+					ei, ok := inst.(*EngineInstance)
+					if !ok {
+						continue
+					}
+
+					wg.Add(1)
+					go func(e *EngineInstance) {
+						defer wg.Done()
+						select {
+						case <-ctx.Done():
+						case <-e.startRequested:
+							restartRequested.Store(true)
+						}
+					}(ei)
+				}
+			}
+
+			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
+			wg.Wait()
+
+			if tc.expRestartRequested {
+				time.Sleep(testProcessingDelay)
+			}
+
+			test.CmpErr(t, tc.expErr, err)
+
+			if tc.expRestartRequested != restartRequested.Load() {
+				t.Errorf("expected restart requested=%v, got=%v",
+					tc.expRestartRequested, restartRequested.Load())
+			}
+
+			logOutput := buf.String()
+			for _, expStr := range tc.expLogContains {
+				if !strings.Contains(logOutput, expStr) {
+					t.Errorf("expected log to contain %q, but it didn't\nLog:\n%s",
+						expStr, logOutput)
+				}
+			}
+		})
+	}
+}
+
+func TestServer_handleEngineSelfTerminated_RateLimiting(t *testing.T) {
+	testRank := ranklist.Rank(1)
+	testIncarnation := uint64(42)
+	testHostname := "test-host-1"
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx, cancel := context.WithTimeout(test.Context(t), 10*time.Second)
+	defer cancel()
+
+	harness := NewEngineHarness(log)
+	setupAddTestEngine(t, log, harness, false)
+
+	cfg := &config.Server{
+		DisableEngineAutoRestart:  false,
+		EngineAutoRestartMinDelay: 2, // 2 seconds for testing
+	}
+
+	restartMgr := newEngineRestartManager(log, cfg)
+	restartMgr.start(ctx)
+	defer restartMgr.stop()
+
+	srv := &server{
+		log:        log,
+		harness:    harness,
+		cfg:        cfg,
+		restartMgr: restartMgr,
+	}
+
+	// Get reference to the engine instance for monitoring startRequested
+	instances, err := harness.FilterInstancesByRankSet("1")
+	if err != nil || len(instances) == 0 {
+		t.Fatalf("failed to get engine instance: %v", err)
+	}
+	e, ok := instances[0].(*EngineInstance)
+	if !ok {
+		t.Fatal("failed to cast to EngineInstance")
+	}
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation,
+		Hostname:    testHostname,
+		Timestamp:   validTimestamp,
+	}
+
+	// Setup goroutine to consume startRequested channel
+	restartCount := atomic.Uint32{}
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-e.startRequested:
+				restartCount.Add(1)
+			case <-time.After(testRestartRequestWait):
+				return
+			}
+		}
+	}()
+
+	// First restart should succeed immediately
+	err = handleEngineSelfTerminated(ctx, srv, evt)
+	if err != nil {
+		t.Fatalf("first restart failed: %v", err)
+	}
+
+	// Wait for restart to be requested
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 1 {
+		t.Fatalf("expected 1 restart request, got %d", restartCount.Load())
+	}
+
+	// Second restart immediately after should be deferred (not rejected)
+	evt2 := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation + 1,
+		Hostname:    testHostname,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	err = handleEngineSelfTerminated(ctx, srv, evt2)
+	if err != nil {
+		t.Fatalf("second restart call failed: %v", err)
+	}
+
+	// Verify no immediate restart (deferred)
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 1 {
+		t.Fatalf("expected restart to be deferred, got %d restarts", restartCount.Load())
+	}
+
+	// Verify rate limiting log message
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "rate limited") {
+		t.Errorf("expected log to contain 'rate limited', got: %s", logOutput)
+	}
+
+	checkPending := func(t *testing.T, shouldExist bool) {
+		t.Helper()
+		restartMgr.mu.RLock()
+		defer restartMgr.mu.RUnlock()
+		_, exists := restartMgr.pendingRestart[testRank]
+		if exists && !shouldExist {
+			t.Fatal("expected pending restart timer to have been cleaned up")
+		} else if !exists && shouldExist {
+			t.Fatal("expected pending restart timer to exist")
+		}
+	}
+
+	// Verify pending timer exists
+	checkPending(t, true)
+
+	// Wait for the deferred restart to trigger
+	time.Sleep(time.Duration(srv.cfg.EngineAutoRestartMinDelay) * time.Second)
+
+	// Verify deferred restart was executed
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 2 {
+		t.Fatalf("expected 2 total restarts after deferred delay, got %d", restartCount.Load())
+	}
+
+	// Verify pending timer was cleaned up
+	checkPending(t, false)
+
+	// Third event immediately after deferred restart should again be deferred
+	evt3 := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Rank:        uint32(testRank),
+		Incarnation: testIncarnation + 2,
+		Hostname:    testHostname,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	err = handleEngineSelfTerminated(ctx, srv, evt3)
+	if err != nil {
+		t.Fatalf("third restart call failed: %v", err)
+	}
+
+	// Should still be 2 restarts (third is deferred)
+	time.Sleep(testProcessingDelay)
+	if restartCount.Load() != 2 {
+		t.Fatalf("expected third restart to be deferred, got %d restarts", restartCount.Load())
+	}
+
+	<-doneCh
+}
+
+func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx, cancel := context.WithTimeout(test.Context(t), 2*time.Second)
+	defer cancel()
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	cfg := &config.Server{
+		DisableEngineAutoRestart: false,
+	}
+
+	restartMgr := newEngineRestartManager(log, cfg)
+	restartMgr.start(ctx)
+	defer restartMgr.stop()
+
+	// Channel to signal when handler completes
+	handlerDone := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:        log,
+		harness:    harness,
+		pubSub:     pubSub,
+		evtLogger:  control.MockEventLogger(log),
+		cfg:        cfg,
+		restartMgr: restartMgr,
+	}
+
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			log.Debugf("ErrorHandling: handler called for event: ID=%v, Type=%v",
+				evt.ID, evt.Type)
+			switch evt.ID {
+			case events.RASEngineSelfTerminated:
+				log.Debugf("ErrorHandling: handling engine self termination event")
+				if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+					srv.log.Errorf("handleEngineSelfTerminated: %s", err)
+				}
+				once.Do(func() { close(handlerDone) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for handler to complete or timeout
+	select {
+	case <-handlerDone:
+		// Handler completed
+	case <-time.After(testHandlerTimeout):
+		t.Fatal("timeout waiting for handler to complete")
+	}
+
+	t.Log(buf.String())
+	if !strings.Contains(buf.String(), "handleEngineSelfTerminated") {
+		t.Error("expected error to be logged by handler")
+	}
+	if !strings.Contains(buf.String(), "no instance found") {
+		t.Errorf("expected 'no instance found' in log, got:\n%s", buf.String())
+	}
+}
+
+func TestServer_handleEngineSelfTerminated_EdgeCases(t *testing.T) {
+	validTimestamp := time.Now().Format(time.RFC3339)
+
+	for name, tc := range map[string]struct {
+		evt            *events.RASEvent
+		expErrContains string
+	}{
+		"zero incarnation": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        1,
+				Incarnation: 0,
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found",
+		},
+		"very high rank number": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        999999,
+				Incarnation: 1,
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found for rank",
+		},
+		"max incarnation value": {
+			evt: &events.RASEvent{
+				ID:          events.RASEngineSelfTerminated,
+				Rank:        1,
+				Incarnation: ^uint64(0),
+				Hostname:    "test-host",
+				Timestamp:   validTimestamp,
+			},
+			expErrContains: "no instance found",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx, cancel := context.WithTimeout(test.Context(t), testContextTimeout)
+			defer cancel()
+
+			harness := NewEngineHarness(log)
+
+			cfg := &config.Server{
+				DisableEngineAutoRestart: false,
+			}
+
+			restartMgr := newEngineRestartManager(log, cfg)
+			restartMgr.start(ctx)
+			defer restartMgr.stop()
+
+			srv := &server{
+				log:        log,
+				harness:    harness,
+				cfg:        cfg,
+				restartMgr: restartMgr,
+			}
+
+			err := handleEngineSelfTerminated(ctx, srv, tc.evt)
+
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+
+			if !strings.Contains(err.Error(), tc.expErrContains) {
+				t.Errorf("expected error containing %q, got: %s",
+					tc.expErrContains, err)
+			}
+		})
+	}
+}
+
+func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx, cancel := context.WithTimeout(test.Context(t), 2*time.Second)
+	defer cancel()
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	cfg := &config.Server{
+		DisableEngineAutoRestart: false,
+	}
+
+	restartMgr := newEngineRestartManager(log, cfg)
+	restartMgr.start(ctx)
+	defer restartMgr.stop()
+
+	// Channel to signal when ANY handler processes the event
+	eventProcessed := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:        log,
+		harness:    harness,
+		pubSub:     pubSub,
+		evtLogger:  control.MockEventLogger(log),
+		cfg:        cfg,
+		restartMgr: restartMgr,
+	}
+
+	registerSubscriptions(srv)
+
+	// Add a secondary subscriber to detect when event is processed
+	// This ensures the event has gone through the pubsub system
+	pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			if evt.ID == events.RASEngineSelfTerminated {
+				once.Do(func() { close(eventProcessed) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for event to be processed or timeout
+	select {
+	case <-eventProcessed:
+		// Event was processed
+	case <-time.After(testHandlerTimeout):
+		t.Fatal("timeout waiting for engine self terminated event to be processed")
+	}
+
+	time.Sleep(testProcessingDelay)
+
+	logOutput := buf.String()
+	hasHandler := strings.Contains(logOutput, "handleEngineSelfTerminated") ||
+		strings.Contains(logOutput, "no instance found") ||
+		strings.Contains(logOutput, "handling engine self termination")
+
+	if !hasHandler {
+		t.Errorf("engine self termination handler does not appear to be registered\nLog:\n%s", logOutput)
+	}
+}
+
+func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T) {
+	const testProcessingTimeout = 2 * time.Second
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx, cancel := context.WithTimeout(test.Context(t), testProcessingTimeout+time.Second)
+	defer cancel()
+
+	harness := NewEngineHarness(log)
+	pubSub := events.NewPubSub(ctx, log)
+
+	svc := newTestMgmtSvc(t, log)
+
+	cfg := &config.Server{
+		DisableEngineAutoRestart: false,
+	}
+
+	restartMgr := newEngineRestartManager(log, cfg)
+	restartMgr.start(ctx)
+	defer restartMgr.stop()
+
+	// Channel to signal when ANY handler processes the event
+	eventProcessed := make(chan struct{})
+	var once sync.Once
+
+	srv := &server{
+		log:        log,
+		harness:    harness,
+		pubSub:     pubSub,
+		evtLogger:  control.MockEventLogger(log),
+		membership: svc.membership,
+		sysdb:      svc.sysdb,
+		mgmtSvc:    svc,
+		cfg:        cfg,
+		restartMgr: restartMgr,
+	}
+
+	registerLeaderSubscriptions(srv)
+
+	// Add a secondary subscriber to detect when event is processed
+	// This ensures the event has gone through the pubsub system
+	pubSub.Subscribe(events.RASTypeInfoOnly,
+		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+			if evt.ID == events.RASEngineSelfTerminated {
+				once.Do(func() { close(eventProcessed) })
+			}
+		}))
+
+	// Give the subscription time to register in the eventLoop
+	time.Sleep(testSubscriptionDelay)
+
+	evt := &events.RASEvent{
+		ID:          events.RASEngineSelfTerminated,
+		Type:        events.RASTypeInfoOnly,
+		Rank:        1,
+		Incarnation: 42,
+		Hostname:    "test-host",
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	pubSub.Publish(evt)
+
+	// Wait for event to be processed or timeout
+	select {
+	case <-eventProcessed:
+		// Event was processed
+	case <-time.After(testProcessingTimeout):
+		t.Fatal("timeout waiting for engine self terminated event to be processed")
+	}
+
+	time.Sleep(testProcessingDelay)
+
+	logOutput := buf.String()
+	hasHandler := strings.Contains(logOutput, "handleEngineSelfTerminated") ||
+		strings.Contains(logOutput, "no instance found") ||
+		strings.Contains(logOutput, "handling engine self termination")
+
+	if !hasHandler {
+		t.Errorf("engine self termination handler does not appear to be registered\nLog:\n%s", logOutput)
 	}
 }
