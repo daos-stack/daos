@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,17 +58,10 @@ dtx_coll_prep_ult(void *arg)
 
 	dcpa->dcpa_result = ds_cont_child_lookup(dci->dci_po_uuid, dci->dci_co_uuid, &cont);
 	if (dcpa->dcpa_result != 0) {
-		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID" for DTX "
-			DF_DTI" with opc %u: "DF_RC"\n",
-			DP_UUID(dci->dci_po_uuid), DP_UUID(dci->dci_co_uuid),
-			DP_DTI(&dci->dci_xid), opc, DP_RC(dcpa->dcpa_result));
-		/*
-		 * Convert the case of container non-exist as -DER_IO to distinguish
-		 * the case of DTX entry does not exist. The latter one is normal.
-		 */
-		if (dcpa->dcpa_result == -DER_NONEXIST)
-			dcpa->dcpa_result = -DER_IO;
-
+		D_ERROR("Failed to locate pool=" DF_UUID " cont=" DF_UUID " for DTX " DF_DTI
+			" with opc %u: " DF_RC "\n",
+			DP_UUID(dci->dci_po_uuid), DP_UUID(dci->dci_co_uuid), DP_DTI(&dci->dci_xid),
+			opc, DP_RC(dcpa->dcpa_result));
 		goto out;
 	}
 

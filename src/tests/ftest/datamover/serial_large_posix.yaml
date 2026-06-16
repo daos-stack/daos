@@ -32,8 +32,9 @@ mdtest:
   client_processes:
     np: 30
   api: DFS
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
   test_dir: "/"
-  dfs_destroy: false
   manager: "MPICH"
   num_of_files_dirs: 1667  # total 50K files and 50K dirs
   mdtest_flags:

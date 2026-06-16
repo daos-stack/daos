@@ -57,7 +57,7 @@ class DaosServerTransportCredentials(TransportCredentials):
         return DaosServerTransportCredentials(self._log_dir)
 
 
-class DaosServerYamlParameters(YamlParameters):
+class DaosServerYamlParameters(YamlParameters):  # pylint: disable=too-many-instance-attributes
     """Defines the daos_server configuration yaml parameters."""
 
     def __init__(self, filename, common_yaml, version=None):
@@ -175,6 +175,10 @@ class DaosServerYamlParameters(YamlParameters):
         # Fault domain path & callback
         self.fault_path = BasicParameter(None)
         self.fault_cb = BasicParameter(None)
+
+        # Engine auto-restart parameters
+        self.disable_engine_auto_restart = BasicParameter(None)
+        self.engine_auto_restart_min_delay = BasicParameter(None)
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -443,7 +447,7 @@ class ControlMetadataParameters(YamlParameters):
         return ControlMetadataParameters(self.namespace)
 
 
-class EngineYamlParameters(YamlParameters):
+class EngineYamlParameters(YamlParameters):  # pylint: disable=too-many-instance-attributes
     """Defines the configuration yaml parameters for a single server engine."""
 
     # Engine environment variables that are required by provider type.
@@ -884,7 +888,7 @@ class StorageYamlParameters(YamlParameters):
         return StorageYamlParameters(self.namespace, self._max_tiers)
 
 
-class StorageTierYamlParameters(YamlParameters):
+class StorageTierYamlParameters(YamlParameters):  # pylint: disable=too-many-instance-attributes
     """Defines the configuration yaml parameters for each storage tier for an engine."""
 
     def __init__(self, base_namespace, tier):

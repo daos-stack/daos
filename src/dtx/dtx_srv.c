@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,19 +196,17 @@ dtx_handler(crt_rpc_t *rpc)
 		if (unlikely(din->di_epoch == 1))
 			D_GOTO(out, rc = -DER_IO);
 
-		while (i < din->di_dtx_array.ca_count) {
-			if (i + count > din->di_dtx_array.ca_count)
-				count = din->di_dtx_array.ca_count - i;
+		/*
+		 * The count of DTX entries will not exceed DTX_THRESHOLD_COUNT, that
+		 * is guaranteed by the caller. Even if some wrong number was offered
+		 * (via network), dtx_commit_large will handle related cases properly.
+		 */
+		rc1 = dtx_commit_large(cont->sc_hdl, (struct dtx_id *)din->di_dtx_array.ca_arrays,
+				       (int)din->di_dtx_array.ca_count, false, NULL);
+		if (rc1 < 0)
+			D_GOTO(out, rc = rc1);
 
-			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, false, NULL);
-			if (rc1 > 0)
-				committed += rc1;
-			else if (rc == 0 && rc1 < 0)
-				rc = rc1;
-
-			i += count;
-		}
+		committed += rc1;
 
 		if (din->di_flags.ca_count > 0)
 			flags = din->di_flags.ca_arrays;

@@ -1032,6 +1032,34 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 	return rc;
 }
 
+int
+dtx_commit_large(daos_handle_t coh, struct dtx_id *dtis, int cnt, bool keep_act, bool *rm_cos)
+{
+	int step      = DTX_YIELD_CYCLE;
+	int committed = 0;
+	int rc        = 0;
+	int i         = 0;
+
+	while (i < cnt) {
+		if (i + step > cnt)
+			step = cnt - i;
+
+		rc = vos_dtx_commit(coh, dtis + i, step, keep_act, rm_cos);
+		if (rc >= 0) {
+			committed += rc;
+			i += step;
+		} else {
+			if ((rc != -DER_NOSPACE && rc != -DER_OVERFLOW) || step <= 1)
+				return rc;
+
+			/* If out of space, reduce TX size and retry. */
+			step >>= 1;
+		}
+	}
+
+	return committed;
+}
+
 /**
  * Prepare the leader DTX handle in DRAM.
  *

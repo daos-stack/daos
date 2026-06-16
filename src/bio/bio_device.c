@@ -397,7 +397,7 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 
 	/* Populate pci_dev_type and socket_id */
 
-	*opts->socket_id = spdk_pci_device_get_socket_id(pci_device);
+	*opts->socket_id = spdk_pci_device_get_numa_id(pci_device);
 
 	device_type = spdk_pci_device_get_type(pci_device);
 	if (device_type == NULL) {

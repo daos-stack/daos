@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1587,7 +1587,7 @@ cont_iv_prop_fetch_ult(void *data)
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_CONT_NONEXIST, DB_ANY, DLOG_ERR, rc,
 			  DF_CONT ": cont_iv_fetch failed", DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}
