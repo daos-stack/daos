@@ -1537,6 +1537,20 @@ ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc)
 	crt_reply_send(rpc);
 }
 
+static bool
+map_update_verbose_enabled(void)
+{
+	static bool initialized;
+	static bool enabled;
+
+	if (!initialized) {
+		d_getenv_bool("DAOS_MAP_UPDATE_VERBOSE", &enabled);
+		initialized = true;
+	}
+
+	return enabled;
+}
+
 int
 ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 {
@@ -1552,8 +1566,11 @@ ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 	bool                            inc_mismatch = false;
 	bool                            uri_mismatch = false;
 	bool                            warn;
+	bool                            verbose;
 	const char                     *warn_prefix;
 	uint32_t                        i;
+
+	verbose = map_update_verbose_enabled();
 
 	for (i = 0; i < in->tm_servers.ca_count; i++) {
 		if (in->tm_servers.ca_arrays[i].se_rank == self_rank) {
@@ -1562,6 +1579,24 @@ ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 			if (in->tm_servers.ca_arrays[i].se_uri != NULL)
 				map_uri = in->tm_servers.ca_arrays[i].se_uri;
 			break;
+		}
+	}
+
+	if (verbose) {
+		for (i = 0; i < in->tm_servers.ca_count; i++) {
+			const char *uri = "<none>";
+
+			if (in->tm_servers.ca_arrays[i].se_uri != NULL)
+				uri = in->tm_servers.ca_arrays[i].se_uri;
+
+			D_DEBUG(
+			    DB_MGMT,
+			    "pre_forward map[%u/%u]: rank=%u inc=%lu uri=%s flags=%u nctxs=%u\n",
+			    i + 1, (unsigned int)in->tm_servers.ca_count,
+			    (unsigned int)in->tm_servers.ca_arrays[i].se_rank,
+			    (unsigned long)in->tm_servers.ca_arrays[i].se_incarnation, uri,
+			    (unsigned int)in->tm_servers.ca_arrays[i].se_flags,
+			    (unsigned int)in->tm_servers.ca_arrays[i].se_nctxs);
 		}
 	}
 

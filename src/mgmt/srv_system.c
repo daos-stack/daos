@@ -155,6 +155,28 @@ map_update_verbose_enabled(void)
 	return enabled;
 }
 
+static void
+warn_map_update_timeout_missing_uri(uint32_t map_version, int nservers,
+				    struct server_entry servers[])
+{
+	int i;
+	int missing = 0;
+
+	for (i = 0; i < nservers; i++) {
+		if (servers[i].se_uri == NULL || servers[i].se_uri[0] == '\0') {
+			D_WARN("MGMT_TGT_MAP_UPDATE timeout: missing target URI rank=%u map_ver=%u "
+			       "idx=%d/%d\n",
+			       servers[i].se_rank, map_version, i + 1, nservers);
+			missing++;
+		}
+	}
+
+	if (missing > 0) {
+		D_WARN("MGMT_TGT_MAP_UPDATE timeout: missing URI targets=%d/%d map_ver=%u\n",
+		       missing, nservers, map_version);
+	}
+}
+
 static struct server_entry *
 dup_server_list(struct server_entry *in, int in_len)
 {
@@ -276,8 +298,11 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 	in->tm_map_version = map_version;
 
 	rc = dss_rpc_send(rpc);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == -DER_TIMEDOUT)
+			warn_map_update_timeout_missing_uri(map_version, nservers, servers);
 		goto out_rpc;
+	}
 
 	out = crt_reply_get(rpc);
 	if (out->tm_rc != 0)
