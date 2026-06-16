@@ -56,13 +56,13 @@ updates:
     commit-message:
       prefix: "Doc-only: true \n"
 
-  - package-ecosystem: github-actions
-    target-branch: release/2.6.4-aurora
-    directory: /
+  - package-ecosystem: maven
+    target-branch: master
+    directory: /src/client/java/hadoop-daos
     schedule:
       interval: weekly
     groups:
-      gha-versions:
+      java-packages:
         patterns:
           - "*"
     reviewers:
@@ -70,13 +70,13 @@ updates:
     commit-message:
       prefix: "Doc-only: true \n"
 
-  - package-ecosystem: github-actions
-    target-branch: release/2.6.4-mfg
-    directory: /
+  - package-ecosystem: maven
+    target-branch: release/2.8
+    directory: /src/client/java/hadoop-daos
     schedule:
       interval: weekly
     groups:
-      gha-versions:
+      java-packages:
         patterns:
           - "*"
     reviewers:
