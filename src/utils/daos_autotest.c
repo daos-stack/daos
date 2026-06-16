@@ -501,7 +501,7 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			/* Poll failure: evp is stale, do not dereference it */
 			if (rc < 0)
 				break;
-			/* Fault injection guard: verify evp is valid to catch stale pointer bugs */
+			/* Verify evp is valid to catch stale pointer bugs */
 			D_ASSERT(evp != NULL);
 
 			/** Check if completed operation failed */
@@ -650,7 +650,7 @@ kv_get(daos_handle_t oh, daos_size_t size)
 			/* Poll failure: evp is stale, do not dereference it */
 			if (rc < 0)
 				break;
-			/* Fault injection guard: verify evp is valid to catch stale pointer bugs */
+			/* Verify evp is valid to catch stale pointer bugs */
 			D_ASSERT(evp != NULL);
 
 			/** Check if completed operation failed */
