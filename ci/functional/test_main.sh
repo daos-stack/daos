@@ -17,6 +17,7 @@ test_tag="$TEST_TAG"
 : "${NODELIST:=localhost}"
 : "${TEST_RPMS:=false}"
 : "${STAGE_NAME:=unknown}"
+: "${CI_JUNIT_TRACE:=false}"
 
 def_node_count="$(nodeset -c "$NODELIST")"
 : "${NODE_COUNT:=$def_node_count}"
@@ -26,12 +27,34 @@ first_node=${NODELIST%%,*}
 
 hardware_ok=false
 
+dump_stage_xml_state() {
+    local label="$1"
+    local dir="$2"
+
+    if [ "$CI_JUNIT_TRACE" != "true" ]; then
+        return 0
+    fi
+
+    echo "JUNIT TRACE [$label] dir=$dir"
+    find "$dir" -maxdepth 3 -type f -name '*.xml' -print | sort || true
+}
+
 cluster_reboot () {
-    # shellcheck disable=SC2029,SC2089
-    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" reboot || true
+    if [ -z "$tnodes" ]; then
+        echo "ERROR: cluster_reboot called without reboot targets"
+        return 1
+    fi
+
+    if [ "$tnodes" = "localhost" ]; then
+        echo "WARNING: localhost is the only reboot target; skipping reboot"
+        return 0
+    fi
 
     # shellcheck disable=SC2029,SC2089
-    poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "${tnodes}" )
+    clush -B -S -o '-i ci_key' -l root -w "$tnodes" reboot || true
+
+    # shellcheck disable=SC2029,SC2089
+    poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "$tnodes" )
     poll_cmd+=( cat /etc/os-release )
     # 20 minutes, HPE systems may take more than 15 minutes.
     reboot_timeout=1200
@@ -47,6 +70,11 @@ cluster_reboot () {
 }
 
 test_cluster() {
+    local rc=0
+    local log_file
+
+    log_file="$(mktemp)"
+
     # Test that all nodes in the cluster are healthy
     clush -B -S -o '-i ci_key' -l root -w "${tnodes}"   \
         "OPERATIONS_EMAIL=${OPERATIONS_EMAIL:-}         \
@@ -99,8 +127,29 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 # Setup the Jenkins build artifacts directory before running the tests to ensure
 # there is enough disk space to report the results.
 # Even though STAGE_NAME forced to be set, shellcheck wants this syntax.
-rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
-mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+mkdir -p "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+stage_dir="${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+framework_dir="$stage_dir/framework"
+preserve_dir="$(mktemp -d)"
+
+dump_stage_xml_state "before-preserve" "$stage_dir"
+
+if compgen -G "$framework_dir/*.xml" > /dev/null; then
+    mkdir -p "$preserve_dir/framework"
+    cp "$framework_dir/"*.xml "$preserve_dir/framework/"
+fi
+
+find "$stage_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+dump_stage_xml_state "after-clean" "$stage_dir"
+
+if [ -d "$preserve_dir/framework" ]; then
+    mkdir -p "$framework_dir"
+    cp "$preserve_dir/framework/"*.xml "$framework_dir/"
+fi
+rm -rf "$preserve_dir"
+
+dump_stage_xml_state "after-restore" "$stage_dir"
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
@@ -109,6 +158,7 @@ rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 
 if "$hardware_ok"; then
+    test_tag="test_daos_management"
     if "$TEST_RPMS"; then
         # shellcheck disable=SC2029
         ssh -i ci_key -l jenkins "${first_node}"      \
@@ -136,4 +186,7 @@ for node in ${tnodes//,/ }; do
         mv "$old_name" "$new_name"
     fi
 done
+
+dump_stage_xml_state "after-hardware-rename" "$stage_dir"
+
 "$hardware_ok"

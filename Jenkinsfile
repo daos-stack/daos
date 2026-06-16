@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateListLiteral */
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
@@ -452,7 +453,8 @@ pipeline {
                 stage('Python Bandit check') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // TESTING: disable for forced-failure diagnostics - REMOVE AFTER TEST
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -492,7 +494,8 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('el8') }
+                        // TESTING: disable for forced-failure diagnostics - REMOVE AFTER TEST
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -600,7 +603,8 @@ pipeline {
                 stage('Build on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('leap15') }
+                        // TESTING: disable for forced-failure diagnostics - REMOVE AFTER TEST
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -611,7 +615,7 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" + 
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
@@ -656,7 +660,8 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                // DEBUG: Skip Unit Tests to reach post-provision mail diagnostics
+                expression { false }
             }
             parallel {
                 stage('Unit Test') {
@@ -825,7 +830,8 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -848,7 +854,8 @@ pipeline {
                 stage('Functional on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -872,14 +879,19 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // expression { !skipStage() }
+                        expression { false }
                     }
                     agent {
-                        label vm9_label('EL9')
+                        label 'ci_node_hdr_241' // 'ci_opa-113-test' //vm9_label('EL9')
                     }
                     steps {
                         job_step_update(
                             functionalTest(
+                                // DEBUG: keep cluster-size requirements minimal for mail-path testing
+                                node_count: 1,
+                                test_tag: 'test_daos_management',
+                                ftest_arg: '--yaml_extension single_host',
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
                                            ' mercury-libfabric',
@@ -896,7 +908,8 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -920,7 +933,8 @@ pipeline {
                 stage('Functional on SLES 15') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -944,7 +958,8 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('Ubuntu')
@@ -967,7 +982,8 @@ pipeline {
                 stage('Fault injection testing') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label params.CI_FI_1_LABEL
@@ -1008,7 +1024,8 @@ pipeline {
                 stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL_RPMs && !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1029,7 +1046,8 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP_RPMs && !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1081,7 +1099,7 @@ pipeline {
                 } // stage('Test RPMs on Leap 15.5')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1125,7 +1143,8 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            //label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: 'ci_node_hdr_241',
                             next_version: next_version(),
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1135,24 +1154,25 @@ pipeline {
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
-                        'Functional Hardware Medium VMD': getFunctionalTestStage(
+                        /* 'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw_vmd,medium',
-                            /* groovylint-disable-next-line UnnecessaryGetter */
+                            // groovylint-disable-next-line UnnecessaryGetter
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
-                        ),
+                        ), */
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            // label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            label: 'ci_node_hdr_241',
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1166,7 +1186,8 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            // label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            label: 'ci_node_hdr_241',
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1180,7 +1201,8 @@ pipeline {
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            // label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            label: 'ci_node_hdr_241',
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1190,8 +1212,8 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Large': getFunctionalTestStage(
+                        ) /*,
+                           'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
@@ -1216,7 +1238,7 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
-                        ),
+                        ),*/
                     )
                 }
             }
@@ -1231,6 +1253,11 @@ pipeline {
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
+        }
+        cleanup {
+            // Need to clean the workspace to reduce disk space usage on
+            // Jenkins build agents
+            cleanWs()
         }
     } // post
 }

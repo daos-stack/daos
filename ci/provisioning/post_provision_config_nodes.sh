@@ -8,6 +8,21 @@
 set -eux
 
 env > /root/last_run-env.txt
+: "${JUNIT_RESULTS_FILE:=post_provision_results.xml}"
+
+# Compute node position in cluster for stable JUnit naming (matches functional tests)
+myhost="${HOSTNAME%%.*}"
+: "${NODELIST:=$myhost}"
+mynodenum=0
+for node in ${NODELIST//,/ }; do
+    ((mynodenum++)) || true
+    if [ "$node" = "$myhost" ]; then break; fi
+done
+export mynodenum
+
+if ! node_alias=$(printf "test-%03d" "$mynodenum"); then
+  node_alias="test-000"
+fi
 
 # Need this fix earlier
 # For some reason sssd_common must be reinstalled
@@ -15,6 +30,9 @@ env > /root/last_run-env.txt
 if command -v dnf; then
     bootstrap_dnf
 fi
+
+# Apply optional site-specific SMTP relay override across all distro paths.
+configure_postfix_relay
 
 # If in CI use made up user "Jenkins" with UID that the build agent is
 # currently using.   Not sure that the UID is actually important any more
@@ -64,8 +82,10 @@ fi
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
 if ! post_provision_config_nodes; then
-    rc=${PIPESTATUS[0]}
+  rc=$?
     echo "post_provision_config_nodes failed with rc=$rc"
+  junit_result "post_provision_config $node_alias" \
+               "post_provision_config_nodes failed with rc=$rc"
     exit "$rc"
 fi
 
@@ -78,9 +98,10 @@ if lspci | grep -i nvme; then
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 
-
 systemctl enable nfs-server.service
 systemctl start nfs-server.service
+junit_pass_result "post_provision_config $node_alias" \
+                  "post_provision_config_nodes completed successfully"
 sync
 sync
 exit 0
