@@ -726,6 +726,31 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return 0;
 }
 
+/* Yield if scrubber consecutively skips too many objects */
+#define SCRUB_FILTER_CREDITS 64
+
+static int
+sc_obj_filter_cb(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
+{
+	struct scrub_ctx *ctx = cb_arg;
+
+	if (desc->id_type == VOS_ITER_OBJ) {
+		if (vos_bkt_iter_skip(ih, desc)) {
+			*acts |= VOS_ITER_CB_SKIP;
+
+			D_ASSERT(ctx->sc_filter_credits > 0);
+			if (--ctx->sc_filter_credits == 0) {
+				ctx->sc_filter_credits = SCRUB_FILTER_CREDITS;
+				sc_sleep(ctx, 0);
+			}
+		} else {
+			ctx->sc_filter_credits = SCRUB_FILTER_CREDITS;
+		}
+	}
+
+	return 0;
+}
+
 static int
 sc_scrub_cont(struct scrub_ctx *ctx)
 {
@@ -737,10 +762,15 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 	if (!daos_csummer_initialized(sc_csummer(ctx)))
 		return 0;
 
+	ctx->sc_filter_credits = SCRUB_FILTER_CREDITS;
+
 	param.ip_hdl = sc_cont_hdl(ctx);
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epc_expr = VOS_IT_EPC_RE;
+	param.ip_filter_cb  = sc_obj_filter_cb;
+	param.ip_filter_arg = ctx;
+
 	/*
 	 * FIXME: Improve iteration by only iterating over visible
 	 * recxs (set param.ip_flags = VOS_IT_RECX_VISIBLE). Will have to be

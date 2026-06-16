@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1684,6 +1684,7 @@ struct scrub_ctx {
 	sc_sleep_fn_t		 sc_sleep_fn;
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
+	uint32_t                 sc_filter_credits;
 
 	enum scrub_status        sc_status;
 	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
