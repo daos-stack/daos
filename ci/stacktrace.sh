@@ -1,5 +1,11 @@
 #!/bin/bash
 
+#
+#  Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+
 stacktrace() {
     local msg=${1:-"Unchecked error condition at"}
     local i=${2:-0}

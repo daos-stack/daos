@@ -192,6 +192,37 @@ GO_TEST_EXTRA_ARGS=${*:-""}
 
 controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
+: "${DLV_MODE:=false}"
+: "${DLV_PACKAGE:=}"
+: "${DLV_TEST_NAME:=}"
+
+if $DLV_MODE; then
+	if [[ -z "$DLV_PACKAGE" ]]; then
+		echo "Usage: $0 --dlv [--run <TestName>] <package>" >&2
+		exit 1
+	fi
+	DLV_BUILD_FLAGS="-mod vendor -tags firmware,fault_injection,test_stubs,spdk"
+	DLV_ARGS=()
+	[[ -n "$DLV_TEST_NAME" ]] && DLV_ARGS=(-- -test.run "$DLV_TEST_NAME")
+	echo "Environment:"
+	echo "  GO VERSION: $(go version | awk '{print $3" "$4}')"
+	echo "  LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+	echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
+	echo "  CGO_CFLAGS: $CGO_CFLAGS"
+	echo
+	echo "Starting dlv session for $DLV_PACKAGE..."
+	pushd "$controldir" >/dev/null
+	testrc=0
+	LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
+	CGO_LDFLAGS="$CGO_LDFLAGS" \
+	CGO_CFLAGS="$CGO_CFLAGS" \
+		dlv test --build-flags "$DLV_BUILD_FLAGS" "$DLV_PACKAGE" "${DLV_ARGS[@]}" || testrc=$?
+	popd >/dev/null
+	exit $testrc
+fi
+
+GO_TEST_RUNNER=$(get_test_runner)
+
 check_formatting "$controldir"
 
 echo "Environment:"
@@ -204,12 +235,11 @@ echo
 
 echo "Running all tests under $controldir..."
 pushd "$controldir" >/dev/null
-set +e
+testrc=0
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 CGO_LDFLAGS="$CGO_LDFLAGS" \
 CGO_CFLAGS="$CGO_CFLAGS" \
-	$GO_TEST_RUNNER "$GO_TEST_EXTRA_ARGS"
-testrc=$?
+	$GO_TEST_RUNNER "$GO_TEST_EXTRA_ARGS" || testrc=$?
 popd >/dev/null
 
 if [ -f "$GO_TEST_XML" ]; then
