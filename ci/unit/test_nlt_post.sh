@@ -13,8 +13,6 @@ if [ -z "$test_log_dir" ]; then
     exit 1
 fi
 
-ls -al /tmp
-
 rm -rf "$test_log_dir"
 mkdir "$test_log_dir"
 
@@ -35,7 +33,7 @@ rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
       --filter="include nlt-junit.xml" --filter="exclude *" ./
 
 # Collect any code coverage files if they exist.
-rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/" \
+rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="include test.cov" --filter="exclude *" "${test_log_dir}/"
 
 mkdir -p vm_test
