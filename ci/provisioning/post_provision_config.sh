@@ -23,6 +23,8 @@ EOF
 # shellcheck disable=SC1091
 source ci/provisioning/post_provision_config_common_functions.sh
 # shellcheck disable=SC1091
+source ci/stacktrace.sh
+# shellcheck disable=SC1091
 source ci/junit.sh
 
 # This script needs to be able to run outside of CI for testing.
@@ -71,49 +73,123 @@ FAMILY="${DISTRO%%_*}"
 if [ -n "$ARTIFACTORY_URL" ] && [ -z "$REPO_FILE_URL" ]; then
     REPO_FILE_URL="$ARTIFACTORY_URL/repo-files/"
 fi
+# This is an NFS share for looking up current test information.
+: "${DAOS_CI_INFO_DIR:=}"
 
 # CI user can be any user that is not expected to be on the test systems.
 : "${CI_USER:=jenkins}"
 
+: "${DAOS_FAILURE_STEP:=startup}"
+
+DAOS_FAILURE_STEP="copy_ci_keys"
 retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 
-function create_host_file() {
-        local node_string="$1"
-        local output_file="${2:-./hosts}"
-        local input_file="${3:-}"
-        rm -rf "$output_file" 2>/dev/null
-        if [ -n "$input_file" ]; then
-                cp "$input_file" "$output_file"
-        fi
-        IFS=',' read -ra NODES <<< "$node_string"
-        for node in "${NODES[@]}"; do
-                ip_address=$(nslookup "$node" 2>/dev/null | awk '/^Address: / {print $2}' | head -n 1)
-                long_name=$(nslookup "$node" 2>/dev/null | awk '/^Name:/ {print $2}' | head -n 1)
-                if [ -n "$ip_address" ] && [ -n "$long_name" ]; then
-                        echo "$ip_address $long_name $node" >> "$output_file"
-                else
-                        echo "ERROR: Could not resolve $node"
-                        return 1
-                fi
-        done
+function resolve_host_ip() {
+    local hostname="$1"
+
+    if command -v getent >/dev/null 2>&1; then
+        getent ahostsv4 "$hostname" | awk 'NF { print $1; exit }'
         return 0
+    fi
+
+    if command -v dig >/dev/null 2>&1; then
+        dig +short A "$hostname" | awk 'NF { print; exit }'
+        return 0
+    fi
+
+    return 1
+}
+
+function create_host_file() {
+    local node_string="$1"
+    local output_file="${2:-./hosts}"
+    local input_file="${3:-}"
+
+    rm -rf "$output_file" 2>/dev/null
+    if [ -n "$input_file" ]; then
+        cp "$input_file" "$output_file"
+    fi
+
+    # Parse node list as comma-separated hostnames in preserved cluster order.
+    IFS=',' read -ra NODES <<< "$node_string" || {
+        echo "ERROR: Failed to parse node string: $node_string"
+        return "$ERROR_FATAL"
+    }
+
+    local node_index=0
+    for node in "${NODES[@]}"; do
+        node_index=$((node_index + 1))
+        local node_num
+        if ! node_num=$(printf "%03d" "$node_index"); then
+            echo "ERROR: Failed to format node index '$node_index'"
+            return "$ERROR_FATAL"
+        fi
+
+        local node_ip
+        node_ip=$(resolve_host_ip "$node" 2>/dev/null || true)
+        if [ -z "$node_ip" ]; then
+            echo "ERROR: Could not resolve host '$node'"
+            return "$ERROR_FATAL"
+        fi
+
+        echo "$node_ip $node test-$node_num" >> "$output_file"
+    done
+
+    # Resolve REPOSITORY_URL and ARTIFACTORY_URL
+    local repo_host
+    local artifactory_host
+
+    if [ -n "${REPOSITORY_URL:-}" ]; then
+        repo_host=$(echo "$REPOSITORY_URL" | sed -E 's|^[^:]+://([^/]+).*|\1|')
+        local repo_ip
+        repo_ip=$(resolve_host_ip "$repo_host" 2>/dev/null || true)
+        if [ -n "$repo_ip" ]; then
+            echo "$repo_ip $repo_host" >> "$output_file"
+        fi
+    fi
+
+    if [ -n "${ARTIFACTORY_URL:-}" ]; then
+        artifactory_host=$(echo "$ARTIFACTORY_URL" |
+            sed -E 's|^[^:]+://([^/]+).*|\1|')
+        local artifactory_ip
+        artifactory_ip=$(
+            resolve_host_ip "$artifactory_host" 2>/dev/null || true)
+        if [ -n "$artifactory_ip" ]; then
+            echo "$artifactory_ip $artifactory_host" >> "$output_file"
+        fi
+    fi
+
+    return 0
 }
 
 if [ "$NODESTRING" != "localhost" ]; then
-    if create_host_file "$NODESTRING" "./hosts" "/etc/hosts"; then
-        retry_cmd 300 clush -B -S -l root -w "$NODESTRING" \
-                            -c ./hosts --dest=/etc/hosts
-    else
+    DAOS_FAILURE_STEP="update_hosts_file"
+    if ! create_host_file "$NODESTRING" "./hosts" "/etc/hosts"; then
+        # Fatal error - exit immediately
         echo "ERROR: Failed to create host file"
+        exit "$ERROR_FATAL"
     fi
+    # Successfully created host file, distribute it to nodes
+    retry_cmd 300 clush -B -S -l root -w "$NODESTRING" \
+                        -c ./hosts --dest=/etc/hosts
 fi
 
 
 # shellcheck disable=SC2001
 sanitized_commit_message="$(echo "$COMMIT_MESSAGE" | sed -e 's/\(["\$]\)/\\\1/g')"
 
-if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
-           "export PS4='$PS4'
+build_remote_post_provision_payload() {
+    local script_path
+    local remote_script_files=(
+        "ci/stacktrace.sh"
+        "ci/junit.sh"
+        "ci/provisioning/post_provision_config_common_functions.sh"
+        "ci/provisioning/post_provision_config_common.sh"
+        "ci/provisioning/post_provision_config_nodes_${FAMILY}.sh"
+        "ci/provisioning/post_provision_config_nodes.sh"
+    )
+
+    REMOTE_POST_PROVISION_PAYLOAD="export PS4='$PS4'
            MY_UID=$(id -u)
            CI_USER=\"${CI_USER}\"
            CONFIG_POWER_ONLY=${CONFIG_POWER_ONLY:-}
@@ -129,6 +205,8 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            BUILD_URL=\"${BUILD_URL:-}\"
            STAGE_NAME=\"${STAGE_NAME:-}\"
            OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL:-}\"
+           DAOS_SMTP_RELAY=\"${DAOS_SMTP_RELAY:-}\"
+           NODELIST=\"${NODESTRING:-}\"
            COMMIT_MESSAGE=\"$sanitized_commit_message\"
            REPO_FILE_URL=\"$REPO_FILE_URL\"
            ARTIFACTORY_URL=\"${ARTIFACTORY_URL}\"
@@ -140,19 +218,47 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            REPO_PATH=\"${REPO_PATH:-}\"
            ARTIFACTS_URL=\"${ARTIFACTS_URL:-}\"
            COVFN_DISABLED=\"${COVFN_DISABLED:-true}\"
-           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR:?DAOS_CI_INFO_DIR is missing. Can not continue with node(s) provisioning process}\"
+           DAOS_CI_INFO_DIR=\"${DAOS_CI_INFO_DIR}\"
            CI_SCONS_ARGS=\"${CI_SCONS_ARGS:-}\"
-           PYTHON_VERSION=\"${PYTHON_VERSION}\"
-           $(cat ci/stacktrace.sh)
-           $(cat ci/junit.sh)
-           $(cat ci/provisioning/post_provision_config_common_functions.sh)
-           $(cat ci/provisioning/post_provision_config_common.sh)
-           $(cat ci/provisioning/post_provision_config_nodes_"$FAMILY".sh)
-           $(cat ci/provisioning/post_provision_config_nodes.sh)"; then
+           PYTHON_VERSION=\"${PYTHON_VERSION}\""
+
+    for script_path in "${remote_script_files[@]}"; do
+        if [ ! -r "$script_path" ]; then
+            echo "ERROR: Missing remote payload file: $script_path"
+            return 2
+        fi
+        if ! bash -n "$script_path"; then
+            echo "ERROR: Syntax check failed for remote payload file: $script_path"
+            return 2
+        fi
+        REMOTE_POST_PROVISION_PAYLOAD+=$'\n'
+        REMOTE_POST_PROVISION_PAYLOAD+="$(<"$script_path")"
+    done
+
+    return 0
+}
+
+DAOS_FAILURE_STEP="remote_payload_build"
+if ! build_remote_post_provision_payload; then
+    junit_result "remote_payload_build" "Failed to build remote post-provision payload"
+    report_junit post_provision_config.sh results.xml "$NODESTRING" || true
+    exit 1
+fi
+
+DAOS_FAILURE_STEP="remote_post_provision"
+if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
+           "$REMOTE_POST_PROVISION_PAYLOAD"; then
     report_junit post_provision_config.sh results.xml "$NODESTRING"
     exit 1
 fi
 
+DAOS_FAILURE_STEP="report_junit"
+if ! report_junit post_provision_config.sh results.xml "$NODESTRING"; then
+    echo "ERROR: Failed to collect node JUnit results"
+    exit 1
+fi
+
+DAOS_FAILURE_STEP="publish_commit_metadata"
 git log --format=%B -n 1 HEAD | sed -ne '1s/^\([A-Z][A-Z]*-[0-9][0-9]*\) .*/\1/p' \
                                      -e '/^Fixes:/{s/^Fixes: *//;s/ /\
 /g;p}' | \
