@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateListLiteral */
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
@@ -317,7 +318,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
     } else if (stageName.contains('Hardware')) {
         // Add skip pragma for parent stage
         if (stageName != 'Test Hardware') {
@@ -948,7 +948,7 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" + 
+                                                " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
@@ -1307,7 +1307,7 @@ pipeline {
                 }
             }
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1449,6 +1449,11 @@ pipeline {
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
+        }
+        cleanup {
+            // Need to clean the workspace to reduce disk space usage on
+            // Jenkins build agents
+            cleanWs()
         }
     } // post
 }
