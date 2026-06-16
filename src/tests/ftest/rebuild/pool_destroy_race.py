@@ -34,10 +34,10 @@ class RbldPoolDestroyWithIO(TestWithServers):
           Destroy Pool during rebuild.
           Re-create pool on remaining ranks.
 
-        :avocado: tags=all,pr
-        :avocado: tags=hw,medium
-        :avocado: tags=pool,rebuild,ior
-        :avocado: tags=RbldPoolDestroyWithIO,test_pool_destroy_with_io
+:avocado: tags=all,pr
+:avocado: tags=cb,medium
+:avocado: tags=pool,rebuild,ior
+:avocado: tags=RbldPoolDestroyWithIO,test_pool_destroy_with_io,stage_ftest
         """
         containers = []
 
