@@ -27,12 +27,45 @@
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
 
-int
-dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t *poh,
-	     uint32_t flags, bool write_mode)
+static int
+create_vos_file_parts(const char *path, const char *db_path, struct vos_file_parts **vf_ptr)
 {
-	int cow_val;
-	int rc;
+	struct vos_file_parts *vf;
+	int                    rc;
+
+	D_ALLOC_PTR(vf);
+	if (vf == NULL) {
+		D_ERROR("Unable to allocate memory for pool path\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = parse_vos_file_parts(path, db_path, vf);
+	if (SUCCESS(rc)) {
+		*vf_ptr = vf;
+	} else {
+		D_ERROR("Unable to parse VOS pool path '%s' and DB path '%s'\n", path,
+			db_path ? db_path : "(null)");
+		D_FREE(vf);
+	}
+
+out:
+	return rc;
+}
+
+bool
+vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
+
+int
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
+	     bool write_mode)
+{
+	int                    rc;
+	struct vos_file_parts *vf;
+
+	rc = create_vos_file_parts(path, db_path, &vf);
+	if (!SUCCESS(rc))
+		goto out;
 
 	/**
 	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
@@ -50,57 +83,73 @@ dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t 
 	 * the mapped memory do not propagate to the persistent medium.
 	 */
 	if (!write_mode) {
-		cow_val = 1;
-		rc      = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
+		int cow_val = 1;
+		rc          = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
 		if (rc != 0) {
-			return daos_errno2der(errno);
+			rc = daos_errno2der(errno);
+			goto out_vf;
 		}
 	}
 
-	rc = vos_self_init(path_parts->vf_db_path, true, path_parts->vf_target_idx);
+	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS with path '%s': " DF_RC "\n",
-			path_parts->vf_db_path, DP_RC(rc));
-		goto exit;
+		D_ERROR("Failed to initialize VOS with DB path '%s': " DF_RC "\n", vf->vf_db_path,
+			DP_RC(rc));
+		goto out_cow;
 	}
 
-	rc = vos_pool_open(path, path_parts->vf_pool_uuid, flags, poh);
+	rc = vos_pool_open(vf->vf_vos_file_path, vf->vf_pool_uuid, flags, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 	}
 
-exit:
+out_cow:
 	if (!write_mode) {
 		/** Restore the default value. */
-		cow_val = 0;
+		int cow_val = 0;
 		pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
 	}
-
+out_vf:
+	D_FREE(vf);
+out:
 	return rc;
 }
 
 int
-dv_pool_destroy(const char *path, struct vos_file_parts *path_parts)
+dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx)
 {
-	int rc, flags = 0;
+	struct vos_file_parts *vf;
+	int                    flags = 0;
+	int                    rc;
 
-	rc = vos_self_init(path_parts->vf_db_path, true, path_parts->vf_target_idx);
-	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS with path '%s': " DF_RC "\n",
-			path_parts->vf_db_path, DP_RC(rc));
-		return rc;
+	rc = create_vos_file_parts(path, db_path, &vf);
+	if (!SUCCESS(rc))
+		goto out;
+
+	if (!vmd_wa_can_proceed(ctx, vf->vf_db_path)) {
+		rc = -DER_NO_SERVICE;
+		goto out_vf;
 	}
 
-	if (strncmp(path_parts->vf_vos_file_name, "rdb", 3) == 0)
+	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Failed to initialize VOS with DB path '%s': " DF_RC "\n", vf->vf_db_path,
+			DP_RC(rc));
+		goto out_vf;
+	}
+
+	if (strncmp(vf->vf_vos_file_name, "rdb", 3) == 0)
 		flags |= VOS_POF_RDB;
 
-	rc = vos_pool_destroy_ex(path, path_parts->vf_pool_uuid, flags);
+	rc = vos_pool_destroy_ex(vf->vf_vos_file_path, vf->vf_pool_uuid, flags);
 	if (!SUCCESS(rc))
 		D_ERROR("Failed to destroy pool: " DF_RC "\n", DP_RC(rc));
-
 	vos_self_fini();
 
+out_vf:
+	D_FREE(vf);
+out:
 	return rc;
 }
 

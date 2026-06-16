@@ -1462,7 +1462,7 @@ belongs_to_user(d_iov_t *key, struct find_hdls_by_cont_arg *arg)
 	hdl = value.iov_buf;
 
 	/* Usually we already have the pool handle in memory. */
-	pool_hdl = ds_pool_hdl_lookup(hdl->ch_pool_hdl);
+	pool_hdl = ds_pool_hdl_lookup_cached(hdl->ch_pool_hdl);
 	if (pool_hdl == NULL) {
 		/* Otherwise, look it up in the pool metadata via a hack. */
 		rc = ds_pool_lookup_hdl_cred(arg->fha_tx, cont->c_svc->cs_pool_uuid,
@@ -1637,7 +1637,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	container_flags |= CONTAINER_F_DESTROYING;
 	d_iov_set(&val, &container_flags, sizeof(container_flags));
-	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
+	rc = rdb_tx_update_critical(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
 
 out_prop:
 	daos_prop_free(prop);
@@ -1821,6 +1821,7 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = daos_gettime_coarse();
 	}
 	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
+	eph_ldr->cte_ec_agg_warn_slug_ts = daos_gettime_coarse();
 	*leader_p = eph_ldr;
 out:
 	if (rc) {
@@ -2146,6 +2147,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	daos_epoch_t			 min_stable_eph;
 	uint64_t                         cur_ts;
 	int				 i;
+	int                              warn_slug_ranks = 8; /* 8 ranks at most */
 	int				 rc = 0;
 
 	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
@@ -2180,6 +2182,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		min_ec_agg_eph = DAOS_EPOCH_MAX;
 		min_stable_eph = DAOS_EPOCH_MAX;
 		cur_ts         = daos_gettime_coarse();
+		if (ds_pool_is_rebuilding(pool) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+			eph_ldr->cte_ec_agg_warn_slug_ts = cur_ts;
 		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 			d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
 
@@ -2189,13 +2193,16 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 				continue;
 			}
 
-			if (pool->sp_reclaim != DAOS_RECLAIM_DISABLED &&
-			    cur_ts > eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts + 600)
+			if (cur_ts > eph_ldr->cte_ec_agg_warn_slug_ts + 600 &&
+			    cur_ts > eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts + 600 &&
+			    warn_slug_ranks > 0) {
+				warn_slug_ranks--;
 				D_WARN(DF_CONT ": Sluggish EC boundary report from rank %d, " DF_U64
 					       " Seconds.",
 				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank,
 				       cur_ts -
 					   eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts);
+			}
 
 			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
 				min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
@@ -2226,7 +2233,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		cur_eph = d_hlc2sec(eph_ldr->cte_current_ec_agg_eph);
 		new_eph = d_hlc2sec(min_ec_agg_eph);
-		if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+		if ((cur_ts > eph_ldr->cte_ec_agg_warn_slug_ts + 600) && cur_eph &&
+		    (new_eph > cur_eph) && (new_eph - cur_eph) >= 600)
 			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
 				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
 			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
@@ -2282,8 +2290,6 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		}
 		eph_ldr->cte_current_ec_agg_eph = min_ec_agg_eph;
 		eph_ldr->cte_current_stable_eph = min_stable_eph;
-		if (atomic_load(&pool->sp_rebuilding))
-			break;
 	}
 	ABT_mutex_unlock(svc->cs_cont_ephs_mutex);
 
@@ -6012,14 +6018,16 @@ cont_cli_opc_name(crt_opcode_t opc)
 void
 ds_cont_op_handler(crt_rpc_t *rpc)
 {
-	struct cont_op_in		*in = crt_req_get(rpc);
-	struct cont_op_out		*out = crt_reply_get(rpc);
-	struct ds_pool_hdl		*pool_hdl;
-	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
-	daos_prop_t			*prop = NULL;
-	const char                      *lbl;
-	struct cont_svc			*svc;
-	int				 rc;
+	struct cont_op_in  *in  = crt_req_get(rpc);
+	struct cont_op_out *out = crt_reply_get(rpc);
+	uuid_t              pool_uuid;
+	struct ds_pool_hdl *pool_hdl;
+	crt_opcode_t        opc  = opc_get(rpc->cr_opc);
+	unsigned int        opv  = opc_get_rpc_ver(rpc->cr_opc);
+	daos_prop_t        *prop = NULL;
+	const char         *lbl;
+	struct cont_svc    *svc;
+	int                 rc;
 
 	/*
 	 * Some mgmt RPCs may come from either client or server (admin/dRPC) calls. RPCs from
@@ -6035,13 +6043,19 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	cont_op_in_get_pool_uuid(rpc, pool_uuid);
+	rc = ds_pool_hdl_lookup(pool_uuid, in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_MD,
+			DF_CONT ": ds_pool_hdl_lookup: rpc=%p opc=%u(%s) pool_hdl=" DF_UUID "\n",
+			DP_CONT(pool_uuid, in->ci_uuid), rpc, opc, cont_cli_opc_name(opc),
+			DP_UUID(in->ci_pool_hdl));
+		goto out;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p proto=%d hdl=" DF_UUID ", opc=%u(%s)\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		opc_get_rpc_ver(rpc->cr_opc), DP_UUID(in->ci_hdl), opc, cont_cli_opc_name(opc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, opv, DP_UUID(in->ci_hdl),
+		opc, cont_cli_opc_name(opc));
 
 	/*
 	 * TODO: How to map to the correct container service among those

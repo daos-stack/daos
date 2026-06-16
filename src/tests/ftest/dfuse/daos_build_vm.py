@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,7 +26,7 @@ class DaosBuildVM(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfs,dfuse,ioil
+        :avocado: tags=daosio,dfuse,ioil
         :avocado: tags=DaosBuildVM,test_dfuse_daos_build_wt_il
         """
         run_build_test(self, "writethrough", il_lib='libioil.so', run_on_vms=True)
@@ -42,7 +42,7 @@ class DaosBuildVM(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfs,dfuse,pil4dfs
+        :avocado: tags=daosio,dfuse,pil4dfs
         :avocado: tags=DaosBuildVM,test_dfuse_daos_build_wt_pil4dfs
         """
         run_build_test(self, "nocache", il_lib='libpil4dfs.so', run_on_vms=True)

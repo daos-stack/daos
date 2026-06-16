@@ -18,6 +18,9 @@
 int
 ddb_vos_ut_run(void);
 
+int
+ddb_commands_ut_run(void);
+
 static int
 ddb_test_driver_arguments_parse(uint32_t argc, char **argv)
 {
@@ -88,6 +91,7 @@ main(int argc, char *argv[])
 	/* filtering suites and tests */
 	char test_suites[] = "";
 	RUN_TEST_SUIT('a', ddb_vos_ut_run);
+	RUN_TEST_SUIT('b', ddb_commands_ut_run);
 
 	ddb_fini();
 	if (rc > 0)

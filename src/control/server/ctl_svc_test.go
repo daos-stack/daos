@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,7 +34,12 @@ func newMockControlServiceFromBackends(t *testing.T, log logging.Logger, cfg *co
 	bp := bdev.NewProvider(log, bmb)
 	syp := system.NewMockSysProvider(log, smsc)
 	mp := mount.NewProvider(log, syp)
-	sp := scm.NewProvider(log, smb, syp, mp)
+	sp := scm.NewProvider(&scm.ProviderConfig{
+		Log:     log,
+		Backend: smb,
+		Sys:     syp,
+		Mounter: mp,
+	})
 
 	mscs := NewMockStorageControlService(log, cfg.Engines, syp, sp, bp, nil)
 

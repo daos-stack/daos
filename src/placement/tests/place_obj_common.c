@@ -924,12 +924,14 @@ bool
 plt_layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
 {
 	uint32_t i, j, dom, new_dom, tgt, new_tgt;
+	uint32_t grp_end;
 
 	print_message("grp_nr %d, grp_size %d\n", layout->ol_grp_nr, layout->ol_grp_size);
 	for (i = 0; i < layout->ol_nr; i++) {
 		tgt = layout->ol_shards[i].po_target;
 		dom = tgt / tgts_per_dom;
-		for (j = i + 1; j < roundup(i, layout->ol_grp_size); j++) {
+		grp_end = rounddown(i, layout->ol_grp_size) + layout->ol_grp_size;
+		for (j = i + 1; j < grp_end; j++) {
 			new_tgt = layout->ol_shards[j].po_target;
 			assert_true(new_tgt != tgt);
 			// assert_true(tgt != -1 && new_tgt != -1);

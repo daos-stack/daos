@@ -14,7 +14,6 @@
 
 #include <daos_types.h>
 #include <daos/object.h>
-#include <daos_srv/daos_chk.h>
 
 #define DAOS_RAS_STR_FIELD_SIZE 128
 #define DAOS_RAS_ID_FIELD_SIZE 64
@@ -43,6 +42,7 @@
 	X(RAS_ENGINE_DIED, "engine_died")                                                          \
 	X(RAS_ENGINE_ASSERTED, "engine_asserted")                                                  \
 	X(RAS_ENGINE_CLOCK_DRIFT, "engine_clock_drift")                                            \
+	X(RAS_ENGINE_SELF_TERMINATED, "engine_self_terminated")                                    \
 	X(RAS_POOL_CORRUPTION_DETECTED, "pool_corruption_detected")                                \
 	X(RAS_POOL_REBUILD_START, "pool_rebuild_started")                                          \
 	X(RAS_POOL_REBUILD_END, "pool_rebuild_finished")                                           \
@@ -240,51 +240,14 @@ int
 ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation);
 
 /**
- * List all the known pools from control plane (MS).
+ * Notify control plane that an excluded engine has self terminated.
  *
- * \param[out] clp	The pools list.
- *
- * \retval		Positive value for the conut of pools.
- *			Negative value if error.
- */
-int
-ds_chk_listpool_upcall(struct chk_list_pool **clp);
-
-/**
- * Register the pool to control plane (MS).
- *
- * \param[in] seq	DAOS Check event sequence, unique for the instance.
- * \param[in] uuid	The pool uuid.
- * \param[in] label	The pool label, optional.
- * \param[in] svcreps	Ranks for the pool service.
+ * \param[in] rank		Rank that self terminated.
+ * \param[in] incarnation	Incarnation of rank that self terminated.
  *
  * \retval		Zero on success, non-zero otherwise.
  */
 int
-ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svcreps);
-
-/**
- * Deregister the pool from control plane (MS).
- *
- * \param[in] seq	DAOS Check event sequence, unique for the instance.
- * \param[in] uuid	The pool uuid.
- *
- * \retval		Zero on success, non-zero otherwise.
- */
-int
-ds_chk_deregpool_upcall(uint64_t seq, uuid_t uuid);
-
-/**
- * Report inconsistency to control plane (MS).
- *
- * \param[in] rpt	The pointer to Chk__CheckReport.
- *
- * \retval		Zero on success, non-zero otherwise.
- */
-int
-ds_chk_report_upcall(void *rpt);
-
-void
-ds_chk_free_pool_list(struct chk_list_pool *clp, uint32_t nr);
+ds_notify_rank_self_terminated(d_rank_t rank, uint64_t incarnation);
 
 #endif /* __DAOS_RAS_H_ */

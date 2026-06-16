@@ -442,6 +442,9 @@ def get_base_env(clean=False):
     http_proxy = os.environ.get('HTTPS_PROXY')
     if http_proxy:
         env['HTTPS_PROXY'] = http_proxy
+    no_proxy = os.environ.get('NO_PROXY')
+    if no_proxy:
+        env['NO_PROXY'] = no_proxy
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
@@ -5022,13 +5025,6 @@ def log_test(conf,
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
-    lto.skip_substrings.extend([
-        'sluggish ec boundary report from rank',
-        'sluggish stable epoch reporting',
-        'progress callback was not called for too long',
-        'rpc failed; rc:',
-    ])
-
     try:
         lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks,
@@ -5921,7 +5917,7 @@ class AllocFailTest():
         # pylint: disable-next=no-member
         num_cores = len(os.sched_getaffinity(0))
 
-        if num_cores < 20:
+        if num_cores < 14:
             max_child = 1
         else:
             max_child = int(num_cores / 4 * 3)
@@ -6748,12 +6744,14 @@ def run(wf, args):
     run_fi = False
 
     if args.perf_check or fi_test or fi_test_dfuse:
-        fs = subprocess.run([os.path.join(conf['PREFIX'], 'bin', 'fault_status')], check=False)
+        fi_env = os.environ.copy()
+        fi_env['PATH'] = f'{conf["PREFIX"]}/bin:{fi_env["PATH"]}'
+        fs = subprocess.run(['fault_status'], check=False, env=fi_env)
         print(fs)
         if fs.returncode == 0:
             run_fi = True
         else:
-            print("Unable to detect fault injection feature, skipping testing")
+            print("Unable to detect fault injection feature - skipping FI testing")
 
     if run_fi:
         args.server_debug = 'INFO'

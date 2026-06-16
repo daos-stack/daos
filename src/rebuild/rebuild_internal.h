@@ -77,12 +77,7 @@ struct rebuild_tgt_pool_tracker {
 	uint64_t		rt_stable_epoch;
 
 	/* Only used by reclaim job to discard those half-rebuild data */
-	uint64_t		rt_reclaim_epoch;
-	/* local rebuild epoch mainly to constrain the VOS aggregation
-	 * to make sure aggregation will not cross the epoch
-	 */
-	uint64_t		rt_rebuild_fence;
-
+	uint64_t                 rt_reclaim_epoch;
 	uint32_t		rt_leader_rank;
 
 	/* Global dtx resync version */
@@ -373,7 +368,8 @@ void
 rebuild_tgt_status_check_ult(void *arg);
 
 int
-rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
+rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
+		    struct rebuild_tgt_pool_tracker **p_rpt);
 
 bool
 rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
