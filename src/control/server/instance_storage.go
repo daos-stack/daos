@@ -81,19 +81,6 @@ func (ei *EngineInstance) clearFormat(ctx context.Context, stopEngineFn func(con
 	idx := ei.Index()
 	ei.log.Infof("instance %d: cleaning up after join failure during replace", idx)
 
-	storageProv := ei.GetStorage()
-
-	// Get SCM config to access mount point and class
-	scmCfg, err := storageProv.GetScmConfig()
-	if err != nil {
-		return errors.Wrap(err, "failed to get SCM config")
-	}
-
-	if scmCfg == nil {
-		ei.log.Debugf("instance %d: no SCM config, nothing to clean", idx)
-		return nil
-	}
-
 	if ei.IsStarted() {
 		ei.log.Infof("instance %d: stopping engine before cleanup", idx)
 		if err := stopEngineFn(ctx, ei); err != nil {
