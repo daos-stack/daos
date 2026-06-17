@@ -32,9 +32,9 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
             Verify the telemetry engine NVMe metrics.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium
+        :avocado: tags=cb,medium,stage_ftest
         :avocado: tags=control,telemetry,nvme
-        :avocado: tags=TestWithTelemetryNvme,test_nvme_telemetry_metrics,stage_ftest
+        :avocado: tags=TestWithTelemetryNvme,test_nvme_telemetry_metrics
         """
         metrics_data = self.telemetry.get_nvme_metrics()
         self.display_nvme_test_metrics(metrics_data)
@@ -68,8 +68,8 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
             Verify the dmg telemetry list command.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium
+        :avocado: tags=cb,medium,stage_ftest
         :avocado: tags=control,telemetry,nvme
-        :avocado: tags=TestWithTelemetryNvme,test_telemetry_list_nvme,stage_ftest
+        :avocado: tags=TestWithTelemetryNvme,test_telemetry_list_nvme
         """
         self.verify_telemetry_list()
