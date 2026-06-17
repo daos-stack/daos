@@ -151,6 +151,44 @@ void updateRunStage() {
         return
     }
 
+    // Handle quick functional
+    if (quickFunctional()) {
+        println("updateRunStage: Detected quick functional testing")
+        Map testBuildStage = [
+            'Functional on EL8': 'Build on EL8',
+            'Functional on EL9': 'Build on EL9',
+            'Functional on Leap 15': 'Build on Leap 15',
+            'Functional on SLES 15': 'Build on Leap 15',
+            'Functional Hardware Medium': 'Build on EL9',
+            'Functional Hardware Medium MD on SSD': 'Build on EL9',
+            'Functional Hardware Medium VMD': 'Build on EL9',
+            'Functional Hardware Medium Verbs Provider': 'Build on EL9',
+            'Functional Hardware Medium Verbs Provider MD on SSD': 'Build on EL9',
+            'Functional Hardware Medium UCX Provider': 'Build on EL9',
+            'Functional Hardware Large': 'Build on EL9',
+            'Functional Hardware Large MD on SSD': 'Build on EL9']
+        for (stage in runStage.keySet()) {
+            if (stage in ['Pre-build', 'Python Bandit check', 'Build']) {
+                // These stages must be run for functional testing
+                runStage[stage] = true
+                reasons[stage] = "Quick functional testing"
+            } else if (stage in ['Unit Tests',
+                                 'Fault injection testing',
+                                 'Test RPMs on EL 9.6',
+                                 'Test RPMs on Leap 15.5']) {
+                // These stages are unrelated to functional testing and should be skipped
+                runStage[stage] = false
+                reasons[stage] = "Quick functional testing"
+            } else if (stage in testBuildStage && runStage[stage]) {
+                // The mapped build stage must be run to generate RPMs for the functional test stage
+                runStage[testBuildStage[stage]] = true
+                reasons[testBuildStage[stage]] = "Quick functional testing"
+            }
+        }
+        displayRunStage(reasons)
+        return
+    }
+
     // Update stage running based on commit pragmas
     println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
     Map<String, String> commitPragmas = envToPragmas()
