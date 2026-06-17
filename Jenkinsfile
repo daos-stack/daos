@@ -151,7 +151,7 @@ void updateRunStage() {
         return
     }
 
-    // Handle quick functional
+    // Handle quick functional commit pragma
     if (quickFunctional()) {
         println("updateRunStage: Detected quick functional testing")
         // These stages must be run for functional testing
@@ -166,19 +166,26 @@ void updateRunStage() {
             reasons[stage] = "Quick functional testing"
         }
         // Build stages should only be run if their RPMs are needed
+        String hwBuildStage = 'Build on '
+        List distroTarget = hwDistroTarget2()
+        if (distroTarget[0].toUpperCase() == 'LEAP' || distroTarget[0].toUpperCase() == 'SLES') {
+            hwBuildStage += "Leap ${distroTarget[1]}"
+        } else {
+            hwBuildStage += "${distroTarget[0].toUpperCase()} ${distroTarget[1]}"
+        }
         Map testBuildStage = [
-            'Functional on EL8': 'Build on EL 8',
-            'Functional on EL9': 'Build on EL 9',
+            'Functional on EL 8': 'Build on EL 8',
+            'Functional on EL 9': 'Build on EL 9',
             'Functional on Leap 15': 'Build on Leap 15',
             'Functional on SLES 15': 'Build on Leap 15',
-            'Functional Hardware Medium': 'Build on EL9',
-            'Functional Hardware Medium MD on SSD': 'Build on EL9',
-            'Functional Hardware Medium VMD': 'Build on EL9',
-            'Functional Hardware Medium Verbs Provider': 'Build on EL9',
-            'Functional Hardware Medium Verbs Provider MD on SSD': 'Build on EL9',
-            'Functional Hardware Medium UCX Provider': 'Build on EL9',
-            'Functional Hardware Large': 'Build on EL9',
-            'Functional Hardware Large MD on SSD': 'Build on EL9']
+            'Functional Hardware Medium': hwBuildStage,
+            'Functional Hardware Medium MD on SSD': hwBuildStage,
+            'Functional Hardware Medium VMD': hwBuildStage,
+            'Functional Hardware Medium Verbs Provider': hwBuildStage,
+            'Functional Hardware Medium Verbs Provider MD on SSD': hwBuildStage,
+            'Functional Hardware Medium UCX Provider': hwBuildStage,
+            'Functional Hardware Large': hwBuildStage,
+            'Functional Hardware Large MD on SSD': hwBuildStage]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
             runStage[stage] = false
