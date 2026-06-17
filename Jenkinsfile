@@ -154,9 +154,21 @@ void updateRunStage() {
     // Handle quick functional
     if (quickFunctional()) {
         println("updateRunStage: Detected quick functional testing")
+        // These stages must be run for functional testing
+        for (stage in ['Pre-build', 'Python Bandit check', 'Build']) {
+            runStage[stage] = true
+            reasons[stage] = "Quick functional testing"
+        }
+        // These stages are unrelated to functional testing and should be skipped
+        for (stage in ['Unit Tests', 'Fault injection testing',
+                       'Test RPMs on EL 9.6', 'Test RPMs on Leap 15.5']) {
+            runStage[stage] = false
+            reasons[stage] = "Quick functional testing"
+        }
+        // Build stages should only be run if their RPMs are needed
         Map testBuildStage = [
-            'Functional on EL8': 'Build on EL8',
-            'Functional on EL9': 'Build on EL9',
+            'Functional on EL8': 'Build on EL 8',
+            'Functional on EL9': 'Build on EL 9',
             'Functional on Leap 15': 'Build on Leap 15',
             'Functional on SLES 15': 'Build on Leap 15',
             'Functional Hardware Medium': 'Build on EL9',
@@ -167,20 +179,14 @@ void updateRunStage() {
             'Functional Hardware Medium UCX Provider': 'Build on EL9',
             'Functional Hardware Large': 'Build on EL9',
             'Functional Hardware Large MD on SSD': 'Build on EL9']
-        for (stage in runStage.keySet()) {
-            if (stage in ['Pre-build', 'Python Bandit check', 'Build']) {
-                // These stages must be run for functional testing
-                runStage[stage] = true
-                reasons[stage] = "Quick functional testing"
-            } else if (stage in ['Unit Tests',
-                                 'Fault injection testing',
-                                 'Test RPMs on EL 9.6',
-                                 'Test RPMs on Leap 15.5']) {
-                // These stages are unrelated to functional testing and should be skipped
-                runStage[stage] = false
-                reasons[stage] = "Quick functional testing"
-            } else if (stage in testBuildStage && runStage[stage]) {
-                // The mapped build stage must be run to generate RPMs for the functional test stage
+        // Initially skip all the build stages
+        for (stage in testBuildStage.values().toSet()) {
+            runStage[stage] = false
+            reasons[stage] = "Quick functional testing"
+        }
+        // The mapped build stage must be run to generate RPMs for the functional test stage
+        for (stage in testBuildStage.keySet()) {
+            if (runStage[stage]) {
                 runStage[testBuildStage[stage]] = true
                 reasons[testBuildStage[stage]] = "Quick functional testing"
             }
