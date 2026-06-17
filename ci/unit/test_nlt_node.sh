@@ -12,11 +12,9 @@ if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
 fi
 
 cd build
-# Memcheck NLT ships opt-daos-valgrind.tar; the fault-injection stage ships
-# the standard opt-daos.tar. Extract whichever was shipped.
-opt_tar=opt-daos.tar
-[ -f opt-daos-valgrind.tar ] && opt_tar=opt-daos-valgrind.tar
-tar -xf "$opt_tar"
+# test_nlt.sh ships whichever build (memcheck valgrind vs fault-injection)
+# under the canonical name opt-daos-install.tar.
+tar -xf opt-daos-install.tar
 sudo mv opt/daos /opt/
 
 # Setup daos admin etc.

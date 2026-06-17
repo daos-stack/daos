@@ -467,7 +467,7 @@ def check_memcheck_build(conf):
         if b'runtime.valgrindRegisterStack' not in fd.read():
             raise NLTestFail(
                 f'{daos_bin} is not built with the Go "valgrind" tag (needs '
-                'Go 1.25+ and BUILD_VALGRIND=1), to run under memcheck.'
+                'Go 1.25+ and BUILD_VALGRIND=1), to run under memcheck. '
                 'Rebuild with: scons install BUILD_VALGRIND=1')
 
 
@@ -6767,6 +6767,10 @@ def run(wf, args):
             except Exception as error:  # pylint: disable=broad-exception-caught
                 if args.repeat == 1:
                     raise
+                if args.failfast:
+                    # re-raise so the traceback is preserved for debugging
+                    print(f'--failfast set; stopping after iteration {rep + 1}/{args.repeat}')
+                    raise
                 print(f'NLT repeat iteration {rep + 1} raised: {error}')
                 fatal_errors.add_result(True)
             if args.failfast and fatal_errors.errors and rep < args.repeat - 1:
@@ -6886,6 +6890,14 @@ def run(wf, args):
     return fatal_errors
 
 
+def _positive_int(value):
+    """argparse type that rejects values below 1."""
+    ivalue = int(value)
+    if ivalue < 1:
+        raise argparse.ArgumentTypeError(f'must be >= 1, got {value}')
+    return ivalue
+
+
 def main():
     """Wrap the core function, and catch/report any exceptions
 
@@ -6907,7 +6919,7 @@ def main():
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
-    parser.add_argument('--repeat', type=int, default=1,
+    parser.add_argument('--repeat', type=_positive_int, default=1,
                         help='Repeat the test execution N times (soak/stability testing)')
     parser.add_argument('--failfast', action='store_true',
                         help='With --repeat, stop after the first failing iteration')

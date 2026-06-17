@@ -15,7 +15,9 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # stage ships the standard opt-daos.tar. Use whichever was unstashed.
 opt_tar=opt-daos.tar
 [ -f opt-daos-valgrind.tar ] && opt_tar=opt-daos-valgrind.tar
-rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" .build_vars* "$opt_tar" utils requirements-utest.txt jenkins@"$NODE":build/
+rm -f opt-daos-install.tar
+ln "$opt_tar" opt-daos-install.tar
+rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" .build_vars* opt-daos-install.tar utils requirements-utest.txt jenkins@"$NODE":build/
 
 ssh -T "$SSH_KEY_ARGS" jenkins@"$NODE" \
     "DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
