@@ -6969,6 +6969,14 @@ struct pool_svc_reconf_arg {
 	bool			sca_sync_remove;
 };
 
+static bool
+pool_svc_reconf_abort(void *arg)
+{
+	struct pool_svc_sched *reconf = arg;
+
+	return reconf->psc_canceled;
+}
+
 /* Must be used with pool_svc.ps_reconf_sched (see container_of below). */
 static void
 pool_svc_reconf_ult(void *varg)
@@ -7051,7 +7059,8 @@ pool_svc_reconf_ult(void *varg)
 		vos_df_version = ds_pool_get_vos_df_version(svc->ps_global_version);
 		D_ASSERTF(vos_df_version != 0, DF_UUID ": vos_df_version=0 global_version=%u\n",
 			  DP_UUID(svc->ps_uuid), svc->ps_global_version);
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes, vos_df_version);
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes, vos_df_version,
+				       pool_svc_reconf_abort, reconf);
 		if (reconf->psc_canceled) {
 			rc = -DER_OP_CANCELED;
 			goto out_to_add_remove;
