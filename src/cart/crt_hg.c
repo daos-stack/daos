@@ -1252,13 +1252,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_pub.cr_opc = opc;
 
 	/* allocate rpc struct for a given opcode; in/out size will vary per opc */
-	rc = crt_rpc_priv_alloc(opc, &rpc_priv, false /* forward */);
+	rc = crt_rpc_priv_alloc_rx(crt_ctx, opc, &rpc_priv);
 	if (unlikely(rc != 0)) {
 		/* set client rc to denial of service if server is out of mem */
 		if (rc == -DER_NOMEM)
 			rc = -DER_DOS; /* don't log as we are oom already */
 		else
-			D_ERROR("crt_rpc_priv_alloc() failed, rc: %d.\n", rc);
+			D_ERROR("crt_rpc_priv_alloc_rx() failed, rc: %d.\n", rc);
 
 		crt_hg_reply_error_send(&rpc_tmp, rc);
 		crt_hg_unpack_cleanup(proc);
