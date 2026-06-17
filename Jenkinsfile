@@ -188,6 +188,10 @@ void updateRunStage() {
         return
     }
 
+    // Debug
+    String buildCause = currentBuild.getBuildCauses().toString()
+    println("updateRunStage: Build cause: ${buildCause}")
+
     // Handle builds started by the user
     if (startedByUser()) {
         println("updateRunStage: Build started by the user, skipping commit pragma checks")
