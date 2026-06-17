@@ -32,9 +32,9 @@ class PoolCreateQueryTests(TestWithServers):
             pool create.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium
+        :avocado: tags=medium
         :avocado: tags=pool
-        :avocado: tags=PoolCreateQueryTests,test_create_and_query,stage_ftest
+        :avocado: tags=PoolCreateQueryTests,test_create_and_query,cb_03
         """
         # Create pool
         pool = add_pool(self)

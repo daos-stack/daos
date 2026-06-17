@@ -345,15 +345,15 @@ pipeline {
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
-        booleanParam(name: 'CI_md_on_ssd_daos_test_TEST',
+        booleanParam(name: 'CI_cb_md_on_ssd_01_TEST',
                      defaultValue: true,
-                     description: 'Run the Functional Cluster Box daos_test Other test stage')
-        booleanParam(name: 'CI_md_on_ssd_ftest_TEST',
+                     description: 'Run the Functional Cluster Box test stage 01')
+        booleanParam(name: 'CI_cb_md_on_ssd_02_TEST',
                      defaultValue: true,
-                     description: 'Run the Functional Cluster Box FTest test stage')
-        booleanParam(name: 'CI_md_on_ssd_daos_test_rebuild_TEST',
+                     description: 'Run the Functional Cluster Box test stage 02')
+        booleanParam(name: 'CI_cb_md_on_ssd_03_TEST',
                      defaultValue: true,
-                     description: 'Run the Functional Cluster Box daos_test_rebuild test stage')
+                     description: 'Run the Functional Cluster Box test stage 03')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -1196,37 +1196,37 @@ pipeline {
                             image_version: 'el9.7',
                             node_count: 5
                         )
-                        hwStages['Functional Hardware Large'] = getFunctionalTestStage(
-                            name: 'Functional Hardware Large',
-                            pragma_suffix: '-hw-large',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        )
-                        hwStages['Functional Hardware Large MD on SSD'] = getFunctionalTestStage(
-                            name: 'Functional Hardware Large MD on SSD',
-                            pragma_suffix: '-hw-large-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        )
+                    hwStages['Functional Hardware Large'] = getFunctionalTestStage(
+                        name: 'Functional Hardware Large',
+                        pragma_suffix: '-hw-large',
+                        label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                        next_version: next_version(),
+                        stage_tags: 'hw,large',
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        default_nvme: 'auto',
+                        run_if_pr: false,
+                        run_if_landing: false,
+                        job_status: job_status_internal,
+                        image_version: 'el9.7'
+                    )
+                    hwStages['Functional Hardware Large MD on SSD'] = getFunctionalTestStage(
+                        name: 'Functional Hardware Large MD on SSD',
+                        pragma_suffix: '-hw-large-md-on-ssd',
+                        label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                        next_version: next_version(),
+                        stage_tags: 'hw,large',
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        default_nvme: 'auto_md_on_ssd',
+                        run_if_pr: true,
+                        run_if_landing: false,
+                        job_status: job_status_internal,
+                        image_version: 'el9.7'
+                    )
 
                     List<Map> clusterBoxStages = [
-                        [name: 'daos_test Rebuild', tag: 'stage_daos_test_rebuild', pragma_suffix: '-cb-md-on-ssd-rebuild'],
-                        [name: 'daos_test Other',   tag: 'stage_daos_test',         pragma_suffix: '-cb-md-on-ssd-daos-test'],
-                        [name: 'FTest',             tag: 'stage_ftest',             pragma_suffix: '-cb-md-on-ssd-ftest'],
+                        [name: '01', tag: 'cb_01', pragma_suffix: '-cb-md-on-ssd-cb-01'],
+                        [name: '02', tag: 'cb_02', pragma_suffix: '-cb-md-on-ssd-cb-02'],
+                        [name: '03', tag: 'cb_03', pragma_suffix: '-cb-md-on-ssd-cb-03'],
                     ]
 
                     clusterBoxStages.each { cfg ->
@@ -1236,7 +1236,7 @@ pipeline {
                             pragma_suffix: cfg.pragma_suffix,
                             label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
                             next_version: next_version(),
-                            stage_tags: "cb,medium,${cfg.tag}",
+                            stage_tags: "medium,${cfg.tag}",
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             image_version: 'el9.7',

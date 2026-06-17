@@ -32,7 +32,7 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
             Verify the telemetry engine NVMe metrics.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium,stage_ftest
+        :avocado: tags=medium,cb_03
         :avocado: tags=control,telemetry,nvme
         :avocado: tags=TestWithTelemetryNvme,test_nvme_telemetry_metrics
         """
@@ -68,7 +68,7 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
             Verify the dmg telemetry list command.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium,stage_ftest
+        :avocado: tags=medium,cb_03
         :avocado: tags=control,telemetry,nvme
         :avocado: tags=TestWithTelemetryNvme,test_telemetry_list_nvme
         """
