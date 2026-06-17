@@ -207,6 +207,12 @@ struct dfs {
 	daos_oclass_hints_t  file_oclass_hint;
 	/** Object class hint for dirs */
 	daos_oclass_hints_t  dir_oclass_hint;
+	/** Cached pool target count for progressive-layout selection */
+	uint32_t             pl_target_nr;
+	/** Cached total SCM capacity for progressive-layout selection */
+	uint64_t             pl_total_scm;
+	/** Cached total NVMe capacity for progressive-layout selection */
+	uint64_t             pl_total_nvme;
 	/** Optional prefix to account for when resolving an absolute path */
 	char                *prefix;
 	daos_size_t          prefix_len;

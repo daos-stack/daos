@@ -97,8 +97,8 @@ file_head_oclass(daos_oclass_id_t tail_cid, uint32_t max_groups)
 
 /* Derive the split point from the selected head group count and pool budget. */
 static daos_size_t
-file_split_off(const daos_pool_info_t *pool_info, daos_oclass_id_t head_cid,
-	       daos_oclass_id_t tail_cid, daos_size_t chunk_size)
+file_split_off(uint32_t target_nr, uint64_t total_scm, uint64_t total_nvme,
+	       daos_oclass_id_t head_cid, daos_oclass_id_t tail_cid, daos_size_t chunk_size)
 {
 	struct daos_oclass_attr *head_attr;
 	struct daos_oclass_attr *tail_attr;
@@ -109,8 +109,7 @@ file_split_off(const daos_pool_info_t *pool_info, daos_oclass_id_t head_cid,
 	unsigned int             data_cells;
 	daos_size_t              split_off;
 
-	if (pool_info == NULL || head_cid == OC_UNKNOWN || tail_cid == OC_UNKNOWN ||
-	    chunk_size == 0)
+	if (target_nr == 0 || head_cid == OC_UNKNOWN || tail_cid == OC_UNKNOWN || chunk_size == 0)
 		return 0;
 
 	/*
@@ -118,14 +117,10 @@ file_split_off(const daos_pool_info_t *pool_info, daos_oclass_id_t head_cid,
 	 * the selected media total. This keeps the split point stable for the container rather than
 	 * tied to transient free-space fluctuations.
 	 */
-	if (pool_info->pi_ntargets == 0)
-		return 0;
-	if (pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME] != 0)
-		target_capacity =
-		    pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME] / pool_info->pi_ntargets;
+	if (total_nvme != 0)
+		target_capacity = total_nvme / target_nr;
 	else
-		target_capacity =
-		    pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_SCM] / pool_info->pi_ntargets;
+		target_capacity = total_scm / target_nr;
 	if (target_capacity == 0)
 		return 0;
 
@@ -162,7 +157,6 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_size_t c
 	      daos_oclass_id_t *head_cid, daos_oclass_id_t *tail_cid, daos_size_t *split_off,
 	      bool *has_tail)
 {
-	daos_pool_info_t         pool_info = {.pi_bits = DPI_SPACE};
 	struct daos_oclass_attr *tail_attr;
 	daos_size_t              local_split_off = 0;
 	uint32_t                 max_groups;
@@ -189,13 +183,10 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_size_t c
 	if (cid != 0 || !dfs_file_layout_has_tail(dfs->layout_v, S_IFREG))
 		return 0;
 
-	rc = daos_pool_query(dfs->poh, NULL, &pool_info, NULL, NULL);
-	if (rc != 0) {
-		D_ERROR("daos_pool_query() failed " DF_RC "\n", DP_RC(rc));
-		return daos_der2errno(rc);
-	}
+	if (dfs->pl_target_nr == 0)
+		return 0;
 
-	if (pool_info.pi_ntargets < 1000 && !pl_bypass_target_limit())
+	if (dfs->pl_target_nr < 1000 && !pl_bypass_target_limit())
 		return 0;
 
 	/* Use the default DAOS file class as the wide tail and derive the compact head from it. */
@@ -217,7 +208,8 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_size_t c
 	if (*head_cid == OC_UNKNOWN)
 		goto out;
 
-	local_split_off = file_split_off(&pool_info, *head_cid, *tail_cid, chunk_size);
+	local_split_off = file_split_off(dfs->pl_target_nr, dfs->pl_total_scm, dfs->pl_total_nvme,
+					 *head_cid, *tail_cid, chunk_size);
 	if (local_split_off == 0)
 		goto out;
 
