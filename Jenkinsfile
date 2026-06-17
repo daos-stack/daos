@@ -151,6 +151,30 @@ void updateRunStage() {
         return
     }
 
+    // Update stage running based on commit pragmas
+    println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
+    Map<String, String> commitPragmas = envToPragmas()
+    println("updateRunStage: Checking skip commit pragmas from commit message:")
+    commitPragmas.each { key, value ->
+        println("  ${key}: ${value}")
+    }
+    for (stage in runStage.keySet()) {
+        List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        for (pragma in skipPragmas) {
+            // commitPragmas will already contain lower case keys from pragmasToMap()
+            println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
+            if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
+                runStage[stage] = false
+                reasons[stage] = "commit pragma ${pragma}: true"
+                break
+            } else if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
+                runStage[stage] = true
+                reasons[stage] = "commit pragma ${pragma}: false"
+                break
+            }
+        }
+    }
+
     // Handle quick functional commit pragma
     if (quickFunctional()) {
         println("updateRunStage: Detected quick functional testing")
@@ -198,33 +222,8 @@ void updateRunStage() {
                 reasons[testBuildStage[stage]] = "Quick functional testing"
             }
         }
-        displayRunStage(reasons)
-        return
     }
 
-    // Update stage running based on commit pragmas
-    println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
-    Map<String, String> commitPragmas = envToPragmas()
-    println("updateRunStage: Checking skip commit pragmas from commit message:")
-    commitPragmas.each { key, value ->
-        println("  ${key}: ${value}")
-    }
-    for (stage in runStage.keySet()) {
-        List<String> skipPragmas = getStageNameSkipPragmas(stage)
-        for (pragma in skipPragmas) {
-            // commitPragmas will already contain lower case keys from pragmasToMap()
-            println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
-            if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
-                runStage[stage] = false
-                reasons[stage] = "commit pragma ${pragma}: true"
-                break
-            } else if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
-                runStage[stage] = true
-                reasons[stage] = "commit pragma ${pragma}: false"
-                break
-            }
-        }
-    }
     displayRunStage(reasons)
 }
 
