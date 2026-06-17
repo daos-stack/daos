@@ -79,6 +79,10 @@ void updateRunStage() {
         }
     }
 
+    // Debug
+    String buildCause = currentBuild.getBuildCauses().toString()
+    println("updateRunStage: Build cause: ${buildCause}")
+
     // Handle doc-only changes: Only run default or selected build stages
     if (docOnlyChange(target_branch)) {
         println("updateRunStage: Detected doc-only change, skipping testing")
