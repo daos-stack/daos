@@ -191,7 +191,7 @@ void updateRunStage() {
         }
         // Build stages should only be run if their RPMs are needed
         String hwBuildStage = 'Build on '
-        List distroTarget = hwDistroTarget()
+        List distroTarget = hwDistroTarget2()
         if (distroTarget[0].toUpperCase() == 'LEAP' || distroTarget[0].toUpperCase() == 'SLES') {
             hwBuildStage += "Leap ${distroTarget[1]}"
         } else {
