@@ -89,9 +89,13 @@ func (ei *EngineInstance) clearFormat(ctx context.Context, stopEngineFn func(con
 		ei.log.Debugf("instance %d: engine stopped successfully", idx)
 	}
 
-	// On RAM-based SCM (tmpfs) unmount here unnecessary as will be done on engine exit
+	// SCM is intentionally not unmounted:
+	// - RAM/tmpfs: auto-unmounted by the control-plane when the engine exits above;
+	//   ramdisk is unconditionally recreated on next startup.
+	// - DCPM: must stay mounted so createSuperblock() writes onto the PMEM in a "Metadata
+	//   format" rather than requiring a full "SCM format".
 
-	// Removing superblock prevents subsequent join without reformat.
+	// Removing superblock prevents subsequent join without an explicit format.
 	if err := ei.RemoveSuperblock(); err != nil {
 		return err
 	}

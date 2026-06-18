@@ -292,7 +292,7 @@ func newTestMgmtSvcNonReplica(t *testing.T, log logging.Logger) *mgmtSvc {
 }
 
 // setupTestEngineWithConfig configures an EngineInstance with a custom engine config.
-// If cfg is nil, uses engine.MockConfig(). If rank is 0, no rank is assigned.
+// If cfg is nil, uses engine.MockConfig(). Note that rank 0 is a valid rank.
 func setupTestEngineWithConfig(t *testing.T, ei *EngineInstance, rank uint32, cfg *engine.Config, stopped ...bool) {
 	if ei._superblock == nil {
 		ei._superblock = &Superblock{}
@@ -314,7 +314,7 @@ func setupTestEngineWithConfig(t *testing.T, ei *EngineInstance, rank uint32, cf
 
 // setupTestEngine configures an EngineInstance for testing with the specified rank and state.
 // If stopped is true (or provided), the engine is marked as stopped, otherwise as running.
-// If rank is 0, no rank is assigned to the superblock.
+// Note that rank 0 is a valid rank.
 func setupTestEngine(t *testing.T, ei *EngineInstance, rank uint32, stopped ...bool) {
 	setupTestEngineWithConfig(t, ei, rank, nil, stopped...)
 }

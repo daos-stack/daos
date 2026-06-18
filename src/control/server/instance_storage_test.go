@@ -568,6 +568,7 @@ func TestEngineInstance_clearFormat(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scmClass          storage.Class
 		engineStarted     bool
+		stopEngineFails   bool
 		missingSuperblock bool
 		expErr            error
 	}{
@@ -594,6 +595,12 @@ func TestEngineInstance_clearFormat(t *testing.T) {
 		"DCPM class engine started": {
 			scmClass:      storage.ClassDcpm,
 			engineStarted: true,
+		},
+		"DCPM class engine started, stop fails": {
+			scmClass:        storage.ClassDcpm,
+			engineStarted:   true,
+			stopEngineFails: true,
+			expErr:          errors.New("stop failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -662,7 +669,7 @@ func TestEngineInstance_clearFormat(t *testing.T) {
 			}
 
 			stopEngine := defStopEngine
-			if tc.engineStarted {
+			if tc.engineStarted && !tc.stopEngineFails {
 				stopEngine = func(_ context.Context, _ *EngineInstance) error {
 					return nil
 				}
