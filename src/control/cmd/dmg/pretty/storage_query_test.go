@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -701,6 +701,7 @@ host1
         Unsafe Shutdowns:%d
         Media Errors:%d
         Error Log Entries:%d
+        Percentage Used:0%%
       Critical Warnings:
         Temperature: WARNING
         Available Spare: WARNING

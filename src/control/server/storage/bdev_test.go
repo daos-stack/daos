@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -181,7 +181,7 @@ func Test_Convert_SmdDevice(t *testing.T) {
 		`":"0000:01:00.0","fw_rev":"fwRev-1","vendor_id":"","pci_type":""` +
 		`,"socket_id":1,"health_stats":{"timestamp":0,"warn_temp_time":1,"` +
 		`crit_temp_time":1,"ctrl_busy_time":1,"power_cycles":1,"power_on_hours":1,"` +
-		`unsafe_shutdowns":1,"media_errs":1,"err_log_entries":1,"bio_read_errs` +
+		`unsafe_shutdowns":1,"media_errs":1,"err_log_entries":1,"percentage_used":0,"bio_read_errs` +
 		`":1,"bio_write_errs":1,"bio_unmap_errs":1,"checksum_errs":1,"` +
 		`temperature":1,"temp_warn":true,"avail_spare_warn":true,"dev_reliability` +
 		`_warn":true,"read_only_warn":true,"volatile_mem_warn":true` +
