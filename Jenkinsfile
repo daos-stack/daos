@@ -82,6 +82,7 @@ void updateRunStage() {
     // Debug
     String buildCause = currentBuild.getBuildCauses().toString()
     println("updateRunStage: Build cause: ${buildCause}")
+    println("updateRunStage: Started by user: ${startedByUser()}")
 
     // Handle doc-only changes: Only run default or selected build stages
     if (docOnlyChange(target_branch)) {
@@ -148,9 +149,10 @@ void updateRunStage() {
         return
     }
 
-    // Handle builds started by the user
-    if (startedByUser()) {
-        println("updateRunStage: Build started by the user, skipping commit pragma checks")
+    // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
+    if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
+        println(
+            "updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas")
         displayRunStage(reasons)
         return
     }
@@ -528,6 +530,10 @@ pipeline {
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
+        booleanParam(name: 'CI_IGNORE_SKIP_COMMIT_PRAGMAS',
+                     defaultValue: false,
+                     description: 'Ignore any commit pragmas used to skip/run stages and rely ' +
+                                  'solely on the build parameter settings')
         string(name: 'CI_SCONS_ARGS',
                defaultValue: '',
                description: 'Arguments for scons when building DAOS')
