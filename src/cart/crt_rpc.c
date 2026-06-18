@@ -64,8 +64,6 @@ crt_rpc_rx_pool_init(struct crt_context *ctx)
 
 		D_ALLOC(rpc_priv, CRT_RX_RPC_POOL_RPC_SIZE);
 		if (rpc_priv == NULL) {
-			D_WARN("RX RPC pool preallocation stopped at %u entries.\n",
-			       ctx->cc_rx_rpc_pool_num);
 			break;
 		}
 
