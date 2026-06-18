@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -79,6 +80,7 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 		fmt.Fprintf(iw, "Checksum Errors:%d\n", uint64(stat.ChecksumErrors))
 	}
 	fmt.Fprintf(iw, "Error Log Entries:%d\n", uint64(stat.ErrorLogEntries))
+	fmt.Fprintf(iw, "Percentage Used:%d%%\n", uint32(stat.PercentageUsed))
 
 	fmt.Fprintf(out, "Critical Warnings:\n")
 	fmt.Fprintf(iw, "Temperature: ")
