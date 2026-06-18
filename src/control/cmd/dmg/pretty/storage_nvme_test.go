@@ -167,7 +167,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Unsafe Shutdowns:%d
     Media Errors:%d
     Error Log Entries:%d
-    Percentage Used:0%%
+    Percentage Used:1%%
   Critical Warnings:
     Temperature: WARNING
     Available Spare: WARNING
@@ -215,7 +215,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Unsafe Shutdowns:%d
     Media Errors:%d
     Error Log Entries:%d
-    Percentage Used:0%%
+    Percentage Used:2%%
   Critical Warnings:
     Temperature: WARNING
     Available Spare: WARNING
@@ -325,7 +325,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Unmap Errors:%d
     Checksum Errors:%d
     Error Log Entries:%d
-    Percentage Used:0%%
+    Percentage Used:1%%
   Critical Warnings:
     Temperature: WARNING
     Available Spare: WARNING

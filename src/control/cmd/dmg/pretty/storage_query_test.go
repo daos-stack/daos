@@ -701,7 +701,7 @@ host1
         Unsafe Shutdowns:%d
         Media Errors:%d
         Error Log Entries:%d
-        Percentage Used:0%%
+        Percentage Used:1%%
       Critical Warnings:
         Temperature: WARNING
         Available Spare: WARNING
