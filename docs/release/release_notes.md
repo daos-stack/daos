@@ -2,6 +2,39 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
+## DAOS Version 2.6.5.p1 (2026-06-17)
+
+The DAOS 2.6.5.p1 release includes the daos-2.6.5.p1 RPM packages and their prerequisites.
+It contains the following updates on top of DAOS 2.6.5:
+
+### Bug fixes and improvements
+
+The DAOS 2.6.5.p1 release includes fixes and improvements in the following areas:
+
+#### DTX (Distributed Transactions)
+
+* Fix multiple race conditions during DTX leader switch: add a version parameter to DTX abort
+  RPCs so that stale abort requests from evicted old leaders are ignored by the new leader;
+  handle empty MBS during early vos\_dtx\_load\_mbs() to prevent segfaults (DAOS-19036).
+
+#### VOS (Versioned Object Store)
+* Stop evicting VOS objects from cache after DTX commit so that concurrent I/O on the
+  same object shard no longer triggers unnecessary retry loops (DAOS-19059).
+
+#### Rebuild
+
+* Retry network errors on the migration pull side (data fetch from source), matching the
+  existing retry behavior on the scan/push side; also ensure out-of-order IV refresh messages
+  cannot revert the global rebuild-done flag (DAOS-18976).
+* Always bump the rebuild generation for RECLAIM and FAIL\_RECLAIM operations, and properly
+  abort local rebuild plan tasks when the rebuild group task completes to prevent stale
+  rebuild work from continuing (DAOS-18976).
+
+#### Engine
+
+* Handle SIGBUS by performing a graceful engine shutdown instead of an uncontrolled process
+  termination, and exit with failure status (DAOS-17931).
+
 ## DAOS Version 2.6.5 (2026-06-05)
 
 The DAOS 2.6.5 release includes the daos-2.6.5 RPM packages and their prerequisites.
