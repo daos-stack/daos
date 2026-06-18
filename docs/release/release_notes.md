@@ -2,14 +2,14 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
-## DAOS Version 2.6.5-p1 (2026-06-17)
+## DAOS Version 2.6.5.p1 (2026-06-17)
 
-The DAOS 2.6.5-p1 release includes the daos-2.6.5-p1 RPM packages and their prerequisites.
+The DAOS 2.6.5.p1 release includes the daos-2.6.5.p1 RPM packages and their prerequisites.
 It contains the following updates on top of DAOS 2.6.5:
 
 ### Bug fixes and improvements
 
-The DAOS 2.6.5-p1 release includes fixes and improvements in the following areas:
+The DAOS 2.6.5.p1 release includes fixes and improvements in the following areas:
 
 #### DTX (Distributed Transactions)
 
