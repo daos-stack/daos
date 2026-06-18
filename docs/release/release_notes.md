@@ -14,11 +14,11 @@ The DAOS 2.6.5-p1 release includes fixes and improvements in the following areas
 #### DTX (Distributed Transactions)
 
 * Fix multiple race conditions during DTX leader switch: add a version parameter to DTX abort
-  RPCs so stale abort requests from evicted old leaders are ignored by the new leader; handle
-  empty MBS during early vos\_dtx\_load\_mbs() to prevent segfaults (DAOS-19036).
+  RPCs so that stale abort requests from evicted old leaders are ignored by the new leader;
+  handle empty MBS during early vos\_dtx\_load\_mbs() to prevent segfaults (DAOS-19036).
 
 #### VOS (Versioned Object Store)
-* Stop evicting VOS objects from cache after DTX commit, so that concurrent I/O on the
+* Stop evicting VOS objects from cache after DTX commit so that concurrent I/O on the
   same object shard no longer triggers unnecessary retry loops (DAOS-19059).
 
 #### Rebuild
