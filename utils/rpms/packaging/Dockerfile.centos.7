@@ -1,0 +1,56 @@
+#
+# Copyright 2018-2022, Intel Corporation
+#
+# 'recipe' for Docker to build an RPM
+#
+
+# Pull base image
+FROM centos:centos7
+LABEL maintainer="daos@daos.groups.io"
+
+# Use local repo server if present
+ARG REPO_FILE_URL
+RUN set -e;                                                      \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        cd /etc/yum.repos.d/ &&                                  \
+        curl -k -f -o daos_ci-centos7-artifactory.repo.tmp       \
+             "$REPO_FILE_URL"daos_ci-centos7-artifactory.repo && \
+        for file in *.repo; do                                   \
+            true > $file;                                        \
+        done;                                                    \
+        mv daos_ci-centos7-artifactory.repo{.tmp,};              \
+    fi;                                                          \
+    yum -y install dnf;                                          \
+    yum clean all;                                               \
+    dnf --disablerepo \*epel\* -y install epel-release           \
+                                          dnf-plugins-core;      \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        dnf -y --quiet config-manager --disable epel;            \
+    fi;                                                          \
+    dnf -y update epel-release;                                  \
+    dnf -y clean all
+
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+# Update distribution
+#Nothing to do for CentOS
+
+# Install basic tools
+RUN dnf install -y epel-release
+RUN dnf install -y mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
+                   git python-srpm-macros dnf && dnf -y clean all
+
+# Add build user (to keep rpmbuild happy)
+ENV USER build
+ENV PASSWD build
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+# add the user to the mock group so it can run mock
+RUN usermod -a -G mock $USER
+
+# mock in Docker needs to use the old-chroot option
+RUN grep use_nspawn /etc/mock/site-defaults.cfg || \
+    echo "config_opts['use_nspawn'] = False" >> /etc/mock/site-defaults.cfg
+
+RUN chmod g+w /etc/mock/default.cfg
