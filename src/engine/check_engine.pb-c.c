@@ -97,6 +97,282 @@ void   shared__check_report_resp__free_unpacked
   assert(message->base.descriptor == &shared__check_report_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   shared__check_list_pool_req__init
+                     (Shared__CheckListPoolReq         *message)
+{
+  static const Shared__CheckListPoolReq init_value = SHARED__CHECK_LIST_POOL_REQ__INIT;
+  *message = init_value;
+}
+size_t shared__check_list_pool_req__get_packed_size
+                     (const Shared__CheckListPoolReq *message)
+{
+  assert(message->base.descriptor == &shared__check_list_pool_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t shared__check_list_pool_req__pack
+                     (const Shared__CheckListPoolReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &shared__check_list_pool_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t shared__check_list_pool_req__pack_to_buffer
+                     (const Shared__CheckListPoolReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &shared__check_list_pool_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Shared__CheckListPoolReq *
+       shared__check_list_pool_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Shared__CheckListPoolReq *)
+     protobuf_c_message_unpack (&shared__check_list_pool_req__descriptor,
+                                allocator, len, data);
+}
+void   shared__check_list_pool_req__free_unpacked
+                     (Shared__CheckListPoolReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &shared__check_list_pool_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   shared__check_list_pool_resp__one_pool__init
+                     (Shared__CheckListPoolResp__OnePool         *message)
+{
+  static const Shared__CheckListPoolResp__OnePool init_value = SHARED__CHECK_LIST_POOL_RESP__ONE_POOL__INIT;
+  *message = init_value;
+}
+void   shared__check_list_pool_resp__init
+                     (Shared__CheckListPoolResp         *message)
+{
+  static const Shared__CheckListPoolResp init_value = SHARED__CHECK_LIST_POOL_RESP__INIT;
+  *message = init_value;
+}
+size_t shared__check_list_pool_resp__get_packed_size
+                     (const Shared__CheckListPoolResp *message)
+{
+  assert(message->base.descriptor == &shared__check_list_pool_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t shared__check_list_pool_resp__pack
+                     (const Shared__CheckListPoolResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &shared__check_list_pool_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t shared__check_list_pool_resp__pack_to_buffer
+                     (const Shared__CheckListPoolResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &shared__check_list_pool_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Shared__CheckListPoolResp *
+       shared__check_list_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Shared__CheckListPoolResp *)
+     protobuf_c_message_unpack (&shared__check_list_pool_resp__descriptor,
+                                allocator, len, data);
+}
+void   shared__check_list_pool_resp__free_unpacked
+                     (Shared__CheckListPoolResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &shared__check_list_pool_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   shared__check_reg_pool_req__init
+                     (Shared__CheckRegPoolReq         *message)
+{
+  static const Shared__CheckRegPoolReq init_value = SHARED__CHECK_REG_POOL_REQ__INIT;
+  *message = init_value;
+}
+size_t shared__check_reg_pool_req__get_packed_size
+                     (const Shared__CheckRegPoolReq *message)
+{
+  assert(message->base.descriptor == &shared__check_reg_pool_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t shared__check_reg_pool_req__pack
+                     (const Shared__CheckRegPoolReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &shared__check_reg_pool_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t shared__check_reg_pool_req__pack_to_buffer
+                     (const Shared__CheckRegPoolReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &shared__check_reg_pool_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Shared__CheckRegPoolReq *
+       shared__check_reg_pool_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Shared__CheckRegPoolReq *)
+     protobuf_c_message_unpack (&shared__check_reg_pool_req__descriptor,
+                                allocator, len, data);
+}
+void   shared__check_reg_pool_req__free_unpacked
+                     (Shared__CheckRegPoolReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &shared__check_reg_pool_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   shared__check_reg_pool_resp__init
+                     (Shared__CheckRegPoolResp         *message)
+{
+  static const Shared__CheckRegPoolResp init_value = SHARED__CHECK_REG_POOL_RESP__INIT;
+  *message = init_value;
+}
+size_t shared__check_reg_pool_resp__get_packed_size
+                     (const Shared__CheckRegPoolResp *message)
+{
+  assert(message->base.descriptor == &shared__check_reg_pool_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t shared__check_reg_pool_resp__pack
+                     (const Shared__CheckRegPoolResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &shared__check_reg_pool_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t shared__check_reg_pool_resp__pack_to_buffer
+                     (const Shared__CheckRegPoolResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &shared__check_reg_pool_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Shared__CheckRegPoolResp *
+       shared__check_reg_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Shared__CheckRegPoolResp *)
+     protobuf_c_message_unpack (&shared__check_reg_pool_resp__descriptor,
+                                allocator, len, data);
+}
+void   shared__check_reg_pool_resp__free_unpacked
+                     (Shared__CheckRegPoolResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &shared__check_reg_pool_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   shared__check_dereg_pool_req__init
+                     (Shared__CheckDeregPoolReq         *message)
+{
+  static const Shared__CheckDeregPoolReq init_value = SHARED__CHECK_DEREG_POOL_REQ__INIT;
+  *message = init_value;
+}
+size_t shared__check_dereg_pool_req__get_packed_size
+                     (const Shared__CheckDeregPoolReq *message)
+{
+  assert(message->base.descriptor == &shared__check_dereg_pool_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t shared__check_dereg_pool_req__pack
+                     (const Shared__CheckDeregPoolReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &shared__check_dereg_pool_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t shared__check_dereg_pool_req__pack_to_buffer
+                     (const Shared__CheckDeregPoolReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &shared__check_dereg_pool_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Shared__CheckDeregPoolReq *
+       shared__check_dereg_pool_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Shared__CheckDeregPoolReq *)
+     protobuf_c_message_unpack (&shared__check_dereg_pool_req__descriptor,
+                                allocator, len, data);
+}
+void   shared__check_dereg_pool_req__free_unpacked
+                     (Shared__CheckDeregPoolReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &shared__check_dereg_pool_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   shared__check_dereg_pool_resp__init
+                     (Shared__CheckDeregPoolResp         *message)
+{
+  static const Shared__CheckDeregPoolResp init_value = SHARED__CHECK_DEREG_POOL_RESP__INIT;
+  *message = init_value;
+}
+size_t shared__check_dereg_pool_resp__get_packed_size
+                     (const Shared__CheckDeregPoolResp *message)
+{
+  assert(message->base.descriptor == &shared__check_dereg_pool_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t shared__check_dereg_pool_resp__pack
+                     (const Shared__CheckDeregPoolResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &shared__check_dereg_pool_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t shared__check_dereg_pool_resp__pack_to_buffer
+                     (const Shared__CheckDeregPoolResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &shared__check_dereg_pool_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Shared__CheckDeregPoolResp *
+       shared__check_dereg_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Shared__CheckDeregPoolResp *)
+     protobuf_c_message_unpack (&shared__check_dereg_pool_resp__descriptor,
+                                allocator, len, data);
+}
+void   shared__check_dereg_pool_resp__free_unpacked
+                     (Shared__CheckDeregPoolResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &shared__check_dereg_pool_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor shared__check_report_req__field_descriptors[1] =
 {
   {
@@ -171,5 +447,342 @@ const ProtobufCMessageDescriptor shared__check_report_resp__descriptor =
   shared__check_report_resp__field_indices_by_name,
   1,  shared__check_report_resp__number_ranges,
   (ProtobufCMessageInit) shared__check_report_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+#define shared__check_list_pool_req__field_descriptors NULL
+#define shared__check_list_pool_req__field_indices_by_name NULL
+#define shared__check_list_pool_req__number_ranges NULL
+const ProtobufCMessageDescriptor shared__check_list_pool_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "shared.CheckListPoolReq",
+  "CheckListPoolReq",
+  "Shared__CheckListPoolReq",
+  "shared",
+  sizeof(Shared__CheckListPoolReq),
+  0,
+  shared__check_list_pool_req__field_descriptors,
+  shared__check_list_pool_req__field_indices_by_name,
+  0,  shared__check_list_pool_req__number_ranges,
+  (ProtobufCMessageInit) shared__check_list_pool_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor shared__check_list_pool_resp__one_pool__field_descriptors[3] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckListPoolResp__OnePool, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "label",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckListPoolResp__OnePool, label),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "svcreps",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Shared__CheckListPoolResp__OnePool, n_svcreps),
+    offsetof(Shared__CheckListPoolResp__OnePool, svcreps),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned shared__check_list_pool_resp__one_pool__field_indices_by_name[] = {
+  1,   /* field[1] = label */
+  2,   /* field[2] = svcreps */
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange shared__check_list_pool_resp__one_pool__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor shared__check_list_pool_resp__one_pool__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "shared.CheckListPoolResp.OnePool",
+  "OnePool",
+  "Shared__CheckListPoolResp__OnePool",
+  "shared",
+  sizeof(Shared__CheckListPoolResp__OnePool),
+  3,
+  shared__check_list_pool_resp__one_pool__field_descriptors,
+  shared__check_list_pool_resp__one_pool__field_indices_by_name,
+  1,  shared__check_list_pool_resp__one_pool__number_ranges,
+  (ProtobufCMessageInit) shared__check_list_pool_resp__one_pool__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor shared__check_list_pool_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckListPoolResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "pools",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Shared__CheckListPoolResp, n_pools),
+    offsetof(Shared__CheckListPoolResp, pools),
+    &shared__check_list_pool_resp__one_pool__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned shared__check_list_pool_resp__field_indices_by_name[] = {
+  1,   /* field[1] = pools */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange shared__check_list_pool_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor shared__check_list_pool_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "shared.CheckListPoolResp",
+  "CheckListPoolResp",
+  "Shared__CheckListPoolResp",
+  "shared",
+  sizeof(Shared__CheckListPoolResp),
+  2,
+  shared__check_list_pool_resp__field_descriptors,
+  shared__check_list_pool_resp__field_indices_by_name,
+  1,  shared__check_list_pool_resp__number_ranges,
+  (ProtobufCMessageInit) shared__check_list_pool_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor shared__check_reg_pool_req__field_descriptors[4] =
+{
+  {
+    "seq",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckRegPoolReq, seq),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "uuid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckRegPoolReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "label",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckRegPoolReq, label),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "svcreps",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Shared__CheckRegPoolReq, n_svcreps),
+    offsetof(Shared__CheckRegPoolReq, svcreps),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned shared__check_reg_pool_req__field_indices_by_name[] = {
+  2,   /* field[2] = label */
+  0,   /* field[0] = seq */
+  3,   /* field[3] = svcreps */
+  1,   /* field[1] = uuid */
+};
+static const ProtobufCIntRange shared__check_reg_pool_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 4 }
+};
+const ProtobufCMessageDescriptor shared__check_reg_pool_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "shared.CheckRegPoolReq",
+  "CheckRegPoolReq",
+  "Shared__CheckRegPoolReq",
+  "shared",
+  sizeof(Shared__CheckRegPoolReq),
+  4,
+  shared__check_reg_pool_req__field_descriptors,
+  shared__check_reg_pool_req__field_indices_by_name,
+  1,  shared__check_reg_pool_req__number_ranges,
+  (ProtobufCMessageInit) shared__check_reg_pool_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor shared__check_reg_pool_resp__field_descriptors[1] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckRegPoolResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned shared__check_reg_pool_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange shared__check_reg_pool_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor shared__check_reg_pool_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "shared.CheckRegPoolResp",
+  "CheckRegPoolResp",
+  "Shared__CheckRegPoolResp",
+  "shared",
+  sizeof(Shared__CheckRegPoolResp),
+  1,
+  shared__check_reg_pool_resp__field_descriptors,
+  shared__check_reg_pool_resp__field_indices_by_name,
+  1,  shared__check_reg_pool_resp__number_ranges,
+  (ProtobufCMessageInit) shared__check_reg_pool_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor shared__check_dereg_pool_req__field_descriptors[2] =
+{
+  {
+    "seq",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckDeregPoolReq, seq),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "uuid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckDeregPoolReq, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned shared__check_dereg_pool_req__field_indices_by_name[] = {
+  0,   /* field[0] = seq */
+  1,   /* field[1] = uuid */
+};
+static const ProtobufCIntRange shared__check_dereg_pool_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor shared__check_dereg_pool_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "shared.CheckDeregPoolReq",
+  "CheckDeregPoolReq",
+  "Shared__CheckDeregPoolReq",
+  "shared",
+  sizeof(Shared__CheckDeregPoolReq),
+  2,
+  shared__check_dereg_pool_req__field_descriptors,
+  shared__check_dereg_pool_req__field_indices_by_name,
+  1,  shared__check_dereg_pool_req__number_ranges,
+  (ProtobufCMessageInit) shared__check_dereg_pool_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor shared__check_dereg_pool_resp__field_descriptors[1] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Shared__CheckDeregPoolResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned shared__check_dereg_pool_resp__field_indices_by_name[] = {
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange shared__check_dereg_pool_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor shared__check_dereg_pool_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "shared.CheckDeregPoolResp",
+  "CheckDeregPoolResp",
+  "Shared__CheckDeregPoolResp",
+  "shared",
+  sizeof(Shared__CheckDeregPoolResp),
+  1,
+  shared__check_dereg_pool_resp__field_descriptors,
+  shared__check_dereg_pool_resp__field_indices_by_name,
+  1,  shared__check_dereg_pool_resp__number_ranges,
+  (ProtobufCMessageInit) shared__check_dereg_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

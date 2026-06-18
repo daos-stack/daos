@@ -8,6 +8,7 @@
 
 import os
 import re
+import sys
 import time
 
 from apricot import TestWithServers
@@ -128,7 +129,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    cmds = ['python3 -m venv {}/venv'.format(mount_dir),
+    cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
@@ -239,7 +240,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,daos_cmd
+        :avocado: tags=daosio,dfs,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         run_build_test(self, "writeback")

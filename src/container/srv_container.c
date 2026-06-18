@@ -1462,7 +1462,7 @@ belongs_to_user(d_iov_t *key, struct find_hdls_by_cont_arg *arg)
 	hdl = value.iov_buf;
 
 	/* Usually we already have the pool handle in memory. */
-	pool_hdl = ds_pool_hdl_lookup(hdl->ch_pool_hdl);
+	pool_hdl = ds_pool_hdl_lookup_cached(hdl->ch_pool_hdl);
 	if (pool_hdl == NULL) {
 		/* Otherwise, look it up in the pool metadata via a hack. */
 		rc = ds_pool_lookup_hdl_cred(arg->fha_tx, cont->c_svc->cs_pool_uuid,
@@ -6018,14 +6018,16 @@ cont_cli_opc_name(crt_opcode_t opc)
 void
 ds_cont_op_handler(crt_rpc_t *rpc)
 {
-	struct cont_op_in		*in = crt_req_get(rpc);
-	struct cont_op_out		*out = crt_reply_get(rpc);
-	struct ds_pool_hdl		*pool_hdl;
-	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
-	daos_prop_t			*prop = NULL;
-	const char                      *lbl;
-	struct cont_svc			*svc;
-	int				 rc;
+	struct cont_op_in  *in  = crt_req_get(rpc);
+	struct cont_op_out *out = crt_reply_get(rpc);
+	uuid_t              pool_uuid;
+	struct ds_pool_hdl *pool_hdl;
+	crt_opcode_t        opc  = opc_get(rpc->cr_opc);
+	unsigned int        opv  = opc_get_rpc_ver(rpc->cr_opc);
+	daos_prop_t        *prop = NULL;
+	const char         *lbl;
+	struct cont_svc    *svc;
+	int                 rc;
 
 	/*
 	 * Some mgmt RPCs may come from either client or server (admin/dRPC) calls. RPCs from
@@ -6041,13 +6043,19 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	cont_op_in_get_pool_uuid(rpc, pool_uuid);
+	rc = ds_pool_hdl_lookup(pool_uuid, in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_MD,
+			DF_CONT ": ds_pool_hdl_lookup: rpc=%p opc=%u(%s) pool_hdl=" DF_UUID "\n",
+			DP_CONT(pool_uuid, in->ci_uuid), rpc, opc, cont_cli_opc_name(opc),
+			DP_UUID(in->ci_pool_hdl));
+		goto out;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p proto=%d hdl=" DF_UUID ", opc=%u(%s)\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		opc_get_rpc_ver(rpc->cr_opc), DP_UUID(in->ci_hdl), opc, cont_cli_opc_name(opc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, opv, DP_UUID(in->ci_hdl),
+		opc, cont_cli_opc_name(opc));
 
 	/*
 	 * TODO: How to map to the correct container service among those

@@ -38,6 +38,7 @@ if $USE_BULLSEYE; then
 fi
 
 NODE=${NODELIST%%,*}
+: "${PYTHON_VERSION:=3.11}"
 
 # Copy over the install tree and some of the build tree.
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . jenkins@"$NODE":build/
@@ -49,4 +50,5 @@ ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME \
                                          DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
                                          DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\" \
                                          BDEV_TEST=$BDEV_TEST \
+                                         PYTHON_VERSION=\"${PYTHON_VERSION}\" \
                                          ./build/ci/unit/test_main_node.sh"

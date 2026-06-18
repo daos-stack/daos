@@ -132,7 +132,8 @@ sudo chown "$me:$me" /tmp/daos_sockets
 
 FTEST=/usr/lib/daos/TESTING/ftest
 
-python3 -m venv venv
+: "${PYTHON_VERSION:=3.11}"
+"python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
@@ -157,10 +158,7 @@ cat "$SERVER_CONFIG"
 cat "$AGENT_CONFIG"
 cat "$CONTROL_CONFIG"
 
-# python3.6 does not like deactivate with -u set, later versions are OK with it however.
-set +u
 deactivate
-set -u
 
 if ! module load "$OPENMPI"; then
     echo "Unable to load OpenMPI module: $OPENMPI"

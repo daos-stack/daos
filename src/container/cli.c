@@ -1995,48 +1995,39 @@ struct cont_oid_alloc_args {
 static int
 cont_oid_alloc_complete(tse_task_t *task, void *data)
 {
-	struct cont_oid_alloc_args *arg = (struct cont_oid_alloc_args *)data;
-	struct cont_oid_alloc_out *out = crt_reply_get(arg->rpc);
-	struct dc_pool *pool = arg->coaa_pool;
-	struct dc_cont *cont = arg->coaa_cont;
-	int rc = task->dt_result;
+	struct cont_oid_alloc_args *arg         = data;
+	struct cont_oid_alloc_out  *out         = crt_reply_get(arg->rpc);
+	struct dc_pool             *pool        = arg->coaa_pool;
+	struct dc_cont             *cont        = arg->coaa_cont;
+	bool                        resched     = false;
+	bool                        refresh_map = false;
+	unsigned int                map_version = 0;
+	int                         rc          = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
-		tse_sched_t *sched = tse_task2sched(task);
-		tse_task_t *ptask;
-		unsigned int map_version = out->coao_op.co_map_version;
-
-		/** pool map refresh task */
-		rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl, map_version,
-						     sched, &ptask);
-		if (rc != 0)
-			D_GOTO(out, rc);
-
-		rc = dc_task_depend(task, 1, &ptask);
-		if (rc != 0) {
-			dc_pool_abandon_map_refresh_task(ptask);
-			D_GOTO(out, rc);
-		}
-
-		rc = dc_task_resched(task);
-		if (rc != 0) {
-			dc_pool_abandon_map_refresh_task(ptask);
-			D_GOTO(out, rc);
-		}
-
-		/* ignore returned value, error is reported by comp_cb */
-		tse_task_schedule(ptask, true);
-		D_GOTO(out, rc = 0);
+	if (daos_rpc_retryable_rc(rc)) {
+		resched     = true;
+		refresh_map = true;
+		goto out_resched;
 	} else if (rc != 0) {
 		/** error but non retryable RPC */
-		D_ERROR("failed to allocate oids: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_ERROR(rc, DF_CONT ": failed to allocate oids",
+			 DP_CONT(pool->dp_pool, cont->dc_uuid));
+		goto out_resched;
 	}
 
 	rc = out->coao_op.co_rc;
-	if (rc != 0) {
-		D_ERROR("failed to allocate oids: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+	if (rc == -DER_STALE) {
+		resched     = true;
+		refresh_map = true;
+		map_version = out->coao_op.co_map_version;
+		goto out_resched;
+	} else if (daos_rpc_retryable_rc(rc)) {
+		resched = true;
+		goto out_resched;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to allocate oids",
+			 DP_CONT(pool->dp_pool, cont->dc_uuid));
+		goto out_resched;
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": OID ALLOC: using hdl="DF_UUID" oid "DF_U64"/"DF_U64"\n",
@@ -2046,6 +2037,38 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	if (arg->oid)
 		*arg->oid = out->oid;
 
+out_resched:
+	if (resched) {
+		tse_sched_t *sched = tse_task2sched(task);
+		tse_task_t  *ptask;
+
+		D_DEBUG(DB_MD, DF_CONT ": resched: refresh_map=%d map_version=%u\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), refresh_map, map_version);
+		if (refresh_map) {
+			rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl,
+							     map_version, sched, &ptask);
+			if (rc != 0)
+				goto out;
+
+			rc = dc_task_depend(task, 1, &ptask);
+			if (rc != 0) {
+				dc_pool_abandon_map_refresh_task(ptask);
+				goto out;
+			}
+		}
+		rc = dc_task_resched(task);
+		if (rc != 0) {
+			if (refresh_map)
+				dc_pool_abandon_map_refresh_task(ptask);
+			goto out;
+		}
+		if (refresh_map) {
+			/* ignore returned value, error is reported by comp_cb */
+			tse_task_schedule(ptask, true);
+			rc = 0;
+			goto out;
+		}
+	}
 out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
