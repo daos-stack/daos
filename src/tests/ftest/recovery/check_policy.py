@@ -35,7 +35,7 @@ class DMGCheckPolicyTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckPolicyTest,test_check_policies
         """
         # 1. Create a pool.
