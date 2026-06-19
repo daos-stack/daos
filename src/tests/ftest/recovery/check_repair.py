@@ -32,7 +32,7 @@ class DMGCheckRepairTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov,faults
-        :avocado: tags=DMGCheckRepairTest,test_check_policies
+        :avocado: tags=DMGCheckRepairTest,test_check_repair_corner_case
         """
         # 1. Create a pool.
         self.log_step("Create a pool")
