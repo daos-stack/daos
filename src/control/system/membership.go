@@ -127,7 +127,21 @@ func (m *Membership) Count() (int, error) {
 // match.
 func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 	if !req.Rank.Equals(NilRank) {
-		return NilRank, errors.New("unexpected rank in replace-rank request")
+		m.log.Debugf("rank %d provided in request", req.Rank)
+
+		cm, err := m.db.FindMemberByRank(req.Rank)
+		if err != nil {
+			return NilRank, errors.Wrapf(err,
+				"failed to find system member with rank %d", req.Rank)
+		}
+
+		if matched, missing := memberFieldsMatch(cm, req); !matched {
+			m.log.Errorf("replace-rank join request for rank %d failed, "+
+				"fields %v didn't match", cm.Rank, missing)
+			return NilRank, FaultJoinReplaceRankNotFound(len(missing))
+		}
+
+		return cm.Rank, nil
 	}
 
 	currentMembers, err := m.db.AllMembers()
