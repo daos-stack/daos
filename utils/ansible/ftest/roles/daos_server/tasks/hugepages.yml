@@ -149,6 +149,9 @@
     enabled: true
     state: started
   when: ansible_service_mgr == 'systemd'
+  # In check mode the template above only simulates creating the service file,
+  # so systemd cannot find the unit yet.  Ignore the error in that context only.
+  ignore_errors: "{{ ansible_check_mode }}"
 
 # ---------------------------------------------------------------------------
 # Phase 4 - Reboot warning
