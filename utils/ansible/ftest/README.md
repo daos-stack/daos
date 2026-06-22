@@ -501,12 +501,24 @@ requirements, e.g. `build_deps.yml` contains both dnf tasks and `gem install`):
 > always forward the play-level environment through the become wrapper, so proxy variables
 > may be silently absent even when the play sets them.
 
-The `include_tasks` call in `main.yml` uses no `apply:`, so the block inside handles the
-dnf exception while the gem task outside the block carries its own explicit proxy env:
+The `include_tasks` call for `build_deps.yml` in `daos_dev/tasks/main.yml` uses no
+`apply:`, because `build_deps.yml` has mixed tasks (Pattern B handles the exception
+via the `block:` inside the file):
 
 ```yaml
 - name: Install DAOS build dependencies
   include_tasks: build_deps.yml    # no apply: — block inside handles the dnf exception
+```
+
+By contrast, `daos_client/tasks/main.yml` and `daos_server/tasks/main.yml` use
+Pattern A for `dependencies.yml` (pure dnf files):
+
+```yaml
+- name: Install client/server dependency packages
+  include_tasks:
+    file: dependencies.yml
+    apply:
+      environment: "{{ daos_noproxy_env if 'dnf' in (daos_proxy_nofwd | default([])) else daos_proxy_env }}"
 ```
 
 #### Adding a new exception
@@ -529,6 +541,23 @@ all:
     daos_proxy_nofwd:
       - dnf    # dnf repositories are local, bypass proxy
 ```
+
+When the cluster also uses a local Artifactory as a **pip index** (configured via
+`/etc/pip.conf` on the nodes), route that hostname around the proxy too using
+`daos_proxy_bypass`:
+
+```yaml
+all:
+  vars:
+    daos_http_proxy: http://proxy.example.com:8080
+    daos_proxy_bypass: "localhost,127.0.0.1,.internal.example.com"
+    daos_proxy_nofwd:
+      - dnf
+```
+
+`daos_proxy_bypass` is appended as `no_proxy` / `NO_PROXY` to every task that uses
+`daos_proxy_env`, so pip will reach the Artifactory server directly without being
+routed through the remote proxy.
 
 #### Reusing the mechanism in another playbook
 
@@ -831,8 +860,8 @@ Each Molecule scenario runs the full Molecule lifecycle:
 | Role | Container name | What `converge.yml` tests | What `verify.yml` asserts |
 |---|---|---|---|
 | `daos_common` | `daos-rocky9-common` | `coredumps.yml` (file writes, sysctl config) + proxy sentinel tasks: verifies that `daos_proxy_env` forwards the proxy URL and `daos_noproxy_env` clears it, and that the `daos_proxy_nofwd` list drives the correct env dict for dnf tasks | `/etc/sysctl.d/daos_coredumps.conf` exists; core dump dir exists; `/etc/environment` does NOT contain `http_proxy`; `/etc/profile.d/proxy.sh` does NOT exist |
-| `daos_server` | `daos-rocky9-server` | `users_groups.yml` + `limits.yml` + `hugepages.yml` (sysctl only; GRUB disabled via `daos_grub_update_enabled: false`) + Debian GRUB path exercised via `ansible_os_family: Debian` override | Groups/user exist; limits files exist; hugepages sysctl file exists; `/etc/default/grub` contains `hugepages=N`, `hugepagesz=2M`, `default_hugepagesz=2M`, each appearing exactly once (idempotency) |
-| `daos_client` | `daos-rocky9-client` | `users_groups.yml` | `daos_agent` group and user exist |
+| `daos_server` | `daos-rocky9-server` | `users_groups.yml` + `limits.yml` + `hugepages.yml` (sysctl only; GRUB disabled via `daos_grub_update_enabled: false`) + Debian GRUB path exercised via `ansible_os_family: Debian` override + proxy sentinel tasks: verifies `daos_proxy_env` / `daos_noproxy_env` and that `daos_proxy_nofwd: [dnf]` drives the correct env for `dependencies.yml` | Groups/user exist; limits files exist; hugepages sysctl file exists; `/etc/default/grub` contains `hugepages=N`, `hugepagesz=2M`, `default_hugepagesz=2M`, each appearing exactly once (idempotency) |
+| `daos_client` | `daos-rocky9-client` | `users_groups.yml` + proxy sentinel tasks: verifies `daos_proxy_env` / `daos_noproxy_env` and that `daos_proxy_nofwd: [dnf]` drives the correct env for `dependencies.yml` | `daos_agent` group and user exist |
 | `daos_dev` | `daos-rocky9-dev` | `users_groups.yml` (with `daos_launch_username: root`) + `build_deps.yml` with a fake repo ID to verify the availability check warns instead of failing; `daos_proxy_nofwd: [dnf]` so the dnf block bypasses the fake test proxy (the gem task outside the block is unaffected — `fpm` is pre-installed in the image) | Task completes without error; `fake-repo-does-not-exist` is not present in `dnf repolist` output |
 | `daos_post` | `daos-rocky9-post` | Full `main.yml` with a mock `requirements-ftest.txt` | `python3 -c "import distro"` succeeds |
 
