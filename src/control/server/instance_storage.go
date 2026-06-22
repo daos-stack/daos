@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/dustin/go-humanize"
@@ -20,8 +21,16 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+// storageReadyInfo contains information about storage readiness including whether a subsequent join
+// should be made to an existing rank.
+type storageReadyInfo struct {
+	replaceRank bool   // Try to assign an existing rank to the formatted engine
+	targetRank  uint32 // If replacing, try to use a specific rank
+}
 
 // GetStorage retrieve the storage provider for an engine instance.
 func (ei *EngineInstance) GetStorage() *storage.Provider {
@@ -71,9 +80,12 @@ func (ei *EngineInstance) MountScm() error {
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
+func (ei *EngineInstance) NotifyStorageReady(replaceRank bool, targetRank uint32) {
 	go func() {
-		ei.storageReady <- replaceRank
+		ei.storageReady <- storageReadyInfo{
+			replaceRank: replaceRank,
+			targetRank:  targetRank,
+		}
 	}()
 }
 
@@ -232,12 +244,17 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		ei.log.Infof("%s %s storage not ready: %s", build.DataPlaneName, msgIdx, ctx.Err())
-	case replaceRank := <-ei.storageReady:
+	case readyInfo := <-ei.storageReady:
 		// Set replaceRank instance state to be used later in join request.
-		ei.replaceRank.Store(replaceRank)
+		ei.replaceRank.Store(readyInfo.replaceRank)
+		atomic.StoreUint32(&ei.targetRank, readyInfo.targetRank)
 		msg := fmt.Sprintf("%s %s storage ready", build.DataPlaneName, msgIdx)
-		if replaceRank {
-			msg += ", attempting to replace rank..."
+		if readyInfo.replaceRank {
+			if readyInfo.targetRank != uint32(ranklist.NilRank) {
+				msg += fmt.Sprintf(", attempting to replace rank %d...", readyInfo.targetRank)
+			} else {
+				msg += ", attempting to replace rank..."
+			}
 		}
 		ei.log.Info(msg)
 	}

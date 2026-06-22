@@ -1113,7 +1113,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			cs.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
-		engine.NotifyStorageReady(req.Replace)
+		engine.NotifyStorageReady(req.Replace, req.Rank)
 	}
 
 	return resp, nil
