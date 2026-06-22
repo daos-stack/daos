@@ -9,7 +9,10 @@
   include_tasks: hugepages.yml
 
 - name: Install server dependency packages
-  include_tasks: dependencies.yml
+  include_tasks:
+    file: dependencies.yml
+    apply:
+      environment: "{{ daos_noproxy_env if 'dnf' in (daos_proxy_nofwd | default([])) else daos_proxy_env }}"
 
 - name: Deploy DAOS server systemd service
   become: true
