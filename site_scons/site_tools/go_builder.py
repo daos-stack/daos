@@ -14,15 +14,15 @@ include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 def _is_valgrind_build(env):
     """Return True if Go artifacts should be built with the Go 1.25+ "valgrind" tag.
 
-    BUILD_VALGRIND=1 makes the Go runtime cooperate with Memcheck. Ignored for
+    BUILD_GO_VALGRIND=1 makes the Go runtime cooperate with Memcheck. Ignored for
     release builds.
     """
-    if not env.get('BUILD_VALGRIND'):
+    if not env.get('BUILD_GO_VALGRIND'):
         return False
     if env.get('BUILD_TYPE') == 'release':
         return False
     if env.get('SANITIZERS'):
-        Exit('BUILD_VALGRIND=1 is incompatible with SANITIZERS')
+        Exit('BUILD_GO_VALGRIND=1 is incompatible with SANITIZERS')
     return True
 
 

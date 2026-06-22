@@ -516,7 +516,7 @@ class PreReqComponent():
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
-        opts.Add(BoolVariable('BUILD_VALGRIND',
+        opts.Add(BoolVariable('BUILD_GO_VALGRIND',
                               'Build Go artifacts with the Go "valgrind" tag for Memcheck '
                               '(also drops -race; ignored for release)',
                               False))

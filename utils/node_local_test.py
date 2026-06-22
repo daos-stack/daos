@@ -457,18 +457,13 @@ def get_base_env(clean=False):
 
 
 def check_memcheck_build(conf):
-    """Fail early if the daos binary is not valgrind-tagged for a memcheck run.
-
-    memcheck-cart.supp no longer suppresses the Go runtime; that relies on the
-    binary being built with the Go 1.25+ "valgrind" tag (BUILD_VALGRIND=1).
-    """
+    """Fail early if the daos binary is not valgrind-tagged for a memcheck run."""
     daos_bin = join(conf['PREFIX'], 'bin', 'daos')
     with open(daos_bin, 'rb') as fd:
         if b'runtime.valgrindRegisterStack' not in fd.read():
             raise NLTestFail(
                 f'{daos_bin} is not built with the Go "valgrind" tag (needs '
-                'Go 1.25+ and BUILD_VALGRIND=1), to run under memcheck. '
-                'Rebuild with: scons install BUILD_VALGRIND=1')
+                'Go 1.25+ and BUILD_GO_VALGRIND=1), to run under memcheck.')
 
 
 class DaosPool():
