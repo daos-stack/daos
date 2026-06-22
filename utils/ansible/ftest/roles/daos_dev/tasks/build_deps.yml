@@ -61,10 +61,11 @@
       become: true
       command: "dnf module enable ruby:{{ _ruby_ver }} -y"
       vars:
-        _ruby_ver: "{{ daos_ruby_modules.stdout | regex_search('3\\.[0-9]+') }}"
+        _ruby_ver: "{{ daos_ruby_modules.stdout | default('') | regex_search('3\\.[0-9]+') | default('', true) }}"
       register: daos_ruby_enable
       changed_when: '"Nothing to do" not in daos_ruby_enable.stdout'
       when:
+        - daos_ruby_modules.stdout is defined
         - _ruby_ver | length > 0
         - daos_ruby_modules.stdout is not search('3\\.[0-9]+ \\[e\\]')
 
