@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -418,6 +418,18 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(req.Ranks...)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if the requested redundancy factor can be met with the number of supplied fault domains.
+	for _, prop := range req.GetProperties() {
+		if prop.GetNumber() == uint32(daos.PoolPropertyRedunFac) {
+			rdFac := int(prop.GetNumval())
+			domainNr := len(req.FaultDomains)
+			if rdFac+1 > domainNr {
+				return nil, FaultPoolTooFewFaultDomains(rdFac, domainNr)
+			}
+			break
+		}
 	}
 
 	if err := svc.calculateCreateStorage(req); err != nil {

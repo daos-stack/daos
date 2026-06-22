@@ -161,6 +161,7 @@ const (
 	ServerPoolHasContainers
 	ServerPoolMemRatioNoRoles
 	ServerBadFaultDomainLabels
+	ServerPoolTooFewFaultDomains
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
 	ServerTransparentHugepageEnabled
