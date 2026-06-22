@@ -639,8 +639,10 @@ func waitForPoolState(ctx context.Context, rpcClient UnaryInvoker, poolID string
 	}
 }
 
-// WaitForPoolRebuild blocks until the named pool's rebuild status is reported
-// as done, polling PoolQuery on the supplied invoker.
+// WaitForPoolRebuild blocks until the named pool's rebuild reaches a terminal
+// state, polling PoolQuery on the supplied invoker. It returns nil only when the
+// rebuild completed successfully; a rebuild that finished with a nonzero error
+// (derived state failed) or was stopped before completing is reported as an error.
 func WaitForPoolRebuild(ctx context.Context, rpcClient UnaryInvoker, poolID string, retryInterval ...time.Duration) error {
 	if len(retryInterval) == 0 {
 		retryInterval = []time.Duration{defaultPoolWaitRetry}
@@ -649,7 +651,18 @@ func WaitForPoolRebuild(ctx context.Context, rpcClient UnaryInvoker, poolID stri
 		if pqr.Rebuild == nil {
 			return false, errors.New("pool rebuild status missing from query response")
 		}
-		return pqr.Rebuild.State == daos.PoolRebuildStateDone, nil
+		// DerivedState folds the rebuild error (Status) into the reported
+		// state, so a raw "done" with a nonzero error surfaces as failed.
+		switch pqr.Rebuild.DerivedState {
+		case daos.PoolRebuildStateDone:
+			return true, nil
+		case daos.PoolRebuildStateFailed:
+			return false, errors.Wrapf(daos.Status(pqr.Rebuild.Status), "pool %s rebuild failed", poolID)
+		case daos.PoolRebuildStateStopped:
+			return false, errors.Errorf("pool %s rebuild stopped before completing", poolID)
+		default:
+			return false, nil
+		}
 	})
 }
 

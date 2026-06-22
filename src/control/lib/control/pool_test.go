@@ -787,6 +787,18 @@ func TestControl_WaitForPoolRebuild(t *testing.T) {
 	idleResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
 		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_IDLE},
 	})
+	failedResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_DONE,
+			Status: int32(daos.MiscError),
+		},
+	})
+	stoppedResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_IDLE,
+			Status: int32(daos.OpCanceled),
+		},
+	})
 	missingRebuildResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{})
 
 	for name, tc := range map[string]struct {
@@ -806,6 +818,24 @@ func TestControl_WaitForPoolRebuild(t *testing.T) {
 				UnaryResponseSet: []*UnaryResponse{idleResp, busyResp, doneResp},
 			},
 			expQueries: 3,
+		},
+		"done with nonzero error is a failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: failedResp,
+			},
+			expErr: errors.New("rebuild failed"),
+		},
+		"transitions to failed": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{idleResp, busyResp, failedResp},
+			},
+			expErr: errors.New("rebuild failed"),
+		},
+		"stopped before completing is a failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: stoppedResp,
+			},
+			expErr: errors.New("rebuild stopped before completing"),
 		},
 		"query error propagates": {
 			mic: &MockInvokerConfig{
