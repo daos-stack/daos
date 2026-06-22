@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -310,8 +310,9 @@ type (
 	// StorageFormatReq contains the parameters for a storage format request.
 	StorageFormatReq struct {
 		unaryRequest
-		Reformat bool `json:"reformat"`
-		Replace  bool `json:"replace"`
+		Reformat bool   `json:"reformat"`
+		Replace  bool   `json:"replace"`
+		Rank     uint32 `json:"rank"` // Specific rank to replace (only valid with replace=true)
 	}
 
 	// StorageFormatResp contains the response from a storage format request.

@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 func TestStorageCommands(t *testing.T) {
@@ -36,7 +37,7 @@ func TestStorageCommands(t *testing.T) {
 			"storage format",
 			strings.Join([]string{
 				printRequest(t, systemQueryReq),
-				printRequest(t, &control.StorageFormatReq{}),
+				printRequest(t, &control.StorageFormatReq{Rank: uint32(ranklist.NilRank)}),
 			}, " "),
 			nil,
 		},
@@ -51,7 +52,7 @@ func TestStorageCommands(t *testing.T) {
 			"storage format --force",
 			strings.Join([]string{
 				printRequest(t, systemQueryReq),
-				printRequest(t, &control.StorageFormatReq{Reformat: true}),
+				printRequest(t, &control.StorageFormatReq{Reformat: true, Rank: uint32(ranklist.NilRank)}),
 			}, " "),
 			nil,
 		},
@@ -172,6 +173,69 @@ func TestStorageCommands(t *testing.T) {
 			"storage format --replace --force",
 			"",
 			errors.New("may not be mixed with --force"),
+		},
+		{
+			"Format with replace and single host",
+			"storage format --replace -l foo1.com",
+			strings.Join([]string{
+				printRequest(t, func() *control.SystemQueryReq {
+					req := &control.SystemQueryReq{FailOnUnavailable: true}
+					req.SetHostList([]string{"foo1.com:10001"})
+					return req
+				}()),
+				printRequest(t, func() *control.StorageFormatReq {
+					req := &control.StorageFormatReq{
+						Replace: true, Rank: uint32(ranklist.NilRank),
+					}
+					req.SetHostList([]string{"foo1.com"})
+					return req
+				}()),
+			}, " "),
+			nil,
+		},
+		{
+			"Format with replace and rank",
+			"storage format --replace --rank 5 -l foo1.com",
+			strings.Join([]string{
+				printRequest(t, func() *control.SystemQueryReq {
+					req := &control.SystemQueryReq{FailOnUnavailable: true}
+					req.SetHostList([]string{"foo1.com:10001"})
+					return req
+				}()),
+				printRequest(t, func() *control.StorageFormatReq {
+					req := &control.StorageFormatReq{
+						Replace: true, Rank: 5,
+					}
+					req.SetHostList([]string{"foo1.com"})
+					return req
+				}()),
+			}, " "),
+			nil,
+		},
+		{
+			"Format with rank but no replace",
+			"storage format --rank 5 -l foo1.com",
+			"",
+			errors.New("--rank option is only valid when used with --replace"),
+		},
+		{
+			"Format with rank 0 and replace",
+			"storage format --replace --rank 0 -l foo1.com",
+			strings.Join([]string{
+				printRequest(t, func() *control.SystemQueryReq {
+					req := &control.SystemQueryReq{FailOnUnavailable: true}
+					req.SetHostList([]string{"foo1.com:10001"})
+					return req
+				}()),
+				printRequest(t, func() *control.StorageFormatReq {
+					req := &control.StorageFormatReq{
+						Replace: true, Rank: 0,
+					}
+					req.SetHostList([]string{"foo1.com"})
+					return req
+				}()),
+			}, " "),
+			nil,
 		},
 		{
 			"Nonexistent subcommand",
