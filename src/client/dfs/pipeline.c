@@ -225,11 +225,7 @@ dfs_pipeline_create(dfs_t *dfs, dfs_predicate_t pred, uint64_t flags, dfs_pipeli
 	*_dpipe = dpipe;
 	return 0;
 err:
-	if (dpipe->pipeline.num_filters || dpipe->pipeline.num_aggr_filters)
-		daos_pipeline_free(&dpipe->pipeline);
-	else if (dpipe->pipef.num_parts)
-		D_FREE(dpipe->pipef.parts);
-	D_FREE(dpipe);
+	dfs_pipeline_destroy(dpipe);
 	return rc;
 }
 
@@ -239,6 +235,12 @@ dfs_pipeline_destroy(dfs_pipeline_t *dpipe)
 	if (dpipe == NULL)
 		return 0;
 
+	/*
+	 * Ownership invariant: daos_pipeline_add() stores a pointer to dpipe->pipef
+	 * inside pipeline.filters[].  Once that succeeds (num_filters > 0),
+	 * daos_pipeline_free() is responsible for freeing pipef.parts via free_filters().
+	 * Before that point pipef.parts must be freed directly.
+	 */
 	if (dpipe->pipeline.num_filters || dpipe->pipeline.num_aggr_filters)
 		daos_pipeline_free(&dpipe->pipeline);
 	else if (dpipe->pipef.num_parts)
