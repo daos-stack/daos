@@ -1299,13 +1299,15 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		tree       *FaultDomainTree
-		inputRanks []uint32
-		expResult  []uint32
-		expErr     error
+		tree        *FaultDomainTree
+		inputRanks  []uint32
+		expResult   []uint32
+		expErr      error
+		expDomainNr int
 	}{
 		"nil tree": {
-			expErr: errors.New("uninitialized fault domain tree"),
+			expErr:      errors.New("uninitialized fault domain tree"),
+			expDomainNr: 0,
 		},
 		"root only": {
 			tree: NewFaultDomainTree(),
@@ -1315,6 +1317,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				ExpFaultDomainID(0),
 				0,
 			},
+			expDomainNr: 0,
 		},
 		"single branch, no rank leaves": {
 			tree: NewFaultDomainTree(
@@ -1335,6 +1338,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				ExpFaultDomainID(3),
 				0,
 			},
+			expDomainNr: 1,
 		},
 		"multi branch, no rank leaves": {
 			tree: NewFaultDomainTree(
@@ -1374,6 +1378,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				ExpFaultDomainID(8),
 				0,
 			},
+			expDomainNr: 5,
 		},
 		"single branch with rank leaves": {
 			tree: NewFaultDomainTree(
@@ -1395,6 +1400,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				1,
 				5,
 			},
+			expDomainNr: 1,
 		},
 		"multi branch with rank leaves": {
 			tree: NewFaultDomainTree(
@@ -1442,6 +1448,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				4,
 				5,
 			},
+			expDomainNr: 6,
 		},
 		"intermediate domain has name like rank": {
 			tree: NewFaultDomainTree(
@@ -1463,6 +1470,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				1,
 				1, // rank
 			},
+			expDomainNr: 1,
 		},
 		"request one rank with node only": {
 			tree: NewFaultDomainTree(
@@ -1485,6 +1493,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				// ranks
 				4,
 			},
+			expDomainNr: 6,
 		},
 		"request one rank": {
 			tree: NewFaultDomainTree(
@@ -1510,6 +1519,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				// ranks
 				4,
 			},
+			expDomainNr: 6,
 		},
 		"request multiple ranks": {
 			tree: NewFaultDomainTree(
@@ -1550,6 +1560,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				4,
 				5,
 			},
+			expDomainNr: 6,
 		},
 		"request nonexistent rank": {
 			tree: NewFaultDomainTree(
@@ -1560,8 +1571,9 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain("/rack1/pdu3", 4),
 				rankDomain("/rack2/pdu4", 5),
 			),
-			inputRanks: []uint32{4, 0, 5, 3, 100},
-			expErr:     errors.New("rank 100 not found"),
+			inputRanks:  []uint32{4, 0, 5, 3, 100},
+			expErr:      errors.New("rank 100 not found"),
+			expDomainNr: 6,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1574,6 +1586,9 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			result, err := membership.CompressedFaultDomainTree(tc.inputRanks...)
 
 			test.CmpErr(t, tc.expErr, err)
+
+			domainNr := membership.DomainNr()
+			test.AssertEqual(t, tc.expDomainNr, domainNr, "unexpected domain number")
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)

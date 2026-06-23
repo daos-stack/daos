@@ -129,7 +129,7 @@ func testPoolRedunFacProp() []*mgmtpb.PoolProperty {
 		{
 			Number: daos.PoolPropertyRedunFac,
 			Value: &mgmtpb.PoolProperty_Numval{
-				Numval: 2,
+				Numval: 1,
 			},
 		},
 	}
@@ -660,7 +660,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				Ranks:      []uint32{0},
 				Properties: testPoolRedunFacProp(),
 			},
-			expErr: FaultPoolTooFewFaultDomains(2, 1),
+			expErr: FaultPoolTooFewFaultDomains(1, 2),
 		},
 		"successful creation with rd_fac": {
 			targetCount: 2,
