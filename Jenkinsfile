@@ -351,6 +351,24 @@ List<String> getStageNameSkipPragmas(String stageName) {
     return pragmas
 }
 
+// Initialize the runStage map with the current state of the build parameters and any commit
+// pragmas related to skipping/running stages. Should only be called once per build.
+def setupRunStage() {
+    pragmasToEnv()
+    update_default_commit_pragmas()
+    updateRunStage()
+}
+
+// Determine if a given stage should be run based on the current state of the runStage map.
+// Ensure the runStage map is initialized before checking the stage state. Required to support
+// the Jenkins Restart from Stage option.
+def shouldRunStage(String name) {
+    if (!runStage) {
+        setupRunStage()
+    }
+    return runStage[name]
+}
+
 void get_rpm_relval() {
     env.DAOS_RELVAL = sh(label: 'get git tag',
                script: '''if [ -n "$GIT_CHECKOUT_DIR" ] && [ -d "$GIT_CHECKOUT_DIR" ]; then
@@ -711,9 +729,7 @@ pipeline {
                 }
                 stage('Setup Stages') {
                     steps {
-                        pragmasToEnv()
-                        update_default_commit_pragmas()
-                        updateRunStage()
+                        setupRunStage()
                     }
                 }
                 stage('Get RPM relval') {
@@ -749,7 +765,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { runStage['Cancel Previous Builds'] }
+                expression { shouldRunStage('Cancel Previous Builds') }
             }
             steps {
                 cancelPreviousBuilds()
@@ -758,13 +774,13 @@ pipeline {
         stage('Pre-build') {
             when {
                 beforeAgent true
-                expression { runStage['Pre-build'] }
+                expression { shouldRunStage('Pre-build') }
             }
             parallel {
                 stage('Python Bandit check') {
                     when {
                         beforeAgent true
-                        expression { runStage['Python Bandit check'] }
+                        expression { shouldRunStage('Python Bandit check') }
                     }
                     agent {
                         dockerfile {
@@ -798,13 +814,13 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { runStage['Build'] }
+                expression { shouldRunStage('Build') }
             }
             parallel {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { runStage['Build on EL 8'] }
+                        expression { shouldRunStage('Build on EL 8') }
                     }
                     agent {
                         dockerfile {
@@ -858,7 +874,7 @@ pipeline {
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
-                        expression { runStage['Build on EL 9'] }
+                        expression { shouldRunStage('Build on EL 9') }
                     }
                     agent {
                         dockerfile {
@@ -912,7 +928,7 @@ pipeline {
                 stage('Build on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { runStage['Build on Leap 15'] }
+                        expression { shouldRunStage('Build on Leap 15') }
                     }
                     agent {
                         dockerfile {
@@ -968,13 +984,13 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { runStage['Unit Tests'] }
+                expression { shouldRunStage('Unit Tests') }
             }
             parallel {
                 stage('Unit Test') {
                     when {
                         beforeAgent true
-                        expression { runStage['Unit Test'] }
+                        expression { shouldRunStage('Unit Test') }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -999,7 +1015,7 @@ pipeline {
                 stage('Unit Test bdev') {
                     when {
                         beforeAgent true
-                        expression { runStage['Unit Test bdev'] }
+                        expression { shouldRunStage('Unit Test bdev') }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -1022,7 +1038,7 @@ pipeline {
                 stage('NLT') {
                     when {
                         beforeAgent true
-                        expression { runStage['NLT'] }
+                        expression { shouldRunStage('NLT') }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -1075,7 +1091,7 @@ pipeline {
                 stage('Unit Test with memcheck') {
                     when {
                         beforeAgent true
-                        expression { runStage['Unit Test with memcheck'] }
+                        expression { shouldRunStage('Unit Test with memcheck') }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -1101,7 +1117,7 @@ pipeline {
                 stage('Unit Test bdev with memcheck') {
                     when {
                         beforeAgent true
-                        expression { runStage['Unit Test bdev with memcheck'] }
+                        expression { shouldRunStage('Unit Test bdev with memcheck') }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -1129,13 +1145,13 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { runStage['Test'] }
+                expression { shouldRunStage('Test') }
             }
             parallel {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { runStage['Functional on EL 8.8 with Valgrind'] }
+                        expression { shouldRunStage('Functional on EL 8.8 with Valgrind') }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -1158,7 +1174,7 @@ pipeline {
                 stage('Functional on EL 8') {
                     when {
                         beforeAgent true
-                        expression { runStage['Functional on EL 8'] }
+                        expression { shouldRunStage('Functional on EL 8') }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -1182,7 +1198,7 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { runStage['Functional on EL 9'] }
+                        expression { shouldRunStage('Functional on EL 9') }
                     }
                     agent {
                         label vm9_label('EL9')
@@ -1206,7 +1222,7 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { runStage['Functional on Leap 15'] }
+                        expression { shouldRunStage('Functional on Leap 15') }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1230,7 +1246,7 @@ pipeline {
                 stage('Functional on SLES 15') {
                     when {
                         beforeAgent true
-                        expression { runStage['Functional on SLES 15'] }
+                        expression { shouldRunStage('Functional on SLES 15') }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1254,7 +1270,7 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { runStage['Functional on Ubuntu 20.04'] }
+                        expression { shouldRunStage('Functional on Ubuntu 20.04') }
                     }
                     agent {
                         label vm9_label('Ubuntu')
@@ -1277,7 +1293,7 @@ pipeline {
                 stage('Fault injection testing') {
                     when {
                         beforeAgent true
-                        expression { runStage['Fault injection testing'] }
+                        expression { shouldRunStage('Fault injection testing') }
                     }
                     agent {
                         label params.CI_FI_1_LABEL
@@ -1315,7 +1331,7 @@ pipeline {
                 stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
-                        expression { runStage['Test RPMs on EL 9.6'] }
+                        expression { shouldRunStage('Test RPMs on EL 9.6') }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1336,7 +1352,7 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { runStage['Test RPMs on Leap 15.5'] }
+                        expression { shouldRunStage('Test RPMs on Leap 15.5') }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1411,14 +1427,14 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { runStage['Test Hardware'] }
+                expression { shouldRunStage('Test Hardware') }
             }
             steps {
                 script {
                     parallel(
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
-                            runStage: runStage['Functional Hardware Medium'],
+                            runStage: shouldRunStage('Functional Hardware Medium'),
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
@@ -1430,7 +1446,7 @@ pipeline {
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
-                            runStage: runStage['Functional Hardware Medium MD on SSD'],
+                            runStage: shouldRunStage('Functional Hardware Medium MD on SSD'),
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
@@ -1442,7 +1458,7 @@ pipeline {
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
-                            runStage: runStage['Functional Hardware Medium VMD'],
+                            runStage: shouldRunStage('Functional Hardware Medium VMD'),
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
@@ -1455,7 +1471,7 @@ pipeline {
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
-                            runStage: runStage['Functional Hardware Medium Verbs Provider'],
+                            runStage: shouldRunStage('Functional Hardware Medium Verbs Provider'),
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
@@ -1468,7 +1484,7 @@ pipeline {
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                            runStage: runStage['Functional Hardware Medium Verbs Provider MD on SSD'],
+                            runStage: shouldRunStage('Functional Hardware Medium Verbs Provider MD on SSD'),
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
@@ -1481,7 +1497,7 @@ pipeline {
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
-                            runStage: runStage['Functional Hardware Medium UCX Provider'],
+                            runStage: shouldRunStage('Functional Hardware Medium UCX Provider'),
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
@@ -1494,7 +1510,7 @@ pipeline {
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
-                            runStage: runStage['Functional Hardware Large'],
+                            runStage: shouldRunStage('Functional Hardware Large'),
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
@@ -1506,7 +1522,7 @@ pipeline {
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
-                            runStage: runStage['Functional Hardware Large MD on SSD'],
+                            runStage: shouldRunStage('Functional Hardware Large MD on SSD'),
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
