@@ -25,6 +25,19 @@ import (
 
 /*
 #include "util.h"
+
+// Weak reference — resolves to the real LSAN function in ASAN builds, NULL otherwise.
+extern void __attribute__((weak)) __lsan_do_leak_check(void);
+
+// Go's runtime calls exit_group() directly when it exits, bypassing libc's exit()
+// and therefore ASAN's registered atexit() handlers.  Call the leak-checker explicitly
+// so that an ASAN report is written to log_path when leaks are detected.
+// Note: use-after-free crashes are reported immediately by ASAN's signal handler and
+// do not depend on this call.
+static void run_asan_fini(void) {
+	if (__lsan_do_leak_check)
+		__lsan_do_leak_check();
+}
 */
 import "C"
 
@@ -331,6 +344,10 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	ap.deadline_limit = C.int(cmd.DeadlineLimit)
 
 	rc := C.pool_autotest_hdlr(ap)
+	// Explicit ASAN/LSAN finalization: Go exits via exit_group syscall which bypasses
+	// libc's exit() and therefore ASAN's atexit() handlers.  Force the report here so
+	// that the log_path file is written before the process terminates.
+	C.run_asan_fini()
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to run autotest for pool %s", cmd.PoolID())
 	}

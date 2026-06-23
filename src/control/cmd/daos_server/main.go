@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -89,6 +90,7 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 	if fault.HasResolution(err) {
 		log.Error(fault.ShowResolutionFor(err))
 	}
+	runASANFini()
 	os.Exit(1)
 }
 
@@ -216,12 +218,15 @@ func main() {
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {
 			log.Infof("%s (pid %d) shutting down", build.ControlPlaneName, os.Getpid())
+			runASANFini()
 			os.Exit(0)
 		}
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
 			log.Info(fe.Error())
+			runASANFini()
 			os.Exit(0)
 		}
 		exitWithError(log, err)
 	}
+	runASANFini()
 }

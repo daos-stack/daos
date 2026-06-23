@@ -23,6 +23,16 @@ import (
 
  #include <ddb.h>
  #include <daos_errno.h>
+
+ // Weak references — resolve to real ASAN/LSAN functions in ASAN builds, NULL otherwise.
+ extern void __attribute__((weak)) __lsan_do_leak_check(void);
+
+ // Go exits via exit_group syscall, bypassing libc exit() and ASAN's atexit handlers.
+ // Call these explicitly at the end of the ddb session so that ASAN reports are written.
+ static void run_asan_fini(void) {
+     if (__lsan_do_leak_check)
+         __lsan_do_leak_check();
+ }
 */
 import "C"
 
@@ -62,6 +72,9 @@ func InitDdb(log *logging.LeveledLogger) (*DdbContext, func(), error) {
 
 	return ctx, func() {
 		C.ddb_fini()
+		// Explicit ASAN/LSAN finalization: Go exits via exit_group syscall which bypasses
+		// libc's exit() and therefore ASAN's atexit() handlers.  Force the report here.
+		C.run_asan_fini()
 		runtime.UnlockOSThread()
 	}, nil
 }
