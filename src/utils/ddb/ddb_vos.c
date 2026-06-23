@@ -1499,7 +1499,7 @@ dv_dtx_commit_active_entry(daos_handle_t coh, struct dtx_id *dti)
 int
 dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti)
 {
-	return vos_dtx_abort(coh, dti, DAOS_EPOCH_MAX);
+	return vos_dtx_abort(coh, dti, DAOS_EPOCH_MAX, 0);
 }
 
 int
