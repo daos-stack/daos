@@ -194,6 +194,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	iod->iod_size  = 1;
 
 	entry->tail_oid   = DAOS_OBJ_NIL;
+	entry->split_off  = 0;
 	entry->tail_state = DFS_TAIL_NONE;
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
@@ -210,6 +211,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
 	if (ver >= DFS_PL_LAYOUT_VERSION) {
 		d_iov_set(&sg_iovs[i++], &entry->tail_oid, sizeof(daos_obj_id_t));
+		d_iov_set(&sg_iovs[i++], &entry->split_off, sizeof(daos_size_t));
 		d_iov_set(&sg_iovs[i++], &entry->tail_state, sizeof(uint8_t));
 	}
 
@@ -387,6 +389,7 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
 	if (ver >= DFS_PL_LAYOUT_VERSION) {
 		d_iov_set(&sg_iovs[i++], &entry->tail_oid, sizeof(daos_obj_id_t));
+		d_iov_set(&sg_iovs[i++], &entry->split_off, sizeof(daos_size_t));
 		d_iov_set(&sg_iovs[i++], &entry->tail_state, sizeof(uint8_t));
 	}
 
@@ -954,8 +957,6 @@ int
 dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count, int *dfs_entry_key_size,
 		  int *dfs_entry_size)
 {
-	struct dfs_entry entry;
-
 	if (dkey == NULL || akey_count == NULL)
 		return EINVAL;
 
@@ -965,13 +966,7 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count, int *df
 
 	*akey_count         = SB_AKEYS;
 	*dfs_entry_key_size = sizeof(INODE_AKEY_NAME) - 1;
-	/** Can't just use sizeof(struct dfs_entry) because it's not accurate */
-	*dfs_entry_size =
-	    D_ALIGNUP(sizeof(entry.mode) + sizeof(entry.oid) + sizeof(entry.mtime) +
-			  sizeof(entry.ctime) + sizeof(entry.chunk_size) + sizeof(entry.oclass) +
-			  sizeof(entry.mtime_nano) + sizeof(entry.ctime_nano) + sizeof(entry.uid) +
-			  sizeof(entry.gid) + sizeof(entry.value_len) + sizeof(entry.obj_hlc),
-		      32);
+	*dfs_entry_size     = dfs_inode_record_size(DFS_LAYOUT_VERSION);
 
 	set_sb_params(true, *iods, dkey);
 

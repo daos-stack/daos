@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,7 +35,10 @@ class DaosCoreTestDfs(DaosCoreBase):
         :avocado: tags=daos_test,dfs_test,dfs
         :avocado: tags=DaosCoreTestDfs,test_daos_dfs_unit
         """
-        self.run_subtest(os.path.join(self.bin, "dfs_test"))
+        self.run_subtest(
+            os.path.join(self.bin, "dfs_test"),
+            env={"DFS_PL_BYPASS_TARGET_LIMIT": "1"},
+        )
 
     def test_daos_dfs_parallel(self):
         """Jira ID: DAOS-5409.

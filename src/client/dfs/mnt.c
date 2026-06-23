@@ -28,6 +28,36 @@ static struct d_hash_table *poh_hash;
 /** hashtable for container open handles */
 static struct d_hash_table *coh_hash;
 
+static void
+dfs_set_pl_pool_info(dfs_t *dfs, const daos_pool_info_t *pool_info)
+{
+	if (dfs == NULL || pool_info == NULL)
+		return;
+
+	dfs->pl_target_nr  = pool_info->pi_ntargets;
+	dfs->pl_total_nvme = pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
+	dfs->pl_total_scm  = pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_SCM];
+}
+
+static void
+dfs_cache_pl_pool_info(dfs_t *dfs)
+{
+	daos_pool_info_t pool_info = {.pi_bits = DPI_SPACE};
+	int              rc;
+
+	if (dfs == NULL)
+		return;
+
+	rc = daos_pool_query(dfs->poh, NULL, &pool_info, NULL, NULL);
+	if (rc != 0) {
+		D_WARN("daos_pool_query() failed while caching PL pool info, " DF_RC "\n",
+		       DP_RC(rc));
+		return;
+	}
+
+	dfs_set_pl_pool_info(dfs, &pool_info);
+}
+
 static inline struct dfs_mnt_hdls *
 hdl_obj(d_list_t *rlink)
 {
@@ -657,6 +687,8 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 			D_GOTO(err_super, rc);
 	}
 
+	dfs_cache_pl_pool_info(dfs);
+
 	/*
 	 * If container was created with balanced mode, only balanced mode
 	 * mounting should be allowed.
@@ -983,6 +1015,9 @@ struct dfs_glob {
 	daos_obj_id_t    super_oid;
 	daos_obj_id_t    root_oid;
 	daos_epoch_t     th_epoch;
+	uint32_t         pl_target_nr;
+	uint64_t         pl_total_scm;
+	uint64_t         pl_total_nvme;
 };
 
 static inline void
@@ -1001,6 +1036,9 @@ swap_dfs_glob(struct dfs_glob *dfs_params)
 	D_SWAP16S(&dfs_params->oclass);
 	D_SWAP16S(&dfs_params->dir_oclass);
 	D_SWAP16S(&dfs_params->file_oclass);
+	D_SWAP32S(&dfs_params->pl_target_nr);
+	D_SWAP64S(&dfs_params->pl_total_scm);
+	D_SWAP64S(&dfs_params->pl_total_nvme);
 	/* skip cont_uuid */
 	/* skip coh_uuid */
 }
@@ -1073,6 +1111,9 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->dir_oclass  = dfs->attr.da_dir_oclass_id;
 	dfs_params->file_oclass = dfs->attr.da_file_oclass_id;
 	dfs_params->th_epoch    = dfs->th_epoch;
+	dfs_params->pl_target_nr  = dfs->pl_target_nr;
+	dfs_params->pl_total_scm  = dfs->pl_total_scm;
+	dfs_params->pl_total_nvme = dfs->pl_total_nvme;
 	uuid_copy(dfs_params->coh_uuid, coh_uuid);
 	uuid_copy(dfs_params->cont_uuid, cont_uuid);
 
@@ -1140,6 +1181,9 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 	dfs->attr.da_oclass_id      = dfs_params->oclass;
 	dfs->attr.da_dir_oclass_id  = dfs_params->dir_oclass;
 	dfs->attr.da_file_oclass_id = dfs_params->file_oclass;
+	dfs->pl_target_nr           = dfs_params->pl_target_nr;
+	dfs->pl_total_scm           = dfs_params->pl_total_scm;
+	dfs->pl_total_nvme          = dfs_params->pl_total_nvme;
 
 	dfs->super_oid       = dfs_params->super_oid;
 	dfs->root.oid        = dfs_params->root_oid;
