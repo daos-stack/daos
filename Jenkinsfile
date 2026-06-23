@@ -30,6 +30,11 @@ job_status_internal = [:]
 @Field
 Map<String, Boolean> runStage = [:]
 
+String bashName(String name) {
+    return name.replaceAll(' ', '_').replaceAll('\\.', '_')
+}
+
+
 // Update the runStage map
 void updateRunStage() {
     Map reasons = [:]
@@ -72,7 +77,7 @@ void updateRunStage() {
 
     // Initialize the run state of each stage using the parameter stage keys
     for (name in stageOrder) {
-        value = params.get(name, null)
+        value = params.get(bashName(name), null)
         if (value instanceof Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
             reasons[name] = "parameter selection or default"
@@ -578,100 +583,100 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'Cancel Previous Builds',
+        booleanParam(name: bashName('Cancel Previous Builds'),
                      defaultValue: true,
                      description: 'Run the Cancel Previous Builds stage.')
-        booleanParam(name: 'Pre-build',
+        booleanParam(name: bashName('Pre-build'),
                      defaultValue: true,
                      description: 'Run the pre-build stage.')
-        booleanParam(name: 'Python Bandit check',
+        booleanParam(name: bashName('Python Bandit check'),
                      defaultValue: true,
                      description: 'Run the Python Bandit check stage.')
-        booleanParam(name: 'Build',
+        booleanParam(name: bashName('Build'),
                      defaultValue: true,
                      description: 'Run the build stage.')
-        booleanParam(name: 'Build on EL 8',
+        booleanParam(name: bashName('Build on EL 8'),
                      defaultValue: true,
                      description: 'Run the build on EL 8 stage.')
-        booleanParam(name: 'Build on EL 9',
+        booleanParam(name: bashName('Build on EL 9'),
                      defaultValue: true,
                      description: 'Run the build on EL 9 stage.')
-        booleanParam(name: 'Build on Leap 15',
+        booleanParam(name: bashName('Build on Leap 15'),
                      defaultValue: true,
                      description: 'Run the build on Leap 15 stage.')
-        booleanParam(name: 'Unit Tests',
+        booleanParam(name: bashName('Unit Tests'),
                      defaultValue: true,
                      description: 'Run the Unit Tests stage.')
-        booleanParam(name: 'Unit Test',
+        booleanParam(name: bashName('Unit Test'),
                      defaultValue: true,
                      description: 'Run the Unit Test stage.')
-        booleanParam(name: 'Unit Test bdev',
+        booleanParam(name: bashName('Unit Test bdev'),
                      defaultValue: true,
                      description: 'Run the Unit Test bdev stage.')
-        booleanParam(name: 'NLT',
+        booleanParam(name: bashName('NLT'),
                      defaultValue: true,
                      description: 'Run the NLT stage.')
-        booleanParam(name: 'Unit Test with memcheck',
+        booleanParam(name: bashName('Unit Test with memcheck'),
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck stage.')
-        booleanParam(name: 'Unit Test bdev with memcheck',
+        booleanParam(name: bashName('Unit Test bdev with memcheck'),
                      defaultValue: true,
                      description: 'Run the Unit Test bdev with memcheck stage.')
-        booleanParam(name: 'Test',
+        booleanParam(name: bashName('Test'),
                      defaultValue: true,
                      description: 'Run the Test stage.')
-        booleanParam(name: 'Functional on EL 8.8 with Valgrind',
+        booleanParam(name: bashName('Functional on EL 8.8 with Valgrind'),
                      defaultValue: false,
                      description: 'Run the Functional on EL 8.8 with Valgrind stage.')
-        booleanParam(name: 'Functional on EL 8',
+        booleanParam(name: bashName('Functional on EL 8'),
                      defaultValue: false,
                      description: 'Run the Functional on EL 8 stage.')
-        booleanParam(name: 'Functional on EL 9',
+        booleanParam(name: bashName('Functional on EL 9'),
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 stage.')
-        booleanParam(name: 'Functional on Leap 15',
+        booleanParam(name: bashName('Functional on Leap 15'),
                      defaultValue: false,
                      description: 'Run the Functional on Leap 15 stage.')
-        booleanParam(name: 'Functional on SLES 15',
+        booleanParam(name: bashName('Functional on SLES 15'),
                      defaultValue: false,
                      description: 'Run the Functional on SLES 15 stage.')
-        booleanParam(name: 'Functional on Ubuntu 20.04',
+        booleanParam(name: bashName('Functional on Ubuntu 20.04'),
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 stage.')
-        booleanParam(name: 'Fault injection testing',
+        booleanParam(name: bashName('Fault injection testing'),
                      defaultValue: true,
                      description: 'Run the Fault injection testing stage.')
-        booleanParam(name: 'Test RPMs on EL 9.6',
+        booleanParam(name: bashName('Test RPMs on EL 9.6'),
                      defaultValue: true,
                      description: 'Run the Test RPMs on EL 9.6 stage.')
-        booleanParam(name: 'Test RPMs on Leap 15.5',
+        booleanParam(name: bashName('Test RPMs on Leap 15.5'),
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15.5 stage.')
-        booleanParam(name: 'Test Hardware',
+        booleanParam(name: bashName('Test Hardware'),
                      defaultValue: true,
                      description: 'Run the Test Hardware stage.')
-        booleanParam(name: 'Functional Hardware Medium',
+        booleanParam(name: bashName('Functional Hardware Medium'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium stage.')
-        booleanParam(name: 'Functional Hardware Medium MD on SSD',
+        booleanParam(name: bashName('Functional Hardware Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD stage.')
-        booleanParam(name: 'Functional Hardware Medium VMD',
+        booleanParam(name: bashName('Functional Hardware Medium VMD'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium VMD stage.')
-        booleanParam(name: 'Functional Hardware Medium Verbs Provider',
+        booleanParam(name: bashName('Functional Hardware Medium Verbs Provider'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider stage.')
-        booleanParam(name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+        booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
-        booleanParam(name: 'Functional Hardware Medium UCX Provider',
+        booleanParam(name: bashName('Functional Hardware Medium UCX Provider'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider stage.')
-        booleanParam(name: 'Functional Hardware Large',
+        booleanParam(name: bashName('Functional Hardware Large'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Large stage.')
-        booleanParam(name: 'Functional Hardware Large MD on SSD',
+        booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
         string(name: 'CI_UNIT_VM1_LABEL',
