@@ -13,11 +13,6 @@
 #include <daos/placement.h>
 #include <pthread.h>
 
-#define DFS_PL_HEAD_BUDGET_NUM 2ULL
-#define DFS_PL_HEAD_BUDGET_DEN 1000ULL
-#define DFS_PL_SPLIT_OFF_MIN   (64ULL << 20)
-#define DFS_PL_SPLIT_OFF_MAX   (64ULL << 30)
-
 /** global DFS mount used for all tests */
 static uuid_t		co_uuid;
 static daos_handle_t	co_hdl;
