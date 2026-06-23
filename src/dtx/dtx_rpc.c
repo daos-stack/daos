@@ -963,7 +963,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	 *	 to resend sometime later.
 	 */
 	if (epoch != 0)
-		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch);
+		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch, dte->dte_ver);
 	else
 		rc1 = vos_dtx_set_flags(cont->sc_hdl, &dte->dte_xid, 1, DTE_CORRUPTED);
 	if (rc1 > 0 || rc1 == -DER_NONEXIST)
@@ -1235,7 +1235,8 @@ next2:
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
 			} else {
-				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
+				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch,
+						    dsp->dsp_version);
 				D_ASSERT(rc1 != -DER_NO_PERM);
 
 				if (rc1 == 0 || !for_io) {
@@ -1655,8 +1656,8 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 	if (dce->dce_bitmap != NULL) {
 		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, 0,
-					  DTX_COLL_COMMIT, dce->dce_bitmap_sz, dce->dce_bitmap,
-					  &results);
+					  dce->dce_ver, DTX_COLL_COMMIT, dce->dce_bitmap_sz,
+					  dce->dce_bitmap, &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
@@ -1738,8 +1739,8 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	if (dce->dce_bitmap != NULL) {
 		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
-					  DTX_COLL_ABORT, dce->dce_bitmap_sz, dce->dce_bitmap,
-					  &results);
+					  dce->dce_ver, DTX_COLL_ABORT, dce->dce_bitmap_sz,
+					  dce->dce_bitmap, &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
@@ -1759,7 +1760,7 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	}
 
 	if (epoch != 0)
-		rc2 = vos_dtx_abort(cont->sc_hdl, &dce->dce_xid, epoch);
+		rc2 = vos_dtx_abort(cont->sc_hdl, &dce->dce_xid, epoch, dce->dce_ver);
 	else
 		rc2 = vos_dtx_set_flags(cont->sc_hdl, &dce->dce_xid, 1, DTE_CORRUPTED);
 	if (rc2 > 0 || rc2 == -DER_NONEXIST)
@@ -1795,8 +1796,8 @@ dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 
 	if (dce->dce_bitmap != NULL) {
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
-					  DTX_COLL_CHECK, dce->dce_bitmap_sz, dce->dce_bitmap,
-					  &results);
+					  dce->dce_ver, DTX_COLL_CHECK, dce->dce_bitmap_sz,
+					  dce->dce_bitmap, &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
