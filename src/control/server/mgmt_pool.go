@@ -427,7 +427,6 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	}
 
 	// IO engine needs the fault domain tree for placement purposes
-	svc.log.Debugf("req.Ranks: %v", req.Ranks)
 	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(req.Ranks...)
 	if err != nil {
 		return nil, err
