@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,9 +15,9 @@
 
 #define MAX_MMAP_BLOCK      (64)
 #define MAX_OPENED_FILE     (2048)
-#define MAX_OPENED_FILE_M1  ((MAX_OPENED_FILE)-1)
 #define MAX_OPENED_DIR      (512)
-#define MAX_OPENED_DIR_M1   ((MAX_OPENED_DIR)-1)
+#define MAX_OPENED_FILE_LMT (1024 * 1024)
+#define MAX_OPENED_DIR_LMT  (256 * 1024)
 
 #define MAX_EQ          64
 
@@ -26,11 +27,6 @@
  * The fd allocate from this lib is always larger than FD_FILE_BASE.
  */
 #define FD_FILE_BASE    (0x20000000)
-
-/* FD_FILE_BASE - The base number of the file descriptor for a directory.
- * The fd allocate from this lib is always larger than FD_FILE_BASE.
- */
-#define FD_DIR_BASE     (FD_FILE_BASE + MAX_OPENED_FILE)
 
 /* structure allocated for a FD for a file */
 struct file_obj {
@@ -91,5 +87,33 @@ struct dfs_mt {
 	char            *pool, *cont;
 	char            *fs_root;
 };
+
+/* structure of a fd pool based on linked list to manage fd/dirfd allocation/deallocation */
+typedef struct {
+	/* the number of allocated nodes */
+	int  size;
+	/* the max number of nodes */
+	int  capacity;
+	/* the index of the head of the link list of available nodes */
+	int  head;
+	/* array of next node for link list */
+	int *next;
+} fd_pool_t;
+
+/* create a fd pool */
+int
+fd_pool_create(int size, fd_pool_t *fd_pool);
+
+/* get a fd */
+int
+fd_pool_alloc(fd_pool_t *fd_pool, int *idx);
+
+/* free a fd */
+int
+fd_pool_free(fd_pool_t *fd_pool, int idx);
+
+/* free fd pool */
+int
+fd_pool_destroy(fd_pool_t *fd_pool);
 
 #endif
