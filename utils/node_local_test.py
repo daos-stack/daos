@@ -6830,6 +6830,34 @@ def run(wf, args):
     return fatal_errors
 
 
+class TeeStream:
+    """A stream that writes to both the original stream and a log file."""
+
+    def __init__(self, stream, log_fd):
+        """Initialize the TeeStream.
+
+        Args:
+            stream: The original stream to write to.
+            log_fd: The log file descriptor to write to.
+        """
+        self._stream = stream
+        self._log_fd = log_fd
+
+    def write(self, data):
+        """Write data to both the original stream and the log file.
+
+        Args:
+            data (str): The data to write.
+        """
+        self._stream.write(data)
+        self._log_fd.write(data)
+
+    def flush(self):
+        """Flush both the original stream and the log file."""
+        self._stream.flush()
+        self._log_fd.flush()
+
+
 def main():
     """Wrap the core function, and catch/report any exceptions
 
@@ -6865,63 +6893,75 @@ def main():
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
 
-    # valgrind reduces the hard limit unless we bump the soft limit first
-    if args.memcheck != "no":
-        (soft, hard) = resource.getrlimit(resource.RLIMIT_NOFILE)
-        if soft < hard:
-            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+    _saved_stdout = sys.stdout
+    _saved_stderr = sys.stderr
 
-    if args.server_fi:
-        server_fi(args)
-        return
+    try:
+        with open(join('nlt_logs', 'nlt-run.log'), 'a', encoding='utf-8') as _nlt_run_log:
+            sys.stdout = TeeStream(_saved_stdout, _nlt_run_log)
+            sys.stderr = TeeStream(_saved_stderr, _nlt_run_log)
 
-    if args.mode:
-        mode_list = args.mode
-        args.mode = mode_list.pop(0)
+            # valgrind reduces the hard limit unless we bump the soft limit first
+            if args.memcheck != "no":
+                (soft, hard) = resource.getrlimit(resource.RLIMIT_NOFILE)
+                if soft < hard:
+                    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
-        if args.mode != 'launch' and mode_list:
-            print(f"unrecognized arguments: {' '.join(mode_list)}")
-            sys.exit(1)
-        args.launch_cmd = mode_list
-    else:
-        args.mode = None
+            if args.server_fi:
+                server_fi(args)
+                return
 
-    if args.mode and args.test:
-        print('Cannot use mode and test')
-        sys.exit(1)
+            if args.mode:
+                mode_list = args.mode
+                args.mode = mode_list.pop(0)
 
-    if args.test and 'list' in args.test:
-        tests = printable_test_list(PosixTests.generate_test_list())
-        print('''
+                if args.mode != 'launch' and mode_list:
+                    print(f"unrecognized arguments: {' '.join(mode_list)}")
+                    sys.exit(1)
+                args.launch_cmd = mode_list
+            else:
+                args.mode = None
+
+            if args.mode and args.test:
+                print('Cannot use mode and test')
+                sys.exit(1)
+
+            if args.test and 'list' in args.test:
+                tests = printable_test_list(PosixTests.generate_test_list())
+                print('''
 * Tests denoted with a '*' have are run separately with caching on and caching off,
 and these may be separately excluded, e.g., --excluded_test read_caching_off
 
 Tests are:
 ''' + '\n'.join(sorted(tests)))
-        sys.exit(1)
+                sys.exit(1)
 
-    wf = WarningsFactory('nlt-errors.json',
-                         post_error=True,
-                         check='Log file errors',
-                         class_id=args.class_name,
-                         junit=True)
+            wf = WarningsFactory('nlt-errors.json',
+                                 post_error=True,
+                                 check='Log file errors',
+                                 class_id=args.class_name,
+                                 junit=True)
 
-    try:
-        fatal_errors = run(wf, args)
-        wf.add_test_case('exit_wrapper')
-        wf.close()
-    except Exception as error:
-        print(error)
-        print(str(error))
-        print(repr(error))
-        trace = ''.join(traceback.format_tb(error.__traceback__))
-        wf.add_test_case('exit_wrapper', str(error), output=trace)
-        wf.close()
-        raise
+            try:
+                fatal_errors = run(wf, args)
+                wf.add_test_case('exit_wrapper')
+                wf.close()
+            except Exception as error:
+                print(error)
+                print(str(error))
+                print(repr(error))
+                trace = ''.join(traceback.format_tb(error.__traceback__))
+                wf.add_test_case('exit_wrapper', str(error), output=trace)
+                wf.close()
+                raise
 
-    if fatal_errors.errors:
-        print("Significant errors encountered")
-        sys.exit(1)
+            if fatal_errors.errors:
+                print("Significant errors encountered")
+                sys.exit(1)
+
+    finally:
+        sys.stdout = _saved_stdout
+        sys.stderr = _saved_stderr
 
 
 if __name__ == '__main__':
