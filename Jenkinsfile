@@ -996,9 +996,6 @@ pipeline {
                                          testResults: 'nlt-junit.xml',
                                          with_valgrind: '',
                                          FI: true
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
                             archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
