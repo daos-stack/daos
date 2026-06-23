@@ -64,7 +64,7 @@
 #define FREE(ptr)	do {free(ptr); (ptr) = NULL; } while (0)
 
 /* The max number of mount points for DAOS mounted simultaneously */
-#define MAX_DAOS_MT         (8)
+#define MAX_DAOS_MT         (32)
 
 #define READ_DIR_BATCH_SIZE (96)
 #define MAX_FD_DUP2ED       (16)
@@ -687,12 +687,15 @@ discover_dfuse_mounts(void)
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
-		if (num_dfs >= MAX_DAOS_MT) {
-			D_FATAL("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
-			abort();
-		}
-		pt_dfs_mt = &dfs_list[num_dfs];
 		if (memcmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
+			if (num_dfs >= MAX_DAOS_MT) {
+				D_WARN("Found more than MAX_DAOS_MT (%d) dfuse mount points. "
+				       "Disabling interception. Increase MAX_DAOS_MT to support "
+				       "more simultaneous mounts.\n",
+				       MAX_DAOS_MT);
+				D_GOTO(out, rc = EOVERFLOW);
+			}
+			pt_dfs_mt              = &dfs_list[num_dfs];
 			pt_dfs_mt->dcache      = NULL;
 			pt_dfs_mt->len_fs_root = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
