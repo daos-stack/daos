@@ -785,6 +785,10 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 	return append([]uint32{md}, compressTree(subtree)...), nil
 }
 
+func (m *Membership) DomainNr() int {
+	return len(m.db.FaultDomainTree().Domains())
+}
+
 const (
 	DomTreeMetadataHasFaultDom uint32 = (1 << iota)
 	DomTreeMetadataHasPerfDom

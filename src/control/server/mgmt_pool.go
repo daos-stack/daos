@@ -414,22 +414,23 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
 	}
 
-	// IO engine needs the fault domain tree for placement purposes
-	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(req.Ranks...)
-	if err != nil {
-		return nil, err
-	}
-
 	// Check if the requested redundancy factor can be met with the number of supplied fault domains.
 	for _, prop := range req.GetProperties() {
 		if prop.GetNumber() == uint32(daos.PoolPropertyRedunFac) {
 			rdFac := int(prop.GetNumval())
-			domainNr := len(req.FaultDomains)
+			domainNr := svc.membership.DomainNr()
 			if rdFac+1 > domainNr {
 				return nil, FaultPoolTooFewFaultDomains(rdFac, domainNr)
 			}
 			break
 		}
+	}
+
+	// IO engine needs the fault domain tree for placement purposes
+	svc.log.Debugf("req.Ranks: %v", req.Ranks)
+	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(req.Ranks...)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := svc.calculateCreateStorage(req); err != nil {
