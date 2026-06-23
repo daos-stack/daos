@@ -345,15 +345,9 @@ pipeline {
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
-        booleanParam(name: 'CI_cb_md_on_ssd_01_TEST',
+        booleanParam(name: 'CI_cb_md_on_ssd_TEST',
                      defaultValue: true,
-                     description: 'Run the Functional Cluster Box test stage 01')
-        booleanParam(name: 'CI_cb_md_on_ssd_02_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional Cluster Box test stage 02')
-        booleanParam(name: 'CI_cb_md_on_ssd_03_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional Cluster Box test stage 03')
+                     description: 'Run the Functional Cluster Box test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -1125,77 +1119,78 @@ pipeline {
                     Map hwStages = [:]
 
                     hwStages['Functional Hardware Medium'] = getFunctionalTestStage(
-                            name: 'Functional Hardware Medium',
-                            pragma_suffix: '-hw-medium',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7',
-                            node_count: 5
-                        )
+                        name: 'Functional Hardware Medium',
+                        pragma_suffix: '-hw-medium',
+                        label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                        next_version: next_version(),
+                        stage_tags: 'hw,medium,-provider',
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        nvme: 'auto',
+                        run_if_pr: false,
+                        run_if_landing: false,
+                        job_status: job_status_internal,
+                        image_version: 'el9.7',
+                        node_count: 5
+                    )
                     hwStages['Functional Hardware Medium MD on SSD'] = getFunctionalTestStage(
-                            name: 'Functional Hardware Medium MD on SSD',
-                            pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7',
-                            node_count: 5
+                        name: 'Functional Hardware Medium MD on SSD',
+                        pragma_suffix: '-hw-medium-md-on-ssd',
+                        label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                        next_version: next_version(),
+                        stage_tags: 'hw,medium,-provider',
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        nvme: 'auto_md_on_ssd',
+                        run_if_pr: true,
+                        run_if_landing: false,
+                        job_status: job_status_internal,
+                        image_version: 'el9.7',
+                        node_count: 5
                      )
                      hwStages['Functional Hardware Medium VMD'] = getFunctionalTestStage(
-                            name: 'Functional Hardware Medium VMD',
-                            pragma_suffix: '-hw-medium-vmd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw_vmd,medium',
-                            /* groovylint-disable-next-line UnnecessaryGetter */
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7',
-                            node_count: 5
-                        )
+                        name: 'Functional Hardware Medium VMD',
+                        pragma_suffix: '-hw-medium-vmd',
+                        label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
+                        next_version: next_version(),
+                        stage_tags: 'hw_vmd,medium',
+                        /* groovylint-disable-next-line UnnecessaryGetter */
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        nvme: 'auto',
+                        run_if_pr: false,
+                        run_if_landing: false,
+                        job_status: job_status_internal,
+                        image_version: 'el9.7',
+                        node_count: 5
+                    )
                      hwStages['Functional Hardware Medium Verbs Provider'] = getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        )
+                        name: 'Functional Hardware Medium Verbs Provider',
+                        pragma_suffix: '-hw-medium-verbs-provider',
+                        label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                        next_version: next_version(),
+                        stage_tags: 'hw,medium,provider',
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        default_nvme: 'auto',
+                        provider: 'ofi+verbs;ofi_rxm',
+                        run_if_pr: false,
+                        run_if_landing: false,
+                        job_status: job_status_internal,
+                        image_version: 'el9.7',
+                        node_count: 5
+                    )
                     hwStages['Functional Hardware Medium Verbs Provider MD on SSD'] = getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7',
-                            node_count: 5
-                        )
+                        name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+                        pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                        label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                        next_version: next_version(),
+                        stage_tags: 'hw,medium,provider',
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        default_nvme: 'auto_md_on_ssd',
+                        provider: 'ofi+verbs;ofi_rxm',
+                        run_if_pr: true,
+                        run_if_landing: false,
+                        job_status: job_status_internal,
+                        image_version: 'el9.7',
+                        node_count: 5
+                    )
                     hwStages['Functional Hardware Large'] = getFunctionalTestStage(
                         name: 'Functional Hardware Large',
                         pragma_suffix: '-hw-large',
@@ -1222,30 +1217,20 @@ pipeline {
                         job_status: job_status_internal,
                         image_version: 'el9.7'
                     )
-
-                    List<Map> clusterBoxStages = [
-                        [name: '01', tag: 'cb_01', pragma_suffix: '-cb-md-on-ssd-cb-01'],
-                        [name: '02', tag: 'cb_02', pragma_suffix: '-cb-md-on-ssd-cb-02'],
-                        [name: '03', tag: 'cb_03', pragma_suffix: '-cb-md-on-ssd-cb-03'],
-                    ]
-
-                    clusterBoxStages.each { cfg ->
-                        String stageKey = "Functional Cluster Box ${cfg.name}"
-                        hwStages[stageKey] = getFunctionalTestStage(
-                            name: stageKey,
-                            pragma_suffix: cfg.pragma_suffix,
-                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
-                            next_version: next_version(),
-                            stage_tags: "medium,${cfg.tag}",
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto_md_on_ssd',
-                            image_version: 'el9.7',
-                            node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        )
-                    }
+                    hwStages["Functional Cluster Box MD on SSD"] = getFunctionalTestStage(
+                        name: "Functional Cluster Box MD on SSD",
+                        pragma_suffix:'-cb-md-on-ssd',
+                        label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                        next_version: next_version(),
+                        stage_tags: "cb,medium",
+                        default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        nvme: 'auto_md_on_ssd',
+                        node_count: 5,
+                        run_if_pr: true,
+                        run_if_landing: false,
+                        job_status: job_status_internal,
+                        image_version: 'el9.7'
+                    )
 
                     parallel(hwStages)
                 }

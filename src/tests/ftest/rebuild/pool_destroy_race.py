@@ -35,7 +35,7 @@ class RbldPoolDestroyWithIO(TestWithServers):
           Re-create pool on remaining ranks.
 
         :avocado: tags=all,pr
-        :avocado: tags=medium,cb_03
+        :avocado: tags=cb,medium
         :avocado: tags=pool,rebuild,ior
         :avocado: tags=RbldPoolDestroyWithIO,test_pool_destroy_with_io
         """

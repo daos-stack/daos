@@ -17,7 +17,7 @@ from pathlib import Path
 THIS_FILE = os.path.realpath(__file__)
 FTEST_DIR = os.path.dirname(THIS_FILE)
 MANUAL_TAG = ('manual',)
-STAGE_TYPE_TAGS = ('vm', 'cb_03', 'cb_02', 'cb_01',  'hw', 'hw_vmd')
+STAGE_TYPE_TAGS = ('vm', 'cb',  'hw', 'hw_vmd')
 STAGE_SIZE_TAGS = ('medium', 'large')
 STAGE_FREQUENCY_TAGS = ('all', 'pr', 'daily_regression', 'full_regression')
 
