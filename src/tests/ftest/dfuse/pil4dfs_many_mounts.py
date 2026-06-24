@@ -6,8 +6,8 @@
 import os
 
 from apricot import TestWithServers
+from command_utils_base import EnvironmentVariables
 from dfuse_utils import get_dfuse, start_dfuse
-from host_utils import get_local_host
 from run_utils import run_remote
 
 # Marker printed to stderr by libpil4dfs at process exit when D_IL_REPORT is set
@@ -29,12 +29,11 @@ class Pil4dfsManyMounts(TestWithServers):
     :avocado: recursive
     """
 
-    def _run_case(self, pool, dfuse_hosts, env_str, mount_count, expect_intercept):
+    def _run_case(self, pool, env_str, mount_count, expect_intercept):
         """Mount mount_count dfuse instances and run a single libpil4dfs process across them.
 
         Args:
             pool (TestPool): pool to create the containers in.
-            dfuse_hosts (NodeSet): hosts on which to mount dfuse and run the command.
             env_str (str): shell prefix that loads libpil4dfs and enables D_IL_REPORT.
             mount_count (int): number of dfuse mount points to mount simultaneously.
             expect_intercept (bool): whether interception is expected to be enabled.
@@ -48,7 +47,7 @@ class Pil4dfsManyMounts(TestWithServers):
         try:
             for _ in range(mount_count):
                 container = self.get_container(pool)
-                dfuse = get_dfuse(self, dfuse_hosts)
+                dfuse = get_dfuse(self, self.hostlist_clients)
                 start_dfuse(self, dfuse, pool, container)
                 dfuses.append(dfuse)
                 mount_dirs.append(dfuse.mount_dir.value)
@@ -57,7 +56,7 @@ class Pil4dfsManyMounts(TestWithServers):
             # initialization libpil4dfs discovers all fuse.daos mounts in /proc/self/mounts,
             # so this exercises the MAX_DAOS_MT table regardless of which mount is accessed.
             stat_cmd = env_str + "stat " + " ".join(mount_dirs)
-            result = run_remote(self.log, dfuse_hosts, stat_cmd)
+            result = run_remote(self.log, self.hostlist_clients, stat_cmd)
 
             # The process must always complete cleanly, regardless of how many mounts are
             # present. Over the limit, libpil4dfs must disable interception gracefully and
@@ -75,10 +74,6 @@ class Pil4dfsManyMounts(TestWithServers):
                 "Case result: %d mount points -> process succeeded, interception %s "
                 "(expected %s)", mount_count, "enabled" if intercepted else "disabled",
                 "enabled" if expect_intercept else "disabled")
-            if intercepted:
-                self.log.info(
-                    "libpil4dfs interception summary for %d mount points:\n%s",
-                    mount_count, result.joined_stdout)
 
             if expect_intercept and not intercepted:
                 self.fail(
@@ -121,17 +116,19 @@ class Pil4dfsManyMounts(TestWithServers):
             "no_intercept_mount_count", "/run/test/*", 33)
 
         lib_path = os.path.join(self.prefix, "lib64", "libpil4dfs.so")
-        env_str = (
-            f"export LD_PRELOAD={lib_path}; export D_IL_NO_BYPASS=1; export D_IL_REPORT=1; ")
-        dfuse_hosts = get_local_host()
+        env_str = EnvironmentVariables({
+            "LD_PRELOAD": lib_path,
+            "D_IL_NO_BYPASS": 1,
+            "D_IL_REPORT": 1
+        }).to_export_str()
 
         self.log_step("Creating a single pool")
         pool = self.get_pool(connect=False)
 
         for mount_count in intercept_mount_counts:
-            self._run_case(pool, dfuse_hosts, env_str, mount_count, expect_intercept=True)
+            self._run_case(pool, env_str, mount_count, expect_intercept=True)
 
         self._run_case(
-            pool, dfuse_hosts, env_str, no_intercept_mount_count, expect_intercept=False)
+            pool, env_str, no_intercept_mount_count, expect_intercept=False)
 
         self.log.info("Test passed")
