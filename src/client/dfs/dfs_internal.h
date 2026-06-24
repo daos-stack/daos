@@ -147,7 +147,13 @@ struct dfs_obj {
 		struct {
 			/** Optional tail array object id for progressive layout */
 			daos_obj_id_t tail_oid;
-			/** Logical file offset where progressive layout switches to tail */
+			/**
+			 * Logical file offset where progressive layout switches to tail.
+			 * Contract: the head array holds logical bytes [0, split_off) and
+			 * the tail array holds logical bytes [split_off, EOF) indexed from 0
+			 * (i.e. tail index == logical_off - split_off). The IO path must
+			 * honor this base when routing reads/writes/punches.
+			 */
 			daos_size_t   split_off;
 			/** Optional tail array object handle for progressive layout */
 			daos_handle_t tail_oh;

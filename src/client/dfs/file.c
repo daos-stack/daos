@@ -35,6 +35,13 @@ file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tai
 	if (rc)
 		return daos_der2errno(rc);
 
+	/*
+	 * The head holds logical bytes [0, split_off) and the tail holds [split_off, EOF) indexed
+	 * from 0, so the logical size is the sum of both extents. This is correct while the head is
+	 * densely filled up to split_off whenever the tail is non-empty.
+	 * TODO: once the PL IO path lands, account for sparse files written only past split_off
+	 * (where the head extent is shorter than split_off) using split_off explicitly.
+	 */
 	stbuf->st_size += tail_stbuf.st_size;
 	if (tail_stbuf.st_max_epoch > stbuf->st_max_epoch)
 		stbuf->st_max_epoch = tail_stbuf.st_max_epoch;

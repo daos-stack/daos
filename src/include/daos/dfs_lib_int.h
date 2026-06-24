@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +17,20 @@ extern "C" {
 
 #include <daos.h>
 #include <daos_fs.h>
+
+/*
+ * Progressive-layout (PL) tuning constants shared between the DFS client implementation and the
+ * tests that validate the head/tail split-point selection. Keep these in one place so the
+ * production logic and the test oracle cannot drift apart.
+ */
+/** Numerator of the per-target fraction of capacity budgeted to the compact head object (0.2%). */
+#define DFS_PL_HEAD_BUDGET_NUM 2ULL
+/** Denominator of the per-target head budget fraction. */
+#define DFS_PL_HEAD_BUDGET_DEN 1000ULL
+/** Do not switch to the tail before this much logical file data (64 MiB). */
+#define DFS_PL_SPLIT_OFF_MIN   (64ULL << 20)
+/** Cap the head region at this size even on very large systems (64 GiB). */
+#define DFS_PL_SPLIT_OFF_MAX   (64ULL << 30)
 
 /*
  * Get the DFS superblock D-Key and A-Keys

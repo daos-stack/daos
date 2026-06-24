@@ -15,16 +15,15 @@
 #include <daos/object.h>
 #include <daos/pool.h>
 
+#include <daos/dfs_lib_int.h>
 #include "dfs_internal.h"
 
-/* 0.2% per-target budget for data that should remain in the compact head object. */
-#define DFS_PL_HEAD_BUDGET_NUM         2ULL
-/* Denominator for the head budget fraction. */
-#define DFS_PL_HEAD_BUDGET_DEN         1000ULL
-/* Do not switch to the tail before 64 MiB of logical file data. */
-#define DFS_PL_SPLIT_OFF_MIN           (64ULL << 20)
-/* Cap the head region at 64 GiB even on very large systems. */
-#define DFS_PL_SPLIT_OFF_MAX           (64ULL << 30)
+/*
+ * Progressive-layout split-point tuning constants (DFS_PL_HEAD_BUDGET_NUM/DEN,
+ * DFS_PL_SPLIT_OFF_MIN/MAX) are defined in <daos/dfs_lib_int.h> so the test oracle stays in sync.
+ */
+/* Minimum pool target count before progressive layout is applied to default-class files. */
+#define DFS_PL_MIN_TARGETS             1000
 /* Test-only override to bypass the PL target-count gate for default-selection testing. */
 #define DFS_PL_BYPASS_TARGET_LIMIT_ENV "DFS_PL_BYPASS_TARGET_LIMIT"
 
@@ -65,7 +64,7 @@ file_head_oclass(daos_oclass_id_t tail_cid, uint32_t max_groups)
 	static const uint32_t head_groups[] = {32, 16, 12, 8, 6, 4, 2, 1};
 	enum daos_obj_redun   ord;
 	uint32_t              group_nr;
-	int                   i;
+	size_t                i;
 
 	if (max_groups == 0)
 		return OC_UNKNOWN;
@@ -186,7 +185,7 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_size_t c
 	if (dfs->pl_target_nr == 0)
 		return 0;
 
-	if (dfs->pl_target_nr < 1000 && !pl_bypass_target_limit())
+	if (dfs->pl_target_nr < DFS_PL_MIN_TARGETS && !pl_bypass_target_limit())
 		return 0;
 
 	/* Use the default DAOS file class as the wide tail and derive the compact head from it. */
@@ -199,9 +198,6 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_size_t c
 	tail_attr = daos_oclass_id2attr(*tail_cid, &max_groups);
 	if (tail_attr == NULL)
 		return EINVAL;
-
-	if (max_groups == 0)
-		goto out;
 
 	/* Keep the tail redundancy family and only compact the head by reducing its group count. */
 	*head_cid = file_head_oclass(*tail_cid, max_groups);
