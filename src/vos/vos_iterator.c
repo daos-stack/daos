@@ -1121,7 +1121,7 @@ vos_iterate_obj(vos_iter_param_t *param, struct vos_iter_anchors *anchors, vos_i
 		return vos_iterate_internal(param, VOS_ITER_OBJ, true, false, anchors, pre_cb,
 					    post_cb, arg, dth);
 
-	/* The caller must provide a filter callback and call the oi_bkt_iter_skip() properly */
+	/* The caller must provide a filter callback and call the vos_bkt_iter_skip() properly */
 	D_ASSERT(param->ip_filter_cb != NULL && param->ip_bkt_iter == NULL);
 
 	bkt_iter = bkt_iter_alloc(cont->vc_pool);
