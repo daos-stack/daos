@@ -255,9 +255,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_EL8_TARGET',
-               defaultValue: '',
-               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_EL9_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
@@ -267,9 +264,6 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_el8_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on EL 8')
         booleanParam(name: 'CI_el9_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build sources and RPMs on EL 9')
@@ -303,12 +297,6 @@ pipeline {
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
-        booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional on EL 8 with Valgrind test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 test stage')
@@ -489,60 +477,6 @@ pipeline {
                 expression { !skip_build_stage() }
             }
             parallel {
-                stage('Build on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skip_build_stage('el8') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.10 ' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                        stash_files: 'ci/test_files_to_stash.txt',
-                                        build_deps: 'no',
-                                        stash_opt: true,
-                                        scons_args: sconsArgs() +
-                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('el8', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('el8', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
@@ -822,53 +756,6 @@ pipeline {
                 expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
             }
             parallel {
-                stage('Functional on EL 8.8 with Valgrind') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8.8 with Valgrind')
-                stage('Functional on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'el8.10'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8')
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
