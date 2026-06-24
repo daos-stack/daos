@@ -1306,8 +1306,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 		expDomainNr int
 	}{
 		"nil tree": {
-			expErr:      errors.New("uninitialized fault domain tree"),
-			expDomainNr: 0,
+			expErr: errors.New("uninitialized fault domain tree"),
 		},
 		"root only": {
 			tree: NewFaultDomainTree(),
@@ -1571,9 +1570,8 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				rankDomain("/rack1/pdu3", 4),
 				rankDomain("/rack2/pdu4", 5),
 			),
-			inputRanks:  []uint32{4, 0, 5, 3, 100},
-			expErr:      errors.New("rank 100 not found"),
-			expDomainNr: 0,
+			inputRanks: []uint32{4, 0, 5, 3, 100},
+			expErr:     errors.New("rank 100 not found"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
