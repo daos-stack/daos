@@ -709,23 +709,51 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	// Print successful results before returning any error.
-	respPoolsSuccess := []string{}
+	// Categorize results: successful, not-rebuilding (DER_NONEXIST), and actual errors
+	var succeeded, notRebuilding, actualErrors []string
 	for _, res := range resp.Results {
 		if !res.Errored {
-			respPoolsSuccess = append(respPoolsSuccess, res.ID)
+			succeeded = append(succeeded, res.ID)
+		} else if strings.Contains(res.Msg, "DER_NONEXIST") ||
+			strings.Contains(res.Msg, "entity does not exist") {
+			notRebuilding = append(notRebuilding, res.ID)
+		} else {
+			actualErrors = append(actualErrors, res.ID)
 		}
 	}
-	msg := fmt.Sprintf("System-rebuild %s request succeeded", opCode)
-	pStr := common.Pluralise("pool", len(respPoolsSuccess))
-	if cmd.Verbose {
-		cmd.Infof("%s on %d %s %v", msg, len(respPoolsSuccess), pStr, respPoolsSuccess)
-	} else {
-		cmd.Infof("%s on %d %s", msg, len(respPoolsSuccess), pStr)
+
+	// Print results based on what happened
+	if len(succeeded) > 0 {
+		pStr := common.Pluralise("pool", len(succeeded))
+		if cmd.Verbose {
+			cmd.Infof("System-rebuild %s succeeded on %d %s: %v", opCode, len(succeeded), pStr, succeeded)
+		} else {
+			cmd.Infof("System-rebuild %s succeeded on %d %s", opCode, len(succeeded), pStr)
+		}
 	}
 
-	if resp.Errors() != nil {
-		return resp.Errors()
+	if len(notRebuilding) > 0 {
+		pStr := common.Pluralise("pool", len(notRebuilding))
+		if cmd.Verbose {
+			cmd.Infof("%d %s not actively rebuilding: %v", len(notRebuilding), pStr, notRebuilding)
+		} else {
+			cmd.Infof("%d %s not actively rebuilding", len(notRebuilding), pStr)
+		}
+	}
+
+	// Only return error if there are actual failures (not DER_NONEXIST)
+	if len(actualErrors) > 0 {
+		var errMsgs []string
+		for _, res := range resp.Results {
+			if res.Errored && !strings.Contains(res.Msg, "DER_NONEXIST") &&
+				!strings.Contains(res.Msg, "entity does not exist") {
+				errMsgs = append(errMsgs, fmt.Sprintf("pool-rebuild %s failed on pool %s: %s",
+					res.OpCode, res.ID, res.Msg))
+			}
+		}
+		if len(errMsgs) > 0 {
+			return errors.New(strings.Join(errMsgs, ", "))
+		}
 	}
 
 	return nil

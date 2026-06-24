@@ -626,14 +626,90 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			ctlCfg:  &control.Config{},
 			opCode:  control.PoolRebuildOpCodeStop,
 			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "System-rebuild stop request succeeded on 0 pools",
+			expInfo: "System-rebuild stop succeeded on 0 pools",
 		},
 		"no pools; verbose": {
 			ctlCfg:  &control.Config{},
 			opCode:  control.PoolRebuildOpCodeStart,
 			verbose: true,
 			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "System-rebuild start request succeeded on 0 pools []",
+			expInfo: "System-rebuild start succeeded on 0 pools []",
+		},
+		"rebuild stop with DER_NONEXIST only": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool1",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: "2 pools not actively rebuilding",
+		},
+		"rebuild stop mixed success and DER_NONEXIST": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool_success1",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "pool_success2",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_notrebuilding1",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_notrebuilding2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: "System-rebuild stop succeeded on 2 pools\n2 pools not actively rebuilding",
+		},
+		"rebuild stop with DER_NONEXIST and real errors": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool_success",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_notrebuilding",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "real error happened",
+						Id:      "pool_failed",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr:  errors.New("pool-rebuild stop failed on pool pool_failed: real error happened"),
+			expInfo: "System-rebuild stop succeeded on 1 pool\n1 pool not actively rebuilding",
 		},
 		"rebuild stop failed": {
 			ctlCfg: &control.Config{},
@@ -659,7 +735,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 				},
 			},
 			expErr:  errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
-			expInfo: "System-rebuild stop request succeeded on 1 pool",
+			expInfo: "System-rebuild stop succeeded on 1 pool",
 		},
 		"rebuild start succeeded; verbose": {
 			ctlCfg:  &control.Config{},
@@ -681,7 +757,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "System-rebuild start request succeeded on 3 pools [foo bar baz]",
+			expInfo: "System-rebuild start succeeded on 3 pools: [foo bar baz]",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
