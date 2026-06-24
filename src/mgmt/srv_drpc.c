@@ -2490,6 +2490,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->pll_lock_loss_cnt = stats.pll_lock_loss_cnt;
 	resp->nand_bytes_written = stats.nand_bytes_written;
 	resp->host_bytes_written = stats.host_bytes_written;
+	resp->percentage_used = stats.percentage_used;
 
 out:
 	resp->status = rc;
