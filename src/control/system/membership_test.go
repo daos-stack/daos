@@ -1493,7 +1493,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				// ranks
 				4,
 			},
-			expDomainNr: 6,
+			expDomainNr: 1,
 		},
 		"request one rank": {
 			tree: NewFaultDomainTree(
@@ -1519,7 +1519,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				// ranks
 				4,
 			},
-			expDomainNr: 6,
+			expDomainNr: 1,
 		},
 		"request multiple ranks": {
 			tree: NewFaultDomainTree(
@@ -1560,7 +1560,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 				4,
 				5,
 			},
-			expDomainNr: 6,
+			expDomainNr: 4,
 		},
 		"request nonexistent rank": {
 			tree: NewFaultDomainTree(
@@ -1573,7 +1573,7 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			),
 			inputRanks:  []uint32{4, 0, 5, 3, 100},
 			expErr:      errors.New("rank 100 not found"),
-			expDomainNr: 6,
+			expDomainNr: 0,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1587,7 +1587,8 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 
 			test.CmpErr(t, tc.expErr, err)
 
-			domainNr := membership.DomainNr()
+			domainNr, err := membership.DomainNr(tc.inputRanks...)
+			test.CmpErr(t, tc.expErr, err)
 			test.AssertEqual(t, tc.expDomainNr, domainNr, "unexpected domain number")
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {

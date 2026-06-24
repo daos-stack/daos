@@ -415,10 +415,13 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	}
 
 	// Check if the requested redundancy factor can be met with the number of supplied fault domains.
+	domainNr, err := svc.membership.DomainNr(req.Ranks...)
+	if err != nil {
+		return nil, err
+	}
 	for _, prop := range req.GetProperties() {
 		if prop.GetNumber() == uint32(daos.PoolPropertyRedunFac) {
 			rdFac := int(prop.GetNumval())
-			domainNr := svc.membership.DomainNr()
 			if rdFac+1 > domainNr {
 				return nil, FaultPoolTooFewFaultDomains(rdFac, domainNr)
 			}

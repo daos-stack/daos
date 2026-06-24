@@ -785,8 +785,18 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 	return append([]uint32{md}, compressTree(subtree)...), nil
 }
 
-func (m *Membership) DomainNr() int {
-	return len(m.db.FaultDomainTree().Domains())
+func (m *Membership) DomainNr(ranks ...uint32) (int, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return 0, errors.New("uninitialized fault domain tree")
+	}
+
+	subtree, err := getFaultDomainSubtree(tree, ranks...)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(subtree.Domains()), nil
 }
 
 const (
