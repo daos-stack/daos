@@ -98,7 +98,7 @@ The Go CLI and the C engine use separate logging systems with different log leve
 The \fI--debug=<log level>\fR option sets the log level for both systems to the closest matching
 levels. The available log levels are: \fBTRACE\fR, \fBDEBUG\fR (or \fBDBUG\fR), \fBINFO\fR,
 \fBNOTICE\fR (or \fBNOTE\fR), \fBWARN\fR, \fBERROR\fR (or \fBERR\fR), \fBCRIT\fR, \fBALRT\fR,
-\fBFATAL\fR (or \fBEMRG\fR), and \fBEMIT\fR. The default log level is \fBERROR\fR.
+\fBFATAL\fR, and \fBEMIT\fR. The default log level is \fBERROR\fR.
 
 Logs can be redirected to a file using the \fI--log_dir=<path>\fR option. Note that \fBERROR\fR
 and above are always printed to the console, even when \fI--log_dir\fR is set.`

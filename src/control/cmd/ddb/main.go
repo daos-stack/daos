@@ -219,8 +219,8 @@ func strToLogLevels(level string) (logging.LogLevel, engine.LogLevel, error) {
 		return logging.LogLevelError, engine.LogLevelCrit, nil
 	case "ALRT":
 		return logging.LogLevelError, engine.LogLevelAlrt, nil
-	case "FATAL", "EMRG":
-		return logging.LogLevelError, engine.LogLevelEmrg, nil
+	case "FATAL":
+		return logging.LogLevelError, engine.LogLevelFatal, nil
 	case "EMIT":
 		return logging.LogLevelError, engine.LogLevelEmit, nil
 	default:
