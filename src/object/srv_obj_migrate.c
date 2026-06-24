@@ -3793,7 +3793,8 @@ cont_fetch_start_ult(void *arg)
 	rc = ds_cont_fetch_snaps(fetch_arg->pool->sp_iv_ns, fetch_arg->cont_uuid,
 				 &fetch_arg->snapshots, &fetch_arg->snap_cnt);
 	if (rc) {
-		D_ERROR("ds_cont_fetch_snaps failed: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": ds_cont_fetch_snaps failed",
+			 DP_CONT(fetch_arg->pool_uuid, fetch_arg->cont_uuid));
 		return rc;
 	}
 
@@ -3848,9 +3849,17 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	rc = dss_ult_execute(cont_fetch_start_ult, &fetch_arg, NULL, NULL, DSS_XS_SYS, 0,
 			     MIGRATE_STACK_SIZE);
 	if (rc) {
-		DL_ERROR(rc, DF_RB ": ds_pool_lookup failed", DP_RB_MPT(tls));
-		if (rc == -DER_SHUTDOWN)
-			rc = 0;
+		if (rc == -DER_CONT_NONEXIST) {
+			DL_INFO(rc, DF_RB ": " DF_CONT " skip orphan container", DP_RB_MPT(tls),
+				DP_CONT(tls->mpt_pool_uuid, cont_uuid));
+			D_GOTO(cont_done, rc = 0);
+		}
+		if (rc == -DER_SHUTDOWN) {
+			tls->mpt_fini = 1;
+			DL_ERROR(rc, DF_RB ": cont_fetch_start_ult failed, set mpt_fini",
+				 DP_RB_MPT(tls));
+		}
+		DL_ERROR(rc, DF_RB ": cont_fetch_start_ult failed", DP_RB_MPT(tls));
 		D_GOTO(free, rc);
 	}
 
@@ -3881,6 +3890,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 		}
 	}
 
+cont_done:
 	D_DEBUG(DB_REBUILD, DF_RB ": iter cont " DF_UUID "/%" PRIx64 " finish.\n", DP_RB_MPT(tls),
 		DP_UUID(cont_uuid), ih.cookie);
 

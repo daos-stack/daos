@@ -1341,13 +1341,14 @@ agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	int                    rc;
 
 	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
+		rc = -DER_OP_CANCELED;
 		/* We currently pause EC aggregation for rebuild, so just cancel the
 		 * aggregation for the current stripe. It means the following peer status
 		 * check may not be checked at all, but let's keep the code because it could
 		 * be useful in the future.
 		 */
-		D_ERROR(DF_UOID " pauses EC aggregation for rebuild\n", DP_UOID(entry->ae_oid));
-		return -DER_OP_CANCELED;
+		DL_ERROR(rc, DF_UOID " pauses EC aggregation for rebuild", DP_UOID(entry->ae_oid));
+		return rc;
 	}
 
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map, &targets,
@@ -1939,9 +1940,9 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	/* avoid race between EC aggregation and rebuild scanner */
 	agg_param->ap_cont->sc_ec_agg_updates++;
 	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
-		D_DEBUG(DB_EPC, DF_UOID " abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		rc = -DER_OP_CANCELED;
+		DL_INFO(rc, DF_UOID " abort as rebuild started", DP_UOID(entry->ae_oid));
 		update_vos = false;
-		rc         = -1;
 		goto out;
 	}
 
@@ -2581,11 +2582,12 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	 * (see obj_inflight_io_check()).
 	 */
 	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
-		D_INFO(DF_CONT " abort as rebuild started, sp_rebuilding %d\n",
-		       DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
-			       agg_param->ap_pool_info.api_cont_uuid),
-		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
-		return -1;
+		rc = -DER_OP_CANCELED;
+		DL_INFO(rc, DF_CONT " abort as rebuild started, sp_rebuilding %d.",
+			DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+				agg_param->ap_pool_info.api_cont_uuid),
+			atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
+		return rc;
 	}
 
 	switch (type) {
@@ -2609,9 +2611,9 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR(DF_UUID " EC aggregation (rebuilding %d) failed: " DF_RC "\n",
-			DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
-			atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID " EC aggregation (rebuilding %d) failed",
+			 DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+			 atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
 		return rc;
 	}
 
