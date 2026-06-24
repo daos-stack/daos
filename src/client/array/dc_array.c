@@ -1282,6 +1282,7 @@ set_short_read_cb(tse_task_t *task, void *data)
 	/** adjust the read_nr based on the array size */
 	args->iod->arr_nr_short_read = 0;
 	args->iod->arr_nr_read = 0;
+	args->iod->arr_array_size    = params->array_size;
 
 	for (i = 0; i < args->iod->arr_nr; i++) {
 		daos_off_t idx = args->iod->arr_rgs[i].rg_idx;
@@ -1404,6 +1405,7 @@ next:
 	if (nr_short_recs == 0) {
 		/** memset all holes to 0 */
 		params->array_size = UINT64_MAX;
+		args->iod->arr_array_size = params->array_size;
 		rc = process_iomap(params, args);
 		D_GOTO(out, rc);
 	}
