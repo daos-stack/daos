@@ -31,7 +31,7 @@ job_status_internal = [:]
 Map<String, Boolean> runStage = [:]
 
 String bashName(String name) {
-    return name.replaceAll(' ', '_').replaceAll('\\.', '_')
+    return name.replaceAll('[^a-zA-Z0-9]', '_')
 }
 
 
@@ -89,19 +89,6 @@ void updateRunStage() {
     println("updateRunStage: Build cause: ${buildCause}")
     println("updateRunStage: Started by user: ${startedByUser()}")
 
-    // Handle doc-only changes: Only run default or selected build stages
-    if (docOnlyChange(target_branch)) {
-        println("updateRunStage: Detected doc-only change, skipping testing")
-        for (stage in runStage.keySet()) {
-            if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
-                runStage[stage] = false
-                reasons[stage] = "doc-only change"
-            }
-        }
-        displayRunStage(reasons)
-        return
-    }
-
     // Handle landing builds
     if (startedByLanding()) {
         println("updateRunStage: Detected landing build, overwriting defaults")
@@ -118,6 +105,19 @@ void updateRunStage() {
                 runStage[stage] = false
             }
             reasons[stage] = "landing build"
+        }
+        displayRunStage(reasons)
+        return
+    }
+
+    // Handle doc-only changes: Only run default or selected build stages
+    if (docOnlyChange(target_branch)) {
+        println("updateRunStage: Detected doc-only change, skipping testing")
+        for (stage in runStage.keySet()) {
+            if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
+                runStage[stage] = false
+                reasons[stage] = "doc-only change"
+            }
         }
         displayRunStage(reasons)
         return
@@ -299,12 +299,12 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         if (stageName.contains('Functional on')) {
             // Add skip pragma alias for all functional tests
-            pragmas.add('skip-func-test')
+            pragmas.add('skip-functional-test')
             // Add skip pragma alias for all functional VM tests
-            pragmas.add('skip-func-test-vm')
-            pragmas.add('skip-func-vm-test')
+            pragmas.add('skip-functional-test-vm')
+            pragmas.add('skip-functional-vm-test')
             // Compatibility with existing commit pragmas
-            pragmas.add(stagePragma.replace('functional-on-', 'func-test-'))
+            pragmas.add(stagePragma.replace('functional-on-', 'functional-test-'))
         } else if (stageName.contains('Test RPMs on')) {
             // Add skip pragma alias for all RPM tests
             pragmas.add('skip-test-rpms')
@@ -316,30 +316,21 @@ List<String> getStageNameSkipPragmas(String stageName) {
         pragmas.add(stagePragma)
 
     } else if (stageName.contains('Hardware')) {
+        // 
         if (stageName != 'Test Hardware') {
             pragmas.add('skip-test-hardware')
-            pragmas.add('skip-test-hw')
         }
         if (stageName.contains('Functional')) {
             // Add skip pragma alias for all functional tests
-            pragmas.add('skip-func-test')
+            pragmas.add('skip-functional-test')
             // Add skip pragma alias for all functional HW tests
-            pragmas.add('skip-func-test-hw')
-            pragmas.add('skip-func-hw-test')
-            
+            pragmas.add('skip-functional-test-hardware')
+            pragmas.add('skip-functional-hardware-test')
             // Compatibility with existing commit pragmas
-            if (stagePragma.contains('functional-hardware-')) {
-                pragmas.add(stagePragma.replace('functional-hardware-', 'func-hw-test-'))
-                pragmas.add(stagePragma.replace('functional-hardware-', 'func-hw-'))
-            }
+            pragmas.add(stagePragma.replace('functional-hardware-', 'functional-hardware-test-'))
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
-        // Support shortening hardware to hw
-        if (stagePragma.contains('hardware-')) {
-            pragmas.add(stagePragma.replace('hardware-', 'hw-'))
-        }
     }
 
     // Compatibility with existing commit pragmas using distro versions
@@ -350,6 +341,14 @@ List<String> getStageNameSkipPragmas(String stageName) {
             if (_pragma.contains("-${distro}-")) {
                 pragmas.add(_pragma.replace("-${distro}-", "-${distro}"))
             }
+        }
+    }
+
+    // Compatibility with existing commit pragmas using shortened func or hw
+    List<String> copyPragmas = pragmas.clone()
+    for (_pragma in copyPragmas) {
+         if (_pragma.contains('-functional-') || _pragma.contains('-hardware-')) {
+            pragmas.add(_pragma.replace('-functional-', '-func-').replace('-hardware-', '-hw-'))
         }
     }
 
