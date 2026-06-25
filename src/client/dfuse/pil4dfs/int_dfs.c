@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -508,6 +508,11 @@ remove_dot_and_cleanup(char szPath[], int len);
 
 /* reference count of fake fd duplicated by real fd with dup2() */
 static int                dup_ref_count[MAX_OPENED_FILE];
+/* whether the direct fake fd of a slot is still open. Together with dup_ref_count[] it
+ * tells when a slot can be cleared, independent of the shared struct file_obj reference
+ * count (the same struct file_obj may be referenced by multiple fake fd slots).
+ */
+static bool               fd_direct_open[MAX_OPENED_FILE];
 struct file_obj          *d_file_list[MAX_OPENED_FILE];
 static struct dir_obj    *dir_list[MAX_OPENED_DIR];
 static struct mmap_obj    mmap_list[MAX_MMAP_BLOCK];
@@ -1536,6 +1541,7 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 		d_file_list[idx] = new_obj;
 	}
 	dup_ref_count[idx] = 0;
+	fd_direct_open[idx] = true;
 	if (next_free_fd > last_fd)
 		last_fd = next_free_fd;
 	next_free_fd = -1;
@@ -1672,10 +1678,18 @@ free_fd(int idx, bool closing_dup_fd)
 
 	if (closing_dup_fd)
 		dup_ref_count[idx]--;
+	else
+		/* the direct fake fd of this slot is being closed */
+		fd_direct_open[idx] = false;
 	d_file_list[idx]->ref_count--;
 	if (d_file_list[idx]->ref_count == 0)
 		saved_obj = d_file_list[idx];
-	if ((dup_ref_count[idx] > 0) || (closing_dup_fd && (d_file_list[idx]->ref_count > 0))) {
+	/* Keep this slot while it still has references of its own: either the direct fake fd
+	 * is still open, or it still has dup2() references via low fds. ref_count must not be
+	 * used to decide whether to clear this slot, since it is shared when the same struct
+	 * file_obj is referenced by multiple fake fd slots (e.g. dup()/fcntl(F_DUPFD)).
+	 */
+	if (fd_direct_open[idx] || (dup_ref_count[idx] > 0)) {
 		D_MUTEX_UNLOCK(&lock_fd);
 		return;
 	}

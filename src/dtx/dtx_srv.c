@@ -239,7 +239,7 @@ dtx_handler(crt_rpc_t *rpc)
 
 			rc = vos_dtx_abort(cont->sc_hdl,
 					   (struct dtx_id *)din->di_dtx_array.ca_arrays,
-					   din->di_epoch);
+					   din->di_epoch, din->di_version);
 		} else {
 			rc = vos_dtx_set_flags(cont->sc_hdl,
 					       (struct dtx_id *)din->di_dtx_array.ca_arrays,
@@ -462,7 +462,7 @@ dtx_coll_handler(crt_rpc_t *rpc)
 	}
 
 	len = dtx_coll_local_exec(dci->dci_po_uuid, dci->dci_co_uuid, &dci->dci_xid, dci->dci_epoch,
-				  opc, bitmap_sz, bitmap, &results);
+				  dci->dci_version, opc, bitmap_sz, bitmap, &results);
 	if (len < 0)
 		D_GOTO(out, rc = len);
 
