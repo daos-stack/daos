@@ -663,7 +663,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	hlen_pt1 = hlen;	/* save part 1 length */
 	if (hlen < sizeof(buf) && mst.oflags & DLOG_FLV_FAC)
-		hlen += snprintf(buf + hlen, sizeof(buf) - hlen, "%-4s ", facstr);
+		hlen += snprintf(buf + hlen, sizeof(buf) - hlen, "%-6s ", facstr);
 	/*
 	 * we expect there is still room (i.e. at least one byte) for a
 	 * message, so this overflow check should never happen, but let's
