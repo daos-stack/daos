@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,15 +61,17 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 			idata->id_base_offset + idata->id_index, DP_DE(name));
 
 	strncpy(dre->dre_name, name, NAME_MAX);
+	dre->dre_name[NAME_MAX] = '\0';
 	dre->dre_offset      = idata->id_base_offset + idata->id_index;
 	dre->dre_next_offset = dre->dre_offset + 1;
+	dre->dre_attrs_valid    = false;
 	idata->id_index++;
 
 	return 0;
 }
 
 static int
-fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eod)
+fetch_dir_entries_iterate(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eod)
 {
 	struct iterate_data       idata = {};
 	uint32_t                  count = to_fetch;
@@ -105,6 +108,147 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 	}
 
 	return rc;
+}
+
+static int
+fetch_dir_entries_batched(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eod)
+{
+	struct dfuse_readdir_hdl *hdl   = oh->doh_rd;
+	dfs_pipeline_t           *dpipe = NULL;
+	dfs_predicate_t           pred  = {0};
+	struct dirent            *dirs  = NULL;
+	daos_obj_id_t            *oids  = NULL;
+	struct dfs_readdir_attrs *attrs = NULL;
+	daos_anchor_t             anchor;
+	daos_epoch_t              epoch0 = 0;
+	daos_epoch_t              epoch1 = 0;
+	uint64_t                  nr_scanned;
+	uint32_t                  count = to_fetch;
+	int                       rc    = 0;
+	int                       i;
+
+	D_ASSERT(oh->doh_rd);
+
+	D_ALLOC_ARRAY(dirs, count);
+	if (dirs == NULL)
+		return ENOMEM;
+
+	D_ALLOC_ARRAY(attrs, count);
+	if (attrs == NULL) {
+		D_FREE(dirs);
+		return ENOMEM;
+	}
+
+	D_ALLOC_ARRAY(oids, count);
+	if (oids == NULL) {
+		D_FREE(attrs);
+		D_FREE(dirs);
+		return ENOMEM;
+	}
+
+	DFUSE_TRA_DEBUG(hdl, "Fetching new entries in batch at offset %#lx", offset);
+	anchor = hdl->drh_anchor;
+
+	rc = dfs_obj_query_max_epoch(oh->doh_ie->ie_obj, &epoch0);
+	if (rc) {
+		DFUSE_TRA_DEBUG(oh, "Failed to query epoch before batch %d, falling back", rc);
+		D_GOTO(out, rc = fetch_dir_entries_iterate(oh, offset, to_fetch, eod));
+	}
+
+	strcpy(pred.dp_name, "%");
+	rc = dfs_pipeline_create(oh->doh_dfs, pred, DFS_FILTER_NAME | DFS_FILTER_INCLUDE_DIRS,
+				 &dpipe);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = dfs_readdir_with_filter(oh->doh_dfs, oh->doh_ie->ie_obj, dpipe, &anchor, &count, dirs,
+				     oids, NULL, &nr_scanned);
+	if (rc) {
+		if (rc == EIO || rc == EBUSY || rc == EAGAIN || rc == ERESTART || rc == ENOTSUP ||
+		    rc == ENOSYS) {
+			DFUSE_TRA_DEBUG(oh,
+					"dfs_readdir_with_filter() failed %d, falling back to "
+					"dfs_iterate",
+					rc);
+			D_GOTO(out, rc = fetch_dir_entries_iterate(oh, offset, to_fetch, eod));
+		}
+
+		DFUSE_TRA_ERROR(oh, "dfs_readdir_with_filter() returned: %d (%s)", rc,
+				strerror(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = dfs_obj_query_max_epoch(oh->doh_ie->ie_obj, &epoch1);
+	if (rc) {
+		DFUSE_TRA_DEBUG(oh, "Failed to query epoch after batch %d, falling back", rc);
+		D_GOTO(out, rc = fetch_dir_entries_iterate(oh, offset, to_fetch, eod));
+	}
+
+	if (epoch1 != epoch0) {
+		DFUSE_TRA_DEBUG(
+		    oh, "Directory changed during batch (%" PRIu64 " != %" PRIu64 "), falling back",
+		    epoch1, epoch0);
+		D_GOTO(out, rc = fetch_dir_entries_iterate(oh, offset, to_fetch, eod));
+	}
+
+	hdl->drh_anchor = anchor;
+	hdl->drh_anchor_index += count;
+	hdl->drh_dre_index      = 0;
+	hdl->drh_dre_last_index = count;
+
+	for (i = 0; i < count; i++) {
+		struct dfuse_readdir_entry *dre = &hdl->drh_dre[i];
+
+		strncpy(dre->dre_name, dirs[i].d_name, NAME_MAX);
+		dre->dre_name[NAME_MAX] = '\0';
+		dre->dre_offset         = offset + i;
+		dre->dre_next_offset    = dre->dre_offset + 1;
+		switch (dirs[i].d_type) {
+		case DT_DIR:
+			attrs[i].dra_mode = S_IFDIR;
+			break;
+		case DT_REG:
+			attrs[i].dra_mode = S_IFREG;
+			break;
+		case DT_LNK:
+			attrs[i].dra_mode = S_IFLNK;
+			break;
+		default:
+			D_GOTO(out, rc = EINVAL);
+		}
+		attrs[i].dra_oid     = oids[i];
+		dre->dre_attrs       = attrs[i];
+		dre->dre_attrs_valid = true;
+	}
+
+	DFUSE_TRA_DEBUG(hdl,
+			"Added %u entries in batch, scanned " DF_U64 " epoch " DF_U64
+			" anchor_index %d rc %d",
+			count, nr_scanned, epoch1, hdl->drh_anchor_index, rc);
+
+	if (count) {
+		if (daos_anchor_is_eof(&hdl->drh_anchor))
+			hdl->drh_dre[count - 1].dre_next_offset = READDIR_EOD;
+	} else {
+		*eod = true;
+	}
+
+out:
+	if (dpipe != NULL)
+		dfs_pipeline_destroy(dpipe);
+	D_FREE(oids);
+	D_FREE(attrs);
+	D_FREE(dirs);
+	return rc;
+}
+
+static int
+fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool plus, bool *eod)
+{
+	if (plus)
+		return fetch_dir_entries_iterate(oh, offset, to_fetch, eod);
+
+	return fetch_dir_entries_batched(oh, offset, to_fetch, eod);
 }
 
 /* Create a readdir handle */
@@ -635,7 +779,7 @@ restart:
 			else
 				to_fetch = READDIR_BASE_COUNT - added;
 
-			rc = fetch_dir_entries(oh, offset, to_fetch, &eod);
+			rc = fetch_dir_entries(oh, offset, to_fetch, plus, &eod);
 			if (rc != 0)
 				D_GOTO(reply, rc);
 
@@ -683,10 +827,19 @@ restart:
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_ie->ie_obj, dre->dre_name,
 						 O_RDWR | O_NOFOLLOW, &obj, &stbuf.st_mode, &stbuf,
 						 1, &duns_xattr_name, (void **)&outp, &attr_len);
-			else
-				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_ie->ie_obj, dre->dre_name,
-						    O_RDONLY | O_NOFOLLOW, &obj, &stbuf.st_mode,
-						    NULL);
+			else if (dre->dre_attrs_valid) {
+				stbuf.st_mode = dre->dre_attrs.dra_mode;
+				oid           = dre->dre_attrs.dra_oid;
+				rc            = 0;
+			} else
+				/*
+				 * Plain readdir only needs the entry type (st_mode) and inode
+				 * number (derived from the object ID); it does not need an open
+				 * object. Use the lightweight helper to avoid a wasteful per-entry
+				 * object/array open RPC that would immediately be released below.
+				 */
+				rc = dfs_lookup_rel_entry(oh->doh_dfs, oh->doh_ie->ie_obj,
+							  dre->dre_name, &stbuf.st_mode, &oid);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
 				D_FREE(drc);
@@ -698,7 +851,8 @@ restart:
 				D_GOTO(reply, rc);
 			}
 
-			dfs_obj2id(obj, &oid);
+			if (plus)
+				dfs_obj2id(obj, &oid);
 
 			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf.st_ino);
 
@@ -742,8 +896,6 @@ restart:
 						d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
 				}
 			} else {
-				dfs_release(obj);
-
 				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
 					      dre->dre_name, &stbuf, dre->dre_next_offset);
 

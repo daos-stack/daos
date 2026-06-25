@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,7 @@
 #include <daos/common.h>
 #include <daos.h>
 #include <daos_fs.h>
+#include <daos/dfs_lib_int.h>
 #include <daos_pipeline.h>
 
 #include "dfs_internal.h"
@@ -225,7 +226,10 @@ dfs_pipeline_create(dfs_t *dfs, dfs_predicate_t pred, uint64_t flags, dfs_pipeli
 	*_dpipe = dpipe;
 	return 0;
 err:
-	printf("failed to create pipeline. rc = %d\n", rc);
+	if (dpipe->pipeline.num_filters || dpipe->pipeline.num_aggr_filters)
+		daos_pipeline_free(&dpipe->pipeline);
+	else if (dpipe->pipef.num_parts)
+		D_FREE(dpipe->pipef.parts);
 	D_FREE(dpipe);
 	return rc;
 }
@@ -233,8 +237,13 @@ err:
 int
 dfs_pipeline_destroy(dfs_pipeline_t *dpipe)
 {
-	if (dpipe->pipeline.num_filters)
-		D_FREE(dpipe->pipeline.filters);
+	if (dpipe == NULL)
+		return 0;
+
+	if (dpipe->pipeline.num_filters || dpipe->pipeline.num_aggr_filters)
+		daos_pipeline_free(&dpipe->pipeline);
+	else if (dpipe->pipef.num_parts)
+		D_FREE(dpipe->pipef.parts);
 	D_FREE(dpipe);
 	return 0;
 }
@@ -293,7 +302,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 
 	D_ALLOC_ARRAY(kds, nr_kds);
 	if (kds == NULL)
-		return ENOMEM;
+		D_GOTO(out, rc = ENOMEM);
 
 	/** alloc buffer to store dkeys enumerated */
 	sgl_keys.sg_nr     = 1;
@@ -386,5 +395,134 @@ out:
 	D_FREE(kds);
 	D_FREE(buf_recs);
 	D_FREE(buf_keys);
+	return rc;
+}
+
+int
+dfs_readdirx(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, struct dirent *dirs,
+	     struct dfs_readdir_attrs *attrs, uint64_t *nr_scanned)
+{
+	dfs_pipeline_t  *dpipe = NULL;
+	dfs_predicate_t  pred  = {0};
+	daos_iod_t       iod;
+	daos_key_desc_t *kds;
+	d_sg_list_t      sgl_keys, sgl_recs;
+	d_iov_t          iov_keys, iov_recs;
+	char            *buf_keys = NULL, *buf_recs = NULL;
+	daos_recx_t      recxs[2];
+	uint32_t         nr_iods, nr_kds, key_nr, i;
+	daos_size_t      record_len;
+	int              rc = 0;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return ENOTDIR;
+	if (*nr == 0)
+		return 0;
+	if (dirs == NULL || attrs == NULL || anchor == NULL || nr_scanned == NULL)
+		return EINVAL;
+
+	strcpy(pred.dp_name, "%");
+	rc = dfs_pipeline_create(dfs, pred, DFS_FILTER_NAME | DFS_FILTER_INCLUDE_DIRS, &dpipe);
+	if (rc != 0)
+		return rc;
+
+	iod.iod_nr      = 2;
+	iod.iod_size    = 1;
+	recxs[0].rx_idx = MODE_IDX;
+	recxs[0].rx_nr  = sizeof(mode_t);
+	recxs[1].rx_idx = OID_IDX;
+	recxs[1].rx_nr  = sizeof(daos_obj_id_t);
+	iod.iod_recxs   = recxs;
+	iod.iod_type    = DAOS_IOD_ARRAY;
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	record_len = recxs[0].rx_nr + recxs[1].rx_nr;
+
+	nr_kds  = *nr;
+	nr_iods = 1;
+
+	D_ALLOC_ARRAY(kds, nr_kds);
+	if (kds == NULL)
+		D_GOTO(out, rc = ENOMEM);
+
+	sgl_keys.sg_nr     = 1;
+	sgl_keys.sg_nr_out = 0;
+	sgl_keys.sg_iovs   = &iov_keys;
+	D_ALLOC_ARRAY(buf_keys, nr_kds * DFS_MAX_NAME);
+	if (buf_keys == NULL)
+		D_GOTO(out, rc = ENOMEM);
+	d_iov_set(&iov_keys, buf_keys, nr_kds * DFS_MAX_NAME);
+
+	sgl_recs.sg_nr     = 1;
+	sgl_recs.sg_nr_out = 0;
+	sgl_recs.sg_iovs   = &iov_recs;
+	D_ALLOC_ARRAY(buf_recs, nr_kds * record_len);
+	if (buf_recs == NULL)
+		D_GOTO(out, rc = ENOMEM);
+	d_iov_set(&iov_recs, buf_recs, nr_kds * record_len);
+
+	key_nr      = 0;
+	*nr_scanned = 0;
+	while (!daos_anchor_is_eof(anchor)) {
+		daos_pipeline_stats_t stats = {0};
+		char                 *ptr1;
+
+		memset(buf_keys, 0, *nr * DFS_MAX_NAME);
+		memset(buf_recs, 0, *nr * record_len);
+
+		rc = daos_pipeline_run(dfs->coh, obj->oh, &dpipe->pipeline, DAOS_TX_NONE, 0, NULL,
+				       &nr_iods, &iod, anchor, &nr_kds, kds, &sgl_keys, &sgl_recs,
+				       NULL, NULL, &stats, NULL);
+		if (rc) {
+			D_ERROR("daos_pipeline_run failed: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+
+		D_ASSERT(nr_iods == 1);
+		ptr1 = buf_keys;
+
+		for (i = 0; i < nr_kds; i++) {
+			char  *ptr2;
+			mode_t mode;
+			char  *dkey = (char *)ptr1;
+
+			memcpy(dirs[key_nr].d_name, dkey, kds[i].kd_key_len);
+			dirs[key_nr].d_name[kds[i].kd_key_len] = '\0';
+
+			ptr2                   = &buf_recs[i * record_len];
+			mode                   = *((mode_t *)ptr2);
+			attrs[key_nr].dra_mode = mode;
+			ptr2 += sizeof(mode_t);
+			oid_cp(&attrs[key_nr].dra_oid, *((daos_obj_id_t *)ptr2));
+
+			if (S_ISDIR(mode))
+				dirs[key_nr].d_type = DT_DIR;
+			else if (S_ISREG(mode))
+				dirs[key_nr].d_type = DT_REG;
+			else if (S_ISLNK(mode))
+				dirs[key_nr].d_type = DT_LNK;
+			else {
+				D_ERROR("Invalid DFS entry type found, possible data corruption\n");
+				D_GOTO(out, rc = EINVAL);
+			}
+
+			key_nr++;
+			ptr1 += kds[i].kd_key_len;
+		}
+
+		*nr_scanned += stats.nr_dkeys;
+		nr_kds = *nr - key_nr;
+		if (nr_kds == 0)
+			break;
+	}
+
+	*nr = key_nr;
+out:
+	D_FREE(buf_recs);
+	D_FREE(buf_keys);
+	D_FREE(kds);
+	if (dpipe != NULL)
+		dfs_pipeline_destroy(dpipe);
 	return rc;
 }
