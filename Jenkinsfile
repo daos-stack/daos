@@ -299,6 +299,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         if (stageName.contains('Functional on')) {
             // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
             pragmas.add('skip-functional-test')
             // Add skip pragma alias for all functional VM tests
             pragmas.add('skip-functional-test-vm')
@@ -322,6 +323,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         if (stageName.contains('Functional')) {
             // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
             pragmas.add('skip-functional-test')
             // Add skip pragma alias for all functional HW tests
             pragmas.add('skip-functional-test-hardware')
@@ -347,8 +349,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
     // Compatibility with existing commit pragmas using shortened func or hw
     copyPragmas = pragmas.clone()
     for (_pragma in copyPragmas) {
-         if (_pragma.contains('-functional-') || _pragma.contains('-hardware-')) {
-            pragmas.add(_pragma.replace('-functional-', '-func-').replace('-hardware-', '-hw-'))
+         if (_pragma.contains('-functional') || _pragma.contains('-hardware')) {
+            pragmas.add(_pragma.replace('-functional', '-func').replace('-hardware', '-hw'))
         }
     }
 
