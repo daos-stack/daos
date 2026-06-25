@@ -11,6 +11,21 @@ GO_COMPILER = 'go'
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 
+def _is_valgrind_build(env):
+    """Return True if Go artifacts should be built with the Go 1.25+ "valgrind" tag.
+
+    BUILD_GO_VALGRIND=1 makes the Go runtime cooperate with Memcheck. Ignored for
+    release builds.
+    """
+    if not env.get('BUILD_GO_VALGRIND'):
+        return False
+    if env.get('BUILD_TYPE') == 'release':
+        return False
+    if env.get('SANITIZERS'):
+        Exit('BUILD_GO_VALGRIND=1 is incompatible with SANITIZERS')
+    return True
+
+
 def _scan_go_file(node, env, _path):
     """Scanner for go code"""
     src_dir = os.path.dirname(str(node))
@@ -119,6 +134,7 @@ def generate(env):
         return 1
 
     env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER, os.environ['PATH']))
+    env.AddMethod(_is_valgrind_build, 'd_is_valgrind_build')
 
     if GetOption('help') or GetOption('clean'):
         return
