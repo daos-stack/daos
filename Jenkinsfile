@@ -345,7 +345,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
     }
 
     // Compatibility with existing commit pragmas using shortened func or hw
-    List<String> copyPragmas = pragmas.clone()
+    copyPragmas = pragmas.clone()
     for (_pragma in copyPragmas) {
          if (_pragma.contains('-functional-') || _pragma.contains('-hardware-')) {
             pragmas.add(_pragma.replace('-functional-', '-func-').replace('-hardware-', '-hw-'))
