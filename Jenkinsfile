@@ -341,7 +341,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
     for (distro in distros) {
         for (_pragma in copyPragmas) {
             if (_pragma.contains("-${distro}-")) {
-                pragmas.add(_pragma.replace("-${distro}-", "-${distro}"))
+                Integer _index = pragmas.indexOf(_pragma)
+                pragmas.insert(_index + 1, _pragma.replace("-${distro}-", "-${distro}"))
             }
         }
     }
@@ -350,7 +351,10 @@ List<String> getStageNameSkipPragmas(String stageName) {
     copyPragmas = pragmas.clone()
     for (_pragma in copyPragmas) {
          if (_pragma.contains('-functional') || _pragma.contains('-hardware')) {
-            pragmas.add(_pragma.replace('-functional', '-func').replace('-hardware', '-hw'))
+            Integer _index = pragmas.indexOf(_pragma)
+            String _compat_pragma = _pragma.replace('-functional', '-func')
+            _compat_pragma = _compat_pragma.replace('-hardware', '-hw')
+            pragmas.insert(_index + 1, _compat_pragma)
         }
     }
 
