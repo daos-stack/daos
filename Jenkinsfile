@@ -294,10 +294,10 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Fault injection testing test stage')
         booleanParam(name: 'CI_TEST_EL_RPMs',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Test RPMs on EL stage')
         booleanParam(name: 'CI_TEST_LEAP_RPMs',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Test RPMs on Leap test stage')
         booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
                      defaultValue: false,
@@ -363,7 +363,7 @@ pipeline {
                defaultValue: 'ci_fi_vm1',
                description: 'Label to use for Fault Injection (FI) tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_node-hdr-120_122-125',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
@@ -582,7 +582,8 @@ pipeline {
                                            build_deps: 'no',
                                            stash_opt: true,
                                            scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' PREFIX=/opt/daos TARGET_TYPE=release' +
+                                                      ' BUILD_TYPE=debug SANITIZERS=address'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
                         }

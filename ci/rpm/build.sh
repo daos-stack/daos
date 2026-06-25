@@ -25,8 +25,10 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-: "${SCONS_FAULTS_ARGS:=BUILD_TYPE=dev}"
-SCONS_ARGS="${SCONS_FAULTS_ARGS}"
+: "${SCONS_FAULTS_ARGS:=BUILD_TYPE=debug}"
+# Always add SANITIZERS=address for DAOS-18859 UAF debugging, regardless of
+# what SCONS_FAULTS_ARGS was set to by the Jenkins environment.
+SCONS_ARGS="${SCONS_FAULTS_ARGS} SANITIZERS=address"
 
 : "${CHROOT_NAME:='rocky+epel-8-x86_64'}"
 : "${TARGET:='el8'}"

@@ -99,6 +99,11 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
 
+# ASAN-instrumented DAOS builds require libasan to be first in the library list.
+# Python is not ASAN-compiled but loads ASAN-instrumented DAOS libraries, so
+# preload libasan explicitly to prevent "ASan runtime does not come first" abort.
+export LD_PRELOAD=/usr/lib64/libasan.so.6
+
 # shellcheck disable=SC2086,SC2090,SC2048
 if ! python ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
