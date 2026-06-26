@@ -32,7 +32,7 @@ properly build a docker image:
 - `DAOS_CLIENT_GID`: Group id of the client (e.g., "1001")
 
 The following environment variables allow to customize the Docker image to build:
-- `LINUX_DISTRO`: Linux distribution identifier (default "el8")
+- `LINUX_DISTRO`: Linux distribution identifier (default "el9")
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the base DAOS docker image (default "v2.4.1")
 - `BUST_CACHE`: Manage docker building cache (default "").  To invalidate the cache, a random value
@@ -40,12 +40,12 @@ The following environment variables allow to customize the Docker image to build
 - `LINUX_IMAGE_NAME`: Base docker image name to use (default "rockylinux/rockylinux")
 - `LINUX_IMAGE_TAG`: Tag identifier of the base docker image to use (default "8.9")
 - `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
-  "https://packages.daos.io/v2.4.1/EL8/packages/x86\_64/")
+  "https://packages.daos.io/v2.4.1/EL9/packages/x86\_64/")
 - `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
    "https://packages.daos.io/v2.4.1/RPM-GPG-KEY-2023")
 - `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
    (default "")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.1-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.1-2.el9")
 
 When the environment file has been properly filled, run the following command to build the base DAOS
 docker image.
@@ -95,10 +95,10 @@ cat /proc/meminfo | grep -e "^Huge"
 
 This section describes how to build a Docker image wrapping the SPDK setup script.  Firstly, update
 the docker environment file "utils/docker/examples/.env" to customize the Docker image to build:
-- `LINUX_DISTRO`: Linux distribution identifier (default "el8")
+- `LINUX_DISTRO`: Linux distribution identifier (default "el9")
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS base docker image (default "v2.4.0")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el9")
 
 When the environment file has been properly filled, run the following command to build the DAOS
 Server docker image.
@@ -141,7 +141,7 @@ This section presents how to build and deploy a Docker image running a DAOS serv
 
 This section describes how to build a Docker image of a DAOS server.  The first step is to create
 the "daos\_server.yml" configuration file and to place it in the directory
-"utils/docker/examples/daos-server/el8".  Example of such configuration file is available in this
+"utils/docker/examples/daos-server/el9".  Example of such configuration file is available in this
 last directory.  Defining the content of this configuration files is out of scope of this
 documentation.  Please refer to the section "Create Configuration Files" of the
 docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
@@ -152,10 +152,10 @@ docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
 
 In a second time, update the docker environment file "utils/docker/examples/.env" to customize the
 Docker image to build:
-- `LINUX_DISTRO`: Linux distribution identifier (default "el8")
+- `LINUX_DISTRO`: Linux distribution identifier (default "el9")
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS base docker image (default "v2.4.0")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el9")
 
 When the environment file has been properly filled, run the following command to build the DAOS
 Server docker image.
@@ -209,17 +209,17 @@ system.
 This section describes how to build a Docker image allowing to administrate a DAOS filesystem
 through the DAOS Management Tool (i.e. dmg) CLI.  The first step is to create the
 "daos\_control.yml" configuration file and to place it in the directory
-"utils/docker/examples/daos-admin/el8".  Example of such configuration file is avalailable in this
+"utils/docker/examples/daos-admin/el9".  Example of such configuration file is avalailable in this
 last directory.  Defining the content of this configuration files is out of scope of this
 documentation.  Please refer to the section "Create Configuration Files" of the
 docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
 
 In a second time, update the following environment variables of the docker environment file
 "utils/docker/examples/.env" to customize the Docker image to build:
-- `LINUX_DISTRO`: Linux distribution identifier (default "el8")
+- `LINUX_DISTRO`: Linux distribution identifier (default "el9")
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS base docker image (default "v2.4.0")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el9")
 
 When the environment file has been properly filled, run the following command to build the DAOS
 admin docker image.
@@ -299,7 +299,7 @@ a DAOS agent running on the docker host.  Firstly, update the docker environment
 "utils/docker/examples/.env" to customize the Docker image to build:
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS client docker image (default "v2.4.0")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el9")
 
 Run the following command to create a DAOS client docker image using a bare metal DAOS agent.
 ```bash
@@ -315,7 +315,7 @@ docker compose --file utils/docker/examples/docker-compose.client_bm.yml build d
 This section presents how to run some relevant use cases with a docker image build according to the
 previous section.  Firstly, define the following environment variables of the docker environment file
 "utils/docker/examples/.env":
-- `LINUX_DISTRO`: Linux distribution identifier (default "el8")
+- `LINUX_DISTRO`: Linux distribution identifier (default "el9")
 - `DAOS_CLIENT_UID`: User id of the client (e.g.  "1001")
 - `DAOS_CLIENT_GID`: Group id of the client (e.g. "1001")
 - `DAOS_AGENT_RUNTIME_DIR`: Directory containing the DAOS agent socket (e.g. "/var/run/daos\_agent")
@@ -373,7 +373,7 @@ docker compose --file utils/docker/examples/docker-compose.client_sa.yml build d
 
 This section describes how to build the Docker container running the DAOS agent service allowing the
 DAOS client container to access a DAOS file system.  The first step is to create a "daos\_agent.yml"
-configuration file and to place it in the directory "utils/docker/examples/daos-agent/el8".
+configuration file and to place it in the directory "utils/docker/examples/daos-agent/el9".
 Defining the content of this configuration files is out of scope of this documentation.  Please
 refer to the section "Create Configuration Files" of the docs/QSG/setup\_rhel.md or
 docs/QSG/setup\_suse.md for detailed instructions.
@@ -384,10 +384,10 @@ docs/QSG/setup\_suse.md for detailed instructions.
 
 In a second time, update the docker environment file "utils/docker/examples/.env" to customize the
 Docker image to build:
-- `LINUX_DISTRO`: Linux distribution identifier (default "el8")
+- `LINUX_DISTRO`: Linux distribution identifier (default "el9")
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the base DAOS docker image (default "v2.4.0")
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el9")
 
 When the environment file has been properly filled, run the following command to build the DAOS
 Agent docker image.
@@ -472,10 +472,10 @@ In a second time, define the following environment variables of the Docker envir
 
 Finally, update the docker environment file "utils/docker/examples/.env" to customize the Docker
 images to build:
-- `LINUX_DISTRO`: Linux distribution identifier (default "el8")
+- `LINUX_DISTRO`: Linux distribution identifier (default "el9")
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS client docker image (default "v2.4.0")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el9")
 
 When the environment file has been properly filled, run the following command to build a DAOS
 Client Docker image running its own DAOS Agent service.
