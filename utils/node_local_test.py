@@ -456,6 +456,16 @@ def get_base_env(clean=False):
     return env
 
 
+def check_memcheck_build(conf):
+    """Fail early if the daos binary is not valgrind-tagged for a memcheck run."""
+    daos_bin = join(conf['PREFIX'], 'bin', 'daos')
+    with open(daos_bin, 'rb') as fd:
+        if b'runtime.valgrindRegisterStack' not in fd.read():
+            raise NLTestFail(
+                f'{daos_bin} is not built with the Go "valgrind" tag (needs '
+                'Go 1.25+ and BUILD_GO_VALGRIND=1), to run under memcheck.')
+
+
 class DaosPool():
     """Class to store data about daos pools"""
 
@@ -550,7 +560,7 @@ class DaosServer():
     """Manage a DAOS server instance"""
 
     def __init__(self, conf, test_class=None, valgrind=False, wf=None, fatal_errors=None,
-                 enable_fi=False):
+                 enable_fi=False, wipe_on_exit=False):
         self.running = False
         self._file = __file__.lstrip('./')
         self._sp = None
@@ -607,6 +617,8 @@ class DaosServer():
         self.network_provider = None
 
         self.fuse_procs = []
+        self.wipe_on_exit = wipe_on_exit
+        self.scm_mounts = []
 
     def __enter__(self):
         self._start()
@@ -616,6 +628,10 @@ class DaosServer():
         rc = self._stop(self.wf)
         if rc != 0 and self.fatal_errors is not None:
             self.fatal_errors.fail()
+        if self.wipe_on_exit:
+            for mount in self.scm_mounts:
+                ret = subprocess.run(['sudo', 'umount', mount], check=False)
+                print(f'rc from umount {mount}: {ret.returncode}')
         return False
 
     def add_fuse(self, fuse):
@@ -777,6 +793,7 @@ class DaosServer():
             engine['first_core'] = ref_engine['targets'] * idx
             engine['fabric_iface_port'] += server_port_count * idx
             engine['storage'][0]['scm_mount'] = f'{ref_engine["storage"][0]["scm_mount"]}_{idx}'
+            self.scm_mounts.append(engine['storage'][0]['scm_mount'])
             scyaml['engines'].append(engine)
         self._yaml_file = tempfile.NamedTemporaryFile(prefix='nlt-server-config-', suffix='.yaml')
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
@@ -1051,6 +1068,7 @@ class DaosServer():
         exec_cmd.extend(cmd)
 
         cmd_env = get_base_env()
+        valgrind_hdl.add_memcheck_env(cmd_env)
 
         with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_',
                                          suffix='.log',
@@ -1293,6 +1311,13 @@ class ValgrindHelper():
             cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
         return cmd
+
+    def add_memcheck_env(self, env):
+        """Disable Go async preemption for a command run under memcheck."""
+        if not self.use_valgrind:
+            return
+        godebug = env.get('GODEBUG')
+        env['GODEBUG'] = f'{godebug},asyncpreemptoff=1' if godebug else 'asyncpreemptoff=1'
 
     def convert_xml(self):
         """Modify the xml file"""
@@ -1731,6 +1756,7 @@ def run_daos_cmd(conf,
     exec_cmd.extend(daos_cmd)
 
     cmd_env = get_base_env()
+    valgrind_hdl.add_memcheck_env(cmd_env)
 
     if conf.args.client_debug:
         cmd_env['D_LOG_MASK'] = conf.args.client_debug
@@ -6635,6 +6661,59 @@ def expand_test_list(raw_test_list, excluded_name_dict):
     return test_variants
 
 
+def _run_test_pass(conf, args, server, fatal_errors, special_list, test_dict, excluded_dict):
+    """Run one pass of the requested tests against server; return whether FI/dfuse is wanted."""
+    fi_test_dfuse = False
+    if args.mode == 'launch':
+        run_in_fg(server, conf, args)
+    elif args.mode == 'overlay' and 'special_dfuse_overlay' in special_list:
+        fatal_errors.add_result(run_duns_overlay_test(server, conf))
+    elif args.mode == 'set-fi':
+        fatal_errors.add_result(server.set_fi())
+    elif args.mode == 'all':
+        fi_test_dfuse = True
+        fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
+        if 'special_dfuse_multi' in special_list:
+            fatal_errors.add_result(run_dfuse(server, conf))
+        if 'special_dfuse_overlay' in special_list:
+            fatal_errors.add_result(run_duns_overlay_test(server, conf))
+        test_pydaos_kv(server, conf)
+        test_pydaos_kv_obj_class(server, conf)
+        fatal_errors.add_result(server.set_fi())
+    elif args.test == 'all':
+        fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
+    elif args.test:
+        special_list = [x for x in args.test if is_special_testname(x)]
+        despecialed_list = ['test_' + x for x in args.test if not is_special_testname(x)]
+        custom_test_dict = expand_input_list(despecialed_list)
+        custom_exclusions = explicit_list_to_exclusion_list(custom_test_dict)
+        exclusion_union = {}
+        for key in custom_test_dict:
+            exclusion_list = \
+                list(set(custom_exclusions.get(key, [])).union(
+                    set(excluded_dict.get(key, []))))
+            if len(exclusion_list) > 0:
+                exclusion_union[key] = exclusion_list
+        needs_dfuse_with_opt.record_exclusions(exclusion_union)
+        custom_filtered_dict = expand_test_list(custom_test_dict.keys(), exclusion_union)
+        if len(custom_filtered_dict) == 0 and len(special_list) == 0:
+            print('No tests to run!')
+            sys.exit(1)
+        if len(custom_filtered_dict) > 0:
+            fatal_errors.add_result(
+                run_posix_tests(server, conf, custom_filtered_dict.keys()))
+        if 'special_dfuse_multi' in special_list:
+            fatal_errors.add_result(run_dfuse(server, conf))
+        if 'special_dfuse_overlay' in special_list:
+            fatal_errors.add_result(run_duns_overlay_test(server, conf))
+    else:
+        fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
+        if 'special_dfuse_multi' in special_list:
+            fatal_errors.add_result(run_dfuse(server, conf))
+        fatal_errors.add_result(server.set_fi())
+    return fi_test_dfuse
+
+
 def run(wf, args):
     """Main entry point"""
     # pylint: disable=too-many-branches
@@ -6657,6 +6736,8 @@ def run(wf, args):
 
     conf.set_wf(wf)
     conf.set_args(args)
+    if args.memcheck != 'no':
+        check_memcheck_build(conf)
     setup_log_test(conf)
 
     fi_test = False
@@ -6667,55 +6748,29 @@ def run(wf, args):
     if args.mode == 'fi':
         fi_test = True
     else:
-        with DaosServer(conf, test_class='first', wf=wf_server,
-                        fatal_errors=fatal_errors) as server:
-            if args.mode == 'launch':
-                run_in_fg(server, conf, args)
-            elif args.mode == 'overlay' and 'special_dfuse_overlay' in special_list:
-                fatal_errors.add_result(run_duns_overlay_test(server, conf))
-            elif args.mode == 'set-fi':
-                fatal_errors.add_result(server.set_fi())
-            elif args.mode == 'all':
-                fi_test_dfuse = True
-                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
-                if 'special_dfuse_multi' in special_list:
-                    fatal_errors.add_result(run_dfuse(server, conf))
-                if 'special_dfuse_overlay' in special_list:
-                    fatal_errors.add_result(run_duns_overlay_test(server, conf))
-                test_pydaos_kv(server, conf)
-                test_pydaos_kv_obj_class(server, conf)
-                fatal_errors.add_result(server.set_fi())
-            elif args.test == 'all':
-                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
-            elif args.test:
-                special_list = [x for x in args.test if is_special_testname(x)]
-                despecialed_list = ['test_' + x for x in args.test if not is_special_testname(x)]
-                custom_test_dict = expand_input_list(despecialed_list)
-                custom_exclusions = explicit_list_to_exclusion_list(custom_test_dict)
-                exclusion_union = {}
-                for key in custom_test_dict:
-                    exclusion_list = \
-                        list(set(custom_exclusions.get(key, [])).union(
-                            set(excluded_dict.get(key, []))))
-                    if len(exclusion_list) > 0:
-                        exclusion_union[key] = exclusion_list
-                needs_dfuse_with_opt.record_exclusions(exclusion_union)
-                custom_filtered_dict = expand_test_list(custom_test_dict.keys(), exclusion_union)
-                if len(custom_filtered_dict) == 0 and len(special_list) == 0:
-                    print('No tests to run!')
-                    sys.exit(1)
-                if len(custom_filtered_dict) > 0:
-                    fatal_errors.add_result(
-                        run_posix_tests(server, conf, custom_filtered_dict.keys()))
-                if 'special_dfuse_multi' in special_list:
-                    fatal_errors.add_result(run_dfuse(server, conf))
-                if 'special_dfuse_overlay' in special_list:
-                    fatal_errors.add_result(run_duns_overlay_test(server, conf))
-            else:
-                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
-                if 'special_dfuse_multi' in special_list:
-                    fatal_errors.add_result(run_dfuse(server, conf))
-                fatal_errors.add_result(server.set_fi())
+        for rep in range(args.repeat):
+            if args.repeat > 1:
+                print(f'=== NLT repeat iteration {rep + 1}/{args.repeat} ===')
+
+            try:
+                # reset after each iteration, except on the last one
+                with DaosServer(conf, test_class='first', wf=wf_server,
+                                fatal_errors=fatal_errors,
+                                wipe_on_exit=rep < args.repeat - 1) as server:
+                    fi_test_dfuse = _run_test_pass(conf, args, server, fatal_errors,
+                                                   special_list, test_dict, excluded_dict)
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                if args.repeat == 1:
+                    raise
+                if args.failfast:
+                    # re-raise so the traceback is preserved for debugging
+                    print(f'--failfast set; stopping after iteration {rep + 1}/{args.repeat}')
+                    raise
+                print(f'NLT repeat iteration {rep + 1} raised: {error}')
+                fatal_errors.add_result(True)
+            if args.failfast and fatal_errors.errors and rep < args.repeat - 1:
+                print(f'--failfast set; stopping after iteration {rep + 1}/{args.repeat}')
+                break
 
     if args.mode == 'all':
         with DaosServer(conf, test_class='restart', wf=wf_server,
@@ -6830,6 +6885,14 @@ def run(wf, args):
     return fatal_errors
 
 
+def _positive_int(value):
+    """argparse type that rejects values below 1."""
+    ivalue = int(value)
+    if ivalue < 1:
+        raise argparse.ArgumentTypeError(f'must be >= 1, got {value}')
+    return ivalue
+
+
 def main():
     """Wrap the core function, and catch/report any exceptions
 
@@ -6851,6 +6914,10 @@ def main():
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
+    parser.add_argument('--repeat', type=_positive_int, default=1,
+                        help='Repeat the test execution N times (soak/stability testing)')
+    parser.add_argument('--failfast', action='store_true',
+                        help='With --repeat, stop after the first failing iteration')
     parser.add_argument('--system-ram-reserved', type=int, default=None, help='GiB reserved RAM')
     parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
