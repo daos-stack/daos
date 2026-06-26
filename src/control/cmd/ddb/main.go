@@ -159,7 +159,7 @@ func printCommands(fd io.Writer, app *grumble.App) {
 		row := c.Name + columnize.DefaultConfig().Delim + c.Help
 		output = append(output, row)
 	}
-	fmt.Fprintf(fd, helpCommandsHeader+columnize.SimpleFormat(output)+"\n\n")
+	fmt.Fprintf(fd, "%s%s\n\n", helpCommandsHeader, columnize.SimpleFormat(output))
 }
 
 func printGeneralHelp(app *grumble.App, generalMsg string) {
