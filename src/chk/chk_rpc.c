@@ -325,24 +325,6 @@ chk_mark_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 }
 
 static int
-chk_act_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
-{
-	struct chk_act_in	*in_source = crt_req_get(source);
-	struct chk_act_out	*out_source = crt_reply_get(source);
-	struct chk_act_out	*out_result = crt_reply_get(result);
-
-	if (out_source->cao_status != 0) {
-		D_ERROR("Failed to check act with gen "DF_X64": "DF_RC"\n",
-			in_source->cai_gen, DP_RC(out_source->cao_status));
-
-		if (out_result->cao_status == 0)
-			out_result->cao_status = out_source->cao_status;
-	}
-
-	return 0;
-}
-
-static int
 chk_cont_list_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
 	struct chk_cont_list_in		*in_source = crt_req_get(source);
@@ -463,11 +445,6 @@ struct crt_corpc_ops chk_query_co_ops = {
 
 struct crt_corpc_ops chk_mark_co_ops = {
 	.co_aggregate	= chk_mark_aggregator,
-	.co_pre_forward	= NULL,
-};
-
-struct crt_corpc_ops chk_act_co_ops = {
-	.co_aggregate	= chk_act_aggregator,
 	.co_pre_forward	= NULL,
 };
 
@@ -763,44 +740,6 @@ out:
 }
 
 int
-chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act,
-	       d_rank_t rank)
-{
-	crt_rpc_t		*req = NULL;
-	struct chk_act_in	*cai;
-	struct chk_act_out	*cao;
-	int			 rc;
-
-	rc = chk_sg_rpc_prepare(rank, CHK_ACT, &req);
-	if (rc != 0)
-		goto out;
-
-	cai            = crt_req_get(req);
-	cai->cai_gen   = gen;
-	cai->cai_seq   = seq;
-	cai->cai_cla   = cla;
-	cai->cai_act   = act;
-	cai->cai_flags = 0;
-
-	rc = dss_rpc_send(req);
-	if (rc != 0)
-		goto out;
-
-	cao = crt_reply_get(req);
-	rc = cao->cao_status;
-
-out:
-	if (req != NULL)
-		crt_req_decref(req);
-
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u take action for DAOS check with gen "DF_X64", seq "DF_X64": "DF_RC"\n",
-		 rank, gen, seq, DP_RC(rc));
-
-	return rc;
-}
-
-int
 chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb, void *args)
 {
 	struct chk_co_rpc_cb_args	 cb_args = { 0 };
@@ -935,84 +874,6 @@ out:
 		 "Sent pool ("DF_UUIDF") members and label %s ("
 		 DF_X64") to rank %u with phase %d gen "DF_X64": %d/%d\n", DP_UUID(uuid),
 		 label != NULL ? label : "(null)", seq, rank, phase, gen, rc, *svc_rc);
-
-	return rc;
-}
-
-int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
-		      d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label, uuid_t *cont,
-		      char *cont_label, daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey,
-		      char *msg, uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
-		      d_sg_list_t *details, uint64_t seq)
-{
-	crt_rpc_t		*req = NULL;
-	struct chk_report_in	*cri;
-	struct chk_report_out	*cro;
-	int			 rc;
-
-	rc = chk_sg_rpc_prepare(leader, CHK_REPORT, &req);
-	if (rc != 0)
-		goto out;
-
-	cri = crt_req_get(req);
-	cri->cri_gen = gen;
-	cri->cri_ics_class = cla;
-	cri->cri_ics_action = act;
-	cri->cri_ics_result = result;
-	cri->cri_rank = rank;
-	cri->cri_target = target;
-	cri->cri_seq = seq;
-
-	if (pool != NULL)
-		uuid_copy(cri->cri_pool, *pool);
-	else
-		memset(cri->cri_pool, 0, sizeof(uuid_t));
-
-	cri->cri_pool_label = pool_label;
-
-	if (cont != NULL)
-		uuid_copy(cri->cri_cont, *cont);
-	else
-		memset(cri->cri_cont, 0, sizeof(uuid_t));
-
-	cri->cri_cont_label = cont_label;
-
-	if (obj != NULL)
-		cri->cri_obj = *obj;
-	else
-		memset(&cri->cri_obj, 0, sizeof(cri->cri_obj));
-
-	if (dkey != NULL)
-		cri->cri_dkey = *dkey;
-	else
-		memset(&cri->cri_dkey, 0, sizeof(cri->cri_dkey));
-
-	if (akey != NULL)
-		cri->cri_akey = *akey;
-	else
-		memset(&cri->cri_akey, 0, sizeof(cri->cri_akey));
-
-	cri->cri_msg = msg;
-	cri->cri_options.ca_count = option_nr;
-	cri->cri_options.ca_arrays = options;
-	cri->cri_details.ca_count = detail_nr;
-	cri->cri_details.ca_arrays = details;
-
-	rc = dss_rpc_send(req);
-	if (rc != 0)
-		goto out;
-
-	cro = crt_reply_get(req);
-	rc = cro->cro_status;
-
-out:
-	if (req != NULL)
-		crt_req_decref(req);
-
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u report DAOS check to leader %u, gen "DF_X64", class %u, action %u, "
-		 "result %d, "DF_UUIDF"/"DF_UUIDF", seq "DF_X64": "DF_RC"\n", rank, leader,
-		 gen, cla, act, result, DP_UUID(pool), DP_UUID(cont), seq, DP_RC(rc));
 
 	return rc;
 }

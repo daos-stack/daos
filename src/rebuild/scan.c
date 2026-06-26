@@ -140,10 +140,13 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		    !daos_crt_network_error(rc)))
 			break;
 
-		if (rpt->rt_abort || rpt->rt_finishing) {
+		if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done) {
 			rc = -DER_SHUTDOWN;
-			DL_INFO(rc, DF_RB ": give up ds_object_migrate_send, shutdown rebuild",
-				DP_RB_RPT(rpt));
+			DL_INFO(rc,
+				DF_RB ": rt_abort %d rf_finishing %d rt_global_done %d, "
+				      "give up ds_object_migrate_send, shutdown rebuild",
+				DP_RB_RPT(rpt), rpt->rt_abort, rpt->rt_finishing,
+				rpt->rt_global_done);
 			break;
 		}
 
@@ -782,8 +785,9 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	int				i;
 	int				rc = 0;
 
-	if (rpt->rt_abort || arg->cont_child->sc_stopping) {
-		D_DEBUG(DB_REBUILD, "rebuild is aborted\n");
+	if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done ||
+	    arg->cont_child->sc_stopping) {
+		D_DEBUG(DB_REBUILD, DF_RB "rebuild is aborted\n", DP_RB_RPT(rpt));
 		return 1;
 	}
 
@@ -942,7 +946,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
-	if (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
+	if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already destroyed or destroying\n",
 			DP_RB_RPT(rpt), DP_UUID(arg->co_uuid));
 		rc = 0;
@@ -1341,6 +1345,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			rpt->rt_re_report = 1;
 
 			rpt->rt_leader_rank = rsi->rsi_master_rank;
+			rpt->rt_rebuild_gen = rsi->rsi_rebuild_gen;
 
 			/* If this is the old leader, then also stop the rebuild tracking ULT. */
 			rebuild_leader_abort(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, -1,

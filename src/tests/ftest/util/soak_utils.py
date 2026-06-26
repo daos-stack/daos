@@ -1346,10 +1346,8 @@ def create_racer_cmdline(self, job_spec):
     # daos_racer needs its own pool; does not run using jobs pool
     add_pools(self, ["pool_racer"])
     add_containers(self, self.pool[-1], "SX")
-    racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
     daos_racer = DaosRacerCommand(
-        self.bin, self.hostlist_clients[0])
-    daos_racer.namespace = racer_namespace
+        self.bin, self.hostlist_clients[0], namespace=os.path.join(os.sep, "run", job_spec, "*"))
     daos_racer.get_params(self)
     daos_racer.pool_uuid.update(self.pool[-1].uuid)
     daos_racer.cont_uuid.update(self.container[-1].uuid)

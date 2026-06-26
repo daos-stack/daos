@@ -15,8 +15,9 @@
 #include <daos_types.h>
 #include "ddb_common.h"
 
-enum { DB_PATH_SIZE = 256, VOS_FILE_NAME_SIZE = 16 };
+enum { VOS_PATH_SIZE = PATH_MAX, DB_PATH_SIZE = PATH_MAX, VOS_FILE_NAME_SIZE = 16 };
 struct vos_file_parts {
+	char     vf_vos_file_path[VOS_PATH_SIZE];
 	char     vf_db_path[DB_PATH_SIZE];
 	uuid_t   vf_pool_uuid;
 	char     vf_vos_file_name[VOS_FILE_NAME_SIZE];
@@ -25,8 +26,8 @@ struct vos_file_parts {
 
 /* Parse a path to a VOS file to get needed parts for initializing vos */
 int
-     parse_vos_file_parts(const char *vos_path, const char *db_path,
-			  struct vos_file_parts *vos_file_parts);
+    parse_vos_file_parts(const char *vos_path, const char *db_path,
+			 struct vos_file_parts *vos_file_parts);
 
 /* See ddb_key_to_printable_buf for how the keys will be printed */
 int ddb_parse_key(const char *input, daos_key_t *key);

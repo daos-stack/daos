@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -622,7 +622,7 @@ enum_unpack_oid(daos_key_desc_t *kds, void *data,
 struct io_unpack_arg {
 	struct dc_obj_enum_unpack_io	*io;
 	dc_obj_enum_unpack_cb_t		cb;
-	d_iov_t				*csum_iov;
+	d_iov_t                         *ua_csum_iov;
 	void				*cb_arg;
 };
 
@@ -641,13 +641,13 @@ enum_obj_io_unpack_cb(daos_key_desc_t *kds, void *ptr, unsigned int size,
 		break;
 	case OBJ_ITER_DKEY:
 	case OBJ_ITER_AKEY:
-		rc = enum_unpack_key(kds, ptr, io, unpack_arg->csum_iov,
-				     unpack_arg->cb, unpack_arg->cb_arg);
+		rc = enum_unpack_key(kds, ptr, io, unpack_arg->ua_csum_iov, unpack_arg->cb,
+				     unpack_arg->cb_arg);
 		break;
 	case OBJ_ITER_RECX:
 	case OBJ_ITER_SINGLE:
-		rc = enum_unpack_recxs(kds, ptr, io, unpack_arg->csum_iov,
-				       unpack_arg->cb, unpack_arg->cb_arg);
+		rc = enum_unpack_recxs(kds, ptr, io, unpack_arg->ua_csum_iov, unpack_arg->cb,
+				       unpack_arg->cb_arg);
 		break;
 	case OBJ_ITER_OBJ_PUNCH_EPOCH:
 	case OBJ_ITER_DKEY_EPOCH:
@@ -787,7 +787,7 @@ dc_obj_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
 	unpack_arg.cb = cb;
 	unpack_arg.io = &io;
 	unpack_arg.cb_arg = cb_arg;
-	unpack_arg.csum_iov = &csum_iov_in;
+	unpack_arg.ua_csum_iov = &csum_iov_in;
 	rc = obj_enum_iterate(kds, sgl, kds_num, -1, enum_obj_io_unpack_cb,
 			      &unpack_arg);
 	if (rc)

@@ -3,7 +3,7 @@
 [Intel VMD (Volume Management Device)](https://www.intel.com/content/www/us/en/architecture-and-technology/intel-volume-management-device-overview.html)
 is a feature introduced with the
 Intel Xeon Scalable processor family to help manage NVMe drives.
-It provides features such as **surprise hot plug, LED management, 
+It provides features such as **surprise hot plug, LED management,
 error isolation** and **bootable RAID**.
 
 The Intel VMD functionality is provided as part of the
@@ -23,7 +23,7 @@ in the servers' UEFI. It can then be also enabled in the `daos_server.yml`
 configuration file, as described below.
 
 DAOS 2.2 did enable VMD-managed devices in the `daos_server.yml` configuration file
-(and as arguments to some DAOS management commands), but did 
+(and as arguments to some DAOS management commands), but did
 _not_ yet provide any additional functionality over non-VMD devices.
 
 DAOS 2.4 introduced the **LED management** feature that requires VMD.
@@ -34,7 +34,6 @@ This document explains how to enable VMD.
 Customers who intend to utilize DAOS capabilities that depend on VMD
 are encouraged to enable VMD when setting up the DAOS cluster, because changing from a
 non-VMD setup to VMD is not possible without reformatting the DAOS storage.
-
 
 ## NVMe view with VMD disabled (before binding to SPDK)
 

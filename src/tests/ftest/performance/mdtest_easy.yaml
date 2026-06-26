@@ -43,7 +43,6 @@ mdtest: &mdtest_base
   num_of_files_dirs: 100000000
   stonewall_timer: 30
   stonewall_statusfile: stoneWallingStatusFile
-  dfs_destroy: false
 
 mdtest_s1: &mdtest_s1
   <<: *mdtest_base

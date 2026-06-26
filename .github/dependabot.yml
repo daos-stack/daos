@@ -56,41 +56,13 @@ updates:
     commit-message:
       prefix: "Doc-only: true \n"
 
-  - package-ecosystem: github-actions
-    target-branch: release/2.6.4-aurora
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      gha-versions:
-        patterns:
-          - "*"
-    reviewers:
-      - daos-stack/actions-watchers
-    commit-message:
-      prefix: "Doc-only: true \n"
-
-  - package-ecosystem: github-actions
-    target-branch: release/2.6.4-mfg
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      gha-versions:
-        patterns:
-          - "*"
-    reviewers:
-      - daos-stack/actions-watchers
-    commit-message:
-      prefix: "Doc-only: true \n"
-
-  - package-ecosystem: gomod
+  - package-ecosystem: maven
     target-branch: master
-    directory: /src/control
+    directory: /src/client/java/hadoop-daos
     schedule:
       interval: weekly
     groups:
-      go-modules:
+      java-packages:
         patterns:
           - "*"
     reviewers:
@@ -98,55 +70,13 @@ updates:
     commit-message:
       prefix: "Doc-only: true \n"
 
-  - package-ecosystem: gomod
+  - package-ecosystem: maven
     target-branch: release/2.8
-    directory: /src/control
+    directory: /src/client/java/hadoop-daos
     schedule:
       interval: weekly
     groups:
-      go-modules:
-        patterns:
-          - "*"
-    reviewers:
-      - daos-stack/actions-watchers
-    commit-message:
-      prefix: "Doc-only: true \n"
-
-  - package-ecosystem: gomod
-    target-branch: release/2.6
-    directory: /src/control
-    schedule:
-      interval: weekly
-    groups:
-      go-modules:
-        patterns:
-          - "*"
-    reviewers:
-      - daos-stack/actions-watchers
-    commit-message:
-      prefix: "Doc-only: true \n"
-
-  - package-ecosystem: gomod
-    target-branch: release/2.6.4-aurora
-    directory: /src/control
-    schedule:
-      interval: weekly
-    groups:
-      go-modules:
-        patterns:
-          - "*"
-    reviewers:
-      - daos-stack/actions-watchers
-    commit-message:
-      prefix: "Doc-only: true \n"
-
-  - package-ecosystem: gomod
-    target-branch: release/2.6.4-mfg
-    directory: /src/control
-    schedule:
-      interval: weekly
-    groups:
-      go-modules:
+      java-packages:
         patterns:
           - "*"
     reviewers:

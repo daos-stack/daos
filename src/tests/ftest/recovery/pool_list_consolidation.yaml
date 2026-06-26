@@ -10,10 +10,12 @@ server_config:
   engines:
     0:
       log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
       nr_xs_helpers: 1
       storage: auto
     1:
       log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
       nr_xs_helpers: 1
       storage: auto
 

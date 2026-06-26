@@ -615,8 +615,13 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	}
 
 	/* If the length is not as expected then the file has been modified since the last stat so
-	 * discard this cache and use regular reads.  Note that this will only detect files which
-	 * have shrunk in size, not grown.
+	 * discard this cache and use regular reads.
+	 *
+	 * TODO: This validation is too weak. A length mismatch only detects one class of change,
+	 * primarily shrink. It does not detect files that were rewritten at the same size,
+	 * replaced by rename at the same size, or grown after the snapshot used for pre-read.
+	 * Timed-cache write-through workloads can hit those patterns, so the open path currently
+	 * disables pre-read there until this validation is strengthened.
 	 */
 	if (ev->de_len != ev->de_readahead_len) {
 		daos_event_fini(&ev->de_ev);

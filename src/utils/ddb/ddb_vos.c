@@ -27,12 +27,45 @@
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
 
-int
-dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t *poh,
-	     uint32_t flags, bool write_mode)
+static int
+create_vos_file_parts(const char *path, const char *db_path, struct vos_file_parts **vf_ptr)
 {
-	int cow_val;
-	int rc;
+	struct vos_file_parts *vf;
+	int                    rc;
+
+	D_ALLOC_PTR(vf);
+	if (vf == NULL) {
+		D_ERROR("Unable to allocate memory for pool path\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = parse_vos_file_parts(path, db_path, vf);
+	if (SUCCESS(rc)) {
+		*vf_ptr = vf;
+	} else {
+		D_ERROR("Unable to parse VOS pool path '%s' and DB path '%s'\n", path,
+			db_path ? db_path : "(null)");
+		D_FREE(vf);
+	}
+
+out:
+	return rc;
+}
+
+bool
+vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
+
+int
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
+	     bool write_mode)
+{
+	int                    rc;
+	struct vos_file_parts *vf;
+
+	rc = create_vos_file_parts(path, db_path, &vf);
+	if (!SUCCESS(rc))
+		goto out;
 
 	/**
 	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
@@ -50,57 +83,73 @@ dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t 
 	 * the mapped memory do not propagate to the persistent medium.
 	 */
 	if (!write_mode) {
-		cow_val = 1;
-		rc      = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
+		int cow_val = 1;
+		rc          = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
 		if (rc != 0) {
-			return daos_errno2der(errno);
+			rc = daos_errno2der(errno);
+			goto out_vf;
 		}
 	}
 
-	rc = vos_self_init(path_parts->vf_db_path, true, path_parts->vf_target_idx);
+	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS with path '%s': " DF_RC "\n",
-			path_parts->vf_db_path, DP_RC(rc));
-		goto exit;
+		D_ERROR("Failed to initialize VOS with DB path '%s': " DF_RC "\n", vf->vf_db_path,
+			DP_RC(rc));
+		goto out_cow;
 	}
 
-	rc = vos_pool_open(path, path_parts->vf_pool_uuid, flags, poh);
+	rc = vos_pool_open(vf->vf_vos_file_path, vf->vf_pool_uuid, flags, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 	}
 
-exit:
+out_cow:
 	if (!write_mode) {
 		/** Restore the default value. */
-		cow_val = 0;
+		int cow_val = 0;
 		pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
 	}
-
+out_vf:
+	D_FREE(vf);
+out:
 	return rc;
 }
 
 int
-dv_pool_destroy(const char *path, struct vos_file_parts *path_parts)
+dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx)
 {
-	int rc, flags = 0;
+	struct vos_file_parts *vf;
+	int                    flags = 0;
+	int                    rc;
 
-	rc = vos_self_init(path_parts->vf_db_path, true, path_parts->vf_target_idx);
-	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS with path '%s': " DF_RC "\n",
-			path_parts->vf_db_path, DP_RC(rc));
-		return rc;
+	rc = create_vos_file_parts(path, db_path, &vf);
+	if (!SUCCESS(rc))
+		goto out;
+
+	if (!vmd_wa_can_proceed(ctx, vf->vf_db_path)) {
+		rc = -DER_NO_SERVICE;
+		goto out_vf;
 	}
 
-	if (strncmp(path_parts->vf_vos_file_name, "rdb", 3) == 0)
+	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Failed to initialize VOS with DB path '%s': " DF_RC "\n", vf->vf_db_path,
+			DP_RC(rc));
+		goto out_vf;
+	}
+
+	if (strncmp(vf->vf_vos_file_name, "rdb", 3) == 0)
 		flags |= VOS_POF_RDB;
 
-	rc = vos_pool_destroy_ex(path, path_parts->vf_pool_uuid, flags);
+	rc = vos_pool_destroy_ex(vf->vf_vos_file_path, vf->vf_pool_uuid, flags);
 	if (!SUCCESS(rc))
 		D_ERROR("Failed to destroy pool: " DF_RC "\n", DP_RC(rc));
-
 	vos_self_fini();
 
+out_vf:
+	D_FREE(vf);
+out:
 	return rc;
 }
 
@@ -1044,6 +1093,117 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 	return rc;
 }
 
+static int
+dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+	     daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t       ioh;
+	struct dcs_ci_list *cil;
+	int                 cb_rc = 0;
+	int                 rc;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+		goto out;
+	}
+
+	cil = vos_ioh2ci(ioh);
+
+	cb_rc = dump_cb(cb_arg, NULL, cil);
+	if (!SUCCESS(cb_rc))
+		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(cb_rc));
+
+	rc = vos_fetch_end(ioh, NULL, cb_rc);
+	if (!SUCCESS(rc) && rc != cb_rc)
+		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+
+out:
+	if (!SUCCESS(cb_rc))
+		rc = cb_rc;
+	return rc;
+}
+
+static int
+dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+	       daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t             ioh;
+	struct dcs_ci_list       *cil;
+	struct daos_recx_ep_list *rel;
+	int                       cb_rc = 0;
+	int                       rc;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+		goto out;
+	}
+
+	cil = vos_ioh2ci(ioh);
+	rel = vos_ioh2recx_list(ioh);
+
+	cb_rc = dump_cb(cb_arg, rel, cil);
+	if (!SUCCESS(cb_rc))
+		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(cb_rc));
+
+	/* rel ownership is transferred by vos_ioh2recx_list(); free before vos_fetch_end. */
+	daos_recx_ep_list_free(rel, iod->iod_nr);
+	rc = vos_fetch_end(ioh, NULL, cb_rc);
+	if (!SUCCESS(rc) && rc != cb_rc)
+		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+
+out:
+	if (!SUCCESS(cb_rc))
+		rc = cb_rc;
+	return rc;
+}
+
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	     dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t coh;
+	daos_iod_t    iod = {0};
+	int           rc  = 0;
+
+	/* No-op when no callback is provided; the caller controls whether to consume results. */
+	if (dump_cb == NULL)
+		goto out;
+
+	rc = vos_cont_open(poh, path->vtp_cont, &coh);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Opening container for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(path->vtp_oid), DP_RC(rc));
+		goto out;
+	}
+
+	iod.iod_name  = path->vtp_akey;
+	iod.iod_recxs = &path->vtp_recx;
+	iod.iod_nr    = 1;
+	iod.iod_size  = 0;
+	if (path->vtp_is_recx) {
+		iod.iod_type = DAOS_IOD_ARRAY;
+		rc = dump_csum_recx(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, dump_cb,
+				    cb_arg);
+	} else {
+		iod.iod_type = DAOS_IOD_SINGLE;
+		rc = dump_csum_sv(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, dump_cb,
+				  cb_arg);
+	}
+
+	vos_cont_close(coh);
+
+out:
+	return rc;
+}
+
 static void
 ilog_entry_status(enum ilog_status status, char *status_str, uint32_t status_str_len)
 {
@@ -1450,7 +1610,7 @@ dv_dtx_commit_active_entry(daos_handle_t coh, struct dtx_id *dti)
 int
 dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti)
 {
-	return vos_dtx_abort(coh, dti, DAOS_EPOCH_MAX);
+	return vos_dtx_abort(coh, dti, DAOS_EPOCH_MAX, 0);
 }
 
 int

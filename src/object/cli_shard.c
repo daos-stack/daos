@@ -1593,7 +1593,7 @@ struct obj_enum_args {
 	daos_recx_t		*eaa_recxs;
 	daos_size_t		*eaa_size;
 	unsigned int		*eaa_map_ver;
-	d_iov_t			*csum;
+	d_iov_t                 *eaa_csum;
 	struct dtx_epoch	*epoch;
 	daos_handle_t		*th;
 	uint64_t		*enqueue_id;
@@ -1799,7 +1799,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		D_GOTO(out, rc);
 	}
 
-	rc = dc_enumerate_copy_csum(enum_args->csum, &oeo->oeo_csum_iov);
+	rc = dc_enumerate_copy_csum(enum_args->eaa_csum, &oeo->oeo_csum_iov);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2019,7 +2019,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.eaa_obj = obj_shard;
 	enum_args.eaa_size = obj_args->size;
 	enum_args.eaa_sgl = sgl;
-	enum_args.csum = obj_args->csum;
+	enum_args.eaa_csum        = obj_args->csum;
 	enum_args.eaa_map_ver = &args->la_auxi.map_ver;
 	enum_args.eaa_recxs = args->la_recxs;
 	enum_args.epoch = &args->la_auxi.epoch;

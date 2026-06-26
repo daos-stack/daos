@@ -2042,6 +2042,14 @@ parse_check_query_report(struct json_object *obj, struct daos_check_report_info 
 
 	dcri->dcri_act = json_object_get_int(tmp);
 
+	if (!json_object_object_get_ex(obj, "rank", &tmp)) {
+		D_ERROR("Unable to extract rank for pool " DF_UUID " from check query result\n",
+			DP_UUID(dcri->dcri_uuid));
+		return -DER_INVAL;
+	}
+
+	dcri->dcri_rank = json_object_get_int(tmp);
+
 	if (!json_object_object_get_ex(obj, "result", &tmp))
 		dcri->dcri_result = 0;
 	else
@@ -2078,6 +2086,12 @@ parse_check_query_info(struct json_object *query_output, uint32_t pool_nr, uuid_
 	if (rc != 0)
 		return rc;
 
+	if (!json_object_object_get_ex(query_output, "leader", &obj)) {
+		D_ERROR("Unable to extract leader from check query result\n");
+		return -DER_INVAL;
+	}
+
+	dci->dci_leader  = json_object_get_int(obj);
 	dci->dci_pool_nr = 0;
 
 	if (pool_nr <= 0)

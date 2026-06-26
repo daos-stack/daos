@@ -187,11 +187,11 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_pool = FormattedParameter("--dfs.pool {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_group = FormattedParameter("--dfs.group {}")
-        self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
-        self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
-        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "S1")
+        self.dfs_destroy = FormattedParameter("--dfs.destroy", False)
+        self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}")
+        self.dfs_oclass = FormattedParameter("--dfs.oclass {}")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
-        self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
+        self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}")
 
         # Include bullseye coverage file environment
         self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")

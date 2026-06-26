@@ -4710,7 +4710,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	d_sg_list_t         *sg, *sg_dup;
 	d_iov_t             *iov, *iov_dup;
 	bool                 dup = false;
-	uint32_t             i, j, k, sgl_idx, count = 0, bitmap_sz;
+	uint32_t             i, j, k, sgl_idx, bitmap_sz;
 	int                  rc  = 0;
 	struct sgl_merge_ctx ctx = {0};
 	bool                 merge_iov =
@@ -4725,6 +4725,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	for (i = 0; i < args->nr; i++) {
 		iod = &args->iods[i];
 		sg                  = &sgls[i];
+		uint32_t valid_iov_count = 0;
 		uint32_t frag_chain = 0;
 		uint32_t frag_start = 0;
 
@@ -4752,7 +4753,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			/* Detect need for iov_buf_len normalization */
 			if (update && iov->iov_len < iov->iov_buf_len)
 				dup = true;
-			count++;
+			valid_iov_count++;
 
 			/* Skip merging logic for single-IOV SGLs */
 			if (sg->sg_nr == 1)
@@ -4784,7 +4785,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			}
 		}
 		/* Validate non-empty SGL for non-ANY size requests */
-		if (count == 0 && iod->iod_size != DAOS_REC_ANY) {
+		if (valid_iov_count == 0 && iod->iod_size != DAOS_REC_ANY) {
 			DL_ERROR(-DER_INVAL, "invalid args, sgl contained only 0 length entries");
 			rc = -DER_INVAL;
 			goto cleanup;
@@ -4942,8 +4943,26 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 			uint32_t     dup_data_len = 0;
 			char        *dup_buf;
 
-			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i])
+			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i]) {
+				/* SGL was duplicated (e.g. to strip zero-buf-len
+				 * entries) but has no merged/allocated buffers.
+				 * Dup IOVs share the same iov_buf pointers as the
+				 * originals, so fetch data is already in place.
+				 * Copy iov_len back so the caller sees actual bytes
+				 * read, and update sg_nr_out accordingly.
+				 */
+				uint32_t dup_idx = 0;
+
+				for (j = 0; j < sg_orig->sg_nr && dup_idx < sg_dup->sg_nr_out;
+				     j++) {
+					iov = &sg_orig->sg_iovs[j];
+					if (skip_sgl_iov(false, iov))
+						continue;
+					iov->iov_len = sg_dup->sg_iovs[dup_idx++].iov_len;
+				}
+				sg_orig->sg_nr_out = j;
 				continue;
+			}
 
 			D_ASSERT(ctx->merged_bitmaps[i] != NULL);
 			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out; j++) {
@@ -4987,7 +5006,6 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 	sgls_dup_free(ctx, obj_auxi->iod_nr);
 	D_FREE(ctx);
 	obj_auxi->rw_args.merge_ctx = NULL;
-	api_args                    = dc_task_get_args(obj_auxi->obj_task);
 	api_args                    = dc_task_get_args(obj_auxi->obj_task);
 	api_args->sgls              = obj_auxi->reasb_req.orr_usgls;
 }

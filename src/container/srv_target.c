@@ -1030,18 +1030,24 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
 			  DF_CONT "[%d]: Load container error",
 			  DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
+		if (rc == -DER_NONEXIST)
+			return -DER_CONT_NONEXIST;
 		return rc;
 	}
 
 	/*
-	 * The container is in stopping because:
-	 * 1. Container is going to be destroyed, or;
-	 * 2. Pool is going to be destroyed, or;
-	 * 3. Pool service is going to be stopped;
+	 * The container can be unavailable because:
+	 * 1. Container is going to be destroyed; or
+	 * 2. Pool is going to be destroyed; or
+	 * 3. Pool service is going to be stopped.
 	 */
-	if (cont_child->sc_stopping || cont_child->sc_destroying) {
-		D_DEBUG(DB_MD,
-			DF_CONT "[%d]: Container is being stopped or destroyed (s=%d, d=%d)\n",
+	if (cont_child->sc_destroying) {
+		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being destroying (s=%d, d=%d)\n",
+			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
+			cont_child->sc_destroying);
+		rc = -DER_CONT_DESTROYING;
+	} else if (cont_child->sc_stopping) {
+		D_DEBUG(DB_MD, DF_CONT "[%d]: Container is being stopped (s=%d, d=%d)\n",
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, cont_child->sc_stopping,
 			cont_child->sc_destroying);
 		rc = -DER_SHUTDOWN;
@@ -1491,10 +1497,19 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid, false /* create */,
 			       ds_cont);
+	if (rc == -DER_NONEXIST)
+		return -DER_CONT_NONEXIST;
+
 	if (rc != 0)
 		return rc;
 
-	if ((*ds_cont)->sc_stopping || (*ds_cont)->sc_destroying) {
+	if ((*ds_cont)->sc_destroying) {
+		cont_child_put(tls->dt_cont_cache, *ds_cont);
+		*ds_cont = NULL;
+		return -DER_CONT_DESTROYING;
+	}
+
+	if ((*ds_cont)->sc_stopping) {
 		cont_child_put(tls->dt_cont_cache, *ds_cont);
 		*ds_cont = NULL;
 		return -DER_SHUTDOWN;
@@ -1525,7 +1540,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 	}
 
 	rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
-	if (rc != -DER_NONEXIST) {
+	if (rc != -DER_CONT_NONEXIST) {
 		if (rc == 0) {
 			if (cont_out != NULL) {
 				D_ASSERT(*cont_out != NULL);
@@ -1984,8 +1999,10 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid), cont_child->sc_open,
 		DP_UUID(cont_hdl_uuid));
 
+	ABT_mutex_lock(hdl->sch_cont->sc_open_mutex);
 	D_ASSERT(cont_child->sc_open > 0);
 	cont_child->sc_open--;
+	ABT_mutex_unlock(hdl->sch_cont->sc_open_mutex);
 	if (cont_child->sc_open == 0)
 		dtx_cont_close(cont_child, false);
 
@@ -2523,15 +2540,20 @@ out:
 void
 ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 {
-	struct cont_op_in	*in = crt_req_get(rpc);
-	struct cont_op_out	*out = crt_reply_get(rpc);
-	struct ds_pool_hdl	*pool_hdl;
-	crt_opcode_t		opc = opc_get(rpc->cr_opc);
-	int			rc;
+	struct cont_op_in  *in  = crt_req_get(rpc);
+	struct cont_op_out *out = crt_reply_get(rpc);
+	uuid_t              pool_uuid;
+	struct ds_pool_hdl *pool_hdl;
+	crt_opcode_t        opc = opc_get(rpc->cr_opc);
+	int                 rc;
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	cont_op_in_get_pool_uuid(rpc, pool_uuid);
+	rc = ds_pool_hdl_lookup(pool_uuid, in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_CONT ": failed to lookup pool handle: " DF_RC "\n",
+			DP_CONT(pool_uuid, in->ci_uuid), DP_RC(rc));
+		goto out;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
@@ -2753,6 +2775,7 @@ ds_cont_eph_report(struct ds_pool *pool)
 	struct cont_track_eph	*ec_eph;
 	struct cont_track_eph	*tmp;
 	int                      rc, ret, *failed_tgts = NULL;
+	int                      cont_num = 0;
 	unsigned int             failed_tgts_nr;
 
 	D_ASSERT(pool != NULL && pool->sp_map != NULL);
@@ -2767,6 +2790,7 @@ ds_cont_eph_report(struct ds_pool *pool)
 		daos_epoch_t min_stable_eph;
 		int          i;
 
+		cont_num++;
 		if (dss_ult_exiting(pool->sp_ec_ephs_req))
 			break;
 
@@ -2798,8 +2822,11 @@ ds_cont_eph_report(struct ds_pool *pool)
 
 		if (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
 		    min_stable_eph <= ec_eph->cte_last_stable_epoch &&
-		    pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+		    pool->sp_reclaim == DAOS_RECLAIM_DISABLED) {
+			if (cont_num % 10 == 0)
+				dss_sleep(0);
 			continue;
+		}
 
 		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
 		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
@@ -2823,6 +2850,8 @@ ds_cont_eph_report(struct ds_pool *pool)
 					min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
 					min_stable_eph, ec_eph->cte_last_stable_epoch,
 					DP_UUID(ec_eph->cte_cont_uuid));
+			if (cont_num % 10 == 0)
+				dss_sleep(0);
 			continue;
 		}
 

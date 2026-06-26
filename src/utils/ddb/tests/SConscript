@@ -51,12 +51,14 @@ def scons():
     # Required for dtx_act_discard_invalid tests.
     # This function is validated by its respective unit tests.
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_dtx_discard_invalid'])
+    # Required for DDB_CAN_PROCEED tests (vmd_wa_can_proceed failure path).
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vmd_wa_can_proceed'])
 
     libs = [
         'uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj',
         'json-c',
     ]
-    src = ['ddb_ut.c', 'ddb_vos_ut.c']
+    src = ['ddb_ut.c', 'ddb_vos_ut.c', 'ddb_commands_ut.c']
     # vos and mock object files to wrap vos symbols
     vos_obj = tenv.Object(Glob('../../../vos/*.c'))
     mock_obj = tenv.Object(Glob('../../../dtx/tests/*_mock.c'))

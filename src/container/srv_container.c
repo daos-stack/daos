@@ -1462,7 +1462,7 @@ belongs_to_user(d_iov_t *key, struct find_hdls_by_cont_arg *arg)
 	hdl = value.iov_buf;
 
 	/* Usually we already have the pool handle in memory. */
-	pool_hdl = ds_pool_hdl_lookup(hdl->ch_pool_hdl);
+	pool_hdl = ds_pool_hdl_lookup_cached(hdl->ch_pool_hdl);
 	if (pool_hdl == NULL) {
 		/* Otherwise, look it up in the pool metadata via a hack. */
 		rc = ds_pool_lookup_hdl_cred(arg->fha_tx, cont->c_svc->cs_pool_uuid,
@@ -1637,7 +1637,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	container_flags |= CONTAINER_F_DESTROYING;
 	d_iov_set(&val, &container_flags, sizeof(container_flags));
-	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
+	rc = rdb_tx_update_critical(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
 
 out_prop:
 	daos_prop_free(prop);
@@ -2148,6 +2148,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	uint64_t                         cur_ts;
 	int				 i;
 	int                              warn_slug_ranks = 8; /* 8 ranks at most */
+	int                              cont_num        = 0;
 	int				 rc = 0;
 
 	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
@@ -2158,6 +2159,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 	ABT_mutex_lock(svc->cs_cont_ephs_mutex);
 	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
+		cont_num++;
 		if (eph_ldr->cte_deleted) {
 			d_list_del(&eph_ldr->cte_list);
 			D_FREE(eph_ldr->cte_server_ephs);
@@ -2216,8 +2218,11 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
 		    min_stable_eph == eph_ldr->cte_current_stable_eph &&
-		    eph_ldr->cte_current_ec_agg_eph != 0)
+		    eph_ldr->cte_current_ec_agg_eph != 0) {
+			if (cont_num % 10 == 0)
+				dss_sleep(0);
 			continue;
+		}
 
 		/**
 		 * NB: during extending or reintegration, the new
@@ -6018,14 +6023,16 @@ cont_cli_opc_name(crt_opcode_t opc)
 void
 ds_cont_op_handler(crt_rpc_t *rpc)
 {
-	struct cont_op_in		*in = crt_req_get(rpc);
-	struct cont_op_out		*out = crt_reply_get(rpc);
-	struct ds_pool_hdl		*pool_hdl;
-	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
-	daos_prop_t			*prop = NULL;
-	const char                      *lbl;
-	struct cont_svc			*svc;
-	int				 rc;
+	struct cont_op_in  *in  = crt_req_get(rpc);
+	struct cont_op_out *out = crt_reply_get(rpc);
+	uuid_t              pool_uuid;
+	struct ds_pool_hdl *pool_hdl;
+	crt_opcode_t        opc  = opc_get(rpc->cr_opc);
+	unsigned int        opv  = opc_get_rpc_ver(rpc->cr_opc);
+	daos_prop_t        *prop = NULL;
+	const char         *lbl;
+	struct cont_svc    *svc;
+	int                 rc;
 
 	/*
 	 * Some mgmt RPCs may come from either client or server (admin/dRPC) calls. RPCs from
@@ -6041,13 +6048,19 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	cont_op_in_get_pool_uuid(rpc, pool_uuid);
+	rc = ds_pool_hdl_lookup(pool_uuid, in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_MD,
+			DF_CONT ": ds_pool_hdl_lookup: rpc=%p opc=%u(%s) pool_hdl=" DF_UUID "\n",
+			DP_CONT(pool_uuid, in->ci_uuid), rpc, opc, cont_cli_opc_name(opc),
+			DP_UUID(in->ci_pool_hdl));
+		goto out;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p proto=%d hdl=" DF_UUID ", opc=%u(%s)\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		opc_get_rpc_ver(rpc->cr_opc), DP_UUID(in->ci_hdl), opc, cont_cli_opc_name(opc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, opv, DP_UUID(in->ci_hdl),
+		opc, cont_cli_opc_name(opc));
 
 	/*
 	 * TODO: How to map to the correct container service among those
@@ -6356,7 +6369,8 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+		DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
+			  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 

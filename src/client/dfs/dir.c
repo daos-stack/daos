@@ -284,7 +284,10 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid)
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
-	/** if this is root obj, we need to update the cached handle oclass */
+	/* Cache the updated default child oclass on the open directory handle. */
+	obj->d.oclass = cid;
+
+	/** if this is root obj, we need to update the cached default child oclass */
 	if (daos_oid_cmp(obj->oid, dfs->root.oid) == 0)
 		dfs->root.d.oclass = cid;
 

@@ -118,6 +118,7 @@ if "$hardware_ok"; then
            WITH_VALGRIND=\"${WITH_VALGRIND:-}\"       \
            STAGE_NAME=\"${STAGE_NAME}\"               \
            DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
+           DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\"       \
            $(cat ci/functional/test_main_node.sh)"
     else
         ./ftest.sh "$test_tag" "$tnodes" "${FTEST_ARG:-}"

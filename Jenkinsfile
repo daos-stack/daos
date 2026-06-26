@@ -47,42 +47,6 @@ void job_step_update(def value=currentBuild.currentResult) {
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
-Map nlt_test() {
-    // groovylint-disable-next-line NoJavaUtilDate
-    Date startDate = new Date()
-    try {
-        unstash('nltr')
-    } catch (e) {
-        print 'Unstash failed, results from NLT stage will not be included'
-    }
-    sh label: 'Fault injection testing using NLT',
-       script: './ci/docker_nlt.sh --class-name fault-injection fi'
-    List filesList = []
-    filesList.addAll(findFiles(glob: '*.memcheck.xml'))
-    int vgfail = 0
-    int vgerr = 0
-    if (filesList) {
-        String rcs = sh label: 'Check for Valgrind errors',
-               script: "grep -E '<error( |>)' ${filesList.join(' ')} || true",
-               returnStdout: true
-        if (rcs) {
-            vgfail = 1
-        }
-        String suite = sanitizedStageName()
-        junitSimpleReport suite: suite,
-                          file: suite + '_valgrind_results.xml',
-                          fails: vgfail,
-                          errors: vgerr,
-                          name: 'Valgrind_Memcheck',
-                          class: 'Valgrind',
-                          message: 'Valgrind Memcheck error detected',
-                          testdata: rcs
-    }
-    int runTime = durationSeconds(startDate)
-    Map runData = ['nlttest_time': runTime]
-    return runData
-}
-
 // For master, this is just some wildly high number
 String next_version() {
     return '1000'
@@ -118,7 +82,7 @@ Integer getuid() {
 }
 
 void fixup_rpmlintrc() {
-    if (env.SCONS_FAULTS_ARGS != 'BUILD_TYPE=dev') {
+    if (sconsArgs() != 'BUILD_TYPE=dev') {
         return
     }
 
@@ -235,8 +199,8 @@ pipeline {
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
-        SCONS_FAULTS_ARGS = sconsArgs()
         HTTPS_PROXY = ''
+        PYTHON_VERSION = '3.11'
     }
 
     options {
@@ -391,8 +355,11 @@ pipeline {
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
-               defaultValue: 'ci_nlt_1',
+               defaultValue: 'ci_nlt_vm1',
                description: 'Label to use for NLT tests')
+        string(name: 'CI_FI_1_LABEL',
+               defaultValue: 'ci_fi_vm1',
+               description: 'Label to use for Fault Injection (FI) tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
@@ -492,7 +459,8 @@ pipeline {
                             filename 'utils/docker/Dockerfile.code_scanning'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false) +
-                                                ' --build-arg FVERSION=37'
+                                                ' --build-arg POINT_RELEASE=.7' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -537,7 +505,8 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.10 '
+                                                ' --build-arg POINT_RELEASE=.10 ' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -590,7 +559,8 @@ pipeline {
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.7 '
+                                                ' --build-arg POINT_RELEASE=.7' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -608,6 +578,20 @@ pipeline {
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                            // For non-release builds, create a separate build with the valgrind
+                            // tag for NLT memcheck testing.  This is necessary to avoid problems
+                            // caused by valgrind being confused by the Go runtime. We don't want
+                            // to use the valgrind build for normal testing because it is much slower.
+                            // BUILD_TYPE=dev is set for PR/dev builds in sconsArgs(), and
+                            // TARGET_TYPE=release is used to select pre-built cached prerequisites.
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           build_deps: 'no',
+                                           scons_args: sconsArgs() +
+                                                      ' BUILD_GO_VALGRIND=1 PREFIX=/opt/daos TARGET_TYPE=release'))
+                            sh label: 'Stash valgrind install tree for NLT',
+                                script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
+                            stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
                         }
                     }
                     post {
@@ -641,8 +625,10 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" + 
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg POINT_RELEASE=.6 '
+                                                ' --build-arg POINT_RELEASE=.6' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -653,9 +639,11 @@ pipeline {
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
-                                scons_args: sconsFaultsArgs() +
-                                ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                build_deps: 'yes'))
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_args: sconsArgs() +
+                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                         }
@@ -742,14 +730,31 @@ pipeline {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
+                        // NLT memchecks the valgrind-tagged build, not the shared -race one.
+                        unstash 'opt-daos-valgrind'
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1').toInteger(),
                                      inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
+                                     test_script: 'ci/unit/test_nlt.sh' +
+                                                  ' --system-ram-reserved 4' +
+                                                  ' --max-log-size 1950MiB' +
+                                                  ' --dfuse-dir /localhome/jenkins/' +
+                                                  ' --log-usage-save nltir.xml' +
+                                                  ' --log-usage-export nltr.json' +
+                                                  ' --class-name nlt' +
+                                                  " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
+                                                  /* groovylint-disable-next-line LineLength */
+                                                  (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
+                                                  ' all',
+                                     with_valgrind: 'memcheck',
+                                     valgrind_pattern: '*memcheck.xml',
+                                     always_script: 'ci/unit/test_nlt_post.sh',
+                                     testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
+                                     image_version: 'el9.7',
+                                     prov_env_vars: 'VM_CPUS=14'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
@@ -759,8 +764,9 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'nlt-memcheck'
+                                         valgrind_stash: 'nlt-memcheck',
+                                         valgrind_pattern: '*memcheck.xml',
+                                         NLT: true
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -931,6 +937,30 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Leap 15')
+                stage('Functional on SLES 15') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('Leap15')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2',
+                                image_version: 'sles15.7'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } // post
+                } // stage('Functional on SLES 15')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -960,51 +990,32 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.9'
-                            label 'docker_runner_fi'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                                ' --build-arg POINT_RELEASE=.7 '
-                            args '--tmpfs /mnt/daos_0'
-                        }
+                        label params.CI_FI_1_LABEL
                     }
                     steps {
                         job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                       build_deps: 'no'))
-                        job_step_update(nlt_test())
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                        //                skipPublishingChecks: true,
-                        //                id: 'fir', name: 'Fault Injection Report')
+                            unitTest(timeout_time: 240,
+                                     inst_repos: daosRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh --memcheck no' +
+                                                  ' --system-ram-reserved 4 --server-debug WARN' +
+                                                  ' --log-usage-import nltr.json' +
+                                                  ' --log-usage-save nltr.xml' +
+                                                  ' --class-name fault-injection fi',
+                                     with_valgrind: '',
+                                     always_script: 'ci/unit/test_nlt_post.sh',
+                                     testResults: 'nlt-junit.xml',
+                                     unstash_opt: true,
+                                     unstash_tests: false,
+                                     inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
+                                     image_version: 'el9.7',
+                                     prov_env_vars: 'VM_CPUS=14'))
                     }
                     post {
                         always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
-                            recordIssues enabledForFailure: true,
-                                         /* ignore warning/errors from PMDK logging system */
-                                         filters: [excludeFile('pmdk/.+')],
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
-                                                        [threshold: 1, type: 'TOTAL_HIGH'],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
-                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
-                                         tools: [issues(pattern: 'nlt-errors.json',
-                                                        name: 'Fault injection issues',
-                                                        id: 'Fault_Injection'),
-                                                 issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'Fault injection leaks',
-                                                        id: 'NLT_client')],
-                                         scm: 'daos-stack/daos'
-                            junit testResults: 'nlt-junit.xml'
-                            stash name: 'fault-inject-valgrind',
-                                  includes: '*.memcheck.xml',
-                                  allowEmpty: true
+                            unitTestPost artifacts: ['nlt_logs/'],
+                                         testResults: 'nlt-junit.xml',
+                                         with_valgrind: '',
+                                         FI: true
                             archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
@@ -1207,7 +1218,8 @@ pipeline {
                             default_nvme: 'auto',
                             run_if_pr: false,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
@@ -1219,7 +1231,8 @@ pipeline {
                             default_nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                     )
                 }
@@ -1229,8 +1242,7 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['nlt-memcheck',
-                                                     'unit-memcheck',
-                                                     'fault-inject-valgrind']
+                                                     'unit-memcheck']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
         }

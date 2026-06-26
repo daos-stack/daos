@@ -51,13 +51,26 @@ struct ddb_array {
 	struct dv_indexed_tree_path *ddba_path;
 };
 
-/* Open and close a pool for a ddb_ctx */
+/**
+ * Open a VOS pool file.
+ *
+ * @param path		VOS pool file path in the format "[/dir/]<pool-uuid>/(vos-N|rdb-pool)".
+ * @param db_path	Path to the VOS metadata DB directory (SMD/NVMe). If NULL or empty,
+ *			the DB directory is derived from the leading path component of path.
+ * @param poh		Pool handle set on success.
+ * @param flags		Flags forwarded to vos_pool_open() (e.g. VOS_POF_FOR_FEATURE_FLAG to
+ *			skip VEA load when only reading/writing pool feature flags).
+ * @param write_mode	When false the pool is mapped copy-on-write so that internal PMEMOBJ
+ *			bookkeeping (SDS, ULOG replay) does not persist to the storage medium.
+ * @return		0 on success, negative DER error code otherwise.
+ */
 int
-    dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t *poh,
-		 uint32_t flags, bool write_mode);
-int dv_pool_close(daos_handle_t poh);
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
+	     bool write_mode);
 int
-dv_pool_destroy(const char *path, struct vos_file_parts *path_parts);
+dv_pool_close(daos_handle_t poh);
+int
+dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx);
 
 /* Update vos pool flags */
 int
@@ -141,6 +154,37 @@ int dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args);
 typedef int (*dv_dump_value_cb)(void *cb_arg, d_iov_t *value);
 int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb,
 		  void *cb_arg);
+
+/**
+ * Callback invoked by dv_dump_csum() with the fetched checksum information.
+ *
+ * @param cb_arg  User-provided argument passed through from dv_dump_csum().
+ * @param rel     Recx/epoch list describing the stored extents. NULL for single-value akeys;
+ *                non-NULL for array akeys. The caller must not free this pointer.
+ * @param cil     Checksum info list. Valid only for the duration of the callback.
+ * @return        0 on success; a negative error code is propagated back to the caller of
+ *                dv_dump_csum().
+ */
+typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *rel,
+			       struct dcs_ci_list *cil);
+
+/**
+ * Fetch and dump the checksum information for the akey identified by \a path.
+ *
+ * @param poh      Open pool handle.
+ * @param path     VOS tree path identifying the container, object, dkey, and akey.
+ *                 For array akeys, path->vtp_recx selects the extent to inspect.
+ * @param epoch    Epoch for the fetch. For single-value akeys, controls which version is
+ *                 returned — pass DAOS_EPOCH_MAX to get the latest, or a snapshot epoch to
+ *                 access an earlier version. For array akeys, selects the visible extent set.
+ * @param dump_cb  Callback invoked with the result. If NULL, the function returns 0
+ *                 without opening the container or calling VOS.
+ * @param cb_arg   Opaque argument forwarded to \a dump_cb.
+ * @return         0 on success, or a negative error code.
+ */
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	     dv_dump_csum_cb dump_cb, void *cb_arg);
 
 struct ddb_ilog_entry {
 	uint32_t	die_idx;
