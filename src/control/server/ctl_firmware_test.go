@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,10 +16,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -803,14 +802,10 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, tc.bmbc, tc.smbc, nil)
 			for i := 0; i < 2; i++ {
-				rCfg := new(engine.TestRunnerConfig)
-				rCfg.Running.Store(tc.enginesRunning)
-				runner := engine.NewTestRunner(rCfg, engine.MockConfig())
-				instance := NewEngineInstance(log, nil, nil, runner, nil)
-				if !tc.noRankEngines {
-					instance._superblock = &Superblock{}
-					instance._superblock.ValidRank = true
-					instance._superblock.Rank = ranklist.NewRankPtr(uint32(i))
+				instance := NewEngineInstance(log, nil, nil, nil, nil)
+				setupTestEngine(t, instance, uint32(i), !tc.enginesRunning)
+				if tc.noRankEngines {
+					instance._superblock = nil
 				}
 				if err := cs.harness.AddInstance(instance); err != nil {
 					t.Fatal(err)

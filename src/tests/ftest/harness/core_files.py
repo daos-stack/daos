@@ -45,52 +45,48 @@ class HarnessCoreFilesTest(TestWithServers):
         if not result.passed:
             self.fail("Unable to find local core file pattern")
         core_path = os.path.split(result.joined_stdout.splitlines()[-1])[0]
-        core_file = "{}/core.gdb.harness.advanced".format(core_path)
+        core_file = f"{core_path}/core.gdb.harness.advanced"
 
-        self.log.debug("Creating %s", core_file)
+        self.log_step(f"Creating {core_file}")
         try:
             with open(core_file, "w", encoding="utf-8") as local_core_file:
                 local_core_file.write("THIS IS JUST A TEST\n")
         except IOError as error:
-            self.fail("Error writing {}: {}".format(core_file, str(error)))
+            self.fail(f"Error writing {core_file}: {error}")
 
         # Choose a server find the pid of its daos_engine process
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
         ranks = self.server_managers[0].get_host_ranks(host)
-        self.log.info("Obtaining pid of the daos_engine process on %s (rank %s)", host, ranks)
+        self.log_step(f"Obtaining pid of the daos_engine process on {host} (rank {ranks})")
         pid = None
         result = run_remote(self.log, host, "pgrep --list-full daos_engine", timeout=20)
         if not result.passed:
-            self.fail("Error obtaining pid of the daos_engine process on {}".format(host))
+            self.fail(f"Error obtaining pid of the daos_engine process on {host}")
         pid = findall(r"(\d+)\s+[A-Za-z0-9/]+daos_engine\s+", "\n".join(result.output[0].stdout))[0]
         if pid is None:
-            self.fail("Error obtaining pid of the daos_engine process on {}".format(host))
+            self.fail(f"Error obtaining pid of the daos_engine process on {host}")
         self.log.info("Found pid %s", pid)
 
         # Send a signal 6 to its daos_engine process
-        self.log.info("Sending a signal 6 to %s", pid)
-        if not run_remote(self.log, host, "sudo -n kill -6 {}".format(pid)).passed:
-            self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
+        self.log_step(f"Sending a signal 6 to {pid}")
+        if not run_remote(self.log, host, f"sudo -n kill -6 {pid}").passed:
+            self.fail(f"Error sending a signal 6 to {pid} on {host}")
 
         # Simplify resolving the host name to rank by marking all ranks as
-        # expected to be either running or errored (sent a signal 6)
-        self.server_managers[0].update_expected_states(ranks, ["Joined", "Errored"])
+        # expected to be either running, errored (sent a signal 6), or excluded
+        self.server_managers[0].update_expected_states(ranks, ["Joined", "Errored", "Excluded"])
 
         # Wait for the engine to create the core file
         ranks = self.server_managers[0].get_host_ranks(host)
-        state = ["errored"]
+        state = ["errored", "excluded"]
         try:
-            self.log.info(
-                "Waiting for the engine on %s (rank %s) to move to the %s state",
-                host, ranks, state)
+            self.log_step(
+                f"Waiting for the engine on {host} (rank {ranks}) to move to the {state} state")
             if self.server_managers[0].check_rank_state(ranks, state, 25):
-                self.fail("Rank {} state not {} after sending signal 6".format(ranks, state))
+                self.fail(f"Rank {ranks} state not {state} after sending signal 6")
         finally:
             # Display the journalctl log for the process that was sent the signal
             self.server_managers[0].manager.dump_logs(host)
-
-        # The rank in the errored state may transition to excluded state; allow either in tearDown
-        self.server_managers[0].update_expected_states(ranks, ["Joined", "Errored", "Excluded"])
 
         self.log.info("Test passed")
 

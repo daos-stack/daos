@@ -29,12 +29,14 @@ const (
 	instanceUpdateDelay = 500 * time.Millisecond
 )
 
+type pollValidateFn func(Engine) bool
+
 // pollInstanceState waits for either context to be cancelled/timeout or for the
 // provided validate function to return true for each of the provided instances.
 //
 // Returns true if all instances return true from the validate function, false
 // if context is cancelled before.
-func pollInstanceState(ctx context.Context, instances []Engine, validate func(Engine) bool) error {
+func pollInstanceState(ctx context.Context, instances []Engine, validate pollValidateFn) error {
 	ready := make(chan struct{})
 	go func() {
 		for {
