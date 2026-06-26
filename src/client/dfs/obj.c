@@ -1790,6 +1790,7 @@ dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *new_name, df
 {
 	struct dfs_entry  src_entry = {0};
 	struct dfs_entry  git_entry = {0};
+	struct dfs_entry  new_entry;
 	struct dfs_entry *link_entry;
 	dfs_obj_t        *created_obj = NULL;
 	daos_handle_t     th          = DAOS_TX_NONE;
@@ -1846,6 +1847,14 @@ restart:
 	if (src_entry.oid.hi != obj->oid.hi || src_entry.oid.lo != obj->oid.lo)
 		D_GOTO(out, rc = ENOENT);
 
+	/** Make sure that the new_name entry does not exist */
+	rc = fetch_entry(dfs->layout_v, parent->oh, th, new_name, len, false, &exists, &new_entry,
+			 0, NULL, NULL, NULL);
+	if (rc)
+		D_GOTO(out, rc);
+	if (exists)
+		D_GOTO(out, rc = EEXIST);
+
 	/** Update existing GIT link count, or create/initialize GIT state on first hardlink. */
 	if (DFS_IS_HARDLINK(src_entry.mode)) {
 		rc = git_fetch_entry(dfs->git_oh, th, &obj->oid, &git_entry, 0, NULL, NULL, NULL);
@@ -1895,9 +1904,8 @@ restart:
 		link_entry = &src_entry;
 	}
 
-	/** Create the hardlink only if the destination entry does not already exist. */
-	rc = insert_entry(dfs->layout_v, parent->oh, th, new_name, len, DAOS_COND_DKEY_INSERT,
-			  link_entry);
+	/** Create the hardlink */
+	rc = insert_entry(dfs->layout_v, parent->oh, th, new_name, len, 0, link_entry);
 	if (rc)
 		D_GOTO(out, rc);
 
