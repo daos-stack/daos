@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,6 +91,8 @@ struct dfuse_eq {
 	struct d_slab_type *de_read_slab;
 	struct d_slab_type *de_pre_read_slab;
 	struct d_slab_type *de_write_slab;
+
+	uint32_t            de_empty_polls;
 };
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected
