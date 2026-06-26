@@ -1582,16 +1582,14 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			membership := NewMembership(log, db)
 
 			result, err := membership.CompressedFaultDomainTree(tc.inputRanks...)
-
 			test.CmpErr(t, tc.expErr, err)
-
-			domainNr, err := membership.DomainNr(tc.inputRanks...)
-			test.CmpErr(t, tc.expErr, err)
-			test.AssertEqual(t, tc.expDomainNr, domainNr, "unexpected domain number")
-
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
+
+			domainNr, err := membership.DomainNr(log, tc.inputRanks...)
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expDomainNr, domainNr, "unexpected domain number")
 		})
 	}
 }
