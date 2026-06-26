@@ -578,6 +578,20 @@ pipeline {
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                            // For non-release builds, create a separate build with the valgrind
+                            // tag for NLT memcheck testing.  This is necessary to avoid problems
+                            // caused by valgrind being confused by the Go runtime. We don't want
+                            // to use the valgrind build for normal testing because it is much slower.
+                            // BUILD_TYPE=dev is set for PR/dev builds in sconsArgs(), and
+                            // TARGET_TYPE=release is used to select pre-built cached prerequisites.
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           build_deps: 'no',
+                                           scons_args: sconsArgs() +
+                                                      ' BUILD_GO_VALGRIND=1 PREFIX=/opt/daos TARGET_TYPE=release'))
+                            sh label: 'Stash valgrind install tree for NLT',
+                                script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
+                            stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
                         }
                     }
                     post {
@@ -716,8 +730,10 @@ pipeline {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
+                        // NLT memchecks the valgrind-tagged build, not the shared -race one.
+                        unstash 'opt-daos-valgrind'
                         job_step_update(
-                            unitTest(timeout_time: 60,
+                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1').toInteger(),
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
@@ -725,7 +741,11 @@ pipeline {
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
-                                                  ' --class-name nlt all',
+                                                  ' --class-name nlt' +
+                                                  " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
+                                                  /* groovylint-disable-next-line LineLength */
+                                                  (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
+                                                  ' all',
                                      with_valgrind: 'memcheck',
                                      valgrind_pattern: '*memcheck.xml',
                                      always_script: 'ci/unit/test_nlt_post.sh',
