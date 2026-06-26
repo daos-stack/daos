@@ -1471,14 +1471,12 @@ crt_primary_grp_init(crt_group_id_t grpid)
 {
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv = NULL;
-	crt_group_id_t		 pri_grpid;
-	bool			 is_service;
+	crt_group_id_t           pri_grpid;
 	int			 rc = 0;
 
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
 
-	is_service = crt_is_service();
 	pri_grpid = (grpid != NULL) ? grpid : CRT_DEFAULT_GRPID;
 
 	rc = crt_grp_priv_create(&grp_priv, pri_grpid, true);
@@ -1488,13 +1486,8 @@ crt_primary_grp_init(crt_group_id_t grpid)
 	}
 	D_ASSERT(grp_priv != NULL);
 
-	if (is_service) {
-		grp_priv->gp_self = CRT_NO_RANK;
-		grp_priv->gp_size = 0;
-	} else {
-		grp_priv->gp_size = 1;
-		grp_priv->gp_self = 0;
-	}
+	grp_priv->gp_self = CRT_NO_RANK;
+	grp_priv->gp_size = 0;
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -86,9 +86,6 @@ test_run()
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
-
-	rc = crt_group_rank(NULL, &test.tg_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 
 	switch (test.tg_num_proto) {
 	case 4:
