@@ -201,7 +201,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
 // pragmas related to skipping/running stages. Should only be called once per build.
 def setupRunStage() {
     pragmasToEnv()
-    update_default_commit_pragmas()
     updateRunStage()
 }
 
