@@ -260,10 +260,11 @@ String vm9_label(String distro) {
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        // cron(env.BRANCH_NAME == 'daily-2.6-testing' ? 'TZ=UTC\n0 12 * * 1,3,5' : '')
-    }
+    // Timed builds have been disabled
+    // triggers {
+    //     /* groovylint-disable-next-line AddEmptyString */
+    //     cron(env.BRANCH_NAME == 'daily-2.6-testing' ? 'TZ=UTC\n0 12 * * 1,3,5' : '')
+    // }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
