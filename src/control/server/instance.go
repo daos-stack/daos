@@ -54,7 +54,7 @@ type EngineInstance struct {
 	incarnation     uint64
 	storage         *storage.Provider
 	waitFormat      atm.Bool
-	storageReady    chan storageReadyInfo
+	storageReady    chan struct{}
 	waitDrpc        atm.Bool
 	drpcReady       chan *srvpb.NotifyReadyReq
 	ready           atm.Bool
@@ -62,8 +62,7 @@ type EngineInstance struct {
 	fsRoot          string
 	hostFaultDomain *system.FaultDomain
 	joinSystem      systemJoinFn
-	replaceRank     atm.Bool
-	targetRank      uint32
+	replaceRank     atomic.Pointer[ranklist.Rank]
 	onAwaitFormat   []onAwaitFormatFn
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
@@ -88,7 +87,7 @@ func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r
 		storage:          p,
 		joinSystem:       jf,
 		drpcReady:        make(chan *srvpb.NotifyReadyReq),
-		storageReady:     make(chan storageReadyInfo),
+		storageReady:     make(chan struct{}),
 		startRequested:   make(chan bool),
 		Publisher:        ps,
 		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
@@ -204,10 +203,12 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		r = *superblock.Rank
 	}
 
-	// If replacing a rank and a target rank was specified, use that rank.
-	targetRank := atomic.LoadUint32(&ei.targetRank)
-	if ei.replaceRank.Load() && targetRank != uint32(ranklist.NilRank) {
-		r = ranklist.Rank(targetRank)
+	// Check if we're in replace mode and if a specific rank was provided
+	replaceRank := ei.replaceRank.Load()
+	isReplace := replaceRank != nil
+	if isReplace {
+		// Explicit rank specified for replacement if not NilRank
+		r = *replaceRank
 	}
 
 	joinReq := &control.SystemJoinReq{
@@ -221,11 +222,11 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		InstanceIdx:          ei.Index(),
 		Incarnation:          ready.GetIncarnation(),
 		CheckMode:            ready.GetCheckMode(),
-		Replace:              ei.replaceRank.Load(),
+		Replace:              isReplace,
 	}
 
 	// Reset replaceRank state for instance after joinSystem() has been attempted.
-	defer ei.replaceRank.SetFalse()
+	defer ei.replaceRank.Store(nil)
 
 	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
@@ -234,7 +235,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		// If this is a replace operation and join failed, clean up the formatted storage to
 		// prevent leaving the rank in a formatted state. This prevents the engine
 		// inadvertently being joined later with a new rank.
-		if ei.replaceRank.Load() {
+		if isReplace {
 			ei.log.Infof("cleaning up after join failure during replace")
 			if cleanupErr := ei.cleanupFailedJoinReplace(ctx); cleanupErr != nil {
 				ei.log.Errorf("failed to cleanup after join failure: %v", cleanupErr)
