@@ -2783,6 +2783,144 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	}
 }
 
+func Test_notifyStorageReady(t *testing.T) {
+	for name, tc := range map[string]struct {
+		awaitingFormat bool
+		replace        bool
+		rank           uint32
+		expNotifyCalls int
+		expReplaceRank *ranklist.Rank
+	}{
+		"not awaiting format - no notification": {
+			awaitingFormat: false,
+			replace:        false,
+			expNotifyCalls: 0,
+		},
+		"awaiting format - standard join": {
+			awaitingFormat: true,
+			replace:        false,
+			expNotifyCalls: 1,
+			expReplaceRank: nil,
+		},
+		"awaiting format - replace with NilRank (auto-detect)": {
+			awaitingFormat: true,
+			replace:        true,
+			rank:           uint32(ranklist.NilRank),
+			expNotifyCalls: 1,
+			expReplaceRank: func() *ranklist.Rank { r := ranklist.NilRank; return &r }(),
+		},
+		"awaiting format - replace with explicit rank 5": {
+			awaitingFormat: true,
+			replace:        true,
+			rank:           5,
+			expNotifyCalls: 1,
+			expReplaceRank: func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
+		},
+		"awaiting format - replace with explicit rank 0": {
+			awaitingFormat: true,
+			replace:        true,
+			rank:           0,
+			expNotifyCalls: 1,
+			expReplaceRank: func() *ranklist.Rank { r := ranklist.Rank(0); return &r }(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// Track NotifyStorageReady calls and parameters
+			notifyCalls := 0
+			var capturedRank *ranklist.Rank
+
+			// Create a mock engine that tracks NotifyStorageReady calls
+			mockEngine := &struct {
+				MockInstance
+				awaitingFormat bool
+			}{
+				MockInstance: MockInstance{
+					cfg: MockInstanceConfig{
+						Index: 0,
+					},
+				},
+				awaitingFormat: tc.awaitingFormat,
+			}
+
+			// Override the isAwaitingFormat method
+			isAwaitingFormat := func() bool {
+				return mockEngine.awaitingFormat
+			}
+			_ = isAwaitingFormat
+
+			// Override NotifyStorageReady to capture calls
+			notifyStorageReady := func(rank *ranklist.Rank) {
+				notifyCalls++
+				capturedRank = rank
+			}
+			_ = notifyStorageReady
+
+			// Create a custom engine interface with overridden methods
+			engine := &testNotifyEngine{
+				MockInstance:         mockEngine.MockInstance,
+				isAwaitingFormatFn:   isAwaitingFormat,
+				notifyStorageReadyFn: notifyStorageReady,
+			}
+
+			req := &ctlpb.StorageFormatReq{
+				Replace: tc.replace,
+				Rank:    tc.rank,
+			}
+
+			// Call the function under test
+			notifyStorageReady_helper(log, req, engine)
+
+			// Verify number of NotifyStorageReady calls
+			test.AssertEqual(t, tc.expNotifyCalls, notifyCalls,
+				"unexpected number of NotifyStorageReady calls")
+
+			if tc.expNotifyCalls == 0 {
+				return
+			}
+
+			// Verify the rank parameter passed to NotifyStorageReady
+			if tc.expReplaceRank == nil {
+				test.AssertTrue(t, capturedRank == nil,
+					"expected nil rank for standard join")
+			} else {
+				test.AssertTrue(t, capturedRank != nil,
+					"expected non-nil rank for replace mode")
+				test.AssertEqual(t, *tc.expReplaceRank, *capturedRank,
+					"rank mismatch in NotifyStorageReady call")
+			}
+		})
+	}
+}
+
+// testNotifyEngine is a test helper that allows overriding specific methods
+type testNotifyEngine struct {
+	MockInstance
+	isAwaitingFormatFn   func() bool
+	notifyStorageReadyFn func(*ranklist.Rank)
+}
+
+func (e *testNotifyEngine) isAwaitingFormat() bool {
+	if e.isAwaitingFormatFn != nil {
+		return e.isAwaitingFormatFn()
+	}
+	return e.MockInstance.isAwaitingFormat()
+}
+
+func (e *testNotifyEngine) NotifyStorageReady(rank *ranklist.Rank) {
+	if e.notifyStorageReadyFn != nil {
+		e.notifyStorageReadyFn(rank)
+	} else {
+		e.MockInstance.NotifyStorageReady(rank)
+	}
+}
+
+func notifyStorageReady_helper(log logging.Logger, req *ctlpb.StorageFormatReq, engine Engine) {
+	notifyStorageReady(log, req, engine)
+}
+
 func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username

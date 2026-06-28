@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/dustin/go-humanize"
@@ -24,13 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
-
-// storageReadyInfo contains information about storage readiness including whether a subsequent join
-// should be made to an existing rank.
-type storageReadyInfo struct {
-	replaceRank bool   // Try to assign an existing rank to the formatted engine
-	targetRank  uint32 // If replacing, try to use a specific rank
-}
 
 // GetStorage retrieve the storage provider for an engine instance.
 func (ei *EngineInstance) GetStorage() *storage.Provider {
@@ -80,13 +72,12 @@ func (ei *EngineInstance) MountScm() error {
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (ei *EngineInstance) NotifyStorageReady(replaceRank bool, targetRank uint32) {
-	go func() {
-		ei.storageReady <- storageReadyInfo{
-			replaceRank: replaceRank,
-			targetRank:  targetRank,
-		}
-	}()
+// If rank is nil, indicates standard join behavior.
+// If rank is non-nil and points to NilRank, indicates replace mode with auto-detection.
+// If rank is non-nil and points to a valid rank, indicates replace mode with explicit rank.
+func (ei *EngineInstance) NotifyStorageReady(rank *ranklist.Rank) {
+	ei.replaceRank.Store(rank)
+	close(ei.storageReady)
 }
 
 func (ei *EngineInstance) clearFormat(ctx context.Context, stopEngineFn func(context.Context, *EngineInstance) error) error {
@@ -244,16 +235,16 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		ei.log.Infof("%s %s storage not ready: %s", build.DataPlaneName, msgIdx, ctx.Err())
-	case readyInfo := <-ei.storageReady:
-		// Set replaceRank instance state to be used later in join request.
-		ei.replaceRank.Store(readyInfo.replaceRank)
-		atomic.StoreUint32(&ei.targetRank, readyInfo.targetRank)
+	case <-ei.storageReady:
 		msg := fmt.Sprintf("%s %s storage ready", build.DataPlaneName, msgIdx)
-		if readyInfo.replaceRank {
-			if readyInfo.targetRank != uint32(ranklist.NilRank) {
-				msg += fmt.Sprintf(", attempting to replace rank %d...", readyInfo.targetRank)
-			} else {
+
+		// Check if we're in replace mode
+		replaceRank := ei.replaceRank.Load()
+		if replaceRank != nil {
+			if replaceRank.Equals(ranklist.NilRank) {
 				msg += ", attempting to replace rank..."
+			} else {
+				msg += fmt.Sprintf(", attempting to replace rank %d...", *replaceRank)
 			}
 		}
 		ei.log.Info(msg)
