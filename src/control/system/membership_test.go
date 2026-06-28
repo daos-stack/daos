@@ -977,7 +977,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 	newUUID := uuid.New()
 	newMember := MockMember(t, 2, MemberStateJoined).WithFaultDomain(fd2)
 	newMemberShallowFD := MockMember(t, 3, MemberStateJoined).WithFaultDomain(shallowFD)
-	adminExcludedMember := MockMember(t, 3, MemberStateAdminExcluded)
+	adminExcludedMember := MockMember(t, 3, MemberStateAdminExcluded).WithFaultDomain(fd2)
 
 	expMapVer := uint32(len(defaultCurMembers) + 1)
 
@@ -1145,6 +1145,22 @@ func TestSystem_Membership_Join(t *testing.T) {
 				FaultDomain:             curMember.FaultDomain,
 			},
 			expErr: FaultJoinMemberExists(newUUID, curMember.UUID),
+		},
+		"join with all fields matching except UUID; needs --replace; admin-excluded": {
+			curMembers: []*Member{
+				adminExcludedMember,
+			},
+			req: &JoinRequest{
+				Rank:                    NilRank,
+				UUID:                    newUUID,
+				ControlAddr:             adminExcludedMember.Addr,
+				PrimaryFabricURI:        adminExcludedMember.PrimaryFabricURI,
+				SecondaryFabricURIs:     adminExcludedMember.SecondaryFabricURIs,
+				FabricContexts:          adminExcludedMember.PrimaryFabricContexts,
+				SecondaryFabricContexts: adminExcludedMember.SecondaryFabricContexts,
+				FaultDomain:             adminExcludedMember.FaultDomain,
+			},
+			expErr: FaultJoinMemberExistsAdminExcluded(newUUID, adminExcludedMember.UUID),
 		},
 		"new member with bad fault domain depth": {
 			req: &JoinRequest{
