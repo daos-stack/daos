@@ -206,7 +206,7 @@ The `--srv_idx` parameter can be used to specify which engine to query, if there
 are multiple engines configured per server.
 The default is to query the first engine on the server (index 0).
 
-See `daos_metrics -h` for details on how to filter metrics.
+See `daos_metrics -h` for netails on how to filter metrics.
 
 ### Configuring the servers for remote metrics collection
 

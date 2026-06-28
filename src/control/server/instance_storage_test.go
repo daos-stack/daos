@@ -340,11 +340,11 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 type tally struct {
 	sync.Mutex
 	evtDesc      string
-	storageReady chan storageReadyInfo
+	storageReady chan struct{}
 	finished     chan struct{}
 }
 
-func newTally(sr chan storageReadyInfo) *tally {
+func newTally(sr chan struct{}) *tally {
 	return &tally{
 		storageReady: sr,
 		finished:     make(chan struct{}),
