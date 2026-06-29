@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -388,7 +388,8 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
     return " ".join(cmd_list)
 
 
-def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_output=True):
+def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_output=True,
+              extra_env=None):
     """Run the command on the local host.
 
     Args:
@@ -400,17 +401,23 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
         stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
         capture_output (bool, optional): whether to include stdout/stderr in the CommandResult.
             Defaults to True.
+        extra_env (dict, optional): additional environment variables to add to the subprocess
+            environment.  These are merged on top of os.environ without modifying it globally.
+            Defaults to None.
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
     local_host = NodeSet(gethostname().split(".")[0])
+    proc_env = os.environ.copy()
+    if extra_env:
+        proc_env.update(extra_env)
     kwargs = {
         "encoding": "utf-8",
         "shell": True,
         "check": False,
         "timeout": timeout,
-        "env": os.environ.copy()
+        "env": proc_env
     }
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE

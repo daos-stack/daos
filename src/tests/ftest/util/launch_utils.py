@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -461,7 +461,21 @@ class TestRunner():
             "[Test %s/%s] Running the %s test on repetition %s/%s",
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
-        result = run_local(logger, " ".join(command), capture_output=False)
+        # When running ASAN-instrumented DAOS binaries (SANITIZERS=address build),
+        # libasan must be the first library loaded in avocado worker processes.
+        # Workers import pydaos.raw which transitively loads ASAN-compiled libdaos.so;
+        # without LD_PRELOAD the dynamic linker initializes libasan too late and aborts.
+        # Pass these only to the avocado subprocess so SSH/clush helper commands that
+        # run before or after tests are not affected by the ASAN runtime.
+        asan_extra_env = {}
+        libasan = "/usr/lib64/libasan.so.6"
+        if os.path.exists(libasan):
+            asan_extra_env = {
+                "LD_PRELOAD": libasan,
+                "ASAN_OPTIONS": "detect_leaks=0",
+            }
+        result = run_local(logger, " ".join(command), capture_output=False,
+                           extra_env=asan_extra_env or None)
         end_time = int(time.time())
         return_code = result.output[0].returncode
         if return_code == 0:
