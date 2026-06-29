@@ -660,7 +660,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				Ranks:      []uint32{0},
 				Properties: testPoolRedunFacProp(),
 			},
-			expErr: FaultPoolTooFewFaultDomains(1, 2),
+			expErr: FaultPoolTooFewFaultDomains(1, 1),
 		},
 		"successful creation with rd_fac": {
 			targetCount: 2,
