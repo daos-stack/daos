@@ -620,7 +620,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the NLT stage.')
         booleanParam(name: bashName('Unit Test with memcheck'),
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Unit Test with memcheck stage.')
         booleanParam(name: bashName('Unit Test bdev with memcheck'),
                      defaultValue: false,
