@@ -39,6 +39,11 @@ type (
 	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, uint64, error, int) error
 )
 
+func errReplaceSuperblockHasRank(r ranklist.Rank) error {
+	return errors.Errorf("cannot replace: superblock already has valid rank %d (reformat "+
+		"required)", r)
+}
+
 // EngineInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O Engine instances. The distinction
 // between this structure and what's in the engine package is that the
@@ -207,6 +212,11 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	replaceRank := ei.replaceRank.Load()
 	isReplace := replaceRank != nil
 	if isReplace {
+		// During replace operations, fail if superblock already has a valid rank
+		// Prior checks in replace flow should prevent this failsafe from being reached
+		if superblock.ValidRank {
+			return ranklist.NilRank, false, 0, errReplaceSuperblockHasRank(r)
+		}
 		// Explicit rank specified for replacement if not NilRank
 		r = *replaceRank
 	}
