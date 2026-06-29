@@ -785,6 +785,11 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 	return append([]uint32{md}, compressTree(subtree)...), nil
 }
 
+// DomainNr returns the number of fault domains in the subtree of the domain
+// tree specified by the given ranks.
+// If no ranks are provided, the entire tree is considered.
+//
+// Note: Do not confuse fault domains with the FaultDomain struct.
 func (m *Membership) DomainNr(ranks ...uint32) (int, error) {
 	tree := m.db.FaultDomainTree()
 	if tree == nil {
