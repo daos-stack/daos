@@ -2360,7 +2360,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("only valid if at least one engine requires format"),
+			expErr: errors.New("only valid if at least one engine requires scm-format"),
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{

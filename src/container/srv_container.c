@@ -2148,6 +2148,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	uint64_t                         cur_ts;
 	int				 i;
 	int                              warn_slug_ranks = 8; /* 8 ranks at most */
+	int                              cont_num        = 0;
 	int				 rc = 0;
 
 	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
@@ -2158,6 +2159,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 	ABT_mutex_lock(svc->cs_cont_ephs_mutex);
 	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
+		cont_num++;
 		if (eph_ldr->cte_deleted) {
 			d_list_del(&eph_ldr->cte_list);
 			D_FREE(eph_ldr->cte_server_ephs);
@@ -2216,8 +2218,11 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
 		    min_stable_eph == eph_ldr->cte_current_stable_eph &&
-		    eph_ldr->cte_current_ec_agg_eph != 0)
+		    eph_ldr->cte_current_ec_agg_eph != 0) {
+			if (cont_num % 10 == 0)
+				dss_sleep(0);
 			continue;
+		}
 
 		/**
 		 * NB: during extending or reintegration, the new
@@ -6364,7 +6369,8 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+		DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
+			  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 

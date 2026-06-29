@@ -236,7 +236,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=cb,medium
         :avocado: tags=unittest,rebuild
         :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_27
-        
         """
         self.run_subtest()
 
