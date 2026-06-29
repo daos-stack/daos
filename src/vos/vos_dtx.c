@@ -29,18 +29,19 @@
 #define DTX_UMOFF_TYPES		(DTX_UMOFF_ILOG | DTX_UMOFF_SVT | DTX_UMOFF_EVT)
 #define DTX_INDEX_INVAL		(int32_t)(-1)
 
-#define dtx_evict_lid(cont, dae)							\
-	do {										\
-		if (dae->dae_dth != NULL && dae->dae_dth->dth_ent != NULL) {		\
-			D_ASSERT(dae->dae_dth->dth_ent == dae);				\
-			dae->dae_dth->dth_ent = NULL;					\
-		}									\
-		D_DEBUG(DB_IO, "Evicting DTX "DF_DTI": lid=%x\n",			\
-			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));				\
-		d_list_del_init(&dae->dae_link);					\
-		lrua_evictx(cont->vc_dtx_array,						\
-			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,	\
-			    DAE_EPOCH(dae));						\
+#define dtx_evict_lid(cont, dae)                                                                   \
+	do {                                                                                       \
+		if (dae->dae_dth != NULL && dae->dae_dth->dth_ent != NULL) {                       \
+			D_ASSERT(dae->dae_dth->dth_ent == dae);                                    \
+			dae->dae_dth->dth_need_validation = 1;                                     \
+			dae->dae_dth->dth_ent             = NULL;                                  \
+		}                                                                                  \
+		D_DEBUG(DB_IO, "Evicting DTX " DF_DTI ": lid = %x\n", DP_DTI(&DAE_XID(dae)),       \
+			DAE_LID(dae));                                                             \
+		d_list_del_init(&dae->dae_link);                                                   \
+		lrua_evictx(cont->vc_dtx_array,                                                    \
+			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,                 \
+			    DAE_EPOCH(dae));                                                       \
 	} while (0)
 
 bool vos_skip_old_partial_dtx;
