@@ -2846,23 +2846,23 @@ func Test_notifyStorageReady(t *testing.T) {
 			}
 
 			// Override the isAwaitingFormat method
-			isAwaitingFormat := func() bool {
+			mockIsAwaitingFormat := func() bool {
 				return mockEngine.awaitingFormat
 			}
-			_ = isAwaitingFormat
+			_ = mockIsAwaitingFormat
 
 			// Override NotifyStorageReady to capture calls
-			notifyStorageReady := func(rank *ranklist.Rank) {
+			mockNotifyStorageReady := func(rank *ranklist.Rank) {
 				notifyCalls++
 				capturedRank = rank
 			}
-			_ = notifyStorageReady
+			_ = mockNotifyStorageReady
 
 			// Create a custom engine interface with overridden methods
 			engine := &testNotifyEngine{
 				MockInstance:         mockEngine.MockInstance,
-				isAwaitingFormatFn:   isAwaitingFormat,
-				notifyStorageReadyFn: notifyStorageReady,
+				isAwaitingFormatFn:   mockIsAwaitingFormat,
+				notifyStorageReadyFn: mockNotifyStorageReady,
 			}
 
 			req := &ctlpb.StorageFormatReq{
@@ -2871,7 +2871,7 @@ func Test_notifyStorageReady(t *testing.T) {
 			}
 
 			// Call the function under test
-			notifyStorageReady_helper(log, req, engine)
+			notifyStorageReady(log, req, engine)
 
 			// Verify number of NotifyStorageReady calls
 			test.AssertEqual(t, tc.expNotifyCalls, notifyCalls,
@@ -2915,10 +2915,6 @@ func (e *testNotifyEngine) NotifyStorageReady(rank *ranklist.Rank) {
 	} else {
 		e.MockInstance.NotifyStorageReady(rank)
 	}
-}
-
-func notifyStorageReady_helper(log logging.Logger, req *ctlpb.StorageFormatReq, engine Engine) {
-	notifyStorageReady(log, req, engine)
 }
 
 func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {

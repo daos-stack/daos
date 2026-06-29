@@ -513,19 +513,17 @@ func TestEngineInstance_determineRank(t *testing.T) {
 			expRank:           0,
 			expLocalJoin:      false,
 		},
-		"replace overrides superblock rank": {
-			setupRank:   func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
-			replaceRank: func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
-			joinResp: &control.SystemJoinResp{
-				Rank:       10,
-				State:      system.MemberStateJoined,
-				LocalJoin:  false,
-				MapVersion: 2,
-			},
-			expJoinReqRank:    10,
+		"replace fails if superblock has valid rank": {
+			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
+			replaceRank:       func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
 			expJoinReqReplace: true,
-			expRank:           10,
-			expLocalJoin:      false,
+			expErr:            errors.New("cannot replace: superblock already has valid rank"),
+		},
+		"replace with auto-detect fails if superblock has valid rank": {
+			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
+			replaceRank:       func() *ranklist.Rank { r := ranklist.NilRank; return &r }(),
+			expJoinReqReplace: true,
+			expErr:            errors.New("cannot replace: superblock already has valid rank"),
 		},
 		"excluded rank": {
 			setupRank: func() *ranklist.Rank { r := ranklist.Rank(3); return &r }(),
@@ -615,21 +613,12 @@ func TestEngineInstance_determineRank(t *testing.T) {
 				MapVersion: 1,
 			},
 		},
-		"NotifyStorageReady: replace overrides superblock rank": {
-			useNotifyAPI:        true,
-			replaceRank:         func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
-			setupRank:           func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
-			expJoinReqRank:      10,
-			expJoinReqReplace:   true,
-			expRank:             10,
-			expLocalJoin:        false,
-			validateFullJoinReq: true,
-			joinResp: &control.SystemJoinResp{
-				Rank:       10,
-				State:      system.MemberStateJoined,
-				LocalJoin:  false,
-				MapVersion: 1,
-			},
+		"NotifyStorageReady: replace fails if superblock has valid rank": {
+			useNotifyAPI:      true,
+			replaceRank:       func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
+			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
+			expJoinReqReplace: true,
+			expErr:            errors.New("cannot replace: superblock already has valid rank"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
