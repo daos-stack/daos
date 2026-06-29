@@ -799,7 +799,7 @@ func (m *Membership) DomainNr(ranks ...uint32) (int, error) {
 	// TODO DAOS-6353: Properly detect when fault and perf domain are requested.
 	// Currently any depth greater than the minimum must indicate a performance domain.
 	minDepth := 2 // domain + rank
-	if tree.Depth() > minDepth {
+	if subtree.Depth() > minDepth {
 		// Loop over the children of the root and sum up the number their children.
 		sum := 0
 		for _, child := range subtree.Children {
@@ -807,11 +807,9 @@ func (m *Membership) DomainNr(ranks ...uint32) (int, error) {
 		}
 		return sum, nil
 	} else {
-		// There are no perf domains, so all children of the root are fault domains.
+		// There are no perf domains, so the children of the root are fault domains.
 		return len(subtree.Children), nil
 	}
-
-	return len(subtree.Domains()), nil
 }
 
 const (
