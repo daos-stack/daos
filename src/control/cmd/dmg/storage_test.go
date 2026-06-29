@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -153,6 +154,24 @@ func TestStorageCommands(t *testing.T) {
 			"storage nvme-add-device --host-list foo2.com --pci-address 0000:80:00.0 --engine-index 1 --tier-index 0",
 			printRequest(t, nvmeAddDeviceReq().WithStorageTierIndex(0)),
 			nil,
+		},
+		{
+			"Format with replace; no hosts in hostlist",
+			"storage format --replace",
+			"",
+			errors.New("expects a single host"),
+		},
+		{
+			"Format with replace; multiple hosts in hostlist",
+			"storage format --replace -l foo[1,2].com",
+			"",
+			errors.New("expects a single host"),
+		},
+		{
+			"Format with replace and force",
+			"storage format --replace --force",
+			"",
+			errors.New("may not be mixed with --force"),
 		},
 		{
 			"Nonexistent subcommand",
