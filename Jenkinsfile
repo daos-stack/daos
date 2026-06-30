@@ -453,7 +453,8 @@ pipeline {
                 stage('Python Bandit check') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // TESTING: disable for forced-failure diagnostics - REMOVE AFTER TEST
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -493,7 +494,8 @@ pipeline {
                 stage('Build on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('el8') }
+                        // TESTING: disable for forced-failure diagnostics - REMOVE AFTER TEST
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -601,7 +603,8 @@ pipeline {
                 stage('Build on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { !skip_build_stage('leap15') }
+                        // TESTING: disable for forced-failure diagnostics - REMOVE AFTER TEST
+                        expression { false }
                     }
                     agent {
                         dockerfile {
@@ -657,7 +660,8 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                // DEBUG: Skip Unit Tests to reach post-provision mail diagnostics
+                expression { false }
             }
             parallel {
                 stage('Unit Test') {
@@ -826,7 +830,8 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -849,7 +854,8 @@ pipeline {
                 stage('Functional on EL 8') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -876,11 +882,15 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label vm9_label('EL9')
+                        label 'ci_node_hdr_241' // 'ci_opa-113-test' //vm9_label('EL9')
                     }
                     steps {
                         job_step_update(
                             functionalTest(
+                                // DEBUG: keep cluster-size requirements minimal for mail-path testing
+                                node_count: 1,
+                                test_tag: 'test_daos_management',
+                                ftest_arg: '--yaml_extension single_host',
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
                                            ' mercury-libfabric',
@@ -897,7 +907,8 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -921,7 +932,8 @@ pipeline {
                 stage('Functional on SLES 15') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -945,7 +957,8 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label vm9_label('Ubuntu')
@@ -968,7 +981,8 @@ pipeline {
                 stage('Fault injection testing') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label params.CI_FI_1_LABEL
@@ -1009,7 +1023,8 @@ pipeline {
                 stage('Test RPMs on EL 9.6') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_EL_RPMs && !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1030,7 +1045,8 @@ pipeline {
                 stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
-                        expression { params.CI_TEST_LEAP_RPMs && !skipStage() }
+                        // DEBUG: Skip VM-based branch for targeted opa-113 testing
+                        expression { false }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL

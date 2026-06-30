@@ -76,6 +76,7 @@ fi
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
+exit 2
 if ! post_provision_config_nodes; then
   rc=$?
     echo "post_provision_config_nodes failed with rc=$rc"
