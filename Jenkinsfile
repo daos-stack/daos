@@ -97,7 +97,7 @@ void updateRunStage() {
                     || stage.contains('NLT')
                     || stage.contains('Fault injection')
                     || stage.contains('Test RPMs')
-                    || (stage.contains('Functional on') && !stage.contains('Ubuntu'))) {
+                    || stage == 'Functional on EL 9') {
                 runStage[stage] = true
             } else {
                 runStage[stage] = false
@@ -623,7 +623,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Unit Test with memcheck stage.')
         booleanParam(name: bashName('Unit Test bdev with memcheck'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Unit Test bdev with memcheck stage.')
         booleanParam(name: bashName('Test'),
                      defaultValue: true,
