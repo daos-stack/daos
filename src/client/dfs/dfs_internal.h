@@ -445,7 +445,8 @@ int
 git_insert_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t flags,
 		 struct dfs_entry *entry);
 int
-git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t value);
+git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t value,
+		    struct timespec *ctime);
 int
 git_copy_xattr(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *dst_oid, daos_handle_t src_oh,
 	       const char *src_name);

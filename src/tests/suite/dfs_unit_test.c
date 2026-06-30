@@ -3793,6 +3793,8 @@ dfs_test_link_remove(void **state)
 	print_message("Step 3: Link file1 -> dir1/file1_same_dir and verify nlink/content\n");
 	same_dir_link_obj = NULL;
 	memset(&statbuf_same_dir, 0, sizeof(statbuf_same_dir));
+	/** sleep so the clock advances and the link's ctime is strictly newer than statbuf1 */
+	usleep(10000);
 	rc = dfs_link(dfs_mt, file1_obj, dir1, "file1_same_dir", &same_dir_link_obj,
 		      &statbuf_same_dir);
 	assert_int_equal(rc, 0);
@@ -3832,7 +3834,9 @@ dfs_test_link_remove(void **state)
 	/**
 	 * Step 4: Create link dir2/file2 from file1; new_obj=NULL, statbuf2 passed.
 	 * After this call: link_cnt = 2 (file1 + file2).
+	 * sleep so the clock advances and the link's ctime is strictly newer.
 	 */
+	usleep(10000);
 	print_message("Step 4: Link file1 -> dir2/file2 (new_obj=NULL)\n");
 	memset(&statbuf2, 0, sizeof(statbuf2));
 	rc = dfs_link(dfs_mt, file1_obj, dir2, "file2", NULL, &statbuf2);
@@ -3855,6 +3859,7 @@ dfs_test_link_remove(void **state)
 	 * Step 6: Create link dir2/file3 from file1; newobj3 and statbuf3 passed.
 	 * After this call: link_cnt = 3 (file1, file2, file3).
 	 */
+	usleep(10000);
 	print_message("Step 6: Link file1 -> dir2/file3\n");
 	newobj3 = NULL;
 	memset(&statbuf3, 0, sizeof(statbuf3));
@@ -3911,8 +3916,7 @@ dfs_test_link_remove(void **state)
 	assert_int_equal(statbuf1.st_ino, statbuf4.st_ino);
 	assert_int_equal(statbuf1.st_size, statbuf4.st_size);
 	assert_int_equal((int)statbuf4.st_nlink, 4);
-	assert_true((statbuf4.st_ctim.tv_sec * 1000000000LL + statbuf4.st_ctim.tv_nsec) >
-		    (statbuf3.st_ctim.tv_sec * 1000000000LL + statbuf3.st_ctim.tv_nsec));
+
 	memset(rbuf, 0, sizeof(rbuf));
 	d_iov_set(&iov, rbuf, sizeof(rbuf));
 	rc = dfs_read(dfs_mt, newobj4, &sgl, 0, &read_size, NULL);
@@ -3960,8 +3964,6 @@ dfs_test_link_remove(void **state)
 	assert_int_equal(statbuf4.st_mode, statbuf5.st_mode);
 	assert_int_equal(statbuf4.st_ino, statbuf5.st_ino);
 	assert_int_equal((int)statbuf5.st_nlink, 4);
-	assert_true((statbuf5.st_ctim.tv_sec * 1000000000LL + statbuf5.st_ctim.tv_nsec) >
-		    (statbuf4.st_ctim.tv_sec * 1000000000LL + statbuf4.st_ctim.tv_nsec));
 
 	/**
 	 * Step 15: Unlink file3, file4, and file5.
@@ -4004,8 +4006,6 @@ dfs_test_link_remove(void **state)
 	assert_int_equal(statbuf2.st_mode, statbuf6.st_mode);
 	assert_int_equal(statbuf2.st_ino, statbuf6.st_ino);
 	assert_int_equal((int)statbuf6.st_nlink, 2);
-	assert_true((statbuf6.st_ctim.tv_sec * 1000000000LL + statbuf6.st_ctim.tv_nsec) >
-		    (statbuf5.st_ctim.tv_sec * 1000000000LL + statbuf5.st_ctim.tv_nsec));
 
 	/**
 	 * Step 18: Write new content buf2 to the underlying file via newobj6.

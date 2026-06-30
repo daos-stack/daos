@@ -370,7 +370,8 @@ restart:
 	 * remains in GIT.
 	 */
 	if (new_link_cnt > 0)
-		D_GOTO(out, rc = git_update_link_cnt(dfs->git_oh, th, &entry.oid, new_link_cnt));
+		D_GOTO(out,
+		       rc = git_update_link_cnt(dfs->git_oh, th, &entry.oid, new_link_cnt, NULL));
 
 	d_iov_set(&git_dkey, &entry.oid, sizeof(daos_obj_id_t));
 	rc = daos_obj_punch_dkeys(dfs->git_oh, th, 0, 1, &git_dkey, NULL);
@@ -574,7 +575,8 @@ git_insert_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uin
 }
 
 int
-git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t value)
+git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, uint64_t value,
+		    struct timespec *ctime)
 {
 	daos_key_t      dkey;
 	d_sg_list_t     sgl;
@@ -618,6 +620,8 @@ git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, 
 		D_ERROR("Failed to update link_cnt in GIT " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
+	if (ctime)
+		*ctime = now;
 	return 0;
 }
 

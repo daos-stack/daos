@@ -1861,11 +1861,14 @@ restart:
 		if (rc)
 			D_GOTO(out, rc);
 		new_link_cnt = git_entry.link_cnt + 1;
-		rc           = git_update_link_cnt(dfs->git_oh, th, &obj->oid, new_link_cnt);
+		rc           = git_update_link_cnt(dfs->git_oh, th, &obj->oid, new_link_cnt, &now);
 		if (rc)
 			D_GOTO(out, rc);
 		git_entry.link_cnt = new_link_cnt;
-		link_entry         = &git_entry;
+		/** Link count update bumped ctime in GIT; mirror it into the returned entry. */
+		git_entry.ctime      = now.tv_sec;
+		git_entry.ctime_nano = now.tv_nsec;
+		link_entry           = &git_entry;
 	} else {
 		dfs_set_hardlink(&src_entry.mode);
 		src_entry.link_cnt = 2;
