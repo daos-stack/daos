@@ -2312,6 +2312,7 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
 	if (!md_on_ssd) {
 		D_ERROR("Not in MD-on-SSD mode; skipping memory environment provisioning.");
+		rc = -DER_INVAL;
 		goto out;
 	}
 
