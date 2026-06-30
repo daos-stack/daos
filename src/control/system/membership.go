@@ -102,7 +102,7 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 		return NilRank, errors.New("unexpected rank in replace-rank request")
 	}
 
-	currentMembers, err := m.Members(nil, AllMemberFilter)
+	currentMembers, err := m.db.AllMembers()
 	if err != nil {
 		return NilRank, errors.Wrap(err, "failed to get all system members")
 	}

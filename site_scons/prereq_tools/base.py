@@ -516,6 +516,10 @@ class PreReqComponent():
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
+        opts.Add(BoolVariable('BUILD_GO_VALGRIND',
+                              'Build Go artifacts with the Go "valgrind" tag for Memcheck '
+                              '(also drops -race; ignored for release)',
+                              False))
         opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
         opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
