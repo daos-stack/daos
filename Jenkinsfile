@@ -43,7 +43,6 @@ void updateRunStage() {
         'Pre-build',
         'Python Bandit check',
         'Build',
-        'Build on EL 8',
         'Build on EL 9',
         'Build on Leap 15',
         'Unit Tests',
@@ -53,8 +52,6 @@ void updateRunStage() {
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
         'Test',
-        'Functional on EL 8.8 with Valgrind',
-        'Functional on EL 8',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on SLES 15',
@@ -207,7 +204,6 @@ void updateRunStage() {
             hwBuildStage += "${distroTarget[0].toUpperCase()} ${distroTarget[1]}"
         }
         Map testBuildStage = [
-            'Functional on EL 8': 'Build on EL 8',
             'Functional on EL 9': 'Build on EL 9',
             'Functional on Leap 15': 'Build on Leap 15',
             'Functional on SLES 15': 'Build on Leap 15',
@@ -603,9 +599,6 @@ pipeline {
         booleanParam(name: bashName('Build'),
                      defaultValue: true,
                      description: 'Run the Build stage.')
-        booleanParam(name: bashName('Build on EL 8'),
-                     defaultValue: true,
-                     description: 'Run the Build on EL 8 stage.')
         booleanParam(name: bashName('Build on EL 9'),
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap test stage')
@@ -639,12 +632,6 @@ pipeline {
         booleanParam(name: bashName('Test'),
                      defaultValue: true,
                      description: 'Run the Test stage.')
-        booleanParam(name: bashName('Functional on EL 8.8 with Valgrind'),
-                     defaultValue: false,
-                     description: 'Run the Functional on EL 8.8 with Valgrind stage.')
-        booleanParam(name: bashName('Functional on EL 8'),
-                     defaultValue: false,
-                     description: 'Run the Functional on EL 8 stage.')
         booleanParam(name: bashName('Functional on EL 9'),
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 stage.')
