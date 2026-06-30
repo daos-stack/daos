@@ -842,7 +842,7 @@ rdb_modify_replicas(struct rdb *db, enum rdb_replica_op op, rdb_replica_id_t *re
 	}
 	for (i = 0; i < *replicas_len; ++i) {
 		rc = rdb_raft_append_apply_cfg(db, type, replicas[i]);
-		if (i == 0 && DAOS_FAIL_CHECK(DAOS_RDB_FAIL_MODIFY_REPLICAS))
+		if (rc == 0 && DAOS_FAIL_CHECK(DAOS_RDB_FAIL_MODIFY_REPLICAS))
 			rc = -DER_NOTLEADER;
 		if (rc != 0) {
 			DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
