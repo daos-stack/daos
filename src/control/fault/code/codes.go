@@ -118,6 +118,7 @@ const (
 	SystemBadFaultDomainDepth
 	SystemPoolLocked
 	SystemJoinReplaceRankNotFound
+	SystemJoinMemberExists
 )
 
 // client fault codes
