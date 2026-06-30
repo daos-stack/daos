@@ -83,7 +83,7 @@ Integer getuid() {
 }
 
 void fixup_rpmlintrc() {
-    if (env.SCONS_FAULTS_ARGS != 'BUILD_TYPE=dev') {
+    if (sconsArgs() != 'BUILD_TYPE=dev') {
         return
     }
 
@@ -200,7 +200,6 @@ pipeline {
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
-        SCONS_FAULTS_ARGS = sconsArgs()
         HTTPS_PROXY = ''
         PYTHON_VERSION = '3.11'
     }
@@ -632,9 +631,11 @@ pipeline {
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
-                                scons_args: sconsFaultsArgs() +
-                                ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                build_deps: 'yes'))
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_args: sconsArgs() +
+                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                         }
@@ -976,11 +977,9 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
+                                         referenceJobName: 'daos-stack/daos/release%252F2.8',
                                          with_valgrind: '',
                                          FI: true
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
                             archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
                                              allowEmptyArchive: true
                             job_status_update()
