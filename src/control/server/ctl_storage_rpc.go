@@ -1074,6 +1074,23 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
+	// Filter instances if engine-idx is specified (MaxUint32 means all engines)
+	if req.EngineIdx != ^uint32(0) {
+		engineIdx := req.EngineIdx
+		var filteredInstances []Engine
+		for _, instance := range instances {
+			if instance.Index() == engineIdx {
+				filteredInstances = append(filteredInstances, instance)
+				break
+			}
+		}
+		if len(filteredInstances) == 0 {
+			return nil, errors.Errorf("engine instance %d not found", engineIdx)
+		}
+		instances = filteredInstances
+		cs.log.Debugf("filtering to engine instance %d only", engineIdx)
+	}
+
 	// DAOS-15947: control_metadata format is valid in --replace case where multiple engines
 	// require replacement or format on the same host. No need to handle independently for
 	// individual engine as if control_metadata is missing then it needs to be created.

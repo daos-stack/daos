@@ -310,9 +310,10 @@ type (
 	// StorageFormatReq contains the parameters for a storage format request.
 	StorageFormatReq struct {
 		unaryRequest
-		Reformat bool   `json:"reformat"`
-		Replace  bool   `json:"replace"`
-		Rank     uint32 `json:"rank"` // Specific rank to replace (only valid with replace=true)
+		Reformat  bool    `json:"reformat"`
+		Replace   bool    `json:"replace"`
+		Rank      uint32  `json:"rank"`       // Specific rank to replace (only valid with replace=true)
+		EngineIdx *uint32 `json:"engine_idx"` // Specific engine instance index to format (optional)
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
@@ -454,6 +455,12 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 	pbReq := new(ctlpb.StorageFormatReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, err
+	}
+	// Handle EngineIdx conversion: nil pointer -> MaxUint32 (sentinel for "all engines")
+	if req.EngineIdx != nil {
+		pbReq.EngineIdx = *req.EngineIdx
+	} else {
+		pbReq.EngineIdx = ^uint32(0) // MaxUint32
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).StorageFormat(ctx, pbReq)
