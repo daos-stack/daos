@@ -578,16 +578,7 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_el9_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on EL 9')
-        booleanParam(name: 'CI_leap15_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build sources and RPMs on Leap 15')
-        booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
-                     defaultValue: false,
-                     description: 'Continue testing if a previous stage is Unstable')
-        booleanParam(name: 'CI_UNIT_TEST',
+        booleanParam(name: bashName('Cancel Previous Builds'),
                      defaultValue: true,
                      description: 'Run the Cancel Previous Builds stage.')
         booleanParam(name: bashName('Pre-build'),
@@ -601,14 +592,8 @@ pipeline {
                      description: 'Run the Build stage.')
         booleanParam(name: bashName('Build on EL 9'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs on Leap test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
-                     defaultValue: false,
-                     description: 'Skip all functional test stages (Test)')
-        booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
-                     defaultValue: false,
-                     description: 'Enable more distros for functional CI tests')
-        booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
+                     description: 'Run the Build on EL 9 stage.')
+        booleanParam(name: bashName('Build on Leap 15'),
                      defaultValue: true,
                      description: 'Run the Build on Leap 15 stage.')
         booleanParam(name: bashName('Unit Tests'),
