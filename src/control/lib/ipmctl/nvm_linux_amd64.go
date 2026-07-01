@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,7 +26,6 @@ import "C"
 
 import (
 	"fmt"
-	"os"
 	"time"
 	"unsafe"
 
@@ -191,46 +191,4 @@ func (n *NvmMgmt) DeleteConfigGoals(log logging.Logger) error {
 	log.Debug("ipmctl bindings: DeleteConfigGoals")
 	defer logDuration(track(log, "time taken calling nvm_delete_config_goal"))
 	return Rc2err("delete_config_goal", C.nvm_delete_config_goal(nil, 0))
-}
-
-// GetFirmwareInfo fetches the firmware revision and other information from the device
-func (n *NvmMgmt) GetFirmwareInfo(uid DeviceUID) (fw DeviceFirmwareInfo, err error) {
-	cUID := C.CString(uid.String())
-	cInfo := new(C.struct_device_fw_info)
-
-	if err = Rc2err(
-		"get_device_fw_info",
-		C.nvm_get_device_fw_image_info(cUID, cInfo)); err != nil {
-		return
-	}
-
-	fw = *(*DeviceFirmwareInfo)(unsafe.Pointer(cInfo))
-	return
-}
-
-// UpdateFirmware updates the firmware on the device
-func (n *NvmMgmt) UpdateFirmware(uid DeviceUID, fwPath string, force bool) error {
-	if len(fwPath) == 0 {
-		return errors.New("firmware path is required")
-	}
-
-	if _, err := os.Stat(fwPath); err != nil {
-		return errors.Wrap(err, "unable to access firmware file")
-	}
-
-	cUID := C.CString(uid.String())
-	cPath := C.CString(fwPath)
-	cPathLen := C.ulong(len(fwPath))
-	var cForce C.uchar
-	if force {
-		cForce = 1
-	}
-
-	if err := Rc2err(
-		"update_device_fw",
-		C.nvm_update_device_fw(cUID, cPath, cPathLen, cForce)); err != nil {
-		return err
-	}
-
-	return nil
 }

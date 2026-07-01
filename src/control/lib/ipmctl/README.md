@@ -16,7 +16,5 @@ capabilities tailored to the specific needs of DAOS, the PMem related features
 are as follows:
 
 * device discovery
-* device firmware version discovery
-* device firmware update
 
 Functionality is exposed through the package's `IpmCtl` public interface.

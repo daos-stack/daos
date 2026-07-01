@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -72,15 +73,5 @@ func (n *NvmMgmt) GetRegions(log logging.Logger) ([]PMemRegion, error) {
 
 // DeleteConfigGoals removes any pending but not yet applied PMem configuration goals.
 func (n *NvmMgmt) DeleteConfigGoals(log logging.Logger) error {
-	return nil
-}
-
-// GetFirmwareInfo fetches the firmware revision and other information from the device
-func (n *NvmMgmt) GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error) {
-	return DeviceFirmwareInfo{}, nil
-}
-
-// UpdateFirmware updates the firmware on the device
-func (n *NvmMgmt) UpdateFirmware(uid DeviceUID, fwPath string, force bool) error {
 	return nil
 }

@@ -444,7 +444,6 @@ void fixup_rpmlintrc() {
                     '/usr/bin/daos',
                     '/usr/bin/daos_agent',
                     '/usr/bin/hello_drpc',
-                    '/usr/bin/daos_firmware',
                     '/usr/bin/daos_admin',
                     '/usr/bin/daos_server',
                     '/usr/bin/ddb']

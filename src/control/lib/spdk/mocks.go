@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -89,17 +89,6 @@ func (n MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	}
 
 	return n.Cfg.FormatRes, nil
-}
-
-// Update calls C.nvme_fwupdate to update controller firmware image.
-func (n MockNvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
-	if n.Cfg.UpdateErr != nil {
-		return n.Cfg.UpdateErr
-	}
-	log.Debugf("mock update fw on nvme ssd: %q, image path %q, slot %d",
-		ctrlrPciAddr, path, slot)
-
-	return nil
 }
 
 // Clean removes SPDK lockfiles associated with NVMe SSDs/controllers at given PCI addresses.

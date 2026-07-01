@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -126,25 +127,4 @@ type PMemRegion struct {
 	Dimms         [24]uint16 // Unique ID's of underlying PMem modules.
 	Health        uint32     // Rolled up health of the underlying PMem modules.
 	Reserved      [40]uint8  // reserved
-}
-
-// FWUpdateStatus values represent the ipmctl fw_update_status enum
-const (
-	// FWUpdateStatusUnknown represents unknown status
-	FWUpdateStatusUnknown = 0
-	// FWUpdateStatusStaged represents a staged FW update to be loaded on reboot
-	FWUpdateStatusStaged = 1
-	// FWUpdateStatusSuccess represents a successfully applied FW update
-	FWUpdateStatusSuccess = 2
-	// FWUpdateStatusFailed represents a failed FW update
-	FWUpdateStatusFailed = 3
-)
-
-// DeviceFirmwareInfo represents an ipmctl device_fw_info structure
-type DeviceFirmwareInfo struct {
-	ActiveFWVersion Version // currently running FW version
-	StagedFWVersion Version // FW version to be applied on next reboot
-	FWImageMaxSize  uint32  // maximum FW image size in 4096-byte chunks
-	FWUpdateStatus  uint32  // last update status
-	Reserved        [4]uint8
 }

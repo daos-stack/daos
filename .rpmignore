@@ -4,19 +4,16 @@
 #
 
 el8/daos-*tests*.rpm
-el8/daos-firmware*.rpm
 el8/daos-mofed*.rpm
 el8/daos-serialize*.rpm
 el8/ucx*.rpm
 
 el9/daos-*tests*.rpm
-el9/daos-firmware*.rpm
 el9/daos-mofed*.rpm
 el9/daos-serialize*.rpm
 el9/ucx*.rpm
 
 leap15/daos-*tests*.rpm
-leap15/daos-firmware*.rpm
 leap15/daos-mofed*.rpm
 leap15/daos-serialize*.rpm
 leap15/openucx*.rpm

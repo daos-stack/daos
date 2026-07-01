@@ -1,4 +1,7 @@
 %changelog
+* Mon June 26 2026 Kris Jacque <kris.jacque@hpe.com> 2.9.100-5
+- Remove defunct daos_firmware package
+
 * Mon May 04 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-4
 - Add gperftools-devel as a build dependency of daos-devel
 

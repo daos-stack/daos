@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,10 +25,6 @@ type (
 		GetRegions(logging.Logger) ([]PMemRegion, error)
 		// DeleteConfigGoals removes any pending but not yet applied PMem configuration goals.
 		DeleteConfigGoals(logging.Logger) error
-		// GetFirmwareInfo retrieves firmware information from persistent memory modules.
-		GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
-		// UpdateFirmware updates persistent memory module firmware.
-		UpdateFirmware(uid DeviceUID, fwPath string, force bool) error
 	}
 
 	// NvmMgmt is an implementation of the IpmCtl interface which exercises

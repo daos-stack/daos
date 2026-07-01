@@ -317,13 +317,10 @@ const (
 
 type (
 	mockIpmctlCfg struct {
-		initErr           error
-		delGoalsErr       error
-		getRegionsErr     error
-		regions           []ipmctl.PMemRegion
-		getFWInfoRet      error
-		fwInfo            ipmctl.DeviceFirmwareInfo
-		updateFirmwareRet error
+		initErr       error
+		delGoalsErr   error
+		getRegionsErr error
+		regions       []ipmctl.PMemRegion
 	}
 
 	mockIpmctl struct {
@@ -345,14 +342,6 @@ func (m *mockIpmctl) DeleteConfigGoals(_ logging.Logger) error {
 
 func (m *mockIpmctl) GetRegions(_ logging.Logger) ([]ipmctl.PMemRegion, error) {
 	return m.cfg.regions, m.cfg.getRegionsErr
-}
-
-func (m *mockIpmctl) GetFirmwareInfo(uid ipmctl.DeviceUID) (ipmctl.DeviceFirmwareInfo, error) {
-	return m.cfg.fwInfo, m.cfg.getFWInfoRet
-}
-
-func (m *mockIpmctl) UpdateFirmware(uid ipmctl.DeviceUID, fwPath string, force bool) error {
-	return m.cfg.updateFirmwareRet
 }
 
 func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
@@ -392,17 +381,14 @@ func mockModule(uid string, pi, si, ci, chi, chp uint32) *storage.ScmModule {
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {
-	GetModulesRes        storage.ScmModules
-	GetModulesErr        error
-	GetNamespacesRes     storage.ScmNamespaces
-	GetNamespacesErr     error
-	PrepRes              *storage.ScmPrepareResponse
-	PrepErr              error
-	PrepResetRes         *storage.ScmPrepareResponse
-	PrepResetErr         error
-	GetFirmwareStatusErr error
-	GetFirmwareStatusRes *storage.ScmFirmwareInfo
-	UpdateFirmwareErr    error
+	GetModulesRes    storage.ScmModules
+	GetModulesErr    error
+	GetNamespacesRes storage.ScmNamespaces
+	GetNamespacesErr error
+	PrepRes          *storage.ScmPrepareResponse
+	PrepErr          error
+	PrepResetRes     *storage.ScmPrepareResponse
+	PrepResetErr     error
 }
 
 type MockBackend struct {
@@ -456,14 +442,6 @@ func (mb *MockBackend) prepReset(req storage.ScmPrepareRequest, _ *storage.ScmSc
 		}, nil
 	}
 	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
-}
-
-func (mb *MockBackend) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error) {
-	return mb.cfg.GetFirmwareStatusRes, mb.cfg.GetFirmwareStatusErr
-}
-
-func (mb *MockBackend) UpdateFirmware(deviceUID string, firmwarePath string) error {
-	return mb.cfg.UpdateFirmwareErr
 }
 
 func NewMockBackend(cfg *MockBackendConfig) *MockBackend {
