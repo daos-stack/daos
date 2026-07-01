@@ -21,6 +21,7 @@ env
 pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
+export PYTHON_VERSION="${3}"
 rm -f ./*.rpm
 rm -rf /home/daos/rpms/*
 utils/rpms/build_packages.sh deps

@@ -42,28 +42,23 @@ then
     SL_PREFIX="$(pwd)/install"
 fi
 
+# Export PYTHONPATH if a valid python installation is found
 function export_pythonpath()
 {
-  MAJOR="${1}"
-  MINOR="$(python3 -c 'import sys; print(sys.version_info.minor)')"
-  VERSION="${MAJOR}.${MINOR}"
-  if [ "${MAJOR}" -eq 3 ]; then
-    PYTHONPATH=${SL_PREFIX}/lib64/python${VERSION}/site-packages:${PYTHONPATH:-}
-  else
-    echo "unknown Python version: ${VERSION}"
+  # Default to PYTHON_VERSION to be compatible with packaging scripts
+  local python_version="${PYTHON_VERSION:=3}"
+  local python_cmd="python${python_version}"
+  if [ ! -x "$(command -v $python_cmd)" ]; then
+    echo "unknown Python version: ${python_version}"
     return 0
   fi
 
-  export PYTHONPATH
+  local major="$($python_cmd -c 'import sys; print(sys.version_info.major)')"
+  local minor="$($python_cmd -c 'import sys; print(sys.version_info.minor)')"
+  python_version="${major}.${minor}"
+  export PYTHONPATH=${SL_PREFIX}/lib64/python${python_version}/site-packages:${PYTHONPATH:-}
 }
-
-# look for a valid installation of python
-if [ -x "$(command -v python3)" ]; then
-  PYTHON_VERSION="$(python3 -c 'import sys; print(sys.version_info.major)')"
-  export_pythonpath "${PYTHON_VERSION}"
-else
-  echo "python3 not found"
-fi
+export_pythonpath
 
 function in_list()
 {

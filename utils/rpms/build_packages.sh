@@ -1,7 +1,11 @@
 #!/bin/bash
-set -eEuo pipefail
+set -eEuox pipefail
+
+: "${PYTHON_VERSION:=}"
+
 build_type="${1:-all}"
 source utils/sl/setup_local.sh
+echo "PYTHON_VERSION=$PYTHON_VERSION"
 if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/argobots.sh
   utils/rpms/fused.sh
@@ -13,5 +17,6 @@ if [[ "${build_type}" =~ deps|all ]]; then
   utils/rpms/daos-spdk.sh
 fi
 if [[ "${build_type}" =~ daos|all ]]; then
+  PYTHON_VERSION=\"${PYTHON_VERSION}\" \
   utils/rpms/daos.sh
 fi

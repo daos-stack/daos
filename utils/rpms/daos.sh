@@ -38,6 +38,8 @@ URL="https://daos.io"
 
 RPM_CHANGELOG="daos.changelog"
 
+: "${PYTHON_VERSION:=}"
+
 # Some extra "install" steps
 # daos package
 files=()
@@ -80,6 +82,7 @@ EXTRA_OPTS+=("--after-install" "${tmp}/post_install_daos")
 DEPENDS=( "mercury >= ${mercury_version}" )
 DEPENDS+=( "${isal_lib} >= ${isal_version}" )
 DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
+EXTERNAL_DEPENDS=("${protobufc_lib}")
 build_package "daos"
 
 # Only build server RPMs if we built the server
@@ -331,6 +334,7 @@ EOF
 fi
 
 EXTERNAL_DEPENDS=("fuse3")
+EXTERNAL_DEPENDS+=("python${PYTHON_VERSION}")
 DEPENDS=("daos = ${VERSION}-${RELEASE}")
 build_package "daos-client"
 
@@ -379,8 +383,7 @@ append_install_list "${files[@]}"
 CONFIG_FILES+=("${TARGET_PATH}/fault-inject-cart.yaml")
 
 #todo add external depends
-EXTERNAL_DEPENDS=("${protobufc_lib}")
-EXTERNAL_DEPENDS+=("fio")
+EXTERNAL_DEPENDS=("fio")
 EXTERNAL_DEPENDS+=("git")
 EXTERNAL_DEPENDS+=("dbench")
 EXTERNAL_DEPENDS+=("lbzip2")

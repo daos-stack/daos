@@ -24,6 +24,8 @@ SERVER_CONFIG="/etc/daos/daos_server.yml"
 AGENT_CONFIG="/etc/daos/daos_agent.yml"
 CONTROL_CONFIG="/etc/daos/daos_control.yml"
 
+: "${PYTHON_VERSION:=3.11}"
+
 if [ -n "$DAOS_PKG_VERSION" ]; then
     DAOS_PKG_VERSION="-${DAOS_PKG_VERSION}"
 fi
@@ -33,6 +35,30 @@ sudo $YUM -y install daos-client"$DAOS_PKG_VERSION"
 if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
   exit 1
+fi
+
+# Verify daos command works
+if ! daos version; then
+    echo "Error checking daos command version"
+    exit 1
+fi
+
+# Verify daos_agent command works
+if ! daos_agent version; then
+    echo "Error checking daos_agent command version"
+    exit 1
+fi
+
+# Verify the python dependency matches what pydaos is packaged with
+if ! rpm -qR daos-client | grep "python${PYTHON_VERSION}"; then
+    echo "daos-client should depend on python${PYTHON_VERSION}"
+    exit 1
+fi
+
+# Verify pydaos can be imported
+if ! "python${PYTHON_VERSION}" -c "import pydaos"; then
+    echo "Should be able to import pydaos after installing daos-client"
+    exit 1
 fi
 
 if ! sudo $YUM -y history undo last; then
@@ -132,7 +158,6 @@ sudo chown "$me:$me" /tmp/daos_sockets
 
 FTEST=/usr/lib/daos/TESTING/ftest
 
-: "${PYTHON_VERSION:=3.11}"
 "python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
