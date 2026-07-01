@@ -18,7 +18,7 @@ import groovy.transform.Field
 //@Library(value="pipeline-lib@your_branch") _
 
 // Name of branch to be tested
-base_branch = 'master'
+test_branch = 'master'
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -43,7 +43,6 @@ void updateRunStage() {
         'Functional Hardware Medium TCP Provider MD on SSD',
         'Functional Hardware Large TCP MD on SSD',
         'Functional Hardware Medium Verbs MD on SSD',
-        'Functional Hardware Medium Verbs Provider MD on SSD',
         'Functional Hardware Large Verbs MD on SSD',
     ]
 
@@ -224,10 +223,10 @@ String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceA
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith('provider-testing') &&
-     !env.BRANCH_NAME.startsWith('weekly-testing') &&
-     !env.BRANCH_NAME.startsWith('release/') &&
-     env.BRANCH_NAME != 'master')) {
+    !(env.BRANCH_NAME =~ branchTypeRE('testing') ||
+      env.BRANCH_NAME =~ branchTypeRE('release') ||
+      env.BRANCH_NAME =~ branchTypeRE('downstream') ||
+      env.BRANCH_NAME == 'master')) {
    currentBuild.result = 'SUCCESS'
    return
 }
@@ -280,7 +279,7 @@ pipeline {
                             'repeat each functional test. CAUTION: only use in combination with ' +
                             'a reduced number of tests specified with the TestTag parameter.')
         string(name: 'BaseBranch',
-               defaultValue: base_branch,
+               defaultValue: test_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
