@@ -25,7 +25,7 @@ dfuse_eq_backoff_us(uint32_t empty_polls)
 		return 0;
 
 	steps = (empty_polls - DFUSE_EQ_BACKOFF_START) / DFUSE_EQ_BACKOFF_START;
-	while (steps-- > 0 && backoff < DFUSE_EQ_BACKOFF_MAX_US / 2)
+	while (steps-- > 0 && backoff < DFUSE_EQ_BACKOFF_MAX_US)
 		backoff *= 2;
 
 	if (backoff > DFUSE_EQ_BACKOFF_MAX_US)
@@ -37,8 +37,10 @@ dfuse_eq_backoff_us(uint32_t empty_polls)
 static void
 dfuse_eq_empty_poll(struct dfuse_eq *eqt)
 {
-	if (eqt->de_empty_polls < UINT32_MAX)
-		eqt->de_empty_polls++;
+	uint32_t empty_polls = atomic_load_relaxed(&eqt->de_empty_polls);
+
+	if (empty_polls < UINT32_MAX)
+		atomic_store_relaxed(&eqt->de_empty_polls, empty_polls + 1);
 }
 
 /* Async progress thread.
@@ -87,10 +89,10 @@ cont:
 				return NULL;
 		}
 
-		poll_timeout = dfuse_eq_backoff_us(eqt->de_empty_polls);
+		poll_timeout = dfuse_eq_backoff_us(atomic_load_relaxed(&eqt->de_empty_polls));
 		rc           = daos_eq_poll(eqt->de_eq, 1, poll_timeout, 128, &dev[0]);
 		if (rc >= 1) {
-			eqt->de_empty_polls = 0;
+			atomic_store_relaxed(&eqt->de_empty_polls, 0);
 
 			for (i = 0; i < rc; i++) {
 				struct dfuse_event *ev;
@@ -1244,7 +1246,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 
 		eqt->de_handle = dfuse_info;
 
-		eqt->de_empty_polls = 0;
+		atomic_store_relaxed(&eqt->de_empty_polls, 0);
 		DFUSE_TRA_UP(eqt, dfuse_info, "event_queue");
 
 		/* Create the semaphore before the eq as there's no way to check if sem_init()
