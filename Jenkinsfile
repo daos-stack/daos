@@ -21,6 +21,7 @@ import groovy.transform.Field
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-19247-fix') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -1175,268 +1176,139 @@ pipeline {
                 beforeAgent true
                 expression { shouldStageRun('Test') }
             }
-            parallel {
-                stage('Functional on EL 8.8 with Valgrind') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on EL 8.8 with Valgrind') &&
-                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr')) }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
+            steps {
+                script {
+                    parallel(
+                        'Functional on EL 8.8 with Valgrind': getFunctionalTestStage(
+                            name: 'Functional on EL 8.8 with Valgrind',
+                            runStage: shouldStageRun('Functional on EL 8.8 with Valgrind'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('EL8'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: 'memcheck',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'el8.8'
+                        ),
+                        'Functional on EL 8': getFunctionalTestStage(
+                            name: 'Functional on EL 8',
+                            runStage: shouldStageRun('Functional on EL 8'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('EL8'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'el8.10'
+                        ),
+                        'Functional on EL 9': getFunctionalTestStage(
+                            name: 'Functional on EL 9',
+                            runStage: shouldStageRun('Functional on EL 9'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('EL9'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional on Leap 15': getFunctionalTestStage(
+                            name: 'Functional on Leap 15',
+                            runStage: shouldStageRun('Functional on Leap 15'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Leap15'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'leap15.6'
+                        ),
+                        'Functional on SLES 15': getFunctionalTestStage(
+                            name: 'Functional on SLES 15',
+                            runStage: shouldStageRun('Functional on SLES 15'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Leap15'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'sles15.7'
+                        ),
+                        'Functional on Ubuntu 20.04': getFunctionalTestStage(
+                            name: 'Functional on Ubuntu 20.04',
+                            runStage: shouldStageRun('Functional on Ubuntu 20.04'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Ubuntu'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal
+                        ),
+                        'Fault injection testing': scriptedTestStage(
+                            name: 'Fault injection testing',
+                            runStage: shouldStageRun('Fault injection testing'),
+                            label: params.CI_FI_1_LABEL,
+                            job_status: job_status_internal,
+                            unitTestArgs: [
+                                timeout_time: 240,
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8.8 with Valgrind')
-                stage('Functional on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on EL 8') &&
-                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr')) }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
+                                test_script: 'ci/unit/test_nlt.sh --memcheck no' +
+                                            ' --system-ram-reserved 4 --server-debug WARN' +
+                                            ' --log-usage-import nltr.json' +
+                                            ' --log-usage-save nltr.xml' +
+                                            ' --class-name fault-injection fi',
+                                with_valgrind: '',
+                                always_script: 'ci/unit/test_nlt_post.sh',
+                                testResults: 'nlt-junit.xml',
+                                unstash_opt: true,
+                                unstash_tests: false,
+                                inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
+                                image_version: 'el9.7',
+                                prov_env_vars: 'VM_CPUS=14'],
+                            unitTestPostArgs: [
+                                artifacts: ['nlt_logs/'],
+                                testResults: 'nlt-junit.xml',
+                                with_valgrind: '',
+                                FI: true],
+                            archiveArtifactsArgs: [
+                                artifacts: 'nlt_logs/fault-injection/',
+                                allowEmptyArchive: true]
+                        ),
+                        'Test RPMs on EL 9.6': scriptedTestStage(
+                            name: 'Test RPMs on EL 9.6',
+                            runStage: shouldStageRun('Test RPMs on EL 9.6'),
+                            label: params.CI_UNIT_VM1_LABEL,
+                            job_status: job_status_internal,
+                            testRpmArgs: [
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'el8.10'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8')
-                stage('Functional on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on EL 9') &&
-                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr'))}
-                    }
-                    agent {
-                        label vm9_label('EL9')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
+                                daos_pkg_version: daosPackagesVersion(next_version()),
+                                inst_rpms: 'mercury-libfabric']
+                        ),
+                        'Test RPMs on Leap 15.5': scriptedTestStage(
+                            name: 'Test RPMs on Leap 15.5',
+                            runStage: shouldStageRun('Test RPMs on Leap 15.5'),
+                            label: params.CI_UNIT_VM1_LABEL,
+                            job_status: job_status_internal,
+                            testRpmArgs: [
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 9')
-                stage('Functional on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on Leap 15') &&
-                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr'))}
-                    }
-                    agent {
-                        label vm9_label('Leap15')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'leap15.6'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional on SLES 15') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on SLES 15') &&
-                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr'))}
-                    }
-                    agent {
-                        label vm9_label('Leap15')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'sles15.7'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on SLES 15')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on Ubuntu 20.04') &&
-                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr'))}
-                    }
-                    agent {
-                        label vm9_label('Ubuntu')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Fault injection testing') }
-                    }
-                    agent {
-                        label params.CI_FI_1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 240,
-                                     inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh --memcheck no' +
-                                                  ' --system-ram-reserved 4 --server-debug WARN' +
-                                                  ' --log-usage-import nltr.json' +
-                                                  ' --log-usage-save nltr.xml' +
-                                                  ' --class-name fault-injection fi',
-                                     with_valgrind: '',
-                                     always_script: 'ci/unit/test_nlt_post.sh',
-                                     testResults: 'nlt-junit.xml',
-                                     unstash_opt: true,
-                                     unstash_tests: false,
-                                     inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
-                                     image_version: 'el9.7',
-                                     prov_env_vars: 'VM_CPUS=14'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['nlt_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         with_valgrind: '',
-                                         FI: true
-                            archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
-                                             allowEmptyArchive: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Fault injection testing')
-                stage('Test RPMs on EL 9.6') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Test RPMs on EL 9.6') }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
+                                daos_pkg_version: daosPackagesVersion(next_version()),
+                                inst_rpms: 'mercury-libfabric']
                         )
-                    }
-                    post {
-                        always {
-                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                        }
-                    }
-                } // stage('Test RPMs on EL 9.6')
-                stage('Test RPMs on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Test RPMs on Leap 15.5') }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        /* neither of these work as FTest strips the first node
-                           out of the pool requiring 2 node clusters at minimum
-                         * additionally for this use-case, can't override
-                           ftest_arg with this :-(
-                        script {
-                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.5',
-                                pragma_suffix: '',
-                                label: params.CI_UNIT_VM1_LABEL,
-                                next_version: next_version(),
-                                stage_tags: '',
-                                default_tags: 'test_daos_management',
-                                nvme: 'auto',
-                                run_if_pr: true,
-                                run_if_landing: true,
-                                job_status: job_status_internal
-                            )
-                        }
-                           job_step_update(
-                            functionalTest(
-                                test_tag: 'test_daos_management',
-                                ftest_arg: '--yaml_extension single_host',
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } */
-                        job_step_update(
-                            testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
-                        )
-                    }
-                    post {
-                        always {
-                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                        }
-                    }
-                } // stage('Test RPMs on Leap 15.5')
-            } // parallel
+                    )
+                }
+            }
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
             when {
