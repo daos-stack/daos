@@ -11,15 +11,199 @@
  * LICENSE file.
  */
 
+import groovy.transform.Field
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
 // Name of branch to be tested
-base_branch = 'release/2.8'
+test_branch = 'release/2.8'
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
+
+// Keys and values updated by the updateRunStage() function using the parameters.
+@Field
+Map<String, Boolean> runStage = [:]
+
+String bashName(String name) {
+    return name.replaceAll('[^a-zA-Z0-9]', '_')
+}
+
+// Update the runStage map
+void updateRunStage() {
+    Map reasons = [:]
+
+    // Ordered list of stage names as params.keySet() does not guarantee order
+    List<String> stageOrder = [
+        'Cancel Previous Builds',
+        'Test',
+        'Functional Hardware Medium TCP',
+        'Functional Hardware Medium TCP Provider',
+        'Functional Hardware Large TCP',
+        'Functional Hardware Medium UCX',
+        'Functional Hardware Large UCX',
+    ]
+
+    // Initialize the run state of each stage using the parameter stage keys
+    for (name in stageOrder) {
+        value = params.get(bashName(name), null)
+        if (value instanceof Boolean && !name.startsWith('CI_')) {
+            runStage[name] = value
+            reasons[name] = "parameter selection or default"
+        }
+    }
+
+    // Debug
+    String buildCause = currentBuild.getBuildCauses().toString()
+    println("updateRunStage: Build cause: ${buildCause}")
+    println("updateRunStage: Started by user: ${startedByUser()}")
+
+    // Handle landing builds
+    if (startedByLanding()) {
+        println("updateRunStage: Detected landing build, overwriting defaults")
+        for (stage in runStage.keySet()) {
+            if (stage in ['Test', 'Functional on EL 9']) {
+                runStage[stage] = true
+            } else {
+                runStage[stage] = false
+            }
+            reasons[stage] = "landing build"
+        }
+        displayRunStage(reasons)
+        return
+    }
+
+    // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
+    if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
+        println(
+            "updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas")
+        displayRunStage(reasons)
+        return
+    }
+
+    // Update stage running based on commit pragmas
+    println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
+    Map<String, String> commitPragmas = envToPragmas()
+    println("updateRunStage: Checking skip commit pragmas from commit message:")
+    commitPragmas.each { key, value ->
+        println("  ${key}: ${value}")
+    }
+    for (stage in runStage.keySet()) {
+        List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        for (pragma in skipPragmas) {
+            // commitPragmas will already contain lower case keys from pragmasToMap()
+            println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
+            if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
+                runStage[stage] = false
+                reasons[stage] = "commit pragma ${pragma}: true"
+                break
+            } else if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
+                runStage[stage] = true
+                reasons[stage] = "commit pragma ${pragma}: false"
+                break
+            }
+        }
+    }
+
+    displayRunStage(reasons)
+}
+
+// Log which stages will be run and why based on the current state of the runStage map
+void displayRunStage(Map reasons = [:]) {
+    println("Stage run conditions:")
+    for (stage in runStage.keySet()) {
+        String reason = reasons.get(stage, 'default')
+        if (runStage[stage]) {
+            echo("Running:   ${stage} (reason: ${reason})")
+        } else {
+            echo("Skipping:  ${stage} (reason: ${reason})")
+        }
+    }
+}
+
+// Get a list of skip commit pragmas to check for a given stage name
+List<String> getStageNameSkipPragmas(String stageName) {
+    String stagePragma = "skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
+    List<String> pragmas = []
+
+    // Build up a priority list of pragmas to check based on the stage name.
+    if (stageName in ['Cancel Previous Builds']) {
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+
+    } else if (stageName == 'Test' || stageName.contains('Functional')) {
+        // Add skip pragma for parent stage
+        if (stageName != 'Test') {
+            pragmas.add('skip-test')
+        }
+        if (stageName.contains('Functional on')) {
+            // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
+            pragmas.add('skip-functional-test')
+            // Add skip pragma alias for all functional VM tests
+            pragmas.add('skip-functional-test-vm')
+            pragmas.add('skip-functional-vm-test')
+            // Compatibility with existing commit pragmas
+            pragmas.add(stagePragma.replace('functional-on-', 'functional-test-'))
+        }
+        if (stageName.contains('Functional Hardware')) {
+            // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
+            pragmas.add('skip-functional-test')
+            // Add skip pragma alias for all functional HW tests
+            pragmas.add('skip-functional-test-hardware')
+            pragmas.add('skip-functional-hardware-test')
+            // Compatibility with existing commit pragmas
+            pragmas.add(stagePragma.replace('functional-hardware-', 'functional-hardware-test-'))
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+    }
+
+    // Compatibility with existing commit pragmas using distro versions
+    List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
+    List<String> copyPragmas = pragmas.clone()
+    for (distro in distros) {
+        for (_pragma in copyPragmas) {
+            if (_pragma.contains("-${distro}-")) {
+                Integer _index = pragmas.indexOf(_pragma)
+                pragmas.add(_index + 1, _pragma.replace("-${distro}-", "-${distro}"))
+            }
+        }
+    }
+
+    // Compatibility with existing commit pragmas using shortened func or hw
+    copyPragmas = pragmas.clone()
+    for (_pragma in copyPragmas) {
+         if (_pragma.contains('-functional') || _pragma.contains('-hardware')) {
+            Integer _index = pragmas.indexOf(_pragma)
+            String _compat_pragma = _pragma.replace('-functional', '-func')
+            _compat_pragma = _compat_pragma.replace('-hardware', '-hw')
+            pragmas.add(_index + 1, _compat_pragma)
+        }
+    }
+
+    return pragmas
+}
+
+// Initialize the runStage map with the current state of the build parameters and any commit
+// pragmas related to skipping/running stages. Should only be called once per build.
+def setupRunStage() {
+    pragmasToEnv()
+    updateRunStage()
+}
+
+// Determine if a given stage should be run based on the current state of the runStage map.
+// Ensure the runStage map is initialized before checking the stage state - required to support
+// the Jenkins Restart from Stage option.
+Boolean shouldStageRun(String name) {
+    if (!runStage) {
+        setupRunStage()
+    }
+    return runStage[name]
+}
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
 void job_status_update(String name=env.STAGE_NAME, def value=currentBuild.currentResult) {
@@ -47,13 +231,23 @@ if (!env.CHANGE_ID &&
    return
 }
 
+// Get the default tags to use for a stage based on the current build type
+String defaultTags(String timedTags, String prTags = 'always_passes') {
+    /* groovylint-disable-next-line UnnecessaryGetter */
+    if (isPr()) {
+        return prTags
+    }
+    return timedTags
+}
+
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'provider-2.8-testing' ? 'TZ=UTC\n0 12 * * 0' : '')
-    }
+    // Disabling timed builds; testing moved to weekly-2.8-testing branch
+    // triggers {
+    //     /* groovylint-disable-next-line AddEmptyString */
+    //     cron(env.BRANCH_NAME == 'provider-2.8-testing' ? 'TZ=UTC\n0 12 * * 0' : '')
+    // }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
@@ -96,7 +290,7 @@ pipeline {
                defaultValue: 'ucx+ud_x',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'BaseBranch',
-               defaultValue: base_branch,
+               defaultValue: test_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
@@ -108,24 +302,31 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        booleanParam(name: 'CI_medium_tcp_TEST',
+        booleanParam(name: 'CI_IGNORE_SKIP_COMMIT_PRAGMAS',
+                     defaultValue: false,
+                     description: 'Ignore any commit pragmas used to skip/run stages and rely ' +
+                                  'solely on the build parameter settings')
+        booleanParam(name: bashName('Cancel Previous Builds'),
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium TCP test stages')
-        booleanParam(name: 'CI_medium_tcp_provider_TEST',
+                     description: 'Run the Cancel Previous Builds stage.')
+        booleanParam(name: bashName('Test'),
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
-        booleanParam(name: 'CI_large_tcp_TEST',
+                     description: 'Run the Test stage.')
+        booleanParam(name: bashName('Functional Hardware Medium TCP'),
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Large TCP test stages')
-        booleanParam(name: 'CI_medium_ucx_TEST',
+                     description: 'Run the Functional Hardware Medium TCP stage.')
+        booleanParam(name: bashName('Functional Hardware Medium TCP Provider'),
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium UCX test stages')
-        booleanParam(name: 'CI_medium_ucx_provider_TEST',
+                     description: 'Run the Functional Hardware Medium TCP Provider stage.')
+        booleanParam(name: bashName('Functional Hardware Large TCP'),
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
-        booleanParam(name: 'CI_large_ucx_TEST',
+                     description: 'Run the Functional Hardware Large TCP stage.')
+        booleanParam(name: bashName('Functional Hardware Medium UCX'),
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Large UCX test stages')
+                     description: 'Run the Functional Hardware Medium UCX stage.')
+        booleanParam(name: bashName('Functional Hardware Large UCX'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Large UCX stage.')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium TCP stage')
@@ -138,9 +339,6 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL',
                defaultValue: 'ci_ofed9',
                description: 'Label to use for 9 node Functional Hardware Large UCX stage')
@@ -150,28 +348,34 @@ pipeline {
     }
 
     stages {
-        stage('Set Description') {
-            steps {
-                script {
-                    if (params.CI_BUILD_DESCRIPTION) {
-                        buildDescription params.CI_BUILD_DESCRIPTION
-                    }
-                }
-            }
-        }
-        stage('Prepare Environment Variables') {
-            // TODO: Could/should these be moved to the environment block?
+        stage('Prepare') {
             parallel {
-                stage('Get Commit Message') {
-                    steps {
-                        pragmasToEnv()
-                    }
-                }
-                stage('Determine Release Branch') {
+                stage('Set Description') {
                     steps {
                         script {
-                            env.RELEASE_BRANCH = releaseBranch()
-                            echo 'Release branch == ' + env.RELEASE_BRANCH
+                            if (params.CI_BUILD_DESCRIPTION) {
+                                buildDescription params.CI_BUILD_DESCRIPTION
+                            }
+                        }
+                    }
+                }
+                stage('Setup Stages') {
+                    steps {
+                        setupRunStage()
+                    }
+                }
+                stage('Branch name check') {
+                    when { changeRequest() }
+                    steps {
+                        script {
+                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
+                                error('Your PR branch name does not follow the rules. Please rename it ' +
+                                      'according to the rules described here: ' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
+                                      'Once you have renamed your branch locally to match the ' +
+                                      'format, close this PR and open a new one using the newly renamed ' +
+                                      'local branch.')
+                            }
                         }
                     }
                 }
@@ -180,7 +384,7 @@ pipeline {
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { shouldStageRun('Cancel Previous Builds') }
             }
             steps {
                 cancelPreviousBuilds()
@@ -189,13 +393,14 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { shouldStageRun('Test') }
             }
             steps {
                 script {
                     parallel(
                         'Functional Hardware Medium TCP': getFunctionalTestStage(
                             name: 'Functional Hardware Medium TCP',
+                            runStage: shouldStageRun('Functional Hardware Medium TCP'),
                             pragma_suffix: '-hw-medium-tcp',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL,
@@ -204,12 +409,11 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium TCP Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium TCP Provider',
+                            runStage: shouldStageRun('Functional Hardware Medium TCP Provider'),
                             pragma_suffix: '-hw-medium-tcp-provider',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL,
@@ -218,12 +422,11 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large TCP': getFunctionalTestStage(
                             name: 'Functional Hardware Large TCP',
+                            runStage: shouldStageRun('Functional Hardware Large TCP'),
                             pragma_suffix: '-hw-large-tcp',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_TCP_LABEL,
@@ -232,12 +435,11 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium UCX': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX',
+                            runStage: shouldStageRun('Functional Hardware Medium UCX'),
                             pragma_suffix: '-hw-medium-ucx',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL,
@@ -247,27 +449,11 @@ pipeline {
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
                             other_packages: 'mercury-ucx',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            pragma_suffix: '-hw-medium-ucx-provider',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
-                            other_packages: 'mercury-ucx',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large UCX': getFunctionalTestStage(
                             name: 'Functional Hardware Large UCX',
+                            runStage: shouldStageRun('Functional Hardware Large UCX'),
                             pragma_suffix: '-hw-large-ucx',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL,
@@ -277,8 +463,6 @@ pipeline {
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
                             other_packages: 'mercury-ucx',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                     )
