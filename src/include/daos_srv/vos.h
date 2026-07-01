@@ -1685,6 +1685,7 @@ struct scrub_ctx {
 	sc_sleep_fn_t		 sc_sleep_fn;
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
+	uint32_t                 sc_filter_credits;
 
 	enum scrub_status        sc_status;
 	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
