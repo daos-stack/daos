@@ -1179,7 +1179,8 @@ pipeline {
                 stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { shouldStageRun('Functional on EL 8.8 with Valgrind') }
+                        expression { shouldStageRun('Functional on EL 8.8 with Valgrind') &&
+                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr')) }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -1202,7 +1203,8 @@ pipeline {
                 stage('Functional on EL 8') {
                     when {
                         beforeAgent true
-                        expression { shouldStageRun('Functional on EL 8') }
+                        expression { shouldStageRun('Functional on EL 8') &&
+                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr')) }
                     }
                     agent {
                         label vm9_label('EL8')
@@ -1226,7 +1228,8 @@ pipeline {
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
-                        expression { shouldStageRun('Functional on EL 9') }
+                        expression { shouldStageRun('Functional on EL 9') &&
+                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr'))}
                     }
                     agent {
                         label vm9_label('EL9')
@@ -1250,7 +1253,8 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { shouldStageRun('Functional on Leap 15') }
+                        expression { shouldStageRun('Functional on Leap 15') &&
+                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr'))}
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1274,7 +1278,8 @@ pipeline {
                 stage('Functional on SLES 15') {
                     when {
                         beforeAgent true
-                        expression { shouldStageRun('Functional on SLES 15') }
+                        expression { shouldStageRun('Functional on SLES 15') &&
+                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr'))}
                     }
                     agent {
                         label vm9_label('Leap15')
@@ -1298,7 +1303,8 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { shouldStageRun('Functional on Ubuntu 20.04') }
+                        expression { shouldStageRun('Functional on Ubuntu 20.04') &&
+                                     !testsInStage(getFunctionalTags('-vm', 'vm', 'pr'))}
                     }
                     agent {
                         label vm9_label('Ubuntu')
