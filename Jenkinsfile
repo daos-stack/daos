@@ -292,6 +292,16 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
+        booleanParam(name: 'CI_IGNORE_SKIP_COMMIT_PRAGMAS',
+                     defaultValue: false,
+                     description: 'Ignore any commit pragmas used to skip/run stages and rely ' +
+                                  'solely on the build parameter settings')
+        booleanParam(name: bashName('Cancel Previous Builds'),
+                     defaultValue: true,
+                     description: 'Run the Cancel Previous Builds stage.')
+        booleanParam(name: bashName('Test'),
+                     defaultValue: true,
+                     description: 'Run the Test stage.')
         booleanParam(name: bashName('Functional Hardware Medium TCP MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium TCP MD on SSD stage.')
