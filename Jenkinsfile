@@ -175,6 +175,9 @@ pipeline {
         booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
+        booleanParam(name: 'CI_cb_md_on_ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box test stage')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
@@ -199,6 +202,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for the Functional Hardware Large MD on SSD stage')
+        string(name: 'FUNCTIONAL_CLUSTER_BOX_LABEL',
+               defaultValue: 'cluster_box',
+               description: 'Label to use for the Functional Cluster Box stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -434,6 +440,20 @@ pipeline {
                             stage_tags: 'hw,large',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
+                            name: "Functional Cluster Box Medium MD on SSD",
+                            pragma_suffix:'-cb-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                            next_version: params.BaseBranch,,
+                            stage_tags: "cb,medium",
+                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
