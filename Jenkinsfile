@@ -1260,15 +1260,15 @@ pipeline {
                             name: 'Fault injection testing',
                             runStage: shouldStageRun('Fault injection testing'),
                             label: params.CI_FI_1_LABEL,
-                            job_status: job_status_internal,
+                            jobStatus: job_status_internal,
                             unitTestArgs: [
                                 timeout_time: 240,
                                 inst_repos: daosRepos(),
                                 test_script: 'ci/unit/test_nlt.sh --memcheck no' +
-                                            ' --system-ram-reserved 4 --server-debug WARN' +
-                                            ' --log-usage-import nltr.json' +
-                                            ' --log-usage-save nltr.xml' +
-                                            ' --class-name fault-injection fi',
+                                             ' --system-ram-reserved 4 --server-debug WARN' +
+                                             ' --log-usage-import nltr.json' +
+                                             ' --log-usage-save nltr.xml' +
+                                             ' --class-name fault-injection fi',
                                 with_valgrind: '',
                                 always_script: 'ci/unit/test_nlt_post.sh',
                                 testResults: 'nlt-junit.xml',
@@ -1290,7 +1290,7 @@ pipeline {
                             name: 'Test RPMs on EL 9.6',
                             runStage: shouldStageRun('Test RPMs on EL 9.6'),
                             label: params.CI_UNIT_VM1_LABEL,
-                            job_status: job_status_internal,
+                            jobStatus: job_status_internal,
                             testRpmArgs: [
                                 inst_repos: daosRepos(),
                                 daos_pkg_version: daosPackagesVersion(next_version()),
@@ -1300,7 +1300,7 @@ pipeline {
                             name: 'Test RPMs on Leap 15.5',
                             runStage: shouldStageRun('Test RPMs on Leap 15.5'),
                             label: params.CI_UNIT_VM1_LABEL,
-                            job_status: job_status_internal,
+                            jobStatus: job_status_internal,
                             testRpmArgs: [
                                 inst_repos: daosRepos(),
                                 daos_pkg_version: daosPackagesVersion(next_version()),
