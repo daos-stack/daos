@@ -903,8 +903,7 @@ pipeline {
                                                                 deps_build: false,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --target build-ci' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
