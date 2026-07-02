@@ -297,7 +297,7 @@ lookup_rel_path_loop:
 	}
 
 	if (mode)
-		*mode = obj->mode;
+		*mode = DFS_EXTERNAL_MODE(obj->mode);
 
 	if (stbuf) {
 		if (is_root) {
@@ -318,8 +318,8 @@ lookup_rel_path_loop:
 			}
 
 			if (mode)
-				*mode = entry.mode;
-			dfs->root_stbuf.st_mode = entry.mode;
+				*mode = DFS_EXTERNAL_MODE(entry.mode);
+			dfs->root_stbuf.st_mode = DFS_EXTERNAL_MODE(entry.mode);
 			dfs->root_stbuf.st_uid  = entry.uid;
 			dfs->root_stbuf.st_gid  = entry.gid;
 
@@ -341,7 +341,7 @@ lookup_rel_path_loop:
 			memcpy(stbuf, &dfs->root_stbuf, sizeof(struct stat));
 		} else {
 			stbuf->st_nlink = 1;
-			stbuf->st_mode  = obj->mode;
+			stbuf->st_mode  = DFS_EXTERNAL_MODE(obj->mode);
 			stbuf->st_uid   = entry.uid;
 			stbuf->st_gid   = entry.gid;
 			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
@@ -555,11 +555,11 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 	}
 
 	if (mode)
-		*mode = obj->mode;
+		*mode = DFS_EXTERNAL_MODE(obj->mode);
 
 	if (stbuf) {
 		stbuf->st_nlink = 1;
-		stbuf->st_mode  = obj->mode;
+		stbuf->st_mode  = DFS_EXTERNAL_MODE(obj->mode);
 		stbuf->st_uid   = entry.uid;
 		stbuf->st_gid   = entry.gid;
 		if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
