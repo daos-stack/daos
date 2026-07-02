@@ -5,6 +5,7 @@ timeouts:
   test_dm_obj_small_dcp: 120
   test_dm_obj_small_cont_clone: 90
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   engines:

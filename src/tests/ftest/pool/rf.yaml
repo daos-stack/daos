@@ -4,6 +4,7 @@ hosts:
 timeout: 300
 server_config:
   name: daos_server
+  disable_hugepages: true
   engines_per_host: 1
   engines:
     0:
