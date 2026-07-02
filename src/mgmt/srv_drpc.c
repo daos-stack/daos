@@ -2505,6 +2505,7 @@ out:
 	}
 
 	ctl__bio_health_req__free_unpacked(req, &alloc.alloc);
+	D_FREE(resp->dev_uuid);
 	D_FREE(resp);
 
 	if (bio_health != NULL)
