@@ -52,7 +52,7 @@ def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMIT
     Returns:
         CommandResult: results from the scontrol command
     """
-    command = ['scontrol', 'create']
+    command = ['sudo', 'scontrol', 'create']
     command.append('='.join(['PartitionName', str(name)]))
     command.append('='.join(['Nodes', str(hosts)]))
     command.append('='.join(['Default', str(default)]))
