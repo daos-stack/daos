@@ -1291,9 +1291,9 @@ pipeline {
                             nextVersion: next_version(),
                             instRpms: 'mercury-libfabric',
                             nodeList: env.NODELIST,
-                            alwaysScript: 'ci/rpm/test_daos_post.sh test_rpms_leap_logs',
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15.5\'',
                             archiveArtifactsArgs: [
-                                artifacts: 'test_rpms_leap_logs/']
+                                artifacts: '\'Test RPMs on Leap 15.5/\'']
                         )
                     )
                 }
