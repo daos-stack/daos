@@ -73,7 +73,7 @@ def delete_partition(log, control, name):
         int: return status from scontrol command
 
     """
-    command = ['scontrol', 'delete']
+    command = ['sudo', 'scontrol', 'delete']
     command.append('='.join(['PartitionName', str(name)]))
     return run_remote(log, control, ' '.join(command))
 
