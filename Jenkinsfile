@@ -70,7 +70,8 @@ void updateRunStage() {
         'Functional Hardware Medium Verbs Provider MD on SSD',
         'Functional Hardware Medium UCX Provider',
         'Functional Hardware Large',
-        'Functional Hardware Large MD on SSD'
+        'Functional Hardware Large MD on SSD',
+        'Functional Cluster Box Medium MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -218,7 +219,9 @@ void updateRunStage() {
             'Functional Hardware Medium Verbs Provider MD on SSD': hwBuildStage,
             'Functional Hardware Medium UCX Provider': hwBuildStage,
             'Functional Hardware Large': hwBuildStage,
-            'Functional Hardware Large MD on SSD': hwBuildStage]
+            'Functional Hardware Large MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium MD on SSD': hwBuildStage,
+            ]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
             runStage[stage] = false
@@ -314,8 +317,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
 
-    } else if (stageName.contains('Hardware')) {
-        //
+    } else if (stageName.contains('Hardware') || stageName.contains('Cluster Box')) {
+        // Add skip pragma for parent stage
         if (stageName != 'Test Hardware') {
             pragmas.add('skip-test-hardware')
         }
@@ -715,7 +718,7 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
-        string(name: 'FUNCTIONAL_CLUSTER_BOX_LABEL',
+        string(name: 'FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL',
                defaultValue: 'cluster_box',
                description: 'Label to use for the Functional Cluster Box stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
@@ -1570,7 +1573,8 @@ pipeline {
                         ),
                         'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
                             name: "Functional Cluster Box Medium MD on SSD",
-                            pragma_suffix:'-cb-md-on-ssd',
+                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
+                            pragma_suffix:'-cb-medium-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
                             next_version: next_version(),
                             stage_tags: "cb,medium",
