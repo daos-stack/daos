@@ -38,37 +38,42 @@ dfs_update_file_metrics(dfs_t *dfs, daos_size_t read_bytes, daos_size_t write_by
 
 /** A head or tail portion of a logical array IO after splitting at split_off. */
 struct dfs_io_part {
-	daos_handle_t    oh;
-	daos_array_iod_t iod;
-	d_sg_list_t      sgl;
-	bool             active;
+	daos_handle_t    dip_oh;
+	daos_array_iod_t dip_iod;
+	d_sg_list_t      dip_sgl;
+	bool             dip_active;
 };
 
+/* Append each contiguous chunk that daos_sgl_processor() yields as an iov in dst_iovs. */
+struct sgl_append_ctx {
+	d_iov_t  *dst_iovs;
+	uint32_t *dst_nr;
+};
+
+static int
+sgl_append_iov_cb(uint8_t *buf, size_t len, void *args)
+{
+	struct sgl_append_ctx *ctx = args;
+
+	d_iov_set(&ctx->dst_iovs[*ctx->dst_nr], buf, len);
+	(*ctx->dst_nr)++;
+	return 0;
+}
+
 /*
- * Append \a need bytes from \a src starting at the running cursor (\a cur_iov, \a cur_off) as a set
- * of iovs into \a dst_iovs, advancing the cursor. The cursor walks the source sgl byte stream so
- * that successive calls carve out consecutive byte slices that map to consecutive array ranges.
+ * Append \a need bytes from \a src starting at the running cursor \a idx as a set of iovs into \a
+ * dst_iovs, advancing the cursor. The cursor walks the source sgl byte stream (by iov_len) so that
+ * successive calls carve out consecutive byte slices that map to consecutive array ranges.
+ * daos_sgl_processor() stops at the end of the sgl, so a \a need larger than the bytes remaining in
+ * \a src cannot walk past sg_nr.
  */
 static void
-sgl_copy_bytes(d_sg_list_t *src, uint32_t *cur_iov, daos_size_t *cur_off, daos_size_t need,
-	       d_iov_t *dst_iovs, uint32_t *dst_nr)
+sgl_copy_bytes(d_sg_list_t *src, struct daos_sgl_idx *idx, daos_size_t need, d_iov_t *dst_iovs,
+	       uint32_t *dst_nr)
 {
-	while (need > 0) {
-		d_iov_t    *siov  = &src->sg_iovs[*cur_iov];
-		daos_size_t avail = siov->iov_len - *cur_off;
-		daos_size_t take  = avail < need ? avail : need;
+	struct sgl_append_ctx ctx = {.dst_iovs = dst_iovs, .dst_nr = dst_nr};
 
-		if (take > 0) {
-			d_iov_set(&dst_iovs[*dst_nr], (char *)siov->iov_buf + *cur_off, take);
-			(*dst_nr)++;
-			*cur_off += take;
-			need -= take;
-		}
-		if (*cur_off == siov->iov_len) {
-			(*cur_iov)++;
-			*cur_off = 0;
-		}
-	}
+	daos_sgl_processor(src, false, idx, need, sgl_append_iov_cb, &ctx);
 }
 
 /* Zero a [off, off+len) byte window within the logical SGL stream (walking iov capacities). */
@@ -166,8 +171,8 @@ dfs_pl_head_short_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_range_
 static void
 dfs_io_part_free(struct dfs_io_part *part)
 {
-	D_FREE(part->iod.arr_rgs);
-	D_FREE(part->sgl.sg_iovs);
+	D_FREE(part->dip_iod.arr_rgs);
+	D_FREE(part->dip_sgl.sg_iovs);
 }
 
 /*
@@ -180,20 +185,19 @@ static int
 dfs_io_build_parts(dfs_obj_t *obj, daos_range_t *rgs, uint32_t rg_nr, d_sg_list_t *sgl,
 		   struct dfs_io_part *head, struct dfs_io_part *tail)
 {
-	daos_size_t split   = obj->f.split_off;
-	uint32_t    cur_iov = 0;
-	daos_size_t cur_off = 0;
-	uint32_t    i;
-	int         rc = 0;
+	daos_size_t         split = obj->f.split_off;
+	struct daos_sgl_idx cur   = {0};
+	uint32_t            i;
+	int                 rc = 0;
 
 	memset(head, 0, sizeof(*head));
 	memset(tail, 0, sizeof(*tail));
-	head->oh = obj->oh;
-	tail->oh = obj->f.tail_oh;
+	head->dip_oh = obj->oh;
+	tail->dip_oh = obj->f.tail_oh;
 
-	D_ALLOC_ARRAY(head->iod.arr_rgs, rg_nr);
-	D_ALLOC_ARRAY(tail->iod.arr_rgs, rg_nr);
-	if (head->iod.arr_rgs == NULL || tail->iod.arr_rgs == NULL)
+	D_ALLOC_ARRAY(head->dip_iod.arr_rgs, rg_nr);
+	D_ALLOC_ARRAY(tail->dip_iod.arr_rgs, rg_nr);
+	if (head->dip_iod.arr_rgs == NULL || tail->dip_iod.arr_rgs == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	if (sgl != NULL) {
@@ -203,9 +207,9 @@ dfs_io_build_parts(dfs_obj_t *obj, daos_range_t *rgs, uint32_t rg_nr, d_sg_list_
 		 */
 		uint32_t max_iovs = sgl->sg_nr + 2 * rg_nr;
 
-		D_ALLOC_ARRAY(head->sgl.sg_iovs, max_iovs);
-		D_ALLOC_ARRAY(tail->sgl.sg_iovs, max_iovs);
-		if (head->sgl.sg_iovs == NULL || tail->sgl.sg_iovs == NULL)
+		D_ALLOC_ARRAY(head->dip_sgl.sg_iovs, max_iovs);
+		D_ALLOC_ARRAY(tail->dip_sgl.sg_iovs, max_iovs);
+		if (head->dip_sgl.sg_iovs == NULL || tail->dip_sgl.sg_iovs == NULL)
 			D_GOTO(err, rc = -DER_NOMEM);
 	}
 
@@ -223,28 +227,28 @@ dfs_io_build_parts(dfs_obj_t *obj, daos_range_t *rgs, uint32_t rg_nr, d_sg_list_
 			hlen = (end < split ? end : split) - idx;
 
 		if (hlen > 0) {
-			daos_range_t *r = &head->iod.arr_rgs[head->iod.arr_nr++];
+			daos_range_t *r = &head->dip_iod.arr_rgs[head->dip_iod.arr_nr++];
 
 			r->rg_idx = idx;
 			r->rg_len = hlen;
 			if (sgl != NULL)
-				sgl_copy_bytes(sgl, &cur_iov, &cur_off, hlen, head->sgl.sg_iovs,
-					       &head->sgl.sg_nr);
+				sgl_copy_bytes(sgl, &cur, hlen, head->dip_sgl.sg_iovs,
+					       &head->dip_sgl.sg_nr);
 		}
 		if (len - hlen > 0) {
-			daos_range_t *r    = &tail->iod.arr_rgs[tail->iod.arr_nr++];
+			daos_range_t *r    = &tail->dip_iod.arr_rgs[tail->dip_iod.arr_nr++];
 			daos_size_t   tidx = (idx > split ? idx : split) - split;
 
 			r->rg_idx = tidx;
 			r->rg_len = len - hlen;
 			if (sgl != NULL)
-				sgl_copy_bytes(sgl, &cur_iov, &cur_off, len - hlen,
-					       tail->sgl.sg_iovs, &tail->sgl.sg_nr);
+				sgl_copy_bytes(sgl, &cur, len - hlen, tail->dip_sgl.sg_iovs,
+					       &tail->dip_sgl.sg_nr);
 		}
 	}
 
-	head->active = head->iod.arr_nr > 0;
-	tail->active = tail->iod.arr_nr > 0;
+	head->dip_active = head->dip_iod.arr_nr > 0;
+	tail->dip_active = tail->dip_iod.arr_nr > 0;
 	return 0;
 
 err:
@@ -287,7 +291,8 @@ dfs_io_split_cb(tse_task_t *task, void *data)
 		DFS_OP_STAT_INCR(args->dfs, DOS_WRITE);
 		dfs_update_file_metrics(args->dfs, 0, args->buf_size);
 	} else {
-		daos_size_t nr_read = args->head.iod.arr_nr_read + args->tail.iod.arr_nr_read;
+		daos_size_t nr_read =
+		    args->head.dip_iod.arr_nr_read + args->tail.dip_iod.arr_nr_read;
 
 		/*
 		 * arr_nr_read from an array read excludes only the trailing short-read (records
@@ -305,15 +310,17 @@ dfs_io_split_cb(tse_task_t *task, void *data)
 		 * the head's reported size -- the head ranges may be unsorted, so the untouched gap
 		 * need not be at the tail of the head SGL.
 		 */
-		if (args->head.active && args->tail.active && args->tail.iod.arr_array_size > 0) {
+		if (args->head.dip_active && args->tail.dip_active &&
+		    args->tail.dip_iod.arr_array_size > 0) {
 			daos_size_t head_len = 0;
 			uint32_t    i;
 
-			for (i = 0; i < args->head.iod.arr_nr; i++)
-				head_len += args->head.iod.arr_rgs[i].rg_len;
-			sgl_zero_head_holes(&args->head.sgl, args->head.iod.arr_rgs,
-					    args->head.iod.arr_nr, args->head.iod.arr_array_size);
-			nr_read = head_len + args->tail.iod.arr_nr_read;
+			for (i = 0; i < args->head.dip_iod.arr_nr; i++)
+				head_len += args->head.dip_iod.arr_rgs[i].rg_len;
+			sgl_zero_head_holes(&args->head.dip_sgl, args->head.dip_iod.arr_rgs,
+					    args->head.dip_iod.arr_nr,
+					    args->head.dip_iod.arr_array_size);
+			nr_read = head_len + args->tail.dip_iod.arr_nr_read;
 		}
 
 		DFS_OP_STAT_INCR(args->dfs, DOS_READ);
@@ -359,7 +366,7 @@ dfs_io_split_task(tse_task_t *task)
 		tse_task_t         *io_task;
 		daos_array_io_t    *io_arg;
 
-		if (!part->active)
+		if (!part->dip_active)
 			continue;
 
 		rc = dc_task_create(io_func, sched, NULL, &io_task);
@@ -367,10 +374,10 @@ dfs_io_split_task(tse_task_t *task)
 			D_GOTO(err, rc);
 
 		io_arg      = dc_task_get_args(io_task);
-		io_arg->oh  = part->oh;
+		io_arg->oh  = part->dip_oh;
 		io_arg->th  = args->write ? DAOS_TX_NONE : args->dfs->th;
-		io_arg->iod = &part->iod;
-		io_arg->sgl = &part->sgl;
+		io_arg->iod = &part->dip_iod;
+		io_arg->sgl = &part->dip_sgl;
 
 		rc = tse_task_register_deps(task, 1, &io_task);
 		if (rc != 0) {
