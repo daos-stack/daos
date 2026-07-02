@@ -685,7 +685,7 @@ pipeline {
         booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
-        booleanParam(name: 'CI_cb_md_on_ssd_TEST',
+        booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
