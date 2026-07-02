@@ -14,6 +14,8 @@
  * LICENSE file.
  */
 
+import groovy.transform.Field
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
@@ -23,6 +25,194 @@ test_branch = 'master'
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
+
+// Keys and values updated by the updateRunStage() function using the parameters.
+@Field
+Map<String, Boolean> runStage = [:]
+
+String bashName(String name) {
+    return name.replaceAll('[^a-zA-Z0-9]', '_')
+}
+
+// Update the runStage map
+void updateRunStage() {
+    Map reasons = [:]
+
+    // Ordered list of stage names as params.keySet() does not guarantee order
+    List<String> stageOrder = [
+        'Cancel Previous Builds',
+        'Test',
+        'Functional on EL 8',
+        'Functional on EL 9',
+        'Functional on Leap 15',
+        'Functional on Ubuntu 20.04',
+        'Functional Hardware Medium',
+        'Functional Hardware Medium MD on SSD',
+        'Functional Hardware Medium Verbs Provider',
+        'Functional Hardware Medium Verbs Provider MD on SSD',
+        'Functional Hardware Medium UCX Provider',
+        'Functional Hardware Large',
+        'Functional Hardware Large MD on SSD'
+    ]
+
+    // Initialize the run state of each stage using the parameter stage keys
+    for (name in stageOrder) {
+        value = params.get(bashName(name), null)
+        if (value instanceof Boolean && !name.startsWith('CI_')) {
+            runStage[name] = value
+            reasons[name] = "parameter selection or default"
+        }
+    }
+
+    // Debug
+    String buildCause = currentBuild.getBuildCauses().toString()
+    println("updateRunStage: Build cause: ${buildCause}")
+    println("updateRunStage: Started by user: ${startedByUser()}")
+
+    // Handle landing builds
+    if (startedByLanding()) {
+        println("updateRunStage: Detected landing build, overwriting defaults")
+        for (stage in runStage.keySet()) {
+            if (stage in ['Test', 'Functional on EL 9']) {
+                runStage[stage] = true
+            } else {
+                runStage[stage] = false
+            }
+            reasons[stage] = "landing build"
+        }
+        displayRunStage(reasons)
+        return
+    }
+
+    // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
+    if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
+        println(
+            "updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas")
+        displayRunStage(reasons)
+        return
+    }
+
+    // Update stage running based on commit pragmas
+    println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
+    Map<String, String> commitPragmas = envToPragmas()
+    println("updateRunStage: Checking skip commit pragmas from commit message:")
+    commitPragmas.each { key, value ->
+        println("  ${key}: ${value}")
+    }
+    for (stage in runStage.keySet()) {
+        List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        for (pragma in skipPragmas) {
+            // commitPragmas will already contain lower case keys from pragmasToMap()
+            println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
+            if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
+                runStage[stage] = false
+                reasons[stage] = "commit pragma ${pragma}: true"
+                break
+            } else if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
+                runStage[stage] = true
+                reasons[stage] = "commit pragma ${pragma}: false"
+                break
+            }
+        }
+    }
+
+    displayRunStage(reasons)
+}
+
+// Log which stages will be run and why based on the current state of the runStage map
+void displayRunStage(Map reasons = [:]) {
+    println("Stage run conditions:")
+    for (stage in runStage.keySet()) {
+        String reason = reasons.get(stage, 'default')
+        if (runStage[stage]) {
+            echo("Running:   ${stage} (reason: ${reason})")
+        } else {
+            echo("Skipping:  ${stage} (reason: ${reason})")
+        }
+    }
+}
+
+// Get a list of skip commit pragmas to check for a given stage name
+List<String> getStageNameSkipPragmas(String stageName) {
+    String stagePragma = "skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
+    List<String> pragmas = []
+
+    // Build up a priority list of pragmas to check based on the stage name.
+    if (stageName in ['Cancel Previous Builds']) {
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+
+    } else if (stageName == 'Test' || stageName.contains('Functional')) {
+        // Add skip pragma for parent stage
+        if (stageName != 'Test') {
+            pragmas.add('skip-test')
+        }
+        if (stageName.contains('Functional on')) {
+            // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
+            pragmas.add('skip-functional-test')
+            // Add skip pragma alias for all functional VM tests
+            pragmas.add('skip-functional-test-vm')
+            pragmas.add('skip-functional-vm-test')
+            // Compatibility with existing commit pragmas
+            pragmas.add(stagePragma.replace('functional-on-', 'functional-test-'))
+        }
+        if (stageName.contains('Functional Hardware')) {
+            // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
+            pragmas.add('skip-functional-test')
+            // Add skip pragma alias for all functional HW tests
+            pragmas.add('skip-functional-test-hardware')
+            pragmas.add('skip-functional-hardware-test')
+            // Compatibility with existing commit pragmas
+            pragmas.add(stagePragma.replace('functional-hardware-', 'functional-hardware-test-'))
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+    }
+
+    // Compatibility with existing commit pragmas using distro versions
+    List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
+    List<String> copyPragmas = pragmas.clone()
+    for (distro in distros) {
+        for (_pragma in copyPragmas) {
+            if (_pragma.contains("-${distro}-")) {
+                Integer _index = pragmas.indexOf(_pragma)
+                pragmas.add(_index + 1, _pragma.replace("-${distro}-", "-${distro}"))
+            }
+        }
+    }
+
+    // Compatibility with existing commit pragmas using shortened func or hw
+    copyPragmas = pragmas.clone()
+    for (_pragma in copyPragmas) {
+         if (_pragma.contains('-functional') || _pragma.contains('-hardware')) {
+            Integer _index = pragmas.indexOf(_pragma)
+            String _compat_pragma = _pragma.replace('-functional', '-func')
+            _compat_pragma = _compat_pragma.replace('-hardware', '-hw')
+            pragmas.add(_index + 1, _compat_pragma)
+        }
+    }
+
+    return pragmas
+}
+
+// Initialize the runStage map with the current state of the build parameters and any commit
+// pragmas related to skipping/running stages. Should only be called once per build.
+def setupRunStage() {
+    pragmasToEnv()
+    updateRunStage()
+}
+
+// Determine if a given stage should be run based on the current state of the runStage map.
+// Ensure the runStage map is initialized before checking the stage state - required to support
+// the Jenkins Restart from Stage option.
+Boolean shouldStageRun(String name) {
+    if (!runStage) {
+        setupRunStage()
+    }
+    return runStage[name]
+}
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
 void job_status_update(String name=env.STAGE_NAME, def value=currentBuild.currentResult) {
@@ -141,40 +331,49 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional on EL 8 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional on EL 9 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional on Leap 15 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
+        booleanParam(name: 'CI_IGNORE_SKIP_COMMIT_PRAGMAS',
                      defaultValue: false,
-                     description: 'Run the Functional on Ubuntu 20.04 test stage' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
-        booleanParam(name: 'CI_medium_TEST',
+                     description: 'Ignore any commit pragmas used to skip/run stages and rely ' +
+                                  'solely on the build parameter settings')
+        booleanParam(name: bashName('Cancel Previous Builds'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium test stage')
-        booleanParam(name: 'CI_medium_md_on_ssd_TEST',
+                     description: 'Run the Cancel Previous Builds stage.')
+        booleanParam(name: bashName('Test'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium MD on SSD test stage')
-        booleanParam(name: 'CI_medium_verbs_provider_TEST',
+                     description: 'Run the Test stage.')
+        booleanParam(name: bashName('Functional on EL 8'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium Verbs Provider test stage')
-        booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
+                     description: 'Run the Functional on EL 8 stage.')
+        booleanParam(name: bashName('Functional on EL 9'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
-        booleanParam(name: 'CI_medium_ucx_provider_TEST',
+                     description: 'Run the Functional on EL 9 stage.')
+        booleanParam(name: bashName('Functional on Leap 15'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium UCX Provider test stage')
-        booleanParam(name: 'CI_large_TEST',
+                     description: 'Run the Functional on Leap 15 stage.')
+        booleanParam(name: bashName('Functional on Ubuntu 20.04'),
+                     defaultValue: false,
+                     description: 'Run the Functional on Ubuntu 20.04 stage.')
+        booleanParam(name: bashName('Functional Hardware Medium'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Large test stage')
-        booleanParam(name: 'CI_large_md_on_ssd_TEST',
+                     description: 'Run the Functional Hardware Medium stage.')
+        booleanParam(name: bashName('Functional Hardware Medium MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Large MD on SSD test stage')
+                     description: 'Run the Functional Hardware Medium MD on SSD stage.')
+        booleanParam(name: bashName('Functional Hardware Medium Verbs Provider'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider stage.')
+        booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
+        booleanParam(name: bashName('Functional Hardware Medium UCX Provider'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium UCX Provider stage.')
+        booleanParam(name: bashName('Functional Hardware Large'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Large stage.')
+        booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Large MD on SSD stage.')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
@@ -211,42 +410,22 @@ pipeline {
     }
 
     stages {
-        stage('Set Description') {
-            steps {
-                script {
-                    if (params.CI_BUILD_DESCRIPTION) {
-                        buildDescription params.CI_BUILD_DESCRIPTION
-                    }
-                }
-            }
-        }
-        stage('Get Commit Message') {
-            steps {
-                script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
-                                            returnStdout: true).trim()
-                    Map pragmas = [:]
-                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
-                    env.COMMIT_MESSAGE.split('\n').each { line ->
-                        String key, value
-                        try {
-                            (key, value) = line.split(':', 2)
-                            if (key.contains(' ')) {
-                                return
+        stage('Prepare') {
+            parallel {
+                stage('Set Description') {
+                    steps {
+                        script {
+                            if (params.CI_BUILD_DESCRIPTION) {
+                                buildDescription params.CI_BUILD_DESCRIPTION
                             }
-                            pragmas[key.toLowerCase()] = value
-                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
-                        } catch (ArrayIndexOutOfBoundsException ignored) {
-                            // ignore and move on to the next line
                         }
                     }
-                    env.pragmas = pragmas
                 }
-            }
-        }
-        stage('Check PR') {
-            when { changeRequest() }
-            parallel {
+                stage('Setup Stages') {
+                    steps {
+                        setupRunStage()
+                    }
+                }
                 stage('Branch name check') {
                     when { changeRequest() }
                     steps {
@@ -262,12 +441,12 @@ pipeline {
                         }
                     }
                 }
-            } // parallel
-        } // stage('Check PR')
+            }
+        }
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { shouldStageRun('Cancel Previous Builds') }
             }
             steps {
                 cancelPreviousBuilds()
@@ -276,7 +455,7 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { shouldStageRun('Test') }
             }
             steps {
                 script {
@@ -287,6 +466,7 @@ pipeline {
                     parallel(
                         'Functional on EL 8': getFunctionalTestStage(
                             name: 'Functional on EL 8',
+                            runStage: shouldStageRun('Functional on EL 8'),
                             pragma_suffix: '-vm',
                             distro: 'el8',
                             image_version: 'el8.10',
@@ -296,12 +476,11 @@ pipeline {
                             stage_tags: '-hw',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: true,
                             job_status: job_status_internal
                         ),
                         'Functional on EL 9': getFunctionalTestStage(
                             name: 'Functional on EL 9',
+                            runStage: shouldStageRun('Functional on EL 9'),
                             pragma_suffix: '-vm',
                             distro: 'el9',
                             image_version: 'el9.7',
@@ -311,12 +490,11 @@ pipeline {
                             stage_tags: '-hw',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional on Leap 15.6': getFunctionalTestStage(
-                            name: 'Functional on Leap 15.6',
+                        'Functional on Leap 15': getFunctionalTestStage(
+                            name: 'Functional on Leap 15',
+                            runStage: shouldStageRun('Functional on Leap 15'),
                             pragma_suffix: '-vm',
                             distro: 'leap15',
                             image_version: 'leap15.6',
@@ -326,12 +504,11 @@ pipeline {
                             stage_tags: '-hw',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional on Ubuntu 20.04': getFunctionalTestStage(
                             name: 'Functional on Ubuntu 20.04',
+                            runStage: shouldStageRun('Functional on Ubuntu 20.04'),
                             pragma_suffix: '-vm',
                             distro: 'ubuntu20',
                             base_branch: params.BaseBranch,
@@ -340,12 +517,11 @@ pipeline {
                             stage_tags: '-hw',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
+                            runStage: shouldStageRun('Functional Hardware Medium'),
                             pragma_suffix: '-hw-medium',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
@@ -353,12 +529,11 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium MD on SSD'),
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
@@ -366,12 +541,11 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
+                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider'),
                             pragma_suffix: '-hw-medium-verbs-provider',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
@@ -380,12 +554,11 @@ pipeline {
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider MD on SSD'),
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
@@ -394,12 +567,11 @@ pipeline {
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
+                            runStage: shouldStageRun('Functional Hardware Medium UCX Provider'),
                             pragma_suffix: '-hw-medium-ucx-provider',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
@@ -408,12 +580,11 @@ pipeline {
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
                             provider: params.TestProviderUCX,
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
+                            runStage: shouldStageRun('Functional Hardware Large'),
                             pragma_suffix: '-hw-large',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
@@ -421,12 +592,11 @@ pipeline {
                             stage_tags: 'hw,large',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Large MD on SSD'),
                             pragma_suffix: '-hw-large-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
@@ -434,8 +604,6 @@ pipeline {
                             stage_tags: 'hw,large',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal
                         ),
                     )
