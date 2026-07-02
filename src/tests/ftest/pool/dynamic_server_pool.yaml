@@ -8,6 +8,7 @@ extra_servers:
   test_servers: server-2
 timeout: 135 # 1.5 times of measured time.
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   engines:

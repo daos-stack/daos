@@ -11,6 +11,7 @@ setup:
   start_servers_once: False
 
 server_config:
+  disable_hugepages: true
   name: daos_server
   provider: ofi+tcp
   reboot_waittime: 210
