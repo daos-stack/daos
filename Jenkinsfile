@@ -470,19 +470,6 @@ String vm9_label(String distro) {
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
-void rpm_test_post(String stageName, String node) {
-    // Extract first node from comma-delimited list
-    String firstNode = node.split(',')[0].trim()
-    sh label: 'Fetch and stage artifacts',
-       script: 'hostname; ssh -i ci_key jenkins@' + firstNode +
-               ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
-               'scp -i ci_key jenkins@' + firstNode +
-               ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
-               stageName + '/"'
-    archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-    job_status_update()
-}
-
 String sconsArgs() {
     if (!params.CI_SCONS_ARGS) {
         return sconsFaultsArgs()
@@ -1256,27 +1243,25 @@ pipeline {
                             nvme: 'auto',
                             job_status: job_status_internal
                         ),
-                        'Fault injection testing': scriptedTestStage(
+                        'Fault injection testing': scriptedUnitTestStage(
                             name: 'Fault injection testing',
                             runStage: shouldStageRun('Fault injection testing'),
                             label: params.CI_FI_1_LABEL,
                             jobStatus: job_status_internal,
-                            unitTestArgs: [
-                                timeout_time: 240,
-                                inst_repos: daosRepos(),
-                                test_script: 'ci/unit/test_nlt.sh --memcheck no' +
-                                             ' --system-ram-reserved 4 --server-debug WARN' +
-                                             ' --log-usage-import nltr.json' +
-                                             ' --log-usage-save nltr.xml' +
-                                             ' --class-name fault-injection fi',
-                                with_valgrind: '',
-                                always_script: 'ci/unit/test_nlt_post.sh',
-                                testResults: 'nlt-junit.xml',
-                                unstash_opt: true,
-                                unstash_tests: false,
-                                inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
-                                image_version: 'el9.7',
-                                prov_env_vars: 'VM_CPUS=14'],
+                            distro: 'el9',
+                            timeoutTime: 240,
+                            testScript: 'ci/unit/test_nlt.sh --memcheck no' +
+                                        ' --system-ram-reserved 4 --server-debug WARN' +
+                                        ' --log-usage-import nltr.json' +
+                                        ' --log-usage-save nltr.xml' +
+                                        ' --class-name fault-injection fi',
+                            withValgrind: '',
+                            alwaysScript: 'ci/unit/test_nlt_post.sh',
+                            testResults: 'nlt-junit.xml',
+                            unstashOpt: true,
+                            unstashTests: false,
+                            imageVersion: 'el9.7',
+                            provEnvVars: 'VM_CPUS=14',
                             unitTestPostArgs: [
                                 artifacts: ['nlt_logs/'],
                                 testResults: 'nlt-junit.xml',
@@ -1286,25 +1271,23 @@ pipeline {
                                 artifacts: 'nlt_logs/fault-injection/',
                                 allowEmptyArchive: true]
                         ),
-                        'Test RPMs on EL 9.6': scriptedTestStage(
+                        'Test RPMs on EL 9.6': scriptedTestRpmStage(
                             name: 'Test RPMs on EL 9.6',
                             runStage: shouldStageRun('Test RPMs on EL 9.6'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
-                            testRpmArgs: [
-                                inst_repos: daosRepos(),
-                                daos_pkg_version: daosPackagesVersion(next_version()),
-                                inst_rpms: 'mercury-libfabric']
+                            nextVersion: next_version(),
+                            instRpms: 'mercury-libfabric',
+                            nodeList: env.NODELIST,
                         ),
-                        'Test RPMs on Leap 15.5': scriptedTestStage(
+                        'Test RPMs on Leap 15.5': scriptedTestRpmStage(
                             name: 'Test RPMs on Leap 15.5',
                             runStage: shouldStageRun('Test RPMs on Leap 15.5'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
-                            testRpmArgs: [
-                                inst_repos: daosRepos(),
-                                daos_pkg_version: daosPackagesVersion(next_version()),
-                                inst_rpms: 'mercury-libfabric']
+                            nextVersion: next_version(),
+                            instRpms: 'mercury-libfabric',
+                            nodeList: env.NODELIST,
                         )
                     )
                 }
