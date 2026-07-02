@@ -8,18 +8,19 @@ set -uex
 test_log_dir="${1:-}"
 first_node="${NODELIST%%,*}"
 
-if [ -z "$test_log_dir" ]; then
+if [ -z "${test_log_dir}" ]; then
     echo "test_daos_post: The test log directory argument is missing!"
     exit 1
 fi
 
 # Copy logs from test_daos_node.sh execution
-rm -rf "$test_log_dir"
-mkdir -p "$test_log_dir"
+rm -rf "${test_log_dir}"
+mkdir -p "${test_log_dir}/configs"
+rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/etc/daos/ \
+      --filter="include daos_*.yml*" \
+      --filter="exclude *" "${test_log_dir}/configs/"
+mkdir -p "${test_log_dir}/logs"
 rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/tmp/ \
       --filter="include suite_dmg.log" \
-      --filter="include daos_server_helper.log" \
-      --filter="include daos_control.log" \
-      --filter="include daos_agent.log" \
-      --filter="include daos_server.log.*" \
-      --filter="exclude *" "${test_log_dir}/"
+      --filter="include daos_*.log*" \
+      --filter="exclude *" "${test_log_dir}/logs/"

@@ -1277,11 +1277,12 @@ pipeline {
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
                             nextVersion: next_version(),
+                            imageVersion: 'el9.6',
                             instRpms: 'mercury-libfabric',
                             nodeList: env.NODELIST,
-                            alwaysScript: 'ci/rpm/test_daos_post.sh test_rpms_el_logs',
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9.6\'',
                             archiveArtifactsArgs: [
-                                artifacts: 'test_rpms_el_logs/']
+                                artifacts: 'Test RPMs on EL 9.6/']
                         ),
                         'Test RPMs on Leap 15.5': scriptedTestRpmStage(
                             name: 'Test RPMs on Leap 15.5',
@@ -1289,11 +1290,12 @@ pipeline {
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
                             nextVersion: next_version(),
+                            imageVersion: 'leap15.5',
                             instRpms: 'mercury-libfabric',
                             nodeList: env.NODELIST,
                             alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15.5\'',
                             archiveArtifactsArgs: [
-                                artifacts: '\'Test RPMs on Leap 15.5/\'']
+                                artifacts: 'Test RPMs on Leap 15.5/']
                         )
                     )
                 }
