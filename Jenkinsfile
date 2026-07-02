@@ -1279,6 +1279,9 @@ pipeline {
                             nextVersion: next_version(),
                             instRpms: 'mercury-libfabric',
                             nodeList: env.NODELIST,
+                            alwaysScript: 'ci/rpm/test_daos_post.sh test_rpms_el_logs',
+                            archiveArtifactsArgs: [
+                                artifacts: 'test_rpms_el_logs/']
                         ),
                         'Test RPMs on Leap 15.5': scriptedTestRpmStage(
                             name: 'Test RPMs on Leap 15.5',
@@ -1288,6 +1291,9 @@ pipeline {
                             nextVersion: next_version(),
                             instRpms: 'mercury-libfabric',
                             nodeList: env.NODELIST,
+                            alwaysScript: 'ci/rpm/test_daos_post.sh test_rpms_leap_logs',
+                            archiveArtifactsArgs: [
+                                artifacts: 'test_rpms_leap_logs/']
                         )
                     )
                 }
