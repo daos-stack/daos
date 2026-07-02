@@ -912,6 +912,8 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		cont_close_hdl(hdl->sch_uuid);
 	}
 
+	D_ASSERT(cont_child->sc_open == 0);
+
 	/* Stop DTX reindex by force. */
 	stop_dtx_reindex_ult(cont_child, true);
 
@@ -1729,12 +1731,13 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t flags, uint64_t sec_capas, uint32_t status_pm_ver,
 		   bool *started, struct ds_cont_hdl **cont_hdl)
 {
-	struct dsm_tls		*tls = dsm_tls_get();
-	struct ds_cont_child	*cont = NULL;
-	struct ds_cont_hdl	*hdl = NULL;
-	daos_handle_t		poh = DAOS_HDL_INVAL;
-	bool			added = false;
-	int			rc = 0;
+	struct dsm_tls       *tls    = dsm_tls_get();
+	struct ds_cont_child *cont   = NULL;
+	struct ds_cont_hdl   *hdl    = NULL;
+	daos_handle_t         poh    = DAOS_HDL_INVAL;
+	bool                  added  = false;
+	bool                  locked = false;
+	int                   rc     = 0;
 
 	D_ASSERT(pool_uuid != NULL && !uuid_is_null(pool_uuid));
 	D_ASSERT(cont_uuid != NULL && !uuid_is_null(cont_uuid));
@@ -1769,12 +1772,24 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		return -DER_NOMEM;
 
 	rc = cont_child_create_start(pool_uuid, cont_uuid, status_pm_ver, true, started, &cont);
-	if (rc < 0)
-		D_GOTO(err_hdl, rc);
+	if (rc < 0) {
+		D_FREE(hdl);
+		return rc;
+	}
 
 	hdl->sch_cont = cont;
 	if (rc == 1) /* Container is created by above cont_child_create_start() call */
-		poh = hdl->sch_cont->sc_pool->spc_hdl;
+		poh = cont->sc_pool->spc_hdl;
+
+	/* It could yield in following calls, serialize open to avoid race */
+	ABT_mutex_lock(cont->sc_open_mutex);
+	locked = true;
+
+	if (unlikely(cont->sc_stopping || cont->sc_destroying)) {
+		D_DEBUG(DB_MD, DF_CONT " is being stopping or destroyed (s=%d, d=%d)\n",
+			DP_CONT(pool_uuid, cont_uuid), cont->sc_stopping, cont->sc_destroying);
+		D_GOTO(err_cont, rc = -DER_SHUTDOWN);
+	}
 
 	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
@@ -1808,50 +1823,42 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	 *    yet, then the ready ones may have to wait or failed dtx_resync.
 	 *    Both cases are not expected.
 	 */
-	D_ASSERT(hdl->sch_cont != NULL);
-	D_ASSERT(hdl->sch_cont->sc_pool != NULL);
 
-	/* It could yield in following calls, serialize open to avoid race */
-	ABT_mutex_lock(hdl->sch_cont->sc_open_mutex);
-
-	hdl->sch_cont->sc_open++;
-	if (hdl->sch_cont->sc_open > 1)
+	cont->sc_open++;
+	if (cont->sc_open > 1)
 		goto opened;
 
-	if (ds_pool_restricted(hdl->sch_cont->sc_pool->spc_pool, false)) {
-		rc = ds_cont_csummer_init(hdl->sch_cont);
+	if (ds_pool_restricted(cont->sc_pool->spc_pool, false)) {
+		rc = ds_cont_csummer_init(cont);
 		if (rc != 0) {
-			D_ASSERT(hdl->sch_cont->sc_open == 1);
-			hdl->sch_cont->sc_open--;
-			ABT_mutex_unlock(hdl->sch_cont->sc_open_mutex);
+			D_ASSERT(cont->sc_open == 1);
+			cont->sc_open--;
 			D_GOTO(err_cont, rc);
 		}
 		goto opened;
 	}
 
-	rc = dtx_cont_open(hdl->sch_cont);
+	rc = dtx_cont_open(cont);
 	if (rc != 0) {
-		D_ASSERTF(hdl->sch_cont->sc_open == 1,
-			  "Unexpected open count for cont " DF_UUID ": %d\n", DP_UUID(cont_uuid),
-			  hdl->sch_cont->sc_open);
-		hdl->sch_cont->sc_open--;
-		ABT_mutex_unlock(hdl->sch_cont->sc_open_mutex);
+		D_ASSERTF(cont->sc_open == 1, "Unexpected open count for cont " DF_UUID ": %d\n",
+			  DP_UUID(cont_uuid), cont->sc_open);
+		cont->sc_open--;
 		D_GOTO(err_cont, rc);
 	}
 
-	ds_cont_child_get(hdl->sch_cont);
-	rc = dss_ult_create(ds_dtx_resync, hdl->sch_cont, DSS_XS_SELF, 0, 0, NULL);
+	ds_cont_child_get(cont);
+	rc = dss_ult_create(ds_dtx_resync, cont, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
-		ds_cont_child_put(hdl->sch_cont);
+		ds_cont_child_put(cont);
 		D_GOTO(err_dtx, rc);
 	}
 
-	rc = ds_cont_csummer_init(hdl->sch_cont);
+	rc = ds_cont_csummer_init(cont);
 	if (rc != 0)
 		D_GOTO(err_dtx, rc);
 
 opened:
-	ABT_mutex_unlock(hdl->sch_cont->sc_open_mutex);
+	ABT_mutex_unlock(cont->sc_open_mutex);
 	if (cont_hdl != NULL) {
 		cont_hdl_get_internal(&tls->dt_cont_hdl_hash, hdl);
 		*cont_hdl = hdl;
@@ -1860,41 +1867,46 @@ opened:
 	return 0;
 
 err_dtx:
-	D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count for cont " DF_UUID ": %d\n",
-		  DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
-	hdl->sch_cont->sc_open--;
-	ABT_mutex_unlock(hdl->sch_cont->sc_open_mutex);
+	D_ASSERT(locked);
+	D_ASSERT(hdl != NULL);
+	D_ASSERTF(cont->sc_open == 1, "Unexpected open count for cont " DF_UUID ": %d\n",
+		  DP_UUID(cont_uuid), cont->sc_open);
 
-	dtx_cont_close(hdl->sch_cont, true);
+	cont->sc_open--;
+	/* Hold reference for dtx_cont_close() after release sc_open_mutex. */
+	cont_hdl_get_internal(&tls->dt_cont_hdl_hash, hdl);
+	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+
+	ABT_mutex_unlock(cont->sc_open_mutex);
+
+	dtx_cont_close(cont, true);
+	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
+	locked = false;
+	hdl    = NULL;
 
 err_cont:
+	if (hdl != NULL && added) {
+		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		hdl = NULL;
+	}
+
+	if (locked)
+		ABT_mutex_unlock(cont->sc_open_mutex);
+
+	if (hdl != NULL)
+		D_FREE(hdl);
+
 	if (daos_handle_is_valid(poh)) {
 		int rc_tmp;
 
-		D_DEBUG(DB_MD, DF_CONT": destroying new vos container\n",
+		D_DEBUG(DB_MD, DF_CONT ": destroying new vos container\n",
 			DP_CONT(pool_uuid, cont_uuid));
 
-		D_ASSERT(hdl != NULL);
-		if (added)
-			cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
-		else
-			D_FREE(hdl);
-		hdl = NULL;
-
-		D_ASSERT(cont != NULL);
 		cont_child_stop(cont);
 
 		rc_tmp = vos_cont_destroy(poh, cont_uuid);
 		if (rc_tmp != 0)
-			D_ERROR("failed to destroy "DF_UUID": %d\n",
-				DP_UUID(cont_uuid), rc_tmp);
-	}
-err_hdl:
-	if (hdl != NULL) {
-		if (added)
-			cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
-		else
-			D_FREE(hdl);
+			D_ERROR("failed to destroy " DF_UUID ": %d\n", DP_UUID(cont_uuid), rc_tmp);
 	}
 
 	return rc;
@@ -1999,10 +2011,8 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid), cont_child->sc_open,
 		DP_UUID(cont_hdl_uuid));
 
-	ABT_mutex_lock(hdl->sch_cont->sc_open_mutex);
 	D_ASSERT(cont_child->sc_open > 0);
 	cont_child->sc_open--;
-	ABT_mutex_unlock(hdl->sch_cont->sc_open_mutex);
 	if (cont_child->sc_open == 0)
 		dtx_cont_close(cont_child, false);
 
