@@ -51,7 +51,7 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
-        :avocado: tags=hw,hw_vmd,medium,large
+        :avocado: tags=hw,cb,hw_vmd,medium,large
         :avocado: tags=harness,harness_basic_test,always_passes
         :avocado: tags=HarnessBasicTest,test_always_passes_hw
         """
