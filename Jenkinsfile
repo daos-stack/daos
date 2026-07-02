@@ -43,7 +43,6 @@ void updateRunStage() {
         'Pre-build',
         'Python Bandit check',
         'Build',
-        'Build on EL 8',
         'Build on EL 9',
         'Build on Leap 15',
         'Unit Tests',
@@ -53,8 +52,6 @@ void updateRunStage() {
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
         'Test',
-        'Functional on EL 8.8 with Valgrind',
-        'Functional on EL 8',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on SLES 15',
@@ -207,7 +204,6 @@ void updateRunStage() {
             hwBuildStage += "${distroTarget[0].toUpperCase()} ${distroTarget[1]}"
         }
         Map testBuildStage = [
-            'Functional on EL 8': 'Build on EL 8',
             'Functional on EL 9': 'Build on EL 9',
             'Functional on Leap 15': 'Build on Leap 15',
             'Functional on SLES 15': 'Build on Leap 15',
