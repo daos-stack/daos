@@ -178,6 +178,8 @@ struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
 
+	int                      ot_rpc_bulk_inflight;
+
 	/** Measure per-operation latency in us (type = gauge) */
 	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
 	/** Count number of per-opcode active requests (type = gauge) */
@@ -226,6 +228,11 @@ enum latency_type {
 			goto label;                                                                \
 		}                                                                                  \
 	} while (0)
+
+/* Per-target in-flight object RPC bulk count threshold. */
+extern uint32_t obj_rpc_bulk_thd;
+
+#define OBJ_RPC_BULK_THD_DEF 512
 
 static inline void
 obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_size)

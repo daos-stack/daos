@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,6 +45,10 @@ obj_mod_init(void)
 		D_ERROR("failed to init migration resource managers\n");
 		goto out_ec;
 	}
+
+	obj_rpc_bulk_thd = OBJ_RPC_BULK_THD_DEF;
+	d_getenv_uint32_t("DAOS_OBJ_RPC_BULK_THD", &obj_rpc_bulk_thd);
+	D_INFO("Set per-target in-flight object RPC bulk threshold as %u\n", obj_rpc_bulk_thd);
 
 	return 0;
 
