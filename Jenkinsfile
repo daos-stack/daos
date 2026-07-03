@@ -42,7 +42,6 @@ void updateRunStage() {
     List<String> stageOrder = [
         'Cancel Previous Builds',
         'Test',
-        'Functional on EL 8',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on Ubuntu 20.04',
