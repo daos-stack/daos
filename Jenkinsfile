@@ -1291,7 +1291,7 @@ pipeline {
                             jobStatus: job_status_internal,
                             nextVersion: next_version(),
                             imageVersion: 'leap15.5',
-                            instRpms: 'mercury-libfabric pciutils-3.13.0-150300.13.12.1.x86_64',
+                            instRpms: 'mercury-libfabric',
                             nodeList: env.NODELIST,
                             alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15.5\'',
                             archiveArtifactsArgs: [
