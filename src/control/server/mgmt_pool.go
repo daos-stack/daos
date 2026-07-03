@@ -415,7 +415,11 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	}
 
 	// Check if the requested redundancy factor can be met with the number of supplied fault domains.
-	domainNr, err := svc.membership.DomainNr(req.Ranks...)
+	level, err := svc.membership.FaultDomainLevel()
+	if err != nil {
+		return nil, err
+	}
+	domainNr, err := svc.membership.DomainNr(level, req.Ranks...)
 	if err != nil {
 		return nil, err
 	}

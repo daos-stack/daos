@@ -785,12 +785,44 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 	return append([]uint32{md}, compressTree(subtree)...), nil
 }
 
-// DomainNr returns the number of fault domains in the subtree of the domain
-// tree specified by the given ranks.
+// FaultDomainLevel returns the fault domain level of the domain tree.
+// It assumes the tree is balanced and that the rank level is present.
+// So, the fault domain level is the second to last level of the tree.
+func (m *Membership) FaultDomainLevel() (int, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return 0, errors.New("uninitialized fault domain tree")
+	}
+
+	depth := tree.Depth()
+	if depth < 2 {
+		return 0, errors.New("domain tree has no fault domain level")
+	}
+
+	return depth - 2, nil
+}
+
+// domainNrAtLevel returns the number of domains in the tree at the given level.
+// It traverses the tree recursively to reach the specified level.
+func domainNrAtLevel(tree *FaultDomainTree, level int) int {
+	if tree == nil {
+		return 0
+	}
+	if level == 0 {
+		return len(tree.Children)
+	}
+
+	count := 0
+	for _, child := range tree.Children {
+		count += domainNrAtLevel(child, level-1)
+	}
+	return count
+}
+
+// DomainNr returns the number of domains in the subtree of the domain tree
+// specified by the given ranks at the given level.
 // If no ranks are provided, the entire tree is considered.
-//
-// Note: Do not confuse fault domains with the FaultDomain struct.
-func (m *Membership) DomainNr(ranks ...uint32) (int, error) {
+func (m *Membership) DomainNr(level int, ranks ...uint32) (int, error) {
 	tree := m.db.FaultDomainTree()
 	if tree == nil {
 		return 0, errors.New("uninitialized fault domain tree")
@@ -801,20 +833,11 @@ func (m *Membership) DomainNr(ranks ...uint32) (int, error) {
 		return 0, err
 	}
 
-	// TODO DAOS-6353: Properly detect when fault and perf domain are requested.
-	// Currently any depth greater than the minimum must indicate a performance domain.
-	minDepth := 2 // domain + rank
-	if subtree.Depth() > minDepth {
-		// Loop over the children of the root and sum up the number their children.
-		sum := 0
-		for _, child := range subtree.Children {
-			sum += len(child.Children)
-		}
-		return sum, nil
-	} else {
-		// There are no perf domains, so the children of the root are fault domains.
-		return len(subtree.Children), nil
+	if level >= subtree.Depth() {
+		return 0, errors.Errorf("level %d >= subtree depth %d", level, subtree.Depth())
 	}
+
+	return domainNrAtLevel(subtree, level), nil
 }
 
 const (
