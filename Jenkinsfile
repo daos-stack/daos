@@ -1575,7 +1575,7 @@ pipeline {
                             name: "Functional Cluster Box Medium MD on SSD",
                             runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
                             pragma_suffix:'-cb-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
                             stage_tags: "cb,medium",
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
