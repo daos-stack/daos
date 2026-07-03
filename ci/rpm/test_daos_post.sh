@@ -24,3 +24,6 @@ rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/tmp/ \
       --filter="include suite_dmg.log" \
       --filter="include daos_*.log*" \
       --filter="exclude *" "${test_log_dir}/logs/"
+rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/tmp/ \
+      --filter="include test_daos_rpms.log" \
+      --filter="exclude *" "${test_log_dir}/"
