@@ -18,12 +18,12 @@ rm -rf "${test_log_dir}"
 mkdir -p "${test_log_dir}/configs"
 rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/etc/daos/ \
       --filter="include daos_*.yml*" \
-      --filter="exclude *" "${test_log_dir}/configs/"
+      --filter="exclude *" "${test_log_dir}/configs/" || true
 mkdir -p "${test_log_dir}/logs"
 rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/tmp/ \
       --filter="include suite_dmg.log" \
       --filter="include daos_*.log*" \
-      --filter="exclude *" "${test_log_dir}/logs/"
+      --filter="exclude *" "${test_log_dir}/logs/" || true
 rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/tmp/ \
       --filter="include test_daos_rpms.log" \
-      --filter="exclude *" "${test_log_dir}/"
+      --filter="exclude *" "${test_log_dir}/" || true
