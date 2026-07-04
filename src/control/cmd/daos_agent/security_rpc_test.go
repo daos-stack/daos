@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,12 +11,15 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"os/user"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -27,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
+	sectest "github.com/daos-stack/daos/src/control/security/test"
 )
 
 func TestAgent_SecurityModule_ID(t *testing.T) {
@@ -218,6 +222,137 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	}
 
 	expectCredResp(t, respBytes, int32(daos.MiscError), false)
+}
+
+func TestAgentSecurityModule_RequestCreds_BadBody(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	conn, cleanup := setupTestUnixConn(t)
+	defer cleanup()
+
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
+	respBytes, err := mod.HandleCall(test.Context(t), newTestSession(t, log, conn),
+		daos.MethodRequestCredentials, []byte("this is not a protobuf"))
+
+	test.CmpErr(t, drpc.UnmarshalingPayloadFailure(), err)
+
+	if respBytes != nil {
+		t.Errorf("Expected no response, got: %v", respBytes)
+	}
+}
+
+func TestAgentSecurityModule_RequestCreds_PoolCert(t *testing.T) {
+	for name, tc := range map[string]struct {
+		poolAuthEnabled bool
+		deployCert      bool
+		corruptCert     bool
+		emptyPoolID     bool
+		badPoolID       bool
+		badHandle       bool
+		expStatus       int32
+		expCert         bool
+	}{
+		"cert deployed":      {poolAuthEnabled: true, deployCert: true, expCert: true},
+		"no cert deployed":   {poolAuthEnabled: true},
+		"pool auth disabled": {deployCert: true},
+		"corrupt cert": {
+			poolAuthEnabled: true,
+			corruptCert:     true,
+			expStatus:       int32(daos.BadCert),
+		},
+		"empty pool ID rejected": {
+			poolAuthEnabled: true,
+			deployCert:      true,
+			emptyPoolID:     true,
+			expStatus:       int32(daos.InvalidInput),
+		},
+		"short pool UUID rejected": {
+			poolAuthEnabled: true,
+			deployCert:      true,
+			badPoolID:       true,
+			expStatus:       int32(daos.InvalidInput),
+		},
+		"bad handle UUID rejected": {
+			poolAuthEnabled: true,
+			deployCert:      true,
+			badHandle:       true,
+			expStatus:       int32(daos.InvalidInput),
+		},
+		"bad handle rejected w/o pool auth": {
+			badHandle: true,
+			expStatus: int32(daos.InvalidInput),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			conn, cleanup := setupTestUnixConn(t)
+			defer cleanup()
+
+			tmpDir, dirCleanup := test.CreateTestDir(t)
+			defer dirCleanup()
+
+			poolUUID := "12345678-1234-1234-1234-123456789abc"
+			handleUUID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+			if tc.deployCert {
+				sectest.WriteNodeCert(t, tmpDir, poolUUID,
+					security.CertCNPrefixTenant+"team-a",
+					time.Now().Add(-time.Minute), time.Now().Add(time.Hour))
+			}
+			if tc.corruptCert {
+				for _, suffix := range []string{".crt", ".key"} {
+					p := filepath.Join(tmpDir, poolUUID+suffix)
+					if err := os.WriteFile(p, []byte("not a PEM"), 0644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+
+			cfg := defaultTestSecurityConfig()
+			cfg.credentials.PoolAuthEnabled = tc.poolAuthEnabled
+			cfg.nodeCertDir = tmpDir
+			mod := NewSecurityModule(log, cfg)
+
+			reqPoolUUID := uuid.MustParse(poolUUID)
+			reqPool := reqPoolUUID[:]
+			if tc.emptyPoolID {
+				reqPool = nil
+			}
+			if tc.badPoolID {
+				reqPool = []byte{1, 2, 3}
+			}
+			reqHandle := handleUUID[:]
+			if tc.badHandle {
+				reqHandle = []byte{1, 2, 3}
+			}
+			body, err := proto.Marshal(&auth.GetCredReq{
+				PoolUuid:   reqPool,
+				HandleUuid: reqHandle,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			respBytes, err := mod.HandleCall(test.Context(t),
+				newTestSession(t, log, conn), daos.MethodRequestCredentials, body)
+			if err != nil {
+				t.Fatalf("Expected no error, got %+v", err)
+			}
+
+			resp := &auth.GetCredResp{}
+			if err := proto.Unmarshal(respBytes, resp); err != nil {
+				t.Fatalf("Couldn't unmarshal result: %v", err)
+			}
+
+			test.AssertEqual(t, resp.Status, tc.expStatus, "status didn't match")
+			test.AssertEqual(t, resp.Cred != nil, tc.expStatus == 0, "credential expectation not met")
+			test.AssertEqual(t, len(resp.NodeCert) > 0, tc.expCert, "node cert expectation not met")
+			test.AssertEqual(t, len(resp.PopSig) > 0, tc.expCert, "node cert PoP expectation not met")
+			test.AssertEqual(t, len(resp.PopPayload) > 0, tc.expCert, "node cert payload expectation not met")
+		})
+	}
 }
 
 type signCredentialResp struct {

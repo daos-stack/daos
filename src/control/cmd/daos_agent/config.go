@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"time"
 
@@ -27,6 +29,10 @@ const (
 	defaultConfigFile = "daos_agent.yml"
 	defaultRuntimeDir = "/var/run/daos_agent"
 )
+
+func defaultNodeCertDir(systemName string) string {
+	return filepath.Join("/etc/daos/certs", systemName, "node_certs")
+}
 
 type refreshMinutes time.Duration
 
@@ -155,6 +161,10 @@ func (c *Config) Validate() error {
 
 	if err := c.Telemetry.Validate(); err != nil {
 		return err
+	}
+
+	if c.CredentialConfig.NodeCertDir != "" && !c.CredentialConfig.PoolAuthEnabled {
+		return errors.New("node_cert_dir is set but pool_auth_enabled is false")
 	}
 
 	return nil
