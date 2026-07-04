@@ -79,7 +79,7 @@ class DmgSystemReformatTest(TestWithServers):
         count = 0
         while count < 4:
             try:
-                dmg.storage_format(force=True)
+                dmg.storage_format(force=True, replace=True)
                 if dmg.result.exit_status != 0:
                     self.fail(
                         "Issues performing storage format --force: {}".format(

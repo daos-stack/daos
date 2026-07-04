@@ -1173,8 +1173,26 @@ command can be used. Before doing this, the affected engines need to be
 stopped by running `dmg system stop` (if necessary with the `--force` flag).
 The erase operation will destroy any pools that may still exist, and will
 unconfigure the storage. It will not stop the daos\_server process, so
-the `dmg` command can still be used. For example, the system can be
-formatted again by running `dmg storage format`.
+the `dmg` command can still be used.
+
+After `dmg system erase`, the system can be formatted again using
+`dmg storage format --replace` for each rank to update the engine UUIDs
+in the management service database.
+
+!!! warning
+    After `dmg system erase`, the engine superblocks are removed and new UUIDs
+    will be generated on the next format. You must use `dmg storage format --replace
+    --rank <N> -l <host>` for each rank to update the UUID in the management
+    service database and allow the rank to rejoin the system. Using `dmg storage
+    format --force` without `--replace` will result in UUID mismatch errors
+    preventing the engines from joining.
+
+    Example for a single-rank system:
+    ```
+    $ dmg system stop --force
+    $ dmg system erase
+    $ dmg storage format --replace --rank 0 -l <hostname>
+    ```
 
 !!! note
     Note that `dmg system erase` does not currently reset the SCM.
