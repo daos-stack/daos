@@ -64,7 +64,7 @@
 #define FREE(ptr)	do {free(ptr); (ptr) = NULL; } while (0)
 
 /* The max number of mount points for DAOS mounted simultaneously */
-#define MAX_DAOS_MT         (8)
+#define MAX_DAOS_MT         (32)
 
 #define READ_DIR_BATCH_SIZE (96)
 #define MAX_FD_DUP2ED       (16)
@@ -589,11 +589,6 @@ discover_daos_mount_with_env(void)
 		/* env D_IL_MOUNT_POINT is undefined, return success (0) */
 		D_GOTO(out, rc = 0);
 
-	if (num_dfs >= MAX_DAOS_MT) {
-		D_FATAL("dfs_list[] is full already. Need to increase MAX_DAOS_MT.\n");
-		D_GOTO(out, rc = EBUSY);
-	}
-
 	if (access(fs_root, R_OK)) {
 		D_FATAL("no read permission for %s: %d (%s)\n", fs_root, errno,	strerror(errno));
 		D_GOTO(out, rc = EACCES);
@@ -602,7 +597,18 @@ discover_daos_mount_with_env(void)
 	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
+		/* already registered by discover_dfuse_mounts(), no new slot needed */
 		D_GOTO(out, rc = 0);
+
+	/* A new slot is required. If the table is already full, skip this mount point
+	 * gracefully instead of aborting the application.
+	 */
+	if (num_dfs >= MAX_DAOS_MT) {
+		D_WARN("D_IL_MOUNT_POINT ignored: dfs_list[] is full (%d mounts). Increase "
+		       "MAX_DAOS_MT to support more simultaneous mounts.\n",
+		       MAX_DAOS_MT);
+		D_GOTO(out, rc = 0);
+	}
 
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
@@ -687,32 +693,36 @@ discover_dfuse_mounts(void)
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
-		if (num_dfs >= MAX_DAOS_MT) {
-			D_FATAL("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
-			abort();
-		}
-		pt_dfs_mt = &dfs_list[num_dfs];
-		if (memcmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
-			pt_dfs_mt->dcache      = NULL;
-			pt_dfs_mt->len_fs_root = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
-			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "mnt_dir[] is too long. Skip this entry.\n");
-				D_GOTO(out, rc = ENAMETOOLONG);
-			}
-			if (access(fs_entry->mnt_dir, R_OK)) {
-				D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n",
-					fs_entry->mnt_dir, errno, strerror(errno));
-				continue;
-			}
+		if (memcmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) != 0)
+			continue;
 
-			atomic_init(&pt_dfs_mt->inited, 0);
-			pt_dfs_mt->pool         = NULL;
-			pt_dfs_mt->cont         = NULL;
-			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
-			if (pt_dfs_mt->fs_root == NULL)
-				D_GOTO(out, rc = ENOMEM);
-			num_dfs++;
+		if (num_dfs >= MAX_DAOS_MT) {
+			D_WARN("Found more than MAX_DAOS_MT (%d) dfuse mount points. "
+			       "Disabling interception. Increase MAX_DAOS_MT to support "
+			       "more simultaneous mounts.\n",
+			       MAX_DAOS_MT);
+			D_GOTO(out, rc = EOVERFLOW);
 		}
+		pt_dfs_mt              = &dfs_list[num_dfs];
+		pt_dfs_mt->dcache      = NULL;
+		pt_dfs_mt->len_fs_root = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
+		if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
+			D_DEBUG(DB_ANY, "mnt_dir[] is too long. Skip this entry.\n");
+			D_GOTO(out, rc = ENAMETOOLONG);
+		}
+		if (access(fs_entry->mnt_dir, R_OK)) {
+			D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_entry->mnt_dir,
+				errno, strerror(errno));
+			continue;
+		}
+
+		atomic_init(&pt_dfs_mt->inited, 0);
+		pt_dfs_mt->pool = NULL;
+		pt_dfs_mt->cont = NULL;
+		D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
+		if (pt_dfs_mt->fs_root == NULL)
+			D_GOTO(out, rc = ENOMEM);
+		num_dfs++;
 	}
 
 out:
