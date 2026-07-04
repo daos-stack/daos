@@ -681,6 +681,10 @@ struct umem_instance;
 #define UMEM_FLAG_ZERO		(((uint64_t)1) << 0)
 #define UMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
 #define UMEM_XADD_NO_SNAPSHOT	(((uint64_t)1) << 2)
+/* On allocation failure, return UMOFF_NULL without aborting the current
+ * transaction, so the caller can fall back to another strategy in-tx.
+ */
+#define UMEM_FLAG_NO_ABORT	(((uint64_t)1) << 3)
 
 /* Macros associated with Memory buckets */
 #define	UMEM_DEFAULT_MBKT_ID	0
