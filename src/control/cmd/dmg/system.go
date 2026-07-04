@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -709,6 +709,13 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
+	// Handle special case: no pools in system
+	if len(resp.Results) == 0 {
+		cmd.Info("No pools in system.")
+		cmd.Info("Command completed successfully.")
+		return nil
+	}
+
 	// Categorize results: successful, not-rebuilding (DER_NONEXIST), and actual errors
 	var succeeded, notRebuilding, actualErrors []string
 	for _, res := range resp.Results {
@@ -722,23 +729,40 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		}
 	}
 
-	// Print results based on what happened
+	// Print structured output following Kenneth C Cain's format
+	totalPools := len(resp.Results)
+	cmd.Infof("System-rebuild %s requested for %d %s", opCode, totalPools, common.Pluralise("pool", totalPools))
+
 	if len(succeeded) > 0 {
-		pStr := common.Pluralise("pool", len(succeeded))
 		if cmd.Verbose {
-			cmd.Infof("System-rebuild %s succeeded on %d %s: %v", opCode, len(succeeded), pStr, succeeded)
+			cmd.Infof("   With active rebuild:    %d %s (%s)", len(succeeded),
+				common.Pluralise("pool", len(succeeded)), strings.Join(succeeded, ", "))
 		} else {
-			cmd.Infof("System-rebuild %s succeeded on %d %s", opCode, len(succeeded), pStr)
+			cmd.Infof("   With active rebuild:    %d %s", len(succeeded),
+				common.Pluralise("pool", len(succeeded)))
 		}
 	}
 
 	if len(notRebuilding) > 0 {
-		pStr := common.Pluralise("pool", len(notRebuilding))
 		if cmd.Verbose {
-			cmd.Infof("%d %s not actively rebuilding: %v", len(notRebuilding), pStr, notRebuilding)
+			cmd.Infof("   Without active rebuild: %d %s (%s)", len(notRebuilding),
+				common.Pluralise("pool", len(notRebuilding)), strings.Join(notRebuilding, ", "))
 		} else {
-			cmd.Infof("%d %s not actively rebuilding", len(notRebuilding), pStr)
+			cmd.Infof("   Without active rebuild: %d %s", len(notRebuilding),
+				common.Pluralise("pool", len(notRebuilding)))
 		}
+	}
+
+	if len(actualErrors) > 0 {
+		if cmd.Verbose {
+			cmd.Infof("   Errors:                 %d %s (%s)", len(actualErrors),
+				common.Pluralise("pool", len(actualErrors)), strings.Join(actualErrors, ", "))
+		} else {
+			cmd.Infof("   Errors:                 %d %s", len(actualErrors),
+				common.Pluralise("pool", len(actualErrors)))
+		}
+	} else {
+		cmd.Infof("   Errors:                 0 pools")
 	}
 
 	// Only return error if there are actual failures (not DER_NONEXIST)
@@ -756,6 +780,7 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		}
 	}
 
+	cmd.Info("Command completed successfully.")
 	return nil
 }
 

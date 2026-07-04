@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -626,14 +626,14 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			ctlCfg:  &control.Config{},
 			opCode:  control.PoolRebuildOpCodeStop,
 			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "System-rebuild stop succeeded on 0 pools",
+			expInfo: "No pools in system.\nCommand completed successfully.",
 		},
 		"no pools; verbose": {
 			ctlCfg:  &control.Config{},
 			opCode:  control.PoolRebuildOpCodeStart,
 			verbose: true,
 			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "System-rebuild start succeeded on 0 pools []",
+			expInfo: "No pools in system.\nCommand completed successfully.",
 		},
 		"rebuild stop with DER_NONEXIST only": {
 			ctlCfg: &control.Config{},
@@ -654,7 +654,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "2 pools not actively rebuilding",
+			expInfo: "System-rebuild stop requested for 2 pools\n   Without active rebuild: 2 pools\n   Errors:                 0 pools\nCommand completed successfully.",
 		},
 		"rebuild stop mixed success and DER_NONEXIST": {
 			ctlCfg: &control.Config{},
@@ -683,7 +683,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "System-rebuild stop succeeded on 2 pools\n2 pools not actively rebuilding",
+			expInfo: "System-rebuild stop requested for 4 pools\n   With active rebuild:    2 pools\n   Without active rebuild: 2 pools\n   Errors:                 0 pools\nCommand completed successfully.",
 		},
 		"rebuild stop with DER_NONEXIST and real errors": {
 			ctlCfg: &control.Config{},
@@ -709,7 +709,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 				},
 			},
 			expErr:  errors.New("pool-rebuild stop failed on pool pool_failed: real error happened"),
-			expInfo: "System-rebuild stop succeeded on 1 pool\n1 pool not actively rebuilding",
+			expInfo: "System-rebuild stop requested for 3 pools\n   With active rebuild:    1 pool\n   Without active rebuild: 1 pool\n   Errors:                 1 pool",
 		},
 		"rebuild stop failed": {
 			ctlCfg: &control.Config{},
@@ -735,7 +735,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 				},
 			},
 			expErr:  errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
-			expInfo: "System-rebuild stop succeeded on 1 pool",
+			expInfo: "System-rebuild stop requested for 3 pools\n   With active rebuild:    1 pool\n   Errors:                 2 pools",
 		},
 		"rebuild start succeeded; verbose": {
 			ctlCfg:  &control.Config{},
@@ -757,7 +757,7 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "System-rebuild start succeeded on 3 pools: [foo bar baz]",
+			expInfo: "System-rebuild start requested for 3 pools\n   With active rebuild:    3 pools (foo, bar, baz)\n   Errors:                 0 pools\nCommand completed successfully.",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
