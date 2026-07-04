@@ -4312,6 +4312,59 @@ pool_query_set_rebuild_status_degraded(struct pool_svc *svc, struct daos_rebuild
 /* Currently we only maintain compatibility between 2 metadata layout versions */
 #define NUM_POOL_VERSIONS	2
 
+/*
+ * Validate the per-pool node certificate presented by a connecting client.
+ * A no-op returning 0 when the pool has no pool_ca configured. Only meaningful
+ * when establishing a *new* handle; callers must not invoke it for attempts
+ * that merely re-transfer the pool map (see the call site in
+ * pool_connect_handler()).
+ */
+static int
+pool_connect_validate_node_cert(crt_rpc_t *rpc, daos_prop_t *prop, uuid_t pool_uuid,
+				const char *machine)
+{
+	struct daos_prop_entry   *ca_entry;
+	struct daos_prop_entry   *wm_entry;
+	struct daos_prop_byteval *ca_bv;
+	d_iov_t                   ca_iov;
+	d_iov_t                   wm_iov;
+	d_iov_t                  *wm_iov_p      = NULL;
+	d_iov_t                  *node_cert_p   = NULL;
+	d_iov_t                  *pop_sig_p     = NULL;
+	d_iov_t                  *pop_payload_p = NULL;
+	int                       rc;
+
+	ca_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_POOL_CA);
+	if (ca_entry == NULL || ca_entry->dpe_val_ptr == NULL)
+		return 0;
+	ca_bv = ca_entry->dpe_val_ptr;
+
+	if (!rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_NODE_CERT)) {
+		D_ERROR(DF_UUID ": pool requires node certificate but client protocol "
+				"version %d does not support it (need >= %d)\n",
+			DP_UUID(pool_uuid), opc_get_rpc_ver(rpc->cr_opc),
+			POOL_PROTO_VER_WITH_NODE_CERT);
+		return -DER_PROTO;
+	}
+
+	d_iov_set(&ca_iov, ca_bv->dpb_data, ca_bv->dpb_len);
+	pool_connect_in_get_node_cert(rpc, &node_cert_p, &pop_sig_p, &pop_payload_p);
+
+	wm_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_CERT_WATERMARKS);
+	if (wm_entry != NULL && wm_entry->dpe_val_ptr != NULL) {
+		struct daos_prop_byteval *wm_bv = wm_entry->dpe_val_ptr;
+
+		d_iov_set(&wm_iov, wm_bv->dpb_data, wm_bv->dpb_len);
+		wm_iov_p = &wm_iov;
+	}
+
+	rc = ds_sec_validate_node_cert(pool_uuid, &ca_iov, machine, wm_iov_p, node_cert_p,
+				       pop_sig_p, pop_payload_p);
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": node certificate validation failed", DP_UUID(pool_uuid));
+	return rc;
+}
+
 static void
 pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 {
@@ -4515,6 +4568,12 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	D_ASSERT(obj_ver_entry != NULL);
 	obj_layout_ver = obj_ver_entry->dpe_val;
 
+	rc = ds_sec_cred_get_origin(credp, &machine);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": unable to retrieve origin", DP_UUID(in->pci_op.pi_uuid));
+		D_GOTO(out_map_version, rc);
+	}
+
 	/*
 	 * Security capabilities determine the access control policy on this
 	 * pool handle.
@@ -4523,13 +4582,6 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": refusing connect attempt for " DF_X64,
 			 DP_UUID(in->pci_op.pi_uuid), flags);
-		D_GOTO(out_map_version, rc);
-	}
-
-	rc = ds_sec_cred_get_origin(credp, &machine);
-
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": unable to retrieve origin", DP_UUID(in->pci_op.pi_uuid));
 		D_GOTO(out_map_version, rc);
 	}
 
@@ -4549,6 +4601,18 @@ pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	transfer_map = true;
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
+
+	/*
+	 * Node-certificate validation gates establishing a *new* handle. Attempts
+	 * that only re-transfer the pool map (a duplicate RPC, or a handle that
+	 * already exists) short-circuit above via skip_update and must not
+	 * re-validate: the security module's replay cache would otherwise reject
+	 * the legitimate retry (e.g. a -DER_TRUNC map-resize retry reusing the same
+	 * handle UUID).
+	 */
+	rc = pool_connect_validate_node_cert(rpc, prop, in->pci_op.pi_uuid, machine);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
