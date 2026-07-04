@@ -1,3 +1,7 @@
+# (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 # DAOS agent configuration file.
 #
 # Location of this configuration file is determined by first checking for the
@@ -63,6 +67,18 @@
 
 ## Configuration for user credential management.
 #credential_config:
+#  # Enable per-pool node certificate authentication. When enabled, the
+#  # agent attaches a per-pool node certificate and proof-of-possession to
+#  # pool connect credentials. Requires transport security.
+#  # Default: false
+#  pool_auth_enabled: true
+#
+#  # Directory containing per-pool node certificates (requires
+#  # pool_auth_enabled). Agent looks for <pool_uuid>.crt and
+#  # <pool_uuid>.key in this directory.
+#  # Default: /etc/daos/certs/<system_name>/node_certs/
+#  node_cert_dir: /etc/daos/certs/daos_server/node_certs/
+#
 #  # If the agent should be able to resolve unknown client uids and gids
 #  # (e.g. when running in a container) into ACL principal names, then a
 #  # client user map may be defined. The optional "default" uid is a special

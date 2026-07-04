@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -292,6 +293,35 @@ telemetry_disabled_procs: ""
 telemetry_retain: foo
 `,
 			expErr: errors.New("time.Duration"),
+		},
+		"pool auth enabled": {
+			input: `
+credential_config:
+  pool_auth_enabled: true
+`,
+			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+				cfg.CredentialConfig.PoolAuthEnabled = true
+				return cfg
+			}),
+		},
+		"pool auth enabled with custom cert dir": {
+			input: `
+credential_config:
+  pool_auth_enabled: true
+  node_cert_dir: /custom/certs
+`,
+			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+				cfg.CredentialConfig.PoolAuthEnabled = true
+				cfg.CredentialConfig.NodeCertDir = "/custom/certs"
+				return cfg
+			}),
+		},
+		"node cert dir without pool auth": {
+			input: `
+credential_config:
+  node_cert_dir: /custom/certs
+`,
+			expErr: errors.New("pool_auth_enabled"),
 		},
 		"minimal telemetry config": {
 			input: `
