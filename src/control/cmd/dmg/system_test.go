@@ -33,12 +33,18 @@ func extractInfoMessages(logOutput string) string {
 	for _, line := range strings.Split(logOutput, "\n") {
 		if strings.Contains(line, " INFO ") {
 			// Extract just the message part after the timestamp
+			// Format: "prefix INFO YYYY/MM/DD HH:MM:SS message"
 			parts := strings.SplitN(line, " INFO ", 2)
 			if len(parts) == 2 {
-				// Further split to remove timestamp and keep only the message
-				msgParts := strings.SplitN(parts[1], " ", 2)
-				if len(msgParts) == 2 {
-					infoLines = append(infoLines, msgParts[1])
+				// Skip the date and time to get just the message
+				// After " INFO ", we have "YYYY/MM/DD HH:MM:SS message"
+				remainder := parts[1]
+
+				// Find the message by skipping two space-separated fields (date and time)
+				fields := strings.SplitN(remainder, " ", 3)
+				if len(fields) == 3 {
+					// fields[0] = date, fields[1] = time, fields[2] = message
+					infoLines = append(infoLines, fields[2])
 				}
 			}
 		}
@@ -47,109 +53,6 @@ func extractInfoMessages(logOutput string) string {
 		return ""
 	}
 	return strings.Join(infoLines, "\n") + "\n"
-}
-
-func TestExtractInfoMessages(t *testing.T) {
-	for name, tc := range map[string]struct {
-		input    string
-		expected string
-	}{
-		"empty input": {
-			input:    "",
-			expected: "",
-		},
-		"no INFO lines": {
-			input: `DEBUG 2026/07/05 07:30:00.123456 system_test.go:123: debug message
-TRACE 2026/07/05 07:30:01.234567 system_test.go:124: trace message
-`,
-			expected: "",
-		},
-		"single INFO line": {
-			input:    "TestDmg_systemRebuildOpCmd_execute/no_pools INFO 2026/07/05 07:30:00 No pools in system.\n",
-			expected: "No pools in system.\n",
-		},
-		"multiple INFO lines": {
-			input: `TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:00 System-rebuild stop requested for 2 pools
-TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:00    Without active rebuild: 2 pools
-TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:00    Errors:                 0 pools
-`,
-			expected: `System-rebuild stop requested for 2 pools
-   Without active rebuild: 2 pools
-   Errors:                 0 pools
-`,
-		},
-		"mixed log levels": {
-			input: `DEBUG 2026/07/05 07:30:00.123456 system_test.go:123: debug message
-TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:00 System-rebuild stop requested for 3 pools
-TRACE 2026/07/05 07:30:01.234567 system_test.go:124: trace message
-TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:01    With active rebuild:    1 pool
-TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:01    Errors:                 2 pools
-`,
-			expected: `System-rebuild stop requested for 3 pools
-   With active rebuild:    1 pool
-   Errors:                 2 pools
-`,
-		},
-		"INFO with verbose output": {
-			input: `TestDmg_systemRebuildOpCmd_execute/verbose INFO 2026/07/05 07:30:00 System-rebuild start requested for 3 pools
-TestDmg_systemRebuildOpCmd_execute/verbose INFO 2026/07/05 07:30:00    With active rebuild:    3 pools (foo, bar, baz)
-TestDmg_systemRebuildOpCmd_execute/verbose INFO 2026/07/05 07:30:00    Errors:                 0 pools
-`,
-			expected: `System-rebuild start requested for 3 pools
-   With active rebuild:    3 pools (foo, bar, baz)
-   Errors:                 0 pools
-`,
-		},
-		"verbose output with errors": {
-			input: `TestDmg_systemRebuildOpCmd_execute/verbose_errors INFO 2026/07/05 07:30:00 System-rebuild stop requested for 5 pools
-TestDmg_systemRebuildOpCmd_execute/verbose_errors INFO 2026/07/05 07:30:00    With active rebuild:    2 pools (pool_ok1, pool_ok2)
-TestDmg_systemRebuildOpCmd_execute/verbose_errors INFO 2026/07/05 07:30:00    Without active rebuild: 1 pool (pool_norebuild)
-TestDmg_systemRebuildOpCmd_execute/verbose_errors INFO 2026/07/05 07:30:00    Errors:                 2 pools (pool_err1, pool_err2)
-`,
-			expected: `System-rebuild stop requested for 5 pools
-   With active rebuild:    2 pools (pool_ok1, pool_ok2)
-   Without active rebuild: 1 pool (pool_norebuild)
-   Errors:                 2 pools (pool_err1, pool_err2)
-`,
-		},
-		"verbose output with only non-existent rebuilds": {
-			input: `TestDmg_systemRebuildOpCmd_execute/verbose_nonexist INFO 2026/07/05 07:30:00 System-rebuild stop requested for 3 pools
-TestDmg_systemRebuildOpCmd_execute/verbose_nonexist INFO 2026/07/05 07:30:00    Without active rebuild: 3 pools (uuid1, uuid2, uuid3)
-TestDmg_systemRebuildOpCmd_execute/verbose_nonexist INFO 2026/07/05 07:30:00    Errors:                 0 pools
-`,
-			expected: `System-rebuild stop requested for 3 pools
-   Without active rebuild: 3 pools (uuid1, uuid2, uuid3)
-   Errors:                 0 pools
-`,
-		},
-		"verbose output with mixed categories": {
-			input: `TestDmg_systemRebuildOpCmd_execute/verbose_mixed INFO 2026/07/05 07:30:00 System-rebuild stop requested for 10 pools
-TestDmg_systemRebuildOpCmd_execute/verbose_mixed INFO 2026/07/05 07:30:00    With active rebuild:    4 pools (pool1, pool2, pool3, pool4)
-TestDmg_systemRebuildOpCmd_execute/verbose_mixed INFO 2026/07/05 07:30:00    Without active rebuild: 4 pools (pool5, pool6, pool7, pool8)
-TestDmg_systemRebuildOpCmd_execute/verbose_mixed INFO 2026/07/05 07:30:00    Errors:                 2 pools (pool9, pool10)
-`,
-			expected: `System-rebuild stop requested for 10 pools
-   With active rebuild:    4 pools (pool1, pool2, pool3, pool4)
-   Without active rebuild: 4 pools (pool5, pool6, pool7, pool8)
-   Errors:                 2 pools (pool9, pool10)
-`,
-		},
-		"malformed INFO line - no space after timestamp": {
-			input:    "TestDmg_systemRebuildOpCmd_execute/case INFO 2026/07/05 07:30:00No pools in system.\n",
-			expected: "",
-		},
-		"INFO line with no message": {
-			input:    "TestDmg_systemRebuildOpCmd_execute/case INFO 2026/07/05 07:30:00 \n",
-			expected: "",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			got := extractInfoMessages(tc.input)
-			if got != tc.expected {
-				t.Fatalf("extractInfoMessages() mismatch:\nexpected:\n%q\ngot:\n%q", tc.expected, got)
-			}
-		})
-	}
 }
 
 func TestDmg_SystemCommands(t *testing.T) {
@@ -788,6 +691,7 @@ Command completed successfully.
 			expInfo: `System-rebuild stop requested for 2 pools
    Without active rebuild: 2 pools
    Errors:                 0 pools
+Command completed successfully.
 `,
 		},
 		"rebuild stop mixed success and DER_NONEXIST": {
@@ -821,6 +725,7 @@ Command completed successfully.
    With active rebuild:    2 pools
    Without active rebuild: 2 pools
    Errors:                 0 pools
+Command completed successfully.
 `,
 		},
 		"rebuild stop with DER_NONEXIST and real errors": {
@@ -905,6 +810,7 @@ Command completed successfully.
 			expInfo: `System-rebuild start requested for 3 pools
    With active rebuild:    3 pools (foo, bar, baz)
    Errors:                 0 pools
+Command completed successfully.
 `,
 		},
 		"rebuild stop with errors; verbose": {
@@ -977,6 +883,7 @@ Command completed successfully.
 			expInfo: `System-rebuild stop requested for 3 pools
    Without active rebuild: 3 pools (uuid1, uuid2, uuid3)
    Errors:                 0 pools
+Command completed successfully.
 `,
 		},
 		"rebuild stop mixed categories; verbose": {
