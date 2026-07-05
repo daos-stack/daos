@@ -25,6 +25,133 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+// extractInfoMessages extracts INFO level messages from a log buffer, returning just
+// the message content without timestamps or prefixes. Returns a single string with
+// messages joined by newlines, terminated with a newline if any messages were found.
+func extractInfoMessages(logOutput string) string {
+	var infoLines []string
+	for _, line := range strings.Split(logOutput, "\n") {
+		if strings.Contains(line, " INFO ") {
+			// Extract just the message part after the timestamp
+			parts := strings.SplitN(line, " INFO ", 2)
+			if len(parts) == 2 {
+				// Further split to remove timestamp and keep only the message
+				msgParts := strings.SplitN(parts[1], " ", 2)
+				if len(msgParts) == 2 {
+					infoLines = append(infoLines, msgParts[1])
+				}
+			}
+		}
+	}
+	if len(infoLines) == 0 {
+		return ""
+	}
+	return strings.Join(infoLines, "\n") + "\n"
+}
+
+func TestExtractInfoMessages(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input    string
+		expected string
+	}{
+		"empty input": {
+			input:    "",
+			expected: "",
+		},
+		"no INFO lines": {
+			input: `DEBUG 2026/07/05 07:30:00.123456 system_test.go:123: debug message
+TRACE 2026/07/05 07:30:01.234567 system_test.go:124: trace message
+`,
+			expected: "",
+		},
+		"single INFO line": {
+			input:    "TestDmg_systemRebuildOpCmd_execute/no_pools INFO 2026/07/05 07:30:00 No pools in system.\n",
+			expected: "No pools in system.\n",
+		},
+		"multiple INFO lines": {
+			input: `TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:00 System-rebuild stop requested for 2 pools
+TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:00    Without active rebuild: 2 pools
+TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:00    Errors:                 0 pools
+`,
+			expected: `System-rebuild stop requested for 2 pools
+   Without active rebuild: 2 pools
+   Errors:                 0 pools
+`,
+		},
+		"mixed log levels": {
+			input: `DEBUG 2026/07/05 07:30:00.123456 system_test.go:123: debug message
+TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:00 System-rebuild stop requested for 3 pools
+TRACE 2026/07/05 07:30:01.234567 system_test.go:124: trace message
+TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:01    With active rebuild:    1 pool
+TestDmg_systemRebuildOpCmd_execute/case1 INFO 2026/07/05 07:30:01    Errors:                 2 pools
+`,
+			expected: `System-rebuild stop requested for 3 pools
+   With active rebuild:    1 pool
+   Errors:                 2 pools
+`,
+		},
+		"INFO with verbose output": {
+			input: `TestDmg_systemRebuildOpCmd_execute/verbose INFO 2026/07/05 07:30:00 System-rebuild start requested for 3 pools
+TestDmg_systemRebuildOpCmd_execute/verbose INFO 2026/07/05 07:30:00    With active rebuild:    3 pools (foo, bar, baz)
+TestDmg_systemRebuildOpCmd_execute/verbose INFO 2026/07/05 07:30:00    Errors:                 0 pools
+`,
+			expected: `System-rebuild start requested for 3 pools
+   With active rebuild:    3 pools (foo, bar, baz)
+   Errors:                 0 pools
+`,
+		},
+		"verbose output with errors": {
+			input: `TestDmg_systemRebuildOpCmd_execute/verbose_errors INFO 2026/07/05 07:30:00 System-rebuild stop requested for 5 pools
+TestDmg_systemRebuildOpCmd_execute/verbose_errors INFO 2026/07/05 07:30:00    With active rebuild:    2 pools (pool_ok1, pool_ok2)
+TestDmg_systemRebuildOpCmd_execute/verbose_errors INFO 2026/07/05 07:30:00    Without active rebuild: 1 pool (pool_norebuild)
+TestDmg_systemRebuildOpCmd_execute/verbose_errors INFO 2026/07/05 07:30:00    Errors:                 2 pools (pool_err1, pool_err2)
+`,
+			expected: `System-rebuild stop requested for 5 pools
+   With active rebuild:    2 pools (pool_ok1, pool_ok2)
+   Without active rebuild: 1 pool (pool_norebuild)
+   Errors:                 2 pools (pool_err1, pool_err2)
+`,
+		},
+		"verbose output with only non-existent rebuilds": {
+			input: `TestDmg_systemRebuildOpCmd_execute/verbose_nonexist INFO 2026/07/05 07:30:00 System-rebuild stop requested for 3 pools
+TestDmg_systemRebuildOpCmd_execute/verbose_nonexist INFO 2026/07/05 07:30:00    Without active rebuild: 3 pools (uuid1, uuid2, uuid3)
+TestDmg_systemRebuildOpCmd_execute/verbose_nonexist INFO 2026/07/05 07:30:00    Errors:                 0 pools
+`,
+			expected: `System-rebuild stop requested for 3 pools
+   Without active rebuild: 3 pools (uuid1, uuid2, uuid3)
+   Errors:                 0 pools
+`,
+		},
+		"verbose output with mixed categories": {
+			input: `TestDmg_systemRebuildOpCmd_execute/verbose_mixed INFO 2026/07/05 07:30:00 System-rebuild stop requested for 10 pools
+TestDmg_systemRebuildOpCmd_execute/verbose_mixed INFO 2026/07/05 07:30:00    With active rebuild:    4 pools (pool1, pool2, pool3, pool4)
+TestDmg_systemRebuildOpCmd_execute/verbose_mixed INFO 2026/07/05 07:30:00    Without active rebuild: 4 pools (pool5, pool6, pool7, pool8)
+TestDmg_systemRebuildOpCmd_execute/verbose_mixed INFO 2026/07/05 07:30:00    Errors:                 2 pools (pool9, pool10)
+`,
+			expected: `System-rebuild stop requested for 10 pools
+   With active rebuild:    4 pools (pool1, pool2, pool3, pool4)
+   Without active rebuild: 4 pools (pool5, pool6, pool7, pool8)
+   Errors:                 2 pools (pool9, pool10)
+`,
+		},
+		"malformed INFO line - no space after timestamp": {
+			input:    "TestDmg_systemRebuildOpCmd_execute/case INFO 2026/07/05 07:30:00No pools in system.\n",
+			expected: "",
+		},
+		"INFO line with no message": {
+			input:    "TestDmg_systemRebuildOpCmd_execute/case INFO 2026/07/05 07:30:00 \n",
+			expected: "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := extractInfoMessages(tc.input)
+			if got != tc.expected {
+				t.Fatalf("extractInfoMessages() mismatch:\nexpected:\n%q\ngot:\n%q", tc.expected, got)
+			}
+		})
+	}
+}
+
 func TestDmg_SystemCommands(t *testing.T) {
 	withRanks := func(req control.UnaryRequest, ranks ...ranklist.Rank) control.UnaryRequest {
 		if rs, ok := req.(interface{ SetRanks(*ranklist.RankSet) }); ok {
@@ -623,17 +750,21 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			expErr: errors.New("failed"),
 		},
 		"no pools": {
-			ctlCfg:  &control.Config{},
-			opCode:  control.PoolRebuildOpCodeStop,
-			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "No pools in system.\nCommand completed successfully.",
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp:   &mgmtpb.SystemRebuildManageResp{},
+			expInfo: `No pools in system.
+Command completed successfully.
+`,
 		},
 		"no pools; verbose": {
 			ctlCfg:  &control.Config{},
 			opCode:  control.PoolRebuildOpCodeStart,
 			verbose: true,
 			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "No pools in system.\nCommand completed successfully.",
+			expInfo: `No pools in system.
+Command completed successfully.
+`,
 		},
 		"rebuild stop with DER_NONEXIST only": {
 			ctlCfg: &control.Config{},
@@ -654,7 +785,10 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "System-rebuild stop requested for 2 pools\n   Without active rebuild: 2 pools\n   Errors:                 0 pools\nCommand completed successfully.",
+			expInfo: `System-rebuild stop requested for 2 pools
+   Without active rebuild: 2 pools
+   Errors:                 0 pools
+`,
 		},
 		"rebuild stop mixed success and DER_NONEXIST": {
 			ctlCfg: &control.Config{},
@@ -683,7 +817,11 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "System-rebuild stop requested for 4 pools\n   With active rebuild:    2 pools\n   Without active rebuild: 2 pools\n   Errors:                 0 pools\nCommand completed successfully.",
+			expInfo: `System-rebuild stop requested for 4 pools
+   With active rebuild:    2 pools
+   Without active rebuild: 2 pools
+   Errors:                 0 pools
+`,
 		},
 		"rebuild stop with DER_NONEXIST and real errors": {
 			ctlCfg: &control.Config{},
@@ -708,8 +846,12 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expErr:  errors.New("pool-rebuild stop failed on pool pool_failed: real error happened"),
-			expInfo: "System-rebuild stop requested for 3 pools\n   With active rebuild:    1 pool\n   Without active rebuild: 1 pool\n   Errors:                 1 pool",
+			expErr: errors.New("pool-rebuild stop failed on pool pool_failed: real error happened"),
+			expInfo: `System-rebuild stop requested for 3 pools
+   With active rebuild:    1 pool
+   Without active rebuild: 1 pool
+   Errors:                 1 pool
+`,
 		},
 		"rebuild stop failed": {
 			ctlCfg: &control.Config{},
@@ -734,8 +876,11 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expErr:  errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
-			expInfo: "System-rebuild stop requested for 3 pools\n   With active rebuild:    1 pool\n   Errors:                 2 pools",
+			expErr: errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
+			expInfo: `System-rebuild stop requested for 3 pools
+   With active rebuild:    1 pool
+   Errors:                 2 pools
+`,
 		},
 		"rebuild start succeeded; verbose": {
 			ctlCfg:  &control.Config{},
@@ -757,7 +902,149 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "System-rebuild start requested for 3 pools\n   With active rebuild:    3 pools (foo, bar, baz)\n   Errors:                 0 pools\nCommand completed successfully.",
+			expInfo: `System-rebuild start requested for 3 pools
+   With active rebuild:    3 pools (foo, bar, baz)
+   Errors:                 0 pools
+`,
+		},
+		"rebuild stop with errors; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStop,
+			verbose: true,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool_ok1",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "pool_ok2",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_norebuild",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "error1",
+						Id:      "pool_err1",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "error2",
+						Id:      "pool_err2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr: errors.New("error1, pool-rebuild stop failed on pool pool_err2: error2"),
+			expInfo: `System-rebuild stop requested for 5 pools
+   With active rebuild:    2 pools (pool_ok1, pool_ok2)
+   Without active rebuild: 1 pool (pool_norebuild)
+   Errors:                 2 pools (pool_err1, pool_err2)
+`,
+		},
+		"rebuild stop with only DER_NONEXIST; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStop,
+			verbose: true,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid1",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid3",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+   Without active rebuild: 3 pools (uuid1, uuid2, uuid3)
+   Errors:                 0 pools
+`,
+		},
+		"rebuild stop mixed categories; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStop,
+			verbose: true,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool1",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "pool2",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "pool3",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "pool4",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool5",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool6",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool7",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool8",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "actual error 1",
+						Id:      "pool9",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "actual error 2",
+						Id:      "pool10",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr: errors.New("actual error 1, pool-rebuild stop failed on pool pool10: actual error 2"),
+			expInfo: `System-rebuild stop requested for 10 pools
+   With active rebuild:    4 pools (pool1, pool2, pool3, pool4)
+   Without active rebuild: 4 pools (pool5, pool6, pool7, pool8)
+   Errors:                 2 pools (pool9, pool10)
+`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -778,16 +1065,17 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			gotErr := rbldCmd.execute(tc.opCode, tc.force)
 			test.CmpErr(t, tc.expErr, gotErr)
 
-			// Note this doesn't verify that the text is on an INFO or DEBUG line
-			// specifically, just that it appears in log output.
-
-			if !strings.Contains(buf.String(), tc.expInfo) {
-				t.Fatalf("expected info log output to contain %s, got %s\n",
-					tc.expInfo, buf.String())
+			if tc.expInfo == "" {
+				if strings.Contains(buf.String(), "INFO") {
+					t.Fatalf("unexpected INFO log output printed, got:\n%s", buf.String())
+				}
+				return
 			}
-			if tc.expInfo == "" && strings.Contains(buf.String(), "INFO") {
-				t.Fatalf("unexpected info log output printed, got %s\n",
-					buf.String())
+
+			gotInfo := extractInfoMessages(buf.String())
+			if gotInfo != tc.expInfo {
+				t.Fatalf("INFO output mismatch:\nexpected:\n%s\ngot:\n%s\nfull buffer:\n%s",
+					tc.expInfo, gotInfo, buf.String())
 			}
 		})
 	}

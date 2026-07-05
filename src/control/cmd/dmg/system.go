@@ -729,7 +729,7 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		}
 	}
 
-	// Print structured output following Kenneth C Cain's format
+	// Print structured output in a consistent format
 	totalPools := len(resp.Results)
 	cmd.Infof("System-rebuild %s requested for %d %s", opCode, totalPools, common.Pluralise("pool", totalPools))
 
