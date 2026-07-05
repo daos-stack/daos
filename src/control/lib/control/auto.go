@@ -70,8 +70,10 @@ type (
 		// Generate config with a tmpfs RAM-disk SCM.
 		UseTmpfsSCM bool `json:"UseTmpfsSCM"`
 		// Location to persist control-plane metadata, will generate MD-on-SSD config.
-		ExtMetadataPath string         `json:"ExtMetadataPath"`
-		Log             logging.Logger `json:"-"`
+		ExtMetadataPath string `json:"ExtMetadataPath"`
+		// Allow NUMA imbalance when NVMe devices are not evenly distributed.
+		AllowNumaImbalance bool           `json:"AllowNumaImbalance"`
+		Log                logging.Logger `json:"-"`
 	}
 
 	// ConfGenerateResp contains the generated server config.
@@ -916,7 +918,12 @@ func filterDevicesByAffinity(req ConfGenerateReq, nd *networkDetails, sd *storag
 	return nodeSet, nil
 }
 
-func correctSSDCounts(log logging.Logger, sd *storageDetails) error {
+func correctSSDCounts(log logging.Logger, sd *storageDetails, allowImbalance bool) error {
+	if allowImbalance {
+		log.Debug("allow-numa-imbalance enabled, distributing SSDs equally across engines")
+		return distributeSSDs(log, sd)
+	}
+
 	// calculate ssd count lowest value across numa nodes
 	minSSDsInCfg, err := lowestCommonNrSSDs(sd.NumaSSDs.keys(), sd.NumaSSDs)
 	if err != nil {
@@ -945,6 +952,57 @@ func correctSSDCounts(log logging.Logger, sd *storageDetails) error {
 			ssdAddrs := ssds.Strings()[:minSSDsInCfg]
 			sd.NumaSSDs[numaID] = hardware.MustNewPCIAddressSet(ssdAddrs...)
 		}
+	}
+
+	return nil
+}
+
+// distributeSSDs allocates all available SSDs equally across engines, ignoring NUMA affinity.
+// Each engine receives the same number of SSDs. If the total number of SSDs is not evenly
+// divisible by the number of engines, only the maximum divisible number of SSDs are used and
+// remainder SSDs are not included in the generated configuration.
+func distributeSSDs(log logging.Logger, sd *storageDetails) error {
+	numaIDs := sd.NumaSSDs.keys()
+	if len(numaIDs) == 0 {
+		return errors.New("no numa nodes with SSDs found")
+	}
+
+	// Collect all SSDs from all NUMA nodes
+	var allSSDs []string
+	for _, numaID := range numaIDs {
+		ssds := sd.NumaSSDs[numaID]
+		if ssds.HasVMD() {
+			// VMD devices cannot be distributed across NUMA nodes
+			log.Debugf("NUMA-%d has VMD devices, skipping distribution", numaID)
+			return errors.New("cannot distribute VMD devices across NUMA nodes, " +
+				"use without --allow-numa-imbalance flag")
+		}
+		allSSDs = append(allSSDs, ssds.Strings()...)
+	}
+
+	totalSSDs := len(allSSDs)
+	nrEngines := len(numaIDs)
+	ssdsPerEngine := totalSSDs / nrEngines
+	remainder := totalSSDs % nrEngines
+	ssdsToUse := ssdsPerEngine * nrEngines
+
+	if remainder > 0 {
+		log.Noticef("total SSDs (%d) not evenly divisible by engines (%d); "+
+			"using %d SSDs (%d per engine), %d SSDs will not be used",
+			totalSSDs, nrEngines, ssdsToUse, ssdsPerEngine, remainder)
+	}
+
+	log.Debugf("distributing %d SSDs equally across %d engines (%d per engine)",
+		ssdsToUse, nrEngines, ssdsPerEngine)
+
+	// Distribute SSDs equally across engines, using only the divisible portion
+	idx := 0
+	for i, numaID := range numaIDs {
+		engineSSDs := allSSDs[idx : idx+ssdsPerEngine]
+		sd.NumaSSDs[numaID] = hardware.MustNewPCIAddressSet(engineSSDs...)
+		log.Debugf("assigned %d SSDs to NUMA-%d (engine %d): %v",
+			ssdsPerEngine, numaID, i, engineSSDs)
+		idx += ssdsPerEngine
 	}
 
 	return nil
@@ -1056,7 +1114,7 @@ func genEngineConfigs(req ConfGenerateReq, newEngineCfg newEngineCfgFn, nodeSet 
 
 	// if nvme is enabled, make ssd counts consistent across numa groupings
 	if !req.SCMOnly {
-		if err := correctSSDCounts(req.Log, sd); err != nil {
+		if err := correctSSDCounts(req.Log, sd, req.AllowNumaImbalance); err != nil {
 			return nil, err
 		}
 	}
@@ -1231,7 +1289,8 @@ func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, tc *threadCounts
 		WithMgmtSvcReplicas(req.MgmtSvcReplicas...).
 		WithFabricProvider(ecs[0].Fabric.Provider).
 		WithEngines(ecs...).
-		WithControlLogFile(defaultControlLogFile)
+		WithControlLogFile(defaultControlLogFile).
+		WithAllowNumaImbalance(req.AllowNumaImbalance)
 
 	for idx := range cfg.Engines {
 		tiers := cfg.Engines[idx].Storage.Tiers
