@@ -4,7 +4,7 @@ module github.com/daos-stack/daos/src/control
 // - rpm packaging version checks: utils/rpms/daos.spec
 // - debian packaging version checks: debian/control
 // Scons uses this file to extract the minimum version.
-go 1.21.0
+go 1.24.0
 
 toolchain go1.24.2
 
