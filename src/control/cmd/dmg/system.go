@@ -16,7 +16,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -709,79 +708,11 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	// Handle special case: no pools in system
-	if len(resp.Results) == 0 {
-		cmd.Info("No pools in system.")
-		cmd.Info("Command completed successfully.")
-		return nil
-	}
+	var out strings.Builder
+	err = pretty.PrintSystemRebuildManageResp(&out, resp, cmd.Verbose)
+	cmd.Info(out.String())
 
-	// Categorize results: successful, not-rebuilding (DER_NONEXIST), and actual errors
-	var succeeded, notRebuilding, actualErrors []string
-	for _, res := range resp.Results {
-		if !res.Errored {
-			succeeded = append(succeeded, res.ID)
-		} else if strings.Contains(res.Msg, "DER_NONEXIST") ||
-			strings.Contains(res.Msg, "entity does not exist") {
-			notRebuilding = append(notRebuilding, res.ID)
-		} else {
-			actualErrors = append(actualErrors, res.ID)
-		}
-	}
-
-	// Print structured output in a consistent format
-	totalPools := len(resp.Results)
-	cmd.Infof("System-rebuild %s requested for %d %s", opCode, totalPools, common.Pluralise("pool", totalPools))
-
-	if len(succeeded) > 0 {
-		if cmd.Verbose {
-			cmd.Infof("   With active rebuild:    %d %s (%s)", len(succeeded),
-				common.Pluralise("pool", len(succeeded)), strings.Join(succeeded, ", "))
-		} else {
-			cmd.Infof("   With active rebuild:    %d %s", len(succeeded),
-				common.Pluralise("pool", len(succeeded)))
-		}
-	}
-
-	if len(notRebuilding) > 0 {
-		if cmd.Verbose {
-			cmd.Infof("   Without active rebuild: %d %s (%s)", len(notRebuilding),
-				common.Pluralise("pool", len(notRebuilding)), strings.Join(notRebuilding, ", "))
-		} else {
-			cmd.Infof("   Without active rebuild: %d %s", len(notRebuilding),
-				common.Pluralise("pool", len(notRebuilding)))
-		}
-	}
-
-	if len(actualErrors) > 0 {
-		if cmd.Verbose {
-			cmd.Infof("   Errors:                 %d %s (%s)", len(actualErrors),
-				common.Pluralise("pool", len(actualErrors)), strings.Join(actualErrors, ", "))
-		} else {
-			cmd.Infof("   Errors:                 %d %s", len(actualErrors),
-				common.Pluralise("pool", len(actualErrors)))
-		}
-	} else {
-		cmd.Infof("   Errors:                 0 pools")
-	}
-
-	// Only return error if there are actual failures (not DER_NONEXIST)
-	if len(actualErrors) > 0 {
-		var errMsgs []string
-		for _, res := range resp.Results {
-			if res.Errored && !strings.Contains(res.Msg, "DER_NONEXIST") &&
-				!strings.Contains(res.Msg, "entity does not exist") {
-				errMsgs = append(errMsgs, fmt.Sprintf("pool-rebuild %s failed on pool %s: %s",
-					res.OpCode, res.ID, res.Msg))
-			}
-		}
-		if len(errMsgs) > 0 {
-			return errors.New(strings.Join(errMsgs, ", "))
-		}
-	}
-
-	cmd.Info("Command completed successfully.")
-	return nil
+	return err
 }
 
 type systemRebuildStartCmd struct {
