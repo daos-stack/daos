@@ -1435,10 +1435,10 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_PURGE;
 	if (iter->it_for_discard)
 		return DAOS_INTENT_DISCARD;
-	if (iter->it_ignore_uncommitted)
-		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_ignore_uncommitted)
+		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_check)
 		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;

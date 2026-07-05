@@ -572,6 +572,28 @@ out:
 }
 
 static int
+obj_layout_upgrade_in_place(struct pl_map *map, daos_unit_oid_t oid, uint32_t old_layout_ver,
+			    uint32_t new_layout_ver, struct daos_obj_md *md, bool *in_place)
+{
+	uint32_t tgts[LOCAL_ARRAY_SIZE];
+	uint32_t shards[LOCAL_ARRAY_SIZE];
+	int      rc;
+
+	if (old_layout_ver == new_layout_ver) {
+		*in_place = true;
+		return 0;
+	}
+
+	rc = obj_layout_diff(map, oid, new_layout_ver, old_layout_ver, md, tgts, shards,
+			     LOCAL_ARRAY_SIZE);
+	if (rc < 0)
+		return rc;
+
+	*in_place = (rc == 0);
+	return 0;
+}
+
+static int
 obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	    struct daos_obj_md *md, struct rebuild_tgt_pool_tracker *rpt,
 	    d_rank_t myrank, daos_unit_oid_t oid, vos_iter_param_t *param,
@@ -582,6 +604,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	struct rebuild_pool_tls *tls;
 	daos_epoch_range_t	discard_epr;
 	bool			still_needed;
+	bool                     in_place;
 	int			rc;
 
 	/*
@@ -606,22 +629,46 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	tls->rebuild_pool_obj_count++;
 	if (still_needed) {
 		if (new_layout_ver > 0) {
-			/* upgrade job reclaim */
+			/*
+			 * Layout upgrade creates a new OI entry sharing the old object's
+			 * tree only when the shard stays on the same target. If the shard
+			 * was migrated, the old/new layout entries own different trees, so
+			 * reclaim must discard the stale tree instead of deleting only the
+			 * OI entry.
+			 */
 			if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
 				if (oid.id_layout_ver == new_layout_ver) {
+					rc = obj_layout_upgrade_in_place(
+					    map, oid, layout_ver, new_layout_ver, md, &in_place);
+					if (rc != 0)
+						return rc;
+
 					*acts |= VOS_ITER_CB_DELETE;
-					vos_obj_delete_ent(param->ip_hdl, oid);
+					if (in_place)
+						return vos_obj_delete_ent(param->ip_hdl, oid);
+
+					goto discard;
 				}
 			} else {
 				if (oid.id_layout_ver < new_layout_ver) {
+					rc = obj_layout_upgrade_in_place(
+					    map, oid, oid.id_layout_ver, new_layout_ver, md,
+					    &in_place);
+					if (rc != 0)
+						return rc;
+
 					*acts |= VOS_ITER_CB_DELETE;
-					vos_obj_delete_ent(param->ip_hdl, oid);
+					if (in_place)
+						return vos_obj_delete_ent(param->ip_hdl, oid);
+
+					goto discard;
 				}
 			}
 		}
 		return 0;
 	}
 
+discard:
 	D_DEBUG(DB_REBUILD, DF_RB " deleting stale object " DF_UOID " oid layout %u/%u",
 		DP_RB_RPT(rpt), DP_UOID(oid), oid.id_layout_ver, new_layout_ver);
 	tls->rebuild_pool_reclaim_obj_count++;
