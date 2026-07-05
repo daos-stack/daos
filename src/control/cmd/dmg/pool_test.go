@@ -1492,3 +1492,103 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 		})
 	}
 }
+
+func Test_checkPoolCreateTierRatioWarning(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp       *control.PoolCreateResp
+		expWarning string
+	}{
+		"PMem mode with low tier ratio - warning expected": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TiByte}, // 0.98% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "NOTICE: storage tier ratio is less than 1.00%, DAOS performance will suffer!",
+		},
+		"PMem mode with acceptable tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{600 * humanize.GiByte, 9400 * humanize.GiByte}, // 6% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"PMem mode at minimum threshold - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 9900 * humanize.GiByte}, // 1.0% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"PMem mode just below threshold - warning expected": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{99 * humanize.GiByte, 9901 * humanize.GiByte}, // 0.99% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "NOTICE: storage tier ratio is less than 1.00%, DAOS performance will suffer!",
+		},
+		"MD-on-SSD mode with low tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{142 * humanize.GiByte, 20 * humanize.TiByte}, // ~0.7% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"MD-on-SSD mode with very low tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{10 * humanize.GiByte, 10 * humanize.TiByte}, // ~0.1% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"MD-on-SSD mode with normal tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1200 * humanize.GiByte, 18800 * humanize.GiByte}, // 6% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"single tier configuration - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1000 * humanize.GiByte},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"no second tier - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1000 * humanize.GiByte, 0},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"three tier configuration - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 1000 * humanize.GiByte, 10000 * humanize.GiByte},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"empty response - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"nil tier bytes - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     nil,
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotWarning := checkPoolCreateTierRatioWarning(tc.resp)
+
+			if diff := cmp.Diff(tc.expWarning, gotWarning); diff != "" {
+				t.Fatalf("unexpected warning (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
