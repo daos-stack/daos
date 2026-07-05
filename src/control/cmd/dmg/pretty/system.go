@@ -259,23 +259,24 @@ func PrintSystemProperties(out io.Writer, props []*daos.SystemProperty) {
 }
 
 func printRebuildManageLines(out io.Writer, inTxt string, items []string, verbose bool) {
-	fmt.Fprintf(out, "%s %d %s", inTxt, len(items),
+	fmt.Fprintf(out, "%s%d %s", inTxt, len(items),
 		common.Pluralise("pool", len(items)))
 	if verbose {
-		fmt.Fprintf(out, " (%s)\n", len(items), strings.Join(items, ", "))
+		fmt.Fprintf(out, " (%s)\n", strings.Join(items, ", "))
 	} else {
 		fmt.Fprintf(out, "\n")
 	}
 }
 
-// printSystemRebuildStopResp renders a human readable output representing the results of a dmg
-// system rebuild stop command response. If <operation>==stop, pools that have no active rebuild
+// PrintSystemRebuildManageResp renders a human readable output representing the results of a dmg
+// system rebuild manage command response. If <operation>==stop, pools that have no active rebuild
 // to stop will be reported in the output but not result in an error being reported.
 func PrintSystemRebuildManageResp(out io.Writer, resp *control.SystemRebuildManageResp, verbose bool) error {
 	// Handle special case: no pools in system
 	if len(resp.Results) == 0 {
-		fmt.Println(out, "No pools in system.")
-		fmt.Println(out, "Command completed without error.")
+		fmt.Fprintln(out, "No pools in system.")
+		fmt.Fprintln(out, "Command completed successfully.")
+
 		return nil
 	}
 
@@ -310,22 +311,22 @@ func PrintSystemRebuildManageResp(out io.Writer, resp *control.SystemRebuildMana
 		common.Pluralise("pool", totalPools))
 
 	if len(succeeded) > 0 {
-		printRebuildManageLines(out, "   With active rebuild:   ", succeeded, verbose)
+		printRebuildManageLines(out, "   With active rebuild:    ", succeeded, verbose)
 	}
 
 	if len(notRebuilding) > 0 {
-		printRebuildManageLines(out, "   Without active rebuild:   ", notRebuilding,
+		printRebuildManageLines(out, "   Without active rebuild: ", notRebuilding,
 			verbose)
 	}
 
 	// Only return error if there are actual failures (not DER_NONEXIST)
 	if len(actualErrors) > 0 {
-		printRebuildManageLines(out, "   Errors:                ", actualErrors, verbose)
+		printRebuildManageLines(out, "   Errors:                 ", actualErrors, verbose)
 
 		return errors.New(strings.Join(errMsgs, ", "))
 	}
 
-	fmt.Println(out, "Command completed without error.")
+	fmt.Fprintln(out, "Command completed successfully.")
 
 	return nil
 }

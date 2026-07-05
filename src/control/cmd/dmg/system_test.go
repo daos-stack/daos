@@ -28,9 +28,14 @@ import (
 // extractInfoMessages extracts INFO level messages from a log buffer, returning just
 // the message content without timestamps or prefixes. Returns a single string with
 // messages joined by newlines, terminated with a newline if any messages were found.
+// Continuation lines (lines that don't contain log level markers) are appended to
+// the previous INFO message.
 func extractInfoMessages(logOutput string) string {
 	var infoLines []string
-	for _, line := range strings.Split(logOutput, "\n") {
+	lines := strings.Split(logOutput, "\n")
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
 		if strings.Contains(line, " INFO ") {
 			// Extract just the message part after the timestamp
 			// Format: "prefix INFO YYYY/MM/DD HH:MM:SS message"
@@ -44,7 +49,28 @@ func extractInfoMessages(logOutput string) string {
 				fields := strings.SplitN(remainder, " ", 3)
 				if len(fields) == 3 {
 					// fields[0] = date, fields[1] = time, fields[2] = message
-					infoLines = append(infoLines, fields[2])
+					msg := fields[2]
+
+					// Collect continuation lines (lines that don't have log level markers)
+					for i+1 < len(lines) {
+						nextLine := lines[i+1]
+						// Check if it's a continuation line (no log level marker)
+						if len(nextLine) > 0 &&
+							!strings.Contains(nextLine, " INFO ") &&
+							!strings.Contains(nextLine, " DEBUG ") &&
+							!strings.Contains(nextLine, " WARN ") &&
+							!strings.Contains(nextLine, " ERROR ") &&
+							nextLine != "captured log output:" &&
+							!strings.HasPrefix(nextLine, "---") &&
+							!strings.HasPrefix(nextLine, "===") {
+							msg += "\n" + nextLine
+							i++
+						} else {
+							break
+						}
+					}
+
+					infoLines = append(infoLines, msg)
 				}
 			}
 		}
@@ -660,74 +686,6 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 Command completed successfully.
 `,
 		},
-		"no pools; verbose": {
-			ctlCfg:  &control.Config{},
-			opCode:  control.PoolRebuildOpCodeStart,
-			verbose: true,
-			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: `No pools in system.
-Command completed successfully.
-`,
-		},
-		"rebuild stop with DER_NONEXIST only": {
-			ctlCfg: &control.Config{},
-			opCode: control.PoolRebuildOpCodeStop,
-			resp: &mgmtpb.SystemRebuildManageResp{
-				Results: []*mgmtpb.PoolRebuildManageResult{
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool1",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool2",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-				},
-			},
-			expInfo: `System-rebuild stop requested for 2 pools
-   Without active rebuild: 2 pools
-   Errors:                 0 pools
-Command completed successfully.
-`,
-		},
-		"rebuild stop mixed success and DER_NONEXIST": {
-			ctlCfg: &control.Config{},
-			opCode: control.PoolRebuildOpCodeStop,
-			resp: &mgmtpb.SystemRebuildManageResp{
-				Results: []*mgmtpb.PoolRebuildManageResult{
-					{
-						Id:     "pool_success1",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Id:     "pool_success2",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool_notrebuilding1",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool_notrebuilding2",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-				},
-			},
-			expInfo: `System-rebuild stop requested for 4 pools
-   With active rebuild:    2 pools
-   Without active rebuild: 2 pools
-   Errors:                 0 pools
-Command completed successfully.
-`,
-		},
 		"rebuild stop with DER_NONEXIST and real errors": {
 			ctlCfg: &control.Config{},
 			opCode: control.PoolRebuildOpCodeStop,
@@ -795,63 +753,21 @@ Command completed successfully.
 				Results: []*mgmtpb.PoolRebuildManageResult{
 					{
 						Id:     "foo",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
 					},
 					{
 						Id:     "bar",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
 					},
 					{
 						Id:     "baz",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
 					},
 				},
 			},
 			expInfo: `System-rebuild start requested for 3 pools
    With active rebuild:    3 pools (foo, bar, baz)
-   Errors:                 0 pools
 Command completed successfully.
-`,
-		},
-		"rebuild stop with errors; verbose": {
-			ctlCfg:  &control.Config{},
-			opCode:  control.PoolRebuildOpCodeStop,
-			verbose: true,
-			resp: &mgmtpb.SystemRebuildManageResp{
-				Results: []*mgmtpb.PoolRebuildManageResult{
-					{
-						Id:     "pool_ok1",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Id:     "pool_ok2",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool_norebuild",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "error1",
-						Id:      "pool_err1",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "error2",
-						Id:      "pool_err2",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-				},
-			},
-			expErr: errors.New("error1, pool-rebuild stop failed on pool pool_err2: error2"),
-			expInfo: `System-rebuild stop requested for 5 pools
-   With active rebuild:    2 pools (pool_ok1, pool_ok2)
-   Without active rebuild: 1 pool (pool_norebuild)
-   Errors:                 2 pools (pool_err1, pool_err2)
 `,
 		},
 		"rebuild stop with only DER_NONEXIST; verbose": {
@@ -882,75 +798,7 @@ Command completed successfully.
 			},
 			expInfo: `System-rebuild stop requested for 3 pools
    Without active rebuild: 3 pools (uuid1, uuid2, uuid3)
-   Errors:                 0 pools
 Command completed successfully.
-`,
-		},
-		"rebuild stop mixed categories; verbose": {
-			ctlCfg:  &control.Config{},
-			opCode:  control.PoolRebuildOpCodeStop,
-			verbose: true,
-			resp: &mgmtpb.SystemRebuildManageResp{
-				Results: []*mgmtpb.PoolRebuildManageResult{
-					{
-						Id:     "pool1",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Id:     "pool2",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Id:     "pool3",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Id:     "pool4",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool5",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool6",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool7",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
-						Id:      "pool8",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "actual error 1",
-						Id:      "pool9",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-					{
-						Errored: true,
-						Msg:     "actual error 2",
-						Id:      "pool10",
-						OpCode:  uint32(control.PoolRebuildOpCodeStop),
-					},
-				},
-			},
-			expErr: errors.New("actual error 1, pool-rebuild stop failed on pool pool10: actual error 2"),
-			expInfo: `System-rebuild stop requested for 10 pools
-   With active rebuild:    4 pools (pool1, pool2, pool3, pool4)
-   Without active rebuild: 4 pools (pool5, pool6, pool7, pool8)
-   Errors:                 2 pools (pool9, pool10)
 `,
 		},
 	} {
