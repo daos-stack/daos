@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -296,6 +297,19 @@ int swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
  * @param[in]  id	IDs of member to delete
  */
 void swim_member_del(struct swim_context *ctx, swim_id_t id);
+
+/**
+ * Reset a SWIM member, typically when updating its incarnation number and
+ * setting its state to SWIM_MEMBER_ALIVE.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  id	IDs of member to reset
+ */
+static inline void
+swim_member_reset(struct swim_context *ctx, swim_id_t id)
+{
+	swim_member_del(ctx, id);
+}
 
 /** @} */
 
