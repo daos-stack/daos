@@ -11,7 +11,8 @@ concurrency:
 
 jobs:
   Run_in_docker:
-    if: github.repository == 'daos-stack/daos'
+    if: false  # Disabled because we do not have self-hosted runners
+    # if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, docker]
     steps:
       - name: Checkout code
