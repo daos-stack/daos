@@ -1635,9 +1635,6 @@ func TestSystem_Membership_FaultDomainLevel(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			// fmt.Printf(tc.tree.String())
-			// fmt.Printf("Depth: %d\n", tc.tree.Depth())
-
 			db := raft.MockDatabaseWithFaultDomainTree(t, log, tc.tree)
 			membership := NewMembership(log, db)
 
