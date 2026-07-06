@@ -731,7 +731,7 @@ Command completed successfully.
 			},
 			expPrintStr: `
 System-rebuild stop requested for 3 pools
-   With active rebuild:    3 pools
+   With active or finishing rebuild:    3 pools
 Command completed successfully.
 `,
 		},
@@ -755,7 +755,7 @@ Command completed successfully.
 			verbose: true,
 			expPrintStr: `
 System-rebuild stop requested for 3 pools
-   With active rebuild:    3 pools (pool1, pool2, pool3)
+   With active or finishing rebuild:    3 pools (pool1, pool2, pool3)
 Command completed successfully.
 `,
 		},
@@ -776,7 +776,7 @@ Command completed successfully.
 			},
 			expPrintStr: `
 System-rebuild stop requested for 2 pools
-   With active rebuild:    1 pool
+   With active or finishing rebuild:    1 pool
    Without active rebuild: 1 pool
 Command completed successfully.
 `,
@@ -860,7 +860,7 @@ System-rebuild stop requested for 2 pools
 			verbose: true,
 			expPrintStr: `
 System-rebuild stop requested for 5 pools
-   With active rebuild:    2 pools (pool1, pool2)
+   With active or finishing rebuild:    2 pools (pool1, pool2)
    Without active rebuild: 1 pool (pool3)
    Errors:                 2 pools (pool4, pool5)
 `,
@@ -881,7 +881,7 @@ System-rebuild stop requested for 5 pools
 			},
 			expPrintStr: `
 System-rebuild start requested for 2 pools
-   With active rebuild:    2 pools
+   Successfully requested:    2 pools
 Command completed successfully.
 `,
 		},
@@ -902,7 +902,7 @@ Command completed successfully.
 			},
 			expPrintStr: `
 System-rebuild start requested for 2 pools
-   With active rebuild:    1 pool
+   Successfully requested:    1 pool
    Errors:                 1 pool
 `,
 			expErr: errors.New("pool-rebuild start failed on pool pool2: failed to start rebuild"),

@@ -711,7 +711,7 @@ Command completed successfully.
 			},
 			expErr: errors.New("pool-rebuild stop failed on pool pool_failed: real error happened"),
 			expInfo: `System-rebuild stop requested for 3 pools
-   With active rebuild:    1 pool
+   With active or finishing rebuild:    1 pool
    Without active rebuild: 1 pool
    Errors:                 1 pool
 `,
@@ -739,9 +739,9 @@ Command completed successfully.
 					},
 				},
 			},
-			expErr: errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
+			expErr: errors.New("pool-rebuild stop failed on pool foo: failed, pool-rebuild stop failed on pool bar: failed"),
 			expInfo: `System-rebuild stop requested for 3 pools
-   With active rebuild:    1 pool
+   With active or finishing rebuild:    1 pool
    Errors:                 2 pools
 `,
 		},
@@ -766,7 +766,7 @@ Command completed successfully.
 				},
 			},
 			expInfo: `System-rebuild start requested for 3 pools
-   With active rebuild:    3 pools (foo, bar, baz)
+   Successfully requested:    3 pools (foo, bar, baz)
 Command completed successfully.
 `,
 		},
