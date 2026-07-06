@@ -16,6 +16,7 @@ DFS
 DSO
 DataLoader
 Datamover
+Deduplicate
 EL
 Enakta
 EOF
@@ -119,6 +120,7 @@ chk
 chmod
 chown
 chowned
+classname
 clush
 cmd
 cmdline
@@ -164,6 +166,7 @@ deserializing
 dev
 dfs
 dfuse
+dicts
 dir
 dirname
 disambiguates
@@ -513,6 +516,7 @@ unlinking
 unmangle
 unmount
 unordered
+untrusted
 unwritable
 uri
 url
