@@ -19,16 +19,16 @@ func TestSystem_getDistribution(t *testing.T) {
 		fileMap map[string]string
 		expDist Distribution
 	}{
-		"rocky-8.5": {
+		"rocky-9.7": {
 			fileMap: map[string]string{
-				"/etc/os-release": "distros/rocky8.5-os-rel",
+				"/etc/os-release": "distros/rocky9.7-os-rel",
 			},
 			expDist: Distribution{
 				ID:   "rocky",
 				Name: "Rocky Linux",
 				Version: DistributionVersion{
-					Major: 8,
-					Minor: 5,
+					Major: 9,
+					Minor: 7,
 				},
 			},
 		},
