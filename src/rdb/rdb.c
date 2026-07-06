@@ -798,7 +798,12 @@ out:
 }
 
 /**
- * Modify \a replicas.
+ * Perform \a op on \a replicas in the membership.
+ *
+ * Note that when \a op is RDB_REPLICA_ADD, even if this function returns an
+ * error, one of \a replicas [out] may have been added to the local membership.
+ * The caller must check the local membership before destroying \a replicas
+ * [out].
  *
  * \param[in]		db		database
  * \param[in]		op		operation to perform
@@ -837,9 +842,12 @@ rdb_modify_replicas(struct rdb *db, enum rdb_replica_op op, rdb_replica_id_t *re
 	}
 	for (i = 0; i < *replicas_len; ++i) {
 		rc = rdb_raft_append_apply_cfg(db, type, replicas[i]);
+		if (rc == 0 && DAOS_FAIL_CHECK(DAOS_RDB_FAIL_MODIFY_REPLICAS))
+			rc = -DER_NOTLEADER;
 		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to do op %d on replica " RDB_F_RID, DP_DB(db),
-				 op, RDB_P_RID(replicas[i]));
+			DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
+				  DF_DB ": failed to do op %d on replica " RDB_F_RID, DP_DB(db), op,
+				  RDB_P_RID(replicas[i]));
 			break;
 		}
 	}
