@@ -55,7 +55,6 @@ type MockNvmeCfg struct {
 	DiscoverErr    error
 	FormatRes      []*FormatResult
 	FormatErr      error
-	UpdateErr      error
 	CleanErr       error
 	CleanRes       []string
 }
