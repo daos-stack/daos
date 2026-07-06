@@ -462,17 +462,20 @@ class TestRunner():
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
         # When running ASAN-instrumented DAOS binaries (SANITIZERS=address build),
-        # libasan must be the first library loaded in avocado worker processes.
-        # Workers import pydaos.raw which transitively loads ASAN-compiled libdaos.so;
-        # without LD_PRELOAD the dynamic linker initializes libasan too late and aborts.
-        # Pass these only to the avocado subprocess so SSH/clush helper commands that
-        # run before or after tests are not affected by the ASAN runtime.
+        # avocado worker processes import pydaos.raw which transitively loads
+        # ASAN-compiled libdaos.so.  Without any workaround, ASAN aborts with
+        # "ASan runtime does not come first in initial library list".
+        # LD_PRELOAD=libasan.so.6 fixes this but causes avocado's worker spawner
+        # to hang: ASAN's pthread_atfork/signal-handler interactions with
+        # avocado's process management block the main avocado process indefinitely.
+        # Instead, set verify_asan_link_order=0 so ASAN does not abort when it is
+        # loaded as a transitive dependency (not first).  Pass this only to the
+        # avocado subprocess; SSH/clush helper commands are unaffected since they
+        # do not load ASAN-compiled libraries.
         asan_extra_env = {}
-        libasan = "/usr/lib64/libasan.so.6"
-        if os.path.exists(libasan):
+        if os.path.exists("/usr/lib64/libasan.so.6"):
             asan_extra_env = {
-                "LD_PRELOAD": libasan,
-                "ASAN_OPTIONS": "detect_leaks=0",
+                "ASAN_OPTIONS": "detect_leaks=0:verify_asan_link_order=0",
             }
         result = run_local(logger, " ".join(command), capture_output=False,
                            extra_env=asan_extra_env or None)
