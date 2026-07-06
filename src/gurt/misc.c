@@ -112,7 +112,14 @@ d_free(void *ptr)
 {
 	size_t msize = _f_get_alloc_size(ptr);
 
+	/* Skip poisoning under TSan: it turns harmless zero-size-allocation
+	 * address reuse into a false heap-use-after-free (DAOS-18626 TSAN-02/03).
+	 */
+#if !defined(__SANITIZE_THREAD__)
 	memset(ptr, 0x42, msize);
+#else
+	(void)msize;
+#endif
 	free(ptr);
 }
 

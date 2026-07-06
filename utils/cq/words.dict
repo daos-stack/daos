@@ -12,6 +12,7 @@ CompletedProcess
 DArray
 DDict
 DFS
+DSO
 DataLoader
 Datamover
 EL
@@ -61,8 +62,10 @@ SX
 Skylake
 SubProcess
 Subdirectories
+TSan
 TestFail
 Testcase
+UBSan
 UCX
 UNS
 Uncomment
