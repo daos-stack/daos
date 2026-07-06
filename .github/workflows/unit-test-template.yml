@@ -1,0 +1,305 @@
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
+# Reusable workflow for DAOS unit-test CI jobs (standard build, ASan, UBSan,
+# and TSan) - shared by the standard/asan/tsan/ubsan jobs in unit-testing.yml.
+#
+# No `permissions:` are declared here: GITHUB_TOKEN permissions can only be
+# downgraded (not elevated) across a workflow_call chain, so they must be
+# granted by the calling job instead. Callers needing SARIF upload (asan,
+# ubsan, tsan) must grant:
+#   security-events: write  # upload SARIF to the Security → Code scanning tab
+#   checks: write           # post JUnit check run on commits / PRs
+#   contents: read          # checkout
+# The standard job only needs checks: write + contents: read (no SARIF).
+# See the standard/asan/tsan/ubsan jobs in unit-testing.yml.
+
+name: Unit Test CI Template
+
+on:
+  workflow_call:
+    inputs:
+      test_mode:
+        description: 'Build/test mode: standard, asan, ubsan, or tsan'
+        required: true
+        type: string
+      sanitizers_build_arg:
+        description: 'Value for the SANITIZERS scons build argument (empty for standard)'
+        required: true
+        type: string
+      image_tag:
+        description: 'Docker image tag to use (e.g. build-asan)'
+        required: true
+        type: string
+      artifact_name:
+        description: 'Name for the uploaded artifact (e.g. test-results-asan)'
+        required: true
+        type: string
+      check_name:
+        description: 'Name shown in the JUnit check run on the PR'
+        required: true
+        type: string
+
+jobs:
+  build-and-test:
+    name: Unit Test DAOS with ${{ inputs.test_mode }}
+    if: github.repository == 'daos-stack/daos'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          submodules: 'recursive'
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # Resolve the correct ref and SHA to associate SARIF findings with.
+      # Use env: variables to avoid script injection from PR context values.
+      - name: Resolve SARIF ref and SHA
+        id: sarif_ref
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          GITHUB_SHA_VAL: ${{ github.sha }}
+          GITHUB_REF_VAL: ${{ github.ref }}
+        run: |
+          if [ -n "${PR_HEAD_SHA}" ]; then
+            echo "sha=${PR_HEAD_SHA}"              >> "$GITHUB_OUTPUT"
+            echo "ref=refs/heads/${PR_HEAD_REF}"   >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${GITHUB_SHA_VAL}"   >> "$GITHUB_OUTPUT"
+            echo "ref=${GITHUB_REF_VAL}"   >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build daos in Docker
+        run: |
+          docker build . \
+            --file utils/docker/Dockerfile.el.9 \
+            --build-arg COMPILER=gcc \
+            --build-arg SANITIZERS=${{ inputs.sanitizers_build_arg }} \
+            --build-arg DEPS_JOBS=$(nproc) \
+            --build-arg DAOS_KEEP_SRC=yes \
+            --build-arg DAOS_KEEP_BUILD=yes \
+            --build-arg DAOS_PACKAGES_BUILD=no \
+            --build-arg DAOS_TARGET_TYPE=debug \
+            --build-arg DAOS_JAVA_BUILD=no \
+            --tag ${{ inputs.image_tag }}
+
+      # Prepare host-side output directories that are bind-mounted into the
+      # container. The script always exits 0 so that reporting steps below
+      # always run regardless of test outcome.
+      - name: Prepare output directories
+        run: |
+          mkdir -p sanitizer-logs test-results
+
+      - name: Run Unit Testing
+        id: run_tests
+        run: |
+          docker run \
+            --privileged \
+            --rm --user root \
+            --workdir /home/daos \
+            --name run-${{ inputs.test_mode }}-unit_tests \
+            --volume "$(pwd)/sanitizer-logs:/home/daos/sanitizer-logs" \
+            --volume "$(pwd)/test-results:/home/daos/test-results" \
+            ${{ inputs.image_tag }} \
+            ./daos/utils/ci/run-unit_tests.sh --${{ inputs.test_mode }}
+
+          # Read the structured status written by the script.
+          # Defaults handle the case where the file was not created.
+          SANITIZER_DETECTED=0
+          FUNCTIONAL_FAILURE=0
+          RUNNER_ERROR=0
+          if [ -f test-results/exit_status ]; then
+            # shellcheck source=/dev/null
+            source test-results/exit_status
+            SANITIZER_DETECTED="${sanitizer_detected:-${SANITIZER_DETECTED}}"
+            FUNCTIONAL_FAILURE="${functional_failure:-${FUNCTIONAL_FAILURE}}"
+            RUNNER_ERROR="${runner_error:-${RUNNER_ERROR}}"
+          fi
+          echo "sanitizer_detected=${SANITIZER_DETECTED}" >> "$GITHUB_OUTPUT"
+          echo "functional_failure=${FUNCTIONAL_FAILURE}"  >> "$GITHUB_OUTPUT"
+          echo "runner_error=${RUNNER_ERROR}"  >> "$GITHUB_OUTPUT"
+
+      # The container runs as root, so the files it writes to the bind-mounted
+      # directories are owned by root. Fix permissions so that subsequent steps
+      # running as the host runner user can read and upload them.
+      - name: Fix permissions on container-written output
+        if: always()
+        run: |
+          sudo chmod -R a+rX sanitizer-logs/ test-results/ || true
+
+      # ── ASan reporting ────────────────────────────────────────────────
+
+      - name: Parse ASan reports
+        if: always() && inputs.test_mode == 'asan'
+        run: |
+          python3 utils/ci/parse_asan_reports.py \
+            --report-dir  sanitizer-logs \
+            --source-root "$(pwd)" \
+            --sarif-out   test-results/asan.sarif \
+            --summary-out test-results/asan_summary.md
+
+      - name: Upload ASan SARIF to GitHub Security tab
+        if: always() && inputs.test_mode == 'asan'
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        with:
+          sarif_file: test-results/asan.sarif
+          category: asan
+          ref: ${{ steps.sarif_ref.outputs.ref }}
+          sha: ${{ steps.sarif_ref.outputs.sha }}
+
+      # ── UBSan reporting ───────────────────────────────────────────────
+
+      - name: Parse UBSan reports
+        if: always() && inputs.test_mode == 'ubsan'
+        run: |
+          python3 utils/ci/parse_ubsan_reports.py \
+            --report-dir  sanitizer-logs \
+            --source-root "$(pwd)" \
+            --sarif-out   test-results/ubsan.sarif \
+            --summary-out test-results/ubsan_summary.md
+
+      - name: Upload UBSan SARIF to GitHub Security tab
+        if: always() && inputs.test_mode == 'ubsan'
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        with:
+          sarif_file: test-results/ubsan.sarif
+          category: ubsan
+          ref: ${{ steps.sarif_ref.outputs.ref }}
+          sha: ${{ steps.sarif_ref.outputs.sha }}
+
+      # ── TSan reporting (TSan mode only) ───────────────────────────────
+
+      - name: Parse TSan reports
+        if: always() && inputs.test_mode == 'tsan'
+        run: |
+          python3 utils/ci/parse_tsan_reports.py \
+            --report-dir  sanitizer-logs \
+            --source-root "$(pwd)" \
+            --sarif-out   test-results/tsan.sarif \
+            --summary-out test-results/tsan_summary.md
+
+      - name: Upload TSan SARIF to GitHub Security tab
+        if: always() && inputs.test_mode == 'tsan'
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        with:
+          sarif_file: test-results/tsan.sarif
+          category: tsan
+          ref: ${{ steps.sarif_ref.outputs.ref }}
+          sha: ${{ steps.sarif_ref.outputs.sha }}
+
+      # ── JUnit / functional-test reporting ─────────────────────────────
+
+      - name: Publish JUnit test results
+        id: junit_report
+        if: always()
+        uses: mikepenz/action-junit-report@bccf2e31636835cf0874589931c4116687171386  # v6.4.0
+        with:
+          report_paths: 'test-results/**/*.xml'
+          check_name: '${{ inputs.check_name }}'
+          fail_on_failure: false
+          annotate_only: false
+          job_summary: false
+
+      # ── Combined job summary ───────────────────────────────────────────
+      # Only a link to the check run is shown here (not mikepenz's own
+      # overview/detailed tables) to avoid duplicating what the check run
+      # itself already reports.
+      #
+      # Sanitizer builds (asan/ubsan/tsan) show only the sanitizer-specific
+      # summary: it already explains each failure with more precision (exact
+      # error type, file:line, function) than the generic functional-failures
+      # table could, which can't reliably tell a genuine failure from an
+      # artifact of the sanitizer's own abort/exit code.  Plain (non-sanitizer)
+      # assertion failures are already surfaced by the standard build's own
+      # job summary, so nothing is lost by not repeating them here.
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            SANITIZER_SUMMARY="test-results/${{ inputs.test_mode }}_summary.md"
+            if [ -f "${SANITIZER_SUMMARY}" ]; then
+              cat "${SANITIZER_SUMMARY}"
+            else
+              MODE_UPPER=$(echo "${{ inputs.test_mode }}" | tr '[:lower:]' '[:upper:]')
+              echo "## DAOS Unit Tests — ${MODE_UPPER} Build"
+              echo ""
+              python3 utils/ci/summarize_functional_failures.py \
+                --results-dir test-results || true
+              echo ""
+            fi
+            REPORT_URL="${{ steps.junit_report.outputs.report_url }}"
+            if [ -n "${REPORT_URL}" ]; then
+              echo "[Unit Test Detailed Results](${REPORT_URL})"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Upload all raw artifacts ───────────────────────────────────────
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: |
+            test-results/
+            sanitizer-logs/
+          retention-days: 14
+
+      # ── Fail the job with a precise, actionable message ───────────────
+      # This step runs last so that all reporting steps above always complete.
+      #
+      # runner_error always fails the job regardless of mode: it means
+      # run_utest.py itself crashed/errored out before finishing (e.g.
+      # malformed utest.yaml, missing build vars), which is an
+      # infrastructure-level problem specific to that build's container/
+      # environment -- unlike a plain test-content failure, it is NOT
+      # necessarily also caught by another mode's separate run.
+      #
+      # Sanitizer builds (asan/ubsan/tsan) otherwise only fail on
+      # sanitizer_detected, not on functional_failure alone: the standard
+      # build runs every suite (sanitizer builds run the same suites minus a
+      # few explicitly excluded, or -- for TSan -- an opt-in subset that's
+      # always a subset of what standard runs) and already fails
+      # independently on the same plain (non-sanitizer) failure, so failing
+      # every sanitizer job too would just be 3x redundant noise for the
+      # same root cause. A functional failure that only reproduces under a
+      # sanitizer's own overhead (without the sanitizer itself flagging
+      # anything) is treated as most likely a timing artifact of that
+      # overhead rather than a genuine bug.
+
+      - name: Fail job on test errors
+        if: >
+          always() &&
+          (steps.run_tests.outputs.runner_error == '1' ||
+           steps.run_tests.outputs.sanitizer_detected == '1' ||
+           (inputs.test_mode == 'standard' &&
+            steps.run_tests.outputs.functional_failure == '1'))
+        run: |
+          DETECTED="${{ steps.run_tests.outputs.sanitizer_detected }}"
+          FUNC="${{ steps.run_tests.outputs.functional_failure }}"
+          RUNNER_ERR="${{ steps.run_tests.outputs.runner_error }}"
+
+          if [ "${RUNNER_ERR}" = "1" ]; then
+            msg="The test runner itself crashed or exited abnormally before completing."
+            msg="${msg} See the 'Run Unit Testing' step log for details."
+          elif [ "${DETECTED}" = "1" ]; then
+            case "${{ inputs.test_mode }}" in
+              asan)  msg="AddressSanitizer detected memory-safety issues." ;;
+              ubsan) msg="UndefinedBehaviorSanitizer detected undefined behavior." ;;
+              tsan)  msg="ThreadSanitizer detected thread-safety issues."
+                     msg="${msg} Note: some findings may be Argobots false positives." ;;
+              *)     msg="Sanitizer detected issues." ;;
+            esac
+            [ "${FUNC}" = "1" ] && msg="${msg} Functional failures also detected."
+            msg="${msg} See the Security tab (Code scanning) for exact file/line locations."
+          else
+            # Only reachable for the standard build with a functional failure
+            # (a runner_error or sanitizer_detected case is already handled
+            # above -- see the if: condition on this step).
+            msg="Functional test failures detected."
+          fi
+          echo "::error::${msg}"
+          exit 1
