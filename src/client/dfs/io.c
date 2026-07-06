@@ -76,28 +76,23 @@ sgl_copy_bytes(d_sg_list_t *src, struct daos_sgl_idx *idx, daos_size_t need, d_i
 	daos_sgl_processor(src, false, idx, need, sgl_append_iov_cb, &ctx);
 }
 
+/* memset each contiguous chunk daos_sgl_processor() yields (used to zero a byte window). */
+static int
+zero_iov_cb(uint8_t *buf, size_t len, void *args)
+{
+	memset(buf, 0, len);
+	return 0;
+}
+
 /* Zero a [off, off+len) byte window within the logical SGL stream (walking iov capacities). */
 static void
 sgl_zero_range(d_sg_list_t *sgl, daos_size_t off, daos_size_t len)
 {
-	uint32_t i;
+	struct daos_sgl_idx idx = {0};
 
-	for (i = 0; i < sgl->sg_nr && len > 0; i++) {
-		d_iov_t    *iov = &sgl->sg_iovs[i];
-		daos_size_t cap = iov->iov_buf_len;
-		daos_size_t n;
-
-		if (off >= cap) {
-			off -= cap;
-			continue;
-		}
-		n = cap - off;
-		if (n > len)
-			n = len;
-		memset((char *)iov->iov_buf + off, 0, n);
-		len -= n;
-		off = 0;
-	}
+	/* check_buf=true walks iov_buf_len (capacity): skip to off, then zero len bytes. */
+	daos_sgl_processor(sgl, true, &idx, off, NULL, NULL);
+	daos_sgl_processor(sgl, true, &idx, len, zero_iov_cb, NULL);
 }
 
 /*
@@ -156,8 +151,10 @@ dfs_pl_head_short_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_range_
 	int         rc;
 
 	rc = daos_array_get_size(obj->f.tail_oh, dfs->th, &tail_size, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("Failed to get tail array size: " DF_RC "\n", DP_RC(rc));
 		return rc;
+	}
 	if (tail_size == 0)
 		/* genuine EOF: leave the buffer past EOF untouched (POSIX), keep the short count */
 		return 0;
@@ -391,6 +388,7 @@ dfs_io_split_task(tse_task_t *task)
 	return 0;
 
 err:
+	D_ERROR("Failed to set up split IO sub-tasks: " DF_RC "\n", DP_RC(rc));
 	tse_task_list_abort(&io_list, rc);
 	if (!cb_registered) {
 		dfs_io_part_free(&args->head);
@@ -436,6 +434,7 @@ dfs_io_split(dfs_t *dfs, dfs_obj_t *obj, daos_range_t *rgs, uint32_t rg_nr, d_sg
 
 	rc = dc_task_create(dfs_io_split_task, NULL, ev, &task);
 	if (rc != 0) {
+		D_ERROR("Failed to create split IO task: " DF_RC "\n", DP_RC(rc));
 		dfs_io_part_free(&args->head);
 		dfs_io_part_free(&args->tail);
 		D_FREE(args);
@@ -699,8 +698,10 @@ pl_head_size_prep_cb(tse_task_t *task, void *data)
 
 	/* short head read: look up the tail size so the comp cb can classify the gap */
 	rc = tse_task_register_comp_cb(task, pl_head_size_comp_cb, NULL, 0);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to register tail size comp cb: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(done, rc);
+	}
 	args       = daos_task_get_args(task);
 	args->oh   = p->obj->f.tail_oh;
 	args->th   = p->dfs->th;
@@ -736,6 +737,7 @@ dfs_pl_head_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_range_t *rgs, uint32_t rg_
 	 */
 	rc = dc_task_create(dc_array_get_size, NULL, ev, &size_task);
 	if (rc != 0) {
+		D_ERROR("Failed to create tail get_size task: " DF_RC "\n", DP_RC(rc));
 		if (own_rgs)
 			D_FREE(rgs);
 		return daos_der2errno(rc);
@@ -766,8 +768,10 @@ dfs_pl_head_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_range_t *rgs, uint32_t rg_
 
 	/** child sub-task: the actual head array read */
 	rc = dc_task_create(dc_array_read, sched, NULL, &read_task);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to create head read task: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_params, rc);
+	}
 	rargs      = dc_task_get_args(read_task);
 	rargs->oh  = obj->oh;
 	rargs->th  = dfs->th;
@@ -776,13 +780,17 @@ dfs_pl_head_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_range_t *rgs, uint32_t rg_
 
 	/** chain the tasks: read -> tail get_size (user-facing) */
 	rc = tse_task_register_deps(size_task, 1, &read_task);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to register head read dependency: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_read, rc);
+	}
 
 	daos_task_set_priv(size_task, params);
 	rc = tse_task_register_cbs(size_task, pl_head_size_prep_cb, NULL, 0, NULL, NULL, 0);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to register head read prep cb: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(err_read, rc);
+	}
 
 	/*
 	 * Schedule the parent before the child (the size_task waits on its dep). dc_task_schedule()
