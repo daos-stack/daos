@@ -711,9 +711,9 @@ Command completed successfully.
 			},
 			expErr: errors.New("pool-rebuild stop failed on pool pool_failed: real error happened"),
 			expInfo: `System-rebuild stop requested for 3 pools
-   With active or finishing rebuild:    1 pool
-   Without active rebuild: 1 pool
-   Errors:                 1 pool
+- With active or finishing rebuild:  1 pool
+- Without active rebuild:            1 pool
+- Errors:                            1 pool
 `,
 		},
 		"rebuild stop failed": {
@@ -741,8 +741,8 @@ Command completed successfully.
 			},
 			expErr: errors.New("pool-rebuild stop failed on pool foo: failed, pool-rebuild stop failed on pool bar: failed"),
 			expInfo: `System-rebuild stop requested for 3 pools
-   With active or finishing rebuild:    1 pool
-   Errors:                 2 pools
+- With active or finishing rebuild:  1 pool
+- Errors:                            2 pools
 `,
 		},
 		"rebuild start succeeded; verbose": {
@@ -766,7 +766,7 @@ Command completed successfully.
 				},
 			},
 			expInfo: `System-rebuild start requested for 3 pools
-   Successfully requested:    3 pools (foo, bar, baz)
+- Successfully requested:            3 pools (foo, bar, baz)
 Command completed successfully.
 `,
 		},
@@ -797,8 +797,90 @@ Command completed successfully.
 				},
 			},
 			expInfo: `System-rebuild stop requested for 3 pools
-   Without active rebuild: 3 pools (uuid1, uuid2, uuid3)
+- Without active rebuild:            3 pools (uuid1, uuid2, uuid3)
 Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY - treated as success": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool1",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool3",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop mixed DER_BUSY DER_NONEXIST and success": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool_success",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool_busy",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_norebuild",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  2 pools
+- Without active rebuild:            1 pool
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY and real errors": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool_busy",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "real error",
+						Id:      "pool_error",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr: errors.New("pool-rebuild stop failed on pool pool_error: real error"),
+			expInfo: `System-rebuild stop requested for 2 pools
+- With active or finishing rebuild:  1 pool
+- Errors:                            1 pool
 `,
 		},
 	} {

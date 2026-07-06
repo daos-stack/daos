@@ -259,13 +259,12 @@ func PrintSystemProperties(out io.Writer, props []*daos.SystemProperty) {
 }
 
 func printRebuildManageLines(out io.Writer, inTxt string, items []string, verbose bool) {
-	fmt.Fprintf(out, "%s%d %s", inTxt, len(items),
-		common.Pluralise("pool", len(items)))
+	extra := ""
 	if verbose {
-		fmt.Fprintf(out, " (%s)\n", strings.Join(items, ", "))
-	} else {
-		fmt.Fprintf(out, "\n")
+		extra = fmt.Sprintf(" (%s)", strings.Join(items, ", "))
 	}
+	fmt.Fprintf(out, "- %-34s %d %s%s\n", inTxt, len(items),
+		common.Pluralise("pool", len(items)), extra)
 }
 
 func printSystemRebuildStopResp(out io.Writer, resp *control.SystemRebuildManageResp, verbose bool) error {
@@ -292,17 +291,17 @@ func printSystemRebuildStopResp(out io.Writer, resp *control.SystemRebuildManage
 		common.Pluralise("pool", totalPools))
 
 	if len(succeeded) > 0 {
-		printRebuildManageLines(out, "   With active or finishing rebuild:    ", succeeded, verbose)
+		printRebuildManageLines(out, "With active or finishing rebuild:", succeeded,
+			verbose)
 	}
 
 	if len(notRebuilding) > 0 {
-		printRebuildManageLines(out, "   Without active rebuild: ", notRebuilding,
-			verbose)
+		printRebuildManageLines(out, "Without active rebuild:", notRebuilding, verbose)
 	}
 
 	// Only return error if there are actual failures (not DER_NONEXIST)
 	if len(actualErrors) > 0 {
-		printRebuildManageLines(out, "   Errors:                 ", actualErrors, verbose)
+		printRebuildManageLines(out, "Errors:", actualErrors, verbose)
 
 		return errors.New(strings.Join(errMsgs, ", "))
 	}
@@ -332,12 +331,12 @@ func printSystemRebuildStartResp(out io.Writer, resp *control.SystemRebuildManag
 		common.Pluralise("pool", totalPools))
 
 	if len(succeeded) > 0 {
-		printRebuildManageLines(out, "   Successfully requested:    ", succeeded, verbose)
+		printRebuildManageLines(out, "Successfully requested:", succeeded, verbose)
 	}
 
 	// Only return error if there are actual failures (not DER_NONEXIST)
 	if len(actualErrors) > 0 {
-		printRebuildManageLines(out, "   Errors:                 ", actualErrors, verbose)
+		printRebuildManageLines(out, "Errors:", actualErrors, verbose)
 
 		return errors.New(strings.Join(errMsgs, ", "))
 	}

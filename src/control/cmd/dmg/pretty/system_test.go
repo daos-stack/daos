@@ -731,7 +731,7 @@ Command completed successfully.
 			},
 			expPrintStr: `
 System-rebuild stop requested for 3 pools
-   With active or finishing rebuild:    3 pools
+- With active or finishing rebuild:  3 pools
 Command completed successfully.
 `,
 		},
@@ -755,7 +755,7 @@ Command completed successfully.
 			verbose: true,
 			expPrintStr: `
 System-rebuild stop requested for 3 pools
-   With active or finishing rebuild:    3 pools (pool1, pool2, pool3)
+- With active or finishing rebuild:  3 pools (pool1, pool2, pool3)
 Command completed successfully.
 `,
 		},
@@ -776,8 +776,8 @@ Command completed successfully.
 			},
 			expPrintStr: `
 System-rebuild stop requested for 2 pools
-   With active or finishing rebuild:    1 pool
-   Without active rebuild: 1 pool
+- With active or finishing rebuild:  1 pool
+- Without active rebuild:            1 pool
 Command completed successfully.
 `,
 		},
@@ -800,7 +800,7 @@ Command completed successfully.
 			},
 			expPrintStr: `
 System-rebuild stop requested for 2 pools
-   Without active rebuild: 2 pools
+- Without active rebuild:            2 pools
 Command completed successfully.
 `,
 		},
@@ -821,8 +821,8 @@ Command completed successfully.
 			},
 			expPrintStr: `
 System-rebuild stop requested for 2 pools
-   With active rebuild:    1 pool
-   Errors:                 1 pool
+- With active rebuild:    1 pool
+- Errors:                 1 pool
 `,
 			expErr: errors.New("pool-rebuild stop failed on pool pool2: failed to stop rebuild"),
 		},
@@ -860,9 +860,9 @@ System-rebuild stop requested for 2 pools
 			verbose: true,
 			expPrintStr: `
 System-rebuild stop requested for 5 pools
-   With active or finishing rebuild:    2 pools (pool1, pool2)
-   Without active rebuild: 1 pool (pool3)
-   Errors:                 2 pools (pool4, pool5)
+- With active or finishing rebuild:    2 pools (pool1, pool2)
+- Without active rebuild:              1 pool (pool3)
+- Errors:                              2 pools (pool4, pool5)
 `,
 			expErr: errors.New("pool-rebuild stop failed on pool pool4: error 1, pool-rebuild stop failed on pool pool5: error 2"),
 		},
@@ -881,7 +881,7 @@ System-rebuild stop requested for 5 pools
 			},
 			expPrintStr: `
 System-rebuild start requested for 2 pools
-   Successfully requested:    2 pools
+- Successfully requested:            2 pools
 Command completed successfully.
 `,
 		},
@@ -902,10 +902,95 @@ Command completed successfully.
 			},
 			expPrintStr: `
 System-rebuild start requested for 2 pools
-   Successfully requested:    1 pool
-   Errors:                 1 pool
+- Successfully requested: 1 pool
+- Errors:                 1 pool
 `,
 			expErr: errors.New("pool-rebuild start failed on pool pool2: failed to start rebuild"),
+		},
+		"rebuild stop with DER_BUSY - treated as success": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- With active or finishing rebuild:  2 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY verbose": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+					{
+						ID:      "pool3",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools (pool1, pool2, pool3)
+Command completed successfully.
+`,
+		},
+		"rebuild stop mixed DER_BUSY DER_NONEXIST success and errors": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool_ok",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool_busy",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+					{
+						ID:      "pool_nonexist",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+					{
+						ID:      "pool_error",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "some error",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 4 pools
+- With active or finishing rebuild:    2 pools (pool_ok, pool_busy)
+- Without active rebuild:              1 pool (pool_nonexist)
+- Errors:                              1 pool (pool_error)
+`,
+			expErr: errors.New("pool-rebuild stop failed on pool pool_error: some error"),
 		},
 		"mismatched opcodes": {
 			resp: &control.SystemRebuildManageResp{
