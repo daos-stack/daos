@@ -183,7 +183,7 @@ lookup_rel_path_loop:
 				daos_array_stbuf_t array_stbuf = {0};
 
 				rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail,
-					       dfs->th, &array_stbuf);
+					       obj->f.split_off, dfs->th, &array_stbuf);
 				if (rc) {
 					if (obj->f.has_tail)
 						daos_array_close(obj->f.tail_oh, NULL);
@@ -509,8 +509,8 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 		if (stbuf) {
 			daos_array_stbuf_t array_stbuf = {0};
 
-			rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail, dfs->th,
-				       &array_stbuf);
+			rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail,
+				       obj->f.split_off, dfs->th, &array_stbuf);
 			if (rc) {
 				if (obj->f.has_tail)
 					daos_array_close(obj->f.tail_oh, NULL);

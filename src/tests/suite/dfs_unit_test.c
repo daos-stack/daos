@@ -3827,6 +3827,781 @@ dfs_test_pl_oclass_selection(void **state)
 	assert_success(rc);
 }
 
+/*
+ * Write a buffer at \a off then read it back and verify the contents, using either the synchronous
+ * (\a async == false) or asynchronous path. The pattern is derived from the logical offset so any
+ * mis-routing between the head and tail array objects (e.g. a wrong reindex) corrupts the readback.
+ */
+static void
+pl_io_check(test_arg_t *arg, dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, daos_size_t len,
+	    bool async, unsigned char seed)
+{
+	char         *wbuf;
+	char         *rbuf;
+	d_sg_list_t   wsgl;
+	d_sg_list_t   rsgl;
+	d_iov_t       wiov;
+	d_iov_t       riov;
+	daos_size_t   got = 0;
+	daos_size_t   i;
+	daos_event_t  ev;
+	daos_event_t *evp;
+	int           rc;
+
+	D_ALLOC(wbuf, len);
+	assert_non_null(wbuf);
+	D_ALLOC(rbuf, len);
+	assert_non_null(rbuf);
+	for (i = 0; i < len; i++)
+		wbuf[i] = (char)(seed + ((off + i) & 0xff));
+
+	d_iov_set(&wiov, wbuf, len);
+	wsgl.sg_nr     = 1;
+	wsgl.sg_nr_out = 1;
+	wsgl.sg_iovs   = &wiov;
+	d_iov_set(&riov, rbuf, len);
+	rsgl.sg_nr     = 1;
+	rsgl.sg_nr_out = 1;
+	rsgl.sg_iovs   = &riov;
+
+	if (async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_write(dfs, obj, &wsgl, off, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_read(dfs, obj, &rsgl, off, &got, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		rc = dfs_write(dfs, obj, &wsgl, off, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_read(dfs, obj, &rsgl, off, &got, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	assert_int_equal(got, len);
+	assert_memory_equal(wbuf, rbuf, len);
+	D_FREE(wbuf);
+	D_FREE(rbuf);
+}
+
+/*
+ * Same as pl_io_check() but exercises the scatter dfs_writex()/dfs_readx() paths with two ranges:
+ * one that straddles split_off and one that lands fully in the tail. This covers the multi-range
+ * splitting in dfs_io_build_parts() for both the gather (write) and scatter (read) directions.
+ */
+static void
+pl_iox_check(test_arg_t *arg, dfs_t *dfs, dfs_obj_t *obj, daos_size_t split, bool async,
+	     unsigned char seed)
+{
+	dfs_iod_t     iod;
+	daos_range_t  rgs[2];
+	d_sg_list_t   wsgl;
+	d_sg_list_t   rsgl;
+	d_iov_t       wiov;
+	d_iov_t       riov;
+	char         *wbuf;
+	char         *rbuf;
+	daos_size_t   rlen  = 8192;
+	daos_size_t   total = rlen * 2;
+	daos_size_t   got   = 0;
+	daos_size_t   i;
+	daos_event_t  ev;
+	daos_event_t *evp;
+	int           rc;
+
+	/* rg[0] straddles split_off, rg[1] is fully in the tail. */
+	rgs[0].rg_idx = split - rlen / 2;
+	rgs[0].rg_len = rlen;
+	rgs[1].rg_idx = split + rlen * 4;
+	rgs[1].rg_len = rlen;
+	iod.iod_nr    = 2;
+	iod.iod_rgs   = rgs;
+
+	D_ALLOC(wbuf, total);
+	assert_non_null(wbuf);
+	D_ALLOC(rbuf, total);
+	assert_non_null(rbuf);
+	for (i = 0; i < total; i++)
+		wbuf[i] = (char)(seed + (i & 0xff));
+
+	d_iov_set(&wiov, wbuf, total);
+	wsgl.sg_nr     = 1;
+	wsgl.sg_nr_out = 1;
+	wsgl.sg_iovs   = &wiov;
+	d_iov_set(&riov, rbuf, total);
+	rsgl.sg_nr     = 1;
+	rsgl.sg_nr_out = 1;
+	rsgl.sg_iovs   = &riov;
+
+	if (async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_writex(dfs, obj, &iod, &wsgl, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_readx(dfs, obj, &iod, &rsgl, &got, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		rc = dfs_writex(dfs, obj, &iod, &wsgl, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_readx(dfs, obj, &iod, &rsgl, &got, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	assert_int_equal(got, total);
+	assert_memory_equal(wbuf, rbuf, total);
+	D_FREE(wbuf);
+	D_FREE(rbuf);
+}
+
+/*
+ * Verify a head-only read that may run past the head's written data. The file must already have
+ * head data in [0, hdata). The head array only knows its own EOF, so DFS consults the tail to tell
+ * an interior hole (tail has data -> the gap reads back as zeros and is counted) apart from real
+ * EOF (tail empty -> short read, the gap is not counted). Exercises dfs_read and dfs_readx, sync
+ * and async, for reads that straddle, fully overrun, or stay within the head data.
+ */
+static void
+pl_head_hole_check(test_arg_t *arg, dfs_t *dfs, dfs_obj_t *obj, char *pattern, daos_size_t hdata,
+		   daos_off_t roff, daos_size_t rlen, bool tail_has_data, bool readx, bool async)
+{
+	char         *rbuf;
+	d_sg_list_t   rsgl;
+	d_iov_t       riov;
+	dfs_iod_t     diod;
+	daos_range_t  drg;
+	daos_size_t   got    = 0;
+	daos_size_t   expect = tail_has_data ? rlen : (roff < hdata ? hdata - roff : 0);
+	daos_size_t   i;
+	daos_event_t  ev;
+	daos_event_t *evp;
+	int           rc;
+
+	D_ALLOC(rbuf, rlen);
+	assert_non_null(rbuf);
+	memset(rbuf, 0xff, rlen);
+	d_iov_set(&riov, rbuf, rlen);
+	rsgl.sg_nr     = 1;
+	rsgl.sg_nr_out = 1;
+	rsgl.sg_iovs   = &riov;
+	drg.rg_idx     = roff;
+	drg.rg_len     = rlen;
+	diod.iod_nr    = 1;
+	diod.iod_rgs   = &drg;
+
+	if (async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		if (readx)
+			rc = dfs_readx(dfs, obj, &diod, &rsgl, &got, &ev);
+		else
+			rc = dfs_read(dfs, obj, &rsgl, roff, &got, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		if (readx)
+			rc = dfs_readx(dfs, obj, &diod, &rsgl, &got, NULL);
+		else
+			rc = dfs_read(dfs, obj, &rsgl, roff, &got, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	assert_int_equal(got, expect);
+	for (i = 0; i < rlen; i++) {
+		daos_off_t pos = roff + i;
+
+		if (pos < hdata)
+			/* within the head's written data: must match the pattern */
+			assert_int_equal((unsigned char)rbuf[i], (unsigned char)pattern[pos]);
+		else if (tail_has_data)
+			/* interior hole of the logical file: zero-filled and counted */
+			assert_int_equal((unsigned char)rbuf[i], 0);
+		/* else: beyond the logical EOF, the bytes are undefined -> not checked */
+	}
+	D_FREE(rbuf);
+}
+
+/*
+ * Multi-range head-only readx where a short (interior-hole) range PRECEDES a data range in the user
+ * SGL. dfs_readx() does not require ranges to be sorted or contiguous, so the head's short region
+ * is not necessarily at the tail of the SGL. The file must have head data in [0, hdata) and a
+ * non-empty tail. range[0]=[hdata*2, hdata) is a fully-interior hole (its SGL slot must read back
+ * zeros) and range[1]=[0, hdata) is head data (its SGL slot must match the pattern). The buggy
+ * tail-only zero-fill zeros the wrong (last) SGL slot, corrupting the data range and leaving the
+ * hole untouched.
+ */
+static void
+pl_head_holex_check(test_arg_t *arg, dfs_t *dfs, dfs_obj_t *obj, char *pattern, daos_size_t hdata,
+		    bool tail_has_data, bool async)
+{
+	char         *rbuf;
+	d_sg_list_t   rsgl;
+	d_iov_t       riov;
+	dfs_iod_t     iod;
+	daos_range_t  rgs[2];
+	daos_size_t   got = 0;
+	daos_size_t   i;
+	daos_event_t  ev;
+	daos_event_t *evp;
+	int           rc;
+
+	rgs[0].rg_idx = hdata * 2; /* fully past the head data EOF -> interior hole */
+	rgs[0].rg_len = hdata;
+	rgs[1].rg_idx = 0; /* head data */
+	rgs[1].rg_len = hdata;
+	iod.iod_nr    = 2;
+	iod.iod_rgs   = rgs;
+
+	D_ALLOC(rbuf, hdata * 2);
+	assert_non_null(rbuf);
+	memset(rbuf, 0xff, hdata * 2);
+	d_iov_set(&riov, rbuf, hdata * 2);
+	rsgl.sg_nr     = 1;
+	rsgl.sg_nr_out = 1;
+	rsgl.sg_iovs   = &riov;
+
+	if (async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_readx(dfs, obj, &iod, &rsgl, &got, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		rc = dfs_readx(dfs, obj, &iod, &rsgl, &got, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	/*
+	 * range[1] (head data) always contributes hdata bytes. range[0] is past the head data: an
+	 * interior hole counted when the tail has data, or past the logical EOF (not counted) when
+	 * the tail is empty.
+	 */
+	assert_int_equal(got, tail_has_data ? hdata * 2 : hdata);
+	if (tail_has_data)
+		/* SGL[0, hdata) holds range[0] (the interior hole) -> must be zero-filled */
+		for (i = 0; i < hdata; i++)
+			assert_int_equal((unsigned char)rbuf[i], 0);
+	/* SGL[hdata, 2*hdata) holds range[1] (head data) -> must match the pattern */
+	for (i = 0; i < hdata; i++)
+		assert_int_equal((unsigned char)rbuf[hdata + i], (unsigned char)pattern[i]);
+	D_FREE(rbuf);
+}
+
+/*
+ * Regression test for multi-range hole placement on the STRADDLE path (dfs_io_split). A readx whose
+ * ranges cross split_off is split into a concurrent head + tail read. The head array only knows its
+ * own EOF, so a head range that ends in a hole is reported as a trailing short-read even though the
+ * logical file continues into the tail; those untouched bytes must be zeroed PER head range using
+ * the head array size. Zeroing only the tail of the head SGL (the old bug) corrupts data when an
+ * all-hole head range precedes a data head range in the SGL.
+ *
+ * Layout (self-contained): head data at [split-8192, split-4096) so the head array EOF is
+ * split-4096, plus tail data at [split, split+2048). The readx uses two straddling ranges, unsorted
+ * by head content: range[0]=[split-2048, +4096) whose head portion [split-2048, split) is entirely
+ * past the head EOF (a pure hole) and PRECEDES range[1]=[split-6144, +8192) whose head portion
+ * [split-6144, split) starts with data [split-6144, split-4096) then a hole [split-4096, split).
+ * The SGL layout is range0-head (hole) | range0-tail | range1-head (data+hole) | range1-tail.
+ */
+static void
+pl_straddle_holes_check(test_arg_t *arg, dfs_t *dfs, dfs_obj_t *obj, daos_size_t split, bool async)
+{
+	char         *hbuf; /* head data block at [split-8192, split-4096) */
+	char         *tbuf; /* tail data block at [split, split+2048) */
+	char         *rbuf;
+	d_sg_list_t   sgl;
+	d_iov_t       iov;
+	dfs_iod_t     iod;
+	daos_range_t  rgs[3];
+	daos_size_t   got = 0;
+	daos_size_t   i;
+	daos_event_t  ev;
+	daos_event_t *evp;
+	int           rc;
+
+	D_ALLOC(hbuf, 4096);
+	assert_non_null(hbuf);
+	D_ALLOC(tbuf, 2048);
+	assert_non_null(tbuf);
+	for (i = 0; i < 4096; i++)
+		hbuf[i] = (char)(0x80 + (i & 0x3f));
+	for (i = 0; i < 2048; i++)
+		tbuf[i] = (char)(0xc0 + (i & 0x3f));
+
+	/* reset, then lay down the sparse head data and the tail data */
+	rc = dfs_punch(dfs, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	d_iov_set(&iov, hbuf, 4096);
+	rc = dfs_write(dfs, obj, &sgl, split - 8192, NULL); /* head EOF becomes split-4096 */
+	assert_int_equal(rc, 0);
+	d_iov_set(&iov, tbuf, 2048);
+	rc = dfs_write(dfs, obj, &sgl, split, NULL); /* tail data [split, split+2048) */
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Two head-only ranges (in descending, non-overlapping order) plus a tail-only range. This
+	 * mix drives the straddle path (a head array read + a tail array read). The first head
+	 * range in SGL order is entirely a hole while the second begins with data, so a naive "zero
+	 * the trailing bytes of the head SGL" fixup would corrupt the head data and leave the real
+	 * hole untouched. Correct placement zeros each range's hole using the head array size.
+	 */
+	rgs[0].rg_idx = split - 2048; /* head hole only: [split-2048, split-1024) */
+	rgs[0].rg_len = 1024;
+	rgs[1].rg_idx =
+	    split - 8192; /* head data [split-8192, split-4096) then hole up to split-2048 */
+	rgs[1].rg_len = 6144;
+	rgs[2].rg_idx = split; /* tail data [split, split+2048) */
+	rgs[2].rg_len = 2048;
+	iod.iod_nr    = 3;
+	iod.iod_rgs   = rgs;
+
+	D_ALLOC(rbuf, 9216);
+	assert_non_null(rbuf);
+	memset(rbuf, 0xff, 9216);
+	d_iov_set(&iov, rbuf, 9216);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+
+	if (async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_readx(dfs, obj, &iod, &sgl, &got, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		rc = dfs_readx(dfs, obj, &iod, &sgl, &got, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	/* the tail holds data, so every head byte is interior: the full 9216 is read */
+	assert_int_equal(got, 9216);
+	/* range[0]: head hole -> zeros */
+	for (i = 0; i < 1024; i++)
+		assert_int_equal((unsigned char)rbuf[i], 0);
+	/* range[1]: head data hbuf[0..4096) then a 2048-byte head hole */
+	for (i = 0; i < 4096; i++)
+		assert_int_equal((unsigned char)rbuf[1024 + i], (unsigned char)hbuf[i]);
+	for (i = 0; i < 2048; i++)
+		assert_int_equal((unsigned char)rbuf[5120 + i], 0);
+	/* range[2]: tail data */
+	for (i = 0; i < 2048; i++)
+		assert_int_equal((unsigned char)rbuf[7168 + i], (unsigned char)tbuf[i]);
+
+	D_FREE(rbuf);
+	D_FREE(tbuf);
+	D_FREE(hbuf);
+}
+
+/*
+ * Regression: a straddling readx whose tail subrange is itself beyond EOF, while the file still
+ * extends into the tail elsewhere. The head range is therefore an interior hole (must zero + count)
+ * even though the requested tail range returns nothing. The fixup must key off the tail array SIZE
+ * (logical continuation), not the requested tail subrange's returned byte count.
+ */
+static void
+pl_straddle_tail_beyond_eof_check(test_arg_t *arg, dfs_t *dfs, dfs_obj_t *obj, daos_size_t split,
+				  bool async)
+{
+	char         *tbuf; /* tail data block at [split, split+2048) */
+	char         *rbuf;
+	d_sg_list_t   sgl;
+	d_iov_t       iov;
+	dfs_iod_t     iod;
+	daos_range_t  rgs[2];
+	daos_size_t   got = 0;
+	daos_size_t   i;
+	daos_event_t  ev;
+	daos_event_t *evp;
+	int           rc;
+
+	D_ALLOC(tbuf, 2048);
+	assert_non_null(tbuf);
+	for (i = 0; i < 2048; i++)
+		tbuf[i] = (char)(0xc0 + (i & 0x3f));
+
+	/* reset, then write only the tail data; the head region stays a hole below logical EOF */
+	rc = dfs_punch(dfs, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	d_iov_set(&iov, tbuf, 2048);
+	rc = dfs_write(dfs, obj, &sgl, split, NULL); /* tail size 2048 => logical EOF split+2048 */
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Head range is an interior hole (below split, below logical EOF). The tail range is
+	 * targeted 1 MiB past the split, far beyond the 2048-byte tail data, so it returns nothing.
+	 * With the old arr_nr_read>0 gate the head hole would be left untouched and uncounted.
+	 */
+	rgs[0].rg_idx = split - 2048; /* head interior hole */
+	rgs[0].rg_len = 1024;
+	rgs[1].rg_idx = split + (1 << 20); /* tail range beyond EOF */
+	rgs[1].rg_len = 4096;
+	iod.iod_nr    = 2;
+	iod.iod_rgs   = rgs;
+
+	D_ALLOC(rbuf, 5120);
+	assert_non_null(rbuf);
+	memset(rbuf, 0xff, 5120);
+	d_iov_set(&iov, rbuf, 5120);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+
+	if (async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+		rc = dfs_readx(dfs, obj, &iod, &sgl, &got, &ev);
+		assert_int_equal(rc, 0);
+		rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+		assert_rc_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_fini(&ev);
+		assert_rc_equal(rc, 0);
+	} else {
+		rc = dfs_readx(dfs, obj, &iod, &sgl, &got, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	/* only the head interior hole is within EOF: 1024 zero bytes read, tail range contributes 0
+	 */
+	assert_int_equal(got, 1024);
+	for (i = 0; i < 1024; i++)
+		assert_int_equal((unsigned char)rbuf[i], 0);
+	/* the beyond-EOF tail range bytes (rbuf[1024..]) are left untouched per POSIX; not asserted
+	 */
+
+	D_FREE(rbuf);
+	D_FREE(tbuf);
+}
+
+static void
+dfs_test_pl_io(void **state)
+{
+	test_arg_t    *arg = *state;
+	dfs_t         *dfs_l;
+	daos_handle_t  coh;
+	dfs_obj_t     *obj;
+	dfs_obj_info_t info     = {0};
+	dfs_attr_t     dattr    = {0};
+	char          *prev_env = NULL;
+	bool           env_was_set;
+	daos_size_t    split;
+	daos_size_t    fsize;
+	struct stat    stbuf;
+	char          *buf;
+	char          *vbuf;
+	d_sg_list_t    sgl;
+	d_iov_t        iov;
+	daos_size_t    got;
+	daos_off_t     hole_off;
+	daos_size_t    hole_len;
+	daos_size_t    i;
+	int            rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/*
+	 * Force progressive layout regardless of the pool target count so the split IO paths are
+	 * exercised even on a small test pool. Save and restore any pre-existing value so other
+	 * tests in this binary are unaffected.
+	 */
+	rc          = d_agetenv_str(&prev_env, "DFS_PL_BYPASS_TARGET_LIMIT");
+	env_was_set = (rc == 0 && prev_env != NULL);
+	rc          = d_setenv("DFS_PL_BYPASS_TARGET_LIMIT", "1", 1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_io", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_l, NULL, "pl_io_file", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj_get_info(dfs_l, obj, &info);
+	assert_int_equal(rc, 0);
+	split = info.doi_split_off;
+	print_message("PL IO: split_off=%zu has_tail=%d chunk=%zu\n", split,
+		      !daos_obj_id_is_nil(info.doi_tail_oid), info.doi_chunk_size);
+
+	if (split == 0) {
+		/* PL did not engage in this environment (e.g. tail class has no group count). */
+		print_message("PL not active; skipping PL IO data-path checks\n");
+		goto out;
+	}
+	assert_false(daos_obj_id_is_nil(info.doi_tail_oid));
+	assert_true(split > 8192);
+
+	/* Head-only IO (entirely below split_off), sync then async. */
+	print_message("PL IO: head-only read/write (sync + async)\n");
+	pl_io_check(arg, dfs_l, obj, 0, 4096, false, 0x11);
+	pl_io_check(arg, dfs_l, obj, 0, 4096, true, 0x12);
+
+	/* Tail-only IO (entirely at/above split_off), sync then async. */
+	print_message("PL IO: tail-only read/write (sync + async)\n");
+	pl_io_check(arg, dfs_l, obj, split + (1 << 20), 4096, false, 0x21);
+	pl_io_check(arg, dfs_l, obj, split + (1 << 20), 4096, true, 0x22);
+
+	/* IO straddling split_off (exercises the concurrent head+tail split), sync then async. */
+	print_message("PL IO: straddling read/write across split_off (sync + async)\n");
+	pl_io_check(arg, dfs_l, obj, split - 2048, 4096, false, 0x31);
+	pl_io_check(arg, dfs_l, obj, split - 2048, 4096, true, 0x32);
+
+	/* Scatter/gather readx/writex with a straddling and a tail range, sync then async. */
+	print_message("PL IO: scatter/gather readx/writex (sync + async)\n");
+	pl_iox_check(arg, dfs_l, obj, split, false, 0x41);
+	pl_iox_check(arg, dfs_l, obj, split, true, 0x42);
+
+	/*
+	 * Straddling readx where an all-hole head range precedes a data head range in the SGL: the
+	 * per-range hole zeroing must not corrupt the data range (regression for dfs_io_split).
+	 */
+	print_message("PL IO: straddling readx multi-range hole placement (sync + async)\n");
+	pl_straddle_holes_check(arg, dfs_l, obj, split, false);
+	pl_straddle_holes_check(arg, dfs_l, obj, split, true);
+
+	/*
+	 * Straddling readx whose tail subrange is beyond EOF while the file still extends into the
+	 * tail: the head interior hole must still be zeroed/counted (regression for dfs_io_split
+	 * keying off the tail array size rather than the requested tail subrange's returned bytes).
+	 */
+	print_message("PL IO: straddling readx tail range beyond EOF (sync + async)\n");
+	pl_straddle_tail_beyond_eof_check(arg, dfs_l, obj, split, false);
+	pl_straddle_tail_beyond_eof_check(arg, dfs_l, obj, split, true);
+
+	/*
+	 * Size aggregation: reset to empty, write into the tail, and verify the logical size is
+	 * reported as split_off + tail_extent through both dfs_get_size() and dfs_ostat().
+	 */
+	print_message("PL IO: size aggregation (dfs_get_size/dfs_ostat == split + tail)\n");
+	rc = dfs_punch(dfs_l, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_get_size(dfs_l, obj, &fsize);
+	assert_int_equal(rc, 0);
+	assert_int_equal(fsize, 0);
+
+	pl_io_check(arg, dfs_l, obj, split + 4096, 4096, false, 0x51);
+	rc = dfs_get_size(dfs_l, obj, &fsize);
+	assert_int_equal(rc, 0);
+	assert_int_equal(fsize, split + 4096 + 4096);
+	rc = dfs_ostat(dfs_l, obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, split + 4096 + 4096);
+
+	/* Truncate into the tail: size becomes split_off + tail offset. */
+	print_message("PL IO: truncate into tail / into head\n");
+	rc = dfs_punch(dfs_l, obj, split + 1024, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_get_size(dfs_l, obj, &fsize);
+	assert_int_equal(rc, 0);
+	assert_int_equal(fsize, split + 1024);
+
+	/* Truncate into the head: size drops below split_off and the tail is cleared. */
+	rc = dfs_punch(dfs_l, obj, 2048, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+	rc = dfs_get_size(dfs_l, obj, &fsize);
+	assert_int_equal(rc, 0);
+	assert_int_equal(fsize, 2048);
+
+	/*
+	 * Head-only reads that run past the head's data, covering both tail states and every read
+	 * variant. The head array only knows its own EOF, so DFS must consult the tail to tell an
+	 * interior hole (tail has data -> zero-fill and count) from real EOF (tail empty -> short
+	 * read). Cover dfs_read/dfs_readx x sync/async, for straddling, fully-beyond, and
+	 * within-data reads, against a non-empty and an empty tail.
+	 */
+	{
+		const daos_size_t hdata = 4096; /* head data occupies [0, 4096) */
+		char             *pat;
+		d_sg_list_t       psgl;
+		d_iov_t           piov;
+		int               a;
+		int               x;
+
+		print_message("PL IO: head-only short read fixup, tail-aware "
+			      "(read/readx x sync/async)\n");
+		D_ALLOC(pat, 8192);
+		assert_non_null(pat);
+		for (i = 0; i < 8192; i++)
+			pat[i] = (char)(0x41 + (i & 0x3f));
+		d_iov_set(&piov, pat, hdata);
+		psgl.sg_nr     = 1;
+		psgl.sg_nr_out = 1;
+		psgl.sg_iovs   = &piov;
+
+		/* tail HAS data: gaps past the head data are interior holes (zeroed and counted) */
+		rc = dfs_punch(dfs_l, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+		rc = dfs_write(dfs_l, obj, &psgl, 0, NULL); /* head data [0, 4096) */
+		assert_int_equal(rc, 0);
+		rc = dfs_write(dfs_l, obj, &psgl, split + 4096, NULL); /* tail data */
+		assert_int_equal(rc, 0);
+
+		for (a = 0; a < 2; a++) {
+			for (x = 0; x < 2; x++) {
+				/* straddle the head data EOF: [0, 8192), hole [4096, 8192) */
+				pl_head_hole_check(arg, dfs_l, obj, pat, hdata, 0, 8192, true, x,
+						   a);
+				/* fully past the head data EOF: [8192, 12288), all hole */
+				pl_head_hole_check(arg, dfs_l, obj, pat, hdata, 8192, 4096, true, x,
+						   a);
+				/* fully within the head data: [0, 4096), no short read */
+				pl_head_hole_check(arg, dfs_l, obj, pat, hdata, 0, hdata, true, x,
+						   a);
+			}
+		}
+
+		/*
+		 * Multi-range readx where the interior-hole range precedes the data range in the
+		 * SGL (ranges need not be sorted/contiguous), sync then async.
+		 */
+		pl_head_holex_check(arg, dfs_l, obj, pat, hdata, true, false);
+		pl_head_holex_check(arg, dfs_l, obj, pat, hdata, true, true);
+
+		/* tail EMPTY: a gap past the head data is the logical EOF (short read, not zeroed)
+		 */
+		rc = dfs_punch(dfs_l, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+		rc = dfs_write(dfs_l, obj, &psgl, 0, NULL); /* head data only */
+		assert_int_equal(rc, 0);
+
+		for (a = 0; a < 2; a++) {
+			for (x = 0; x < 2; x++) {
+				/* straddle: read past data with empty tail -> got == hdata */
+				pl_head_hole_check(arg, dfs_l, obj, pat, hdata, 0, 8192, false, x,
+						   a);
+				/* fully beyond: read entirely past the logical EOF -> got == 0 */
+				pl_head_hole_check(arg, dfs_l, obj, pat, hdata, 8192, 4096, false,
+						   x, a);
+				/* fully within data: exact read -> got == hdata */
+				pl_head_hole_check(arg, dfs_l, obj, pat, hdata, 0, hdata, false, x,
+						   a);
+			}
+		}
+
+		/* multi-range readx with an empty tail: the hole range is past the logical EOF */
+		pl_head_holex_check(arg, dfs_l, obj, pat, hdata, false, false);
+		pl_head_holex_check(arg, dfs_l, obj, pat, hdata, false, true);
+
+		D_FREE(pat);
+	}
+
+	/*
+	 * Hole punch straddling split_off: write a known buffer across the boundary, punch a hole
+	 * that also straddles it, and verify the hole reads back as zeros while the surrounding
+	 * data is intact.
+	 */
+	print_message("PL IO: hole punch straddling split_off\n");
+	rc = dfs_punch(dfs_l, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+
+	D_ALLOC(buf, 8192);
+	assert_non_null(buf);
+	D_ALLOC(vbuf, 8192);
+	assert_non_null(vbuf);
+	for (i = 0; i < 8192; i++)
+		buf[i] = (char)(0x61 + (i & 0x3f));
+	d_iov_set(&iov, buf, 8192);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs_l, obj, &sgl, split - 4096, NULL);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Punch a hole that straddles split_off: [split-1024, split+1024). The head loses its
+	 * trailing 1024 bytes and the tail loses its leading 1024 bytes, so in the 8192-byte read
+	 * buffer (read from split-4096) the hole maps to [3072, 5120).
+	 */
+	hole_off = split - 1024;
+	hole_len = 2048;
+	rc       = dfs_punch(dfs_l, obj, hole_off, hole_len);
+	assert_int_equal(rc, 0);
+
+	memset(vbuf, 0xff, 8192);
+	d_iov_set(&iov, vbuf, 8192);
+	rc = dfs_read(dfs_l, obj, &sgl, split - 4096, &got, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(got, 8192);
+	for (i = 0; i < 8192; i++) {
+		daos_off_t pos = (split - 4096) + i;
+
+		if (pos >= hole_off && pos < hole_off + hole_len)
+			assert_int_equal((unsigned char)vbuf[i], 0);
+		else
+			assert_int_equal((unsigned char)vbuf[i], (unsigned char)buf[i]);
+	}
+	D_FREE(buf);
+	D_FREE(vbuf);
+
+out:
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_success(rc);
+	rc = daos_cont_destroy(arg->pool.poh, "pl_io", 0, NULL);
+	assert_success(rc);
+
+	/* Restore the environment to its prior state. */
+	if (env_was_set)
+		d_setenv("DFS_PL_BYPASS_TARGET_LIMIT", prev_env, 1);
+	else
+		d_unsetenv("DFS_PL_BYPASS_TARGET_LIMIT");
+	d_freeenv_str(&prev_env);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
@@ -3869,6 +4644,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST29: dfs progressive layout oclass selection", dfs_test_pl_oclass_selection,
      async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST30: dfs progressive layout IO paths", dfs_test_pl_io, async_disable,
+     test_case_teardown},
 };
 
 static int

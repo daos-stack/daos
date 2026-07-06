@@ -15,8 +15,8 @@
 #include "dfs_internal.h"
 
 int
-file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tail, daos_handle_t th,
-	  daos_array_stbuf_t *stbuf)
+file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tail,
+	  daos_size_t split_off, daos_handle_t th, daos_array_stbuf_t *stbuf)
 {
 	daos_array_stbuf_t tail_stbuf = {0};
 	int                rc;
@@ -37,12 +37,13 @@ file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tai
 
 	/*
 	 * The head holds logical bytes [0, split_off) and the tail holds [split_off, EOF) indexed
-	 * from 0, so the logical size is the sum of both extents. This is correct while the head is
-	 * densely filled up to split_off whenever the tail is non-empty.
-	 * TODO: once the PL IO path lands, account for sparse files written only past split_off
-	 * (where the head extent is shorter than split_off) using split_off explicitly.
+	 * from 0. When the tail has data the logical size is split_off + the tail extent (the head
+	 * is logically full up to split_off); otherwise it is the head extent. Using split_off
+	 * explicitly keeps the size correct for sparse files written only past split_off, where the
+	 * head extent is shorter than split_off.
 	 */
-	stbuf->st_size += tail_stbuf.st_size;
+	if (tail_stbuf.st_size > 0)
+		stbuf->st_size = split_off + tail_stbuf.st_size;
 	if (tail_stbuf.st_max_epoch > stbuf->st_max_epoch)
 		stbuf->st_max_epoch = tail_stbuf.st_max_epoch;
 
@@ -51,7 +52,8 @@ file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tai
 
 int
 file_stat_by_oid(dfs_t *dfs, daos_obj_id_t head_oid, daos_obj_id_t tail_oid, bool has_tail,
-		 daos_size_t chunk_size, daos_handle_t th, daos_array_stbuf_t *stbuf)
+		 daos_size_t split_off, daos_size_t chunk_size, daos_handle_t th,
+		 daos_array_stbuf_t *stbuf)
 {
 	daos_handle_t head_oh = DAOS_HDL_INVAL;
 	daos_handle_t tail_oh = DAOS_HDL_INVAL;
@@ -80,7 +82,7 @@ file_stat_by_oid(dfs_t *dfs, daos_obj_id_t head_oid, daos_obj_id_t tail_oid, boo
 		}
 	}
 
-	rc = file_stat(dfs, head_oh, tail_oh, has_tail, th, stbuf);
+	rc = file_stat(dfs, head_oh, tail_oh, has_tail, split_off, th, stbuf);
 out:
 	if (daos_handle_is_valid(tail_oh)) {
 		int rc2 = daos_array_close(tail_oh, NULL);
@@ -240,7 +242,8 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 	if (size == NULL)
 		return EINVAL;
 
-	rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail, dfs->th, &stbuf);
+	rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail, obj->f.split_off, dfs->th,
+		       &stbuf);
 	if (rc)
 		return rc;
 

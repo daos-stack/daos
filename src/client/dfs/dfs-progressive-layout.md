@@ -248,20 +248,86 @@ On creation, tail_state is set to active.
 tail_state is initialized as active at file creation and remains active for the lifetime of the file.
 It is informational only in this design and does not gate routing, size query, or unlink behavior. In the future, we can explore an efficient way to track the state of the tail(s) to improve metadata efficiency of accessing the tail oid.
 
+## Range Classification and Validation
+
+Both the single-range (read/write) and multi-range (readx/writex) entry points classify the
+request against split_off before routing. For progressive-layout files (has_tail) only:
+
+1. Validate every range first: if any range wraps (rg_idx + rg_len < rg_idx) the call returns
+   EINVAL before any routing or arithmetic. This guards the idx + len computations used by
+   classification and SGL splitting against integer overflow.
+2. Classify the set of ranges into one of three dispositions:
+   - HEAD: every range lies fully below split_off → route to the head object unchanged.
+   - TAIL: every range lies at or above split_off → route to the tail object with each
+     rg_idx translated by -split_off.
+   - SPLIT: the set contains a mix of head-only and tail-only ranges (or a range that itself
+     crosses split_off) → split the request into a head part and a tail part.
+
+Non progressive-layout files (has_tail == false) bypass this entirely and pass straight to the
+single underlying array object, preserving existing behavior.
+
 ## Read Path Changes
 
-Given logical request [off, off+len):
+A logical read maps onto one or both array objects per the classification above. The subtlety is
+that each array object only knows its OWN size: the head object cannot tell whether the logical
+file continues into the tail. This matters for short reads and holes.
 
-1. If range is fully below split, read head.
-3. If fully above split, read tail using translated offset off - split_off.
-4. If crossing split, split the read SGL and issue two reads asynchronously, wait for completion (if blocking), and return combined bytes. If the call is non-blocking, we need to track both fetch operations as part of completion.
+### Hole and short-read semantics (POSIX)
+
+A byte-array read fills interior holes (offsets below the object's size that were never written)
+with zeros and counts them as read, but for offsets at or beyond the object's size it returns a
+short count and leaves the caller's buffer bytes UNTOUCHED (never pre-zeroed). For a
+progressive-layout file the logical EOF is split_off + tail_extent, so a region the head object
+reports as short can be one of two things:
+
+- An interior hole of the logical file (the tail holds data): it must read back as zeros and be
+  counted as read.
+- The genuine end of file (the tail is empty): the short count is correct and the buffer past it
+  is left untouched per POSIX.
+
+To resolve this without a redundant size query, the array read returns the size it already used to
+resolve its own short reads in `daos_array_iod_t.arr_array_size` (the real array size when a short
+read was possible, or UINT64_MAX otherwise). DFS reuses that value instead of issuing its own head
+size query.
+
+### Head-only read
+
+1. Issue the head read.
+2. If it returned the full requested length, finalize immediately (no extra query).
+3. If it short-read, query the tail SIZE:
+   - tail size == 0: genuine EOF. Keep the short count; leave the buffer past it untouched.
+   - tail size > 0: interior hole. Zero each requested range's untouched gap in place (placed
+     per range using the head size reported via arr_array_size, since ranges may be unsorted and
+     the gap need not be at the physical end of the SGL) and count the full requested length.
+
+The tail size query is only issued on a short read, so the common full-data read pays nothing
+extra. The synchronous path does this inline; the asynchronous path expresses it as a two-task
+chain (head read → tail get_size, the latter bound to the user event) where the tail get_size body
+only runs when the head actually short-read.
+
+### Cross-split (straddle) read
+
+The request is split into a head part and a tail part that are issued concurrently and tracked by a
+parent task; the user event (or a private event when blocking) completes only after both finish.
+The combined read size is the sum of the two parts' returned bytes, with the same head-hole
+correction as above: when the head part short-reads at its own EOF but the tail part reports a
+non-zero size (gated on the tail part's arr_array_size, NOT on whether the requested tail subrange
+happened to return bytes — a multi-range readx may target a tail range that is itself beyond EOF),
+the head region is interior to the logical file, so its untouched gaps are zeroed per range (using
+the head part's reported size) and the head's full requested length is counted. Because both array
+reads report their sizes, no separate size queries are needed on the straddle path either.
 
 ## Write Path Changes
 
 Given logical request [off, off+len):
 
-1. Route lower segment to head, upper segment to tail (split SGL similar to reads). Writes to the 2 array objects can be done asynchronously.
-2. Wait for all the update operations to complete if the write is blocking. If the call is non-blocking, we need to track both updates as part of completion.
+1. Route lower segment to head, upper segment to tail (split SGL similar to reads). Writes to the
+   two array objects are issued concurrently.
+2. Wait for all the update operations to complete if the write is blocking. If the call is
+   non-blocking, both updates are tracked by a parent task as part of completion.
+
+Writes need no hole or size-query handling: holes are a read-side concern, and a write never
+short-completes the way a read does at EOF.
 
 ## Truncate and Punch Semantics
 
@@ -314,3 +380,12 @@ Unit and integration coverage should include:
 6. Punch ranges below, above, and across split.
 7. Rename and unlink for promoted files.
 8. Mount compatibility checks between v3 and v4 clients and containers.
+9. Hole and short-read handling, sync and async, single-range and multi-range (readx):
+  - Head-only read whose range ends in a hole while the tail holds data (interior hole → zeros
+    read back and counted) versus an empty tail (genuine EOF → short count, buffer untouched).
+  - Straddle readx with unsorted head ranges (an all-hole head range preceding a data head
+    range) to verify per-range zero placement rather than a trailing-zero of the SGL.
+  - Straddle readx whose tail range is itself beyond EOF while the file still extends into the
+    tail elsewhere, verifying the head hole is still zeroed and counted (gate on tail size, not
+    on the tail subrange's returned bytes).
+  - Range-overflow guard: a wrapping range returns EINVAL.

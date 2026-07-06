@@ -594,13 +594,13 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		}
 
 		if (obj) {
-			rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail, th,
-				       &array_stbuf);
+			rc = file_stat(dfs, obj->oh, obj->f.tail_oh, obj->f.has_tail,
+				       obj->f.split_off, th, &array_stbuf);
 			if (rc)
 				return rc;
 		} else {
 			rc = file_stat_by_oid(dfs, entry.oid, entry.tail_oid, has_tail,
-					      entry.chunk_size, th, &array_stbuf);
+					      entry.split_off, entry.chunk_size, th, &array_stbuf);
 			if (rc)
 				return rc;
 		}

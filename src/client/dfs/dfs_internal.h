@@ -489,11 +489,12 @@ int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, size_t len,
 	   struct dfs_obj *obj, bool get_size, struct stat *stbuf, uint64_t *obj_hlc);
 int
-file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tail, daos_handle_t th,
-	  daos_array_stbuf_t *stbuf);
+file_stat(dfs_t *dfs, daos_handle_t head_oh, daos_handle_t tail_oh, bool has_tail,
+	  daos_size_t split_off, daos_handle_t th, daos_array_stbuf_t *stbuf);
 int
 file_stat_by_oid(dfs_t *dfs, daos_obj_id_t head_oid, daos_obj_id_t tail_oid, bool has_tail,
-		 daos_size_t chunk_size, daos_handle_t th, daos_array_stbuf_t *stbuf);
+		 daos_size_t split_off, daos_size_t chunk_size, daos_handle_t th,
+		 daos_array_stbuf_t *stbuf);
 int
 file_truncate_zero(dfs_obj_t *obj, daos_handle_t th);
 int

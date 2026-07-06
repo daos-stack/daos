@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,6 +50,13 @@ typedef struct {
 	daos_size_t		arr_nr_short_read;
 	/** (on read only) the number of records that were actually read from the array */
 	daos_size_t		arr_nr_read;
+	/** (on read only, byte arrays) the array size (in records) the read used to resolve short
+	 * reads and holes: the actual array size when a short read was possible (a get_size was
+	 * issued), or UINT64_MAX when no short read was possible (the size was not queried). Lets a
+	 * caller reuse the size the array layer already determined instead of issuing its own
+	 * daos_array_get_size().
+	 */
+	daos_size_t             arr_array_size;
 } daos_array_iod_t;
 
 /** DAOS array stat (size, modification time) information */

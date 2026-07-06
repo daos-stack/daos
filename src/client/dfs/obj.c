@@ -1238,7 +1238,15 @@ ostatx_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc = -DER_ENOENT);
 
 	if (S_ISREG(args->obj->mode) && args->obj->f.has_tail) {
-		op_args->array_stbuf.st_size += op_args->tail_array_stbuf.st_size;
+		daos_size_t tail_size = op_args->tail_array_stbuf.st_size;
+
+		/*
+		 * The head holds logical bytes [0, split_off) and the tail holds [split_off, EOF)
+		 * reindexed from 0. When the tail has data the logical size is split_off + tail
+		 * extent; otherwise it is the head extent already in array_stbuf.st_size.
+		 */
+		if (tail_size > 0)
+			op_args->array_stbuf.st_size = args->obj->f.split_off + tail_size;
 		if (op_args->tail_array_stbuf.st_max_epoch > op_args->array_stbuf.st_max_epoch)
 			op_args->array_stbuf.st_max_epoch = op_args->tail_array_stbuf.st_max_epoch;
 	}
@@ -2038,6 +2046,61 @@ out_obj:
 	return rc;
 }
 
+/*
+ * Truncate a progressive-layout file to \a offset. The head array holds logical bytes [0,
+ * split_off); the tail array holds [split_off, EOF) reindexed from 0. Truncating below split_off
+ * shrinks the head and empties the tail, otherwise only the tail extent changes.
+ */
+static int
+dfs_pl_truncate(dfs_obj_t *obj, daos_off_t offset)
+{
+	daos_size_t split = obj->f.split_off;
+	int         rc;
+
+	if (offset <= split) {
+		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
+		if (rc)
+			return rc;
+		return daos_array_set_size(obj->f.tail_oh, DAOS_TX_NONE, 0, NULL);
+	}
+
+	/* head retains all of [0, split_off); only the tail extent changes */
+	return daos_array_set_size(obj->f.tail_oh, DAOS_TX_NONE, offset - split, NULL);
+}
+
+/* Punch the logical hole [offset, offset + len) of a progressive-layout file across head and tail.
+ */
+static int
+dfs_pl_punch_hole(dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
+{
+	daos_size_t      split = obj->f.split_off;
+	daos_off_t       end   = offset + len;
+	daos_array_iod_t iod;
+	daos_range_t     rg;
+	int              rc;
+
+	iod.arr_nr  = 1;
+	iod.arr_rgs = &rg;
+
+	if (offset < split) {
+		rg.rg_idx = offset;
+		rg.rg_len = (end < split ? end : split) - offset;
+		rc        = daos_array_punch(obj->oh, DAOS_TX_NONE, &iod, NULL);
+		if (rc)
+			return rc;
+	}
+	if (end > split) {
+		daos_off_t tstart = (offset > split ? offset : split);
+
+		rg.rg_idx = tstart - split;
+		rg.rg_len = end - tstart;
+		rc        = daos_array_punch(obj->f.tail_oh, DAOS_TX_NONE, &iod, NULL);
+		if (rc)
+			return rc;
+	}
+	return 0;
+}
+
 int
 dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 {
@@ -2055,6 +2118,54 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		return EINVAL;
 	if ((obj->flags & O_ACCMODE) == O_RDONLY)
 		return EPERM;
+
+	if (obj->f.has_tail) {
+		daos_size_t split = obj->f.split_off;
+		daos_size_t hsize = 0;
+		daos_size_t tsize = 0;
+
+		/** simple truncate */
+		if (len == DFS_MAX_FSIZE) {
+			rc = dfs_pl_truncate(obj, offset);
+			return daos_der2errno(rc);
+		}
+
+		/** logical size = split + tail extent when the tail has data, else the head extent
+		 */
+		rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &hsize, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+		rc = daos_array_get_size(obj->f.tail_oh, DAOS_TX_NONE, &tsize, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+		size = tsize > 0 ? split + tsize : hsize;
+
+		/** nothing to do if offset is larger or equal to the file size */
+		if (size <= offset)
+			return 0;
+
+		if ((offset + len) < offset)
+			hi = DFS_MAX_FSIZE;
+		else
+			hi = offset + len;
+
+		/** if fsize is between the range to punch, just truncate to offset */
+		if (offset < size && size <= hi) {
+			rc = dfs_pl_truncate(obj, offset);
+			return daos_der2errno(rc);
+		}
+
+		D_ASSERT(size > hi);
+
+		rc = dfs_pl_punch_hole(obj, offset, len);
+		if (rc) {
+			D_ERROR("dfs_pl_punch_hole() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
+
+		DFS_OP_STAT_INCR(dfs, DOS_TRUNCATE);
+		return 0;
+	}
 
 	/** simple truncate */
 	if (len == DFS_MAX_FSIZE) {
