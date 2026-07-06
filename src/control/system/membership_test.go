@@ -1606,7 +1606,7 @@ func TestSystem_Membership_FaultDomainLevel(t *testing.T) {
 				rankDomain("/rack1", 4),
 				rankDomain("/rack2", 5),
 			),
-			expLevel: 0,
+			expLevel: 1,
 		},
 		"two domain levels": {
 			tree: NewFaultDomainTree(
@@ -1617,7 +1617,7 @@ func TestSystem_Membership_FaultDomainLevel(t *testing.T) {
 				rankDomain("/rack1/pdu3", 4),
 				rankDomain("/rack2/pdu4", 5),
 			),
-			expLevel: 1,
+			expLevel: 2,
 		},
 		"three domain levels": {
 			tree: NewFaultDomainTree(
@@ -1628,7 +1628,7 @@ func TestSystem_Membership_FaultDomainLevel(t *testing.T) {
 				rankDomain("/geo1/rack1/pdu3", 4),
 				rankDomain("/geo2/rack2/pdu4", 5),
 			),
-			expLevel: 2,
+			expLevel: 3,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1655,9 +1655,9 @@ func TestSystem_Membership_DomainNr(t *testing.T) {
 		rankDomain("/geo1/rack2/pdu5", 5),
 	)
 	ranksSubset := []uint32{4, 0, 5, 3}
-	geoLevel := 0
-	rackLevel := 1
-	pduLevel := 2
+	geoLevel := 1
+	rackLevel := 2
+	pduLevel := 3
 
 	for name, tc := range map[string]struct {
 		tree        *FaultDomainTree
@@ -1679,7 +1679,7 @@ func TestSystem_Membership_DomainNr(t *testing.T) {
 				rankDomain("/rack2", 5),
 			),
 			inputRanks:  []uint32{5, 1, 2, 3},
-			inputLevel:  0,
+			inputLevel:  1,
 			expDomainNr: 3,
 		},
 		"big domain tree: geo level": {

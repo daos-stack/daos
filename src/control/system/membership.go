@@ -795,11 +795,13 @@ func (m *Membership) FaultDomainLevel() (int, error) {
 	}
 
 	depth := tree.Depth()
-	if depth < 2 {
+	// The depth includes the rank level but it does NOT include the root level.
+	// So, the tree needs to have more than one level to have a fault domain level.
+	if depth <= 1 {
 		return 0, errors.New("domain tree has no fault domain level")
 	}
 
-	return depth - 2, nil
+	return depth - 1, nil
 }
 
 // domainNrAtLevel returns the number of domains in the tree at the given level.
@@ -809,7 +811,7 @@ func domainNrAtLevel(tree *FaultDomainTree, level int) int {
 		return 0
 	}
 	if level == 0 {
-		return len(tree.Children)
+		return 1
 	}
 
 	count := 0
