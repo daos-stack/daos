@@ -19,16 +19,56 @@ func TestSystem_getDistribution(t *testing.T) {
 		fileMap map[string]string
 		expDist Distribution
 	}{
-		"rocky-9.7": {
+		"centos-7.9": {
 			fileMap: map[string]string{
-				"/etc/os-release": "distros/rocky9.7-os-rel",
+				"/etc/os-release":     "distros/centos7.9-os-rel",
+				"/etc/centos-release": "distros/centos7.9-rel",
+				"/proc/version":       "distros/centos7.9-proc-ver",
+			},
+			expDist: Distribution{
+				ID:   "centos",
+				Name: "CentOS Linux",
+				Version: DistributionVersion{
+					Major: 7,
+					Minor: 9,
+					Patch: 2009,
+				},
+				Kernel: KernelVersion{
+					Major: 3,
+					Minor: 10,
+				},
+			},
+		},
+		"centos-8.3": {
+			fileMap: map[string]string{
+				"/etc/os-release":     "distros/centos8.3-os-rel",
+				"/etc/centos-release": "distros/centos8.3-rel",
+				"/proc/version":       "distros/centos8.3-proc-ver",
+			},
+			expDist: Distribution{
+				ID:   "centos",
+				Name: "CentOS Linux",
+				Version: DistributionVersion{
+					Major: 8,
+					Minor: 3,
+					Patch: 2011,
+				},
+				Kernel: KernelVersion{
+					Major: 4,
+					Minor: 18,
+				},
+			},
+		},
+		"rocky-8.5": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/rocky8.5-os-rel",
 			},
 			expDist: Distribution{
 				ID:   "rocky",
 				Name: "Rocky Linux",
 				Version: DistributionVersion{
-					Major: 9,
-					Minor: 7,
+					Major: 8,
+					Minor: 5,
 				},
 			},
 		},
