@@ -10,7 +10,7 @@ from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
 from general_utils import append_error, report_errors
-from run_utils import command_as_user, run_remote
+from run_utils import run_remote
 from server_utils_base import DaosServerCommandRunner
 
 
@@ -65,7 +65,7 @@ class DAOSVersion(TestWithServers):
         daos_agent_version = None
         env = EnvironmentVariables()
         self.test_env.add_to_env(env, 'bullseye_file')
-        daos_agent_cmd = command_as_user("daos_agent --json version", env=env)
+        daos_agent_cmd = f"{env.to_export_str()} daos_agent --json version"
         result = run_remote(self.log, NodeSet(self.hostlist_servers[0]), daos_agent_cmd)
         if not result.passed:
             self.fail("Failed to get daos_agent version")
