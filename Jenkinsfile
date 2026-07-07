@@ -639,10 +639,10 @@ pipeline {
                      description: 'Run the Fault injection testing stage.')
         booleanParam(name: bashName('Test RPMs on EL 9'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs on EL 9.6 stage.')
+                     description: 'Run the Test RPMs on EL 9 stage.')
         booleanParam(name: bashName('Test RPMs on Leap 15'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs on Leap 15.6 stage.')
+                     description: 'Run the Test RPMs on Leap 15 stage.')
         booleanParam(name: bashName('Test Hardware'),
                      defaultValue: true,
                      description: 'Run the Test Hardware stage.')
