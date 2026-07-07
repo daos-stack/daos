@@ -5,40 +5,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package ipmctl
-
-import (
-	"bytes"
-)
-
-// DeviceUID represents the Go equivalent of an NVM_UID string buffer
-type DeviceUID [22]byte
-
-// String converts the DeviceUID bytes to a string
-func (d DeviceUID) String() string {
-	return bytes2String(d[:])
-}
-
-func bytes2String(b []byte) string {
-	n := bytes.IndexByte(b, 0)
-	return string(b[:n])
-}
-
-// Version represents the Go equivalent of an NVM_VERSION string buffer
-type Version [25]byte
-
-// String converts the Version bytes to a string
-func (v Version) String() string {
-	return bytes2String(v[:])
-}
-
-// PartNumber represents the part number string for an NVM device.
-type PartNumber [21]byte
-
-// String converts the PartNumber bytes to a string
-func (p PartNumber) String() string {
-	return bytes2String(p[:])
-}
+package scm
 
 // PMemRegionType represents PMem region type.
 type PMemRegionType uint32
@@ -113,18 +80,4 @@ func PMemRegionHealthFromString(in string) PMemRegionHealth {
 		return val
 	}
 	return RegionHealthUnknown
-}
-
-// PMemRegion represents Go equivalent of C.struct_region from nvm_management.h (NVM API) as
-// reported by "go tool cgo -godefs nvm.go".
-type PMemRegion struct {
-	IsetId        uint64     // Unique identifier of the region.
-	Type          uint32     // The type of region.
-	Capacity      uint64     // Size of the region in bytes.
-	Free_capacity uint64     // Available size of the region in bytes.
-	Socket_id     int16      // socket ID
-	Dimm_count    uint16     // The number of PMem modules in this region.
-	Dimms         [24]uint16 // Unique ID's of underlying PMem modules.
-	Health        uint32     // Rolled up health of the underlying PMem modules.
-	Reserved      [40]uint8  // reserved
 }

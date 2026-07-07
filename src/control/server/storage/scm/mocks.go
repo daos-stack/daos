@@ -13,13 +13,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
-	"github.com/dustin/go-humanize"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -61,9 +60,9 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions[0].ISetID++
 		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
 	case "unhealthy":
-		rl.Regions[0].Health = regionHealth(ipmctl.RegionHealthError)
+		rl.Regions[0].Health = regionHealth(RegionHealthError)
 	case "not-interleaved":
-		rl.Regions[0].PersistentMemoryType = regionType(ipmctl.RegionTypeNotInterleaved)
+		rl.Regions[0].PersistentMemoryType = regionType(RegionTypeNotInterleaved)
 	case "unknown-memtype":
 		rl.Regions[0].PersistentMemoryType = regionType(math.MaxInt32)
 	case "part-free":
@@ -101,7 +100,7 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
 		rl.Regions[1].SocketID = 1
-		rl.Regions[1].Health = regionHealth(ipmctl.RegionHealthError)
+		rl.Regions[1].Health = regionHealth(RegionHealthError)
 	case "full-free-2nd-sock":
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
@@ -314,45 +313,6 @@ const (
   ]
 `
 )
-
-type (
-	mockIpmctlCfg struct {
-		initErr       error
-		delGoalsErr   error
-		getRegionsErr error
-		regions       []ipmctl.PMemRegion
-	}
-
-	mockIpmctl struct {
-		cfg mockIpmctlCfg
-	}
-)
-
-func (m *mockIpmctl) Init(_ logging.Logger) error {
-	return m.cfg.initErr
-}
-
-func (m *mockIpmctl) GetModules(_ logging.Logger) ([]ipmctl.DeviceDiscovery, error) {
-	return nil, errors.New("GetModules ipmctl library call not used")
-}
-
-func (m *mockIpmctl) DeleteConfigGoals(_ logging.Logger) error {
-	return m.cfg.delGoalsErr
-}
-
-func (m *mockIpmctl) GetRegions(_ logging.Logger) ([]ipmctl.PMemRegion, error) {
-	return m.cfg.regions, m.cfg.getRegionsErr
-}
-
-func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
-	if cfg == nil {
-		cfg = &mockIpmctlCfg{}
-	}
-
-	return &mockIpmctl{
-		cfg: *cfg,
-	}
-}
 
 func mustParseBytes(s string) uint64 {
 	sz, err := humanize.ParseBytes(s)

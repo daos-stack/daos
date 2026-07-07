@@ -26,6 +26,7 @@ Name:          daos
 Version:       2.9.100
 Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
+Obsoletes:     daos-firmware
 
 License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
