@@ -2785,6 +2785,7 @@ ds_cont_eph_report(struct ds_pool *pool)
 	struct cont_track_eph	*ec_eph;
 	struct cont_track_eph	*tmp;
 	int                      rc, ret, *failed_tgts = NULL;
+	int                      cont_num = 0;
 	unsigned int             failed_tgts_nr;
 
 	D_ASSERT(pool != NULL && pool->sp_map != NULL);
@@ -2799,6 +2800,7 @@ ds_cont_eph_report(struct ds_pool *pool)
 		daos_epoch_t min_stable_eph;
 		int          i;
 
+		cont_num++;
 		if (dss_ult_exiting(pool->sp_ec_ephs_req))
 			break;
 
@@ -2830,8 +2832,11 @@ ds_cont_eph_report(struct ds_pool *pool)
 
 		if (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
 		    min_stable_eph <= ec_eph->cte_last_stable_epoch &&
-		    pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+		    pool->sp_reclaim == DAOS_RECLAIM_DISABLED) {
+			if (cont_num % 10 == 0)
+				dss_sleep(0);
 			continue;
+		}
 
 		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
 		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
@@ -2855,6 +2860,8 @@ ds_cont_eph_report(struct ds_pool *pool)
 					min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
 					min_stable_eph, ec_eph->cte_last_stable_epoch,
 					DP_UUID(ec_eph->cte_cont_uuid));
+			if (cont_num % 10 == 0)
+				dss_sleep(0);
 			continue;
 		}
 
