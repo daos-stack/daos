@@ -1572,7 +1572,7 @@ pipeline {
                             image_version: 'el9.7'
                         ),
                         'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
-                            name: "Functional Cluster Box Medium MD on SSD",
+                            name: 'Functional Cluster Box Medium MD on SSD',
                             runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
                             pragma_suffix:'-cb-medium-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
