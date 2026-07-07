@@ -25,10 +25,21 @@ if [ ! -e "$COVFILE" ]; then
 fi
 
 # Generate the html report
-rm -fr bullseye_code_coverage_report || true
-mkdir bullseye_code_coverage_report
-cd bullseye_code_coverage_report
-mkdir sources
+if [ -d bullseye_code_coverage_report ]; then
+  rm -fr bullseye_code_coverage_report
+fi
+mkdir -p bullseye_code_coverage_report
+pushd bullseye_code_coverage_report
+
+mkdir -p report
+pushd report
+mkdir -p sources
 tar -xf /opt/BullseyeCoverage/daos/bullseye_sources.tar.gz -C sources/
-covhtml -h
 covhtml --srcdir sources --file "${COVFILE}" .
+popd
+
+tar -czf bullseye_code_coverage_report.tar.gz -C report .
+rm -fr report
+
+cp "${COVFILE}" .
+popd

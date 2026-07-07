@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import json
-from getpass import getuser
 
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
@@ -66,7 +65,7 @@ class DAOSVersion(TestWithServers):
         daos_agent_version = None
         env = EnvironmentVariables()
         self.test_env.add_to_env(env, 'bullseye_file')
-        daos_agent_cmd = command_as_user("daos_agent --json version", getuser(), env)
+        daos_agent_cmd = command_as_user("daos_agent --json version", env=env)
         result = run_remote(self.log, NodeSet(self.hostlist_servers[0]), daos_agent_cmd)
         if not result.passed:
             self.fail("Failed to get daos_agent version")
