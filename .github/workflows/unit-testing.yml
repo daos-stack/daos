@@ -1,7 +1,7 @@
 name: Unit testing
 
 on:
-  pull_request:
+  workflow_dispatch:
 
 permissions: {}
 
@@ -11,8 +11,7 @@ concurrency:
 
 jobs:
   Run_in_docker:
-    if: false  # Disabled because we do not have self-hosted runners
-    # if: github.repository == 'daos-stack/daos'
+    if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, docker]
     steps:
       - name: Checkout code
