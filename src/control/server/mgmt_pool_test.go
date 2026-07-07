@@ -434,7 +434,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mgmtSvc        *mgmtSvc
 		setupMockDrpc  func(_ *mgmtSvc, _ error)
-		targetCount    int
 		memberCount    int
 		mdonssdEnabled bool
 		req            *mgmtpb.PoolCreateReq
@@ -454,8 +453,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
-			mgmtSvc:     missingSB,
-			targetCount: 8,
+			mgmtSvc: missingSB,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 0},
@@ -464,8 +462,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: errNotReplica,
 		},
 		"not MS replica": {
-			mgmtSvc:     notAP,
-			targetCount: 8,
+			mgmtSvc: notAP,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 0},
@@ -474,7 +471,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: errNotReplica,
 		},
 		"dRPC send fails": {
-			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 0},
@@ -483,7 +479,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: errors.New("send failure"),
 		},
 		"zero target count": {
-			targetCount: 0,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 0},
@@ -492,7 +487,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: errors.New("zero target count"),
 		},
 		"garbage resp": {
-			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
@@ -507,7 +501,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: errors.New("unmarshal"),
 		},
 		"successful creation": {
-			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
@@ -523,7 +516,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 		},
 		"create with memory file ratio; mdonssd not enabled": {
-			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
@@ -533,7 +525,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: errors.New("MD-on-SSD has not been enabled"),
 		},
 		"successful creation with memory file ratio": {
-			targetCount:    8,
 			mdonssdEnabled: true,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
@@ -553,7 +544,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 		},
 		"successful creation minimum size": {
-			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid: test.MockUUID(1),
 				TierBytes: []uint64{
@@ -578,7 +568,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 		},
 		"successful creation auto size": {
-			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TotalBytes: 100 * humanize.GiByte,
@@ -601,7 +590,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 		},
 		"failed creation invalid ranks": {
-			targetCount: 1,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
@@ -611,7 +599,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: FaultPoolInvalidRanks([]ranklist.Rank{11, 40}),
 		},
 		"failed creation invalid number of ranks": {
-			targetCount: 1,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
@@ -621,7 +608,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: FaultPoolInvalidNumRanks(3, 2),
 		},
 		"svc replicas > max": {
-			targetCount: 1,
 			memberCount: MaxPoolServiceReps + 2,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
@@ -633,7 +619,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: FaultPoolInvalidServiceReps(uint32(MaxPoolServiceReps)),
 		},
 		"svc replicas > numRanks": {
-			targetCount: 1,
 			memberCount: MaxPoolServiceReps - 2,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
@@ -645,7 +630,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: FaultPoolInvalidServiceReps(uint32(MaxPoolServiceReps - 2)),
 		},
 		"no label": {
-			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:      test.MockUUID(1),
 				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
@@ -653,7 +637,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: FaultPoolNoLabel,
 		},
 		"failed creation too few fault domains": {
-			targetCount: 1,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
@@ -663,7 +646,6 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			expErr: FaultPoolTooFewFaultDomains(1, 1),
 		},
 		"successful creation with rd_fac": {
-			targetCount: 2,
 			req: &mgmtpb.PoolCreateReq{
 				Uuid:       test.MockUUID(1),
 				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
