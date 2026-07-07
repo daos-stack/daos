@@ -686,7 +686,8 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				numMembers = 2
 			}
 			for i := 0; i < numMembers; i++ {
-				mm := system.MockMember(t, uint32(i), system.MemberStateJoined)
+				faultDomain := system.MustCreateFaultDomain(fmt.Sprintf("mock_domain%d", i))
+				mm := system.MockMember(t, uint32(i), system.MemberStateJoined).WithFaultDomain(faultDomain)
 				if _, err := tc.mgmtSvc.membership.Add(mm); err != nil {
 					t.Fatal(err)
 				}
