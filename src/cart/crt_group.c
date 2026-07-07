@@ -1536,9 +1536,10 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	struct crt_grp_priv		*grp_priv;
 	struct crt_grp_priv		*default_grp_priv;
 	struct crt_grp_priv		*grp_priv_primary;
-	struct crt_context		*crt_ctx;
+	struct crt_uri_item             *ui;
 	struct crt_uri_lookup_in	*ul_in;
 	struct crt_uri_lookup_out	*ul_out;
+	d_list_t                        *rlink;
 	d_rank_t			 g_rank;
 	char				*tmp_uri = NULL;
 	char				*cached_uri = NULL;
@@ -1580,8 +1581,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 
-	crt_ctx = rpc_req->cr_ctx;
-
 	if (unlikely(ul_in->ul_tag >= CRT_SRV_CONTEXT_NUM)) {
 		D_WARN("Looking up invalid tag %d of rank %d "
 		       "in group %s (%d)\n",
@@ -1616,30 +1615,34 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 
-	/* step 1, lookup the URI in the local cache */
-	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank,
-			  ul_in->ul_tag, &cached_uri, NULL);
-	ul_out->ul_uri = cached_uri;
+	/* step 1, lookup URI directly from URI cache by rank:tag */
+	ul_out->ul_uri = NULL;
 	ul_out->ul_tag = ul_in->ul_tag;
 
-	if (ul_out->ul_uri != NULL) {
-		if (crt_gdata.cg_use_sensors)
-			d_tm_inc_counter(crt_gdata.cg_uri_other, 1);
-		D_GOTO(out, rc);
+	D_RWLOCK_RDLOCK(&grp_priv_primary->gp_rwlock);
+	rlink = d_hash_rec_find(&grp_priv_primary->gp_uri_lookup_cache, (void *)&g_rank,
+				sizeof(g_rank));
+	if (rlink != NULL) {
+		ui         = crt_ui_link2ptr(rlink);
+		cached_uri = atomic_load_relaxed(&ui->ui_uri[ul_in->ul_tag]);
+
+		/* Fallback to tag 0 only when requested tag URI is absent */
+		if (cached_uri == NULL && ul_in->ul_tag != 0) {
+			cached_uri = atomic_load_relaxed(&ui->ui_uri[0]);
+			if (cached_uri != NULL)
+				ul_out->ul_tag = 0;
+		}
+
+		d_hash_rec_decref(&grp_priv_primary->gp_uri_lookup_cache, rlink);
 	}
+	D_RWLOCK_UNLOCK(&grp_priv_primary->gp_rwlock);
 
-	/* If this server does not know rank:0 then return error */
-	if (ul_in->ul_tag == 0)
-		D_GOTO(out, rc = -DER_OOG);
-
-	/**
-	 * step 2, if rank:tag is not found, lookup rank:tag=0
-	 */
-	ul_out->ul_tag = 0;
-	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank, 0, &cached_uri, NULL);
 	ul_out->ul_uri = cached_uri;
 	if (ul_out->ul_uri == NULL)
 		D_GOTO(out, rc = -DER_OOG);
+
+	if (crt_gdata.cg_use_sensors)
+		d_tm_inc_counter(crt_gdata.cg_uri_other, 1);
 
 out:
 	ul_out->ul_rc = rc;
