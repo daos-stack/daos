@@ -61,8 +61,8 @@ void updateRunStage() {
         'Functional on SLES 15',
         'Functional on Ubuntu 20.04',
         'Fault injection testing',
-        'Test RPMs on EL 9.6',
-        'Test RPMs on Leap 15.5',
+        'Test RPMs on EL 9',
+        'Test RPMs on Leap 15',
         'Test Hardware',
         'Functional Hardware Medium',
         'Functional Hardware Medium MD on SSD',
@@ -195,7 +195,7 @@ void updateRunStage() {
         }
         // These stages are unrelated to functional testing and should be skipped
         for (stage in ['Unit Tests', 'Fault injection testing',
-                       'Test RPMs on EL 9.6', 'Test RPMs on Leap 15.5']) {
+                       'Test RPMs on EL 9', 'Test RPMs on Leap 15']) {
             runStage[stage] = false
             reasons[stage] = "Quick functional testing"
         }
@@ -637,12 +637,12 @@ pipeline {
         booleanParam(name: bashName('Fault injection testing'),
                      defaultValue: true,
                      description: 'Run the Fault injection testing stage.')
-        booleanParam(name: bashName('Test RPMs on EL 9.6'),
+        booleanParam(name: bashName('Test RPMs on EL 9'),
                      defaultValue: true,
                      description: 'Run the Test RPMs on EL 9.6 stage.')
-        booleanParam(name: bashName('Test RPMs on Leap 15.5'),
+        booleanParam(name: bashName('Test RPMs on Leap 15'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs on Leap 15.5 stage.')
+                     description: 'Run the Test RPMs on Leap 15.6 stage.')
         booleanParam(name: bashName('Test Hardware'),
                      defaultValue: true,
                      description: 'Run the Test Hardware stage.')
