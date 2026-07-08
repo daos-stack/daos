@@ -17,7 +17,6 @@
  */
 
 import groovy.transform.Field
-import org.jenkinsci.plugins.pipeline.modeldefinition.Utils
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
