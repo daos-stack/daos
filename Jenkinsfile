@@ -44,7 +44,6 @@ void updateRunStage() {
         'Pre-build',
         'Python Bandit check',
         'Build',
-        'Build on EL 8',
         'Build on EL 9',
         'Build on Leap 15',
         'Build on EL 9 with Bullseye',
@@ -56,8 +55,7 @@ void updateRunStage() {
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
         'Test',
-        'Functional on EL 8.8 with Valgrind',
-        'Functional on EL 8',
+        'Functional on EL 9 with Valgrind',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on SLES 15',
@@ -154,14 +152,12 @@ void updateRunStage() {
             } else if (stage.contains('Functional Hardware')) {
                 runStage[stage] = true
                 reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
-            } else if (stage in ['Build on EL 8',
-                                 'Build on EL 9',
+            } else if (stage in ['Build on EL 9',
                                  'Build on Leap 15',
                                  'NLT',
                                  'Unit Test with memcheck',
                                  'Unit Test bdev with memcheck',
-                                 'Functional on EL 8.8 with Valgrind',
-                                 'Functional on EL 8',
+                                 'Functional on EL 9 with Valgrind',
                                  'Functional on Leap 15',
                                  'Functional on SLES 15',
                                  'Functional on Ubuntu 20.04',
@@ -247,7 +243,6 @@ void updateRunStage() {
             hwBuildStage += "${distroTarget[0].toUpperCase()} ${distroTarget[1]}"
         }
         Map testBuildStage = [
-            'Functional on EL 8': 'Build on EL 8',
             'Functional on EL 9': 'Build on EL 9',
             'Functional on Leap 15': 'Build on Leap 15',
             'Functional on SLES 15': 'Build on Leap 15',
@@ -659,9 +654,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_EL8_TARGET',
-               defaultValue: '',
-               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_EL9_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
@@ -683,9 +675,6 @@ pipeline {
         booleanParam(name: bashName('Build'),
                      defaultValue: true,
                      description: 'Run the Build stage.')
-        booleanParam(name: bashName('Build on EL 8'),
-                     defaultValue: true,
-                     description: 'Run the Build on EL 8 stage.')
         booleanParam(name: bashName('Build on EL 9'),
                      defaultValue: true,
                      description: 'Run the Build on EL 9 stage.')
@@ -719,12 +708,9 @@ pipeline {
         booleanParam(name: bashName('Test'),
                      defaultValue: true,
                      description: 'Run the Test stage.')
-        booleanParam(name: bashName('Functional on EL 8.8 with Valgrind'),
+        booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
-                     description: 'Run the Functional on EL 8.8 with Valgrind stage.')
-        booleanParam(name: bashName('Functional on EL 8'),
-                     defaultValue: false,
-                     description: 'Run the Functional on EL 8 stage.')
+                     description: 'Run the Functional on EL 9 with Valgrind stage.')
         booleanParam(name: bashName('Functional on EL 9'),
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 stage.')
@@ -926,37 +912,9 @@ pipeline {
             steps {
                 script {
                     parallel(
-                        'Build on EL 8': scriptedDockerStage(
-                            name: 'Build on EL 8',
-                            runStage: shouldStageRun('Build on EL 8'),
-                            jobStatus: job_status_internal,
-                            dockerTag: jobStatusKey("build-el8-gcc").toLowerCase(),
-                            dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
-                                                             deps_build: false,
-                                                             parallel_build: true) +
-                                             ' --build-arg DAOS_PACKAGES_BUILD=no' +
-                                             ' --build-arg DAOS_KEEP_SRC=yes' +
-                                             ' --build-arg REPOS="' + prRepos('el8') + '"' +
-                                             ' --build-arg POINT_RELEASE=.10 ' +
-                                             " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
-                                             ' -f utils/docker/Dockerfile.el.8 .',
-                            installScript: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} false",
-                            buildScript: './ci/rpm/build_deps.sh false ${BULLSEYE_KEY}',
-                            stepMethod: { args -> sconsBuild(args) },
-                            stepMethodArgs: [
-                                parallel_build: true,
-                                stash_files: 'ci/test_files_to_stash.txt',
-                                build_deps: 'no',
-                                stash_opt: true,
-                                scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
-                            ],
-                            configLogArtifacts: "config.log-el8-gcc",
-                            generateRpmsScript: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL} false",
-                            uploadTarget: 'el8',
-                        ),
                         'Build on EL 9': scriptedDockerStage(
                             name: 'Build on EL 9',
-                            runStage: shouldStageRun('Build on EL 8'),
+                            runStage: shouldStageRun('Build on EL 9'),
                             jobStatus: job_status_internal,
                             dockerTag: jobStatusKey("build-el9-gcc").toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
@@ -1282,13 +1240,13 @@ pipeline {
                 expression { shouldStageRun('Test') }
             }
             parallel {
-                stage('Functional on EL 8.8 with Valgrind') {
+                stage('Functional on EL 9 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { shouldStageRun('Functional on EL 8.8 with Valgrind') }
+                        expression { shouldStageRun('Functional on EL 9 with Valgrind') }
                     }
                     agent {
-                        label vm9_label('EL8')
+                        label vm9_label('EL9')
                     }
                     steps {
                         job_step_update(
@@ -1296,30 +1254,8 @@ pipeline {
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
                                            ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Functional on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on EL 8') }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalInstRpms('mercury-libfabric', false),
                                 test_function: 'runTestFunctionalV2',
-                                image_version: 'el8.10'))
+                                image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -1538,7 +1474,7 @@ pipeline {
                 }
             }
         }
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
