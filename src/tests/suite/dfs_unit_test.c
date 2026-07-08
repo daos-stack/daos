@@ -95,7 +95,14 @@ dfs_test_mount(void **state)
 	assert_int_equal(attr.da_dir_oclass_id, exp_doc);
 	rc = daos_obj_get_oclass(coh, DAOS_OT_ARRAY_BYTE, 0, 0, &exp_foc);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(attr.da_file_oclass_id, exp_foc);
+	if (attr.da_file_pl_nr > 0)
+		/*
+		 * Progressive layout: da_file_oclass_id is the compact head class and the wide
+		 * default class  for arrays is what is used for the tail segment.
+		 */
+		assert_int_equal(attr.da_file_pl_segs[0].pls_oclass_id, exp_foc);
+	else
+		assert_int_equal(attr.da_file_oclass_id, exp_foc);
 
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
@@ -3690,12 +3697,14 @@ assert_file_oclass_selection(dfs_t *dfs, daos_handle_t coh, const daos_pool_info
 			 : 0;
 	print_message("PL test '%s': tail expected_present=%d actual_present=%d split_off "
 		      "expected=%zu actual=%zu chunk=%zu\n",
-		      name, exp_has_tail, !daos_obj_id_is_nil(info.doi_tail_oid), exp_split_off,
-		      info.doi_split_off, info.doi_chunk_size);
-	assert_int_equal(!daos_obj_id_is_nil(info.doi_tail_oid), exp_has_tail);
-	assert_int_equal(info.doi_split_off, exp_split_off);
+		      name, exp_has_tail, info.doi_pl_nr > 0, exp_split_off,
+		      info.doi_pl_nr > 0 ? info.doi_pl_segs[0].pls_split_off : 0,
+		      info.doi_chunk_size);
+	assert_int_equal(info.doi_pl_nr > 0, exp_has_tail);
 	if (exp_has_tail) {
-		actual_cid = daos_obj_id2class(info.doi_tail_oid);
+		assert_int_equal(info.doi_pl_nr, 1);
+		assert_int_equal(info.doi_pl_segs[0].pls_split_off, exp_split_off);
+		actual_cid = daos_obj_id2class(info.doi_pl_segs[0].pls_oid);
 		daos_oclass_id2name(exp_tail, exp_tail_name);
 		daos_oclass_id2name(actual_cid, act_tail_name);
 		rc = compare_oclass(coh, actual_cid, exp_tail);
@@ -3703,7 +3712,7 @@ assert_file_oclass_selection(dfs_t *dfs, daos_handle_t coh, const daos_pool_info
 			      act_tail_name);
 		assert_rc_equal(rc, 0);
 	} else {
-		assert_true(daos_obj_id_is_nil(info.doi_tail_oid));
+		assert_int_equal(info.doi_pl_nr, 0);
 	}
 
 	rc = dfs_release(obj);
@@ -4370,16 +4379,16 @@ dfs_test_pl_io(void **state)
 
 	rc = dfs_obj_get_info(dfs_l, obj, &info);
 	assert_int_equal(rc, 0);
-	split = info.doi_split_off;
-	print_message("PL IO: split_off=%zu has_tail=%d chunk=%zu\n", split,
-		      !daos_obj_id_is_nil(info.doi_tail_oid), info.doi_chunk_size);
+	split = info.doi_pl_nr > 0 ? info.doi_pl_segs[0].pls_split_off : 0;
+	print_message("PL IO: split_off=%zu has_tail=%d chunk=%zu\n", split, info.doi_pl_nr > 0,
+		      info.doi_chunk_size);
 
 	if (split == 0) {
 		/* PL did not engage in this environment (e.g. tail class has no group count). */
 		print_message("PL not active; skipping PL IO data-path checks\n");
 		goto out;
 	}
-	assert_false(daos_obj_id_is_nil(info.doi_tail_oid));
+	assert_true(info.doi_pl_nr > 0);
 	assert_true(split > 8192);
 
 	/* Head-only IO (entirely below split_off), sync then async. */

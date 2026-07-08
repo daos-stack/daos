@@ -126,12 +126,21 @@ func (l *ContainerLayout) UnmarshalJSON(data []byte) error {
 }
 
 type (
+	// PLSegment describes one progressive-layout tail segment of a file beyond the head.
+	PLSegment struct {
+		ObjectClass ObjectClass `json:"object_class"`
+		SplitOffset uint64      `json:"split_offset"`
+	}
+
 	// POSIXAttributes contains extended information about POSIX-layout containers.
 	POSIXAttributes struct {
 		ChunkSize       uint64      `json:"chunk_size,omitempty"`
 		ObjectClass     ObjectClass `json:"object_class,omitempty"`
 		DirObjectClass  ObjectClass `json:"dir_object_class,omitempty"`
 		FileObjectClass ObjectClass `json:"file_object_class,omitempty"`
+		// Progressive-layout tail segment(s) of the default file layout, ordered by split
+		// offset (empty when PL does not apply). The head class is FileObjectClass.
+		FilePLTails     []PLSegment `json:"file_pl_tails,omitempty"`
 		ConsistencyMode uint32      `json:"cons_mode,omitempty"`
 		Hints           string      `json:"hints,omitempty"`
 	}

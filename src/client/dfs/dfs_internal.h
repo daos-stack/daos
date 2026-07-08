@@ -498,6 +498,9 @@ file_stat_by_oid(dfs_t *dfs, daos_obj_id_t head_oid, daos_obj_id_t tail_oid, boo
 int
 file_truncate_zero(dfs_obj_t *obj, daos_handle_t th);
 int
+dfs_default_file_pl(dfs_t *dfs, daos_size_t chunk_size, daos_oclass_id_t *head_cid,
+		    daos_oclass_id_t *tail_cid, daos_size_t *split_off, bool *has_tail);
+int
 get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr, bool check_empty);
 int
 update_stbuf_times(struct dfs_entry entry, daos_epoch_t max_epoch, struct stat *stbuf,

@@ -975,6 +975,8 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
+	/* Progressive layout is only reported for the default file class; clear until confirmed. */
+	attr->da_file_pl_nr = 0;
 
 	if (!dfs->attr.da_dir_oclass_id) {
 		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0, 0,
@@ -985,12 +987,41 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 		}
 	}
 
+	/*
+	 * A non-zero da_file_oclass_id means the container has an explicit default file class, so
+	 * the default layout is NOT progressive. Only when it is unset (0) do we resolve the
+	 * default byte-array class and the progressive-layout head/tail segment(s) it would
+	 * produce: da_file_oclass_id becomes the compact head class and da_file_pl_segs[] the wider
+	 * tail segment(s); da_file_pl_nr stays 0 when PL does not apply.
+	 */
 	if (!dfs->attr.da_file_oclass_id) {
+		daos_oclass_id_t head_cid  = OC_UNKNOWN;
+		daos_oclass_id_t tail_cid  = OC_UNKNOWN;
+		daos_size_t      split_off = 0;
+		daos_size_t      chunk_size;
+		bool             has_tail = false;
+
 		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, 0, 0,
 					 &attr->da_file_oclass_id);
 		if (rc) {
 			D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
 			return daos_der2errno(rc);
+		}
+
+		chunk_size =
+		    dfs->attr.da_chunk_size ? dfs->attr.da_chunk_size : DFS_DEFAULT_CHUNK_SIZE;
+		rc = dfs_default_file_pl(dfs, chunk_size, &head_cid, &tail_cid, &split_off,
+					 &has_tail);
+		if (rc) {
+			D_ERROR("failed to resolve default file layout: %d\n", rc);
+			return rc;
+		}
+		if (has_tail) {
+			attr->da_file_oclass_id                = head_cid;
+			attr->da_file_pl_nr                    = 1;
+			attr->da_file_pl_segs[0].pls_oclass_id = tail_cid;
+			attr->da_file_pl_segs[0].pls_split_off = split_off;
+			attr->da_file_pl_segs[0].pls_oid       = DAOS_OBJ_NIL;
 		}
 	}
 
