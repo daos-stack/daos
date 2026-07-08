@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,7 +19,7 @@ class HarnessSetupTest(TestWithServers):
         Useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
 
         :avocado: tags=all
-        :avocado: tags=hw,medium,large
+        :avocado: tags=hw,cb,medium,large
         :avocado: tags=harness
         :avocado: tags=HarnessSetupTest,test_setup
         """

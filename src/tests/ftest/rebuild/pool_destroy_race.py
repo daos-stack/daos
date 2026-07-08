@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -35,7 +35,7 @@ class RbldPoolDestroyWithIO(TestWithServers):
           Re-create pool on remaining ranks.
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=pool,rebuild,ior
         :avocado: tags=RbldPoolDestroyWithIO,test_pool_destroy_with_io
         """

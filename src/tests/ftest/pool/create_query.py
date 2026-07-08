@@ -1,6 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +32,7 @@ class PoolCreateQueryTests(TestWithServers):
             pool create.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateQueryTests,test_create_and_query
         """
