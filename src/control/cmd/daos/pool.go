@@ -25,6 +25,7 @@ import (
 
 /*
 #include "util.h"
+#include <stdlib.h>
 
 // Weak reference — resolves to the real LSAN function in ASAN builds, NULL otherwise.
 extern void __attribute__((weak)) __lsan_do_leak_check(void);
@@ -32,10 +33,17 @@ extern void __attribute__((weak)) __lsan_do_leak_check(void);
 // Go's runtime calls exit_group() directly when it exits, bypassing libc's exit()
 // and therefore ASAN's registered atexit() handlers.  Call the leak-checker explicitly
 // so that an ASAN report is written to log_path when leaks are detected.
+//
+// __lsan_do_leak_check() is LSAN's on-demand API: unlike the implicit atexit-based
+// check, it ignores ASAN_OPTIONS=detect_leaks=0 and always performs a stop-the-world
+// scan.  On some CI hosts this scan aborts with "LeakSanitizer has encountered a
+// fatal error", failing the command even though the underlying operation succeeded.
+// Make the call opt-in via DAOS_ASAN_LEAK_CHECK=1 so routine CLI invocations are
+// unaffected.
 // Note: use-after-free crashes are reported immediately by ASAN's signal handler and
 // do not depend on this call.
 static void run_asan_fini(void) {
-	if (__lsan_do_leak_check)
+	if (__lsan_do_leak_check && getenv("DAOS_ASAN_LEAK_CHECK"))
 		__lsan_do_leak_check();
 }
 */
