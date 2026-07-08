@@ -22,6 +22,7 @@ import org.jenkinsci.plugins.pipeline.modeldefinition.Utils
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@hendersp/DAOS-18348-2') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -73,7 +74,8 @@ void updateRunStage() {
         'Functional Hardware Medium Verbs Provider MD on SSD',
         'Functional Hardware Medium UCX Provider',
         'Functional Hardware Large',
-        'Functional Hardware Large MD on SSD'
+        'Functional Hardware Large MD on SSD',
+        'Functional Cluster Box Medium MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -257,7 +259,9 @@ void updateRunStage() {
             'Functional Hardware Medium Verbs Provider MD on SSD': hwBuildStage,
             'Functional Hardware Medium UCX Provider': hwBuildStage,
             'Functional Hardware Large': hwBuildStage,
-            'Functional Hardware Large MD on SSD': hwBuildStage]
+            'Functional Hardware Large MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium MD on SSD': hwBuildStage,
+            ]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
             runStage[stage] = false
@@ -353,8 +357,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
 
-    } else if (stageName.contains('Hardware')) {
-        // 
+    } else if (stageName.contains('Hardware') || stageName.contains('Cluster Box')) {
+        // Add skip pragma for parent stage
         if (stageName != 'Test Hardware') {
             pragmas.add('skip-test-hardware')
         }
@@ -543,184 +547,6 @@ Map update_default_commit_pragmas() {
     }
 }
 
-/**
- * getScriptOutput
- *
- * Run a script and return the trimmed output.
- *
- * @param script    the script to run
- * @param args      optional arguments to pass to the script
- * @return          the trimmed output from the script
- */
-String getScriptOutput(String script, String args='') {
-    return sh(script: "${script} ${args}", returnStdout: true).trim()
-}
-
-/**
- * scriptedBuildStage
- *
- * Get a build stage in scripted syntax.
- *
- * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
- *          name                    the build stage name
- *          distro                  the shorthand distro name; defaults to 'el8'
- *          rpmDistro               the distro to use for rpm building; defaults to distro
- *          compiler                the compiler to use; defaults to 'gcc'
- *          runStage                optional additional condition to determine if the stage runs
- *          buildRpms               whether or not to build rpms; defaults to true
- *          release                 the DAOS RPM release value to use; defaults to env.DAOS_RELVAL
- *          dockerBuildArgs         optional docker build arguments
- *          sconsBuildArgs          optional scons build arguments
- *          valgrindSconsBuildArgs  optional scons build arguments for valgrind build
- *          artifacts               optional artifacts name to archive; defaults to
- *                                     "config.log-${distro}-${compiler}"
- *          uploadTarget            the distro to use when uploading rpms; defaults to distro
- * @return a scripted stage to run in a pipeline
- */
-def scriptedBuildStage(Map kwargs = [:]) {
-    String name = kwargs.get('name', 'Unknown Build Stage')
-    String distro = kwargs.get('distro', 'el8')
-    String rpmDistro = kwargs.get('rpmDistro', distro)
-    String compiler = kwargs.get('compiler', 'gcc')
-    Boolean runStage = kwargs.get('runStage', true)
-    Boolean buildRpms = kwargs.get('buildRpms', true)
-    String release = kwargs.get('release', env.DAOS_RELVAL)
-    String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
-    Map sconsBuildArgs = kwargs.get('sconsBuildArgs', [:])
-    Map valgrindSconsBuildArgs = kwargs.get('valgrindSconsBuildArgs', [:])
-    String artifacts = kwargs.get('artifacts', "config.log-${distro}-${compiler}")
-    String uploadTarget = kwargs.get('uploadTarget', distro)
-    String dockerTag = jobStatusKey("build-${uploadTarget}-${compiler}").toLowerCase()
-    String bullseye = 'false'
-    if (compiler == 'covc') {
-        bullseye = 'true'
-    }
-    return {
-        stage("${name}") {
-            if (!runStage) {
-                println("[${name}] Marking build stage as skipped")
-                Utils.markStageSkippedForConditional("${name}")
-                return
-            }
-            node('docker_runner') {
-                println("[${name}] Check out from version control")
-                checkoutScm(pruneStaleBranch: true)
-
-                def dockerImage = docker.build(dockerTag, dockerBuildArgs)
-                try {
-                    dockerImage.inside() {
-                        if (buildRpms) {
-                            sh label: 'Install RPMs',
-                                script: "./ci/rpm/install_deps.sh ${rpmDistro} ${release} ${bullseye}"
-                            // Avoid interpolation of sensitive environment variables
-                            sh label: 'Build deps',
-                                script: "./ci/rpm/build_deps.sh ${bullseye}" + ' ${BULLSEYE_KEY}'
-                        }
-                        job_step_update(sconsBuild(sconsBuildArgs))
-                        if (valgrindSconsBuildArgs) {
-                            // For non-release builds, create a separate build with the valgrind
-                            // tag for NLT memcheck testing.  This is necessary to avoid problems
-                            // caused by valgrind being confused by the Go runtime. We don't want
-                            // to use the valgrind build for normal testing because it is much slower.
-                            // BUILD_TYPE=dev is set for PR/dev builds in sconsArgs(), and
-                            // TARGET_TYPE=release is used to select pre-built cached prerequisites.
-                            job_step_update(sconsBuild(valgrindSconsBuildArgs))
-                            sh label: 'Stash valgrind install tree for NLT',
-                               script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
-                            stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
-                        }
-                        if (buildRpms) {
-                            sh label: 'Generate RPMs',
-                                script: "./ci/rpm/gen_rpms.sh ${rpmDistro} ${release} ${bullseye}"
-                            // Success actions
-                            uploadNewRPMs(uploadTarget, 'success')
-                        }
-                    }
-                } catch (Exception e) {
-                    // Unsuccessful actions
-                    sh """if [ -f config.log ]; then
-                            mv config.log ${artifacts}
-                        fi"""
-                    archiveArtifacts artifacts: "${artifacts}", allowEmptyArchive: true
-                    throw e
-                } finally {
-                    // Cleanup actions
-                    if (buildRpms) {
-                        uploadNewRPMs(uploadTarget, 'cleanup')
-                    }
-                    jobStatusUpdate(job_status_internal, name)
-                }
-            }
-            println("[${name}] Finished with ${job_status_internal}")
-        }
-    }
-}
-
-/**
- * scriptedSummaryStage
- *
- * Get a summary stage in scripted syntax.
- *
- * @param kwargs Map containing the following optional arguments (empty strings yield defaults):
- *          name                    the summary stage name
- *          distro                  the shorthand distro name; defaults to 'el8'
- *          compiler                the compiler to use; defaults to 'gcc'
- *          runStage                Optional additional condition to determine if the stage runs
- *          dockerBuildArgs         optional docker build arguments
- *          installScript           optional script to install RPMs
- *          runScriptArgs           Map of arguments to pass to runScriptWithStashes()
- *          archiveArtifactsArgs    Map of arguments to pass to archiveArtifacts()
- *          publishHtmlArgs         Map of arguments to pass to publishHTML()
- * @return a scripted stage to run in a pipeline
- */
-def scriptedSummaryStage(Map kwargs = [:]) {
-    String name = kwargs.get('name', 'Unknown Summary Stage')
-    String distro = kwargs.get('distro', 'el8')
-    String compiler = kwargs.get('compiler', 'gcc')
-    Boolean runStage = kwargs.get('runStage', true)
-    String dockerBuildArgs = kwargs.get('dockerBuildArgs', '')
-    String installScript = kwargs.get('installScript', '')
-    Map runScriptArgs = kwargs.get('runScriptArgs', [:])
-    Map archiveArtifactsArgs = kwargs.get('archiveArtifactsArgs', [:])
-    Map publishHtmlArgs = kwargs.get('publishHtmlArgs', [:])
-    String dockerTag = jobStatusKey("${name}-${distro}-${compiler}").toLowerCase()
-
-    return {
-        stage("${name}") {
-            if (!runStage) {
-                println("[${name}] Marking summary stage as skipped")
-                Utils.markStageSkippedForConditional("${name}")
-                return
-            }
-            node('docker_runner') {
-                println("[${name}] Check out from version control")
-                checkoutScm(pruneStaleBranch: true)
-
-                def dockerImage = docker.build(dockerTag, dockerBuildArgs)
-                try {
-                    dockerImage.inside() {
-                        if (installScript) {
-                            sh label: 'Install RPMs',
-                                script: "${installScript} ${distro}"
-                        }
-                        job_step_update(runScriptWithStashes(runScriptArgs))
-                    }
-                } finally {
-                    // Cleanup actions
-                    if (publishHtmlArgs) {
-                        publishHTML(publishHtmlArgs)
-                    }
-                    if (archiveArtifactsArgs) {
-                        archiveArtifacts(archiveArtifactsArgs)
-                    }
-                    jobStatusUpdate(job_status_internal, name)
-                }
-            }
-            println("[${name}] Finished with ${job_status_internal}")
-        }
-    }
-}
-
 // Determine if the Build with Bullseye was run and successful
 Boolean builtWithBullseye() {
     Map status = job_status_internal['Build_on_EL_9_with_Bullseye'] ?: [:]
@@ -730,7 +556,9 @@ Boolean builtWithBullseye() {
 
 // Get the inst_rpms argument for the unitTest method
 String unitTestInstRpms(String distro='el9', Boolean bullseye=false) {
-    return getScriptOutput("ci/unit/required_packages.sh ${distro} ${bullseye.toString()}")
+    return sh(
+        script: "ci/unit/required_packages.sh ${distro} ${bullseye.toString()}",
+        returnStdout: true).trim()
 }
 
 // Get the compiler argument for the unitTest method
@@ -946,6 +774,9 @@ pipeline {
         booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
+        booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -976,6 +807,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL',
+               defaultValue: 'cluster_box',
+               description: 'Label to use for the Functional Cluster Box stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -993,8 +827,10 @@ pipeline {
                 stage('Set Description') {
                     steps {
                         script {
-                            if (params.CI_BUILD_DESCRIPTION) {
-                                buildDescription params.CI_BUILD_DESCRIPTION
+                            String description = params.CI_BUILD_DESCRIPTION ?:
+                                                 cachedCommitPragma('Build-description', '')
+                            if (description) {
+                                buildDescription description
                             }
                         }
                     }
@@ -1091,13 +927,11 @@ pipeline {
             steps {
                 script {
                     parallel(
-                        'Build on EL 8': scriptedBuildStage(
+                        'Build on EL 8': scriptedDockerStage(
                             name: 'Build on EL 8',
-                            distro:'el8',
-                            compiler: 'gcc',
                             runStage: shouldStageRun('Build on EL 8'),
-                            buildRpms: true,
-                            release: env.DAOS_RELVAL,
+                            jobStatus: job_status_internal,
+                            dockerTag: jobStatusKey("build-el8-gcc").toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
@@ -1107,38 +941,45 @@ pipeline {
                                              ' --build-arg POINT_RELEASE=.10 ' +
                                              " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.el.8 .',
-                            sconsBuildArgs: [
+                            installScript: "./ci/rpm/install_deps.sh el8 ${env.DAOS_RELVAL} false",
+                            buildScript: './ci/rpm/build_deps.sh false ${BULLSEYE_KEY}',
+                            stepMethod: { args -> sconsBuild(args) },
+                            stepMethodArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
                                 build_deps: 'no',
                                 stash_opt: true,
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            artifacts: "config.log-el8-gcc"
+                            configLogArtifacts: "config.log-el8-gcc",
+                            generateRpmsScript: "./ci/rpm/gen_rpms.sh el8 ${env.DAOS_RELVAL} false",
+                            uploadTarget: 'el8',
                         ),
-                        'Build on EL 9': scriptedBuildStage(
+                        'Build on EL 9': scriptedDockerStage(
                             name: 'Build on EL 9',
-                            distro:'el9',
-                            compiler: 'gcc',
-                            runStage: shouldStageRun('Build on EL 9'),
-                            buildRpms: true,
-                            release: env.DAOS_RELVAL,
+                            runStage: shouldStageRun('Build on EL 8'),
+                            jobStatus: job_status_internal,
+                            dockerTag: jobStatusKey("build-el9-gcc").toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
                                              ' --build-arg DAOS_PACKAGES_BUILD=no' +
                                              ' --build-arg DAOS_KEEP_SRC=yes' +
                                              ' --build-arg REPOS="' + prRepos('el9') + '"' +
-                                             ' --build-arg POINT_RELEASE=.7' +
+                                             ' --build-arg POINT_RELEASE=.7 ' +
                                              " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.el.9 .',
-                            sconsBuildArgs: [
+                            installScript: "./ci/rpm/install_deps.sh el9 ${env.DAOS_RELVAL} false",
+                            buildScript: './ci/rpm/build_deps.sh false ${BULLSEYE_KEY}',
+                            stepMethod: { args -> sconsBuild(args) },
+                            stepMethodArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
                                 build_deps: 'no',
                                 stash_opt: true,
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
+                            configLogArtifacts: "config.log-el9-gcc",
                             valgrindSconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'no',
@@ -1146,16 +987,14 @@ pipeline {
                                             ' BUILD_GO_VALGRIND=1 PREFIX=/opt/daos' +
                                             ' TARGET_TYPE=release'
                             ],
-                            artifacts: "config.log-el9-gcc"
+                            generateRpmsScript: "./ci/rpm/gen_rpms.sh el9 ${env.DAOS_RELVAL} false",
+                            uploadTarget: 'el9',
                         ),
-                        'Build on Leap 15': scriptedBuildStage(
+                        'Build on Leap 15': scriptedDockerStage(
                             name: 'Build on Leap 15',
-                            distro:'leap15',
-                            rpmDistro: 'suse.lp156',
-                            compiler: 'gcc',
                             runStage: shouldStageRun('Build on Leap 15'),
-                            buildRpms: true,
-                            release: env.DAOS_RELVAL,
+                            jobStatus: job_status_internal,
+                            dockerTag: jobStatusKey("build-leap15-gcc").toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
@@ -1164,20 +1003,23 @@ pipeline {
                                              ' --build-arg POINT_RELEASE=.6' +
                                              " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.leap.15 .',
-                            sconsBuildArgs: [
+                            installScript: "./ci/rpm/install_deps.sh suse.lp156 ${env.DAOS_RELVAL} false",
+                            buildScript: './ci/rpm/build_deps.sh false ${BULLSEYE_KEY}',
+                            stepMethod: { args -> sconsBuild(args) },
+                            stepMethodArgs: [
                                 parallel_build: true,
                                 build_deps: 'yes',
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            artifacts: "config.log-leap156-gcc",
+                            configLogArtifacts: "config.log-leap15-gcc",
+                            generateRpmsScript: "./ci/rpm/gen_rpms.sh suse.lp156 ${env.DAOS_RELVAL} false",
+                            uploadTarget: 'leap15',
                         ),
-                        'Build on EL 9 with Bullseye': scriptedBuildStage(
+                        'Build on EL 9 with Bullseye': scriptedDockerStage(
                             name: 'Build on EL 9 with Bullseye',
-                            distro:'el9',
-                            compiler: 'covc',
                             runStage: shouldStageRun('Build on EL 9 with Bullseye'),
-                            buildRpms: true,
-                            release: env.DAOS_RELVAL,
+                            jobStatus: job_status_internal,
+                            dockerTag: jobStatusKey("build-el9-covc").toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
@@ -1189,7 +1031,10 @@ pipeline {
                                              ' --build-arg COMPILER=covc' +
                                              ' --build-arg CODE_COVERAGE=true' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
-                            sconsBuildArgs: [
+                            installScript: "./ci/rpm/install_deps.sh el9 ${env.DAOS_RELVAL} true",
+                            buildScript: './ci/rpm/build_deps.sh true ${BULLSEYE_KEY}',
+                            stepMethod: { args -> sconsBuild(args) },
+                            stepMethodArgs: [
                                 parallel_build: true,
                                 stash_files: 'ci/test_files_to_stash.txt',
                                 build_deps: 'no',
@@ -1197,7 +1042,8 @@ pipeline {
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release' +
                                             ' COMPILER=covc'
                             ],
-                            artifacts: "config.log-el9-covc",
+                            configLogArtifacts: "config.log-el9-covc",
+                            generateRpmsScript: "./ci/rpm/gen_rpms.sh el9 ${env.DAOS_RELVAL} false",
                             uploadTarget: 'el9-bullseye'
                         )
                     )
@@ -1845,6 +1691,21 @@ pipeline {
                             image_version: 'el9.7',
                             bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
+                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
+                            pragma_suffix:'-cb-medium-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            stage_tags: "cb,medium",
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
                     )
                 }
             }
@@ -1857,12 +1718,11 @@ pipeline {
             steps {
                 script {
                     parallel(
-                        'Bullseye Report': scriptedSummaryStage(
+                        'Bullseye Report': scriptedDockerStage(
                             name: 'Bullseye Report',
-                            distro: 'el9',
-                            compiler: 'covc',
                             runStage: builtWithBullseye(),
-                            nodeLabel: 'docker_runner',
+                            jobStatus: job_status_internal,
+                            dockerTag: jobStatusKey("build-el9-covc").toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
@@ -1873,7 +1733,8 @@ pipeline {
                                              ' --build-arg CODE_COVERAGE=true' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
                             installScript: './ci/summary/install_pkgs.sh el9 true',
-                            runScriptArgs: [
+                            stepMethod: { args -> runScriptWithStashes(args) },
+                            stepMethodArgs: [
                                 label: 'Generate Bullseye Report',
                                 script: 'ci/summary/bullseye_report.sh',
                                 stashes: ['unit_test_bullseye',
@@ -1888,17 +1749,6 @@ pipeline {
                                           'func_hw_large_bullseye',
                                           'func_hw_large_md_on_ssd_bullseye']
                             ],
-                            archiveArtifactsArgs: [
-                                artifacts: 'bullseye_code_coverage_report/',
-                                allowEmptyArchive: false
-                            ],
-                            publishHtmlArgs: [
-                                target: [
-                                    reportDir: 'bullseye_code_coverage_report',
-                                    reportFiles: 'index.html',
-                                    reportName: 'Bullseye Coverage'
-                                ]
-                            ]
                         )
                     )
                 }
