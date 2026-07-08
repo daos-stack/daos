@@ -42,7 +42,6 @@ void updateRunStage() {
     List<String> stageOrder = [
         'Cancel Previous Builds',
         'Test',
-        'Functional on EL 8',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on Ubuntu 20.04',
@@ -318,9 +317,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_EL8_TARGET',
-               defaultValue: '',
-               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_EL9_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
@@ -340,9 +336,6 @@ pipeline {
         booleanParam(name: bashName('Test'),
                      defaultValue: true,
                      description: 'Run the Test stage.')
-        booleanParam(name: bashName('Functional on EL 8'),
-                     defaultValue: true,
-                     description: 'Run the Functional on EL 8 stage.')
         booleanParam(name: bashName('Functional on EL 9'),
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 stage.')
@@ -463,20 +456,6 @@ pipeline {
                     // pragmas will be ignored. This is to avoid multiple parallel test stages
                     // from duplicating testing.
                     parallel(
-                        'Functional on EL 8': getFunctionalTestStage(
-                            name: 'Functional on EL 8',
-                            runStage: shouldStageRun('Functional on EL 8'),
-                            pragma_suffix: '-vm',
-                            distro: 'el8',
-                            image_version: 'el8.10',
-                            base_branch: params.BaseBranch,
-                            label: vm9_label('EL8'),
-                            next_version: params.BaseBranch,
-                            stage_tags: '-hw',
-                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
-                            nvme: 'auto',
-                            job_status: job_status_internal
-                        ),
                         'Functional on EL 9': getFunctionalTestStage(
                             name: 'Functional on EL 9',
                             runStage: shouldStageRun('Functional on EL 9'),
