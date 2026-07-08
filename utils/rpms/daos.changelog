@@ -1,4 +1,7 @@
 %changelog
+* Tue May 26 2026 Jerome Soumagne <jerome.soumagne@hpe.com> 2.9.100-5
+- Add crt perf binaries to DAOS tests
+
 * Mon May 04 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-4
 - Add gperftools-devel as a build dependency of daos-devel
 
