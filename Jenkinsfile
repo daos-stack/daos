@@ -35,6 +35,7 @@ String bashName(String name) {
 }
 
 // Update the runStage map
+/* groovylint-disable-next-line MethodSize */
 void updateRunStage() {
     Map reasons = [:]
 
@@ -78,20 +79,20 @@ void updateRunStage() {
     // Initialize the run state of each stage using the parameter stage keys
     for (name in stageOrder) {
         value = params.get(bashName(name), null)
-        if (value instanceof Boolean && !name.startsWith('CI_')) {
+        if (value != null && value.class == Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
-            reasons[name] = "parameter selection or default"
+            reasons[name] = 'parameter selection or default'
         }
     }
 
     // Debug
-    String buildCause = currentBuild.getBuildCauses().toString()
-    println("updateRunStage: Build cause: ${buildCause}")
+    List buildCauses = currentBuild.buildCauses
+    println("updateRunStage: Build cause: ${buildCauses}")
     println("updateRunStage: Started by user: ${startedByUser()}")
 
     // Handle landing builds
     if (startedByLanding()) {
-        println("updateRunStage: Detected landing build, overwriting defaults")
+        println('updateRunStage: Detected landing build, overwriting defaults')
         for (stage in runStage.keySet()) {
             if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'Test']
                     || stage.contains('Build on')
@@ -104,7 +105,7 @@ void updateRunStage() {
             } else {
                 runStage[stage] = false
             }
-            reasons[stage] = "landing build"
+            reasons[stage] = 'landing build'
         }
         displayRunStage(reasons)
         return
@@ -112,11 +113,11 @@ void updateRunStage() {
 
     // Handle doc-only changes: Only run default or selected build stages
     if (docOnlyChange(target_branch)) {
-        println("updateRunStage: Detected doc-only change, skipping testing")
+        println('updateRunStage: Detected doc-only change, skipping testing')
         for (stage in runStage.keySet()) {
             if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
                 runStage[stage] = false
-                reasons[stage] = "doc-only change"
+                reasons[stage] = 'doc-only change'
             }
         }
         displayRunStage(reasons)
@@ -125,13 +126,13 @@ void updateRunStage() {
 
     // Handle user setting CI_RPM_TEST_VERSION or specifying RPM-test-version
     if (rpmTestVersion()) {
-        println("updateRunStage: Detected RPM test version, skipping build/RPM test stages")
+        println('updateRunStage: Detected RPM test version, skipping build/RPM test stages')
         for (stage in runStage.keySet()) {
             if (stage.contains('Build')
                     || stage.contains('Unit Tests')
                     || stage.contains('Test RPMs')) {
                 runStage[stage] = false
-                reasons[stage] = "RPM test version"
+                reasons[stage] = 'RPM test version'
             }
         }
         displayRunStage(reasons)
@@ -140,14 +141,14 @@ void updateRunStage() {
 
     // Handle user setting CI_BUILD_PACKAGES_ONLY
     if (params.CI_BUILD_PACKAGES_ONLY) {
-        println("updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages")
+        println('updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages')
         for (stage in runStage.keySet()) {
             if (stage.contains('Unit Tests')) {
                 runStage[stage] = false
-                reasons[stage] = "CI_BUILD_PACKAGES_ONLY"
+                reasons[stage] = 'CI_BUILD_PACKAGES_ONLY'
             } else if (stage.contains('Build')) {
                 runStage[stage] = true
-                reasons[stage] = "CI_BUILD_PACKAGES_ONLY"
+                reasons[stage] = 'CI_BUILD_PACKAGES_ONLY'
             }
         }
         displayRunStage(reasons)
@@ -157,7 +158,7 @@ void updateRunStage() {
     // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
     if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
         println(
-            "updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas")
+            'updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas')
         displayRunStage(reasons)
         return
     }
@@ -165,12 +166,13 @@ void updateRunStage() {
     // Update stage running based on commit pragmas
     println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
     Map<String, String> commitPragmas = envToPragmas()
-    println("updateRunStage: Checking skip commit pragmas from commit message:")
+    println('updateRunStage: Checking skip commit pragmas from commit message:')
     commitPragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        /* groovylint-disable-next-line NestedForLoop */
         for (pragma in skipPragmas) {
             // commitPragmas will already contain lower case keys from pragmasToMap()
             println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
@@ -188,17 +190,18 @@ void updateRunStage() {
 
     // Handle quick functional commit pragma
     if (quickFunctional()) {
-        println("updateRunStage: Detected quick functional testing")
+        println('updateRunStage: Detected quick functional testing')
         // These stages must be run for functional testing
         for (stage in ['Pre-build', 'Python Bandit check', 'Build']) {
             runStage[stage] = true
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // These stages are unrelated to functional testing and should be skipped
+        /* groovylint-disable-next-line BracesForForLoop */
         for (stage in ['Unit Tests', 'Fault injection testing',
                        'Test RPMs on EL 9', 'Test RPMs on Leap 15']) {
             runStage[stage] = false
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // Build stages should only be run if their RPMs are needed
         String hwBuildStage = 'Build on '
@@ -226,13 +229,13 @@ void updateRunStage() {
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
             runStage[stage] = false
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // The mapped build stage must be run to generate RPMs for the functional test stage
         for (stage in testBuildStage.keySet()) {
             if (runStage[stage]) {
                 runStage[testBuildStage[stage]] = true
-                reasons[testBuildStage[stage]] = "Quick functional testing"
+                reasons[testBuildStage[stage]] = 'Quick functional testing'
             }
         }
     }
@@ -242,7 +245,7 @@ void updateRunStage() {
 
 // Log which stages will be run and why based on the current state of the runStage map
 void displayRunStage(Map reasons = [:]) {
-    println("Stage run conditions:")
+    println('Stage run conditions:')
     for (stage in runStage.keySet()) {
         String reason = reasons.get(stage, 'default')
         if (runStage[stage]) {
@@ -254,6 +257,7 @@ void displayRunStage(Map reasons = [:]) {
 }
 
 // Get a list of skip commit pragmas to check for a given stage name
+/* groovylint-disable-next-line MethodSize */
 List<String> getStageNameSkipPragmas(String stageName) {
     String stagePragma = "skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
     List<String> pragmas = []
@@ -262,13 +266,11 @@ List<String> getStageNameSkipPragmas(String stageName) {
     if (stageName in ['Cancel Previous Builds', 'Pre-build']) {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
     } else if (stageName == 'Python Bandit check') {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
         // Compatibility with existing commit pragmas
         pragmas.add(stagePragma.replace('-bandit-check', '-bandit'))
-
     } else if (stageName.contains('Build')) {
         // Add skip pragma for parent stage
         if (stageName != 'Build') {
@@ -280,7 +282,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('build-on-')) {
             pragmas.add(stagePragma.replace('build-on-', 'build-'))
         }
-
     } else if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
         // Add skip pragma for parent stage
         if (stageName != 'Unit Tests') {
@@ -292,7 +293,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('-with-')) {
             pragmas.add(stagePragma.replace('-with-', '-'))
         }
-
     } else if (stageName == 'Test' || stageName.contains('Functional on')
             || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
         // Add skip pragma for parent stage
@@ -317,7 +317,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
     } else if (stageName.contains('Hardware') || stageName.contains('Cluster Box')) {
         // Add skip pragma for parent stage
         if (stageName != 'Test Hardware') {
@@ -341,6 +340,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
     List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
     List<String> copyPragmas = pragmas.clone()
     for (distro in distros) {
+        /* groovylint-disable-next-line NestedForLoop */
         for (_pragma in copyPragmas) {
             if (_pragma.contains("-${distro}-")) {
                 Integer _index = pragmas.indexOf(_pragma)
@@ -365,7 +365,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
 
 // Initialize the runStage map with the current state of the build parameters and any commit
 // pragmas related to skipping/running stages. Should only be called once per build.
-def setupRunStage() {
+void setupRunStage() {
     pragmasToEnv()
     update_default_commit_pragmas()
     updateRunStage()
@@ -1068,7 +1068,8 @@ pipeline {
                         // NLT memchecks the valgrind-tagged build, not the shared -race one.
                         unstash 'opt-daos-valgrind'
                         job_step_update(
-                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1').toInteger(),
+                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat',
+                                                                           def_val: '1').toInteger(),
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
@@ -1077,6 +1078,7 @@ pipeline {
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
                                                   ' --class-name nlt' +
+                                                  /* groovylint-disable-next-line LineLength */
                                                   " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
                                                   /* groovylint-disable-next-line LineLength */
                                                   (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
@@ -1274,6 +1276,7 @@ pipeline {
                             imageVersion: 'el9.7',
                             provEnvVars: 'VM_CPUS=14',
                             unitTestPostArgs: [
+                                /* groovylint-disable-next-line DuplicateListLiteral */
                                 artifacts: ['nlt_logs/'],
                                 testResults: 'nlt-junit.xml',
                                 with_valgrind: '',
@@ -1446,7 +1449,7 @@ pipeline {
                             pragma_suffix:'-cb-medium-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
-                            stage_tags: "cb,medium",
+                            stage_tags: 'cb,medium',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
