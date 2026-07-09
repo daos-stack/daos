@@ -1929,7 +1929,7 @@ retry:
 
 out_put:
 	cont_svc_put_leader(svc);
-	return 0;
+	return rc;
 }
 
 #define EPH_ARG_TGT_INLINE	(64)
