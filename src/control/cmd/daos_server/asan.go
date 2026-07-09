@@ -7,7 +7,11 @@
 package main
 
 /*
-#include <stdlib.h>
+// Note: intentionally not "#include <stdlib.h>" -- SCons' Go dependency scanner
+// (site_scons/site_tools/go_builder.py) treats every "#include <...>" line in a
+// CGO preamble as a DAOS public header located under src/include/, which breaks
+// the build for genuine system headers.  Declare getenv() directly instead.
+extern char *getenv(const char *name);
 
 // Weak references — resolve to real ASAN/LSAN functions in ASAN builds, NULL otherwise.
 extern void __attribute__((weak)) __lsan_do_leak_check(void);
