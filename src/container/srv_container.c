@@ -2020,7 +2020,7 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = ds_pool_thread_collective(
 	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
-	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG, rc,
+	DL_CDEBUG(rc != 0 && rc != -DER_CONT_NONEXIST && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
 		  DF_CONT ": refresh ec_agg_eph " DF_X64 ", "
 			  "stable_eph " DF_X64,
 		  DP_CONT(pool_uuid, cont_uuid), ec_agg_eph, stable_eph);
@@ -2294,8 +2294,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 					       min_ec_agg_eph, min_stable_eph,
 					       svc->cs_cont_ephs_leader_req);
 		if (rc) {
-			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
-				  DF_CONT ": refresh failed",
+			DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_MD, DLOG_ERR,
+				  rc, DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
 
 			/* If ULT is exiting, break out */
