@@ -52,7 +52,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_reset
         """
         # 1. Create a pool.
@@ -168,7 +168,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_interactive
         """
         # 1. Create a pool.
@@ -288,7 +288,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_failout
         """
         self.log_step("Create a pool.")
@@ -372,7 +372,7 @@ class DMGCheckStartOptionsTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartOptionsTest,test_check_start_find_orphans
         """
         # 1. Create a pool and a container.

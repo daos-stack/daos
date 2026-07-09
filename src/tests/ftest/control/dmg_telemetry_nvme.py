@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +33,7 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
             Verify the telemetry engine NVMe metrics.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=control,telemetry,nvme
         :avocado: tags=TestWithTelemetryNvme,test_nvme_telemetry_metrics
         """
@@ -68,7 +69,7 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
             Verify the dmg telemetry list command.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=control,telemetry,nvme
         :avocado: tags=TestWithTelemetryNvme,test_telemetry_list_nvme
         """
