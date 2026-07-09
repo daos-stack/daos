@@ -1678,7 +1678,6 @@ pipeline {
                                              ' --build-arg COMPILER=covc' +
                                              ' --build-arg CODE_COVERAGE=true' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
-                            installScript: './ci/summary/install_pkgs.sh el9 true',
                             stepMethod: { args -> runScriptWithStashes(args) },
                             stepMethodArgs: [
                                 label: 'Generate Bullseye Report',
@@ -1695,6 +1694,11 @@ pipeline {
                                           'func_hw_large_bullseye',
                                           'func_hw_large_md_on_ssd_bullseye']
                             ],
+                            installScript: './ci/summary/install_pkgs.sh el9 true',
+                            archiveArtifactsArgs: [
+                                artifacts: 'bullseye_code_coverage_report/',
+                                allowEmptyArchive: false
+                            ]
                         )
                     )
                 }
