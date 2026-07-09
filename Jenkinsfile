@@ -493,13 +493,6 @@ void fixup_rpmlintrc() {
     writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
 }
 
-void uploadNewRPMs(String target, String stage) {
-    buildRpmPost target: target,
-                 condition: stage,
-                 rpmlint: false,
-                 productArtifacts: ['daos', 'deps', 'bullseye']
-}
-
 String vm9_label(String distro) {
     return cachedCommitPragma(pragma: distro + '-VM9-label',
                               def_val: cachedCommitPragma(pragma: 'VM9-label',
@@ -945,7 +938,11 @@ pipeline {
                                             ' TARGET_TYPE=release'
                             ],
                             generateRpmsScript: "./ci/rpm/gen_rpms.sh el9 ${env.DAOS_RELVAL} false",
-                            uploadTarget: 'el9',
+                            buildRpmPostArgs: [
+                                target: 'el9',
+                                rpmlint: false,
+                                productArtifacts: ['daos', 'deps', 'bullseye']
+                            ],
                         ),
                         'Build on Leap 15': scriptedDockerStage(
                             name: 'Build on Leap 15',
@@ -970,7 +967,11 @@ pipeline {
                             ],
                             configLogArtifacts: "config.log-leap15-gcc",
                             generateRpmsScript: "./ci/rpm/gen_rpms.sh suse.lp156 ${env.DAOS_RELVAL} false",
-                            uploadTarget: 'leap15',
+                            buildRpmPostArgs: [
+                                target: 'leap15',
+                                rpmlint: false,
+                                productArtifacts: ['daos', 'deps', 'bullseye']
+                            ],
                         ),
                         'Build on EL 9 with Bullseye': scriptedDockerStage(
                             name: 'Build on EL 9 with Bullseye',
@@ -1001,7 +1002,11 @@ pipeline {
                             ],
                             configLogArtifacts: "config.log-el9-covc",
                             generateRpmsScript: "./ci/rpm/gen_rpms.sh el9 ${env.DAOS_RELVAL} false",
-                            uploadTarget: 'el9-bullseye'
+                            buildRpmPostArgs: [
+                                target: 'el9-bullseye',
+                                rpmlint: false,
+                                productArtifacts: ['daos', 'deps', 'bullseye']
+                            ],
                         )
                     )
                 }
