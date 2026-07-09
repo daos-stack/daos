@@ -58,7 +58,7 @@ class DfuseBashCmd(TestWithServers):
                 env["LD_PRELOAD"] = lib_path
             if nobypass:
                 env["D_IL_NO_BYPASS"] = "1"
-        self.test_env.add_to_env(env, 'bullseye_file')
+        env[self.test_env.get_sys_env_name('bullseye_file')] = self.test_env.bullseye_file
         env_str = env.to_export_str()
 
         # Create a pool if one does not already exist.

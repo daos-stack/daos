@@ -199,7 +199,7 @@ void updateRunStage() {
     }
 
     // Update stage running based on commit pragmas
-    println('updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}')
+    println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
     Map<String, String> commitPragmas = envToPragmas()
     println('updateRunStage: Checking skip commit pragmas from commit message:')
     commitPragmas.each { key, value ->

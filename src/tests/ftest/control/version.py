@@ -64,7 +64,7 @@ class DAOSVersion(TestWithServers):
         # Get daos_agent version.
         daos_agent_version = None
         env = EnvironmentVariables()
-        self.test_env.add_to_env(env, 'bullseye_file')
+        env[self.test_env.get_sys_env_name('bullseye_file')] = self.test_env.bullseye_file
         daos_agent_cmd = f"{env.to_export_str()} daos_agent --json version"
         result = run_remote(self.log, NodeSet(self.hostlist_servers[0]), daos_agent_cmd)
         if not result.passed:

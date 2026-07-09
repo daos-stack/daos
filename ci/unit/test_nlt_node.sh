@@ -67,7 +67,7 @@ fi
 TMPDIR="$(pwd)/nlt_logs" \
     HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
     NO_PROXY="${DAOS_NO_PROXY:-}" \
-    exec ./utils/node_local_test.py "$@"
+    ./utils/node_local_test.py "$@"
 
 if [ -e "${COVFILE:-}" ]; then
     echo "Code coverage after running unit tests:"

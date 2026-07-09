@@ -195,24 +195,19 @@ class TestEnvironment():
         if self.server_config is None:
             self.server_config = os.path.join(self.log_dir, "configs", "daos_server.yml")
 
-    def add_to_env(self, env, name):
-        """Add the provided environment variable dictionary with the test environment value.
-
-        If the environment variable dictionary already contains a value for the test environment
-        variable, do not override it.
+    def get_sys_env_name(self, name):
+        """Get the system environment variable name for the provided test environment name/property.
 
         Args:
-            env (EnvironmentVariables): environment variable dictionary to update
-            name (str): test environment variable name to update in the provided dictionary
+            name (str): test environment name
 
-        Raises:
-            TestEnvironmentException: if the name is not a valid test environment variable name
+        Returns:
+            str: the system environment variable name
         """
         if name not in self.__ENV_VAR_MAP:
-            raise TestEnvironmentException(f"Invalid environment variable name: {name}")
+            raise TestEnvironmentException(f"Invalid test environment name: {name}")
 
-        if self.__ENV_VAR_MAP[name] not in env:
-            env[self.__ENV_VAR_MAP[name]] = os.environ.get(self.__ENV_VAR_MAP[name])
+        return self.__ENV_VAR_MAP[name]
 
     def __set_value(self, key, value):
         """Set the test environment variable.

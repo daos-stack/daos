@@ -1689,7 +1689,7 @@ class TestWithServers(TestWithoutServers):
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
             dmg_config_temp, self.mgmt_svc_replicas_suffix)
         dmg_cmd.hostlist = self.mgmt_svc_replicas
-        self.test_env.add_to_env(dmg_cmd.env, 'bullseye_file')
+        dmg_cmd.env[self.test_env.get_sys_env_name('bullseye_file')] = self.test_env.bullseye_file
         return dmg_cmd
 
     def get_daos_command(self):
