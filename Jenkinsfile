@@ -35,6 +35,7 @@ String bashName(String name) {
 }
 
 // Update the runStage map
+/* groovylint-disable-next-line MethodSize */
 void updateRunStage() {
     Map reasons = [:]
 
@@ -78,20 +79,20 @@ void updateRunStage() {
     // Initialize the run state of each stage using the parameter stage keys
     for (name in stageOrder) {
         value = params.get(bashName(name), null)
-        if (value instanceof Boolean && !name.startsWith('CI_')) {
+        if (value != null && value.class == Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
-            reasons[name] = "parameter selection or default"
+            reasons[name] = 'parameter selection or default'
         }
     }
 
     // Debug
-    String buildCause = currentBuild.getBuildCauses().toString()
-    println("updateRunStage: Build cause: ${buildCause}")
+    List buildCauses = currentBuild.buildCauses
+    println("updateRunStage: Build cause: ${buildCauses}")
     println("updateRunStage: Started by user: ${startedByUser()}")
 
     // Handle landing builds
     if (startedByLanding()) {
-        println("updateRunStage: Detected landing build, overwriting defaults")
+        println('updateRunStage: Detected landing build, overwriting defaults')
         for (stage in runStage.keySet()) {
             if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'Test']
                     || stage.contains('Build on')
@@ -104,7 +105,7 @@ void updateRunStage() {
             } else {
                 runStage[stage] = false
             }
-            reasons[stage] = "landing build"
+            reasons[stage] = 'landing build'
         }
         displayRunStage(reasons)
         return
@@ -112,11 +113,11 @@ void updateRunStage() {
 
     // Handle doc-only changes: Only run default or selected build stages
     if (docOnlyChange(target_branch)) {
-        println("updateRunStage: Detected doc-only change, skipping testing")
+        println('updateRunStage: Detected doc-only change, skipping testing')
         for (stage in runStage.keySet()) {
             if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
                 runStage[stage] = false
-                reasons[stage] = "doc-only change"
+                reasons[stage] = 'doc-only change'
             }
         }
         displayRunStage(reasons)
@@ -125,13 +126,13 @@ void updateRunStage() {
 
     // Handle user setting CI_RPM_TEST_VERSION or specifying RPM-test-version
     if (rpmTestVersion()) {
-        println("updateRunStage: Detected RPM test version, skipping build/RPM test stages")
+        println('updateRunStage: Detected RPM test version, skipping build/RPM test stages')
         for (stage in runStage.keySet()) {
             if (stage.contains('Build')
                     || stage.contains('Unit Tests')
                     || stage.contains('Test RPMs')) {
                 runStage[stage] = false
-                reasons[stage] = "RPM test version"
+                reasons[stage] = 'RPM test version'
             }
         }
         displayRunStage(reasons)
@@ -140,7 +141,7 @@ void updateRunStage() {
 
     // Handle user setting CI_FULL_BULLSEYE_REPORT
     if (params.CI_FULL_BULLSEYE_REPORT) {
-        println("updateRunStage: Detected CI_FULL_BULLSEYE_REPORT, skipping unrelated stages")
+        println('updateRunStage: Detected CI_FULL_BULLSEYE_REPORT, skipping unrelated stages')
         for (stage in runStage.keySet()) {
             if (stage in ['Build on EL 9 with Bullseye',
                           'Unit Test',
@@ -148,10 +149,11 @@ void updateRunStage() {
                           'NLT with Bullseye',
                           'Functional on EL 9']) {
                 runStage[stage] = true
-                reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
-            } else if (stage.contains('Functional Hardware')) {
+                reasons[stage] = 'CI_FULL_BULLSEYE_REPORT'
+            } else if (stage.contains('Functional Hardware')
+                        || stage.contains('Functional Cluster Box')) {
                 runStage[stage] = true
-                reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
+                reasons[stage] = 'CI_FULL_BULLSEYE_REPORT'
             } else if (stage in ['Build on EL 9',
                                  'Build on Leap 15',
                                  'NLT',
@@ -165,7 +167,7 @@ void updateRunStage() {
                                  'Test RPMs on EL 9.6',
                                  'Test RPMs on Leap 15.5']) {
                 runStage[stage] = false
-                reasons[stage] = "CI_FULL_BULLSEYE_REPORT"
+                reasons[stage] = 'CI_FULL_BULLSEYE_REPORT'
             }
         }
         displayRunStage(reasons)
@@ -174,14 +176,14 @@ void updateRunStage() {
 
     // Handle user setting CI_BUILD_PACKAGES_ONLY
     if (params.CI_BUILD_PACKAGES_ONLY) {
-        println("updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages")
+        println('updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages')
         for (stage in runStage.keySet()) {
             if (stage.contains('Unit Tests')) {
                 runStage[stage] = false
-                reasons[stage] = "CI_BUILD_PACKAGES_ONLY"
+                reasons[stage] = 'CI_BUILD_PACKAGES_ONLY'
             } else if (stage.contains('Build')) {
                 runStage[stage] = true
-                reasons[stage] = "CI_BUILD_PACKAGES_ONLY"
+                reasons[stage] = 'CI_BUILD_PACKAGES_ONLY'
             }
         }
         displayRunStage(reasons)
@@ -191,20 +193,21 @@ void updateRunStage() {
     // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
     if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
         println(
-            "updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas")
+            'updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas')
         displayRunStage(reasons)
         return
     }
 
     // Update stage running based on commit pragmas
-    println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
+    println('updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}')
     Map<String, String> commitPragmas = envToPragmas()
-    println("updateRunStage: Checking skip commit pragmas from commit message:")
+    println('updateRunStage: Checking skip commit pragmas from commit message:')
     commitPragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        /* groovylint-disable-next-line NestedForLoop */
         for (pragma in skipPragmas) {
             // commitPragmas will already contain lower case keys from pragmasToMap()
             println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
@@ -222,17 +225,18 @@ void updateRunStage() {
 
     // Handle quick functional commit pragma
     if (quickFunctional()) {
-        println("updateRunStage: Detected quick functional testing")
+        println('updateRunStage: Detected quick functional testing')
         // These stages must be run for functional testing
         for (stage in ['Pre-build', 'Python Bandit check', 'Build']) {
             runStage[stage] = true
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // These stages are unrelated to functional testing and should be skipped
+        /* groovylint-disable-next-line BracesForForLoop */
         for (stage in ['Unit Tests', 'Fault injection testing',
                        'Test RPMs on EL 9.6', 'Test RPMs on Leap 15.5']) {
             runStage[stage] = false
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // Build stages should only be run if their RPMs are needed
         String hwBuildStage = 'Build on '
@@ -259,13 +263,13 @@ void updateRunStage() {
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
             runStage[stage] = false
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // The mapped build stage must be run to generate RPMs for the functional test stage
         for (stage in testBuildStage.keySet()) {
             if (runStage[stage]) {
                 runStage[testBuildStage[stage]] = true
-                reasons[testBuildStage[stage]] = "Quick functional testing"
+                reasons[testBuildStage[stage]] = 'Quick functional testing'
             }
         }
     }
@@ -275,7 +279,7 @@ void updateRunStage() {
 
 // Log which stages will be run and why based on the current state of the runStage map
 void displayRunStage(Map reasons = [:]) {
-    println("Stage run conditions:")
+    println('Stage run conditions:')
     for (stage in runStage.keySet()) {
         String reason = reasons.get(stage, 'default')
         if (runStage[stage]) {
@@ -287,6 +291,7 @@ void displayRunStage(Map reasons = [:]) {
 }
 
 // Get a list of skip commit pragmas to check for a given stage name
+/* groovylint-disable-next-line MethodSize */
 List<String> getStageNameSkipPragmas(String stageName) {
     String stagePragma = "skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
     List<String> pragmas = []
@@ -295,13 +300,11 @@ List<String> getStageNameSkipPragmas(String stageName) {
     if (stageName in ['Cancel Previous Builds', 'Pre-build']) {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
     } else if (stageName == 'Python Bandit check') {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
         // Compatibility with existing commit pragmas
         pragmas.add(stagePragma.replace('-bandit-check', '-bandit'))
-
     } else if (stageName.contains('Build')) {
         // Add skip pragma for parent stage
         if (stageName != 'Build') {
@@ -313,7 +316,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('build-on-')) {
             pragmas.add(stagePragma.replace('build-on-', 'build-'))
         }
-
     } else if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
         // Add skip pragma for parent stage
         if (stageName != 'Unit Tests') {
@@ -325,7 +327,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('-with-')) {
             pragmas.add(stagePragma.replace('-with-', '-'))
         }
-
     } else if (stageName == 'Test' || stageName.contains('Functional on')
             || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
         // Add skip pragma for parent stage
@@ -350,7 +351,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
     } else if (stageName.contains('Hardware') || stageName.contains('Cluster Box')) {
         // Add skip pragma for parent stage
         if (stageName != 'Test Hardware') {
@@ -374,6 +374,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
     List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
     List<String> copyPragmas = pragmas.clone()
     for (distro in distros) {
+        /* groovylint-disable-next-line NestedForLoop */
         for (_pragma in copyPragmas) {
             if (_pragma.contains("-${distro}-")) {
                 Integer _index = pragmas.indexOf(_pragma)
@@ -398,7 +399,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
 
 // Initialize the runStage map with the current state of the build parameters and any commit
 // pragmas related to skipping/running stages. Should only be called once per build.
-def setupRunStage() {
+void setupRunStage() {
     pragmasToEnv()
     update_default_commit_pragmas()
     updateRunStage()
@@ -544,16 +545,13 @@ Boolean builtWithBullseye() {
 // Get the inst_rpms argument for the unitTest method
 String unitTestInstRpms(String distro='el9', Boolean bullseye=false) {
     return sh(
-        script: "ci/unit/required_packages.sh ${distro} ${bullseye.toString()}",
+        script: "ci/unit/required_packages.sh ${distro} ${bullseye}",
         returnStdout: true).trim()
 }
 
 // Get the compiler argument for the unitTest method
 String unitTestCompiler(Boolean bullseye=false) {
-    if (bullseye) {
-        return 'covc'
-    }
-    return 'gcc'
+    return bullseye ? 'covc' : 'gcc'
 }
 
 // Get the packages to install for functional testing
@@ -572,6 +570,8 @@ String functionalInstRpms(String otherPackages, Boolean bullseye=false, String r
     }
     return packages
 }
+
+final List<String> PRODUCT_ARTIFACTS = ['daos', 'deps', 'bullseye']
 
 pipeline {
     agent { label 'lightweight' }
@@ -909,7 +909,7 @@ pipeline {
                             name: 'Build on EL 9',
                             runStage: shouldStageRun('Build on EL 9'),
                             jobStatus: job_status_internal,
-                            dockerTag: jobStatusKey("build-el9-gcc").toLowerCase(),
+                            dockerTag: jobStatusKey('build-el9-gcc').toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
@@ -920,6 +920,7 @@ pipeline {
                                              " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.el.9 .',
                             installScript: "./ci/rpm/install_deps.sh el9 ${env.DAOS_RELVAL} false",
+                            /* groovylint-disable-next-line GStringExpressionWithinString */
                             buildScript: './ci/rpm/build_deps.sh false ${BULLSEYE_KEY}',
                             stepMethod: { args -> sconsBuild(args) },
                             stepMethodArgs: [
@@ -929,7 +930,7 @@ pipeline {
                                 stash_opt: true,
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            configLog: "config.log-el9-gcc",
+                            configLog: 'config.log-el9-gcc',
                             valgrindSconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'no',
@@ -942,7 +943,7 @@ pipeline {
                                 condition: 'success',
                                 target: 'el9',
                                 rpmlint: false,
-                                productArtifacts: ['daos', 'deps', 'bullseye']
+                                productArtifacts: PRODUCT_ARTIFACTS
                             ],
                             archiveArtifactsArgs: [artifacts: 'artifacts/el9/**'],
                         ),
@@ -950,7 +951,7 @@ pipeline {
                             name: 'Build on Leap 15',
                             runStage: shouldStageRun('Build on Leap 15'),
                             jobStatus: job_status_internal,
-                            dockerTag: jobStatusKey("build-leap15-gcc").toLowerCase(),
+                            dockerTag: jobStatusKey('build-leap15-gcc').toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
@@ -960,6 +961,7 @@ pipeline {
                                              " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.leap.15 .',
                             installScript: "./ci/rpm/install_deps.sh suse.lp156 ${env.DAOS_RELVAL} false",
+                            /* groovylint-disable-next-line GStringExpressionWithinString */
                             buildScript: './ci/rpm/build_deps.sh false ${BULLSEYE_KEY}',
                             stepMethod: { args -> sconsBuild(args) },
                             stepMethodArgs: [
@@ -967,13 +969,13 @@ pipeline {
                                 build_deps: 'yes',
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            configLog: "config.log-leap15-gcc",
+                            configLog: 'config.log-leap15-gcc',
                             generateRpmsScript: "./ci/rpm/gen_rpms.sh suse.lp156 ${env.DAOS_RELVAL} false",
                             buildRpmPostArgs: [
                                 condition: 'success',
                                 target: 'leap15',
                                 rpmlint: false,
-                                productArtifacts: ['daos', 'deps', 'bullseye']
+                                productArtifacts: PRODUCT_ARTIFACTS
                             ],
                             archiveArtifactsArgs: [artifacts: 'artifacts/leap15/**'],
                         ),
@@ -981,7 +983,7 @@ pipeline {
                             name: 'Build on EL 9 with Bullseye',
                             runStage: shouldStageRun('Build on EL 9 with Bullseye'),
                             jobStatus: job_status_internal,
-                            dockerTag: jobStatusKey("build-el9-covc").toLowerCase(),
+                            dockerTag: jobStatusKey('build-el9-covc').toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
@@ -994,6 +996,7 @@ pipeline {
                                              ' --build-arg CODE_COVERAGE=true' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
                             installScript: "./ci/rpm/install_deps.sh el9 ${env.DAOS_RELVAL} true",
+                            /* groovylint-disable-next-line GStringExpressionWithinString */
                             buildScript: './ci/rpm/build_deps.sh true ${BULLSEYE_KEY}',
                             stepMethod: { args -> sconsBuild(args) },
                             stepMethodArgs: [
@@ -1004,13 +1007,13 @@ pipeline {
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release' +
                                             ' COMPILER=covc'
                             ],
-                            configLog: "config.log-el9-covc",
+                            configLog: 'config.log-el9-covc',
                             generateRpmsScript: "./ci/rpm/gen_rpms.sh el9 ${env.DAOS_RELVAL} true",
                             buildRpmPostArgs: [
                                 condition: 'success',
                                 target: 'el9-bullseye',
                                 rpmlint: false,
-                                productArtifacts: ['daos', 'deps', 'bullseye']
+                                productArtifacts: PRODUCT_ARTIFACTS
                             ],
                             archiveArtifactsArgs: [artifacts: 'artifacts/el9-bullseye/**'],
                         )
@@ -1047,7 +1050,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_logs/'],
-                                         compiler: unitTestCompiler()
+                                         compiler: unitTestCompiler(builtWithBullseye())
                             job_status_update()
                         }
                     }
@@ -1075,7 +1078,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_bdev_logs/'],
-                                         compiler: unitTestCompiler()
+                                         compiler: unitTestCompiler(builtWithBullseye())
                             job_status_update()
                         }
                     }
@@ -1092,6 +1095,7 @@ pipeline {
                         // NLT memchecks the valgrind-tagged build, not the shared -race one.
                         unstash 'opt-daos-valgrind'
                         job_step_update(
+                            /* groovylint-disable-next-line LineLength */
                             unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1').toInteger(),
                                      inst_repos: daosRepos(),
                                      inst_rpms: unitTestInstRpms('el9', false),
@@ -1105,6 +1109,7 @@ pipeline {
                                                   ' --log-usage-export nltr.json' +
                                                   ' --log-base-dir nlt_logs' +
                                                   ' --class-name nlt' +
+                                                  /* groovylint-disable-next-line LineLength */
                                                   " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
                                                   /* groovylint-disable-next-line LineLength */
                                                   (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
@@ -1399,6 +1404,7 @@ pipeline {
                     }
                     post {
                         always {
+                            /* groovylint-disable-next-line DuplicateListLiteral */
                             unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          with_valgrind: '',
@@ -1669,7 +1675,7 @@ pipeline {
                             name: 'Bullseye Report',
                             runStage: builtWithBullseye(),
                             jobStatus: job_status_internal,
-                            dockerTag: jobStatusKey("build-el9-covc").toLowerCase(),
+                            dockerTag: jobStatusKey('build-el9-covc').toLowerCase(),
                             dockerBuildArgs: dockerBuildArgs(repo_type: 'stable',
                                                              deps_build: false,
                                                              parallel_build: true) +
