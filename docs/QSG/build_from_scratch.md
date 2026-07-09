@@ -45,11 +45,11 @@ distribution.
 
 ### RHEL and Clones
 
-For RHEL8-compatible distributions (e.g. Rocky Linux 8 or AlmaLinux 8), please
+For RHEL-compatible distributions (e.g. Rocky Linux 9 or AlmaLinux 9), please
 run the following command from the DAOS tree as root or via sudo:
 
 ```bash
-$ sudo ./utils/scripts/install-el8.sh
+$ sudo ./utils/scripts/install-el9.sh
 ```
 
 ### openSUSE
