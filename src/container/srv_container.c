@@ -1887,9 +1887,12 @@ retry:
 		}
 		cont_put(cont);
 
-		rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
-		if (rc)
-			D_GOTO(out_put, rc);
+		eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
+		if (eph_ldr == NULL) {
+			rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
+			if (rc)
+				D_GOTO(out_put, rc);
+		}
 	}
 
 	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
