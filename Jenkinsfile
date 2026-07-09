@@ -929,7 +929,7 @@ pipeline {
                                 stash_opt: true,
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            configLogArtifacts: "config.log-el9-gcc",
+                            configLog: "config.log-el9-gcc",
                             valgrindSconsBuildArgs: [
                                 parallel_build: true,
                                 build_deps: 'no',
@@ -939,10 +939,12 @@ pipeline {
                             ],
                             generateRpmsScript: "./ci/rpm/gen_rpms.sh el9 ${env.DAOS_RELVAL} false",
                             buildRpmPostArgs: [
+                                condition: 'success',
                                 target: 'el9',
                                 rpmlint: false,
                                 productArtifacts: ['daos', 'deps', 'bullseye']
                             ],
+                            archiveArtifactsArgs: [artifacts: 'artifacts/el9/**'],
                         ),
                         'Build on Leap 15': scriptedDockerStage(
                             name: 'Build on Leap 15',
@@ -965,13 +967,15 @@ pipeline {
                                 build_deps: 'yes',
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release'
                             ],
-                            configLogArtifacts: "config.log-leap15-gcc",
+                            configLog: "config.log-leap15-gcc",
                             generateRpmsScript: "./ci/rpm/gen_rpms.sh suse.lp156 ${env.DAOS_RELVAL} false",
                             buildRpmPostArgs: [
+                                condition: 'success',
                                 target: 'leap15',
                                 rpmlint: false,
                                 productArtifacts: ['daos', 'deps', 'bullseye']
                             ],
+                            archiveArtifactsArgs: [artifacts: 'artifacts/leap15/**'],
                         ),
                         'Build on EL 9 with Bullseye': scriptedDockerStage(
                             name: 'Build on EL 9 with Bullseye',
@@ -1000,13 +1004,15 @@ pipeline {
                                 scons_args: sconsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release' +
                                             ' COMPILER=covc'
                             ],
-                            configLogArtifacts: "config.log-el9-covc",
-                            generateRpmsScript: "./ci/rpm/gen_rpms.sh el9 ${env.DAOS_RELVAL} false",
+                            configLog: "config.log-el9-covc",
+                            generateRpmsScript: "./ci/rpm/gen_rpms.sh el9 ${env.DAOS_RELVAL} true",
                             buildRpmPostArgs: [
+                                condition: 'success',
                                 target: 'el9-bullseye',
                                 rpmlint: false,
                                 productArtifacts: ['daos', 'deps', 'bullseye']
                             ],
+                            archiveArtifactsArgs: [artifacts: 'artifacts/el9-bullseye/**'],
                         )
                     )
                 }
