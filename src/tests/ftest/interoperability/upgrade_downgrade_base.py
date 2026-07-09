@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -619,7 +619,9 @@ class UpgradeDowngradeBase(IorTestBase):
             self.verify_write_read(hosts_client, tmp_cont, write=True, read=True)
             tmp_cont.destroy()
 
-            if self.current_server_version.major > self.current_client_version.major:
+            if (self.current_server_version.major > self.current_client_version.major) or \
+                    (self.current_server_version == "2.8.0"
+                     and self.current_client_version == "2.6.5"):
                 # Across major versions, old client should not be able to access a new server pool
                 self.log_step("Verify old client cannot access new pool")
                 tmp_pool = self.get_pool(connect=False)
