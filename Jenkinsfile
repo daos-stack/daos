@@ -1642,15 +1642,16 @@ pipeline {
                             runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
                             pragma_suffix:'-cb-medium-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: "cb,medium",
+                            inst_rpms: functionalInstRpms(
+                                'mercury-libfabric', paramsValue('CI_FULL_BULLSEYE_REPORT', false)),
+                            stage_tags: 'cb,medium',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            coverage_stash: 'func_cb_medium_md_on_ssd_bullseye',
+                            image_version: 'el9.7',
+                            bullseye: paramsValue('CI_FULL_BULLSEYE_REPORT', false)
                         ),
                     )
                 }
