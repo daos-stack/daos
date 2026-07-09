@@ -26,6 +26,7 @@ timeouts:
   test_daos_rebuild_simple: 2400
   test_daos_drain_simple: 3720
   test_daos_extend_simple: 3600
+  test_daos_extend_simple_13: 600
   test_daos_rebuild_interactive: 1185
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
@@ -105,6 +106,7 @@ daos_tests:
     test_daos_rebuild_simple: 1
     test_daos_drain_simple: 1
     test_daos_extend_simple: 1
+    test_daos_extend_simple_13: 1
     test_daos_rebuild_interactive: 1
     test_daos_oid_allocator: 1
     test_daos_checksum: 1
@@ -141,6 +143,7 @@ daos_tests:
     test_daos_degraded_ec: DAOS_Degraded_EC
     test_daos_dedup: DAOS_Dedup
     test_daos_extend_simple: DAOS_Extend_Simple
+    test_daos_extend_simple_13: DAOS_Extend_Simple_13
     test_daos_rebuild_interactive: DAOS_Rebuild_Interactive
     test_daos_upgrade: DAOS_Upgrade
     test_daos_pipeline: DAOS_Pipeline
@@ -165,6 +168,7 @@ daos_tests:
     test_daos_rebuild_simple: v
     test_daos_drain_simple: b
     test_daos_extend_simple: B
+    test_daos_extend_simple_13: B
     test_daos_rebuild_interactive: j
     test_daos_oid_allocator: O
     test_daos_checksum: z
@@ -182,6 +186,7 @@ daos_tests:
     test_daos_rebuild_simple: -s3
     test_daos_drain_simple: -s3
     test_daos_extend_simple: -s3
+    test_daos_extend_simple_13: -s3 -u subtests="13"
     test_daos_rebuild_interactive: -s3
     test_daos_oid_allocator: -s5
   stopped_ranks:
