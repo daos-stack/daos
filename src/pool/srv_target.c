@@ -2802,7 +2802,6 @@ ds_pool_tgt_discard_ult(void *data)
 {
 	struct ds_pool         *pool;
 	struct tgt_discard_arg *arg = data;
-	uint32_t                ex_status;
 	int                     discarding;
 	int                     rc;
 
@@ -2816,9 +2815,15 @@ ds_pool_tgt_discard_ult(void *data)
 		D_GOTO(free, rc = 0);
 	}
 
-	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
-	rc        = ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
-					      DSS_ULT_DEEP_STACK);
+	/*
+	 * arg->tgt_list has already been validated and filtered by the pool service
+	 * leader against the authoritative pool map (see pool_discard() in srv_pool.c),
+	 * so there is no need to further exclude targets based on this engine's own
+	 * (possibly stale) pool map here. pool_child_discard() only discards targets
+	 * that are present in arg->tgt_list.
+	 */
+	rc = ds_pool_thread_collective(arg->pool_uuid, 0 /* exclude_status */, pool_child_discard,
+				       arg, DSS_ULT_DEEP_STACK);
 
 	ABT_mutex_lock(pool->sp_mutex);
 	pool->sp_discard_status = rc;
