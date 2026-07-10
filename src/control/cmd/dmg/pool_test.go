@@ -1503,7 +1503,7 @@ func Test_checkPoolCreateTierRatioWarning(t *testing.T) {
 				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TiByte}, // 0.98% ratio
 				MdOnSsdActive: false,
 			},
-			expWarning: "NOTICE: storage tier ratio is less than 1.00%, DAOS performance will suffer!",
+			expWarning: "storage tier ratio is less than 1.00%, DAOS performance may suffer!",
 		},
 		"PMem mode with acceptable tier ratio - no warning": {
 			resp: &control.PoolCreateResp{
@@ -1524,7 +1524,7 @@ func Test_checkPoolCreateTierRatioWarning(t *testing.T) {
 				TierBytes:     []uint64{99 * humanize.GiByte, 9901 * humanize.GiByte}, // 0.99% ratio
 				MdOnSsdActive: false,
 			},
-			expWarning: "NOTICE: storage tier ratio is less than 1.00%, DAOS performance will suffer!",
+			expWarning: "storage tier ratio is less than 1.00%, DAOS performance may suffer!",
 		},
 		"MD-on-SSD mode with low tier ratio - no warning": {
 			resp: &control.PoolCreateResp{
