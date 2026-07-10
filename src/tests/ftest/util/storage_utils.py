@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -777,3 +777,19 @@ class StorageInfo():
             filter(
                 partial(is_not, None),
                 itertools.chain(*itertools.zip_longest(*numa_devices.values()))))
+
+
+def storage_numa_nodes(test):
+    """Get the number of unique available storage NUMA nodes
+
+    Args:
+        test (Test): avocado test object
+
+    Returns:
+        list: list of unique available storage NUMA nodes
+    """
+    info = StorageInfo(test.log, test.hostlist_servers)
+    info.scan()
+    numa_nodes = list(set([device.numa_node for device in info.devices]))
+    test.log.info("Detected storage NUMA nodes: %s", numa_nodes)
+    return numa_nodes

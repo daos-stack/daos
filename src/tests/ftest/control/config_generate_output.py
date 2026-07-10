@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,6 +10,7 @@ import yaml
 from apricot import TestWithServers
 from dmg_utils import DmgCommand
 from exception_utils import CommandFailure
+from storage_utils import storage_numa_nodes
 
 
 class ConfigGenerateOutput(TestWithServers):
@@ -24,6 +26,7 @@ class ConfigGenerateOutput(TestWithServers):
         super().__init__(*args, **kwargs)
 
         self.def_provider = "ofi+tcp"
+        self.allow_numa_imbalance = False
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)
@@ -31,6 +34,16 @@ class ConfigGenerateOutput(TestWithServers):
         self.numa_node_to_interfaces = defaultdict(set)
         self.interface_to_providers = defaultdict(set)
         self.interface_set = set()
+
+    def setUp(self):
+        """Set up each test case."""
+        super().setUp()
+
+        # Determine the number of available numa nodes. This is be used to determine if the
+        # --allow-numa-imbalance flag is needed when generating running config generate.
+        self.allow_numa_imbalance = False
+        if len(storage_numa_nodes(self)) > 1:
+            self.allow_numa_imbalance = True
 
     def prepare_expected_data(self):
         """Prepare expected values.
@@ -147,7 +160,8 @@ class ConfigGenerateOutput(TestWithServers):
 
         try:
             result = dmg.config_generate(
-                mgmt_svc_replicas=host_port_input, net_provider=self.def_provider)
+                mgmt_svc_replicas=host_port_input, net_provider=self.def_provider,
+                allow_numa_imbalance=self.allow_numa_imbalance)
         except CommandFailure as err:
             errors.append("Unexpected failure! {}".format(err))
 
@@ -186,7 +200,7 @@ class ConfigGenerateOutput(TestWithServers):
         5. Repeat for all engines.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_basic_config
         """
@@ -195,7 +209,8 @@ class ConfigGenerateOutput(TestWithServers):
 
         # 1. Call dmg config generate.
         result = self.get_dmg_command().config_generate(
-            mgmt_svc_replicas="wolf-a", net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", net_provider=self.def_provider,
+            allow_numa_imbalance=self.allow_numa_imbalance)
         generated_yaml = yaml.safe_load(result.stdout)
 
         errors = []
@@ -264,7 +279,7 @@ class ConfigGenerateOutput(TestWithServers):
         7. Repeat for all engines.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_tmpfs_scm_config
         """
@@ -276,7 +291,7 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate.
         result = self.get_dmg_command().config_generate(
             mgmt_svc_replicas="wolf-a", net_provider=self.def_provider, use_tmpfs_scm=True,
-            control_metadata_path=self.test_dir)
+            control_metadata_path=self.test_dir, allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status != 0:
             errors.append("Config generate failed with use_tmpfs_scm = True!")
         generated_yaml = yaml.safe_load(result.stdout)
@@ -332,7 +347,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --ms-replica with single MS replica with and without port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
         :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_single
         """
@@ -350,7 +365,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --ms-replicas with odd number of MS replicas.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
         :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_odd
         """
@@ -368,7 +383,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --ms-replicas with invalid port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
         :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_invalid
         """
@@ -391,7 +406,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --ms-replicas with the same MS replicas repeated.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
         :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_same_ap_repeated
         """
@@ -412,7 +427,7 @@ class ConfigGenerateOutput(TestWithServers):
         3. Call dmg config generate --num-engines=<max_engine + 1> Should fail.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_num_engines
         """
@@ -433,7 +448,8 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<1 to max_engine>
         for num_engines in range(1, max_engine + 1):
             result = dmg.config_generate(
-                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_provider=self.def_provider)
+                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_provider=self.def_provider,
+                allow_numa_imbalance=self.allow_numa_imbalance)
             generated_yaml = yaml.safe_load(result.stdout)
             actual_num_engines = len(generated_yaml["engines"])
 
@@ -445,7 +461,8 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Verify that max_engine + 1 fails.
         result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", num_engines=max_engine + 1, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", num_engines=max_engine + 1, net_provider=self.def_provider,
+            allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status == 0:
             errors.append("Host + invalid num engines succeeded with {}!".format(max_engine + 1))
 
@@ -460,7 +477,7 @@ class ConfigGenerateOutput(TestWithServers):
         verify that there's no bdev_list field.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_scm_only
         """
@@ -474,7 +491,8 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate with --scm-only=False
         result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", scm_only=False, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", scm_only=False, net_provider=self.def_provider,
+            allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status != 0:
             errors.append("config generate failed with scm_only = False!")
         generated_yaml = yaml.safe_load(result.stdout)
@@ -493,7 +511,8 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate with --scm-only=True
         result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", scm_only=True, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", scm_only=True, net_provider=self.def_provider,
+            allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status != 0:
             errors.append("config generate failed with scm_only = True!")
         generated_yaml = yaml.safe_load(result.stdout)
@@ -526,7 +545,7 @@ class ConfigGenerateOutput(TestWithServers):
         "fabric_iface".
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_net_class
         """
@@ -550,7 +569,7 @@ class ConfigGenerateOutput(TestWithServers):
             # dmg config generate should pass.
             result = dmg.config_generate(
                 mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_class="infiniband",
-                net_provider=self.def_provider)
+                net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
 
             if result.exit_status != 0:
                 msg = "config generate failed with --net-class=infiniband "\
@@ -576,7 +595,7 @@ class ConfigGenerateOutput(TestWithServers):
         # --net-class=infiniband. Too many engines. Should fail.
         result = dmg.config_generate(
             mgmt_svc_replicas="wolf-a", num_engines=ib_count + 1, net_class="infiniband",
-            net_provider=self.def_provider)
+            net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
                 ib_count + 1)
@@ -595,7 +614,7 @@ class ConfigGenerateOutput(TestWithServers):
             # dmg config generate should pass.
             result = dmg.config_generate(
                 mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_class="ethernet",
-                net_provider=self.def_provider)
+                net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
 
             if result.exit_status != 0:
                 msg = "config generate failed with --net-class=ethernet --num-engines = {}!".format(
@@ -621,7 +640,7 @@ class ConfigGenerateOutput(TestWithServers):
         # --net-class=ethernet. Too many engines. Should fail.
         result = dmg.config_generate(
             mgmt_svc_replicas="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
-            net_provider=self.def_provider)
+            net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(
                 eth_count + 1)

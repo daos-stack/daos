@@ -1380,7 +1380,7 @@ class DmgCommand(DmgCommandBase):
 
     def config_generate(self, mgmt_svc_replicas, num_engines=None, scm_only=False,
                         net_class=None, net_provider=None, use_tmpfs_scm=False,
-                        control_metadata_path=None):
+                        control_metadata_path=None, allow_numa_imbalance=False):
         """Produce a server configuration.
 
         Args:
@@ -1397,6 +1397,8 @@ class DmgCommand(DmgCommandBase):
                 as SCM. Defaults to False.
             control_metadata_path (str): External directory provided to store control
                 metadata in MD-on-SSD mode. Defaults to None.
+            allow_numa_imbalance (bool, optional): Whether to allow NUMA imbalance in
+                the generated config.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1407,7 +1409,8 @@ class DmgCommand(DmgCommandBase):
             ("config", "generate"), mgmt_svc_replicas=mgmt_svc_replicas,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
             net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
-            control_metadata_path=control_metadata_path)
+            control_metadata_path=control_metadata_path,
+            allow_numa_imbalance=allow_numa_imbalance)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.

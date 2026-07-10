@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1073,10 +1073,10 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 
 func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
 	for name, tc := range map[string]struct {
-		sd              storageDetails
-		allowImbalance  bool
-		expErr          error
-		expSD           storageDetails // expected details after updates
+		sd             storageDetails
+		allowImbalance bool
+		expErr         error
+		expSD          storageDetails // expected details after updates
 	}{
 		"no ssds": {
 			sd: storageDetails{

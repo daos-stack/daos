@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -10,6 +10,7 @@ import os
 import yaml
 from apricot import TestWithServers
 from server_utils import ServerFailed
+from storage_utils import storage_numa_nodes
 
 
 class ConfigGenerateRun(TestWithServers):
@@ -20,6 +21,21 @@ class ConfigGenerateRun(TestWithServers):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a ConfigGenerateRun object."""
+        super().__init__(*args, **kwargs)
+        self.allow_numa_imbalance = False
+
+    def setUp(self):
+        """Set up each test case."""
+        super().setUp()
+
+        # Determine the number of available numa nodes. This is be used to determine if the
+        # --allow-numa-imbalance flag is needed when generating running config generate.
+        self.allow_numa_imbalance = False
+        if len(storage_numa_nodes(self)) > 1:
+            self.allow_numa_imbalance = True
 
     def test_config_generate_run(self):
         """Run daos_server with generated server config file.
@@ -36,7 +52,7 @@ class ConfigGenerateRun(TestWithServers):
         Note: When running locally, use 50 sec timeout in DaosServerCommand.__init__()
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateRun,test_config_generate_run
         """
@@ -58,7 +74,7 @@ class ConfigGenerateRun(TestWithServers):
         result = self.get_dmg_command().config_generate(
             mgmt_svc_replicas=server_host, num_engines=num_engines, scm_only=scm_only,
             net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
-            control_metadata_path=control_metadata)
+            control_metadata_path=control_metadata, allow_numa_imbalance=self.allow_numa_imbalance)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
