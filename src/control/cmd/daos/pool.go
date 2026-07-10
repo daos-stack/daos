@@ -32,6 +32,17 @@ import (
 // the build for genuine system headers.  Declare getenv() directly instead.
 extern char *getenv(const char *name);
 
+// Compiled-in default LSAN options, used whenever ASAN_OPTIONS/LSAN_OPTIONS is not
+// set in the environment.  Without this hook, LSAN falls back to its own default of
+// detect_leaks=1 and performs a stop-the-world ptrace-based scan whenever the
+// process exits through any path that runs libc atexit handlers.  That scan aborts
+// with "LeakSanitizer has encountered a fatal error" on some CI hosts (likely a
+// ptrace restriction).  Values explicitly set via ASAN_OPTIONS/LSAN_OPTIONS in the
+// environment still take precedence over this compiled-in default.
+const char *__lsan_default_options(void) {
+	return "detect_leaks=0";
+}
+
 // Weak reference — resolves to the real LSAN function in ASAN builds, NULL otherwise.
 extern void __attribute__((weak)) __lsan_do_leak_check(void);
 

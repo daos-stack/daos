@@ -13,6 +13,23 @@ package main
 // the build for genuine system headers.  Declare getenv() directly instead.
 extern char *getenv(const char *name);
 
+// Compiled-in default LSAN options, used whenever ASAN_OPTIONS/LSAN_OPTIONS is not
+// set in the environment.  daos_server_helper is spawned as a privileged sub-process
+// by daos_server (see pbin.ExecReq, which sets child.Env = os.Environ()) and so only
+// inherits whatever environment daos_server itself was started with -- routine
+// invocations (e.g. "daos_server nvme reset" from the ftest framework) do not set
+// ASAN_OPTIONS at all.  Without this hook, LSAN falls back to its own default of
+// detect_leaks=1 and performs a stop-the-world ptrace-based scan whenever the
+// process exits through any path that runs libc atexit handlers (including from
+// within CGO/SPDK C code, which does not bypass atexit() the way Go's own exit path
+// does).  That scan aborts with "LeakSanitizer has encountered a fatal error" on
+// some CI hosts (likely a ptrace restriction).  Values explicitly set via
+// ASAN_OPTIONS/LSAN_OPTIONS in the environment still take precedence over this
+// compiled-in default.
+const char *__lsan_default_options(void) {
+	return "detect_leaks=0";
+}
+
 // Weak references — resolve to real ASAN/LSAN functions in ASAN builds, NULL otherwise.
 extern void __attribute__((weak)) __lsan_do_leak_check(void);
 
