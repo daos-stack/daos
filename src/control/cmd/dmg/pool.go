@@ -228,7 +228,8 @@ func checkPoolCreateTierRatioWarning(resp *control.PoolCreateResp) string {
 
 	// Warn if ratio is below minimum for PMem mode (SCM:NVMe)
 	if percentage < minPercentage {
-		return fmt.Sprintf("NOTICE: storage tier ratio is less than %0.2f%%, DAOS performance will suffer!", minPercentage)
+		return fmt.Sprintf("storage tier ratio is less than %0.2f%%, DAOS performance may suffer!",
+			minPercentage)
 	}
 
 	return ""
