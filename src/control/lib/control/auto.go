@@ -483,32 +483,6 @@ func (nsm numaSSDsMap) keys() (keys []int) {
 // divisible by the number of engines, only the maximum divisible number of SSDs are used and
 // remainder SSDs are not included in the generated configuration.
 func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMap) error {
-	// Check if any NUMA node has VMD devices
-	//	hasVMD := false
-	//	for _, ssds := range sd.NumaSSDs {
-	//		if ssds.HasVMD() {
-	//			hasVMD = true
-	//			break
-	//		}
-	//	}
-
-	//	if allowImbalance {
-	//		if hasVMD {
-	//			// VMD domains cannot be redistributed across NUMA nodes, but we can accept
-	//			// the imbalance and keep VMD domains on their original NUMA nodes
-	//			log.Debug("allow-numa-imbalance enabled with VMD devices, accepting imbalanced VMD configuration")
-	//			return nil
-	//		}
-	req.Log.Debug("allow-numa-imbalance enabled, distributing SSDs equally across engines")
-	// TODO: could continue here?? maybe not
-	//		return distributeSsdsIgnNuma(log, sd)
-	//	}
-
-	// Assume numaCount contiguous IDs and split appropriately.
-	//	numaIDs := sd.NumaSSDs.keys()
-	//	if len(numaIDs) == 0 {
-	//		return errors.New("no numa nodes with SSDs found")
-	//	}
 	if numaCount == 0 {
 		return errors.New("no numa nodes detected")
 	}
@@ -516,13 +490,11 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 		return errors.New("no ssds detected")
 	}
 
+	req.Log.Debug("allow-numa-imbalance enabled, distributing SSDs equally across engines")
+
 	// Collect all SSDs from all NUMA nodes
 	var allSSDs []string
 	for _, ssdAddrs := range nsm {
-		//	for numaID := 0; numaID < numaCount; mumaID++ {
-		//	for _, numaID := range numaIDs {
-		//
-		//		ssds := sd.NumaSSDs[numaID]
 		addrs := ssdAddrs.Strings()
 
 		if ssdAddrs.HasVMD() {
@@ -532,17 +504,14 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 			if err != nil {
 				return errors.Wrap(err, "converting backing addresses to vmd")
 			}
-			//			nrSSDs = newAddrSet.Len()
 			addrs = newAddrSet.Strings()
 		}
 		allSSDs = append(allSSDs, addrs...)
 	}
 
+	// Divide SSDs across NUMA rather than requested number of engines to preserve how the
+	// selection algorithms work when deciding on NUMA-to-engine mappings.
 	totalSSDs := len(allSSDs)
-	//	// TODO: take numaIDs as parameter based on network interfaces or engine nr CLI input
-	//	nrEngines := len(numaIDs)
-	// Divide SSDs across NUMA Rather than requested number of engines to preserve how the
-	// selection algorithms work
 	ssdsPerNuma := totalSSDs / numaCount
 	remainder := totalSSDs % numaCount
 	ssdsToUse := ssdsPerNuma * numaCount
@@ -553,13 +522,16 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 			totalSSDs, numaCount, ssdsToUse, ssdsPerNuma, remainder)
 	}
 
-	req.Log.Debugf("distributing %d SSDs equally across %d engines (%d per engine)",
+	req.Log.Debugf("distributing %d SSDs equally across %d NUMA nodes (%d per node)",
 		ssdsToUse, numaCount, ssdsPerNuma)
+
+	// Clear existing map and repopulate with redistributed SSDs
+	for k := range nsm {
+		delete(nsm, k)
+	}
 
 	// Distribute SSDs equally across engines, using only the divisible portion
 	idx := 0
-	//	for i, numaID := range numaIDs {
-	nsm = make(numaSSDsMap)
 	for numaID := 0; numaID < numaCount; numaID++ {
 		numaSSDs := allSSDs[idx : idx+ssdsPerNuma]
 		nsm[numaID] = hardware.MustNewPCIAddressSet(numaSSDs...)
@@ -572,7 +544,6 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 }
 
 // fromNVMe maps NUMA node ID to NVMe SSD PCI address set.
-// TODO: If numa imbalance set, convert vmd-backing addresses then distribute over numa-count.
 func (nsm numaSSDsMap) fromNVMe(req *ConfGenerateReq, ssds storage.NvmeControllers, numaCount int) error {
 	if nsm == nil {
 		return errors.Errorf("%T receiver is nil", nsm)
