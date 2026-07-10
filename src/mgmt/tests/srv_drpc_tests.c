@@ -3343,9 +3343,9 @@ test_drpc_dev_set_faulty_success(void **state)
 static void
 setup_bio_health_drpc_call(Drpc__Call *call, const char *uuid_str)
 {
-	Ctl__BioHealthReq	req = CTL__BIO_HEALTH_REQ__INIT;
-	size_t			len;
-	uint8_t			*body;
+	Ctl__BioHealthReq req = CTL__BIO_HEALTH_REQ__INIT;
+	size_t            len;
+	uint8_t          *body;
 
 	req.dev_uuid = (char *)uuid_str;
 
@@ -3354,13 +3354,13 @@ setup_bio_health_drpc_call(Drpc__Call *call, const char *uuid_str)
 	ctl__bio_health_req__pack(&req, body);
 
 	call->body.data = body;
-	call->body.len = len;
+	call->body.len  = len;
 }
 
 static void
 expect_bio_health_resp_with_fields(Drpc__Response *resp, uint8_t exp_percentage)
 {
-	Ctl__BioHealthResp	*bh_resp = NULL;
+	Ctl__BioHealthResp *bh_resp = NULL;
 
 	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
 	assert_non_null(resp->body.data);
@@ -3376,9 +3376,9 @@ expect_bio_health_resp_with_fields(Drpc__Response *resp, uint8_t exp_percentage)
 static void
 test_drpc_bio_health_query_success(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	uint8_t			test_percentage = 49;
+	Drpc__Call     call            = DRPC__CALL__INIT;
+	Drpc__Response resp            = DRPC__RESPONSE__INIT;
+	uint8_t        test_percentage = 49;
 
 	/* Mock will populate response with test data including percentage_used=49 */
 	setup_bio_health_drpc_call(&call, TEST_UUID);
@@ -3500,7 +3500,7 @@ test_drpc_check_act_success(void **state)
 
 #define SET_FAULTY_TEST(x)	cmocka_unit_test_setup(x, drpc_dev_set_faulty_setup)
 
-#define BIO_HEALTH_TEST(x)	cmocka_unit_test(x)
+#define BIO_HEALTH_TEST(x)      cmocka_unit_test(x)
 
 #define CHECK_START_TEST(x)	cmocka_unit_test(x)
 

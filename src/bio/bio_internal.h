@@ -135,80 +135,59 @@ struct bio_dma_buffer {
 	uint64_t		 bdb_dump_ts;
 };
 
-#define BIO_PROTO_NVME_STATS_LIST					\
-	X(bdh_du_written, "commands/data_units_written",		\
-	  "number of 512b data units written to the controller",	\
-	  "data units", D_TM_COUNTER)					\
-	X(bdh_du_read, "commands/data_units_read",			\
-	  "number of 512b data units read from to the controller",	\
-	  "data units", D_TM_COUNTER)					\
-	X(bdh_write_cmds, "commands/host_write_cmds",			\
-	  "number of write commands completed by to the controller",	\
-	  "cmds", D_TM_COUNTER)						\
-	X(bdh_read_cmds, "commands/host_read_cmds",			\
-	  "number of read commands completed by to the controller",	\
-	  "cmds", D_TM_COUNTER)						\
-	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",		\
-	  "Amount of time the controller is busy with I/O commands",	\
-	  "minutes", D_TM_COUNTER)					\
-	X(bdh_media_errs, "commands/media_errs",			\
-	  "Number of unrecovered data integrity error",			\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_read_errs, "commands/read_errs",				\
-	  "Number of errors reported to the engine on read commands",	\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_write_errs, "commands/write_errs",			\
-	  "Number of errors reported to the engine on write commands",	\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_unmap_errs, "commands/unmap_errs",			\
-	  "Number of errors reported to the engine on unmap/trim commands",\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
-	  "Number of checksum mismatch detected by the engine",		\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_power_cycles, "power_cycles",				\
-	  "Number of power cycles",					\
-	  "cycles", D_TM_COUNTER)					\
-	X(bdh_power_on_hours, "power_on_hours",				\
-	  "Number of power-on hours cycles",				\
-	  "hours", D_TM_COUNTER)					\
-	X(bdh_unsafe_shutdowns, "unsafe_shutdowns",			\
-	  "Number of unsafe shutdowns (no notification prior to power loss)",  \
-	  "shutdowns", D_TM_COUNTER)					\
-	X(bdh_percentage_used, "percentage_used",			\
-	  "Percentage of rated lifetime used - indicates drive endurance consumption (0-100%)",\
-	  "percents", D_TM_GAUGE)					\
-	X(bdh_temp, "temp/current",					\
-	  "Current SSD temperature",					\
-	  "kelvins", D_TM_GAUGE)					\
-	X(bdh_temp_warn, "temp/warn",					\
-	  "Set to 1 if temperature is above threshold",			\
-	  "", D_TM_GAUGE)						\
-	X(bdh_temp_warn_time, "temp/warn_time",				\
-	  "Amount of time the controller operated above warn temp threshold",  \
-	  "minutes", D_TM_COUNTER)					\
-	X(bdh_temp_crit_time, "temp/crit_time",				\
-	  "Amount of time the controller operated above crit temp threshold",  \
-	  "minutes", D_TM_COUNTER)					\
-	X(bdh_avail_spare, "reliability/avail_spare",			\
-	  "Percentage of remaining spare capacity available",		\
-	  "%", D_TM_GAUGE)						\
-	X(bdh_avail_spare_thres, "reliability/avail_spare_threshold",	\
-	  "Threshold for available spare value",			\
-	  "%", D_TM_GAUGE)						\
-	X(bdh_avail_spare_warn, "reliability/avail_spare_warn",		\
-	  "Set to 1 when available spare has fallen below threshold",	\
-	  "", D_TM_GAUGE)						\
-	X(bdh_reliability_warn, "reliability/reliability_warn",		\
-	  "Set to 1 when NVM subsystem has been degraded due to significant "  \
-	  "media-related errors",					\
-	  "", D_TM_GAUGE)						\
-	X(bdh_read_only_warn, "read_only_warn",				\
-	  "Set to 1 when media has been placed in read-only mode",	\
-	  "", D_TM_GAUGE)						\
-	X(bdh_volatile_mem_warn, "volatile_mem_warn",			\
-	  "Set to 1 when volatile memory backup device has failed",	\
-	  "", D_TM_GAUGE)
+#define BIO_PROTO_NVME_STATS_LIST                                                                  \
+	X(bdh_du_written, "commands/data_units_written",                                           \
+	  "number of 512b data units written to the controller", "data units", D_TM_COUNTER)       \
+	X(bdh_du_read, "commands/data_units_read",                                                 \
+	  "number of 512b data units read from to the controller", "data units", D_TM_COUNTER)     \
+	X(bdh_write_cmds, "commands/host_write_cmds",                                              \
+	  "number of write commands completed by to the controller", "cmds", D_TM_COUNTER)         \
+	X(bdh_read_cmds, "commands/host_read_cmds",                                                \
+	  "number of read commands completed by to the controller", "cmds", D_TM_COUNTER)          \
+	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",                                           \
+	  "Amount of time the controller is busy with I/O commands", "minutes", D_TM_COUNTER)      \
+	X(bdh_media_errs, "commands/media_errs", "Number of unrecovered data integrity error",     \
+	  "errs", D_TM_COUNTER)                                                                    \
+	X(bdh_read_errs, "commands/read_errs",                                                     \
+	  "Number of errors reported to the engine on read commands", "errs", D_TM_COUNTER)        \
+	X(bdh_write_errs, "commands/write_errs",                                                   \
+	  "Number of errors reported to the engine on write commands", "errs", D_TM_COUNTER)       \
+	X(bdh_unmap_errs, "commands/unmap_errs",                                                   \
+	  "Number of errors reported to the engine on unmap/trim commands", "errs", D_TM_COUNTER)  \
+	X(bdh_checksum_errs, "commands/checksum_mismatch",                                         \
+	  "Number of checksum mismatch detected by the engine", "errs", D_TM_COUNTER)              \
+	X(bdh_power_cycles, "power_cycles", "Number of power cycles", "cycles", D_TM_COUNTER)      \
+	X(bdh_power_on_hours, "power_on_hours", "Number of power-on hours cycles", "hours",        \
+	  D_TM_COUNTER)                                                                            \
+	X(bdh_unsafe_shutdowns, "unsafe_shutdowns",                                                \
+	  "Number of unsafe shutdowns (no notification prior to power loss)", "shutdowns",         \
+	  D_TM_COUNTER)                                                                            \
+	X(bdh_percentage_used, "percentage_used",                                                  \
+	  "Percentage of rated lifetime used - indicates drive endurance consumption (0-100%)",    \
+	  "percents", D_TM_GAUGE)                                                                  \
+	X(bdh_temp, "temp/current", "Current SSD temperature", "kelvins", D_TM_GAUGE)              \
+	X(bdh_temp_warn, "temp/warn", "Set to 1 if temperature is above threshold", "",            \
+	  D_TM_GAUGE)                                                                              \
+	X(bdh_temp_warn_time, "temp/warn_time",                                                    \
+	  "Amount of time the controller operated above warn temp threshold", "minutes",           \
+	  D_TM_COUNTER)                                                                            \
+	X(bdh_temp_crit_time, "temp/crit_time",                                                    \
+	  "Amount of time the controller operated above crit temp threshold", "minutes",           \
+	  D_TM_COUNTER)                                                                            \
+	X(bdh_avail_spare, "reliability/avail_spare",                                              \
+	  "Percentage of remaining spare capacity available", "%", D_TM_GAUGE)                     \
+	X(bdh_avail_spare_thres, "reliability/avail_spare_threshold",                              \
+	  "Threshold for available spare value", "%", D_TM_GAUGE)                                  \
+	X(bdh_avail_spare_warn, "reliability/avail_spare_warn",                                    \
+	  "Set to 1 when available spare has fallen below threshold", "", D_TM_GAUGE)              \
+	X(bdh_reliability_warn, "reliability/reliability_warn",                                    \
+	  "Set to 1 when NVM subsystem has been degraded due to significant "                      \
+	  "media-related errors",                                                                  \
+	  "", D_TM_GAUGE)                                                                          \
+	X(bdh_read_only_warn, "read_only_warn",                                                    \
+	  "Set to 1 when media has been placed in read-only mode", "", D_TM_GAUGE)                 \
+	X(bdh_volatile_mem_warn, "volatile_mem_warn",                                              \
+	  "Set to 1 when volatile memory backup device has failed", "", D_TM_GAUGE)
 
 #define BIO_PROTO_NVME_VENDOR_STATS_LIST				\
 	Y(bdh_prog_fail_cnt_norm, "vendor/program_fail_cnt_norm",	\

@@ -1333,10 +1333,10 @@ rebuild_kill_rank_during_rebuild(void **state)
 static void
 rebuild_kill_PS_leader_during_rebuild(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	d_rank_t	leader;
-	int		i;
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oids[OBJ_NR];
+	d_rank_t      leader;
+	int           i;
 
 	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
 		print_message("need at least 5 svcs, -s5\n");
@@ -1353,17 +1353,14 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 
 	/* kill non-leader rank */
 	if (leader != 6)
-		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, 6);
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, 6);
 	else
-		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, 5);
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, 5);
 	/* hang the rebuild */
 	if (arg->myrank == 0) {
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_TGT_SCAN_HANG, 0, NULL);
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, DAOS_REBUILD_TGT_SCAN_HANG,
 				      0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5, 0, NULL);
 	}
 	sleep(2);
 	rebuild_single_pool_rank(arg, leader, true);

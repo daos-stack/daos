@@ -38,11 +38,10 @@ static char *zombies_path;
  * In-memory, not persistent.
  */
 struct ds_pooltgts {
-	ABT_mutex		dpt_mutex;
-	ABT_cond		dpt_cv;
-	struct d_hash_table	dpt_creates_ht;
+	ABT_mutex           dpt_mutex;
+	ABT_cond            dpt_cv;
+	struct d_hash_table dpt_creates_ht;
 };
-
 
 struct ds_pooltgts_rec {
 	uuid_t		dptr_uuid;
@@ -638,7 +637,7 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 struct tgt_create_args {
 	char			*tca_newborn;
 	char			*tca_path;
-	struct ds_pooltgts_rec	*tca_ptrec;
+	struct ds_pooltgts_rec  *tca_ptrec;
 	struct dss_xstream	*tca_dx;
 	daos_size_t		 tca_scm_size;
 	daos_size_t		 tca_nvme_size;
@@ -1017,8 +1016,8 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 {
 	struct mgmt_tgt_destroy_in	*td_in;
 	struct mgmt_tgt_destroy_out	*td_out;
-	char				*path;
-	int				 rc;
+	char                            *path;
+	int                              rc;
 
 	/** incoming request buffer */
 	td_in = crt_req_get(td_req);
@@ -1033,7 +1032,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	ABT_mutex_lock(pooltgts->dpt_mutex);
 	do {
 		d_list_t		*rec = NULL;
-		struct ds_pooltgts_rec	*ptrec = NULL;
+		struct ds_pooltgts_rec  *ptrec = NULL;
 		uint32_t		 nreqs = 0;
 
 		rec = d_hash_rec_find(&pooltgts->dpt_creates_ht,

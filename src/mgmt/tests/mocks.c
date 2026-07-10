@@ -563,11 +563,11 @@ int
 ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid)
 {
 	/* Populate test data for bio_health query tests */
-	mbh->mb_dev_state.percentage_used = 49;
-	mbh->mb_dev_state.media_errs = 100;
-	mbh->mb_dev_state.err_log_entries = 50;
+	mbh->mb_dev_state.percentage_used  = 49;
+	mbh->mb_dev_state.media_errs       = 100;
+	mbh->mb_dev_state.err_log_entries  = 50;
 	mbh->mb_dev_state.unsafe_shutdowns = 10;
-	mbh->mb_dev_state.power_on_hours = 1000;
+	mbh->mb_dev_state.power_on_hours   = 1000;
 	uuid_copy(mbh->mb_devid, uuid);
 	return 0;
 }

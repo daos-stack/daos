@@ -26,7 +26,7 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 	struct mgmt_tgt_destroy_out	*td_out;
 	unsigned int			opc;
 	int				topo;
-	int				rc;
+	int                              rc;
 	uint8_t                          mgmt_ver;
 
 	rc = ds_mgmt_rpc_protocol(&mgmt_ver);

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,7 +82,7 @@ fini_tests(void **state)
 int main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test_swim),
+	    cmocka_unit_test(test_swim),
 	};
 
 	d_register_alt_assert(mock_assert);

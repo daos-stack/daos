@@ -581,7 +581,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	struct pl_obj_layout	*layout = NULL;
 	struct rebuild_pool_tls *tls;
 	daos_epoch_range_t	discard_epr;
-	bool			still_needed;
+	bool                     still_needed;
 	int			rc;
 
 	/*

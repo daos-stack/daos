@@ -1536,9 +1536,9 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	struct crt_grp_priv		*grp_priv;
 	struct crt_grp_priv		*default_grp_priv;
 	struct crt_grp_priv		*grp_priv_primary;
-	struct crt_context		*crt_ctx;
+	struct crt_context              *crt_ctx;
 	struct crt_uri_lookup_in	*ul_in;
-	struct crt_uri_lookup_out	*ul_out;
+	struct crt_uri_lookup_out       *ul_out;
 	d_rank_t			 g_rank;
 	char				*tmp_uri = NULL;
 	char				*cached_uri = NULL;
@@ -1617,8 +1617,8 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	}
 
 	/* step 1, lookup the URI in the local cache */
-	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank,
-			  ul_in->ul_tag, &cached_uri, NULL);
+	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank, ul_in->ul_tag, &cached_uri,
+			  NULL);
 	ul_out->ul_uri = cached_uri;
 	ul_out->ul_tag = ul_in->ul_tag;
 
