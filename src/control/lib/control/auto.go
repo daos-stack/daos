@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -512,24 +512,27 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 	if numaCount == 0 {
 		return errors.New("no numa nodes detected")
 	}
-	if len(ssds) == 0 {
+	if len(nsm) == 0 {
 		return errors.New("no ssds detected")
 	}
 
 	// Collect all SSDs from all NUMA nodes
 	var allSSDs []string
-	for _, numaID := range numaIDs {
-		ssds := sd.NumaSSDs[numaID]
-		addrs := ssds.Strings()
+	for _, ssdAddrs := range nsm {
+		//	for numaID := 0; numaID < numaCount; mumaID++ {
+		//	for _, numaID := range numaIDs {
+		//
+		//		ssds := sd.NumaSSDs[numaID]
+		addrs := ssdAddrs.Strings()
 
-		if ssds.HasVMD() {
+		if ssdAddrs.HasVMD() {
 			// If addresses are for VMD backing devices, convert to the logical VMD
 			// domain address as this is what is expected in the server config.
-			newAddrSet, err := ssds.BackingToVMDAddresses()
+			newAddrSet, err := ssdAddrs.BackingToVMDAddresses()
 			if err != nil {
-				return nil, errors.Wrap(err, "converting backing addresses to vmd")
+				return errors.Wrap(err, "converting backing addresses to vmd")
 			}
-			nrSSDs = newAddrSet.Len()
+			//			nrSSDs = newAddrSet.Len()
 			addrs = newAddrSet.Strings()
 		}
 		allSSDs = append(allSSDs, addrs...)
@@ -545,21 +548,23 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 	ssdsToUse := ssdsPerNuma * numaCount
 
 	if remainder > 0 {
-		log.Noticef("total SSDs (%d) not evenly divisible by engines (%d); "+
+		req.Log.Noticef("total SSDs (%d) not evenly divisible by engines (%d); "+
 			"using %d SSDs (%d per engine), %d SSDs will not be used",
 			totalSSDs, numaCount, ssdsToUse, ssdsPerNuma, remainder)
 	}
 
-	log.Debugf("distributing %d SSDs equally across %d engines (%d per engine)",
+	req.Log.Debugf("distributing %d SSDs equally across %d engines (%d per engine)",
 		ssdsToUse, numaCount, ssdsPerNuma)
 
 	// Distribute SSDs equally across engines, using only the divisible portion
 	idx := 0
-	for i, numaID := range numaIDs {
+	//	for i, numaID := range numaIDs {
+	nsm = make(numaSSDsMap)
+	for numaID := 0; numaID < numaCount; numaID++ {
 		numaSSDs := allSSDs[idx : idx+ssdsPerNuma]
-		sd.NumaSSDs[numaID] = hardware.MustNewPCIAddressSet(numaSSDs...)
-		log.Debugf("assigned %d SSDs to NUMA-%d (numa %d): %v",
-			ssdsPerNuma, numaID, i, numaSSDs)
+		nsm[numaID] = hardware.MustNewPCIAddressSet(numaSSDs...)
+		req.Log.Debugf("assigned %d SSDs to NUMA-%d: %v", ssdsPerNuma, numaID,
+			numaSSDs)
 		idx += ssdsPerNuma
 	}
 
@@ -592,7 +597,7 @@ func (nsm numaSSDsMap) fromNVMe(req *ConfGenerateReq, ssds storage.NvmeControlle
 	if req.AllowNumaImbalance {
 		// Pretend NVMe devices are distributed equally across NUMA nodes
 		if err := redistributeSsdsIgnNuma(req, numaCount, nsm); err != nil {
-			return nil, err
+			return errors.Wrap(err, "redistributing numa-imbalanced ssds")
 		}
 	}
 
