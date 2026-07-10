@@ -1259,8 +1259,25 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 
 		rc = rdb_modify_replicas(svc->s_db, RDB_REPLICA_ADD, &id, &ids_len);
 		if (rc != 0) {
-			ds_rsvc_dist_stop(svc->s_class, &svc->s_id, &rl, NULL, svc->s_term,
-					  true /* destroy */);
+			rdb_replica_id_t *replicas;
+			int               replicas_len;
+			int               rc_tmp;
+
+			/*
+			 * If this new replica has been added to the local membership, we can't
+			 * destroy it.
+			 */
+			rc_tmp = rdb_get_replicas(svc->s_db, &replicas, &replicas_len);
+			if (rc_tmp == 0) {
+				int j;
+
+				for (j = 0; j < replicas_len; j++)
+					if (rdb_replica_id_compare(replicas[j], id) == 0)
+						break;
+				if (j == replicas_len)
+					ds_rsvc_dist_stop(svc->s_class, &svc->s_id, &rl, NULL,
+							  svc->s_term, true /* destroy */);
+			}
 			break;
 		}
 	}

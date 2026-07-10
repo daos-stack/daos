@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -193,7 +193,7 @@ class OSAOnlineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands/IO in parallel
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=osa,checksum,osa_parallel
         :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test
         """
