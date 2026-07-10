@@ -1333,10 +1333,15 @@ rebuild_kill_rank_during_rebuild(void **state)
 static void
 rebuild_kill_PS_leader_during_rebuild(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	d_rank_t	leader;
-	int		i;
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oids[OBJ_NR];
+	d_rank_t      leader;
+	d_rank_t      non_leader;
+	int           i;
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank != 0)
+		return;
 
 	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
 		print_message("need at least 5 svcs, -s5\n");
@@ -1350,25 +1355,30 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 		oids[i] = dts_oid_set_rank(oids[i], 6);
 	}
 	rebuild_io(arg, oids, OBJ_NR);
+	non_leader = leader != 6 ? 6 : 5;
+	print_message("leader=%u non_leader=%u pre_rs_version=%u pre_pool_ver=%u\n", leader,
+		      non_leader, arg->pool.pool_info.pi_rebuild_st.rs_version,
+		      arg->pool.pool_info.pi_map_ver);
 
 	/* kill non-leader rank */
-	if (leader != 6)
-		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, 6);
-	else
-		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, 5);
-	/* hang the rebuild */
-	if (arg->myrank == 0) {
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_TGT_SCAN_HANG, 0, NULL);
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5,
-				      0, NULL);
-	}
-	sleep(2);
+	print_message("killing non-leader rank=%u to trigger first rebuild\n", non_leader);
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, non_leader);
+
+	/* Wait for the first rebuild to start scanning */
+	test_rebuild_wait_to_scanning_next(&arg, 1);
+	print_message("first rebuild started: rs_version=%u state=%d errno=%d tobe_obj=" DF_U64
+		      " rebuilt_obj=" DF_U64 "\n",
+		      arg->pool.pool_info.pi_rebuild_st.rs_version,
+		      arg->pool.pool_info.pi_rebuild_st.rs_state,
+		      arg->pool.pool_info.pi_rebuild_st.rs_errno,
+		      arg->pool.pool_info.pi_rebuild_st.rs_toberb_obj_nr,
+		      arg->pool.pool_info.pi_rebuild_st.rs_obj_nr);
+
+	print_message("killing PS leader rank=%u during active first rebuild\n", leader);
 	rebuild_single_pool_rank(arg, leader, true);
 
 	sleep(5);
+	print_message("restart/reintegrate previous PS leader rank=%u\n", leader);
 	reintegrate_single_pool_rank(arg, leader, true);
 }
 

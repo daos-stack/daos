@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,7 +91,21 @@ struct dfuse_eq {
 	struct d_slab_type *de_read_slab;
 	struct d_slab_type *de_pre_read_slab;
 	struct d_slab_type *de_write_slab;
+
+	ATOMIC uint32_t     de_empty_polls;
 };
+
+/*
+ * Wake up the EQ progress thread for newly queued work.  Reset de_empty_polls
+ * first so any inherited backoff is cleared before the sem_post, otherwise
+ * the freshly submitted event could be delayed by a stale backoff window.
+ */
+static inline void
+dfuse_eq_wakeup(struct dfuse_eq *eqt)
+{
+	atomic_store_relaxed(&eqt->de_empty_polls, 0);
+	sem_post(&eqt->de_sem);
+}
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected
  * This is the maximum size expected from the kernel, increasing this without changing kernel
