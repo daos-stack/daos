@@ -70,7 +70,8 @@ void updateRunStage() {
         'Functional Hardware Medium Verbs Provider MD on SSD',
         'Functional Hardware Medium UCX Provider',
         'Functional Hardware Large',
-        'Functional Hardware Large MD on SSD'
+        'Functional Hardware Large MD on SSD',
+        'Functional Cluster Box Medium MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -218,7 +219,9 @@ void updateRunStage() {
             'Functional Hardware Medium Verbs Provider MD on SSD': hwBuildStage,
             'Functional Hardware Medium UCX Provider': hwBuildStage,
             'Functional Hardware Large': hwBuildStage,
-            'Functional Hardware Large MD on SSD': hwBuildStage]
+            'Functional Hardware Large MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium MD on SSD': hwBuildStage,
+            ]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
             runStage[stage] = false
@@ -314,8 +317,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
 
-    } else if (stageName.contains('Hardware')) {
-        // 
+    } else if (stageName.contains('Hardware') || stageName.contains('Cluster Box')) {
+        // Add skip pragma for parent stage
         if (stageName != 'Test Hardware') {
             pragmas.add('skip-test-hardware')
         }
@@ -682,6 +685,9 @@ pipeline {
         booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
+        booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -712,6 +718,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL',
+               defaultValue: 'cluster_box',
+               description: 'Label to use for the Functional Cluster Box stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -729,8 +738,10 @@ pipeline {
                 stage('Set Description') {
                     steps {
                         script {
-                            if (params.CI_BUILD_DESCRIPTION) {
-                                buildDescription params.CI_BUILD_DESCRIPTION
+                            String description = params.CI_BUILD_DESCRIPTION ?:
+                                                 cachedCommitPragma('Build-description', '')
+                            if (description) {
+                                buildDescription description
                             }
                         }
                     }
@@ -961,7 +972,7 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" + 
+                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
@@ -1557,6 +1568,21 @@ pipeline {
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
+                            pragma_suffix:'-cb-medium-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            stage_tags: "cb,medium",
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
