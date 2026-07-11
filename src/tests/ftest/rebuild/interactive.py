@@ -8,7 +8,6 @@ from functools import partial
 
 from apricot import TestWithServers
 from data_utils import assert_val_in_list
-from exception_utils import CommandFailure
 from ior_utils import get_ior
 from job_manager_utils import get_job_manager
 
@@ -103,15 +102,15 @@ class RbldInteractive(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{exclude_method} - Manually stop rebuild')
-        for i in range(4):
-            try:
-                pool.rebuild_stop()
+        max_tries = 4
+        for i in range(max_tries):
+            result = pool.rebuild_stop()
+            if 'DER_NONEXIST' not in result.stdout_text:
                 break
-            except CommandFailure as error:
-                if i == 3 or 'DER_NONEXIST' not in str(error):
-                    raise
-                self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
-                time.sleep(3)
+            if i == max_tries - 1:
+                self.fail(f'Rebuild not stopped after {max_tries} tries')
+            self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
+            time.sleep(3)
 
         self.log_step(f'{exclude_method} - Wait for rebuild to stop')
         pool.wait_for_rebuild_to_stop(interval=3)
@@ -161,15 +160,15 @@ class RbldInteractive(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{reint_method} - Manually stop rebuild')
-        for i in range(4):
-            try:
-                pool.rebuild_stop()
+        max_tries = 4
+        for i in range(max_tries):
+            result = pool.rebuild_stop()
+            if 'DER_NONEXIST' not in result.stdout_text:
                 break
-            except CommandFailure as error:
-                if i == 3 or 'DER_NONEXIST' not in str(error):
-                    raise
-                self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
-                time.sleep(3)
+            if i == max_tries - 1:
+                self.fail(f'Rebuild not stopped after {max_tries} tries')
+            self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
+            time.sleep(3)
 
         self.log_step(f'{reint_method} - Wait for rebuild to stop')
         pool.wait_for_rebuild_to_stop(interval=3)
