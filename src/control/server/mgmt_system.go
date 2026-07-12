@@ -1654,25 +1654,14 @@ func (svc *mgmtSvc) eraseAndRestart(pause bool) error {
 		return errors.Wrap(err, "failed to remove system database")
 	}
 
-	// Sync filesystem to ensure all deletions are committed to disk
+	// Sync filesystem to ensure all deletions are committed to disk before restart.
+	// In MD-on-SSD mode, this ensures the control metadata device has all changes
+	// committed so they persist across the server restart and remount.
 	unix.Sync()
 
-	// In MD-on-SSD mode, unmount the control metadata device after removing raft DB files.
-	// This ensures the deletion is properly committed to the underlying device.
-	// Get storage provider through first engine instance to check control metadata config.
-	if len(svc.harness.Instances()) > 0 {
-		ei, ok := svc.harness.Instances()[0].(*EngineInstance)
-		if ok && ei.storage != nil {
-			ctlMetadata := ei.storage.GetControlMetadata()
-			if ctlMetadata != nil && ctlMetadata.HasPath() && ctlMetadata.DevicePath != "" {
-				svc.log.Infof("unmounting control metadata device after erasing system db")
-				if err := ei.storage.UnmountControlMetadata(); err != nil {
-					svc.log.Errorf("failed to unmount control metadata: %s", err)
-					// Don't fail the erase operation if unmount fails, but log it
-				}
-			}
-		}
-	}
+	// Give the kernel time to complete pending I/O operations to the control metadata
+	// device before restarting. This is especially important for MD-on-SSD mode.
+	time.Sleep(100 * time.Millisecond)
 
 	myPath, err := os.Readlink("/proc/self/exe")
 	if err != nil {
@@ -1714,6 +1703,10 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 				svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
 			}
 		}
+		// Sync filesystem to commit superblock deletions before proceeding
+		unix.Sync()
+		// Give the kernel time to complete pending I/O operations
+		time.Sleep(100 * time.Millisecond)
 		if err := svc.eraseAndRestart(false); err != nil {
 			return nil, errors.Wrap(err, "erasing and restarting non-leader")
 		}
