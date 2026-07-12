@@ -1650,29 +1650,29 @@ func (svc *mgmtSvc) eraseAndRestart(pause bool) error {
 		return errors.Wrap(err, "failed to stop system database")
 	}
 
-	// In MD-on-SSD mode, unmount the control metadata device before removing raft DB files.
-	// This ensures the deletion is properly committed and files don't reappear on remount.
-	// Get storage provider through first engine instance to check control metadata config.
-	if len(svc.harness.Instances()) > 0 {
-		ei, ok := svc.harness.Instances()[0].(*EngineInstance)
-		if ok && ei.storage != nil {
-			ctlMetadata := ei.storage.GetControlMetadata()
-			if ctlMetadata != nil && ctlMetadata.HasPath() && ctlMetadata.DevicePath != "" {
-				svc.log.Infof("unmounting control metadata device before erasing system db")
-				if err := ei.storage.UnmountControlMetadata(); err != nil {
-					svc.log.Errorf("failed to unmount control metadata: %s (continuing with erase)", err)
-					// Don't fail the erase operation if unmount fails, but log it
-				}
-			}
-		}
-	}
-
 	if err := svc.sysdb.RemoveFiles(); err != nil {
 		return errors.Wrap(err, "failed to remove system database")
 	}
 
 	// Sync filesystem to ensure all deletions are committed to disk
 	unix.Sync()
+
+	// In MD-on-SSD mode, unmount the control metadata device after removing raft DB files.
+	// This ensures the deletion is properly committed to the underlying device.
+	// Get storage provider through first engine instance to check control metadata config.
+	if len(svc.harness.Instances()) > 0 {
+		ei, ok := svc.harness.Instances()[0].(*EngineInstance)
+		if ok && ei.storage != nil {
+			ctlMetadata := ei.storage.GetControlMetadata()
+			if ctlMetadata != nil && ctlMetadata.HasPath() && ctlMetadata.DevicePath != "" {
+				svc.log.Infof("unmounting control metadata device after erasing system db")
+				if err := ei.storage.UnmountControlMetadata(); err != nil {
+					svc.log.Errorf("failed to unmount control metadata: %s", err)
+					// Don't fail the erase operation if unmount fails, but log it
+				}
+			}
+		}
+	}
 
 	myPath, err := os.Readlink("/proc/self/exe")
 	if err != nil {
