@@ -769,6 +769,22 @@ func TestControl_AutoConfig_fromNVMe(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(2, 3)...),
 			},
 		},
+		"all vmd backing devices on numa 1 with allow imbalance": {
+			ssds: storage.NvmeControllers{
+				// Two VMD endpoints (0000:5d:05.5 and 0000:d7:05.5) on NUMA-1,
+				// each with one backing device behind them
+				&storage.NvmeController{PciAddr: "5d0505:01:00.0", SocketID: 1},
+				&storage.NvmeController{PciAddr: "d70505:01:00.0", SocketID: 1},
+			},
+			numaCount:      2,
+			allowImbalance: true,
+			expNumaSSDs: numaSSDsMap{
+				// VMD backing addresses should be converted to VMD domain addresses
+				// and distributed: one VMD endpoint to NUMA-0, one to NUMA-1
+				0: hardware.MustNewPCIAddressSet("0000:5d:05.5"),
+				1: hardware.MustNewPCIAddressSet("0000:d7:05.5"),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

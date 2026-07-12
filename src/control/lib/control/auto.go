@@ -492,9 +492,16 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 
 	req.Log.Debug("allow-numa-imbalance enabled, distributing SSDs equally across engines")
 
-	// Collect all SSDs from all NUMA nodes
+	// Collect all SSDs from all NUMA nodes in sorted order for deterministic distribution
 	var allSSDs []string
-	for _, ssdAddrs := range nsm {
+	var numaIDs []int
+	for numaID := range nsm {
+		numaIDs = append(numaIDs, numaID)
+	}
+	sort.Ints(numaIDs)
+
+	for _, numaID := range numaIDs {
+		ssdAddrs := nsm[numaID]
 		addrs := ssdAddrs.Strings()
 
 		if ssdAddrs.HasVMD() {
