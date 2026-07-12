@@ -185,6 +185,30 @@ func (p *Provider) MountControlMetadata() error {
 	return err
 }
 
+// UnmountControlMetadata unmounts the storage for control metadata, if it is on a separate device.
+func (p *Provider) UnmountControlMetadata() error {
+	if p == nil {
+		return errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// If there's no control metadata path, control metadata is stored on engine SCM.
+		// We don't unmount engine SCM as it's still in use.
+		p.log.Debug("no separate control metadata path configured, nothing to unmount")
+		return nil
+	}
+
+	req := MetadataMountRequest{
+		RootPath: p.engineStorage.ControlMetadata.Path,
+		Device:   p.engineStorage.ControlMetadata.DevicePath,
+	}
+
+	p.log.Debugf("calling metadata storage provider unmount: %+v", req)
+	_, err := p.metadata.Unmount(req)
+
+	return err
+}
+
 // ControlMetadataIsMounted determines whether the control metadata storage is already mounted.
 func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 	if p == nil {
