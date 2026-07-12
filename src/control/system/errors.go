@@ -155,7 +155,7 @@ func (err *ErrJoinFailure) Error() string {
 	case err.rankChanged:
 		return fmt.Sprintf("can't rejoin member with uuid %s: rank changed from %d -> %d", *err.curUUID, *err.curRank, *err.newRank)
 	case err.uuidChanged:
-		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s", *err.curRank, *err.curUUID, *err.newUUID)
+		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s (use 'dmg storage format --replace --rank %d' to update UUID)", *err.curRank, *err.curUUID, *err.newUUID, *err.curRank)
 	case err.isExcluded:
 		return fmt.Sprintf("member %s (rank %d) has been administratively excluded", err.curUUID, *err.curRank)
 	case err.addrChanged:

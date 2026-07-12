@@ -37,7 +37,7 @@ type SystemCmd struct {
 	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
 	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
 	Reintegrate  systemReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate ranks or hosts into all relevant pools in DAOS system"`
-	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata prior to reformat"`
+	Erase        systemEraseCmd        `command:"erase" description:"Erase system metadata (use 'dmg storage format --replace' afterwards to rejoin ranks)"`
 	ListPools    poolListCmd           `command:"list-pools" description:"List all pools in the DAOS system"`
 	Cleanup      systemCleanupCmd      `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
 	SetAttr      systemSetAttrCmd      `command:"set-attr" description:"Set system attributes"`
