@@ -1291,10 +1291,9 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
-	rc = crt_grp_lc_addr_insert(rpc_priv->crp_grp_priv, crt_ctx,
-				    rpc_priv->crp_pub.cr_ep.ep_rank,
-				    rpc_priv->crp_pub.cr_ep.ep_tag,
-				    &hg_addr);
+	rc = crt_grp_hg_addr_cache_insert(rpc_priv->crp_grp_priv, crt_ctx,
+					  rpc_priv->crp_pub.cr_ep.ep_rank,
+					  rpc_priv->crp_pub.cr_ep.ep_tag, &hg_addr);
 	if (rc != 0) {
 		D_ERROR("Failed to insert: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
