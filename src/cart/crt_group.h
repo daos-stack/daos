@@ -242,9 +242,9 @@ void
 		      char **base_addr, hg_addr_t *hg_addr);
 int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv,
 			  d_rank_t rank, uint32_t tag, const char *uri);
-int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
-			   struct crt_context *ctx_idx,
-			   d_rank_t rank, uint32_t tag, hg_addr_t *hg_addr);
+int
+    crt_grp_hg_addr_cache_insert(struct crt_grp_priv *grp_priv, struct crt_context *ctx_idx,
+				 d_rank_t rank, uint32_t tag, hg_addr_t *hg_addr);
 int crt_grp_ctx_invalid(struct crt_context *ctx, bool locked);
 struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 struct crt_grp_priv *crt_grp_lookup_grpid(crt_group_id_t grp_id);
