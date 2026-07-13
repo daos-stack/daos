@@ -917,13 +917,10 @@ out:
 }
 
 /*
- * Lookup the URI and NA address of a (rank, tag) combination in the addr cache.
- * This function only looks into the address cache. If the requested (rank, tag)
- * pair doesn't exist in the address cache, *hg_addr will be NULL on return, and
- * an empty record for the requested rank with NULL values will be inserted to
- * the cache. For input parameters, base_addr and hg_addr can not be both NULL.
- * (hg_addr == NULL) means the caller only want to lookup the base_addr.
- * (base_addr == NULL) means the caller only want to lookup the hg_addr.
+ * Lookup URI and HG Address based on passed rank:tag combination
+ *
+ * URIs are looked up from URI cache based on rank key
+ * HG Addresses are looked up from HG Address cache basedon rank:tag key
  */
 void
 crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uint32_t tag,
@@ -964,6 +961,30 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uin
 		rank = crt_grp_priv_get_primary_rank(grp_priv, rank);
 	}
 
+	if (uri)
+		*uri = NULL;
+	if (hg_addr)
+		*hg_addr = NULL;
+
+	/* Get URI from uri lookup cache */
+	if (uri != NULL) {
+		struct crt_uri_item *ui;
+
+		D_RWLOCK_RDLOCK(&default_grp_priv->gp_rwlock);
+		rlink = d_hash_rec_find(&default_grp_priv->gp_uri_lookup_cache, (void *)&rank,
+					sizeof(rank));
+		if (rlink != NULL) {
+			ui   = crt_ui_link2ptr(rlink);
+			*uri = atomic_load_relaxed(&ui->ui_uri[tag]);
+			d_hash_rec_decref(&default_grp_priv->gp_uri_lookup_cache, rlink);
+		} else {
+			D_DEBUG(DB_ALL, "URI entry for rank=%d not found\n", rank);
+		}
+
+		D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
+	}
+
+	/* Get HG handle from HG lookup cache */
 	key = crt_lc_lookup_key(rank, tag);
 
 	D_RWLOCK_RDLOCK(&default_grp_priv->gp_rwlock);
@@ -976,30 +997,14 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uin
 		D_ASSERT(li->li_tag == tag);
 		D_ASSERT(li->li_initialized != 0);
 
-		if (uri != NULL)
-			*uri = grp_li_uri_get(li, tag);
+		*hg_addr = li->li_tag_addr;
 
-		if (hg_addr == NULL)
-			D_ASSERT(uri != NULL);
-		else if (li->li_tag_addr != NULL)
-			*hg_addr = li->li_tag_addr;
-		d_hash_rec_decref(&default_grp_priv->gp_lookup_cache[ctx_idx],
-				  rlink);
-		D_GOTO(out, 0);
+		d_hash_rec_decref(&default_grp_priv->gp_lookup_cache[ctx_idx], rlink);
 	} else {
-		D_DEBUG(DB_ALL, "Entry for rank=%d not found\n", rank);
+		D_DEBUG(DB_ALL, "HG entry for rank=%d:%d not found\n", rank, tag);
 	}
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 
-	if (uri)
-		*uri = NULL;
-	if (hg_addr)
-		*hg_addr = NULL;
-
-	return;
-
-out:
-	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 	return;
 }
 
