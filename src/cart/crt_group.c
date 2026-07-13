@@ -247,35 +247,6 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_FREE(ui);
 }
 
-static inline char *
-grp_li_uri_get(struct crt_lookup_item *li, int tag)
-{
-	struct crt_uri_item	*ui;
-	d_list_t		*rlink;
-	struct crt_grp_priv	*grp_priv;
-	d_rank_t		rank;
-
-	rank = li->li_rank;
-	grp_priv = li->li_grp_priv;
-
-	rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
-				(void *)&rank, sizeof(rank));
-	/* It's possible to have crt_lookup_item for which uri
-	 * info has not been populated yet
-	 */
-	if (rlink == NULL) {
-		D_DEBUG(DB_TRACE,
-			"Failed to find uri_info for %d:%d\n",
-			rank, tag);
-		return NULL;
-	}
-
-	ui = crt_ui_link2ptr(rlink);
-	d_hash_rec_decref(&grp_priv->gp_uri_lookup_cache, rlink);
-
-	return atomic_load_relaxed(&ui->ui_uri[tag]);
-}
-
 static int
 generate_cxi_uris(int prov_type, char *addr, int tag, struct crt_uri_item *ui)
 {
