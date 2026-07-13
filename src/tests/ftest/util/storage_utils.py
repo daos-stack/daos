@@ -218,6 +218,18 @@ class StorageDevice():
         """
         return self.storage_class == "PMEM"
 
+    def to_dict(self):
+        """Convert this StorageDevice into a dictionary.
+
+        Returns:
+            dict: the dictionary version of the StorageDevice
+        """
+        if self.is_pmem:
+            # Exclude the NUMA node for PMEM devices to avoid issues with persistent naming
+            return {"address": self.address, "description": self.description}
+        return {
+            "address": self.address, "description": self.description, "numa_node": self.numa_node}
+
 
 class StorageInfo():
     """Information about host storage."""
@@ -302,7 +314,7 @@ class StorageInfo():
         for key, name in {'PMEM': 'pmem', 'NVMe': 'disk', 'VMD': 'controller'}.items():
             devices = getattr(self, f'{name}_devices')
             if devices:
-                data[key] = [str(item) for item in devices]
+                data[key] = [item.to_dict() for item in devices]
         return data
 
     def _raise_error(self, message, error=None):
@@ -779,35 +791,11 @@ class StorageInfo():
                 itertools.chain(*itertools.zip_longest(*numa_devices.values()))))
 
 
-def storage_numa_nodes(test):
-    """Get the number of unique available storage NUMA nodes
-
-    Note: needs to be run before the servers are started
-
-    Args:
-        test (Test): avocado test object
-
-    Raises:
-        StorageException: if athere is a problem determining the storage NUMA nodes
-
-    Returns:
-        list: list of unique available storage NUMA nodes
-    """
-    if test.server_managers:
-        raise StorageException("Storage NUMA nodes must be determined before starting servers")
-
-    info = StorageInfo(test.log, test.hostlist_servers)
-    info.scan()
-    numa_nodes = list(set([device.numa_node for device in info.devices]))
-    test.log.info("Detected storage NUMA nodes: %s", numa_nodes)
-    return numa_nodes
-
-
-def has_numa_balance(test):
+def has_numa_balance(storage_file):
     """Determine if the system has storage on more than one NUMA node.
 
     Args:
-        test (Test): avocado test object
+        storage_file (str): path to the storage YAML file
 
     Raises:
         StorageException: if athere is a problem determining the storage NUMA nodes
@@ -815,4 +803,21 @@ def has_numa_balance(test):
     Returns:
         bool: True if the system has storage on more than one NUMA node, False otherwise
     """
-    return len(storage_numa_nodes(test)) > 1
+    if not os.path.exists(storage_file):
+        raise StorageException(f"Storage file {storage_file} does not exist")
+
+    numa_nodes = {}
+    with open(storage_file, 'r', encoding='utf-8') as f:
+        try:
+            storage_data = yaml.safe_load(f)
+            for storage_type in storage_data["storage"]:
+                if storage_type not in ("NVMe", "VMD"):
+                    continue
+                if storage_type not in numa_nodes:
+                    numa_nodes[storage_type] = set()
+                for device in storage_data["storage"][storage_type]:
+                    numa_nodes[storage_type].add(device["numa_node"])
+        except Exception as error:
+            raise StorageException("Error reading storage NUMA nodes") from error
+
+    return any(len(nodes) > 1 for nodes in numa_nodes.values())

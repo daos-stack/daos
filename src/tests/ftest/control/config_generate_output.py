@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import os
 from collections import defaultdict
 
 import yaml
@@ -26,7 +27,8 @@ class ConfigGenerateOutput(TestWithServers):
         super().__init__(*args, **kwargs)
 
         self.def_provider = "ofi+tcp"
-        self.allow_numa_imbalance = not has_numa_balance(self)
+        self.allow_numa_imbalance = not has_numa_balance(
+            os.path.join(self.test_env.log_dir, "common", "storage.yaml"))
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)
