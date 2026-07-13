@@ -1115,7 +1115,7 @@ class TestGroup():
 
         if test_storage_yaml:
             logger.info("Writing the test storage yaml to %s", test_storage_yaml)
-            storage_info.write_test_storage_yaml(test_storage_yaml)
+            storage_info.write_device_yaml(test_storage_yaml)
 
     def _add_auto_storage_yaml(self, logger, storage_info, yaml_dir, tier_0_type, scm_size,
                                scm_mount, max_nvme_tiers, control_metadata):

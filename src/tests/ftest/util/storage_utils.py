@@ -750,6 +750,29 @@ class StorageInfo():
 
         write_yaml_file(self._log, yaml_file, lines)
 
+    def write_device_yaml(self, yaml_file):
+        """Generate a storage device yaml file.
+
+        Args:
+            yaml_file (str): file in which to write the storage device yaml entry
+
+        Raises:
+            YamlException: if there was an error writing the yaml file
+
+        """
+        self._log.info('Generating a storage device yaml: %s', yaml_file)
+        lines = ['storage:']
+        device_data = self.device_dict()
+        for storage_type, devices in device_data.items():
+            lines.append(f'  {storage_type}:')
+            for device in devices:
+                for index, (key, value) in enumerate(device.items()):
+                    if index == 0:
+                        lines.append(f"    - {key}: '{value}'")
+                    else:
+                        lines.append(f"      {key}: '{value}'")
+        write_yaml_file(self._log, yaml_file, lines)
+
     @staticmethod
     def _get_numa_devices(devices):
         """Get a dictionary of sorted devices indexed by their NUMA node.
@@ -807,9 +830,9 @@ def has_numa_balance(storage_file):
         raise StorageException(f"Storage file {storage_file} does not exist")
 
     numa_nodes = {}
-    with open(storage_file, 'r', encoding='utf-8') as f:
+    with open(storage_file, 'r', encoding='utf-8') as yaml_file:
         try:
-            storage_data = yaml.safe_load(f)
+            storage_data = yaml.safe_load(yaml_file.read())
             for storage_type in storage_data["storage"]:
                 if storage_type not in ("NVMe", "VMD"):
                     continue
@@ -819,5 +842,4 @@ def has_numa_balance(storage_file):
                     numa_nodes[storage_type].add(device["numa_node"])
         except Exception as error:
             raise StorageException("Error reading storage NUMA nodes") from error
-
     return any(len(nodes) > 1 for nodes in numa_nodes.values())
