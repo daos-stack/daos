@@ -938,14 +938,13 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uin
 	D_ASSERT(uri != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
-	if (rank == CRT_NO_RANK) {
-		if (uri)
-			*uri = NULL;
+	if (uri)
+		*uri = NULL;
+	if (hg_addr)
+		*hg_addr = NULL;
 
-		if (hg_addr)
-			*hg_addr = NULL;
+	if (rank == CRT_NO_RANK)
 		return;
-	}
 
 	provider = crt_gdata.cg_primary_prov;
 
@@ -961,10 +960,8 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uin
 		rank = crt_grp_priv_get_primary_rank(grp_priv, rank);
 	}
 
-	if (uri)
-		*uri = NULL;
-	if (hg_addr)
-		*hg_addr = NULL;
+	if (uri == NULL)
+		D_GOTO(skip_uri_lookup, 0);
 
 	/* Get URI from uri lookup cache */
 	if (uri != NULL) {
@@ -983,6 +980,11 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uin
 
 		D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 	}
+
+skip_uri_lookup:
+
+	if (hg_addr == NULL)
+		D_GOTO(skip_hg_addr_lookup, 0);
 
 	/* Get HG handle from HG lookup cache */
 	key = crt_lc_lookup_key(rank, tag);
@@ -1004,6 +1006,8 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uin
 		D_DEBUG(DB_ALL, "HG entry for rank=%d:%d not found\n", rank, tag);
 	}
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
+
+skip_hg_addr_lookup:
 
 	return;
 }
