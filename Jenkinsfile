@@ -473,7 +473,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL9'),
                             next_version: params.BaseBranch,
-                            stage_tags: '-hw',
+                            stage_tags: 'vm',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
                             job_status: job_status_internal
@@ -487,7 +487,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: params.BaseBranch,
-                            stage_tags: '-hw',
+                            stage_tags: 'vm',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
                             job_status: job_status_internal
@@ -500,7 +500,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('Ubuntu'),
                             next_version: params.BaseBranch,
-                            stage_tags: '-hw',
+                            stage_tags: 'vm',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
                             job_status: job_status_internal
