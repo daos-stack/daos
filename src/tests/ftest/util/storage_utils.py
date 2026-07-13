@@ -782,14 +782,37 @@ class StorageInfo():
 def storage_numa_nodes(test):
     """Get the number of unique available storage NUMA nodes
 
+    Note: needs to be run before the servers are started
+
     Args:
         test (Test): avocado test object
+
+    Raises:
+        StorageException: if athere is a problem determining the storage NUMA nodes
 
     Returns:
         list: list of unique available storage NUMA nodes
     """
+    if test.server_managers:
+        raise StorageException("Storage NUMA nodes must be determined before starting servers")
+
     info = StorageInfo(test.log, test.hostlist_servers)
     info.scan()
     numa_nodes = list(set([device.numa_node for device in info.devices]))
     test.log.info("Detected storage NUMA nodes: %s", numa_nodes)
     return numa_nodes
+
+
+def has_numa_balance(test):
+    """Determine if the system has storage on more than one NUMA node.
+
+    Args:
+        test (Test): avocado test object
+
+    Raises:
+        StorageException: if athere is a problem determining the storage NUMA nodes
+
+    Returns:
+        bool: True if the system has storage on more than one NUMA node, False otherwise
+    """
+    return len(storage_numa_nodes(test)) > 1

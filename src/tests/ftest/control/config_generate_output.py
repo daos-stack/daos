@@ -10,7 +10,7 @@ import yaml
 from apricot import TestWithServers
 from dmg_utils import DmgCommand
 from exception_utils import CommandFailure
-from storage_utils import storage_numa_nodes
+from storage_utils import has_numa_balance
 
 
 class ConfigGenerateOutput(TestWithServers):
@@ -26,7 +26,7 @@ class ConfigGenerateOutput(TestWithServers):
         super().__init__(*args, **kwargs)
 
         self.def_provider = "ofi+tcp"
-        self.allow_numa_imbalance = False
+        self.allow_numa_imbalance = not has_numa_balance(self)
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)
@@ -34,16 +34,6 @@ class ConfigGenerateOutput(TestWithServers):
         self.numa_node_to_interfaces = defaultdict(set)
         self.interface_to_providers = defaultdict(set)
         self.interface_set = set()
-
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-
-        # Determine the number of available numa nodes. This is be used to determine if the
-        # --allow-numa-imbalance flag is needed when generating running config generate.
-        self.allow_numa_imbalance = False
-        if len(storage_numa_nodes(self)) > 1:
-            self.allow_numa_imbalance = True
 
     def prepare_expected_data(self):
         """Prepare expected values.

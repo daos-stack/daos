@@ -10,7 +10,7 @@ import os
 import yaml
 from apricot import TestWithServers
 from server_utils import ServerFailed
-from storage_utils import storage_numa_nodes
+from storage_utils import has_numa_balance
 
 
 class ConfigGenerateRun(TestWithServers):
@@ -25,17 +25,7 @@ class ConfigGenerateRun(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a ConfigGenerateRun object."""
         super().__init__(*args, **kwargs)
-        self.allow_numa_imbalance = False
-
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-
-        # Determine the number of available numa nodes. This is be used to determine if the
-        # --allow-numa-imbalance flag is needed when generating running config generate.
-        self.allow_numa_imbalance = False
-        if len(storage_numa_nodes(self)) > 1:
-            self.allow_numa_imbalance = True
+        self.allow_numa_imbalance = not has_numa_balance(self)
 
     def test_config_generate_run(self):
         """Run daos_server with generated server config file.
