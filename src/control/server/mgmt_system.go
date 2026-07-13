@@ -1712,8 +1712,29 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		}
 	}
 
-	// On the leader, we should first tell all servers to prepare for
-	// reformat by wiping out their engine superblocks, etc.
+	// On the leader, we should first tell MS replica peers to erase their databases
+	// and restart, BEFORE telling engines to reset format. This prevents engines from
+	// trying to join before the MS replicas have been wiped.
+	peers, err := svc.sysdb.PeerAddrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, peer := range peers {
+		peerReq := new(control.SystemEraseReq)
+		peerReq.AddHost(peer.String())
+
+		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
+			if control.IsRetryableConnErr(err) {
+				continue
+			}
+			return nil, err
+		}
+	}
+
+	// Next, tell all servers to prepare for reformat by wiping out their engine
+	// superblocks. This will restart engines which will then try to join.
+	// By doing this after erasing MS replicas, the replicas have clean databases
+	// when engines attempt to join.
 	fanReq, fanResp, err := svc.getFanout(&mgmtpb.SystemQueryReq{})
 	if err != nil {
 		return nil, err
@@ -1738,23 +1759,6 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 	if fanResp.Results.Errors() != nil {
 		return pbResp, nil
-	}
-
-	// Next, tell all of the replicas to lobotomize themselves and restart.
-	peers, err := svc.sysdb.PeerAddrs()
-	if err != nil {
-		return nil, err
-	}
-	for _, peer := range peers {
-		peerReq := new(control.SystemEraseReq)
-		peerReq.AddHost(peer.String())
-
-		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
-			if control.IsRetryableConnErr(err) {
-				continue
-			}
-			return nil, err
-		}
 	}
 
 	// Finally, take care of the leader on the way out.
