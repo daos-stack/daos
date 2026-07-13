@@ -99,6 +99,7 @@ class TestEnvironment():
     __ENV_VAR_MAP = {
         'app_dir': 'DAOS_TEST_APP_DIR',
         'app_src': 'DAOS_TEST_APP_SRC',
+        'common_dir': 'DAOS_TEST_COMMON_DIR',
         'log_dir': 'DAOS_TEST_LOG_DIR',
         'shared_dir': 'DAOS_TEST_SHARED_DIR',
         'user_dir': 'DAOS_TEST_USER_DIR',
@@ -122,7 +123,8 @@ class TestEnvironment():
         self.set_defaults(None)
 
     def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None,
-                     agent_user=None, log_dir=None, systemd_path=None, systemd_library_path=None):
+                     agent_user=None, log_dir=None, systemd_path=None, systemd_library_path=None,
+                     common_dir=None):
         """Set the default test environment variable values with optional inputs.
 
         Args:
@@ -139,6 +141,7 @@ class TestEnvironment():
             log_dir (str, optional): test log directory base path. Defaults to None.
             systemd_path (str, optional): systemd path. Defaults to None.
             systemd_library_path (str, optional): systemd library path. Defaults to None.
+            common_dir (str, optional): common directory path. Defaults to None.
 
         Raises:
             TestEnvironmentException: if there are any issues setting environment variable default
@@ -151,6 +154,8 @@ class TestEnvironment():
         # Override values if explicitly specified
         if log_dir is not None:
             self.log_dir = log_dir
+        if common_dir is not None:
+            self.common_dir = common_dir
         if provider is not None:
             self.provider = provider
         if insecure_mode is not None:
@@ -165,6 +170,8 @@ class TestEnvironment():
         # Set defaults for any unset values
         if self.log_dir is None:
             self.log_dir = os.path.join(os.sep, "var", "tmp", "daos_testing")
+        if self.common_dir is None:
+            self.common_dir = os.path.join(os.sep, "var", "tmp", "daos_common")
         if self.shared_dir is None:
             self.shared_dir = os.path.expanduser(os.path.join("~", "daos_test"))
         if self.app_dir is None:
@@ -242,6 +249,24 @@ class TestEnvironment():
             value (str): the location from which to copy test applications
         """
         self.__set_value('app_src', value)
+
+    @property
+    def common_dir(self):
+        """Get the common directory path.
+
+        Returns:
+            str: the common directory path
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['common_dir'])
+
+    @common_dir.setter
+    def common_dir(self, value):
+        """Set the common directory path.
+
+        Args:
+            value (str): the common directory path
+        """
+        self.__set_value('common_dir', value)
 
     @property
     def log_dir(self):
