@@ -433,7 +433,7 @@ grp_uri_cache_set(struct crt_grp_priv *grp_priv, d_rank_t rank, int tag, const c
 				       &ui->ui_link,
 				       true /* exclusive */);
 		if (rc != 0) {
-			D_ERROR("Entry already present\n");
+			D_ERROR("Entry for rank=%d already present\n", rank);
 
 			if (crt_provider_is_contig_ep(provider)) {
 				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
@@ -759,6 +759,7 @@ crt_grp_hg_addr_cache_insert(struct crt_grp_priv *passed_grp_priv, struct crt_co
 	struct crt_grp_priv	*grp_priv;
 	int			 ctx_idx;
 	int			 rc = 0;
+	bool                     need_decref = false;
 	uint32_t                 key;
 
 	D_ASSERT(crt_ctx != NULL);
@@ -795,12 +796,30 @@ crt_grp_hg_addr_cache_insert(struct crt_grp_priv *passed_grp_priv, struct crt_co
 		li->li_rank        = rank;
 		li->li_tag         = tag;
 		li->li_initialized = 1;
-	}
 
-	li = crt_li_link2ptr(rlink);
-	D_ASSERT(li->li_rank == rank);
-	D_ASSERT(li->li_tag == tag);
-	D_ASSERT(li->li_initialized != 0);
+		rc = d_hash_rec_insert(&grp_priv->gp_lookup_cache[ctx_idx], &key, sizeof(key),
+				       &li->li_link, true /* exclusive */);
+		if (rc != 0) {
+			D_DEBUG(DB_TRACE,
+				"entry already exists in lookup "
+				"table, grp_priv %p ctx_idx %d, rank: %d.\n",
+				grp_priv, ctx_idx, rank);
+			crt_li_destroy(li);
+			rc = 0;
+		} else {
+			D_DEBUG(DB_TRACE,
+				"Filling in URI in lookup table. "
+				" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
+				grp_priv, ctx_idx, rank, &li->li_link);
+		}
+	} else {
+		li = crt_li_link2ptr(rlink);
+		D_ASSERT(li->li_rank == rank);
+		D_ASSERT(li->li_tag == tag);
+		D_ASSERT(li->li_initialized != 0);
+
+		need_decref = true;
+	}
 
 	D_MUTEX_LOCK(&li->li_mutex);
 	if (li->li_tag_addr == NULL) {
@@ -821,8 +840,10 @@ crt_grp_hg_addr_cache_insert(struct crt_grp_priv *passed_grp_priv, struct crt_co
 out:
 	D_MUTEX_UNLOCK(&li->li_mutex);
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-	d_hash_rec_decref(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
 
+	/* decref needed if we looked up item, not if we inserted it */
+	if (need_decref)
+		d_hash_rec_decref(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
 	return rc;
 
 err_free_li:
