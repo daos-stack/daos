@@ -49,7 +49,6 @@ dnf --nodocs install ${dnf_install_args} \
     libasan \
     libcmocka-devel \
     libevent-devel \
-    libipmctl-devel \
     libibverbs-devel \
     libiscsi-devel \
     libnl3-devel \
