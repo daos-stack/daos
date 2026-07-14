@@ -3684,7 +3684,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			},
 			expError: errors.New("No SCM storage space available"),
 		},
-		"requested rank not joined": {
+		"requested stopped rank retained but not scanned": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3696,9 +3696,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			memberStates: map[ranklist.Rank]system.MemberState{
 				0: system.MemberStateStopped,
 			},
-			expError: errors.New("specified rank 0 is not joined"),
+			expError: errors.New("No SCM storage space available"),
 		},
-		"multiple requested ranks not joined": {
+		"multiple requested ranks with downout retained but not scanned": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3717,7 +3717,31 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				1: system.MemberStateStopped,
 				2: system.MemberStateExcluded,
 			},
-			expError: errors.New("specified rank 1 is not joined"),
+			expCreateReqRanks: ranklist.RankList{0, 1, 2},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
+		},
+		"requested excluded rank retained but not scanned": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName:   "bar",
+					ScmConfig:  []MockScmConfig{newScmCfg(1, 50*humanize.GByte)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0, 500*humanize.GByte)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0, 1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateExcluded,
+			},
+			expCreateReqRanks: ranklist.RankList{0, 1},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"all requested ranks joined": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3741,7 +3765,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			expScmBytes:  100 * humanize.GByte,
 			expNvmeBytes: humanize.TByte,
 		},
-		"no requested ranks; filters to joined ranks only": {
+		"no requested ranks; records joined ranks only": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",

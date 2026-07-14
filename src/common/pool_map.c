@@ -1496,7 +1496,7 @@ fill_rank_comp(uint32_t rank, int idx, int map_version, uint8_t new_status, uint
 static int
 add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int map_version,
 			    uint32_t nr_tgts, int ndomains, const uint32_t *domains,
-			    d_rank_list_t *ordered_ranks)
+			    d_rank_list_t *ordered_ranks, d_rank_list_t *downout_ranks)
 {
 	int			rc;
 	uint32_t                num_node_comps;
@@ -1594,6 +1594,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
 		case D_FD_NODE_TYPE_RANK:
 		{
 			uint32_t rank = node.fdn_val.rank;
+			uint8_t  rank_status;
 
 			if (map) {
 				struct pool_domain *found_dom;
@@ -1609,8 +1610,12 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
 			}
 
 			updated = true;
-			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version,
-				       new_status, nr_tgts, &map_comp);
+			rank_status = new_status;
+			if (map == NULL && downout_ranks != NULL &&
+			    d_rank_in_rank_list(downout_ranks, rank))
+				rank_status = PO_COMP_ST_DOWNOUT;
+			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version, rank_status,
+				       nr_tgts, &map_comp);
 
 			D_ASSERT(i < ordered_ranks->rl_nr);
 			ordered_ranks->rl_ranks[i++] = node.fdn_val.rank;
@@ -1670,12 +1675,14 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
  */
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr)
+	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr,
+	     d_rank_list_t *downout_ranks)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
 	uint32_t		num_comps;
 	uint8_t			new_status;
+	uint8_t                  target_status;
 	int			i, rc;
 	uint32_t		num_domain_comps = 0;
 	d_rank_list_t		*ordered_ranks;
@@ -1700,7 +1707,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 		D_GOTO(out_ranks, rc = -DER_NOMEM);
 
 	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains, domains,
-					 ordered_ranks);
+					 ordered_ranks, downout_ranks);
 	if (rc != 0) {
 		/* Do not need update the pool map anymore */
 		if (rc == -DER_EXIST)
@@ -1720,9 +1727,20 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	for (i = 0; i < ordered_ranks->rl_nr; i++) {
 		int j;
 
+		/*
+		 * Asymmetric pool create: for a fresh pool (map == NULL), if the rank
+		 * is already excluded / admin-excluded in system membership, all its
+		 * targets are inserted as DOWNOUT so that a subsequent reint can bring
+		 * them back naturally without extending the pool map.
+		 */
+		target_status = new_status;
+		if (map == NULL && downout_ranks != NULL &&
+		    d_rank_in_rank_list(downout_ranks, ordered_ranks->rl_ranks[i]))
+			target_status = PO_COMP_ST_DOWNOUT;
+
 		for (j = 0; j < dss_tgt_nr; j++) {
 			map_comp.co_type = PO_COMP_TP_TARGET;
-			map_comp.co_status = new_status;
+			map_comp.co_status  = target_status;
 			map_comp.co_index = j;
 			map_comp.co_padding = 0;
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;

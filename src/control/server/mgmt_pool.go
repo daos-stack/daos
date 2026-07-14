@@ -169,6 +169,24 @@ func minPoolNvme(tgtCount, rankCount uint64) uint64 {
 	return minRankNvme(tgtCount) * rankCount
 }
 
+// poolCreateActiveRankCount returns the number of ranks in req.Ranks that are
+// not also present in req.DownoutRanks (i.e. the ranks that will actually host
+// storage for the pool). The input rank lists are treated as sets: duplicate
+// entries in req.Ranks are only counted once against req.DownoutRanks.
+func poolCreateActiveRankCount(req *mgmtpb.PoolCreateReq) int {
+	downout := make(map[uint32]struct{}, len(req.GetDownoutRanks()))
+	for _, r := range req.GetDownoutRanks() {
+		downout[r] = struct{}{}
+	}
+	n := 0
+	for _, r := range req.GetRanks() {
+		if _, ok := downout[r]; !ok {
+			n++
+		}
+	}
+	return n
+}
+
 // calculateCreateStorage determines the amount of SCM/NVMe storage to allocate per engine in order
 // to fulfill the create request, if those values are not already supplied as part of the request.
 func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
@@ -198,6 +216,14 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 
 	nvmeMissing := !instances[0].GetStorage().HasBlockDevices()
 
+	// Determine the number of ranks that will actually host storage. DOWNOUT
+	// ranks are normally passed separately from req.Ranks; only subtract any
+	// overlap to handle explicit requests that included an excluded rank.
+	activeRanks := poolCreateActiveRankCount(req)
+	if activeRanks <= 0 {
+		return errors.New("no active ranks for pool create")
+	}
+
 	// As this is an exclusive interface between control-API and server, accept only known
 	// request parameter combinations.
 
@@ -223,10 +249,9 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		for tierIdx := range req.TierBytes {
 			req.TierBytes[tierIdx] =
 				uint64(float64(req.TotalBytes)*req.TierRatio[tierIdx]) /
-					uint64(len(req.GetRanks()))
+					uint64(activeRanks)
 			svc.log.Infof("%s = (%s*%f) / %d", humanize.IBytes(req.TierBytes[tierIdx]),
-				humanize.IBytes(req.TotalBytes), req.TierRatio[tierIdx],
-				len(req.GetRanks()))
+				humanize.IBytes(req.TotalBytes), req.TierRatio[tierIdx], activeRanks)
 		}
 
 	default:
@@ -234,7 +259,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	}
 
 	// Sanity check tier bytes are greater than the minimums.
-	tgts, ranks := uint64(instances[0].GetTargetCount()), uint64(len(req.GetRanks()))
+	tgts, ranks := uint64(instances[0].GetTargetCount()), uint64(activeRanks)
 	if tgts == 0 {
 		return errors.New("zero target count")
 	}
@@ -353,15 +378,38 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, err
 	}
 
-	if len(req.GetRanks()) > 0 {
-		// If the request supplies a specific rank list, use it. Note that
-		// the rank list may include downed ranks, in which case the create
-		// will fail with an error.
+	// Asymmetric pool create: also enumerate ranks that are currently excluded
+	// or stopped in the system. These ranks are not target create candidates,
+	// but may be passed separately to the pool service so they enter the pool
+	// map as DOWNOUT.
+	downoutRanks, err := svc.sysdb.MemberRanks(system.MemberStateExcluded |
+		system.MemberStateAdminExcluded | system.MemberStateStopped)
+	if err != nil {
+		return nil, err
+	}
+	downoutSet := make(map[uint32]struct{}, len(downoutRanks))
+	for _, r := range downoutRanks {
+		downoutSet[r.Uint32()] = struct{}{}
+	}
+
+	ranksRequested := len(req.GetRanks()) > 0
+	numRanksRequested := req.GetNumRanks() > 0
+	autoRanks := req.GetRanksAutoSelected()
+	if ranksRequested {
+		// If the request supplies a rank list, use it. Note that the rank list
+		// may include downed ranks, in which case the create will fail with an
+		// error.
 		reqRanks := ranklist.RanksFromUint32(req.GetRanks())
 		// Create a RankSet to sort/dedupe the ranks.
 		reqRanks = ranklist.RankSetFromRanks(reqRanks).Ranks()
 
-		if invalid := ranklist.CheckRankMembership(allRanks, reqRanks); len(invalid) > 0 {
+		// Consider the full set of "known" ranks (available + downout) as
+		// valid membership candidates; downout ranks passed in are OK; they
+		// will be flagged as DOWNOUT in the pool map.
+		knownRanks := make([]ranklist.Rank, 0, len(allRanks)+len(downoutRanks))
+		knownRanks = append(knownRanks, allRanks...)
+		knownRanks = append(knownRanks, downoutRanks...)
+		if invalid := ranklist.CheckRankMembership(knownRanks, reqRanks); len(invalid) > 0 {
 			return nil, FaultPoolInvalidRanks(invalid)
 		}
 
@@ -371,9 +419,8 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		// available ranks in the system (if the request does not
 		// specify a number of ranks, all are used).
 		nAllRanks := len(allRanks)
-		nRanks := nAllRanks
-		if req.GetNumRanks() > 0 {
-			nRanks = int(req.GetNumRanks())
+		if numRanksRequested {
+			nRanks := int(req.GetNumRanks())
 
 			if nRanks > nAllRanks {
 				return nil, FaultPoolInvalidNumRanks(nRanks, nAllRanks)
@@ -387,11 +434,13 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			rand.Shuffle(nAllRanks, func(i, j int) {
 				allRanks[i], allRanks[j] = allRanks[j], allRanks[i]
 			})
-		}
-
-		req.Ranks = make([]uint32, nRanks)
-		for i := 0; i < nRanks; i++ {
-			req.Ranks[i] = allRanks[i].Uint32()
+			// With an explicit num_ranks, do NOT auto-admit excluded
+			// ranks: the user asked for a specific size.
+			req.Ranks = ranklist.RanksToUint32(allRanks[:nRanks])
+		} else {
+			// Full-cluster default preserves the original target-create behavior:
+			// only available ranks receive VOS/blob-store creation.
+			req.Ranks = ranklist.RanksToUint32(allRanks)
 		}
 		sort.Slice(req.Ranks, func(i, j int) bool { return req.Ranks[i] < req.Ranks[j] })
 	}
@@ -400,14 +449,41 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, errors.New("pool request contains zero target ranks")
 	}
 
+	// Compute DownoutRanks from the authoritative membership state. For the
+	// default/full-cluster paths, keep req.Ranks as active target ranks and pass
+	// downout ranks separately so they are pool-map-only DOWNOUT entries. For
+	// an explicit rank list, split req.Ranks into active target ranks and
+	// pool-map-only downout ranks so both paths present a uniform semantic to
+	// the pool service: req.Ranks == VOS target creators, req.DownoutRanks ==
+	// pool-map-only DOWNOUT entries.
+	downout := make([]uint32, 0, len(downoutRanks))
+	if autoRanks || (!ranksRequested && !numRanksRequested) {
+		for _, r := range downoutRanks {
+			downout = append(downout, r.Uint32())
+		}
+	} else {
+		active := req.Ranks[:0]
+		for _, r := range req.Ranks {
+			if _, ok := downoutSet[r]; ok {
+				downout = append(downout, r)
+			} else {
+				active = append(active, r)
+			}
+		}
+		req.Ranks = active
+	}
+	req.DownoutRanks = downout
+
 	// Clamp the maximum allowed svc replicas to the smaller of requested
-	// storage ranks or MaxPoolServiceReps.
+	// storage ranks or MaxPoolServiceReps. DOWNOUT ranks are pool-map-only
+	// unless they were explicitly present in req.Ranks; only subtract overlaps.
+	activeRankCount := poolCreateActiveRankCount(req)
 	maxSvcReps := func(allRanks int) uint32 {
 		if allRanks > MaxPoolServiceReps {
 			return uint32(MaxPoolServiceReps)
 		}
 		return uint32(allRanks)
-	}(len(req.GetRanks()))
+	}(activeRankCount)
 
 	// If NumSvcReps is not specified, daos_engine will choose a value.
 	if req.GetNumSvcReps() > maxSvcReps {
@@ -434,8 +510,14 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 	}
 
-	// IO engine needs the fault domain tree for placement purposes
-	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(req.Ranks...)
+	// IO engine needs the fault domain tree for placement purposes. Include
+	// both active target ranks and pool-map-only DOWNOUT ranks.
+	mapRankSet := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(req.GetRanks()))
+	for _, r := range req.GetDownoutRanks() {
+		mapRankSet.Add(ranklist.Rank(r))
+	}
+	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(
+		ranklist.RanksToUint32(mapRankSet.Ranks())...)
 	if err != nil {
 		return nil, err
 	}
@@ -488,6 +570,11 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 	}()
 
+	// RanksAutoSelected is a control-plane-only hint used above to decide
+	// whether to auto-include system DOWNOUT ranks in the pool map. Clear it
+	// before invoking the engine so the flag does not leak across the dRPC
+	// boundary; the engine ignores this field.
+	req.RanksAutoSelected = false
 	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodPoolCreate, req)
 	if err != nil {
 		svc.log.Errorf("pool create dRPC call failed: %s", err)

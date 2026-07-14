@@ -199,10 +199,19 @@ struct  _Mgmt__PoolCreateReq
    * Fraction of meta-blob-sz to use as mem-file-sz
    */
   float mem_ratio;
+  /*
+   * Excluded/admin-excluded ranks that enter pool map as DOWNOUT
+   */
+  size_t n_downout_ranks;
+  uint32_t *downout_ranks;
+  /*
+   * true if control auto-selected ranks from joined membership
+   */
+  protobuf_c_boolean ranks_auto_selected;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL, 0, 0,NULL, 0 }
 
 
 /*

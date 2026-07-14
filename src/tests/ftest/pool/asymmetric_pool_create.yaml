@@ -1,0 +1,53 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers: 3
+
+timeout: 300
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      targets: 1
+      nr_xs_helpers: 0
+      log_file: daos_server0.log
+      log_mask: ERR
+      env_vars:
+        - DD_MASK=mgmt
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos0
+          scm_size: 4
+    1:
+      targets: 1
+      nr_xs_helpers: 0
+      log_file: daos_server1.log
+      log_mask: ERR
+      env_vars:
+        - DD_MASK=mgmt
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos1
+          scm_size: 4
+  system_ram_reserved: 1
+  transport_config:
+    allow_insecure: true
+
+agent_config:
+  transport_config:
+    allow_insecure: true
+
+dmg:
+  transport_config:
+    allow_insecure: true
+
+pool:
+  size: 30%

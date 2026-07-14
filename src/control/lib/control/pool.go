@@ -223,18 +223,19 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
-		UUID       uuid.UUID            `json:"uuid,omitempty"` // Optional UUID; auto-generate if not supplied
-		User       string               `json:"user"`
-		UserGroup  string               `json:"user_group"`
-		ACL        *AccessControlList   `json:"-"`
-		NumSvcReps uint32               `json:"num_svc_reps"`
-		Properties []*daos.PoolProperty `json:"-"`
-		TotalBytes uint64               `json:"total_bytes"` // Auto-sizing param
-		TierRatio  []float64            `json:"tier_ratio"`  // Auto-sizing param
-		NumRanks   uint32               `json:"num_ranks"`   // Auto-sizing param
-		Ranks      []ranklist.Rank      `json:"ranks"`       // Manual-sizing param
-		TierBytes  []uint64             `json:"tier_bytes"`  // Per-rank values
-		MemRatio   float32              `json:"mem_ratio"`   // mem_file_size:meta_blob_size
+		UUID              uuid.UUID            `json:"uuid,omitempty"` // Optional UUID; auto-generate if not supplied
+		User              string               `json:"user"`
+		UserGroup         string               `json:"user_group"`
+		ACL               *AccessControlList   `json:"-"`
+		NumSvcReps        uint32               `json:"num_svc_reps"`
+		Properties        []*daos.PoolProperty `json:"-"`
+		TotalBytes        uint64               `json:"total_bytes"` // Auto-sizing param
+		TierRatio         []float64            `json:"tier_ratio"`  // Auto-sizing param
+		NumRanks          uint32               `json:"num_ranks"`   // Auto-sizing param
+		Ranks             []ranklist.Rank      `json:"ranks"`       // Manual-sizing param
+		TierBytes         []uint64             `json:"tier_bytes"`  // Per-rank values
+		MemRatio          float32              `json:"mem_ratio"`   // mem_file_size:meta_blob_size
+		RanksAutoSelected bool                 `json:"-"`           // Internal: Ranks were selected from joined membership
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -326,6 +327,7 @@ func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCre
 	if err = convert.Types(in, out); err != nil {
 		return
 	}
+	out.RanksAutoSelected = in.RanksAutoSelected
 
 	if out.Uuid == "" {
 		out.Uuid = uuid.New().String()
@@ -1296,28 +1298,46 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		return 0, 0, errors.Wrap(err, "getMaxPoolSize: SystemQuery")
 	}
 	joinedRanks := ranklist.RankList{}
+	downoutRanks := ranklist.RankList{}
 	for _, member := range queryResp.Members {
-		if member.State == system.MemberStateJoined {
+		switch member.State {
+		case system.MemberStateJoined:
 			joinedRanks = append(joinedRanks, member.Rank)
+		case system.MemberStateExcluded, system.MemberStateAdminExcluded, system.MemberStateStopped:
+			downoutRanks = append(downoutRanks, member.Rank)
 		}
 	}
 
-	// Refuse if any requested ranks are not joined, update ranklist to contain only joined ranks.
+	// Refuse if any requested ranks are not known to the system. Use only joined ranks for the
+	// storage scan. If no ranks were requested, keep the existing control behavior of filling
+	// createReq.Ranks with the joined ranks only; the management service may add downout ranks
+	// to the pool map based on its authoritative membership view.
 	filterRanks := ranklist.RankList{}
 	if len(createReq.Ranks) == 0 {
 		filterRanks = joinedRanks
+		createReq.Ranks = append(ranklist.RankList{}, joinedRanks...)
+		createReq.RanksAutoSelected = true
 	} else {
+		createReq.RanksAutoSelected = false
+		knownRanks := make(ranklist.RankList, 0, len(joinedRanks)+len(downoutRanks))
+		knownRanks = append(knownRanks, joinedRanks...)
+		knownRanks = append(knownRanks, downoutRanks...)
+
 		for _, rank := range createReq.Ranks {
-			if !rank.InList(joinedRanks) {
-				return 0, 0, errors.Errorf("specified rank %d is not joined", rank)
+			if !rank.InList(knownRanks) {
+				return 0, 0, errors.Errorf("specified rank %d is not a known system member", rank)
 			}
-			filterRanks = append(filterRanks, rank)
+			if rank.InList(joinedRanks) {
+				filterRanks = append(filterRanks, rank)
+			}
 		}
 	}
 	slices.Sort(filterRanks)
-	rpcClient.Debugf("requested/joined/filter ranks: %v/%v/%v", createReq.Ranks, joinedRanks,
-		filterRanks)
-	createReq.Ranks = filterRanks
+	if len(createReq.Ranks) > 0 {
+		createReq.Ranks = ranklist.RankSetFromRanks(createReq.Ranks).Ranks()
+	}
+	rpcClient.Debugf("requested/joined/downout/filter ranks: %v/%v/%v/%v", createReq.Ranks,
+		joinedRanks, downoutRanks, filterRanks)
 
 	scanReq := &StorageScanReq{
 		Usage:    true,

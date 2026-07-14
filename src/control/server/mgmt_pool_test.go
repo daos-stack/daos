@@ -784,6 +784,12 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 
 	// We should only be trying to create on the Joined ranks.
 	wantReq.Ranks = []uint32{0, 2, 3}
+	wantReq.DownoutRanks = []uint32{1}
+	fdTree, err = mgmtSvc.membership.CompressedFaultDomainTree(0, 1, 2, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantReq.FaultDomains = fdTree
 
 	// These properties are automatically added by PoolCreate
 	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
@@ -798,6 +804,103 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 			Numval: 0,
 		},
 	})
+
+	gotReq := new(mgmtpb.PoolCreateReq)
+	if err := proto.Unmarshal(dc.calls.get()[0].Body, gotReq); err != nil {
+		t.Fatal(err)
+	}
+
+	cmpOpts := append(test.DefaultCmpOpts(),
+		// Ensure stable ordering of properties to avoid intermittent failures.
+		protocmp.SortRepeated(func(a, b *mgmtpb.PoolProperty) bool {
+			return a.Number < b.Number
+		}),
+	)
+	if diff := cmp.Diff(wantReq, gotReq, cmpOpts...); diff != "" {
+		t.Fatalf("unexpected pool create req (-want, +got):\n%s\n", diff)
+	}
+}
+
+func TestServer_MgmtSvc_PoolCreateExcludedRanksAsDownout(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	mgmtSvc := newTestMgmtSvc(t, log)
+	ec := engine.MockConfig().
+		WithTargetCount(1).
+		WithStorage(
+			storage.NewTierConfig().
+				WithStorageClass("ram").
+				WithScmMountPoint("/foo/bar"),
+			storage.NewTierConfig().
+				WithStorageClass("nvme").
+				WithBdevDeviceList("foo", "bar"),
+		)
+	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil, nil)
+	mgmtSvc.harness.instances[0] = newTestEngine(log, false, sp, ec)
+
+	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
+	dc.cfg.setSendMsgResponse(drpc.Status_SUCCESS, nil, nil)
+	mgmtSvc.harness.instances[0].(*EngineInstance).getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+		return dc
+	}
+
+	for _, m := range []*system.Member{
+		system.MockMember(t, 0, system.MemberStateJoined),
+		system.MockMember(t, 1, system.MemberStateExcluded),
+		system.MockMember(t, 2, system.MemberStateJoined),
+		system.MockMember(t, 3, system.MemberStateJoined),
+		system.MockMember(t, 4, system.MemberStateStopped),
+	} {
+		if err := mgmtSvc.sysdb.AddMember(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	totalBytes := uint64(100 * humanize.GiByte)
+	req := &mgmtpb.PoolCreateReq{
+		Sys:               build.DefaultSystemName,
+		Uuid:              test.MockUUID(),
+		TotalBytes:        totalBytes,
+		TierRatio:         []float64{0.06, 0.94},
+		Ranks:             []uint32{0, 2, 3},
+		RanksAutoSelected: true,
+		Properties:        testPoolLabelProp(),
+	}
+	wantReq := new(mgmtpb.PoolCreateReq)
+	*wantReq = *req
+	wantReq.TotalBytes = 0
+	wantReq.TierBytes = []uint64{
+		uint64(float64(totalBytes)*DefaultPoolScmRatio) / 3,
+		uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / 3,
+	}
+	wantReq.TierRatio = nil
+	wantReq.Ranks = []uint32{0, 2, 3}
+	wantReq.RanksAutoSelected = false
+	wantReq.DownoutRanks = []uint32{1, 4}
+	fdTree, err := mgmtSvc.membership.CompressedFaultDomainTree(0, 1, 2, 3, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantReq.FaultDomains = fdTree
+	// These properties are automatically added by PoolCreate.
+	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
+		Number: daos.PoolPropertyScrubMode,
+		Value: &mgmtpb.PoolProperty_Numval{
+			Numval: 0,
+		},
+	})
+	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
+		Number: daos.PoolPropertyScrubThresh,
+		Value: &mgmtpb.PoolProperty_Numval{
+			Numval: 0,
+		},
+	})
+
+	_, err = mgmtSvc.PoolCreate(test.Context(t), req)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gotReq := new(mgmtpb.PoolCreateReq)
 	if err := proto.Unmarshal(dc.calls.get()[0].Body, gotReq); err != nil {

@@ -34,6 +34,8 @@ message PoolCreateReq {
 	repeated uint32 ranks      = 12; // target ranks
 	repeated uint64 tier_bytes = 13; // Size in bytes of storage tier
 	float           mem_ratio = 14; // Fraction of meta-blob-sz to use as mem-file-sz
+	repeated uint32 downout_ranks = 15; // Excluded/admin-excluded ranks that enter pool map as DOWNOUT
+	bool ranks_auto_selected = 16; // true if control auto-selected ranks from joined membership
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
