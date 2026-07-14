@@ -103,7 +103,7 @@ which is the recommended Mercury backend for all fabrics
 except NVIDIA based InfiniBand and RoCE Ethernet fabrics.
 Mercuy also has a UCF [UCX](https://openucx.org/) backend,
 which is the recommended Mercury backend for NVIDIA based fabrics.
-DAOS Version 2.9 uses Mercury Version 2.4.1.
+DAOS Version 2.8 uses Mercury Version 2.4.1.
 
 Mercury backends are dynamically loaded, and there is no RPM dependency
 in the base `mercury` RPM for a specific backend. Depending on the intended
@@ -152,7 +152,7 @@ are used with the various fabric providers.
 
 Details on the exact levels of the fabric host software stacks
 that have been validated with DAOS can be found in the
-[DAOS 2.9 Support Matrix](https://docs.daos.io/v2.9/release/support_matrix/),
+[DAOS 2.8 Support Matrix](https://docs.daos.io/v2.8/release/support_matrix/),
 which also provides more information and references
 for the supported high performance fabrics.
 
