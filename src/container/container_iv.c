@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -734,8 +734,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 out:
 	if (rc < 0 && rc != -DER_IVCB_FORWARD)
-		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
-			  "failed to insert");
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST || rc == -DER_NOTLEADER,
+			  DB_ANY, DLOG_ERR, rc, "failed to insert");
 
 	return rc;
 }
@@ -869,8 +869,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = cont_iv_len;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST, DB_ANY, DLOG_ERR, rc,
-			  DF_UUID " iv update failed", DP_UUID(key_uuid));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST,
+			  DB_ANY, DLOG_ERR, rc, DF_UUID " iv update failed", DP_UUID(key_uuid));
 
 	return rc;
 }
@@ -1148,8 +1148,8 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry), shortcut, sync_mode,
 			    false /* retry */);
 	if (rc && !cont_iv_retryable_error(rc))
-		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
-			DP_UUID(cont_uuid), op, DP_RC(rc));
+		DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_ANY, DLOG_ERR, rc,
+			  DF_UUID " op %d, cont_iv_update failed", DP_UUID(cont_uuid), op);
 	return rc;
 }
 

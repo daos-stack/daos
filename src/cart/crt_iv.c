@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3515,8 +3515,9 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER || rc == -DER_BUSY, DB_TRACE,
-			  DLOG_ERR, rc, "ivo_on_update failed");
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST || rc == -DER_NOTLEADER ||
+			      rc == -DER_BUSY,
+			  DB_TRACE, DLOG_ERR, rc, "ivo_on_update failed");
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);

@@ -1755,7 +1755,9 @@ ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 			      d_rank_t rank, daos_epoch_t eph)
 {
 	struct cont_svc		*svc;
+	struct rdb_tx            tx;
 	struct cont_ec_agg	*ec_agg;
+	struct cont             *cont = NULL;
 	int			rc;
 	bool			retried = false;
 	int			i;
@@ -1768,9 +1770,28 @@ ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 retry:
 	ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
 	if (ec_agg == NULL) {
-		rc = cont_ec_agg_alloc(svc, cont_uuid, &ec_agg);
-		if (rc)
+		/* check container's existence before creating cont_ec_agg */
+		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+		if (rc != 0)
 			D_GOTO(out_put, rc);
+
+		ABT_rwlock_rdlock(svc->cs_lock);
+		rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+		ABT_rwlock_unlock(svc->cs_lock);
+		rdb_tx_end(&tx);
+		if (rc != 0) {
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_MD, DLOG_ERR, rc,
+				  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+			D_GOTO(out_put, rc);
+		}
+		cont_put(cont);
+
+		ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
+		if (ec_agg == NULL) {
+			rc = cont_ec_agg_alloc(svc, cont_uuid, &ec_agg);
+			if (rc)
+				D_GOTO(out_put, rc);
+		}
 	}
 
 	for (i = 0; i < ec_agg->ea_servers_num; i++) {
@@ -1803,7 +1824,7 @@ retry:
 
 out_put:
 	cont_svc_put_leader(svc);
-	return 0;
+	return rc;
 }
 
 struct refresh_vos_agg_eph_arg {
@@ -1876,8 +1897,9 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 	    cont_refresh_vos_agg_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
 	if (rc) {
-		DL_ERROR(rc, DF_CONT ": refresh ec_agg_eph " DF_X64 " failed.",
-			 DP_CONT(pool_uuid, cont_uuid), eph);
+		DL_CDEBUG(rc != -DER_CONT_NONEXIST && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": refresh ec_agg_eph " DF_X64 " failed.",
+			  DP_CONT(pool_uuid, cont_uuid), eph);
 	} else {
 		if (cnt++ % gap == 0) {
 			D_INFO(DF_CONT ": refresh ec_agg_eph " DF_X64,
@@ -2146,8 +2168,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph,
 						svc->cs_ec_leader_ephs_req);
 		if (rc) {
-			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
-				  DF_CONT ": refresh failed",
+			DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_MD, DLOG_ERR,
+				  rc, DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
 
 			/* If ULT is exiting, break out */
