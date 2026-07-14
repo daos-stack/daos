@@ -1262,19 +1262,20 @@ pipeline {
                             label: params.CI_FI_1_LABEL,
                             jobStatus: job_status_internal,
                             distro: 'el9',
-                            timeoutTime: 240,
-                            testScript: 'ci/unit/test_nlt.sh --memcheck no' +
-                                        ' --system-ram-reserved 4 --server-debug WARN' +
-                                        ' --log-usage-import nltr.json' +
-                                        ' --log-usage-save nltr.xml' +
-                                        ' --class-name fault-injection fi',
-                            withValgrind: '',
-                            alwaysScript: 'ci/unit/test_nlt_post.sh',
-                            testResults: 'nlt-junit.xml',
-                            unstashOpt: true,
-                            unstashTests: false,
-                            imageVersion: 'el9.7',
-                            provEnvVars: 'VM_CPUS=14',
+                            unitTestArgs: [
+                                timeout_time: 240,
+                                test_script: 'ci/unit/test_nlt.sh --memcheck no' +
+                                             ' --system-ram-reserved 4 --server-debug WARN' +
+                                             ' --log-usage-import nltr.json' +
+                                             ' --log-usage-save nltr.xml' +
+                                             ' --class-name fault-injection fi',
+                                always_script: 'ci/unit/test_nlt_post.sh',
+                                testResults: 'nlt-junit.xml',
+                                unstash_opt: true,
+                                unstash_tests: false,
+                                image_version: 'el9.7',
+                                prov_env_vars: 'VM_CPUS=14'
+                            ],
                             unitTestPostArgs: [
                                 /* groovylint-disable-next-line DuplicateListLiteral */
                                 artifacts: ['nlt_logs/'],
@@ -1290,11 +1291,12 @@ pipeline {
                             runStage: shouldStageRun('Test RPMs on EL 9'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
+                            testRpmArgs: [
+                                target: 'el9.6',
+                                inst_rpms: 'mercury-libfabric',
+                                NODELIST: env.NODELIST],
                             nextVersion: next_version(),
-                            imageVersion: 'el9.6',
-                            instRpms: 'mercury-libfabric',
-                            nodeList: env.NODELIST,
-                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
+                            postScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
                             archiveArtifactsArgs: [
                                 artifacts: 'Test RPMs on EL 9/']
                         ),
@@ -1303,11 +1305,12 @@ pipeline {
                             runStage: shouldStageRun('Test RPMs on Leap 15'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
+                            testRpmArgs: [
+                                target: 'leap15.6',
+                                inst_rpms: 'mercury-libfabric',
+                                NODELIST: env.NODELIST],
                             nextVersion: next_version(),
-                            imageVersion: 'leap15.6',
-                            instRpms: 'mercury-libfabric',
-                            nodeList: env.NODELIST,
-                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
+                            postScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
                             archiveArtifactsArgs: [
                                 artifacts: 'Test RPMs on Leap 15/']
                         )
