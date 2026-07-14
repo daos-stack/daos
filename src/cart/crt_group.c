@@ -605,7 +605,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv,
 	}
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-	grp_uri_cache_set(grp_priv, rank, tag, uri);
+	rc = grp_uri_cache_set(grp_priv, rank, tag, uri);
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	return rc;

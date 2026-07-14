@@ -1242,9 +1242,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 				D_GOTO(out, rc);
 			}
 
-			rc = crt_grp_lc_uri_insert(grp_priv,
-						   tgt_ep->ep_rank,
-						   dst_tag, base_addr);
+			rc = crt_grp_lc_uri_insert(grp_priv, tgt_ep->ep_rank, dst_tag, uri);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
