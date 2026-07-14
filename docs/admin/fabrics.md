@@ -198,9 +198,9 @@ does not apply to the admin node role.
 ### Generic TCP Fabrics with libfabric TCP
 
 DAOS should run over any standard TCP/IP network, using the libfabric
-`ofi+tcp` provider. This provider does **not** support RDMA tranfers,
+`ofi+tcp` provider. This provider does **not** support RDMA transfers,
 and the operating system's TCP stack is used which typically implies
-higher CPU utilisation, higher latency, and lower bandwidth than
+higher CPU utilization, higher latency, and lower bandwidth than
  the other providers. The TCP provider should only be used on fabrics
 where none of the other fabric providers can be used.
 
@@ -223,7 +223,7 @@ often needed for many of the networking settings. In particular,
 the TCP buffer sizes in `net.ipv4` (and the corresponding
 settings in `net.core`) as well as other performance-related
 TCP settings should be reviewed and tuned. The optimized settings need to be
-made persistent, for exampe through a configuration file in `/etc/sysctl.d/`.
+made persistent, for example through a configuration file in `/etc/sysctl.d/`.
 
 In addition to `sysctl` tuning, the **MTU size** of all network interfaces
 in the fabric should be set to the largest supported value.
@@ -235,8 +235,8 @@ or an equivalent `nmcli` configuration.
 ### RoCE on NVIDIA Ethernet with DOCA-OFED and UCX
 
 While DAOS runs on any TCP network with the `ofi+tcp` provider,
-DAOS also supports RDMA over Converged Ethernet (RoCE)
-which will provide higher performance at lower CPU utilisation.
+zAOS also supports RDMA over Converged Ethernet (RoCE)
+which will provide higher performance at lower CPU utilization.
 
 In NVIDIA Ethernet environments, the recommended provider for
 RoCE is `ucx+dc_x`
@@ -306,7 +306,7 @@ recommendation to deviate from the defaults.
 
 The recommended provider for InfiniBand fabrics is `ucx+dc_x`,
 and a current DOCA-OFED level has to be installed on all hosts.
-UCX with the DC tranport does support RDMA, and it does not suffer
+UCX with the DC transport does support RDMA, and it does not suffer
 from the scalability limitations of the libfabric `ofi+verbs`
 provider (which is not recommended for DAOS on InfiniBand fabrics).
 
@@ -431,7 +431,7 @@ As with all high-speed fabrics, the MTU size is important to achieve good perfor
 with TCP. The default MTU size on Omni-Path is 2048, but it can be increased to 10240
 by editing the configuration file of the Omni-Path fabric manager `/etc/opa-fm/opafm.xml`
 and restarting the fabric manager (`systemctl restart opafm`). In the default
-configuration, there is a singel MulticastGroup and its MTU needs to be changed
+configuration, there is a single MulticastGroup and its MTU needs to be changed
 to 10240. If multiple MulticastGroups exist change the MTU for all of them:
 
 ```xml
