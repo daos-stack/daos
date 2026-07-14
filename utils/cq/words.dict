@@ -416,7 +416,7 @@ scontrol
 seekable
 sharedctypes
 shlex
-shs
+SHS
 simul
 sinfo
 slurm
