@@ -91,7 +91,7 @@ struct crt_grp_priv {
 	 */
 	d_rank_t                  gp_self;
 	/* address lookup cache, only valid for primary group */
-	struct d_hash_table	 *gp_lookup_cache;
+	struct d_hash_table      *gp_hg_addr_cache;
 
 	/* uri lookup cache, only valid for primary group */
 	struct d_hash_table	 gp_uri_lookup_cache;
@@ -206,25 +206,25 @@ struct crt_uri_item {
 	uint32_t	ui_initialized:1;
 };
 
-/* lookup cache item for one target */
-struct crt_lookup_item {
-	/* link to crt_grp_priv::gp_lookup_cache[ctx_idx] */
-	d_list_t		 li_link;
+/* HG cache entry */
+struct crt_hg_cache_entry {
+	/* link to crt_grp_priv::gp_hg_addr_cache[ctx_idx] */
+	d_list_t             link;
 	/* point back to grp_priv */
-	struct crt_grp_priv	*li_grp_priv;
+	struct crt_grp_priv *grp_priv;
 	/* packed lookup key: low 24 bits of rank + 8 bits of tag */
-	uint32_t                 li_key;
+	uint32_t             key;
 	/* rank of the target */
-	d_rank_t		 li_rank;
+	d_rank_t             rank;
 	/* tag index for the target */
-	uint32_t                 li_tag;
-	/* connected HG addr */
-	hg_addr_t                li_tag_addr;
+	uint32_t             tag;
+	/* looked up HG addr */
+	hg_addr_t            hg_addr;
 
 	/* reference count */
-	ATOMIC uint32_t		 li_ref;
-	uint32_t		 li_initialized:1;
-	pthread_mutex_t		 li_mutex;
+	ATOMIC uint32_t      ref;
+	uint32_t             initialized : 1;
+	pthread_mutex_t      mutex;
 };
 
 /* structure of global group data */
@@ -278,7 +278,8 @@ crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 	dst_ep->ep_tag = src_ep->ep_tag;
 }
 
-struct crt_lookup_item *crt_li_link2ptr(d_list_t *rlink);
+struct crt_hg_cache_entry                      *
+crt_hg_cache_link2ptr(d_list_t *rlink);
 
 struct crt_uri_item *crt_ui_link2ptr(d_list_t *rlink);
 
