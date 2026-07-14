@@ -5,6 +5,7 @@ APs
 Ansible
 BW
 Broadwell
+CaRT
 CGO
 Cilk
 CompletedProcess
@@ -50,6 +51,7 @@ RAS
 RawArray
 RawValue
 Romio
+RoCE
 SConstruct
 SGL
 SHA
@@ -414,6 +416,7 @@ scontrol
 seekable
 sharedctypes
 shlex
+shs
 simul
 sinfo
 slurm
