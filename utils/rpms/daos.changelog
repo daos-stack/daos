@@ -1,4 +1,7 @@
 %changelog
+* Wed Jul 08 2026 Michael Hennecke <michael.hennecke@hpe.com> 2.9.100-5
+- Add a /var/daos directory writable for daos_server
+
 * Mon May 04 2026 Cedric Koch-Hofer <cedric.koch-hofer@hpe.com> 2.9.100-4
 - Add gperftools-devel as a build dependency of daos-devel
 

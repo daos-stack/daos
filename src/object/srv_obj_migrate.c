@@ -73,6 +73,12 @@ enum {
 };
 #define MIGRATE_DATA_MB_ENV "D_MIGRATE_DATA_MB"
 
+static inline bool
+migrate_cont_gone(int rc)
+{
+	return rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING;
+}
+
 struct migr_res_manager;
 
 /* resource consumed by migration */
@@ -3047,6 +3053,8 @@ out:
 		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate punch failed", DP_RB_MPT(tls),
 			 DP_UOID(arg->oid));
 
+	if (migrate_cont_gone(rc))
+		rc = 0;
 	if (tls->mpt_status == 0 && rc != 0)
 		tls->mpt_status = rc;
 
@@ -3563,23 +3571,13 @@ free:
 	if (arg->epoch == DAOS_EPOCH_MAX)
 		tls->mpt_obj_count++;
 
-	if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
-		struct ds_cont_child *cont_child = NULL;
-
-		/* check again to see if the container is being destroyed. */
-		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child, false);
-		if (cont_child == NULL || cont_child->sc_stopping)
-			rc = 0;
-
-		if (cont_child)
-			ds_cont_child_put(cont_child);
-	}
-
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
 	    tls->mpt_obj_count >= daos_fail_value_get())
 		rc = -DER_IO;
 
 out:
+	if (migrate_cont_gone(rc))
+		rc = 0;
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 
@@ -3822,7 +3820,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 			     MIGRATE_STACK_SIZE);
 	if (rc) {
 		DL_ERROR(rc, DF_RB ": cont_fetch_start_ult failed", DP_RB_MPT(tls));
-		if (rc == -DER_CONT_NONEXIST) {
+		if (migrate_cont_gone(rc)) {
 			DL_ERROR(rc, DF_RB ": " DF_CONT " skip orphan container", DP_RB_MPT(tls),
 				 DP_CONT(tls->mpt_pool_uuid, cont_uuid));
 			D_GOTO(cont_done, rc = 0);
