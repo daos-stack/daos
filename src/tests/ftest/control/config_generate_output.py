@@ -28,7 +28,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         self.def_provider = "ofi+tcp"
         self.allow_numa_imbalance = not has_numa_balance(
-            os.path.join(self.test_env.log_dir, "common", "storage.yaml"))
+            os.path.join(self.test_env.common_dir, "storage.yaml"))
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)

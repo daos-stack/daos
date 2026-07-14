@@ -26,7 +26,7 @@ class ConfigGenerateRun(TestWithServers):
         """Initialize a ConfigGenerateRun object."""
         super().__init__(*args, **kwargs)
         self.allow_numa_imbalance = not has_numa_balance(
-            os.path.join(self.test_env.log_dir, "common", "storage.yaml"))
+            os.path.join(self.test_env.common_dir, "storage.yaml"))
 
     def test_config_generate_run(self):
         """Run daos_server with generated server config file.
