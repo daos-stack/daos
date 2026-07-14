@@ -847,8 +847,8 @@ func (m *Membership) FaultDomainLevel() (int, error) {
 // domainNrAtLevel returns the number of domains in the tree at the given level.
 // It traverses the tree recursively to reach the specified level.
 func domainNrAtLevel(tree *FaultDomainTree, level int) int {
-	if level == 0 {
-		return 1
+	if level == 1 {
+		return len(tree.Children)
 	}
 
 	count := 0
