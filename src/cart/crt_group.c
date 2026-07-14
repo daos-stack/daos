@@ -839,7 +839,7 @@ crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
 
 		rc = crt_grp_lc_ctx_invalid(grp_priv, ctx);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
+			D_ERROR("crt_grp_lc_ctx_invalid failed,group %s, "
 				"ctx_idx: %d, rc: %d.\n",
 				grp_priv->gp_pub.cg_grpid, ctx->cc_idx, rc);
 			break;
