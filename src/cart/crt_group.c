@@ -722,13 +722,13 @@ int
 crt_grp_hg_addr_cache_insert(struct crt_grp_priv *passed_grp_priv, struct crt_context *crt_ctx,
 			     d_rank_t rank, uint32_t tag, hg_addr_t *hg_addr)
 {
-	d_list_t		*rlink;
+	d_list_t                  *rlink;
 	struct crt_hg_cache_entry *entry;
-	struct crt_grp_priv	*grp_priv;
-	int			 ctx_idx;
-	int			 rc = 0;
-	bool                     need_decref = false;
-	uint32_t                 key;
+	struct crt_grp_priv       *grp_priv;
+	int                        ctx_idx;
+	int                        rc          = 0;
+	bool                       need_decref = false;
+	uint32_t                   key;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -3284,6 +3284,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 
 		/* TODO: Change for multi-provider support */
 		rc = grp_uri_cache_set(grp_priv, rank, 0, uris[idx]);
+		if (rc != 0)
+			D_GOTO(cleanup, rc);
 
 		/* Notify about members being added */
 		for (cb_idx = 0; cb_idx < cbs_size; cb_idx++) {
