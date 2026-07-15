@@ -81,7 +81,15 @@ Builtin support for multiple lines.
 ... command
 ```
 
+## Flags
+
+You can pass flags in two ways: `cmd --flag value` or `cmd --flag=value`  
+There are some exceptions/additions to this:  
+- bool: `cmd --boolflag` offer a third option that does not require a value
+- string: `cmd --stringflag="some test string"` leads to value `some test string`, as double quotes are stripped from the value
+
 ## Separate flags and args specifically
+
 If you need to pass a flag-like value as positional argument, you can do so by using a double dash:  
 `>>> command --flag1=something -- --myPositionalArg`
 

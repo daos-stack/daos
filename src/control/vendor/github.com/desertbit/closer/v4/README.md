@@ -1,13 +1,17 @@
 # Closer - A simple, thread-safe closer
 
-[![GoDoc](https://godoc.org/github.com/desertbit/closer?status.svg)](https://godoc.org/github.com/desertbit/closer)
-[![Go Report Card](https://goreportcard.com/badge/github.com/desertbit/closer)](https://goreportcard.com/report/github.com/desertbit/closer)
+[![GoDoc](https://godoc.org/github.com/desertbit/closer/v4?status.svg)](https://godoc.org/github.com/desertbit/closer/v4)
+[![Go Report Card](https://goreportcard.com/badge/github.com/desertbit/closer/v4)](https://goreportcard.com/report/github.com/desertbit/closer/v4)
 [![coverage](https://codecov.io/gh/desertbit/closer/branch/master/graph/badge.svg)](https://codecov.io/gh/desertbit/closer/branch/master)
 [![license](https://img.shields.io/github/license/desertbit/closer.svg)](https://opensource.org/licenses/MIT)
 
 This package aims to provide a simple and performance oriented mechanism to manage the graceful and reliable shutdown of an application, or parts of it.  
 
 It can also be a handy alternative to the context package, though it does not solve the problem that common go libraries only accept context as a valid cancellation method. Therefore, you are only able to cancel "in-between" slow operations.
+
+```
+go get github.com/desertbit/closer/v4
+```
 
 ### Examples
 Check out the sample program for a good overview of this package's functionality.
@@ -23,9 +27,12 @@ type Server struct {
 func New() *Server {
     // ...
     s := &Server {
+        Closer: closer.New(),
         conn: conn,
     }
-    s.Closer = closer.New(s.onClose)
+    closer.Hook(s, func(h closer.H) {
+        h.OnCloseWithErr(s.onClose)
+    })
     return s
 }
 
@@ -42,6 +49,7 @@ func main() {
     s.Close()
 }
 ```
+
 ##### OneWay
 Now we want an application that (among other things) connects as a client to a remote server. In case the connection is interrupted, the app should continue to run and not fail. But if the app itself closes, of course we want to take down the client connection as well.
 ```go
@@ -60,12 +68,15 @@ type Client struct {
     conn net.Conn
 }
 
-func NewClient(cl closer.Closer) *Client {
-    c := &Client{
-        Closer: cl,
-    }
-    c.OnClose(func() error {
-        return c.conn.Close()
+func NewClient(cl closer.Closer, conn net.Conn) (c *Client) {
+    closer.Hook(s, func(h closer.H) {
+        c = &Client{
+            Closer: cl,
+            conn: conn,
+        }
+        h.OnCloseWithErr(func() error {
+            return c.conn.Close()
+        })
     })
     return c
 }
@@ -73,12 +84,13 @@ func NewClient(cl closer.Closer) *Client {
 func main() {
     a := NewApp()
     // Close c, when a closes, but do not close a, when c closes.
-    c := NewClient(a.CloserOneWay())
+    c := NewClient(closer.OneWay(a))
     
     c.Close()
-    // a still alive.
+    // App still alive.
 }
 ```
+
 ##### TwoWay
 Of course, there is the opposite to the OneWay closer that closes its parent as well. If we take the example from before, we can simply exchange the closer that is passed to the client.
 ```go
@@ -87,15 +99,9 @@ Of course, there is the opposite to the OneWay closer that closes its parent as 
 func main() {
     a := NewApp()
     // Close c, when a closes, and close a, when c closes.
-    c := NewClient(a.CloserTwoWay())
+    c := NewClient(closer.TwoWay(a))
     
     c.Close()
-    // a has been closed.
+    // App has been closed.
 }
 ```
-### Documentation
-Check out [godoc](https://godoc.org/github.com/desertbit/closer) for the documentation.
-### Install
-`go get github.com/desertbit/closer`
-### Contribution
-We love contributions, so feel free to do so! Coding and contribution guide lines will come in the future. Simply file a new issue, if you encounter problems with this package or have feature requests.
