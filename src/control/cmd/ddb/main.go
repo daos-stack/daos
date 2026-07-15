@@ -92,9 +92,11 @@ shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
 the '-w' option must be included.
 
-If the command requires it, the VOS file must be provided with the parameter 
---vos-path. The VOS file will be opened before any commands are executed. See
-the command‑specific help for details.
+If the command requires it, the VOS file must be provided with the parameter
+--vos_path. The VOS file will be opened before any commands are executed,
+except for commands that manage their own pool lifecycle (open, close, feature,
+rm_pool, prov_mem, smd_sync, dev_list, dev_replace). See the command-specific
+help for details.
 
 A DAOS file system can operate in different modes depending on the available hardware resources.
 The two primary modes are MD-on-SSD and PMEM. In MD-on-SSD mode (the default), metadata is stored
@@ -104,7 +106,6 @@ MODE section of the manpage for details.
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
 const runCmdArgsErr = "Cannot use both command file and a command string"
-const vosPathMissErr = "Cannot use sys db path without a VOS path"
 const loggerInitErr = "Logging facilities cannot be initialized"
 const ctxInitErr = "DDB Context cannot be initialized"
 const vosPathOpenErr = "Error opening VOS path '%s'"
@@ -286,7 +287,7 @@ func closePoolIfOpen(ctx *DdbContext, log *logging.LeveledLogger) {
 
 func parseOpts(args []string, ctx *DdbContext) (cliOptions, *flags.Parser, error) {
 	var opts cliOptions
-	parser := flags.NewParser(&opts, flags.HelpFlag|flags.IgnoreUnknown)
+	parser := flags.NewParser(&opts, flags.HelpFlag|flags.IgnoreUnknown|flags.PassAfterNonOption)
 	parser.Name = "ddb"
 	parser.Usage = "[OPTIONS]"
 	parser.ShortDescription = "daos debug tool"
@@ -383,8 +384,8 @@ func runDdb(ctx *DdbContext, args []string) error {
 		return nil
 	}
 
-	var log *logging.LeveledLogger
-	if log, err = newLogger(opts); err != nil {
+	log, err := newLogger(opts)
+	if err != nil {
 		return errors.Wrap(err, loggerInitErr)
 	}
 	log.Debug("Logging facilities initialized")
