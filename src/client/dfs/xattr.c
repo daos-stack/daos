@@ -116,11 +116,9 @@ retry:
 			D_GOTO(out_tx, rc = daos_der2errno(rc));
 
 		/*
-		 * Since this function deals with dfs_obj, the hardlink information in its
-		 * mode field may be outdated. Check and update the mode with hardlink info.
-		 * Retry if the hardlink bit is set.
+		 * Handle conversion of the file to hardlink remotely.
 		 */
-		if (S_ISREG(obj->mode)) {
+		if (dfs->use_dtx && S_ISREG(obj->mode)) {
 			rc = fetch_entry(dfs->layout_v, oh, th, obj->name, strlen(obj->name), false,
 					 &exists, &entry, 0, NULL, NULL, NULL);
 			if (rc) {
@@ -164,7 +162,7 @@ retry:
 			D_GOTO(out_obj, rc = EEXIST);
 		} else if ((rc == -DER_NONEXIST) && (flags & XATTR_REPLACE)) {
 			D_ERROR("xattr %s does not exist\n", name);
-			D_GOTO(out_obj, rc = ENODATA);
+			D_GOTO(out_obj, rc = ENOENT);
 		} else if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("Failed to check xattr %s existence\n", name);
 			D_GOTO(out_obj, rc = daos_der2errno(rc));

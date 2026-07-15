@@ -4275,16 +4275,11 @@ dfs_test_xattr_hardlink(void **state)
 	assert_string_equal(buf, v1b);
 
 	/** Step 9: XATTR_CREATE/XATTR_REPLACE flag semantics on a hardlink. */
-#if 0
-	/** Bug: DAOS-19258
-	 * Currently masked because of the above bug.
-	 */
 	print_message("Step 9: XATTR_CREATE / XATTR_REPLACE semantics on a hardlink\n");
 	rc = dfs_setxattr(dfs_mt, l2_obj, k4, v4, strlen(v4) + 1, XATTR_CREATE);
 	assert_int_equal(rc, EEXIST);
 	rc = dfs_setxattr(dfs_mt, l2_obj, "user.missing", v4, strlen(v4) + 1, XATTR_REPLACE);
-	assert_int_equal(rc, ENODATA);
-#endif
+	assert_int_equal(rc, ENOENT);
 	rc = dfs_setxattr(dfs_mt, l2_obj, k1, v1, strlen(v1) + 1, XATTR_REPLACE);
 	assert_int_equal(rc, 0);
 
