@@ -100,7 +100,7 @@ BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 %if %{with server}
-BuildRequires: libipmctl-devel
+BuildRequires: ipmctl
 %endif
 %if (0%{?rhel} >= 9)
 BuildRequires: python-devel
@@ -118,7 +118,7 @@ BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 %if %{with server}
-BuildRequires: ipmctl-devel
+BuildRequires: ipmctl
 %endif
 BuildRequires: python3-devel
 BuildRequires: python3-distro
