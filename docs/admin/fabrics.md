@@ -21,26 +21,32 @@ When designing a DAOS solution, one question that needs to be decided
 early on is if the control plane traffic will be using the same physical
 network as the data plane (for example, and IP-over-IB interface on the
 InfiniBand NIC in an InfiniBand network), or if the control plane will use
-a separate physical network (like an administrative Ethernet LAN).
+a separate physical network (like an administrative Ethernet network).
 
-* For example, if there is a reliable 25GbE management LAN over which
+* For example, if there is a reliable 25GbE management network over which
   all DAOS servers, DAOS clients and DAOS admin nodes can communicate,
   then it is possible to use that network for the control plane.
 
-* On the other hand, if the management LAN of the DAOS servers is isolated
-  from the client nodes' management LAN (which is a best practice to
+* On the other hand, if the management network of the DAOS servers is isolated
+  from the client nodes' management network (which is a best practice to
   protect the server-side management interfaces), then the control plane
   must use TCP over the data plane network to guarantee that the DAOS
   servers, clients and admin nodes can communicate with each other.
 
-This is configured in the `daos_server.yml`, `daos_agent.yml` and
-`daos_contol.yml` files, by using the IP addresses (or IP names) of
-either then nodes' management LAN interface or an IP-over-IB interface
+The control plane network is configured in the `daos_server.yml`,
+`daos_agent.yml` and
+`daos_control.yml` files, by using the IP addresses (or hostnames) of
+either then nodes' management network interface or an IP-over-IB interface
 of their high-speed NICs in the control plane configuration sections.
 The settings in these three configuration files must be consistent.
 
-For example, for a cluster of 8 DAOS servers where nodes 1, 4 and 8 are
-defined as management service replicas, to use the IP-over-IB interfaces:
+Given an 8-node cluster of nodes n[0001-0008], where:
+
+- nodes n[0001,0004,0008] are defined as management service replicas, and
+- the '-ibs1' node name suffix represents and IP-over-IB interface,
+
+the following example would designate a control plane network using
+the IP-over-IB interface:
 
 ```yaml
 # daos_agent.yml
@@ -55,7 +61,7 @@ access_points:
 - n0004-ibs1
 - n0008-ibs1
 
-#daos_control.yml
+# daos_control.yml
 hostlist:
 - n0001-ibs1
 - n0002-ibs1
@@ -67,10 +73,6 @@ hostlist:
 - n0008-ibs1
 ```
 
-This assumes that IP names for the IP-over-IB interfaces of the first
-InfiniBand adapter on these nodes have been set up (in DNS or /etc/hosts)
-to be the hostname with an `-ibs1` suffix.
-
 !!! note
     On dual-socket DAOS servers with two InfiniBand NICs, the second InfiniBand
     NIC also has an IP-over-IB interface, address and name (which is used by the
@@ -80,8 +82,8 @@ to be the hostname with an `-ibs1` suffix.
     To limit the control plane to a specific interface, the `control_iface:`
     setting in the `daos_server.yml` configuration file can be used.
 
-To use the management LAN interface, replace the above IP names with the
-IP names of the management LAN interfaces (typically identical to the hostname).
+To use the management network interface, replace the above hostnames with the
+hostnames of the management network interfaces.
 
 The rest of this document assumes that the control plane is using
 IP-over-IB over the data plane's high-speed NICs,
@@ -97,13 +99,11 @@ InfiniBand networks.
 The CaRT layer that is used by the DAOS _data plane_ is part of the main
 DAOS RPM packages. CaRT uses the Mercury RPC framework, which is provided
 as separate RPMs within the DAOS packages directory.
-Mercury's default backend plugin is OFI
-[libfabric](https://ofiwg.github.io/libfabric/),
-which is the recommended Mercury backend for all fabrics
-except NVIDIA based InfiniBand and RoCE Ethernet fabrics.
-Mercuy also has a UCF [UCX](https://openucx.org/) backend,
-which is the recommended Mercury backend for NVIDIA based fabrics.
-DAOS Version 2.8 uses Mercury Version 2.4.1.
+For NVIDIA based InfiniBand and RoCE Ethernet fabrics, Mercury's
+[UCX](https://openucx.org/) backend is the recommended plugin.
+For all other fabrics, Mercury's
+[libfabric](https://ofiwg.github.io/libfabric/) backend is used.
+DAOS Version 2.9 uses Mercury Version 2.4.1.
 
 Mercury backends are dynamically loaded, and there is no RPM dependency
 in the base `mercury` RPM for a specific backend. Depending on the intended
@@ -167,6 +167,14 @@ When installing the host software stack for the fabric, adapter firmware
 levels should always be checked and updated to the correct level.
 Refer to the respective fabric's documentation for details.
 
+## Multiple NICs per host
+
+Both DAOS server and DAOC clients may have more than one high-speed NIC,
+with IP addresses in the same network range.
+Some `sysctl` configuration is needed to ensure proper operation in such
+scenarios, in particular around ARP resolution.  This is discussed in the
+[Predeployment checklist](https://docs.daos.io/master/admin/predeployment_check/#multi-railnic-setup).
+
 ## Provider selection and configuration
 
 On DAOS _servers_, the fabric provider is configured in the `daos_server.yml`
@@ -174,11 +182,87 @@ configuration file. Details for each supported fabric are given below.
 
 The `daos_server network scan` command displays all network interfaces that
 are recognized on a DAOS server for the provider that is set in the
-`daos_server.yml` configuration file.
+`daos_server.yml` configuration file:
+
+```
+# daos_server network scan
+DAOS Server config loaded from /etc/daos/daos_server.yml
+---------
+localhost
+---------
+
+    -------------
+    NUMA Socket 0
+    -------------
+
+        Provider Interfaces
+        -------- ----------
+        ucx+dc_x ibs1
+
+    -------------
+    NUMA Socket 1
+    -------------
+
+        Provider Interfaces
+        -------- ----------
+        ucx+dc_x ibP1s3
+```
+
 To list **all** providers that are recognized for each of the server's
 network interfaces, add the `--ignore-config` option. If an expected provider
 is missing in the `daos_server network scan --ignore-config` output,
-check if all the host software stack components are installed.
+check if all the host software stack components are installed:
+
+```
+# daos_server network scan --ignore-config
+---------
+localhost
+---------
+
+    -------------
+    NUMA Socket 1
+    -------------
+
+        Provider     Interfaces
+        --------     ----------
+        ucx+rc       ibP1s3
+        ucx+rc_v     ibP1s3
+        ucx+ud       ibP1s3
+        ucx+dc       ibP1s3
+        ucx+dc_x     ibP1s3
+        ucx+rc_mlx5  ibP1s3
+        ucx+tcp      ibP1s3
+        ucx+rc_x     ibP1s3
+        ucx+ud_verbs ibP1s3
+        ucx+ud_x     ibP1s3
+        ucx+all      ibP1s3, ibP1s3
+        ucx+dc_mlx5  ibP1s3
+        ucx+rc_verbs ibP1s3
+        ucx+ud_mlx5  ibP1s3
+        ucx+ud_v     ibP1s3
+
+    -------------
+    NUMA Socket 0
+    -------------
+
+        Provider     Interfaces
+        --------     ----------
+        ucx+ud_mlx5  ibs1
+        ucx+tcp      bond0, ibs1
+        ucx+rc       ibs1
+        ucx+rc_mlx5  ibs1
+        ucx+rc_verbs ibs1
+        ucx+rc_x     ibs1
+        ucx+dc_mlx5  ibs1
+        ucx+dc_x     ibs1
+        ucx+ud_v     ibs1
+        ucx+ud_verbs ibs1
+        ucx+all      bond0, ibs1, ibs1
+        ucx+dc       ibs1
+        ucx+rc_v     ibs1
+        ucx+ud_x     ibs1
+        ucx+ud       ibs1
+```
 
 DAOS _clients_ do not require explicit fabric provider configuration.
 They receive their provider configuration from the DAOS servers through the
@@ -189,7 +273,36 @@ host stack software installed to be able to communicate with the servers.
 The `daos-agent net-scan` command displays all fabric providers that are
 recognized on the DAOS client for each of its network interfaces.
 If an expected provider is missing in the `daos_agent net-scan` output,
-check if all the host software stack components are installed.
+check if all the host software stack components are installed:
+
+```
+# daos_agent net-scan
+---------
+localhost
+---------
+
+    -------------
+    NUMA Socket 0
+    -------------
+
+        Provider     Interfaces
+        --------     ----------
+        ucx+rc_mlx5  ibs1
+        ucx+ud_v     ibs1
+        ucx+dc       ibs1
+        ucx+dc_x     ibs1
+        ucx+rc_x     ibs1
+        ucx+ud_verbs ibs1
+        ucx+ud_x     ibs1
+        ucx+rc       ibs1
+        ucx+rc_v     ibs1
+        ucx+rc_verbs ibs1
+        ucx+ud       ibs1
+        ucx+ud_mlx5  ibs1
+        ucx+tcp      bond0, ibs1
+        ucx+all      bond0, ibs1, ibs1
+        ucx+dc_mlx5  ibs1
+```
 
 Unless they are also DAOS servers or DAOS clients, DAOS _admin nodes_
 only use the control plane, so fabric provider configuration
@@ -235,7 +348,7 @@ or an equivalent `nmcli` configuration.
 ### RoCE on NVIDIA Ethernet with DOCA-OFED and UCX
 
 While DAOS runs on any TCP network with the `ofi+tcp` provider,
-zAOS also supports RDMA over Converged Ethernet (RoCE)
+DAOS also supports RDMA over Converged Ethernet (RoCE)
 which will provide higher performance at lower CPU utilization.
 
 In NVIDIA Ethernet environments, the recommended provider for
@@ -299,16 +412,13 @@ Depending on the size of the fabric, other settings like the CaRT timeout
 (set with `crt_timeout:` in the global section of the `daos_server.yml` file)
 and/or the SWIM timeout settings (set as `SWIM_*` environment variables
 within the `env_vars:` section of both engines) may also need to be adjusted.
-But these settings depend on the fabric details, and there is no general
-recommendation to deviate from the defaults.
+But these settings depend on the cluster size and fabric details,
+and there is no general recommendation to deviate from the defaults.
 
 ### NVIDIA InfiniBand with DOCA-OFED and UCX
 
 The recommended provider for InfiniBand fabrics is `ucx+dc_x`,
 and a current DOCA-OFED level has to be installed on all hosts.
-UCX with the DC transport does support RDMA, and it does not suffer
-from the scalability limitations of the libfabric `ofi+verbs`
-provider (which is not recommended for DAOS on InfiniBand fabrics).
 
 Example of the network-related configuration settings for InfiniBand
 in the `daos_server.yml` file:
@@ -426,7 +536,7 @@ The tuning script referenced therein is located in
 For Omni-Path fabrics, the libfabric `psm2` and `opx` providers that are available for
 MPI message-passing applicationos cannot be used with DAOS due to some functional gaps.
 
-The libfabric `tcp` provider is supported on Omni-Path. 
+The libfabric `tcp` provider is supported on Omni-Path.
 As with all high-speed fabrics, the MTU size is important to achieve good performance
 with TCP. The default MTU size on Omni-Path is 2048, but it can be increased to 10240
 by editing the configuration file of the Omni-Path fabric manager `/etc/opa-fm/opafm.xml`
@@ -445,18 +555,24 @@ to 10240. If multiple MulticastGroups exist change the MTU for all of them:
 </MulticastGroup>
 ```
 
-After restarting the fabric manager, hosts will automatically pick up the 
-increased MTU size, for example the `ip a show ibs3d1` command will
-show an MTU size of 10236.
+After restarting the fabric manager, hosts will automatically pick up the
+increased MTU size, for example the `ip a show` command will
+show an MTU size of 10236 (10240 minus a 4-byte header):
+
+```
+# ip a show ibs3d1 | head -1
+9: ibs3d1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 10236 qdisc mq state UP group default qlen 1000
+```
+
 This MTU change will enable line rate performance on Omni-Path 100 fabrics.
-But it will not be possible to saturate the 400Gbps link bandwidth of 
+But it will not be possible to saturate the 400Gbps link bandwidth of
 Omni-Path CN5000 fabrics with TCP, even with the increased MTU size.
 
 Cornelis has implemented a verbs API over CN5000, and the `ofi+verbs`
 provider is the recommended provider for DAOS on CN5000.
 To achieve the best performance, it is recommended to enable the Cornelis
 _HFI service_ (previously called _Bulk Transfer Service (BTS)_)
-in the Omni-Path SuperNIC driver: 
+in the Omni-Path SuperNIC driver:
 
 ```
 cat /sys/module/hfi1/parameters/use_bulksvc
@@ -489,6 +605,6 @@ Depending on the size of the fabric, other settings like the CaRT timeout
 (set with `crt_timeout:` in the global section of the `daos_server.yml` file)
 and/or the SWIM timeout settings (set as `SWIM_*` environment variables
 within the `env_vars:` section of both engines) may also need to be adjusted.
-But these settings depend on the fabric details, and there is no general
-recommendation to deviate from the defaults.
+But these settings depend on the cluster size and fabric details,
+and there is no general recommendation to deviate from the defaults.
 
