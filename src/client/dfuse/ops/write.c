@@ -133,7 +133,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 		DFUSE_REPLY_WRITE(oh, req, len);
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_write_slab);

@@ -317,23 +317,33 @@ if [ ! -d ${daos_log_dir} ]; then
     chmod 775 ${daos_log_dir}
 fi
 EOF
+chmod +x "${tmp}/pre_install_client"
 EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_client")
 
 cat << EOF  > "${tmp}/post_install_client"
+#!/bin/bash
+set -x
+ldconfig
 systemctl --no-reload preset daos_agent.service  &>/dev/null || :
 EOF
+chmod +x "${tmp}/post_install_client"
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_client")
 
 cat << EOF  > "${tmp}/pre_uninstall_client"
 systemctl --no-reload disable --now daos_agent.service >& /dev/null || :
 EOF
+chmod +x "${tmp}/pre_uninstall_client"
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
 if [[ "${DISTRO:-el8}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
+#!/bin/bash
+set -x
+ldconfig
 rm -f "/var/lib/systemd/migrated/daos_agent.service" || :
 /usr/bin/systemctl daemon-reload || :
 EOF
+  chmod +x "${tmp}/post_uninstall_client"
   EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
 fi
 
