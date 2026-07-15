@@ -752,7 +752,7 @@ crt_grp_hg_addr_cache_insert(struct crt_grp_priv *passed_grp_priv, struct crt_co
 		/* target rank not in cache */
 		D_ALLOC_PTR(entry);
 		if (entry == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(grp_unlock, rc = -DER_NOMEM);
 
 		rc = D_MUTEX_INIT(&entry->mutex, NULL);
 		if (rc != 0)
@@ -807,6 +807,7 @@ crt_grp_hg_addr_cache_insert(struct crt_grp_priv *passed_grp_priv, struct crt_co
 
 out:
 	D_MUTEX_UNLOCK(&entry->mutex);
+grp_unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	/* decref needed if we looked up item, not if we inserted it */
