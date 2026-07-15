@@ -696,6 +696,103 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 	}
 }
 
+func TestControl_AutoConfig_fromNVMe(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ssds           storage.NvmeControllers
+		numaCount      int
+		allowImbalance bool
+		expErr         error
+		expNumaSSDs    numaSSDsMap
+	}{
+		"allow imbalance distributes equally": {
+			ssds: storage.NvmeControllers{
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(0), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(5), SocketID: 1},
+			},
+			numaCount:      2,
+			allowImbalance: true,
+			expNumaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
+			},
+		},
+		"allow imbalance with remainder discards extras": {
+			ssds: storage.NvmeControllers{
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(0), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(5), SocketID: 1},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(6), SocketID: 1},
+			},
+			numaCount:      2,
+			allowImbalance: true,
+			expNumaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
+			},
+		},
+		"allow imbalance with 8 SSDs across 2 engines": {
+			ssds: storage.NvmeControllers{
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(0), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(5), SocketID: 1},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(6), SocketID: 1},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(7), SocketID: 1},
+			},
+			numaCount:      2,
+			allowImbalance: true,
+			expNumaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(4, 5, 6, 7)...),
+			},
+		},
+		"no imbalance keeps original distribution": {
+			ssds: storage.NvmeControllers{
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(0), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 1},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 1},
+			},
+			numaCount:      2,
+			allowImbalance: false,
+			expNumaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(2, 3)...),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			req := ConfGenerateReq{
+				Log:                log,
+				AllowNumaImbalance: tc.allowImbalance,
+			}
+
+			nsm := make(numaSSDsMap)
+			gotErr := nsm.fromNVMe(&req, tc.ssds, tc.numaCount)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expNumaSSDs, nsm, defStorCmpOpts...); diff != "" {
+				t.Fatalf("unexpected numa SSDs (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 	singlePMemMap := numaSCMsMap{0: []string{"/dev/pmem0"}}
 
@@ -1073,10 +1170,9 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 
 func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
 	for name, tc := range map[string]struct {
-		sd             storageDetails
-		allowImbalance bool
-		expErr         error
-		expSD          storageDetails // expected details after updates
+		sd     storageDetails
+		expErr error
+		expSD  storageDetails
 	}{
 		"no ssds": {
 			sd: storageDetails{
