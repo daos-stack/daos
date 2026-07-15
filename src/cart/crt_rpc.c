@@ -1361,7 +1361,8 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 				rc = crt_req_send_immediately(rpc_priv);
 			else
 				D_ERROR("crt_req_hg_addr_lookup() failed, "
-					"rc %d, opc: %#x.\n", rc, req->cr_opc);
+					"rc: " DF_RC " opc: %#x.\n",
+					DP_RC(rc), req->cr_opc);
 		} else {
 			/* base_addr == NULL, send uri lookup req */
 			rpc_priv->crp_state = RPC_STATE_URI_LOOKUP;
