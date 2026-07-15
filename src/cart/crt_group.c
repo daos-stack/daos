@@ -3216,6 +3216,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	void				*cb_args;
 	struct crt_event_cb_priv	*cbs_event;
 	size_t				cbs_size;
+	int                              num_ranks_added = 0;
 
 	grp_priv = crt_grp_pub2priv(grp);
 
@@ -3268,6 +3269,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	cbs_size = crt_plugin_gdata.cpg_event_size;
 	cbs_event = crt_plugin_gdata.cpg_event_cbs;
 
+	num_ranks_added = 0;
+
 	/* Add ranks based on idx_to_add list */
 	for (i = 0; i < n_idx_to_add; i++) {
 		uint32_t	idx = idx_to_add[i];
@@ -3282,7 +3285,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 			D_GOTO(cleanup, rc);
 		}
 
-		/* TODO: Change for multi-provider support */
+		num_ranks_added++;
+
 		rc = grp_uri_cache_set(grp_priv, rank, 0, uris[idx]);
 		if (rc != 0)
 			D_GOTO(cleanup, rc);
@@ -3351,7 +3355,7 @@ cleanup:
 
 	D_ERROR("Failure when adding node %d, rc=%d\n", ranks->rl_ranks[idx_to_add[i]], rc);
 
-	for (k = 0; k < i; k++)
+	for (k = 0; k < num_ranks_added; k++)
 		crt_group_rank_remove_internal(grp_priv, ranks->rl_ranks[idx_to_add[k]]);
 
 	D_FREE(idx_to_add);
