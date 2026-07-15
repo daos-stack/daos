@@ -55,6 +55,7 @@ RoCE
 SConstruct
 SGL
 SHA
+SHS
 SSF
 SX
 Skylake
@@ -415,7 +416,6 @@ scontrol
 seekable
 sharedctypes
 shlex
-SHS
 simul
 sinfo
 slurm
