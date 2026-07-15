@@ -53,34 +53,34 @@ void updateRunStage() {
         'Functional Hardware Medium TCP MD on SSD',
         'Functional Hardware Medium TCP Provider MD on SSD',
         'Functional Hardware Large TCP MD on SSD',
-        'Functional Hardware Medium Verbs MD on SSD',
-        'Functional Hardware Large Verbs MD on SSD'
+        'Functional Hardware Medium UCX MD on SSD',
+        'Functional Hardware Large UCX MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
     for (name in stageOrder) {
         value = params.get(bashName(name), null)
-        if (value instanceof Boolean && !name.startsWith('CI_')) {
+        if (value != null && value.class == Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
-            reasons[name] = "parameter selection or default"
+            reasons[name] = 'parameter selection or default'
         }
     }
 
     // Debug
-    String buildCause = currentBuild.getBuildCauses().toString()
-    println("updateRunStage: Build cause: ${buildCause}")
+    List buildCauses = currentBuild.buildCauses
+    println("updateRunStage: Build cause: ${buildCauses}")
     println("updateRunStage: Started by user: ${startedByUser()}")
 
     // Handle landing builds
     if (startedByLanding()) {
-        println("updateRunStage: Detected landing build, overwriting defaults")
+        println('updateRunStage: Detected landing build, overwriting defaults')
         for (stage in runStage.keySet()) {
             if (stage in ['Test', 'Functional on EL 9']) {
                 runStage[stage] = true
             } else {
                 runStage[stage] = false
             }
-            reasons[stage] = "landing build"
+            reasons[stage] = 'landing build'
         }
         displayRunStage(reasons)
         return
@@ -89,7 +89,7 @@ void updateRunStage() {
     // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
     if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
         println(
-            "updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas")
+            'updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas')
         displayRunStage(reasons)
         return
     }
@@ -97,12 +97,13 @@ void updateRunStage() {
     // Update stage running based on commit pragmas
     println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
     Map<String, String> commitPragmas = envToPragmas()
-    println("updateRunStage: Checking skip commit pragmas from commit message:")
+    println('updateRunStage: Checking skip commit pragmas from commit message:')
     commitPragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        /* groovylint-disable-next-line NestedForLoop */
         for (pragma in skipPragmas) {
             // commitPragmas will already contain lower case keys from pragmasToMap()
             println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
@@ -123,7 +124,7 @@ void updateRunStage() {
 
 // Log which stages will be run and why based on the current state of the runStage map
 void displayRunStage(Map reasons = [:]) {
-    println("Stage run conditions:")
+    println('Stage run conditions:')
     for (stage in runStage.keySet()) {
         String reason = reasons.get(stage, 'default')
         if (runStage[stage]) {
@@ -143,7 +144,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
     if (stageName in ['Cancel Previous Builds']) {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
     } else if (stageName == 'Test' || stageName.contains('Functional')) {
         // Add skip pragma for parent stage
         if (stageName != 'Test') {
@@ -177,6 +177,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
     List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
     List<String> copyPragmas = pragmas.clone()
     for (distro in distros) {
+        /* groovylint-disable-next-line NestedForLoop */
         for (_pragma in copyPragmas) {
             if (_pragma.contains("-${distro}-")) {
                 Integer _index = pragmas.indexOf(_pragma)
@@ -193,7 +194,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
             String _compat_pragma = _pragma.replace('-functional', '-func')
             _compat_pragma = _compat_pragma.replace('-hardware', '-hw')
             pragmas.add(_index + 1, _compat_pragma)
-        }
+         }
     }
 
     return pragmas
@@ -201,7 +202,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
 
 // Initialize the runStage map with the current state of the build parameters and any commit
 // pragmas related to skipping/running stages. Should only be called once per build.
-def setupRunStage() {
+void setupRunStage() {
     pragmasToEnv()
     updateRunStage()
 }
@@ -239,7 +240,7 @@ if (!env.CHANGE_ID &&
       env.BRANCH_NAME == 'master')) {
     currentBuild.result = 'SUCCESS'
     return
-}
+      }
 
 // The docker agent setup and the provisionNodes step need to know the
 // UID that the build agent is running under.
@@ -311,6 +312,10 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
+        string(name: 'TestProviderUCX',
+               defaultValue: 'ucx+ud_x',
+               description: 'Provider to use for the Functional Hardware Medium/Large UCX stages ' +
+                            'of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
@@ -377,12 +382,12 @@ pipeline {
         booleanParam(name: bashName('Functional Hardware Large TCP MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large TCP MD on SSD stage.')
-        booleanParam(name: bashName('Functional Hardware Medium Verbs MD on SSD'),
+        booleanParam(name: bashName('Functional Hardware Medium UCX MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium Verbs MD on SSD stage.')
-        booleanParam(name: bashName('Functional Hardware Large Verbs MD on SSD'),
+                     description: 'Run the Functional Hardware Medium UCX MD on SSD stage.')
+        booleanParam(name: bashName('Functional Hardware Large UCX MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Large Verbs MD on SSD stage.')
+                     description: 'Run the Functional Hardware Large UCX MD on SSD stage.')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
@@ -410,12 +415,12 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_TCP_MD_ON_SSD_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large TCP MD on SSD stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_MD_ON_SSD_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium Verbs MD on SSD stage')
-        string(name: 'FUNCTIONAL_HARDWARE_LARGE_VERBS_MD_ON_SSD_LABEL',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX MD on SSD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_UCX_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed9',
-               description: 'Label to use for 9 node Functional Hardware Large Verbs MD on SSD stage')
+               description: 'Label to use for 9 node Functional Hardware Large UCX MD on SSD stage')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -619,32 +624,32 @@ pipeline {
                             provider: 'ofi+tcp',
                             job_status: job_status_internal
                         ),
-                        'Functional Hardware Medium Verbs MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs MD on SSD',
-                            runStage: shouldStageRun('Functional Hardware Medium Verbs MD on SSD'),
-                            pragma_suffix: '-hw-medium-verbs-md-on-ssd',
+                        'Functional Hardware Medium UCX MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium UCX MD on SSD'),
+                            pragma_suffix: '-hw-medium-ucx-md-on-ssd',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_MD_ON_SSD_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
-                            other_packages: 'mercury-libfabric',
+                            other_packages: 'mercury-ucx',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
+                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
                             job_status: job_status_internal
                         ),
-                        'Functional Hardware Large Verbs MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Large Verbs MD on SSD',
-                            runStage: shouldStageRun('Functional Hardware Large Verbs MD on SSD'),
-                            pragma_suffix: '-hw-large-verbs-md-on-ssd',
+                        'Functional Hardware Large UCX MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Large UCX MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Large UCX MD on SSD'),
+                            pragma_suffix: '-hw-large-ucx-md-on-ssd',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_VERBS_MD_ON_SSD_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_UCX_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
-                            other_packages: 'mercury-libfabric',
+                            other_packages: 'mercury-ucx',
                             stage_tags: 'hw,large',
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
+                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
                             job_status: job_status_internal
                         )
                     )
