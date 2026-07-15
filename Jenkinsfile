@@ -194,7 +194,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
             String _compat_pragma = _pragma.replace('-functional', '-func')
             _compat_pragma = _compat_pragma.replace('-hardware', '-hw')
             pragmas.add(_index + 1, _compat_pragma)
-         }
+        }
     }
 
     return pragmas
@@ -240,7 +240,7 @@ if (!env.CHANGE_ID &&
       env.BRANCH_NAME == 'master')) {
     currentBuild.result = 'SUCCESS'
     return
-      }
+}
 
 // The docker agent setup and the provisionNodes step need to know the
 // UID that the build agent is running under.
