@@ -423,6 +423,8 @@ test_rebuild_wait_to_start(test_arg_t **args, int args_cnt);
 void
 test_rebuild_wait_to_start_next(test_arg_t **args, int args_cnt);
 void
+test_rebuild_wait_to_scanning_next(test_arg_t **args, int args_cnt);
+void
 test_rebuild_wait_to_start_lower(test_arg_t **args, int args_cnt);
 void
     test_rebuild_wait_to_error(test_arg_t **args, int args_cnt);

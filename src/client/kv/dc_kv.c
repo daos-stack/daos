@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,12 +95,19 @@ kv_hdl2ptr(daos_handle_t oh)
 
 daos_handle_t daos_kv2objhandle(daos_handle_t kv_oh)
 {
-	struct dc_kv *dk = kv_hdl2ptr(kv_oh);
+	struct dc_kv *dk;
+	daos_handle_t oh;
 
-	if (dk)
-		return dk->daos_oh;
+	dk = kv_hdl2ptr(kv_oh);
+	if (dk == NULL) {
+		oh = DAOS_HDL_INVAL;
+		goto out;
+	}
+	oh = dk->daos_oh;
+	kv_decref(dk);
 
-	return DAOS_HDL_INVAL;
+out:
+	return oh;
 }
 
 static void

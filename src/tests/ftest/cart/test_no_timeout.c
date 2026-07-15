@@ -91,9 +91,6 @@ test_run(void)
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	rc = crt_group_rank(NULL, &test_g.t_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
-
 	/* register RPCs */
 	rc = crt_proto_register(&my_proto_fmt_test_group1);
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
@@ -136,6 +133,13 @@ test_run(void)
 		}
 	}
 
+	crtu_progress_stop();
+
+	rc = pthread_join(test_g.t_tid[0], NULL);
+	if (rc != 0)
+		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
+	D_DEBUG(DB_TEST, "joined progress thread.\n");
+
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
 
@@ -147,13 +151,6 @@ test_run(void)
 		D_ASSERTF(rc == 0,
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
-
-	crtu_progress_stop();
-
-	rc = pthread_join(test_g.t_tid[0], NULL);
-	if (rc != 0)
-		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TEST, "joined progress thread.\n");
 
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
