@@ -39,6 +39,7 @@ pkgs="boost-python3$PY_MINOR_VER-devel                               \
       gperftools-devel                                               \
       hwloc-devel                                                    \
       libasan                                                        \
+      libipmctl-devel                                                \
       libyaml-devel                                                  \
       numactl                                                        \
       numactl-devel                                                  \

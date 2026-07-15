@@ -94,5 +94,5 @@ fi
 if [ "$arch" = x86_64 ]; then
     # shellcheck disable=SC2086
     dnf --nodocs install ${dnf_install_args} \
-        ipmctl
+        ipmctl-devel
 fi

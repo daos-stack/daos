@@ -104,7 +104,8 @@ dnf --nodocs install ${dnf_install_args} \
 if [ "$arch" = x86_64 ]; then
     # shellcheck disable=SC2086
     dnf --nodocs install ${dnf_install_args} \
-        ipmctl
+        ipmctl \
+        libipmctl-devel
 fi
 
 # For fedora, java-11 is installed along with maven if we install maven from
