@@ -1296,7 +1296,7 @@ pipeline {
                                 inst_rpms: 'mercury-libfabric',
                                 NODELIST: env.NODELIST],
                             nextVersion: next_version(),
-                            postScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
                             archiveArtifactsArgs: [
                                 artifacts: 'Test RPMs on EL 9/']
                         ),
@@ -1310,7 +1310,7 @@ pipeline {
                                 inst_rpms: 'mercury-libfabric',
                                 NODELIST: env.NODELIST],
                             nextVersion: next_version(),
-                            postScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
                             archiveArtifactsArgs: [
                                 artifacts: 'Test RPMs on Leap 15/']
                         )
