@@ -297,7 +297,11 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		splitOff uint64
 	}
 	var tails []plTail
-	for i := 0; i < int(attrs.doi_pl_nr); i++ {
+	plNr := int(attrs.doi_pl_nr)
+	if plNr > int(C.DFS_PL_MAX_SEGMENTS) {
+		plNr = int(C.DFS_PL_MAX_SEGMENTS)
+	}
+	for i := 0; i < plNr; i++ {
 		seg := attrs.doi_pl_segs[i]
 		var segClass [16]C.char
 		C.daos_oclass_id2name(seg.pls_oclass_id, &segClass[0])
