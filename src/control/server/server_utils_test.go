@@ -2104,22 +2104,6 @@ const (
 	testProcessingDelay    = 100 * time.Millisecond
 )
 
-func setupAddTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRunning bool, ranks ...uint32) {
-	t.Helper()
-
-	rank := uint32(1)
-	if len(ranks) != 0 {
-		rank = ranks[0]
-	}
-
-	ei := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
-	setupTestEngine(t, ei, rank, !isRunning)
-
-	if err := h.AddInstance(ei); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestServer_handleEngineSelfTerminated(t *testing.T) {
 	testRank := ranklist.Rank(1)
 	testIncarnation := uint64(42)

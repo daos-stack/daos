@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"syscall"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -74,6 +75,54 @@ func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
 	go func() {
 		ei.storageReady <- replaceRank
 	}()
+}
+
+func (ei *EngineInstance) clearFormat(ctx context.Context, stopEngineFn func(context.Context, *EngineInstance) error) error {
+	idx := ei.Index()
+	ei.log.Infof("instance %d: cleaning up after join failure during replace", idx)
+
+	if ei.IsStarted() {
+		ei.log.Infof("instance %d: stopping engine before cleanup", idx)
+		if err := stopEngineFn(ctx, ei); err != nil {
+			return err
+		}
+		ei.log.Debugf("instance %d: engine stopped successfully", idx)
+	}
+
+	// SCM is intentionally not unmounted:
+	// - RAM/tmpfs: auto-unmounted by the control-plane when the engine exits above;
+	//   ramdisk is unconditionally recreated on next startup.
+	// - DCPM: must stay mounted so createSuperblock() writes onto the PMEM in a "Metadata
+	//   format" rather than requiring a full "SCM format".
+
+	// Removing superblock prevents subsequent join without an explicit format.
+	if err := ei.RemoveSuperblock(); err != nil {
+		return err
+	}
+
+	ei.log.Infof("instance %d: cleanup after join failure complete", idx)
+	return nil
+}
+
+// Production implementation of stopEngineFn.
+func stopEngine(ctx context.Context, ei *EngineInstance) error {
+	if err := ei.Stop(syscall.SIGKILL); err != nil {
+		return errors.Wrap(err, "failed to stop engine")
+	}
+
+	pollFn := func(e Engine) bool { return !e.IsStarted() }
+	if err := pollInstanceState(ctx, []Engine{ei}, pollFn); err != nil {
+		return errors.Wrap(err, "waiting for engine to stop")
+	}
+
+	return nil
+}
+
+// cleanupFailedJoinReplace cleans up storage after a join failure during replace operation.
+// This is called when format succeeded but the join to the system failed, leaving
+// the storage in a partially initialized state.
+func (ei *EngineInstance) cleanupFailedJoinReplace(ctx context.Context) error {
+	return ei.clearFormat(ctx, stopEngine)
 }
 
 func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {
