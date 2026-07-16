@@ -2875,9 +2875,10 @@ ds_cont_eph_report(struct ds_pool *pool)
 			ec_eph->cte_last_ec_agg_epoch = min_ec_agg_eph;
 			ec_eph->cte_last_stable_epoch = min_stable_eph;
 		} else {
-			DL_ERROR(ret, DF_CONT ": Failed to update EC agg report IV.",
-				 DP_CONT(pool->sp_uuid, ec_eph->cte_cont_uuid));
 			rc = ret;
+			DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_MD, DLOG_ERR,
+				  rc, DF_CONT ": Failed to update EC agg report IV.",
+				  DP_CONT(pool->sp_uuid, ec_eph->cte_cont_uuid));
 		}
 	}
 	D_FREE(failed_tgts);
