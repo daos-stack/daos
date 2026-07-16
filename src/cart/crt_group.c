@@ -756,7 +756,7 @@ crt_grp_hg_addr_cache_insert(struct crt_grp_priv *passed_grp_priv, struct crt_co
 
 		rc = D_MUTEX_INIT(&entry->mutex, NULL);
 		if (rc != 0)
-			D_GOTO(err_free_li, rc);
+			D_GOTO(err_free_entry, rc);
 
 		D_INIT_LIST_HEAD(&entry->link);
 		entry->grp_priv    = grp_priv;
@@ -815,8 +815,9 @@ grp_unlock:
 		d_hash_rec_decref(&grp_priv->gp_hg_addr_cache[ctx_idx], rlink);
 	return rc;
 
-err_free_li:
+err_free_entry:
 	D_FREE(entry);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	return rc;
 }
 
