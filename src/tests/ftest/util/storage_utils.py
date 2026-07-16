@@ -814,11 +814,13 @@ class StorageInfo():
                 itertools.chain(*itertools.zip_longest(*numa_devices.values()))))
 
 
-def has_numa_balance(storage_file):
+def has_numa_balance(storage_file, logger=None):
     """Determine if the system has storage on more than one NUMA node.
 
     Args:
         storage_file (str): path to the storage YAML file
+        logger (logger, optional): logger for the messages produced by this function.
+            Defaults to None.
 
     Raises:
         StorageException: if athere is a problem determining the storage NUMA nodes
@@ -829,6 +831,8 @@ def has_numa_balance(storage_file):
     if not os.path.exists(storage_file):
         raise StorageException(f"Storage file {storage_file} does not exist")
 
+    if logger:
+        logger.debug("Checking storage NUMA nodes in %s", storage_file)
     numa_nodes = {}
     with open(storage_file, 'r', encoding='utf-8') as yaml_file:
         try:
@@ -836,9 +840,13 @@ def has_numa_balance(storage_file):
             for storage_type in storage_data["storage"]:
                 if storage_type not in ("NVMe", "VMD"):
                     continue
+                if logger:
+                    logger.debug("  %s devices:", storage_type)
                 if storage_type not in numa_nodes:
                     numa_nodes[storage_type] = set()
                 for device in storage_data["storage"][storage_type]:
+                    if logger:
+                        logger.debug("    %s", device)
                     numa_nodes[storage_type].add(device["numa_node"])
         except Exception as error:
             raise StorageException("Error reading storage NUMA nodes") from error
