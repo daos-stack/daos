@@ -1292,11 +1292,9 @@ pipeline {
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
                             testRpmArgs: [
-                                NODELIST: env.NODELIST,
                                 target: 'el9.6',
                                 inst_rpms: 'mercury-libfabric',
                                 ignoreFailure: false],
-                            distro: 'el9',
                             nextVersion: next_version(),
                             alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
                             archiveArtifactsArgs: [
@@ -1308,11 +1306,9 @@ pipeline {
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
                             testRpmArgs: [
-                                NODELIST: env.NODELIST,
                                 target: 'leap15.6',
                                 inst_rpms: 'mercury-libfabric',
                                 ignoreFailure: false],
-                            distro: 'leap15',
                             nextVersion: next_version(),
                             alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
                             archiveArtifactsArgs: [
