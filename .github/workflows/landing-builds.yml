@@ -255,11 +255,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.9, ubuntu]
+        distro: [alma.9, rocky.9, ubuntu]
         include:
           - distro: alma.9
             base: el.9
             with: almalinux:9
+            python: 3.11
+          - distro: rocky.9
+            base: el.9
+            with: rockylinux/rockylinux:9
             python: 3.11
           - distro: ubuntu
             base: ubuntu
@@ -349,13 +353,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu, leap.15]
+        distro: [ubuntu, alma.9, leap.15]
         compiler: [clang]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
             python: 3
+          - distro: alma.9
+            base: el.9
+            with: almalinux:9
+            python: 3.11
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5

@@ -92,7 +92,7 @@ jobs:
             with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.9
-            with: fedora:38
+            with: fedora:42
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5

@@ -52,6 +52,7 @@ void updateRunStage() {
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
         'Test',
+        'Functional on EL 9.7 with Valgrind',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on SLES 15',
@@ -621,6 +622,9 @@ pipeline {
         booleanParam(name: bashName('Test'),
                      defaultValue: true,
                      description: 'Run the Test stage.')
+        booleanParam(name: bashName('Functional on EL 9.7 with Valgrind'),
+                     defaultValue: false,
+                     description: 'Run the Functional on EL 9.7 with Valgrind stage.')
         booleanParam(name: bashName('Functional on EL 9'),
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 stage.')
@@ -1117,6 +1121,29 @@ pipeline {
                 expression { shouldStageRun('Test') }
             }
             parallel {
+                stage('Functional on EL 9.7 with Valgrind') {
+                    when {
+                        beforeAgent true
+                        expression { shouldStageRun('Functional on EL 9.7 with Valgrind') }
+                    }
+                    agent {
+                        label vm9_label('EL9')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
+                                           ' mercury-libfabric',
+                                test_function: 'runTestFunctionalV2'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional on EL 9.7 with Valgrind')
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true

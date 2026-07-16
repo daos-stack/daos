@@ -11,6 +11,8 @@ env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list except the highest
+  EL9_BUILD_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
+  EL9_VERSION: ${{ vars.EL9_VERSION_MASTER }}
   LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
   # Which distros to build for
   TEST_TAG: ${{ vars.TEST_TAG }}
