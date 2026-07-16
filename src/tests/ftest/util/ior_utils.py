@@ -85,8 +85,9 @@ def run_ior(test, manager, log, hosts, path, slots, pool, container, processes, 
 
 
 def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
-                   pool, container, processes, ppn, intercept, plugin_path, dfuse,
-                   display_space, fail_on_warning, namespace, ior_params):
+                   pool, container, processes, ppn=None, intercept=None, plugin_path=None,
+                   dfuse=None, display_space=True, fail_on_warning=False, namespace="/run/ior/*",
+                   ior_params=None):
     # pylint: disable=too-many-arguments
     """Start an IOR thread with thread queue for failure analysis.
 
@@ -572,17 +573,21 @@ class Ior:
             parts.append('read')
         return '.'.join(['_'.join(parts), 'log'])
 
-    def run(self, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
-            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=None):
+    def run(self, pool=None, container=None, processes=None, ppn=None, intercept=None,
+            plugin_path=None, dfuse=None, display_space=True, fail_on_warning=False,
+            unique_log=True, il_report=None):
         # pylint: disable=too-many-arguments
         """Run ior.
 
         Args:
-            pool (TestPool): DAOS test pool object
-            container (TestContainer): DAOS test container object.
-            processes (int): number of processes to run
-            ppn (int, optional): number of processes per node to run.  If specified it will override
-                the processes input. Defaults to None.
+            pool (TestPool, optional): DAOS test pool object. Overrides the current pool.
+                Defaults to None.
+            container (TestContainer, optional): DAOS test container object.
+                Overrides the current container. Defaults to None.
+            processes (int, optional): number of processes to run. Overrides the current processes.
+                Defaults to None.
+            ppn (int, optional): number of processes per node to run. Overrides the current ppn.
+                Takes precedent over `processes`. Defaults to None.
             intercept (str, optional): path to interception library. Defaults to None.
             plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
                 working directory which is needed to run vol connector for DAOS. Default is None.
@@ -606,7 +611,10 @@ class Ior:
         result = None
         error_message = None
 
-        self.command.set_daos_params(pool, container.identifier)
+        if pool:
+            self.command.update_params(dfs_pool=pool.identifier)
+        if container:
+            self.command.update_params(dfs_cont=container.identifier)
 
         if intercept:
             self.env["LD_PRELOAD"] = intercept
@@ -635,7 +643,7 @@ class Ior:
         # Pass only processes or ppn to be compatible with previous behavior
         if ppn is not None:
             self.manager.assign_processes(ppn=ppn)
-        else:
+        elif processes is not None:
             self.manager.assign_processes(processes=processes)
 
         self.manager.assign_environment(self.env)
@@ -643,11 +651,11 @@ class Ior:
         if fail_on_warning and "WARNING" not in self.manager.check_results_list:
             self.manager.check_results_list.append("WARNING")
 
-        if unique_log:
+        if container and unique_log:
             self.update_log_file(self.get_unique_log(container))
 
         try:
-            if display_space:
+            if pool and display_space:
                 pool.display_space()
             result = self.manager.run()
 
@@ -655,7 +663,7 @@ class Ior:
             error_message = "IOR Failed:\n  {}".format("\n  ".join(str(error).split("\n")))
 
         finally:
-            if not self.manager.run_as_subprocess and display_space:
+            if not self.manager.run_as_subprocess and pool and display_space:
                 pool.display_space()
 
         if error_message:
