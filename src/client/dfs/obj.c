@@ -152,9 +152,9 @@ file_split_off(uint32_t target_nr, uint64_t total_scm, uint64_t total_nvme,
 
 /* Resolve file head/tail oclasses, applying PL only when no explicit file class was selected. */
 static int
-file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_size_t chunk_size,
-	      daos_oclass_id_t *head_cid, daos_oclass_id_t *tail_cid, daos_size_t *split_off,
-	      bool *has_tail)
+file_oclasses(dfs_t *dfs, daos_oclass_id_t parent_oclass, daos_oclass_id_t cid,
+	      daos_size_t chunk_size, daos_oclass_id_t *head_cid, daos_oclass_id_t *tail_cid,
+	      daos_size_t *split_off, bool *has_tail)
 {
 	struct daos_oclass_attr *tail_attr;
 	daos_size_t              local_split_off = 0;
@@ -168,10 +168,10 @@ file_oclasses(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, daos_size_t c
 	if (cid == 0) {
 		/* Respect explicit file-class choices before considering progressive layout
 		 * defaults. */
-		if (parent->d.oclass == 0)
+		if (parent_oclass == 0)
 			cid = dfs->attr.da_file_oclass_id;
 		else
-			cid = parent->d.oclass;
+			cid = parent_oclass;
 	}
 
 	*head_cid  = cid;
@@ -236,6 +236,22 @@ out:
 	return 0;
 }
 
+/*
+ * Report the head/tail object classes and split offset a default-class regular file would receive
+ * under progressive layout in this container (no explicit or parent class). Used by dfs_query() to
+ * expose the effective default layout. On return \a has_tail is false (and \a tail_cid/\a split_off
+ * are 0) when progressive layout does not apply to default files.
+ */
+int
+dfs_default_file_pl(dfs_t *dfs, daos_size_t chunk_size, daos_oclass_id_t *head_cid,
+		    daos_oclass_id_t *tail_cid, daos_size_t *split_off, bool *has_tail)
+{
+	if (dfs == NULL)
+		return EINVAL;
+
+	return file_oclasses(dfs, 0, 0, chunk_size, head_cid, tail_cid, split_off, has_tail);
+}
+
 static int
 check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int mask)
 {
@@ -293,13 +309,19 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 		return EINVAL;
 
 	info->doi_oid = obj->oid;
-	info->doi_tail_oid  = DAOS_OBJ_NIL;
-	info->doi_split_off = 0;
+	info->doi_pl_nr = 0;
 
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR: {
 		/** the oclass of the directory object itself */
 		info->doi_oclass_id = daos_obj_id2class(obj->oid);
+
+		if (obj->d.chunk_size)
+			info->doi_chunk_size = obj->d.chunk_size;
+		else if (dfs->attr.da_chunk_size)
+			info->doi_chunk_size = dfs->attr.da_chunk_size;
+		else
+			info->doi_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 
 		/** what is the default oclass files and dirs will be created with in this dir */
 		if (obj->d.oclass) {
@@ -330,23 +352,45 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 				return daos_der2errno(rc);
 			}
 
-			if (dfs->attr.da_file_oclass_id)
+			if (dfs->attr.da_file_oclass_id) {
 				info->doi_file_oclass_id = dfs->attr.da_file_oclass_id;
-			else
+			} else {
+				daos_oclass_id_t pl_head     = 0;
+				daos_oclass_id_t pl_tail     = 0;
+				daos_size_t      pl_split    = 0;
+				bool             pl_has_tail = false;
+
+				/** container uses the DAOS-default file class */
 				rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, 0, 0,
 							 &info->doi_file_oclass_id);
-			if (rc) {
-				D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
-				return daos_der2errno(rc);
+				if (rc) {
+					D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n",
+						DP_RC(rc));
+					return daos_der2errno(rc);
+				}
+
+				/*
+				 * Files created here use the default class, so they may be
+				 * progressive: report the head/tail classes and split offset a file
+				 * created in this directory would receive. doi_file_oclass_id
+				 * becomes the compact head class and doi_pl_segs[] the wider tail
+				 * segment(s); left as no PL when the pool is too small or the
+				 * layout predates PL.
+				 */
+				rc = file_oclasses(dfs, 0, 0, info->doi_chunk_size, &pl_head,
+						   &pl_tail, &pl_split, &pl_has_tail);
+				if (rc)
+					return rc;
+				if (pl_has_tail) {
+					info->doi_file_oclass_id           = pl_head;
+					info->doi_pl_nr                    = 1;
+					info->doi_pl_segs[0].pls_oclass_id = pl_tail;
+					info->doi_pl_segs[0].pls_split_off = pl_split;
+					info->doi_pl_segs[0].pls_oid       = DAOS_OBJ_NIL;
+				}
 			}
 		}
 
-		if (obj->d.chunk_size)
-			info->doi_chunk_size = obj->d.chunk_size;
-		else if (dfs->attr.da_chunk_size)
-			info->doi_chunk_size = dfs->attr.da_chunk_size;
-		else
-			info->doi_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 		break;
 	}
 	case S_IFREG: {
@@ -358,8 +402,10 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 
 		info->doi_oclass_id = daos_obj_id2class(obj->oid);
 		if (obj->f.has_tail) {
-			info->doi_tail_oid  = obj->f.tail_oid;
-			info->doi_split_off = obj->f.split_off;
+			info->doi_pl_nr                    = 1;
+			info->doi_pl_segs[0].pls_oclass_id = daos_obj_id2class(obj->f.tail_oid);
+			info->doi_pl_segs[0].pls_split_off = obj->f.split_off;
+			info->doi_pl_segs[0].pls_oid       = obj->f.tail_oid;
 		}
 		break;
 	}
@@ -403,7 +449,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 				chunk_size = parent->d.chunk_size;
 		}
 
-		rc = file_oclasses(dfs, parent, cid, chunk_size, &cid, &tail_cid,
+		rc = file_oclasses(dfs, parent->d.oclass, cid, chunk_size, &cid, &tail_cid,
 				   &file->f.split_off, &file->f.has_tail);
 		if (rc != 0)
 			return rc;

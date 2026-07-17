@@ -39,6 +39,8 @@ extern "C" {
 #define DFS_MAX_FSIZE		(~0ULL)
 /** Default chunk size for files (arrays) */
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
+/** Maximum number of progressive-layout tail segments reported for a file (head is separate) */
+#define DFS_PL_MAX_SEGMENTS     8
 /** Maximum xattr name */
 #define DFS_MAX_XATTR_NAME	255
 /** Maximum xattr value */
@@ -68,6 +70,16 @@ typedef struct dfs dfs_t;
 /** read/write access */
 #define DFS_RDWR	O_RDWR
 
+/** One progressive-layout segment of a file beyond the head. */
+typedef struct {
+	/** object class of this segment */
+	daos_oclass_id_t pls_oclass_id;
+	/** logical byte offset at which this segment begins */
+	daos_size_t      pls_split_off;
+	/** object id of this segment; nil for template layouts (dir/container defaults) */
+	daos_obj_id_t    pls_oid;
+} dfs_pl_seg_t;
+
 /** struct holding attributes for a DFS container - all optional */
 typedef struct {
 	/** User ID for DFS container. */
@@ -92,6 +104,20 @@ typedef struct {
 	 * examples include: "file:single,dir:max", "directory:single,file:max", etc.
 	 */
 	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
+	/**
+	 * Output-only (populated by dfs_query()): number of progressive-layout tail segments of the
+	 * default regular-file layout. When > 0, da_file_oclass_id is the compact HEAD class and
+	 * da_file_pl_segs[0..nr-1] describe the wider tail segment(s). 0 when progressive layout
+	 * does not apply to default files (an explicit file class is set, the layout version
+	 * predates PL, or the pool is too small).
+	 */
+	uint32_t                 da_file_pl_nr;
+	/**
+	 * Tail segment(s) of the default regular-file layout in increasing split-offset order
+	 * (valid for indices [0, da_file_pl_nr); pls_oid is nil for this container-default
+	 * template).
+	 */
+	dfs_pl_seg_t             da_file_pl_segs[DFS_PL_MAX_SEGMENTS];
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
@@ -114,10 +140,18 @@ typedef struct {
 	daos_oclass_id_t        doi_file_oclass_id;
 	/** Object id */
 	daos_obj_id_t           doi_oid;
-	/** Tail object id for progressive-layout files, or nil when absent */
-	daos_obj_id_t           doi_tail_oid;
-	/** Logical file offset where progressive layout switches from head to tail */
-	daos_size_t             doi_split_off;
+	/**
+	 * Number of progressive-layout segments beyond the head. For a regular FILE the head is
+	 * doi_oid / doi_oclass_id; for a DIRECTORY this describes the file-creation default (head
+	 * is doi_file_oclass_id). 0 when progressive layout does not apply.
+	 */
+	uint32_t                doi_pl_nr;
+	/**
+	 * Progressive-layout segments beyond the head, ordered by increasing split offset (valid
+	 * for indices [0, doi_pl_nr)). Each entry carries the segment's object class, split offset,
+	 * and oid (nil for a directory file-creation template).
+	 */
+	dfs_pl_seg_t            doi_pl_segs[DFS_PL_MAX_SEGMENTS];
 } dfs_obj_info_t;
 
 /**

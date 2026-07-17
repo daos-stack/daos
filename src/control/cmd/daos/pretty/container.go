@@ -48,7 +48,21 @@ func PrintContainerInfo(out io.Writer, ci *daos.ContainerInfo, verbose bool) err
 				rows = append(rows, txtfmt.TableRow{"Dir Object Class": ci.DirObjectClass.String()})
 			}
 			if ci.FileObjectClass != 0 {
-				rows = append(rows, txtfmt.TableRow{"File Object Class": ci.FileObjectClass.String()})
+				label := "File Object Class"
+				if len(ci.FilePLTails) > 0 {
+					label = "File Head Object Class"
+				}
+				rows = append(rows, txtfmt.TableRow{label: ci.FileObjectClass.String()})
+			}
+			for i, seg := range ci.FilePLTails {
+				tailLabel := "File Tail Object Class"
+				splitLabel := "Split Offset"
+				if len(ci.FilePLTails) > 1 {
+					tailLabel = fmt.Sprintf("File Tail %d Object Class", i+1)
+					splitLabel = fmt.Sprintf("Split Offset %d", i+1)
+				}
+				rows = append(rows, txtfmt.TableRow{tailLabel: seg.ObjectClass.String()})
+				rows = append(rows, txtfmt.TableRow{splitLabel: humanize.IBytes(seg.SplitOffset)})
 			}
 			if ci.Hints != "" {
 				rows = append(rows, txtfmt.TableRow{"Hints": ci.Hints})

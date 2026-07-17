@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -286,23 +287,67 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	var fileoclassName [16]C.char
 	var oid C.daos_obj_id_t = attrs.doi_oid
 	var oidStr string = fmt.Sprintf("%d.%d", oid.hi, oid.lo)
-	if C.mode_is_dir(cmode) {
+	isDir := bool(C.mode_is_dir(cmode))
+
+	// Collect the progressive-layout tail segment(s) beyond the head (empty when not PL). For a
+	// file each carries its own tail OID; for a directory template the segment OIDs are nil.
+	type plTail struct {
+		oidStr   string
+		oclass   string
+		splitOff uint64
+	}
+	var tails []plTail
+	plNr := int(attrs.doi_pl_nr)
+	if plNr > int(C.DFS_PL_MAX_SEGMENTS) {
+		plNr = int(C.DFS_PL_MAX_SEGMENTS)
+	}
+	for i := 0; i < plNr; i++ {
+		seg := attrs.doi_pl_segs[i]
+		var segClass [16]C.char
+		C.daos_oclass_id2name(seg.pls_oclass_id, &segClass[0])
+		t := plTail{
+			oclass:   C.GoString(&segClass[0]),
+			splitOff: uint64(seg.pls_split_off),
+		}
+		if seg.pls_oid.hi != 0 || seg.pls_oid.lo != 0 {
+			t.oidStr = fmt.Sprintf("%d.%d", seg.pls_oid.hi, seg.pls_oid.lo)
+		}
+		tails = append(tails, t)
+	}
+	isPL := len(tails) > 0
+
+	if isDir {
 		C.daos_oclass_id2name(attrs.doi_dir_oclass_id, &diroclassName[0])
 		C.daos_oclass_id2name(attrs.doi_file_oclass_id, &fileoclassName[0])
 	}
 
 	if cmd.JSONOutputEnabled() {
-		if C.mode_is_dir(cmode) {
+		if isDir {
+			type jsonTail struct {
+				ObjClass string `json:"oclass"`
+				SplitOff uint64 `json:"split_off"`
+			}
+			var jsonTails []jsonTail
+			for _, t := range tails {
+				jsonTails = append(jsonTails, jsonTail{ObjClass: t.oclass, SplitOff: t.splitOff})
+			}
+			dirAttr := struct {
+				DirObjClass  string     `json:"dir_oclass"`
+				FileObjClass string     `json:"file_oclass"`
+				FilePLTails  []jsonTail `json:"file_pl_tails,omitempty"`
+				ChunkSize    uint64     `json:"chunk_size"`
+			}{
+				FileObjClass: C.GoString(&diroclassName[0]),
+				DirObjClass:  C.GoString(&fileoclassName[0]),
+				FilePLTails:  jsonTails,
+				ChunkSize:    uint64(attrs.doi_chunk_size),
+			}
 			jsonAttrs := struct {
 				ObjAttr struct {
 					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				} `json:"object"`
-				DirAttr struct {
-					DirObjClass  string `json:"dir_oclass"`
-					FileObjClass string `json:"file_oclass"`
-					ChunkSize    uint64 `json:"chunk_size"`
-				} `json:"directory"`
+				DirAttr interface{} `json:"directory"`
 			}{
 				ObjAttr: struct {
 					OID      string `json:"oid"`
@@ -311,38 +356,76 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 					OID:      oidStr,
 					ObjClass: C.GoString(&oclassName[0]),
 				},
-				DirAttr: struct {
-					DirObjClass  string `json:"dir_oclass"`
-					FileObjClass string `json:"file_oclass"`
-					ChunkSize    uint64 `json:"chunk_size"`
-				}{
-					FileObjClass: C.GoString(&diroclassName[0]),
-					DirObjClass:  C.GoString(&fileoclassName[0]),
-					ChunkSize:    uint64(attrs.doi_chunk_size),
-				},
-			}
-			return cmd.OutputJSON(jsonAttrs, nil)
-		} else {
-			jsonAttrs := &struct {
-				OID       string `json:"oid"`
-				ObjClass  string `json:"oclass"`
-				ChunkSize uint64 `json:"chunk_size"`
-			}{
-				OID:       oidStr,
-				ObjClass:  C.GoString(&oclassName[0]),
-				ChunkSize: uint64(attrs.doi_chunk_size),
+				DirAttr: dirAttr,
 			}
 			return cmd.OutputJSON(jsonAttrs, nil)
 		}
+		type jsonTail struct {
+			OID      string `json:"oid,omitempty"`
+			ObjClass string `json:"oclass"`
+			SplitOff uint64 `json:"split_off"`
+		}
+		var jsonTails []jsonTail
+		for _, t := range tails {
+			jsonTails = append(jsonTails, jsonTail{OID: t.oidStr, ObjClass: t.oclass, SplitOff: t.splitOff})
+		}
+		jsonAttrs := &struct {
+			OID       string     `json:"oid"`
+			ObjClass  string     `json:"oclass"`
+			ChunkSize uint64     `json:"chunk_size"`
+			Tails     []jsonTail `json:"tails,omitempty"`
+		}{
+			OID:       oidStr,
+			ObjClass:  C.GoString(&oclassName[0]),
+			ChunkSize: uint64(attrs.doi_chunk_size),
+			Tails:     jsonTails,
+		}
+		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
-	cmd.Infof("OID = %s", oidStr)
-	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
-	if C.mode_is_dir(cmode) {
+	if isDir {
+		cmd.Infof("OID = %s", oidStr)
+		cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))
-		cmd.Infof("File Creation Object Class = %s", C.GoString(&fileoclassName[0]))
-		cmd.Infof("File Creation Chunk Size = %d", attrs.doi_chunk_size)
+		if isPL {
+			cmd.Infof("File Creation Head Object Class = %s", C.GoString(&fileoclassName[0]))
+			for i, t := range tails {
+				if len(tails) > 1 {
+					cmd.Infof("File Creation Tail %d Object Class = %s", i+1, t.oclass)
+					cmd.Infof("File Creation Split Offset %d = %d", i+1, t.splitOff)
+				} else {
+					cmd.Infof("File Creation Tail Object Class = %s", t.oclass)
+					cmd.Infof("File Creation Split Offset = %d", t.splitOff)
+				}
+			}
+			cmd.Infof("File Creation Chunk Size = %d", attrs.doi_chunk_size)
+		} else {
+			cmd.Infof("File Creation Object Class = %s", C.GoString(&fileoclassName[0]))
+			cmd.Infof("File Creation Chunk Size = %d", attrs.doi_chunk_size)
+		}
+	} else if isPL {
+		cmd.Infof("Head OID = %s", oidStr)
+		cmd.Infof("Head Object Class = %s", C.GoString(&oclassName[0]))
+		for i, t := range tails {
+			if len(tails) > 1 {
+				cmd.Infof("Tail %d OID = %s", i+1, t.oidStr)
+				cmd.Infof("Tail %d Object Class = %s", i+1, t.oclass)
+			} else {
+				cmd.Infof("Tail OID = %s", t.oidStr)
+				cmd.Infof("Tail Object Class = %s", t.oclass)
+			}
+		}
+		cmd.Infof("Object Chunk Size = %d", attrs.doi_chunk_size)
+		for i, t := range tails {
+			if len(tails) > 1 {
+				cmd.Infof("Split Offset %d = %d", i+1, t.splitOff)
+			} else {
+				cmd.Infof("Split Offset = %d", t.splitOff)
+			}
+		}
 	} else {
+		cmd.Infof("OID = %s", oidStr)
+		cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 		cmd.Infof("Object Chunk Size = %d", attrs.doi_chunk_size)
 	}
 	return nil

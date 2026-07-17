@@ -381,6 +381,17 @@ func containerQueryDFSAttrs(contConn *ContainerHandle) (*daos.POSIXAttributes, e
 	pa.ObjectClass = daos.ObjectClass(attr.da_oclass_id)
 	pa.DirObjectClass = daos.ObjectClass(attr.da_dir_oclass_id)
 	pa.FileObjectClass = daos.ObjectClass(attr.da_file_oclass_id)
+	plNr := int(attr.da_file_pl_nr)
+	if plNr > int(C.DFS_PL_MAX_SEGMENTS) {
+		plNr = int(C.DFS_PL_MAX_SEGMENTS)
+	}
+	for i := 0; i < plNr; i++ {
+		seg := attr.da_file_pl_segs[i]
+		pa.FilePLTails = append(pa.FilePLTails, daos.PLSegment{
+			ObjectClass: daos.ObjectClass(seg.pls_oclass_id),
+			SplitOffset: uint64(seg.pls_split_off),
+		})
+	}
 	pa.ConsistencyMode = uint32(attr.da_mode)
 	pa.Hints = C.GoString(&attr.da_hints[0])
 
