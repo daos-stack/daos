@@ -73,7 +73,7 @@ class ConfigGenerateOutput(TestWithServers):
         for nvme_device in nvme_devices:
             socket_id = nvme_device["socket_id"]
             pci_addr = nvme_device["pci_addr"]
-            if not pci_addr.startswith("0000:") and pci_addr.endswith(":01.00.0"):
+            if not pci_addr.startswith("0000:"):
                 # Convert a dmg VMD style address to a standard PCI address:
                 # e.g.,  -> d70605:01.00.0 -> 0000:d7:06.5
                 bus_dev_fn = pci_addr.split(":", 1)[0]
