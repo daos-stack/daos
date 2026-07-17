@@ -241,7 +241,7 @@ class NetworkFailureTest(IorTestBase):
         # 7.5 Verify that no ranks are disabled after reintegration.
         output = dmg_cmd.pool_query(pool=self.pool.identifier)
         disabled_ranks = output["response"].get("disabled_ranks")
-        if disabled_ranks is not None:
+        if disabled_ranks:
             self.fail(f"Ranks are still disabled after reintegration: {disabled_ranks}")
 
         # 8. Run IOR again. It should work this time.

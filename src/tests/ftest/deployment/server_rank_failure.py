@@ -201,7 +201,7 @@ class ServerRankFailure(IorTestBase):
         # 10.5 Verify that no ranks are disabled after reintegration.
         output = self.get_dmg_command().pool_query(pool=self.pool.identifier)
         disabled_ranks = output["response"].get("disabled_ranks")
-        if disabled_ranks is not None:
+        if disabled_ranks:
             self.fail(f"Ranks are still disabled after reintegration: {disabled_ranks}")
 
         # 11. Verify that the container Health is HEALTHY.
