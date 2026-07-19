@@ -55,8 +55,9 @@ message StorageFormatReq {
 	FormatNvmeReq nvme = 1;
 	FormatScmReq scm = 2;
 	bool reformat = 3;
-	bool          replace  = 4;
-	uint32        rank     = 5; // Specific rank to replace (only valid with replace=true)
+	bool          replace    = 4;
+	uint32        rank       = 5; // Specific rank to replace (only valid with replace=true)
+	uint32        engine_idx = 6; // Specific engine instance index to format (optional)
 }
 
 message StorageFormatResp {

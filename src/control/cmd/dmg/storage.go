@@ -98,10 +98,11 @@ type storageFormatCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	cmdutil.JSONOutputCmd
-	Verbose bool    `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
-	Force   bool    `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
-	Replace bool    `long:"replace" description:"Replace an excluded rank. Allows a DAOS engine instance to reclaim its old rank number after metadata is lost due to PMem or other storage media failure"`
-	Rank    *uint32 `long:"rank" description:"Specific rank to replace (only valid with --replace)"`
+	Verbose   bool    `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
+	Force     bool    `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
+	Replace   bool    `long:"replace" description:"Replace an excluded rank. Allows a DAOS engine instance to reclaim its old rank number after metadata is lost due to PMem or other storage media failure"`
+	Rank      *uint32 `long:"rank" description:"Specific rank to replace (only valid with --replace)"`
+	EngineIdx *uint32 `long:"engine-idx" description:"Specific engine instance index to format (optional, by default all engines are formatted)"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -127,7 +128,12 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		rank = *cmd.Rank
 	}
 
-	req := &control.StorageFormatReq{Reformat: cmd.Force, Replace: cmd.Replace, Rank: rank}
+	req := &control.StorageFormatReq{
+		Reformat:  cmd.Force,
+		Replace:   cmd.Replace,
+		Rank:      rank,
+		EngineIdx: cmd.EngineIdx,
+	}
 	req.SetHostList(cmd.getHostList())
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
