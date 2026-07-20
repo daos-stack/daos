@@ -906,13 +906,13 @@ pipeline {
                                                 ' --target build-ci' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
+                                                " --build-arg DAOS_DEPS_INSTALL=yes" +
+                                                " --build-arg DAOS_DEPS_INSTALL_RELEASE=${env.DAOS_RELVAL}"
                         }
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
