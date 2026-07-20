@@ -3031,6 +3031,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	uint32_t                         max_ver = 0;
 	struct dtx_epoch                 epoch   = {0};
 	int                              rc;
+	int                              retry      = 0;
 	bool                             need_abort = false;
 
 	D_ASSERT(orw != NULL);
@@ -3244,6 +3245,17 @@ again:
 		 * old client if reply with -DER_TX_RESTART).
 		 */
 		if (orw->orw_api_flags & DAOS_COND_MASK) {
+			rc = -DER_INPROGRESS;
+			break;
+		}
+
+		/* If we have already retried once, but still failed for -DER_TX_RESTART, then
+		 * it is quite possible that the -DER_TX_RESTART failure is related with server
+		 * overload or some congestion caused RPC delay. Let's ask client to retry with
+		 * some backoff delay. That will avoid increasing server workload/congestion and
+		 * avoid client RPC timeout during server retry repeatedly.
+		 */
+		if (++retry > 1) {
 			rc = -DER_INPROGRESS;
 			break;
 		}
@@ -4019,6 +4031,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	uint32_t                         max_ver   = 0;
 	struct dtx_epoch                 epoch;
 	int                              rc;
+	int                              retry      = 0;
 	bool                             need_abort = false;
 
 	opi = crt_req_get(rpc);
@@ -4155,6 +4168,17 @@ again:
 		 * (to avoid fail old client if reply -DER_TX_RESTART).
 		 */
 		if (opi->opi_api_flags & DAOS_COND_PUNCH) {
+			rc = -DER_INPROGRESS;
+			break;
+		}
+
+		/* If we have already retried once, but still failed for -DER_TX_RESTART, then
+		 * it is quite possible that the -DER_TX_RESTART failure is related with server
+		 * overload or some congestion caused RPC delay. Let's ask client to retry with
+		 * some backoff delay. That will avoid increasing server workload/congestion and
+		 * avoid client RPC timeout during server retry repeatedly.
+		 */
+		if (++retry > 1) {
 			rc = -DER_INPROGRESS;
 			break;
 		}
