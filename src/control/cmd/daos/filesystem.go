@@ -259,6 +259,62 @@ type fsGetAttrCmd struct {
 	fsAttrCmd
 }
 
+// fsGetAttrTailJSON is the JSON representation of a progressive-layout tail
+// segment beyond the head object. For directory templates the segment OID is
+// nil and therefore omitted.
+type fsGetAttrTailJSON struct {
+	OID      string `json:"oid,omitempty"`
+	ObjClass string `json:"oclass"`
+	SplitOff uint64 `json:"split_off"`
+}
+
+// fsGetAttrDirJSON is the JSON representation of a directory's default
+// creation attributes returned by the fs get-attr command.
+type fsGetAttrDirJSON struct {
+	ObjAttr struct {
+		OID      string `json:"oid"`
+		ObjClass string `json:"oclass"`
+	} `json:"object"`
+	DirAttr struct {
+		DirObjClass  string              `json:"dir_oclass"`
+		FileObjClass string              `json:"file_oclass"`
+		FilePLTails  []fsGetAttrTailJSON `json:"file_pl_tails,omitempty"`
+		ChunkSize    uint64              `json:"chunk_size"`
+	} `json:"directory"`
+}
+
+// fsGetAttrFileJSON is the JSON representation of a file's attributes
+// returned by the fs get-attr command.
+type fsGetAttrFileJSON struct {
+	OID       string              `json:"oid"`
+	ObjClass  string              `json:"oclass"`
+	ChunkSize uint64              `json:"chunk_size"`
+	Tails     []fsGetAttrTailJSON `json:"tails,omitempty"`
+}
+
+// newFSGetAttrJSON builds the JSON output value for the fs get-attr command.
+// It is kept free of cgo so that the attribute-to-field mapping can be unit
+// tested. \a tails carries any progressive-layout segments beyond the head.
+func newFSGetAttrJSON(isDir bool, oidStr, oclass, dirOclass, fileOclass string, chunkSize uint64, tails []fsGetAttrTailJSON) any {
+	if isDir {
+		out := fsGetAttrDirJSON{}
+		out.ObjAttr.OID = oidStr
+		out.ObjAttr.ObjClass = oclass
+		out.DirAttr.DirObjClass = dirOclass
+		out.DirAttr.FileObjClass = fileOclass
+		out.DirAttr.FilePLTails = tails
+		out.DirAttr.ChunkSize = chunkSize
+		return out
+	}
+
+	return fsGetAttrFileJSON{
+		OID:       oidStr,
+		ObjClass:  oclass,
+		ChunkSize: chunkSize,
+		Tails:     tails,
+	}
+}
+
 func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
 	if err != nil {
@@ -322,64 +378,13 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	}
 
 	if cmd.JSONOutputEnabled() {
-		if isDir {
-			type jsonTail struct {
-				ObjClass string `json:"oclass"`
-				SplitOff uint64 `json:"split_off"`
-			}
-			var jsonTails []jsonTail
-			for _, t := range tails {
-				jsonTails = append(jsonTails, jsonTail{ObjClass: t.oclass, SplitOff: t.splitOff})
-			}
-			dirAttr := struct {
-				DirObjClass  string     `json:"dir_oclass"`
-				FileObjClass string     `json:"file_oclass"`
-				FilePLTails  []jsonTail `json:"file_pl_tails,omitempty"`
-				ChunkSize    uint64     `json:"chunk_size"`
-			}{
-				FileObjClass: C.GoString(&diroclassName[0]),
-				DirObjClass:  C.GoString(&fileoclassName[0]),
-				FilePLTails:  jsonTails,
-				ChunkSize:    uint64(attrs.doi_chunk_size),
-			}
-			jsonAttrs := struct {
-				ObjAttr struct {
-					OID      string `json:"oid"`
-					ObjClass string `json:"oclass"`
-				} `json:"object"`
-				DirAttr interface{} `json:"directory"`
-			}{
-				ObjAttr: struct {
-					OID      string `json:"oid"`
-					ObjClass string `json:"oclass"`
-				}{
-					OID:      oidStr,
-					ObjClass: C.GoString(&oclassName[0]),
-				},
-				DirAttr: dirAttr,
-			}
-			return cmd.OutputJSON(jsonAttrs, nil)
-		}
-		type jsonTail struct {
-			OID      string `json:"oid,omitempty"`
-			ObjClass string `json:"oclass"`
-			SplitOff uint64 `json:"split_off"`
-		}
-		var jsonTails []jsonTail
+		var jsonTails []fsGetAttrTailJSON
 		for _, t := range tails {
-			jsonTails = append(jsonTails, jsonTail{OID: t.oidStr, ObjClass: t.oclass, SplitOff: t.splitOff})
+			jsonTails = append(jsonTails, fsGetAttrTailJSON{OID: t.oidStr, ObjClass: t.oclass, SplitOff: t.splitOff})
 		}
-		jsonAttrs := &struct {
-			OID       string     `json:"oid"`
-			ObjClass  string     `json:"oclass"`
-			ChunkSize uint64     `json:"chunk_size"`
-			Tails     []jsonTail `json:"tails,omitempty"`
-		}{
-			OID:       oidStr,
-			ObjClass:  C.GoString(&oclassName[0]),
-			ChunkSize: uint64(attrs.doi_chunk_size),
-			Tails:     jsonTails,
-		}
+		jsonAttrs := newFSGetAttrJSON(isDir, oidStr, C.GoString(&oclassName[0]),
+			C.GoString(&diroclassName[0]), C.GoString(&fileoclassName[0]),
+			uint64(attrs.doi_chunk_size), jsonTails)
 		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
