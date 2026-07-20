@@ -1989,6 +1989,52 @@ def check_dir_attr(data, oclass, file_oclass, dir_oclass, csize):
                              file_oclass=file_oclass, chunk_size=csize)
 
 
+def check_file_pl_attr(data, head_oclass, tail_oclass, split_off):
+    """Verify daos fs get-attr output for a progressive-layout file
+
+    The file head object uses head_oclass and it has a single tail segment using tail_oclass
+    starting at split_off.
+    """
+    if not check_fs_get_attr_oid(data, 'response'):
+        return False
+    if not check_fs_get_attr(data, 'response', oclass=head_oclass):
+        return False
+    tails = data['response'].get('tails')
+    if not tails or len(tails) != 1:
+        print(f"expected a single progressive-layout tail, got {tails}")
+        return False
+    if tails[0].get('oclass') != tail_oclass:
+        print(f"unexpected tail oclass {tails[0].get('oclass')} != {tail_oclass}")
+        return False
+    if tails[0].get('split_off') != split_off:
+        print(f"unexpected tail split_off {tails[0].get('split_off')} != {split_off}")
+        return False
+    return True
+
+
+def check_dir_pl_attr(data, head_oclass, tail_oclass, split_off):
+    """Verify daos fs get-attr output for a progressive-layout directory template
+
+    Files created in the directory use head_oclass for the head and a single tail using tail_oclass
+    starting at split_off.
+    """
+    if not check_fs_get_attr_oid(data['response'], 'object'):
+        return False
+    if not check_fs_get_attr(data['response'], 'directory', file_oclass=head_oclass):
+        return False
+    tails = data['response']['directory'].get('file_pl_tails')
+    if not tails or len(tails) != 1:
+        print(f"expected a single progressive-layout directory tail, got {tails}")
+        return False
+    if tails[0].get('oclass') != tail_oclass:
+        print(f"unexpected directory tail oclass {tails[0].get('oclass')} != {tail_oclass}")
+        return False
+    if tails[0].get('split_off') != split_off:
+        print(f"unexpected directory tail split_off {tails[0].get('split_off')} != {split_off}")
+        return False
+    return True
+
+
 def needs_dfuse(method):
     """Decorator function for starting dfuse under posix_tests class
 
@@ -4040,6 +4086,39 @@ class PosixTests():
 
         data = run_fs_get_attr(self.conf, '--path', file2)
         assert check_file_attr(data, 'S1', 16)
+
+        # Progressive-layout (PL) coverage.  PL is gated behind a large target-count minimum which
+        # a single NLT server does not meet, so bypass the gate with DFS_PL_BYPASS_TARGET_LIMIT.
+        # A dfuse and daos command started while this is set inherit it via get_base_env().  With
+        # this server's 4 targets the default byte-array class (SX) resolves to S4, so a
+        # default-class file gets a compact S1 head object plus an S4 tail segment.  The small NLT
+        # pool makes the computed split point fall below DFS_PL_SPLIT_OFF_MIN, so it is clamped to
+        # that minimum of 64 MiB.
+        pl_split_off = 64 * 1024 * 1024
+        os.environ['DFS_PL_BYPASS_TARGET_LIMIT'] = '1'
+        try:
+            pl_dfuse = DFuse(self.server, self.conf, container=uns_container, caching=False)
+            pl_dfuse.use_valgrind = False
+            pl_dfuse.start(v_hint='daos_fs_tool_pl')
+            try:
+                pl_dir = join(pl_dfuse.dir, 'pl_dir')
+                os.mkdir(pl_dir)
+                pl_file = join(pl_dir, 'pl_file')
+                with open(pl_file, 'w'):
+                    pass
+
+                # The directory template advertises the S1 head and S4 tail for default files.
+                data = run_fs_get_attr(self.conf, '--path', pl_dir)
+                assert check_dir_pl_attr(data, 'S1', 'S4', pl_split_off), data
+
+                # The default-class file is created with an S1 head and an S4 tail segment.
+                data = run_fs_get_attr(self.conf, '--path', pl_file)
+                assert check_file_pl_attr(data, 'S1', 'S4', pl_split_off), data
+            finally:
+                if pl_dfuse.stop():
+                    self.fatal_errors = True
+        finally:
+            del os.environ['DFS_PL_BYPASS_TARGET_LIMIT']
 
     def test_cont_copy(self):
         """Verify that copying into a container works"""
