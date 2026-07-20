@@ -5,7 +5,8 @@ module github.com/daos-stack/daos/src/control
 // - debian packaging version checks: debian/control
 // Scons uses this file to extract the minimum version.
 go 1.21
-toolchain go1.24.0
+
+toolchain go1.24.2
 
 require (
 	github.com/Jille/raft-grpc-transport v1.6.1
