@@ -114,6 +114,18 @@ RUN . /home/daos/venv/bin/activate &&                       \
     pip --no-cache-dir install -r requirements-build.txt && \
     rm -r requirements-build.txt
 
+# Install DAOS dependencies if available
+ARG DAOS_DEPS_INSTALL=yes
+ARG DAOS_DEPS_INSTALL_RELEASE=''
+RUN --mount=type=bind,source=ci/rpm/install_deps.sh,target=/daos/ci/rpm/install_deps.sh \
+    --mount=type=bind,source=ci/parse_ci_envs.sh,target=/daos/ci/parse_ci_envs.sh \
+    --mount=type=bind,source=utils/rpms/package_version.sh,target=/daos/utils/rpms/package_version.sh \
+    --mount=type=bind,source=utils/rpms/package_info.sh,target=/daos/utils/rpms/package_info.sh \
+    --mount=type=bind,source=utils/rpms/daos.spec,target=/daos/utils/rpms/daos.spec \
+    [ "$DAOS_DEPS_INSTALL" != "yes" ] || \
+        export STAGE_NAME="el9" && \
+        /daos/ci/rpm/install_deps.sh suse.lp156 "${DAOS_DEPS_INSTALL_RELEASE}"
+
 # Setup docker image for build using local copy of sources.
 # Include also clang and java compilers installation
 FROM build-ci AS build-local
