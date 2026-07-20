@@ -242,7 +242,7 @@ class ConfigGenerateOutput(TestWithServers):
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
                         if self.allow_numa_imbalance:
-                            if pci_addr not in self.numa_node_to_pci_addrs['all']:
+                            if pci_addr not in self.numa_node_to_pci_addrs['imbalance']:
                                 errors.append(
                                     f"Cannot find PCI address {pci_addr} in expected set "
                                     f"{self.numa_node_to_pci_addrs['imbalance']}")
@@ -329,7 +329,7 @@ class ConfigGenerateOutput(TestWithServers):
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
                         if self.allow_numa_imbalance:
-                            if pci_addr not in self.numa_node_to_pci_addrs['all']:
+                            if pci_addr not in self.numa_node_to_pci_addrs['imbalance']:
                                 errors.append(
                                     f"Cannot find PCI address {pci_addr} in expected set "
                                     f"{self.numa_node_to_pci_addrs['imbalance']}")
@@ -435,9 +435,9 @@ class ConfigGenerateOutput(TestWithServers):
 
         1. Using the NVMe PCI dictionary, find the number of keys. i.e., number
         of Socket IDs. This would determine the maximum number of engines.
-        2. Call dmg config generate --num-engines=<1 to max_engine>. Should
+        2. Call dmg config generate --num-engines=<1 to max_engines>. Should
         pass.
-        3. Call dmg config generate --num-engines=<max_engine + 1> Should fail.
+        3. Call dmg config generate --num-engines=<max_engines + 1> Should fail.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,hw_vmd,medium
@@ -447,21 +447,17 @@ class ConfigGenerateOutput(TestWithServers):
         # Get necessary storage and network info.
         self.prepare_expected_data()
 
-        # Find the maximum number of engines we can use. It's the number of
-        # sockets in NVMe. However, I'm not sure if we need to have the same
-        # number of interfaces. Go over this step if we have issue with the
-        # max_engine assumption.
-        max_engine = len(list(self.numa_node_to_pci_addrs.keys()))
-        if self.allow_numa_imbalance:
-            max_engine -= 1
-        self.log.info("max_engine threshold = %s", max_engine)
+        # Find the maximum number of engines we can use. With the possibility of NUMA imbalance,
+        # use 2.
+        max_engines = self.params.get("max_engines", "/run/test_params/*")
+        self.log.info("max_engines threshold = %s", max_engines)
 
         dmg = DmgCommand(self.bin)
         dmg.exit_status_exception = False
         errors = []
 
-        # Call dmg config generate --num-engines=<1 to max_engine>
-        for num_engines in range(1, max_engine + 1):
+        # Call dmg config generate --num-engines=<1 to max_engines>
+        for num_engines in range(1, max_engines + 1):
             self.log_step(f"Generating server config for {num_engines} engine(s)")
             result = dmg.config_generate(
                 mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_provider=self.def_provider,
@@ -476,13 +472,13 @@ class ConfigGenerateOutput(TestWithServers):
                     f"Unexpected number of engine field! Expected = {num_engines}; "
                     f"Actual = {actual_num_engines}")
 
-        # Verify that max_engine + 1 fails.
+        # Verify that max_engines + 1 fails.
         self.log_step(f"Generating server config for {num_engines + 1} engine(s) - should fail")
         result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", num_engines=max_engine + 1, net_provider=self.def_provider,
+            mgmt_svc_replicas="wolf-a", num_engines=max_engines + 1, net_provider=self.def_provider,
             allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status == 0:
-            errors.append(f"Host + invalid num engines succeeded with {max_engine + 1}!")
+            errors.append(f"Host + invalid num engines succeeded with {max_engines + 1}!")
 
         self.check_errors(errors)
 
