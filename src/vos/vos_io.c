@@ -32,6 +32,8 @@ struct vos_io_context {
 	/** The epoch bound including uncertainty */
 	daos_epoch_t		 ic_bound;
 	daos_epoch_range_t	 ic_epr;
+	/** Actual stored epoch of the single value found during fetch; 0 if none was fetched */
+	daos_epoch_t              ic_sv_epoch;
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
 	daos_iod_t		*ic_iods;
@@ -962,6 +964,9 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	} else if (key.sk_epoch > epr->epr_hi) {
 		/* Uncertainty violation */
 		D_GOTO(out, rc = -DER_TX_RESTART);
+	} else {
+		/* Real SV found within the valid epoch range; record its actual stored epoch. */
+		ioc->ic_sv_epoch = key.sk_epoch;
 	}
 
 	if (ci_is_valid(&csum_info))
@@ -2044,7 +2049,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		else
 			akey_flags = ioc->ic_ts_set->ts_flags;
 
-		switch (akey_flags) {
+		switch (akey_flags & VOS_COND_AKEY_UPDATE_MASK) {
 		case VOS_OF_COND_AKEY_UPDATE:
 			update_cond = VOS_ILOG_COND_UPDATE;
 			break;
@@ -2828,6 +2833,12 @@ vos_ioh2ci_nr(daos_handle_t ioh)
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
 	return ioc->ic_csum_list.dcl_csum_infos_nr;
+}
+
+daos_epoch_t
+vos_ioh2sv_epoch(daos_handle_t ioh)
+{
+	return vos_ioh2ioc(ioh)->ic_sv_epoch;
 }
 
 struct bio_sglist *
