@@ -613,7 +613,7 @@ pipeline {
                                            stash_opt: true,
                                            scons_args: sconsArgs() +
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release' +
-                                                      ' BUILD_TYPE=debug SANITIZERS=address'))
+                                                      ' BUILD_TYPE=debug SANITIZERS=thread'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
                         }

@@ -46,13 +46,29 @@ def is_release_build(benv):
     return benv.get("BUILD_TYPE") == "release"
 
 
+def get_sanitizers(benv):
+    """Return the list of requested C sanitizers, or an empty list if none."""
+    if 'SANITIZERS' not in benv or benv['SANITIZERS'] == "":
+        return []
+    return benv['SANITIZERS'].split(',')
+
+
 def get_build_flags(benv):
     """Return string of build flags"""
     if is_release_build(benv):
         return '-buildmode=pie'
-    if 'SANITIZERS' in benv and benv['SANITIZERS'] != "":
+    sanitizers = get_sanitizers(benv)
+    if 'address' in sanitizers:
         return '-asan'
-    # enable race detector for non-release builds
+    if 'thread' in sanitizers:
+        # Go's own -race flag uses a statically-linked, bundled TSan-derived runtime that is
+        # incompatible with the system libtsan pulled in by C libraries built with
+        # -fsanitize=thread (Go's build system explicitly forbids combining -race with
+        # -asan/-msan for the same reason).  Build the Go binary itself with no sanitizer flag;
+        # it still picks up thread-sanitizer instrumentation transitively via the C libraries it
+        # links against (see the CGO_CFLAGS/CGO_LDFLAGS additions below).
+        return ''
+    # enable race detector for non-release, non-sanitizer builds
     return '-race'
 
 
@@ -153,6 +169,16 @@ def scons():
         install_dir('include/spdk')
 
     denv.Tool('go_builder')
+
+    # Go's build system only auto-injects -fsanitize=address/-fsanitize=memory into cgo's own
+    # CGO_CFLAGS/CGO_LDFLAGS for -asan/-msan; there is no equivalent auto-injection for thread
+    # sanitizer (Go's own -race flag is intentionally not used with SANITIZERS=thread -- see
+    # get_build_flags() above).  Add it explicitly here so the small inline C snippets in the
+    # CGO preambles (weak-symbol ASAN/TSan glue) compile consistently with the rest of the
+    # thread-sanitizer-instrumented binary.
+    if 'thread' in get_sanitizers(denv):
+        denv.AppendENVPath("CGO_CFLAGS", "-fsanitize=thread", sep=" ")
+        denv.AppendENVPath("CGO_LDFLAGS", "-fsanitize=thread", sep=" ")
 
     # Sets CGO_LDFLAGS for rpath options
     denv.d_add_rpaths("..", True, True)

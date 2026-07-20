@@ -154,11 +154,11 @@ ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
-# Build DAOS — always with SANITIZERS=address + BUILD_TYPE=debug on this branch (DAOS-18859 debugging)
+# Build DAOS — always with SANITIZERS=thread + BUILD_TYPE=debug on this branch (DAOS-18859 debugging)
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
               FIRMWARE_MGMT=1 BUILD_TYPE=debug TARGET_TYPE=$DAOS_TARGET_TYPE \
-              SANITIZERS=address &&                                         \
+              SANITIZERS=thread &&                                          \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
         cp -r utils/config/examples /opt/daos;                             \

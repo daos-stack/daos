@@ -30,6 +30,22 @@ const char *__lsan_default_options(void) {
 	return "detect_leaks=0";
 }
 
+// Compiled-in default TSAN options for daos_server_helper.  This is a
+// privileged sub-process spawned by daos_server (pbin.ExecReq sets
+// child.Env = os.Environ(), so it inherits whatever environment daos_server
+// itself was started with) and is not the DAOS-18859 reproduction target (the
+// suspected race is client-side, inside the daos CLI process during pool
+// connect -- see pool.go).  This binary needs its own compiled-in default
+// rather than relying on inheriting daos_server's environment, since a
+// compiled-in default applies regardless of invocation path.  Silence TSan
+// reporting outright: report_bugs is a genuine, documented sanitizer_common
+// flag that keeps all instrumentation active but suppresses bug reports.
+// Values explicitly set via TSAN_OPTIONS in the environment still take
+// precedence over this default.
+const char *__tsan_default_options(void) {
+	return "report_bugs=0";
+}
+
 // Weak references — resolve to real ASAN/LSAN functions in ASAN builds, NULL otherwise.
 extern void __attribute__((weak)) __lsan_do_leak_check(void);
 

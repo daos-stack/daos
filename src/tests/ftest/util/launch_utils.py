@@ -461,24 +461,35 @@ class TestRunner():
             "[Test %s/%s] Running the %s test on repetition %s/%s",
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
-        # When running ASAN-instrumented DAOS binaries (SANITIZERS=address build),
-        # avocado worker processes import pydaos.raw which transitively loads
-        # ASAN-compiled libdaos.so.  Without any workaround, ASAN aborts with
-        # "ASan runtime does not come first in initial library list".
-        # LD_PRELOAD=libasan.so.6 fixes this but causes avocado's worker spawner
-        # to hang: ASAN's pthread_atfork/signal-handler interactions with
-        # avocado's process management block the main avocado process indefinitely.
-        # Instead, set verify_asan_link_order=0 so ASAN does not abort when it is
-        # loaded as a transitive dependency (not first).  Pass this only to the
-        # avocado subprocess; SSH/clush helper commands are unaffected since they
-        # do not load ASAN-compiled libraries.
-        asan_extra_env = {}
+        # When running sanitizer-instrumented DAOS binaries (SANITIZERS=address or
+        # SANITIZERS=thread build), avocado worker processes import pydaos.raw which
+        # transitively loads the sanitizer-compiled libdaos.so.  Without any workaround,
+        # ASAN aborts with "ASan runtime does not come first in initial library list".
+        # LD_PRELOAD=libasan.so.6 fixes this but causes avocado's worker spawner to hang:
+        # ASAN's pthread_atfork/signal-handler interactions with avocado's process
+        # management block the main avocado process indefinitely.  Instead, set
+        # verify_asan_link_order=0 so ASAN does not abort when it is loaded as a
+        # transitive dependency (not first).  Pass this only to the avocado subprocess;
+        # SSH/clush helper commands are unaffected since they do not load
+        # sanitizer-compiled libraries.
+        #
+        # The avocado worker is not the DAOS-18859 reproduction target (the suspected
+        # race is inside the daos CLI process itself, during pool connect), so under
+        # TSan its reporting is silenced with report_bugs=0 to avoid noise unrelated to
+        # this investigation.  Whether TSan has an equivalent to ASAN's "runtime does not
+        # come first" abort here is untested; if it recurs this will need a follow-up
+        # iteration the same way the ASAN campaign did.
+        sanitizer_extra_env = {}
         if os.path.exists("/usr/lib64/libasan.so.6"):
-            asan_extra_env = {
+            sanitizer_extra_env = {
                 "ASAN_OPTIONS": "detect_leaks=0:verify_asan_link_order=0",
             }
+        elif list(Path("/usr/lib64").glob("libtsan.so*")):
+            sanitizer_extra_env = {
+                "TSAN_OPTIONS": "report_bugs=0",
+            }
         result = run_local(logger, " ".join(command), capture_output=False,
-                           extra_env=asan_extra_env or None)
+                           extra_env=sanitizer_extra_env or None)
         end_time = int(time.time())
         return_code = result.output[0].returncode
         if return_code == 0:

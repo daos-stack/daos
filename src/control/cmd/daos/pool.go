@@ -43,6 +43,18 @@ const char *__lsan_default_options(void) {
 	return "detect_leaks=0";
 }
 
+// Compiled-in default TSAN options for the daos CLI, used whenever
+// TSAN_OPTIONS is not set in the environment.  This binary is the reproduction
+// target for DAOS-18859 (the suspected use-after-free is a race between a
+// background CaRT/Mercury TLS thread and the main thread, both inside this
+// process, during pool connect) so TSan reporting is enabled here, unlike the
+// other DAOS Go binaries where it is silenced by default (report_bugs=0) to
+// avoid noise unrelated to this investigation.  Values explicitly set via
+// TSAN_OPTIONS in the environment still take precedence over this default.
+const char *__tsan_default_options(void) {
+	return "halt_on_error=0:report_signal_unsafe=0:history_size=7:second_deadlock_stack=1";
+}
+
 // Weak reference — resolves to the real LSAN function in ASAN builds, NULL otherwise.
 extern void __attribute__((weak)) __lsan_do_leak_check(void);
 

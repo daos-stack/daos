@@ -28,10 +28,20 @@ class PoolAutotestTest(TestWithServers):
         self.pool.set_query_data()
         daos_cmd = self.get_daos_command()
 
-        # Propagate ASAN_OPTIONS to the daos client process when running with
-        # ASAN-instrumented RPMs (DAOS-18859 debugging).  Leak detection is
-        # disabled (detect_leaks=0) to avoid noise from non-DAOS allocations;
-        # UAF/buffer-overflow detection (the main goal) is unaffected.
+        # Propagate ASAN_OPTIONS and TSAN_OPTIONS to the daos client process when
+        # running with sanitizer-instrumented RPMs (DAOS-18859 debugging).  Both are
+        # set unconditionally: whichever sanitizer's runtime is not actually loaded
+        # simply ignores its corresponding *_OPTIONS variable, so this works
+        # regardless of which sanitizer the RPM was built with.  This process is the
+        # DAOS-18859 reproduction target -- the suspected use-after-free is a race
+        # between a background CaRT/Mercury TLS thread and the main thread, both
+        # inside this process, during pool connect -- so reporting is enabled for
+        # both sanitizers here (unlike the other DAOS Go binaries, where TSan
+        # reporting is silenced by default to avoid unrelated noise).
+        #
+        # ASAN: leak detection is disabled (detect_leaks=0) to avoid noise from
+        # non-DAOS allocations; UAF/buffer-overflow detection (the main goal) is
+        # unaffected.
         daos_cmd.env["ASAN_OPTIONS"] = (
             "halt_on_error=0:"
             "atexit=1:"
@@ -46,6 +56,15 @@ class PoolAutotestTest(TestWithServers):
             "handle_sigbus=2:"
             "detect_leaks=0:"
             "print_stats=0"
+        )
+        # TSAN: report_signal_unsafe=0 avoids noise from DAOS's own extensive use of
+        # signal handlers for crash/error handling; history_size/second_deadlock_stack
+        # give deeper stack traces in any race report.
+        daos_cmd.env["TSAN_OPTIONS"] = (
+            "halt_on_error=0:"
+            "report_signal_unsafe=0:"
+            "history_size=7:"
+            "second_deadlock_stack=1"
         )
 
         self.log_step("Autotest start")
