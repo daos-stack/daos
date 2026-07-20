@@ -1,0 +1,27 @@
+hosts:
+  test_servers: 4
+  test_clients: 1
+
+timeout: 600
+
+server_config:
+  name: daos_server
+  crt_timeout: 10
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 2
+      nr_xs_helpers: 0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+
+pool:
+  size: 1G
+  pool_query_timeout: 30
+  properties: rd_fac:1
+
