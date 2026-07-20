@@ -1101,6 +1101,18 @@ uint32_t
 vos_ioh2ci_nr(daos_handle_t ioh);
 
 /**
+ * Get the actual stored epoch of the single value fetched by vos_fetch_begin().
+ * Only meaningful for DAOS_IOD_SINGLE akeys after a successful fetch; returns 0
+ * if no single value was found (hole, -DER_NONEXIST, or array akey fetch).
+ *
+ * \param ioh	[IN]	The I/O handle.
+ *
+ * \return		Actual stored epoch, or 0 if no SV was found.
+ */
+daos_epoch_t
+vos_ioh2sv_epoch(daos_handle_t ioh);
+
+/**
  * Get the scatter/gather list associated with a given I/O descriptor.
  *
  * \param ioh	[IN]	The I/O handle.

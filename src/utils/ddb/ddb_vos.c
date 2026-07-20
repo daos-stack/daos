@@ -1110,8 +1110,7 @@ dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod
 	}
 
 	cil = vos_ioh2ci(ioh);
-
-	cb_rc = dump_cb(cb_arg, NULL, cil);
+	cb_rc = dump_cb(cb_arg, NULL, vos_ioh2sv_epoch(ioh), cil);
 	if (!SUCCESS(cb_rc))
 		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(cb_rc));
@@ -1146,8 +1145,7 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 
 	cil = vos_ioh2ci(ioh);
 	rel = vos_ioh2recx_list(ioh);
-
-	cb_rc = dump_cb(cb_arg, rel, cil);
+	cb_rc = dump_cb(cb_arg, rel, 0, cil);
 	if (!SUCCESS(cb_rc))
 		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(cb_rc));
