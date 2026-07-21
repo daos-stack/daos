@@ -56,6 +56,7 @@ func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 		UnsafeShutdowns:         uint64(idx),
 		MediaErrors:             uint64(idx),
 		ErrorLogEntries:         uint64(idx),
+		PercentageUsed:          uint32(idx),
 		ReadErrors:              uint32(idx),
 		WriteErrors:             uint32(idx),
 		UnmapErrors:             uint32(idx),

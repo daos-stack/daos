@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -143,6 +143,7 @@ func c2GoDeviceHealth(hs *C.struct_nvme_stats) *storage.NvmeHealth {
 		UnsafeShutdowns:         uint64(hs.unsafe_shutdowns),
 		MediaErrors:             uint64(hs.media_errs),
 		ErrorLogEntries:         uint64(hs.err_log_entries),
+		PercentageUsed:          uint32(hs.percentage_used),
 		Temperature:             uint32(hs.temperature),
 		TempWarn:                bool(hs.temp_warn),
 		AvailSpareWarn:          bool(hs.avail_spare_warn),
