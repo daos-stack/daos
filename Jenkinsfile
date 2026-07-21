@@ -907,8 +907,7 @@ pipeline {
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
-                                                " --build-arg DAOS_DEPS_INSTALL=yes" +
-                                                " --build-arg DAOS_DEPS_INSTALL_RELEASE=${env.DAOS_RELVAL}"
+                                                " --build-arg DAOS_DEPS_INSTALL=yes"
                         }
                     }
                     steps {
@@ -973,8 +972,7 @@ pipeline {
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
-                                                " --build-arg DAOS_DEPS_INSTALL=yes" +
-                                                " --build-arg DAOS_DEPS_INSTALL_RELEASE=${env.DAOS_RELVAL}"
+                                                " --build-arg DAOS_DEPS_INSTALL=yes"
                         }
                     }
                     steps {

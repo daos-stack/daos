@@ -5,7 +5,6 @@
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
-root="$(realpath "$(dirname "$(dirname "$(dirname "${BASH_SOURCE[0]}")")")")"
 set_lib_name() {
   comp="$1"; shift
   vartype="$1"; shift
@@ -34,11 +33,6 @@ set_lib_name() {
 }
 
 distro_name=".${DISTRO:-el8}"
-daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
-export daos_version
-daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
-  sed 's/^Release: *//' | sed 's/%.*//')${DAOS_RELVAL:-}${distro_name}"
-export daos_release
 
 export libfabric_min_version="1.20"
 export libfabric_version="1.22.0"

@@ -9,18 +9,14 @@ if [ -n "${STAGE_NAME:?}" ]; then
   case $STAGE_NAME in
     *CentOS\ 7*|*el7*|*centos7*)
       : "${TARGET:=centos7}"
-      : "${REPO_SPEC:=el-7}"
       ;;
     *CentOS\ 8*|*EL\ 8*|*el8*|*centos8*)
       : "${TARGET:=centos8}"
-      : "${REPO_SPEC:=el-8}"
       ;;
     *CentOS\ 9*|*EL\ 9*|*el9*|*centos9*)
       : "${TARGET:=centos9}"
-      : "${REPO_SPEC:=el-9}"
       ;;
     *SLES\ 15.7*|*sles15.7*)
-      : "${CHROOT_NAME:=sles-15-sp7-x86_64}"
       : "${TARGET:=sles15.7}"
       ;;
     *Leap\ 15.6*|*leap15.6*|*opensuse15.6*|*sles15.6*)
@@ -37,20 +33,15 @@ if [ -n "${STAGE_NAME:?}" ]; then
       ;;
     *Leap\ 15*|*leap15*|*opensuse15*|*sles15*)
       : "${TARGET:=leap15}"
-      : "${REPO_SPEC:=sl-15}"
       ;;
     *Ubuntu\ 20.04*|*ubuntu2004*)
       : "${TARGET:=ubuntu20}"
-      : "${REPO_SPEC:=ubuntu-20.04}"
       ;;
     *Ubuntu\ 22.04*|*ubuntu2204*)
       : "${TARGET:=ubuntu22}"
-      : "${REPO_SPEC:=ubuntu-22.04}"
       ;;
     *Ubuntu\ 24.04*|*ubuntu2404*)
-      : "${CHROOT_NAME:="not_applicable"}"
       : "${TARGET:=ubuntu24}"
-      : "${REPO_SPEC:=ubuntu-24.04}"
       ;;
   esac
 fi
