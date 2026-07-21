@@ -14,7 +14,6 @@ if [ -z "${SL_PREFIX:-}" ]; then
   echo "daos is not built"
   exit 1
 fi
-
 daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
@@ -22,6 +21,12 @@ sysctl_script_name="10-daos_server.conf"
 daos_sys_dir="/var/daos"
 daos_log_dir="/var/log/daos"
 
+distro_name=".${DISTRO:-el8}"
+daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | \
+                sed 's/^Version: *//')"
+daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
+                sed 's/^Release: *//' | \
+                sed 's/%.*//')${DAOS_RELVAL:-}${distro_name}"
 VERSION=${daos_version}
 RELEASE=${daos_release}
 LICENSE="BSD-2-Clause-Patent"
