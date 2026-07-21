@@ -870,7 +870,7 @@ pipeline {
                                         scons_args: sconsArgs() +
                                                     ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '" "' + env.PYTHON_VERSION + '"'
                         }
                     }
                     post {
@@ -924,7 +924,7 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '" "' + env.PYTHON_VERSION + '"'
                             // For non-release builds, create a separate build with the valgrind
                             // tag for NLT memcheck testing.  This is necessary to avoid problems
                             // caused by valgrind being confused by the Go runtime. We don't want
@@ -992,7 +992,7 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '" "' + env.PYTHON_VERSION + '"'
                         }
                     }
                     post {

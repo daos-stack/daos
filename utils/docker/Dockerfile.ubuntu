@@ -133,6 +133,7 @@ RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { 
 	export DISTRO=ubuntu &&                                                 \
 	export OUTPUT_TYPE=deb &&                                               \
 	export LIBDIR=/usr/lib/x86_64-linux-gnu &&                              \
+	export PYTHON_VERSION=${PYTHON_VERSION} &&                              \
 	utils/rpms/build_packages.sh deps &&                                    \
 	mkdir -p /home/daos/dpkg &&                                             \
 	cp *.deb /home/daos/dpkg;                                               \
@@ -181,6 +182,7 @@ RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
 	export DISTRO=ubuntu &&                                            \
 	export OUTPUT_TYPE=deb &&                                          \
 	export LIBDIR=/usr/lib/x86_64-linux-gnu &&                         \
+	export PYTHON_VERSION=${PYTHON_VERSION} &&                         \
 	utils/rpms/build_packages.sh daos &&                               \
 	mkdir -p /home/daos/dpkg &&                                        \
 	cp *.deb /home/daos/dpkg;                                          \
