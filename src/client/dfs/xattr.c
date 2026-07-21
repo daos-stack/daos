@@ -230,6 +230,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 	struct dfs_entry entry = {0};
 	bool             exists;
 	int              rc;
+	int              rc2;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -296,16 +297,13 @@ retry:
 			rc = daos_obj_fetch(oh, dfs->th, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, NULL,
 					    NULL, NULL);
 
-		if (rc == -DER_NONEXIST && S_ISREG(obj->mode)) {
+		if (dfs->use_dtx && (rc == -DER_NONEXIST) && S_ISREG(obj->mode)) {
 			/*
-			 * Since this function deals with dfs_obj, the hardlink information in its
-			 * mode field may be outdated. If xattr name does not exist in dentry then
-			 * check whether the file is already converted into a hardlink. If so,
-			 * update the mode with hardlink info. Retry if the hardlink bit is set.
+			 * In balanced mode the file may have been converted to a hardlink by
+			 * another client.
 			 */
-			int rc2 =
-			    fetch_entry(dfs->layout_v, oh, dfs->th, obj->name, strlen(obj->name),
-					false, &exists, &entry, 0, NULL, NULL, NULL);
+			rc2 = fetch_entry(dfs->layout_v, oh, dfs->th, obj->name, strlen(obj->name),
+					  false, &exists, &entry, 0, NULL, NULL, NULL);
 			daos_obj_close(oh, NULL);
 			oh = DAOS_HDL_INVAL;
 			if (rc2) {
@@ -356,6 +354,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	struct dfs_entry entry = {0};
 	bool             exists;
 	int              rc;
+	int              rc2;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -428,16 +427,14 @@ retry:
 		d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
 
 		rc = daos_obj_punch_akeys(oh, DAOS_TX_NONE, cond, &dkey, 1, &akey, NULL);
-		if (rc == -DER_NONEXIST && S_ISREG(obj->mode)) {
+		if (dfs->use_dtx && (rc == -DER_NONEXIST) && S_ISREG(obj->mode)) {
 			/*
-			 * Since this function deals with dfs_obj, the hardlink information in its
-			 * mode field may be outdated. If xattr name does not exist in dentry then
-			 * check whether the file is already converted into a hardlink. If so,
-			 * update the mode with hardlink info. Retry if the hardlink bit is set.
+			 * In balanced mode the file may have been converted to a hardlink by
+			 * another client.
 			 */
-			int rc2 = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, obj->name,
-					      strlen(obj->name), false, &exists, &entry, 0, NULL,
-					      NULL, NULL);
+			rc2 = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, obj->name,
+					  strlen(obj->name), false, &exists, &entry, 0, NULL, NULL,
+					  NULL);
 			daos_obj_close(oh, NULL);
 			oh = DAOS_HDL_INVAL;
 			if (rc2) {
@@ -580,11 +577,10 @@ retry:
 	}
 
 	/*
-	 * Since this function deals with dfs_obj, the hardlink information in its
-	 * mode field may be outdated. If list xattr does not return any xattr name,
-	 * check and update the mode with hardlink info. Retry if the hardlink bit is set.
+	 * In balanced mode the file may have been converted to a hardlink by
+	 * another client.
 	 */
-	if (!ret_size && !is_hardlink && S_ISREG(obj->mode)) {
+	if (dfs->use_dtx && !ret_size && !is_hardlink && S_ISREG(obj->mode)) {
 		rc = fetch_entry(dfs->layout_v, oh, dfs->th, obj->name, strlen(obj->name), false,
 				 &exists, &entry, 0, NULL, NULL, NULL);
 		daos_obj_close(oh, NULL);

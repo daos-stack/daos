@@ -4122,9 +4122,11 @@ dfs_test_link_remove(void **state)
 /**
  * Test xattr operations across hardlinks. After a regular file is converted to a
  * hardlink, its xattrs migrate to the GIT object and are keyed by OID, so all
- * links must observe a single shared set of xattrs. This test also exercises the
- * "stale mode" path: handles opened while the object was a regular file must
- * transparently retry against GIT once the on-disk entry becomes a hardlink.
+ * links must observe a single shared set of xattrs.
+ *
+ * Handle usage depends on the mount mode (DFS_USE_DTX): in balanced mode the
+ * shared-xattr checks reuse the duplicate handles (simulates remote handle) opened before the
+ * conversion, which must be transparently redirected to GIT.
  *
  * Note: the DTX path in dfs_setxattr is covered automatically because the whole
  * suite is re-run with DFS_USE_DTX=1 (see run_dfs_unit_test()).
@@ -4136,7 +4138,8 @@ dfs_test_link_remove(void **state)
  *  4.  listxattr on the regular file returns {k1,k2,k3}; size-probe (list=NULL).
  *  5.  Convert f to a hardlink via dfs_link (l2_obj returned, nlink=2) and verify
  *      the x: akeys were removed from the parent dentry (migrated to GIT).
- *  6.  get/list via stale handles (hB, hC, hA) and the new l2_obj -> shared data.
+ *  6.  get/list via the duplicate handles (stale in balanced mode, reopened in
+ *      relaxed mode) and the new l2_obj -> shared data.
  *  7.  set k4 via one link, get via another -> visible (cross-link write).
  *  8.  overwrite k1 via one link, get via another -> last writer wins.
  *  9.  XATTR_CREATE/XATTR_REPLACE flag semantics on a hardlink.
@@ -4160,10 +4163,18 @@ dfs_test_xattr_hardlink(void **state)
 	char        list[128];
 	daos_size_t size;
 	struct stat statbuf;
+	bool        use_dtx = false;
 	int         rc;
 
 	if (arg->myrank != 0)
 		return;
+
+	/**
+	 * dfs_mt is mounted on a relaxed container, so its balanced (DTX) behavior is driven by the
+	 * DFS_USE_DTX environment override. The flag selects how the post-conversion shared-xattr
+	 * checks pick their handles (stale duplicates vs handles reopened after the conversion).
+	 */
+	d_getenv_bool("DFS_USE_DTX", &use_dtx);
 
 	/** Step 1: create directory and a regular file with multiple open handles. */
 	rc = dfs_open(dfs_mt, NULL, "xhl_dir1", S_IFDIR | S_IWUSR | S_IRUSR,
@@ -4228,6 +4239,31 @@ dfs_test_xattr_hardlink(void **state)
 	assert_false(test_akey_present(dir1, "file1", xakey));
 	snprintf(xakey, sizeof(xakey), "x:%s", k3);
 	assert_false(test_akey_present(dir1, "file1", xakey));
+
+	/**
+	 * Handle selection for the shared-xattr checks that follow:
+	 *  - Balanced mode (use_dtx): simulate concurrent balanced-mode operation by keeping the
+	 *    multiple duplicate handles hA/hB/hC opened to the same file while it was a regular
+	 *    file. Once one handle converts the file to a hardlink, the others become stale, which
+	 *    mimics a remote client operating on the same file; dfs_{get,list,remove}xattr must
+	 *    detect this and transparently redirect these stale handles to GIT.
+	 *  - Relaxed mode: stale handles are not supported, so release the duplicates and reopen
+	 *    them as valid hardlink handles (opened after the conversion).
+	 */
+	if (!use_dtx) {
+		rc = dfs_release(hA);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(hB);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(hC);
+		assert_int_equal(rc, 0);
+		rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hA);
+		assert_int_equal(rc, 0);
+		rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hB);
+		assert_int_equal(rc, 0);
+		rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hC);
+		assert_int_equal(rc, 0);
+	}
 
 	/** Step 6: stale handles (hB, hC, hA) and the new link see the shared xattrs. */
 	print_message("Step 6: get/list via stale handles and the new link\n");
