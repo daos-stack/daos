@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -113,6 +113,23 @@ func testPoolLabelProp() []*mgmtpb.PoolProperty {
 			Number: daos.PoolPropertyLabel,
 			Value: &mgmtpb.PoolProperty_Strval{
 				Strval: "test",
+			},
+		},
+	}
+}
+
+func testPoolRedunFacProp() []*mgmtpb.PoolProperty {
+	return []*mgmtpb.PoolProperty{
+		{
+			Number: daos.PoolPropertyLabel,
+			Value: &mgmtpb.PoolProperty_Strval{
+				Strval: "test",
+			},
+		},
+		{
+			Number: daos.PoolPropertyRedunFac,
+			Value: &mgmtpb.PoolProperty_Numval{
+				Numval: 1,
 			},
 		},
 	}
@@ -634,6 +651,33 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 			},
 			expErr: FaultPoolNoLabel,
+		},
+		"failed creation too few fault domains": {
+			targetCount: 1,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:       test.MockUUID(1),
+				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				Ranks:      []uint32{0},
+				Properties: testPoolRedunFacProp(),
+			},
+			expErr: FaultPoolTooFewFaultDomains(1, 1),
+		},
+		"successful creation with rd_fac": {
+			targetCount: 2,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:       test.MockUUID(1),
+				TierBytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				Ranks:      []uint32{0, 1},
+				Properties: testPoolRedunFacProp(),
+			},
+			drpcRet: &mgmtpb.PoolCreateResp{
+				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				TgtRanks:  []uint32{0, 1},
+			},
+			expResp: &mgmtpb.PoolCreateResp{
+				TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				TgtRanks:  []uint32{0, 1},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -825,6 +825,38 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 	return append([]uint32{md}, compressTree(subtree)...), nil
 }
 
+// DomainNr returns the number of fault domains in the subtree of the domain
+// tree specified by the given ranks.
+// If no ranks are provided, the entire tree is considered.
+//
+// Note: Do not confuse fault domains with the FaultDomain struct.
+func (m *Membership) DomainNr(ranks ...uint32) (int, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return 0, errors.New("uninitialized fault domain tree")
+	}
+
+	subtree, err := getFaultDomainSubtree(tree, ranks...)
+	if err != nil {
+		return 0, err
+	}
+
+	// TODO DAOS-6353: Properly detect when fault and perf domain are requested.
+	// Currently any depth greater than the minimum must indicate a performance domain.
+	minDepth := 2 // domain + rank
+	if subtree.Depth() > minDepth {
+		// Loop over the children of the root and sum up the number their children.
+		sum := 0
+		for _, child := range subtree.Children {
+			sum += len(child.Children)
+		}
+		return sum, nil
+	} else {
+		// There are no perf domains, so the children of the root are fault domains.
+		return len(subtree.Children), nil
+	}
+}
+
 const (
 	DomTreeMetadataHasFaultDom uint32 = (1 << iota)
 	DomTreeMetadataHasPerfDom

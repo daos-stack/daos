@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -412,6 +412,21 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	// If NumSvcReps is not specified, daos_engine will choose a value.
 	if req.GetNumSvcReps() > maxSvcReps {
 		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
+	}
+
+	// Check if the requested redundancy factor can be met with the number of supplied fault domains.
+	domainNr, err := svc.membership.DomainNr(req.Ranks...)
+	if err != nil {
+		return nil, err
+	}
+	for _, prop := range req.GetProperties() {
+		if prop.GetNumber() == uint32(daos.PoolPropertyRedunFac) {
+			rdFac := int(prop.GetNumval())
+			if rdFac+1 > domainNr {
+				return nil, FaultPoolTooFewFaultDomains(rdFac, domainNr)
+			}
+			break
+		}
 	}
 
 	// IO engine needs the fault domain tree for placement purposes
