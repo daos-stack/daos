@@ -334,6 +334,22 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
+    def test_daos_extend_simple_13(self):
+        """Jira ID: DAOS-1568
+
+        Test Description:
+            Run daos_test -B --subtests="13"
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,provider
+        :avocado: tags=daos_test,daos_core_test,rebuild
+        :avocado: tags=DaosCoreTest,test_daos_extend_simple_13
+        """
+        self.run_subtest()
+
     def test_daos_rebuild_interactive(self):
         """Jira ID: DAOS-17358
 
