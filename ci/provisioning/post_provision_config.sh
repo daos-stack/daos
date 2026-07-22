@@ -196,8 +196,8 @@ if [ "$NODESTRING" != "localhost" ]; then
 fi
 
 
-# shellcheck disable=SC2001
-sanitized_commit_message="$(echo "$COMMIT_MESSAGE" | sed -e 's/\(["\$]\)/\\\1/g')"
+sanitized_commit_message="${COMMIT_MESSAGE//\"/\\\"}"
+sanitized_commit_message="${sanitized_commit_message//\$/\\\$}"
 
 build_remote_post_provision_payload() {
     local script_path

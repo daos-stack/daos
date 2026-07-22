@@ -111,21 +111,13 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 # Even though STAGE_NAME forced to be set, shellcheck wants this syntax.
 mkdir -p "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 stage_dir="${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
-framework_dir="$stage_dir/framework"
-preserve_dir="$(mktemp -d)"
 
-if compgen -G "$framework_dir/*.xml" > /dev/null; then
-    mkdir -p "$preserve_dir/framework"
-    cp "$framework_dir/"*.xml "$preserve_dir/framework/"
-fi
-
-find "$stage_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-
-if [ -d "$preserve_dir/framework" ]; then
-    mkdir -p "$framework_dir"
-    cp "$preserve_dir/framework/"*.xml "$framework_dir/"
-fi
-rm -rf "$preserve_dir"
+find "$stage_dir" -mindepth 1 -maxdepth 2 \
+    ! -wholename "*/framework/*.xml" \
+    ! -name "framework" \
+    -exec rm -rf {} +
+# The framework directory holds JUnit results from the post-provisioning script
+# and must be preserved when the workspace is reused across stages.
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1

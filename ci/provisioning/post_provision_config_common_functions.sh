@@ -97,10 +97,10 @@ configure_postfix_relay() {
     # Enable and start postfix on all distros that have it.
     # This is done unconditionally so mail delivery works on LEAP/SLES as
     # well as EL without requiring distro-specific bootstrap hooks.
+    local postfix_start_exit=0
     if command -v systemctl >/dev/null 2>&1 && command -v postfix >/dev/null 2>&1; then
         systemctl enable postfix.service 2>/dev/null || true
-        systemctl start postfix.service 2>/dev/null || true
-        postfix_start_exit=$?
+        systemctl start postfix.service 2>/dev/null || postfix_start_exit=$?
         if [ $postfix_start_exit -ne 0 ]; then
             echo "WARNING: Postfix not started: $postfix_start_exit"
             systemctl status postfix.service || true
@@ -171,6 +171,8 @@ retry_dnf() {
             return 0
         fi
         # Command failed, retry
+        # $? after a failed if-condition correctly holds the command's exit code.
+        rc=$?
         (( attempt++ )) || true
         if [ "$attempt" -gt 0 ]; then
             # shellcheck disable=SC2154
@@ -242,11 +244,7 @@ retry_cmd() {
     local rc=0
     local non_retry_codes=" ${DAOS_STACK_NON_RETRY_EXIT_CODES} "
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        # Capture command return code while preserving failure for set -e.
-        # With set -e, we use || to capture $? immediately after the command fails,
-        # before it gets reset by the if-else structure.
-        monitor_cmd "$monitor_threshold" "$@" || rc=$?
-        if [ $rc -eq 0 ]; then
+        if monitor_cmd "$monitor_threshold" "$@"; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
@@ -254,6 +252,8 @@ retry_cmd() {
             fi
             return 0
         fi
+        # $? after a failed if-condition correctly holds the command's exit code.
+        rc=$?
         if [[ "$non_retry_codes" == *" $rc "* ]]; then
             echo "Command retry aborted for non-retryable exit status: $rc"
             break
