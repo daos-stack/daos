@@ -42,9 +42,19 @@ const char *__lsan_default_options(void) {
 // flag that keeps all instrumentation active but suppresses bug reports.
 // Values explicitly set via TSAN_OPTIONS in the environment still take
 // precedence over this default.
+//
+// Guarded by __SANITIZE_THREAD__ (defined by GCC/Clang only when this
+// translation unit is actually compiled with -fsanitize=thread): when
+// SANITIZERS is unset, Go falls back to its own native -race flag, which
+// links Go's own bundled TSan-derived runtime.  That runtime already defines
+// __tsan_default_options() itself, so defining it unconditionally here causes
+// "multiple definition of `__tsan_default_options'" at link time for any
+// ordinary -race build (observed across EL8/EL9/Leap15 in build_023).
+#ifdef __SANITIZE_THREAD__
 const char *__tsan_default_options(void) {
 	return "report_bugs=0";
 }
+#endif
 
 // Weak references — resolve to real ASAN/LSAN functions in ASAN builds, NULL otherwise.
 extern void __attribute__((weak)) __lsan_do_leak_check(void);

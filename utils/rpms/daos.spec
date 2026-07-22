@@ -130,6 +130,7 @@ BuildRequires: libuuid-devel
 # Needed for debugging tasks
 %if (0%{?rhel} >= 8)
 BuildRequires: libasan
+BuildRequires: libtsan
 %endif
 %if (0%{?suse_version} > 0)
 BuildRequires: libasan8
