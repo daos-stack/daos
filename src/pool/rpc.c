@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,6 +81,7 @@ crt_proc_struct_pool_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
 	return crt_proc_pool_op_out(proc, data);
 }
 
+CRT_RPC_DEFINE(pool_create_v6, DAOS_ISEQ_POOL_CREATE_V6, DAOS_OSEQ_POOL_CREATE)
 CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT, DAOS_OSEQ_POOL_DISCONNECT)
@@ -436,4 +437,3 @@ map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
 	crt_bulk_free(bulk);
 	pool_buf_free(buf);
 }
-

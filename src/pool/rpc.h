@@ -34,10 +34,13 @@
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
 
-#define POOL_PROTO_VER_WITH_SVC_OP_KEY 6
+#define POOL_PROTO_VER_WITH_SVC_OP_KEY    6
+#define POOL_PROTO_VER_WITH_DOWNOUT_RANKS 7
 
 #define POOL_PROTO_CLI_RPC_LIST(ver)                                                               \
-	X(POOL_CREATE, 0, &CQF_pool_create, ds_pool_create_handler, NULL)                          \
+	X(POOL_CREATE, 0,                                                                          \
+	  ver >= POOL_PROTO_VER_WITH_DOWNOUT_RANKS ? &CQF_pool_create : &CQF_pool_create_v6,       \
+	  ds_pool_create_handler, NULL)                                                            \
 	X(POOL_CONNECT, 0, &CQF_pool_connect, ds_pool_connect_handler, NULL)                       \
 	X(POOL_DISCONNECT, 0, &CQF_pool_disconnect, ds_pool_disconnect_handler, NULL)              \
 	X(POOL_QUERY, 0, ver >= 7 ? &CQF_pool_query : &CQF_pool_query_v6,                          \
@@ -121,7 +124,7 @@ extern int dc_pool_proto_version;
 CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 
 /* If pri_op.pi_hdl is not null, call rdb_campaign. */
-#define DAOS_ISEQ_POOL_CREATE	/* input fields */			\
+#define DAOS_ISEQ_POOL_CREATE_V6 /* input fields */			\
 	((struct pool_op_in)	(pri_op)		CRT_VAR)	\
 	((d_rank_list_t)	(pri_tgt_ranks)		CRT_PTR)	\
 	((daos_prop_t)		(pri_prop)		CRT_PTR)	\
@@ -129,9 +132,14 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 	((uint32_t)		(pri_ntgts)		CRT_VAR)	\
 	((uint32_t)		(pri_domains)		CRT_ARRAY)
 
+#define DAOS_ISEQ_POOL_CREATE	/* input fields */			\
+	DAOS_ISEQ_POOL_CREATE_V6					\
+	((d_rank_list_t)	(pri_downout_ranks)	CRT_PTR)
+
 #define DAOS_OSEQ_POOL_CREATE	/* output fields */		 \
 	((struct pool_op_out)	(pro_op)		CRT_VAR)
 
+CRT_RPC_DECLARE(pool_create_v6, DAOS_ISEQ_POOL_CREATE_V6, DAOS_OSEQ_POOL_CREATE)
 CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
 /* clang-format on */
@@ -199,10 +207,11 @@ pool_opc_2map_opc(uint32_t pool_opc)
 
 static inline void
 pool_create_in_get_data(crt_rpc_t *rpc, d_rank_list_t **pri_tgt_ranksp, daos_prop_t **pri_propp,
-			uint32_t *pri_ndomainsp, uint32_t *pri_ntgtsp, uint32_t **pri_domainsp)
+			uint32_t *pri_ndomainsp, uint32_t *pri_ntgtsp, uint32_t **pri_domainsp,
+			d_rank_list_t **pri_downout_ranksp)
 {
-	struct pool_create_in *in      = crt_req_get(rpc);
-	uint8_t                rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
+	struct pool_create_v6_in *in      = crt_req_get(rpc);
+	uint8_t                   rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
 
 	D_ASSERT(rpc_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
 	*pri_tgt_ranksp = in->pri_tgt_ranks;
@@ -210,15 +219,22 @@ pool_create_in_get_data(crt_rpc_t *rpc, d_rank_list_t **pri_tgt_ranksp, daos_pro
 	*pri_ndomainsp  = in->pri_ndomains;
 	*pri_ntgtsp     = in->pri_ntgts;
 	*pri_domainsp   = in->pri_domains.ca_arrays;
+	if (pri_downout_ranksp != NULL) {
+		if (rpc_ver >= POOL_PROTO_VER_WITH_DOWNOUT_RANKS)
+			*pri_downout_ranksp = ((struct pool_create_in *)in)->pri_downout_ranks;
+		else
+			*pri_downout_ranksp = NULL;
+	}
 	D_ASSERT(*pri_ndomainsp == in->pri_domains.ca_count);
 }
 
 static inline void
 pool_create_in_set_data(crt_rpc_t *rpc, d_rank_list_t *pri_tgt_ranks, daos_prop_t *pri_prop,
-			uint32_t pri_ndomains, uint32_t pri_ntgts, uint32_t *pri_domains)
+			uint32_t pri_ndomains, uint32_t pri_ntgts, uint32_t *pri_domains,
+			d_rank_list_t *pri_downout_ranks)
 {
-	struct pool_create_in *in      = crt_req_get(rpc);
-	uint8_t                rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
+	struct pool_create_v6_in *in      = crt_req_get(rpc);
+	uint8_t                   rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
 
 	D_ASSERT(rpc_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
 	in->pri_tgt_ranks         = pri_tgt_ranks;
@@ -227,6 +243,8 @@ pool_create_in_set_data(crt_rpc_t *rpc, d_rank_list_t *pri_tgt_ranks, daos_prop_
 	in->pri_ntgts             = pri_ntgts;
 	in->pri_domains.ca_arrays = pri_domains;
 	in->pri_domains.ca_count  = pri_ndomains;
+	if (rpc_ver >= POOL_PROTO_VER_WITH_DOWNOUT_RANKS)
+		((struct pool_create_in *)in)->pri_downout_ranks = pri_downout_ranks;
 }
 
 /* clang-format off */
