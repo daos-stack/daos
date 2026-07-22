@@ -79,7 +79,7 @@ class ConfigGenerateOutput(TestWithServers):
                 bus_dev_fn = pci_addr.split(":", 1)[0]
                 pci_addr = f"0000:{bus_dev_fn[0:2]}:{bus_dev_fn[2:4]}.{int(bus_dev_fn[4:6])}"
             self.numa_node_to_pci_addrs[socket_id].add(pci_addr)
-            self.numa_node_to_pci_addrs['imbalance'].add(pci_addr)
+            self.numa_node_to_pci_addrs["all"].add(pci_addr)
 
         # 2. Create numa_node_to_blockdev. Key is numa_node from the output and value is a
         # set of blockdev(s) from the output.
@@ -87,6 +87,7 @@ class ConfigGenerateOutput(TestWithServers):
             numa_node = scm_namespace["numa_node"]
             blockdev = scm_namespace["blockdev"]
             self.numa_node_to_blockdev[numa_node].add(blockdev)
+            self.numa_node_to_blockdev["all"].add(blockdev)
 
         # Call dmg network scan --provider=all --json for step 3, 4, and 5.
         network_out = dmg.network_scan(provider="all")
@@ -109,6 +110,7 @@ class ConfigGenerateOutput(TestWithServers):
             # 3. Create numa_node_to_interfaces. Key is NumaNode from the output and value
             # is a set of Device(s) from the output.
             self.numa_node_to_interfaces[numa_node].add(device)
+            self.numa_node_to_interfaces["all"].add(device)
             # 4. Create interface_to_providers. Key is Device from the output and value is
             # a set of Provider(s) from the output.
             self.interface_to_providers[device].add(provider)
@@ -220,6 +222,8 @@ class ConfigGenerateOutput(TestWithServers):
             scm_found = False
             nvme_found = False
             pinned_numa_node = engine["pinned_numa_node"]
+            if self.allow_numa_imbalance:
+                pinned_numa_node = "all"
 
             for storage in engine["storage"]:
                 self.log_step(f"Verifying storage configuration for engine {index}")
@@ -241,16 +245,10 @@ class ConfigGenerateOutput(TestWithServers):
                 if storage["class"] == "nvme":
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
-                        if self.allow_numa_imbalance:
-                            if pci_addr not in self.numa_node_to_pci_addrs['imbalance']:
-                                errors.append(
-                                    f"Cannot find PCI address {pci_addr} in expected set "
-                                    f"{self.numa_node_to_pci_addrs['imbalance']}")
-                        else:
-                            if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
-                                errors.append(
-                                    f"Cannot find PCI address {pci_addr} in expected set "
-                                    f"{self.numa_node_to_pci_addrs[pinned_numa_node]}")
+                        if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
+                            errors.append(
+                                f"Cannot find PCI address {pci_addr} in expected set "
+                                f"{self.numa_node_to_pci_addrs[pinned_numa_node]}")
                         nvme_found = True
 
             if not scm_found:
@@ -308,6 +306,8 @@ class ConfigGenerateOutput(TestWithServers):
             scm_found = False
             nvme_found = False
             pinned_numa_node = engine["pinned_numa_node"]
+            if self.allow_numa_imbalance:
+                pinned_numa_node = "all"
 
             for storage in engine["storage"]:
                 self.log_step(f"Verifying storage configuration for engine {index}")
@@ -328,16 +328,10 @@ class ConfigGenerateOutput(TestWithServers):
                 if storage["class"] == "nvme":
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
-                        if self.allow_numa_imbalance:
-                            if pci_addr not in self.numa_node_to_pci_addrs['imbalance']:
-                                errors.append(
-                                    f"Cannot find PCI address {pci_addr} in expected set "
-                                    f"{self.numa_node_to_pci_addrs['imbalance']}")
-                        else:
-                            if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
-                                errors.append(
-                                    f"Cannot find PCI address {pci_addr} in expected set "
-                                    f"{self.numa_node_to_pci_addrs[pinned_numa_node]}")
+                        if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
+                            errors.append(
+                                f"Cannot find PCI address {pci_addr} in expected set "
+                                f"{self.numa_node_to_pci_addrs[pinned_numa_node]}")
                         nvme_found = True
 
             if not scm_found:
