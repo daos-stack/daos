@@ -193,6 +193,7 @@ type NvmeHealth struct {
 	UnsafeShutdowns         uint64  `json:"unsafe_shutdowns"`
 	MediaErrors             uint64  `json:"media_errs"`
 	ErrorLogEntries         uint64  `json:"err_log_entries"`
+	PercentageUsed          uint32  `json:"percentage_used"`
 	ReadErrors              uint32  `json:"bio_read_errs"`
 	WriteErrors             uint32  `json:"bio_write_errs"`
 	UnmapErrors             uint32  `json:"bio_unmap_errs"`
