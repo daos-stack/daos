@@ -1,14 +1,17 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import os
 from collections import defaultdict
 
 import yaml
 from apricot import TestWithServers
 from dmg_utils import DmgCommand
 from exception_utils import CommandFailure
+from storage_utils import has_numa_balance
 
 
 class ConfigGenerateOutput(TestWithServers):
@@ -24,6 +27,8 @@ class ConfigGenerateOutput(TestWithServers):
         super().__init__(*args, **kwargs)
 
         self.def_provider = "ofi+tcp"
+        self.allow_numa_imbalance = not has_numa_balance(
+            os.path.join(self.test_env.common_dir, "storage.yaml"), self.log)
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)
@@ -68,7 +73,13 @@ class ConfigGenerateOutput(TestWithServers):
         for nvme_device in nvme_devices:
             socket_id = nvme_device["socket_id"]
             pci_addr = nvme_device["pci_addr"]
+            if not pci_addr.startswith("0000:"):
+                # Convert a dmg VMD style address to a standard PCI address:
+                # e.g.,  -> d70605:01.00.0 -> 0000:d7:06.5
+                bus_dev_fn = pci_addr.split(":", 1)[0]
+                pci_addr = f"0000:{bus_dev_fn[0:2]}:{bus_dev_fn[2:4]}.{int(bus_dev_fn[4:6])}"
             self.numa_node_to_pci_addrs[socket_id].add(pci_addr)
+            self.numa_node_to_pci_addrs["all"].add(pci_addr)
 
         # 2. Create numa_node_to_blockdev. Key is numa_node from the output and value is a
         # set of blockdev(s) from the output.
@@ -76,6 +87,7 @@ class ConfigGenerateOutput(TestWithServers):
             numa_node = scm_namespace["numa_node"]
             blockdev = scm_namespace["blockdev"]
             self.numa_node_to_blockdev[numa_node].add(blockdev)
+            self.numa_node_to_blockdev["all"].add(blockdev)
 
         # Call dmg network scan --provider=all --json for step 3, 4, and 5.
         network_out = dmg.network_scan(provider="all")
@@ -98,6 +110,7 @@ class ConfigGenerateOutput(TestWithServers):
             # 3. Create numa_node_to_interfaces. Key is NumaNode from the output and value
             # is a set of Device(s) from the output.
             self.numa_node_to_interfaces[numa_node].add(device)
+            self.numa_node_to_interfaces["all"].add(device)
             # 4. Create interface_to_providers. Key is Device from the output and value is
             # a set of Provider(s) from the output.
             self.interface_to_providers[device].add(provider)
@@ -118,6 +131,7 @@ class ConfigGenerateOutput(TestWithServers):
         """
         if errors:
             self.fail("\n----- Errors detected! -----\n{}".format("\n".join(errors)))
+        self.log.info("Test passed")
 
     def verify_ms_replica(self, host_port_input, failure_expected=None):
         """Run with given MS replica and verify the MS replica in the output.
@@ -137,7 +151,7 @@ class ConfigGenerateOutput(TestWithServers):
         check["expected"] = host_port_input.split(",")
         if ":" not in host_port_input:
             # dmg automatically sets 10001 if it's not given in the input.
-            check["expected"] = ["{}:10001".format(host) for host in check["expected"]]
+            check["expected"] = [f"{host}:10001" for host in check["expected"]]
 
         # Create a new DmgCommand and set its exit_status_exception to False to
         # make it not raise a TestFailure when the command failed. Then we'll be
@@ -147,9 +161,10 @@ class ConfigGenerateOutput(TestWithServers):
 
         try:
             result = dmg.config_generate(
-                mgmt_svc_replicas=host_port_input, net_provider=self.def_provider)
+                mgmt_svc_replicas=host_port_input, net_provider=self.def_provider,
+                allow_numa_imbalance=self.allow_numa_imbalance)
         except CommandFailure as err:
-            errors.append("Unexpected failure! {}".format(err))
+            errors.append(f"Unexpected failure! {err}")
 
         if result.exit_status == 0 and failure_expected is None:
             try:
@@ -157,18 +172,17 @@ class ConfigGenerateOutput(TestWithServers):
                 check["actual"] = yaml_data["mgmt_svc_replicas"]
                 if sorted(check["expected"]) != sorted(check["actual"]):
                     errors.append(
-                        "Unexpected MS replica: {} != {}".format(
-                            check["expected"], check["actual"]))
+                        f"Unexpected MS replica: {check['expected']} != {check['actual']}")
             except yaml.YAMLError as error:
-                errors.append("Error loading dmg generated config!: {}".format(error))
+                errors.append(f"Error loading dmg generated config!: {error}")
         elif result.exit_status == 0 and failure_expected is not None:
-            errors.append("dmg command passed when expected to fail!: {}".format(result))
+            errors.append(f"dmg command passed when expected to fail!: {result}")
         elif result.exit_status != 0 and failure_expected is not None:
             if failure_expected not in result.stderr_text:
                 errors.append(
-                    "Missing expected error message in failed dmg command!: {}".format(result))
+                    f"Missing expected error message in failed dmg command!: {result}")
         else:
-            errors.append("dmg command failed when expected to pass!: {}".format(result))
+            errors.append(f"dmg command failed when expected to pass!: {result}")
 
         return errors
 
@@ -186,7 +200,7 @@ class ConfigGenerateOutput(TestWithServers):
         5. Repeat for all engines.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_basic_config
         """
@@ -194,20 +208,25 @@ class ConfigGenerateOutput(TestWithServers):
         self.prepare_expected_data()
 
         # 1. Call dmg config generate.
+        self.log_step("Generating server configuration")
         result = self.get_dmg_command().config_generate(
-            mgmt_svc_replicas="wolf-a", net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", net_provider=self.def_provider,
+            allow_numa_imbalance=self.allow_numa_imbalance)
         generated_yaml = yaml.safe_load(result.stdout)
 
         errors = []
 
         # Iterate engines and verify scm_list, bdev_list, and fabric_iface.
         engines = generated_yaml["engines"]
-        for engine in engines:
+        for index, engine in enumerate(engines):
             scm_found = False
             nvme_found = False
             pinned_numa_node = engine["pinned_numa_node"]
+            if self.allow_numa_imbalance:
+                pinned_numa_node = "all"
 
             for storage in engine["storage"]:
+                self.log_step(f"Verifying storage configuration for engine {index}")
                 if storage["class"] == "dcpm":
                     # 2. Verify the scm_list value is in the SCM Namespace set of the
                     # correct pinned numa node. e.g., If the value is /dev/pmem0 with
@@ -216,10 +235,9 @@ class ConfigGenerateOutput(TestWithServers):
                     for scm_dev in scm_list:
                         device_name = scm_dev.split("/")[-1]
                         if device_name not in self.numa_node_to_blockdev[pinned_numa_node]:
-                            msg = ("Cannot find SCM device name {} "
-                                   "in expected list {}").format(
-                                device_name, self.numa_node_to_blockdev[pinned_numa_node])
-                            errors.append(msg)
+                            errors.append(
+                                f"Cannot find SCM device name {device_name} in expected list "
+                                f"{self.numa_node_to_blockdev[pinned_numa_node]}")
                         scm_found = True
 
                 # 3. Verify the bdev_list values are in the NVMe PCI address set of the
@@ -228,10 +246,9 @@ class ConfigGenerateOutput(TestWithServers):
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
                         if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
-                            msg = ("Cannot find PCI address {} "
-                                   "in expected set {}").format(
-                                pci_addr, self.numa_node_to_pci_addrs[pinned_numa_node])
-                            errors.append(msg)
+                            errors.append(
+                                f"Cannot find PCI address {pci_addr} in expected set "
+                                f"{self.numa_node_to_pci_addrs[pinned_numa_node]}")
                         nvme_found = True
 
             if not scm_found:
@@ -240,11 +257,12 @@ class ConfigGenerateOutput(TestWithServers):
                 errors.append("No NVMe devices found")
 
             # Verify fabric interface is in the interface set of the correct numa node.
+            self.log_step(f"Verifying fabric configuration for engine {index}")
             fabric_iface = engine["fabric_iface"]
             if fabric_iface not in self.numa_node_to_interfaces[pinned_numa_node]:
                 errors.append(
-                    "Cannot find fabric interface {} in expected set {}".format(
-                        fabric_iface, self.numa_node_to_interfaces[pinned_numa_node]))
+                    f"Cannot find fabric interface {fabric_iface} in expected set "
+                    f"{self.numa_node_to_interfaces[pinned_numa_node]}")
 
         self.check_errors(errors)
 
@@ -264,7 +282,7 @@ class ConfigGenerateOutput(TestWithServers):
         7. Repeat for all engines.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_tmpfs_scm_config
         """
@@ -274,21 +292,25 @@ class ConfigGenerateOutput(TestWithServers):
         errors = []
 
         # Call dmg config generate.
+        self.log_step("Generating server configuration with --use-tmpfs-scm")
         result = self.get_dmg_command().config_generate(
             mgmt_svc_replicas="wolf-a", net_provider=self.def_provider, use_tmpfs_scm=True,
-            control_metadata_path=self.test_dir)
+            control_metadata_path=self.test_dir, allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status != 0:
             errors.append("Config generate failed with use_tmpfs_scm = True!")
         generated_yaml = yaml.safe_load(result.stdout)
 
         # Iterate engines and verify class, scm_size, bdev_list, and fabric_iface.
         engines = generated_yaml["engines"]
-        for engine in engines:
+        for index, engine in enumerate(engines):
             scm_found = False
             nvme_found = False
             pinned_numa_node = engine["pinned_numa_node"]
+            if self.allow_numa_imbalance:
+                pinned_numa_node = "all"
 
             for storage in engine["storage"]:
+                self.log_step(f"Verifying storage configuration for engine {index}")
                 if storage["class"] == "ram":
                     scm_found = True
                     # Verify scm_list value is not set:
@@ -307,10 +329,9 @@ class ConfigGenerateOutput(TestWithServers):
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
                         if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
-                            msg = ("Cannot find PCI address {} "
-                                   "in expected set {}").format(
-                                pci_addr, self.numa_node_to_pci_addrs[pinned_numa_node])
-                            errors.append(msg)
+                            errors.append(
+                                f"Cannot find PCI address {pci_addr} in expected set "
+                                f"{self.numa_node_to_pci_addrs[pinned_numa_node]}")
                         nvme_found = True
 
             if not scm_found:
@@ -320,11 +341,12 @@ class ConfigGenerateOutput(TestWithServers):
 
             # Verify fabric interface values are in the interface set of the correct numa
             # node.
+            self.log_step(f"Verifying fabric configuration for engine {index}")
             fabric_iface = engine["fabric_iface"]
             if fabric_iface not in self.numa_node_to_interfaces[pinned_numa_node]:
                 errors.append(
-                    "Cannot find fabric interface {} in expected set {}".format(
-                        fabric_iface, self.numa_node_to_interfaces[pinned_numa_node]))
+                    f"Cannot find fabric interface {fabric_iface} in expected set "
+                    f"{self.numa_node_to_interfaces[pinned_numa_node]}")
 
         self.check_errors(errors)
 
@@ -332,7 +354,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --ms-replica with single MS replica with and without port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
         :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_single
         """
@@ -350,7 +372,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --ms-replicas with odd number of MS replicas.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
         :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_odd
         """
@@ -368,7 +390,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --ms-replicas with invalid port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
         :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_invalid
         """
@@ -391,7 +413,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --ms-replicas with the same MS replicas repeated.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate,mgmt_svc_replicas
         :avocado: tags=ConfigGenerateOutput,test_mgmt_svc_replicas_same_ap_repeated
         """
@@ -407,47 +429,50 @@ class ConfigGenerateOutput(TestWithServers):
 
         1. Using the NVMe PCI dictionary, find the number of keys. i.e., number
         of Socket IDs. This would determine the maximum number of engines.
-        2. Call dmg config generate --num-engines=<1 to max_engine>. Should
+        2. Call dmg config generate --num-engines=<1 to max_engines>. Should
         pass.
-        3. Call dmg config generate --num-engines=<max_engine + 1> Should fail.
+        3. Call dmg config generate --num-engines=<max_engines + 1> Should fail.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_num_engines
         """
         # Get necessary storage and network info.
         self.prepare_expected_data()
 
-        # Find the maximum number of engines we can use. It's the number of
-        # sockets in NVMe. However, I'm not sure if we need to have the same
-        # number of interfaces. Go over this step if we have issue with the
-        # max_engine assumption.
-        max_engine = len(list(self.numa_node_to_pci_addrs.keys()))
-        self.log.info("max_engine threshold = %s", max_engine)
+        # Find the maximum number of engines we can use. With the possibility of NUMA imbalance,
+        # use 2.
+        max_engines = self.params.get("max_engines", "/run/test_params/*")
+        self.log.info("max_engines threshold = %s", max_engines)
 
         dmg = DmgCommand(self.bin)
         dmg.exit_status_exception = False
         errors = []
 
-        # Call dmg config generate --num-engines=<1 to max_engine>
-        for num_engines in range(1, max_engine + 1):
+        # Call dmg config generate --num-engines=<1 to max_engines>
+        for num_engines in range(1, max_engines + 1):
+            self.log_step(f"Generating server config for {num_engines} engine(s)")
             result = dmg.config_generate(
-                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_provider=self.def_provider)
+                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_provider=self.def_provider,
+                allow_numa_imbalance=self.allow_numa_imbalance)
             generated_yaml = yaml.safe_load(result.stdout)
             actual_num_engines = len(generated_yaml["engines"])
 
             # Verify the number of engine field.
+            self.log_step(f"Verifying number of engine field for {num_engines} engine(s)")
             if actual_num_engines != num_engines:
-                msg = "Unexpected number of engine field! Expected = {}; Actual = {}".format(
-                    num_engines, actual_num_engines)
-                errors.append(msg)
+                errors.append(
+                    f"Unexpected number of engine field! Expected = {num_engines}; "
+                    f"Actual = {actual_num_engines}")
 
-        # Verify that max_engine + 1 fails.
+        # Verify that max_engines + 1 fails.
+        self.log_step(f"Generating server config for {num_engines + 1} engine(s) - should fail")
         result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", num_engines=max_engine + 1, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", num_engines=max_engines + 1, net_provider=self.def_provider,
+            allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status == 0:
-            errors.append("Host + invalid num engines succeeded with {}!".format(max_engine + 1))
+            errors.append(f"Host + invalid num engines succeeded with {max_engines + 1}!")
 
         self.check_errors(errors)
 
@@ -460,7 +485,7 @@ class ConfigGenerateOutput(TestWithServers):
         verify that there's no bdev_list field.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_scm_only
         """
@@ -473,15 +498,18 @@ class ConfigGenerateOutput(TestWithServers):
         errors = []
 
         # Call dmg config generate with --scm-only=False
+        self.log_step("Generating server config with --scm-only=False")
         result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", scm_only=False, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", scm_only=False, net_provider=self.def_provider,
+            allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status != 0:
             errors.append("config generate failed with scm_only = False!")
         generated_yaml = yaml.safe_load(result.stdout)
 
         # Iterate the engines and verify that there is a bdev_list field in each nvme tier.
         engines = generated_yaml["engines"]
-        for engine in engines:
+        for index, engine in enumerate(engines):
+            self.log_step(f"Verifying storage configuration for engine {index}")
             nvme_found = False
             for tier in engine["storage"]:
                 if tier["class"] == "nvme":
@@ -491,16 +519,19 @@ class ConfigGenerateOutput(TestWithServers):
             if not nvme_found:
                 errors.append("no nvme tier exists with --scm-only=False!")
 
+        self.log_step("Generating server config with --scm-only=True")
         # Call dmg config generate with --scm-only=True
         result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", scm_only=True, net_provider=self.def_provider)
+            mgmt_svc_replicas="wolf-a", scm_only=True, net_provider=self.def_provider,
+            allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status != 0:
             errors.append("config generate failed with scm_only = True!")
         generated_yaml = yaml.safe_load(result.stdout)
 
         # Iterate the engines and verify that there is no nvme tier.
         engines = generated_yaml["engines"]
-        for engine in engines:
+        for index, engine in enumerate(engines):
+            self.log_step(f"Verifying storage configuration for engine {index}")
             for tier in engine["storage"]:
                 if tier["class"] == "nvme":
                     errors.append("nvme tier exists with --scm-only=True!")
@@ -526,7 +557,7 @@ class ConfigGenerateOutput(TestWithServers):
         "fabric_iface".
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_net_class
         """
@@ -548,39 +579,43 @@ class ConfigGenerateOutput(TestWithServers):
         # --net-class=infiniband. Should pass.
         for num_engines in range(1, ib_count + 1):
             # dmg config generate should pass.
+            self.log_step(f"Generating server config for {num_engines} engine(s) with infiniband")
             result = dmg.config_generate(
                 mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_class="infiniband",
-                net_provider=self.def_provider)
+                net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
 
             if result.exit_status != 0:
-                msg = "config generate failed with --net-class=infiniband "\
-                    "--num-engines = {}!".format(num_engines)
-                errors.append(msg)
+                errors.append(
+                    f"config generate failed with --net-class=infiniband --num-engines "
+                    f"= {num_engines}!")
             else:
                 generated_config = yaml.safe_load(result.stdout)
-                for engine in generated_config["engines"]:
+                for index, engine in enumerate(generated_config["engines"]):
+                    self.log_step(f"Verifying fabric configuration for engine {index}")
                     fabric_iface = engine["fabric_iface"]
                     provider = engine["provider"]
                     # Verify fabric_iface field, e.g., ib0 by checking the
                     # dictionary keys.
                     if not self.interface_to_providers[fabric_iface]:
-                        errors.append("Unexpected fabric_iface! {}".format(fabric_iface))
+                        errors.append(f"Unexpected fabric_iface! {fabric_iface}")
                     elif provider not in self.interface_to_providers[fabric_iface]:
                         # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
-                        msg = "Unexpected provider in fabric_iface! provider ="\
-                            " {}; fabric_iface = {}".format(provider, fabric_iface)
-                        errors.append(msg)
+                        errors.append(
+                            f"Unexpected provider in fabric_iface! provider = {provider}; "
+                            f"fabric_iface = {fabric_iface}")
 
         # Call dmg config generate --num-engines=<ib_count + 1>
         # --net-class=infiniband. Too many engines. Should fail.
+        self.log_step(
+            f"Generating server config for {ib_count + 1} engine(s) with infiniband - should fail")
         result = dmg.config_generate(
             mgmt_svc_replicas="wolf-a", num_engines=ib_count + 1, net_class="infiniband",
-            net_provider=self.def_provider)
+            net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status == 0:
-            msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
-                ib_count + 1)
-            errors.append(msg)
+            errors.append(
+                f"config generate succeeded with --net-class=infiniband num_engines "
+                f"= {ib_count + 1}!")
 
         # Get eth_count threshold.
         eth_count = 0
@@ -593,38 +628,42 @@ class ConfigGenerateOutput(TestWithServers):
         # --net-class=ethernet. Should pass.
         for num_engines in range(1, eth_count + 1):
             # dmg config generate should pass.
+            self.log_step(f"Generating server config for {num_engines} engine(s) with ethernet")
             result = dmg.config_generate(
                 mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_class="ethernet",
-                net_provider=self.def_provider)
+                net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
 
             if result.exit_status != 0:
-                msg = "config generate failed with --net-class=ethernet --num-engines = {}!".format(
-                    num_engines)
-                errors.append(msg)
+                errors.append(
+                    f"config generate failed with --net-class=ethernet --num-engines "
+                    f"= {num_engines}!")
             else:
                 generated_config = yaml.safe_load(result.stdout)
-                for engine in generated_config["engines"]:
+                for index, engine in enumerate(generated_config["engines"]):
+                    self.log_step(f"Verifying fabric configuration for engine {index}")
                     fabric_iface = engine["fabric_iface"]
                     provider = engine["provider"]
                     # Verify fabric_iface field, e.g., eth0 by checking the
                     # dictionary keys.
                     if not self.interface_to_providers[fabric_iface]:
-                        errors.append("Unexpected fabric_iface! {}".format(fabric_iface))
+                        errors.append(f"Unexpected fabric_iface! {fabric_iface}")
                     elif provider not in self.interface_to_providers[fabric_iface]:
                         # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
-                        msg = "Unexpected provider in fabric_iface! provider ="\
-                            " {}; fabric_iface = {}".format(provider, fabric_iface)
-                        errors.append(msg)
+                        errors.append(
+                            f"Unexpected provider in fabric_iface! provider = {provider}; "
+                            f"fabric_iface = {fabric_iface}")
 
         # Call dmg config generate --num-engines=<eth_count + 1>
         # --net-class=ethernet. Too many engines. Should fail.
+        self.log_step(
+            f"Generating server config for {eth_count + 1} engine(s) with ethernet - should fail")
         result = dmg.config_generate(
             mgmt_svc_replicas="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
-            net_provider=self.def_provider)
+            net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
         if result.exit_status == 0:
-            msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(
-                eth_count + 1)
-            errors.append(msg)
+            errors.append(
+                f"config generate succeeded with --net-class=ethernet, num_engines "
+                f"= {eth_count + 1}!")
 
         self.check_errors(errors)

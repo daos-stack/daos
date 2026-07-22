@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -218,6 +218,18 @@ class StorageDevice():
         """
         return self.storage_class == "PMEM"
 
+    def to_dict(self):
+        """Convert this StorageDevice into a dictionary.
+
+        Returns:
+            dict: the dictionary version of the StorageDevice
+        """
+        if self.is_pmem:
+            # Exclude the NUMA node for PMEM devices to avoid issues with persistent naming
+            return {"address": self.address, "description": self.description}
+        return {
+            "address": self.address, "description": self.description, "numa_node": self.numa_node}
+
 
 class StorageInfo():
     """Information about host storage."""
@@ -302,7 +314,7 @@ class StorageInfo():
         for key, name in {'PMEM': 'pmem', 'NVMe': 'disk', 'VMD': 'controller'}.items():
             devices = getattr(self, f'{name}_devices')
             if devices:
-                data[key] = [str(item) for item in devices]
+                data[key] = [item.to_dict() for item in devices]
         return data
 
     def _raise_error(self, message, error=None):
@@ -738,6 +750,29 @@ class StorageInfo():
 
         write_yaml_file(self._log, yaml_file, lines)
 
+    def write_device_yaml(self, yaml_file):
+        """Generate a storage device yaml file.
+
+        Args:
+            yaml_file (str): file in which to write the storage device yaml entry
+
+        Raises:
+            YamlException: if there was an error writing the yaml file
+
+        """
+        self._log.info('Generating a storage device yaml: %s', yaml_file)
+        lines = ['storage:']
+        device_data = self.device_dict()
+        for storage_type, devices in device_data.items():
+            lines.append(f'  {storage_type}:')
+            for device in devices:
+                for index, (key, value) in enumerate(device.items()):
+                    if index == 0:
+                        lines.append(f"    - {key}: '{value}'")
+                    else:
+                        lines.append(f"      {key}: '{value}'")
+        write_yaml_file(self._log, yaml_file, lines)
+
     @staticmethod
     def _get_numa_devices(devices):
         """Get a dictionary of sorted devices indexed by their NUMA node.
@@ -777,3 +812,42 @@ class StorageInfo():
             filter(
                 partial(is_not, None),
                 itertools.chain(*itertools.zip_longest(*numa_devices.values()))))
+
+
+def has_numa_balance(storage_file, logger=None):
+    """Determine if the system has storage on more than one NUMA node.
+
+    Args:
+        storage_file (str): path to the storage YAML file
+        logger (logger, optional): logger for the messages produced by this function.
+            Defaults to None.
+
+    Raises:
+        StorageException: if athere is a problem determining the storage NUMA nodes
+
+    Returns:
+        bool: True if the system has storage on more than one NUMA node, False otherwise
+    """
+    if not os.path.exists(storage_file):
+        raise StorageException(f"Storage file {storage_file} does not exist")
+
+    if logger:
+        logger.debug("Checking storage NUMA nodes in %s", storage_file)
+    numa_nodes = {}
+    with open(storage_file, 'r', encoding='utf-8') as yaml_file:
+        try:
+            storage_data = yaml.safe_load(yaml_file.read())
+            for storage_type in storage_data["storage"]:
+                if storage_type not in ("NVMe", "VMD"):
+                    continue
+                if logger:
+                    logger.debug("  %s devices:", storage_type)
+                if storage_type not in numa_nodes:
+                    numa_nodes[storage_type] = set()
+                for device in storage_data["storage"][storage_type]:
+                    if logger:
+                        logger.debug("    %s", device)
+                    numa_nodes[storage_type].add(device["numa_node"])
+        except Exception as error:
+            raise StorageException("Error reading storage NUMA nodes") from error
+    return any(len(nodes) > 1 for nodes in numa_nodes.values())

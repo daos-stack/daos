@@ -1221,12 +1221,84 @@ func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
 				},
 			},
 		},
+		"allow imbalance distributes equally": {
+			sd: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(4, 5)...),
+				},
+			},
+			allowImbalance: true,
+			expSD: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				// 6 total SSDs distributed equally: 3 per engine
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
+				},
+			},
+		},
+		"allow imbalance with remainder discards extras": {
+			sd: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3, 4)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(5, 6)...),
+				},
+			},
+			allowImbalance: true,
+			expSD: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				// 7 total SSDs: uses 6 (3 per engine), 1 remainder not used
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
+				},
+			},
+		},
+		"allow imbalance with 8 SSDs across 2 engines": {
+			sd: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3, 4)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(5, 6, 7)...),
+				},
+			},
+			allowImbalance: true,
+			expSD: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				// 8 total SSDs distributed equally: 4 per engine
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(4, 5, 6, 7)...),
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			gotErr := correctSSDCounts(log, &tc.sd)
+			gotErr := correctSSDCounts(log, &tc.sd, tc.allowImbalance)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
