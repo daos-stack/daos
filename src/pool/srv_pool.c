@@ -1165,7 +1165,8 @@ rechoose:
 		goto out_backoff_seq;
 	}
 	/* We could send map_buf to simplify things. */
-	pool_create_in_set_data(rpc, target_addrs, prop, ndomains, ntargets, domains);
+	pool_create_in_set_data(rpc, target_addrs, prop, ndomains, ntargets, domains,
+				NULL /* downout_ranks */);
 
 	/* Send the POOL_CREATE request. */
 	rc = dss_rpc_send(rpc);
@@ -4013,8 +4014,8 @@ out:
 void
 ds_pool_create_handler(crt_rpc_t *rpc)
 {
-	struct pool_create_in  *in = crt_req_get(rpc);
-	struct pool_create_out *out = crt_reply_get(rpc);
+	struct pool_create_v6_in *in  = crt_req_get(rpc);
+	struct pool_create_out   *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
 	d_iov_t			value;
@@ -4029,7 +4030,8 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_MD, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pri_op.pi_uuid), rpc);
 
-	pool_create_in_get_data(rpc, &tgt_ranks, &prop, &ndomains, &ntgts, &domains);
+	pool_create_in_get_data(rpc, &tgt_ranks, &prop, &ndomains, &ntgts, &domains,
+				NULL /* downout_ranks */);
 
 	if (ntgts != tgt_ranks->rl_nr)
 		D_GOTO(out, rc = -DER_PROTO);
