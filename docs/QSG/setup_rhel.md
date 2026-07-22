@@ -2,8 +2,8 @@
 
 The following instructions detail how to install, set up and start DAOS servers and clients on
 two or more nodes.
-This document includes instructions for RHEL8-compatible distributions. This includes
-RHEL8, Rocky Linux and AlmaLinux.
+This document includes instructions for RHEL9-compatible distributions. This includes
+RHEL9, Rocky Linux and AlmaLinux.
 
 For setup instructions on OpenSuse, refer to [OpenSuse setup](setup_suse.md).
 
@@ -68,7 +68,7 @@ daos-server RPM.
 
 1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.6/):
 
-		clush -B -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.6/EL8/packages/x86_64/daos_packages.repo'
+		clush -B -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.6/EL9/packages/x86_64/daos_packages.repo'
 
 2. Import GPG key on all nodes:
 
