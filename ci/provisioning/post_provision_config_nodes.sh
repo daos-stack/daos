@@ -83,6 +83,7 @@ fi
 # and catted to the remote node along with this script
 # Capture function return code while preserving failure for set -e.
 # With set -e, we use || to capture $? immediately after the command fails.
+rc=0
 post_provision_config_nodes || rc=$?
 if [ $rc -ne 0 ]; then
     echo "post_provision_config_nodes failed with rc=$rc"
