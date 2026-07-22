@@ -242,7 +242,11 @@ retry_cmd() {
     local rc=0
     local non_retry_codes=" ${DAOS_STACK_NON_RETRY_EXIT_CODES} "
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        if monitor_cmd "$monitor_threshold" "$@"; then
+        # Capture command return code while preserving failure for set -e.
+        # With set -e, we use || to capture $? immediately after the command fails,
+        # before it gets reset by the if-else structure.
+        monitor_cmd "$monitor_threshold" "$@" || rc=$?
+        if [ $rc -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
@@ -250,8 +254,6 @@ retry_cmd() {
             fi
             return 0
         fi
-        # Command failed, retry
-        rc=$?
         if [[ "$non_retry_codes" == *" $rc "* ]]; then
             echo "Command retry aborted for non-retryable exit status: $rc"
             break

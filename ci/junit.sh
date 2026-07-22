@@ -155,8 +155,10 @@ report_junit() {
     class_name="$(junit_classname)"
     test_name_base="${JUNIT_TESTCASE_BASE:-$name}"
 
-    if ! clush -o '-i ci_key' -l root -w "$nodes" --rcopy "$results"; then
-        rcopy_rc=$?
+    # Capture clush return code while preserving failure for set -e.
+    # With set -e, we use || to capture $? immediately after the command fails.
+    clush -o '-i ci_key' -l root -w "$nodes" --rcopy "$results" || rcopy_rc=$?
+    if [ $rcopy_rc -ne 0 ]; then
         echo "ERROR: Failed to copy $results from nodes=$nodes rc=$rcopy_rc"
     fi
 
@@ -266,9 +268,11 @@ EOF
     cp "$STAGE_NAME"/framework/framework_results.xml \
        "$STAGE_NAME"/framework/results.xml
 
-    if ! clush -o '-i ci_key' -l root -w "$nodes" --rcopy /var/tmp/artifacts \
-                       --dest "$STAGE_NAME"/framework/; then
-        artifacts_rc=$?
+    # Capture clush return code while preserving failure for set -e.
+    # With set -e, we use || to capture $? immediately after the command fails.
+    clush -o '-i ci_key' -l root -w "$nodes" --rcopy /var/tmp/artifacts \
+                       --dest "$STAGE_NAME"/framework/ || artifacts_rc=$?
+    if [ $artifacts_rc -ne 0 ]; then
         echo "WARNING: Failed to copy /var/tmp/artifacts from nodes=$nodes rc=$artifacts_rc"
     fi
 

@@ -81,11 +81,13 @@ fi
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
-if ! post_provision_config_nodes; then
-  rc=$?
+# Capture function return code while preserving failure for set -e.
+# With set -e, we use || to capture $? immediately after the command fails.
+post_provision_config_nodes || rc=$?
+if [ $rc -ne 0 ]; then
     echo "post_provision_config_nodes failed with rc=$rc"
-  junit_result "post_provision_config $node_alias" \
-               "post_provision_config_nodes failed with rc=$rc"
+    junit_result "post_provision_config $node_alias" \
+                 "post_provision_config_nodes failed with rc=$rc"
     exit "$rc"
 fi
 
