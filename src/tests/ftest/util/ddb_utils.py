@@ -34,7 +34,7 @@ class DdbCommandBase(CommandWithParameters):
         self.write_mode = FormattedParameter("-w", default=False, position=1)
 
         # Used to place rm_pool before --db_path.
-        self.single_command_1 = BasicParameter(None, position=2)
+        self.ddb_command = BasicParameter(None, position=2)
 
         # Path to the system database. Used for MD-on-SSD.
         self.db_path = BasicParameter(None, position=3)
@@ -42,8 +42,8 @@ class DdbCommandBase(CommandWithParameters):
         # VOS file path.
         self.vos_path = FormattedParameter("--vos_path {}", position=4)
 
-        # Command to run on the VOS file that contains container, object info, etc.
-        self.single_command_2 = BasicParameter(None, position=5)
+        # Path for various ddb subcommands.
+        self.path = BasicParameter(None, position=5)
 
         # Members needed for run().
         self.verbose = verbose
@@ -115,7 +115,7 @@ class DdbCommand(DdbCommandBase):
         if component_path:
             cmd.append(component_path)
         self.write_mode.value = False
-        self.single_command_2.value = " ".join(cmd)
+        self.path.value = " ".join(cmd)
 
         return self.run()
 
@@ -137,7 +137,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command_2.value = " ".join(["value_dump", component_path, out_file_path])
+        self.path.value = " ".join(["value_dump", component_path, out_file_path])
 
         return self.run()
 
@@ -158,7 +158,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.single_command_2.value = " ".join(["value_load", load_file_path, component_path])
+        self.path.value = " ".join(["value_load", load_file_path, component_path])
 
         return self.run()
 
@@ -174,7 +174,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.single_command_2.value = " ".join(["rm", component_path])
+        self.path.value = " ".join(["rm", component_path])
 
         return self.run()
 
@@ -190,7 +190,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command_2.value = " ".join(["ilog_dump", component_path])
+        self.path.value = " ".join(["ilog_dump", component_path])
 
         return self.run()
 
@@ -206,7 +206,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command_2.value = " ".join(["ilog_commit", component_path])
+        self.path.value = " ".join(["ilog_commit", component_path])
 
         return self.run()
 
@@ -222,7 +222,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command_2.value = " ".join(["ilog_clear", component_path])
+        self.path.value = " ".join(["ilog_clear", component_path])
 
         return self.run()
 
@@ -238,7 +238,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command_2.value = " ".join(["superblock_dump", component_path])
+        self.path.value = " ".join(["superblock_dump", component_path])
 
         return self.run()
 
@@ -266,7 +266,7 @@ class DdbCommand(DdbCommandBase):
             commands.append("-a")
         commands.append(component_path)
 
-        self.single_command_2.value = " ".join(commands)
+        self.path.value = " ".join(commands)
 
         return self.run()
 
@@ -282,7 +282,7 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.single_command_2.value = " ".join(["dtx_cmt_clear", component_path])
+        self.path.value = " ".join(["dtx_cmt_clear", component_path])
 
         return self.run()
 
@@ -299,13 +299,8 @@ class DdbCommand(DdbCommandBase):
             CommandResult: groups of command results from the same hosts with the same return status
         """
         self.vos_path.value = '""'
-        # "ddb prov_mem" takes db_path, but it doesn't use --db_path indicator, so set the member's
-        # value to None and set it to the cmd list. This db_path is handled differently from
-        # rm_pool's db_path, so we need to handle it in a strange way. i.e., We have self.db_path,
-        # but we're not using it and use single_command_2 instead.
-        self.db_path.value = None
         cmd = ["prov_mem", db_path, tmpfs_mount]
-        self.single_command_2.value = " ".join(cmd)
+        self.path.value = " ".join(cmd)
 
         return self.run()
 
@@ -325,8 +320,8 @@ class DdbCommand(DdbCommandBase):
             CommandResult: groups of command results from the same hosts with the same return status
         """
         self.vos_path.value = None
-        self.single_command_1.value = "rm_pool"
+        self.ddb_command.value = "rm_pool"
         self.db_path.value = " ".join(["--db_path", db_path])
-        self.single_command_2.value = removing_path
+        self.path.value = removing_path
 
         return self.run()
