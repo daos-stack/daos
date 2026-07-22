@@ -58,7 +58,7 @@ RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
     /tmp/repo-helper.sh &&                          \
     rm -f /tmp/repo-helper.sh
 
-FROM basic
+FROM basic AS build-local
 # Install OS updates and package.  Include basic tools and daos dependencies
 # The proxy variables are currently needed for the combination of running
 # with a local repository, yet needing a proxy to reach outside repositories.
