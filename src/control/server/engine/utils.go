@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -65,7 +66,7 @@ const (
 	LogLevelErr
 	LogLevelCrit
 	LogLevelAlrt
-	LogLevelEmrg
+	LogLevelFatal
 	LogLevelEmit
 )
 
@@ -85,8 +86,8 @@ func (ll LogLevel) String() string {
 		return "CRIT"
 	case LogLevelAlrt:
 		return "ALRT"
-	case LogLevelEmrg:
-		return "EMRG"
+	case LogLevelFatal:
+		return "FATAL"
 	case LogLevelEmit:
 		return "EMIT"
 	default:
@@ -111,8 +112,8 @@ func StrToLogLevel(s string) LogLevel {
 		return LogLevelCrit
 	case "ALRT":
 		return LogLevelAlrt
-	case "FATAL", "EMRG":
-		return LogLevelEmrg
+	case "FATAL":
+		return LogLevelFatal
 	case "EMIT":
 		return LogLevelEmit
 	default:
@@ -123,7 +124,7 @@ func StrToLogLevel(s string) LogLevel {
 var (
 	validLogLevels = []string{
 		"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "FATAL",
-		"EMRG", "EMIT",
+		"EMIT",
 	}
 	validLogStreams = []string{
 		"ALL",                                                     // Select all streams

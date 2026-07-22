@@ -424,7 +424,7 @@
 #  # Mask specifies minimum level of message significance to pass to logger.
 #  # Currently supported values:
 #  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
-#  #   FATAL, EMRG, EMIT
+#  #   FATAL, EMIT
 #  #
 #  # default: ERR
 #  log_mask: INFO
@@ -595,7 +595,7 @@
 #  # Mask specifies minimum level of message significance to pass to logger.
 #  # Currently supported values:
 #  #   DEBUG, DBUG (alias for DEBUG), INFO, NOTE, WARN, ERROR, ERR (alias for ERROR), CRIT, ALRT,
-#  #   FATAL, EMRG, EMIT
+#  #   FATAL, EMIT
 #  #
 #  # default: ERR
 #  log_mask: INFO

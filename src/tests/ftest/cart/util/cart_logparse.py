@@ -28,13 +28,12 @@ class InvalidLogFile(Exception):
 LOG_LEVELS = {
     'EMIT': 1,
     'FATAL': 2,
-    'EMRG': 3,
-    'CRIT': 4,
-    'ERR': 5,
-    'WARN': 6,
-    'NOTE': 7,
-    'INFO': 8,
-    'DBUG': 9}
+    'CRIT': 3,
+    'ERROR': 4,
+    'WARN': 5,
+    'NOTE': 6,
+    'INFO': 7,
+    'DEBUG': 8}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
@@ -72,6 +71,10 @@ class LogLine():
 
     # pylint: disable=too-many-public-methods
 
+    # Match a log tag with pid/tid/uid ('TAG[pid/tid/uid]').
+    # Assumes DLOG_FLV_TAG and DLOG_FLV_LOGPID are set.
+    _pid_tag_re = re.compile(r'.+\[\d+/\d+/\d+\]')
+
     @staticmethod
     def is_valid(line):
         """Return True if a valid CaRT log line is recognized."""
@@ -87,26 +90,28 @@ class LogLine():
             and len(fields[1]) == 10 and fields[1][4] == '/' and fields[1][7] == '/'
             # Valid time: hh:mm:ss.micros
             and len(fields[2]) == 15 and fields[2][2] == ':' and fields[2][8] == '.'
+            # Assuming DLOG_FLV_TAG and DLOG_FLV_LOGPID are set: TAG[pid/tid/uid]
+            and LogLine._pid_tag_re.fullmatch(fields[4])
             # pylint: enable=too-many-boolean-expressions
         )
 
     # Match an address range, a region in memory.
-    re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
+    _re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
     # Match a pointer, with optional ')', '.' or ',' suffix.
-    re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.|\,)?)")
+    _re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.|\,)?)")
     # Match a pid marker
-    re_pid = re.compile(r"pid=(\d+)")
+    _re_pid = re.compile(r"pid=(\d+)")
 
     # Match a truncated uuid from DF_UUID
-    re_uuid = re.compile(r"[0-9a-f]{8}(:|\,?)")
+    _re_uuid = re.compile(r"[0-9a-f]{8}(:|\,?)")
     # Match a truncated uuid[rank] from DF_DB
-    re_uuid_rank = re.compile(r"[0-9,a-f]{8}\[\d+\](:?)")
+    _re_uuid_rank = re.compile(r"[0-9,a-f]{8}\[\d+\](:?)")
     # Match from DF_UIOD
-    re_uiod = re.compile(r"\d{1,20}\.\d{1,20}.(\d{1,10})")
+    _re_uiod = re.compile(r"\d{1,20}\.\d{1,20}.(\d{1,10})")
     # Match a RPCID from RPC_TRACE macro.
-    re_rpcid = re.compile(r"rpcid=0x[0-9a-f]{1,16}")
+    _re_rpcid = re.compile(r"rpcid=0x[0-9a-f]{1,16}")
     # Match DF_CONT
-    re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
+    _re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
     def __init__(self, line):
         # The format of log lines depends on the flags (DLOG_FLV_*) passed during initialization.
@@ -210,36 +215,36 @@ class LogLine():
         for entry in self._fields[2:]:
             field = None
 
-            r = self.re_region.fullmatch(entry)
+            r = self._re_region.fullmatch(entry)
             if r:
                 field = '0x...-0x...'
 
             if not field:
-                r = self.re_pointer.fullmatch(entry)
+                r = self._re_pointer.fullmatch(entry)
                 if r:
                     field = '0x...{}'.format(r.group(1))
             if not field:
-                r = self.re_pid.fullmatch(entry)
+                r = self._re_pid.fullmatch(entry)
                 if r:
                     field = 'pid=<pid>'
             if not field:
-                r = self.re_uuid.fullmatch(entry)
+                r = self._re_uuid.fullmatch(entry)
                 if r:
                     field = 'uuid{}'.format(r.group(1))
             if not field:
-                r = self.re_uuid_rank.fullmatch(entry)
+                r = self._re_uuid_rank.fullmatch(entry)
                 if r:
                     field = 'uuid/rank{}'.format(r.group(1))
             if not field:
-                r = self.re_uiod.fullmatch(entry)
+                r = self._re_uiod.fullmatch(entry)
                 if r:
                     field = 'uoid.{}'.format(r.group(1))
             if not field:
-                r = self.re_rpcid.fullmatch(entry)
+                r = self._re_rpcid.fullmatch(entry)
                 if r:
                     field = 'rpcid=<rpcid>'
             if not field:
-                r = self.re_cont.fullmatch(entry)
+                r = self._re_cont.fullmatch(entry)
                 if r:
                     field = 'pool/cont{}'.format(r.group(1))
             if field:
