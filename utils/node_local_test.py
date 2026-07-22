@@ -111,6 +111,7 @@ class NLTConf():
         self.args = None
         self.max_log_size = None
         self.valgrind_errors = False
+        self.go_memcheck = {}
         self.log_timer = CulmTimer()
         self.compress_timer = CulmTimer()
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
@@ -456,14 +457,38 @@ def get_base_env(clean=False):
     return env
 
 
-def check_memcheck_build(conf):
-    """Fail early if the daos binary is not valgrind-tagged for a memcheck run."""
-    daos_bin = join(conf['PREFIX'], 'bin', 'daos')
-    with open(daos_bin, 'rb') as fd:
-        if b'runtime.valgrindRegisterStack' not in fd.read():
-            raise NLTestFail(
-                f'{daos_bin} is not built with the Go "valgrind" tag (needs '
-                'Go 1.25+ and BUILD_GO_VALGRIND=1), to run under memcheck.')
+def has_go_valgrind_tag(go_bin):
+    """Return True if go_bin is built with the Go "valgrind" tag."""
+    with open(go_bin, 'rb') as fd:
+        return b'runtime.valgrindRegisterStack' in fd.read()
+
+
+def go_memcheck_enabled(conf, go_bin):
+    """Return True if go_bin (a Go binary/library) should run under memcheck.
+
+    The Go runtime is only comprehensible to valgrind when built with the Go
+    "valgrind" tag. Possible actions, depending on conf.args.memcheck:
+      'no'   - never run with valgrind
+      'yes'  - always; abort if go_bin lacks the tag
+      'some' - when go_bin has the tag; otherwise skip (e.g. release builds)
+    """
+    if conf.args.memcheck == 'no':
+        return False
+    # cache the decision per artifact
+    if go_bin not in conf.go_memcheck:
+        tagged = has_go_valgrind_tag(go_bin)
+        if not tagged:
+            if conf.args.memcheck == 'yes':
+                raise NLTestFail(
+                    f'{go_bin} is not built with the Go "valgrind" tag (needs '
+                    'Go 1.25+ and BUILD_GO_VALGRIND=1), to run under memcheck.')
+            print(f'{go_bin} lacks the Go "valgrind" tag (release build?), '
+                  'running it without memcheck', flush=True)
+        else:
+            print(f'{go_bin} has the Go "valgrind" tag; running it under memcheck',
+                  flush=True)
+        conf.go_memcheck[go_bin] = tagged
+    return conf.go_memcheck[go_bin]
 
 
 class DaosPool():
@@ -1060,9 +1085,6 @@ class DaosServer():
         """
         valgrind_hdl = ValgrindHelper(self.conf)
 
-        if self.conf.args.memcheck == 'no':
-            valgrind_hdl.use_valgrind = False
-
         exec_cmd = valgrind_hdl.get_cmd_prefix()
 
         exec_cmd.extend(cmd)
@@ -1078,6 +1100,7 @@ class DaosServer():
             cmd_env['D_LOG_FILE'] = log_name
             with open(log_name, 'w', encoding='utf-8') as lf:
                 lf.write(f'cmd: {" ".join(cmd)}\n')
+                lf.write(f'valgrind: {valgrind_hdl.use_valgrind}\n')
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
@@ -1202,9 +1225,6 @@ class DaosServer():
         cmd_env['D_PROVIDER'] = self.network_provider
         valgrind_hdl = ValgrindHelper(self.conf)
 
-        if self.conf.args.memcheck == 'no':
-            valgrind_hdl.use_valgrind = False
-
         system_name = 'daos_server'
 
         exec_cmd = valgrind_hdl.get_cmd_prefix()
@@ -1265,14 +1285,22 @@ class ValgrindHelper():
     Jenkins in locating the source code.
     """
 
-    def __init__(self, conf, logid=None):
+    def __init__(self, conf, logid=None, go_bin=None):
 
-        # Set this to False to disable valgrind, which will run faster.
         self.conf = conf
-        self.use_valgrind = True
         self.full_check = True
         self._xml_file = None
         self._logid = logid
+
+        # C commands run under memcheck whenever it is enabled; Go commands also
+        # need the build's Go "valgrind" tag (go_bin names the Go object to check).
+        # Callers may still force use_valgrind False afterwards for other reasons.
+        if conf.args.memcheck == 'no':
+            self.use_valgrind = False
+        elif go_bin is None:
+            self.use_valgrind = True
+        else:
+            self.use_valgrind = go_memcheck_enabled(conf, go_bin)
 
         src_dir = os.path.realpath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.src_dir = f'{src_dir}/'
@@ -1413,9 +1441,6 @@ class DFuse():
             my_env['DFS_USE_DTX'] = '1'
 
         self.valgrind = ValgrindHelper(self.conf, v_hint)
-        if self.conf.args.memcheck == 'no':
-            self.valgrind.use_valgrind = False
-
         if not self.use_valgrind:
             self.valgrind.use_valgrind = False
 
@@ -1738,17 +1763,15 @@ def run_daos_cmd(conf,
     Enable logging, and valgrind for the command.
     """
     dcr = DaosCmdReturn()
-    valgrind_hdl = ValgrindHelper(conf)
-
-    if conf.args.memcheck == 'no':
-        valgrind = False
+    daos_bin = join(conf['PREFIX'], 'bin', 'daos')
+    valgrind_hdl = ValgrindHelper(conf, go_bin=daos_bin)
 
     if not valgrind:
         valgrind_hdl.use_valgrind = False
 
     exec_cmd = valgrind_hdl.get_cmd_prefix()
     dcr.valgrind = list(exec_cmd)
-    daos_cmd = [join(conf['PREFIX'], 'bin', 'daos')]
+    daos_cmd = [daos_bin]
     if use_json:
         daos_cmd.append('--json')
     daos_cmd.extend(cmd)
@@ -1774,6 +1797,7 @@ def run_daos_cmd(conf,
         cmd_env['D_LOG_FILE'] = log_name
         with open(log_file.name, 'w', encoding='utf-8') as lf:
             lf.write(f'cmd: {" ".join(cmd)}\n')
+            lf.write(f'valgrind: {valgrind_hdl.use_valgrind}\n')
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
@@ -5709,6 +5733,10 @@ class AllocFailTestRun():
         else:
             exec_cmd = self._cmd
 
+        used_valgrind = self.valgrind_hdl is not None and self.valgrind_hdl.use_valgrind
+        with open(self.log_file, 'a', encoding='utf-8') as log_fh:
+            log_fh.write(f'valgrind: {used_valgrind}\n')
+
         self._sp = subprocess.Popen(exec_cmd,
                                     env=self._env,
                                     cwd=self._cwd,
@@ -6071,6 +6099,8 @@ class AllocFailTest():
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc, cwd)
         if valgrind:
             aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}')
+            # Crash reruns always valgrind, regardless of the memcheck mode.
+            aftf.valgrind_hdl.use_valgrind = True
             # Turn off leak checking in this case, as we're just interested in why it crashed.
             aftf.valgrind_hdl.full_check = False
 
@@ -6736,8 +6766,6 @@ def run(wf, args):
 
     conf.set_wf(wf)
     conf.set_args(args)
-    if args.memcheck != 'no':
-        check_memcheck_build(conf)
     setup_log_test(conf)
 
     fi_test = False

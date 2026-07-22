@@ -478,6 +478,17 @@ String sconsArgs() {
     return sconsFaultsArgs() + ' ' + params.CI_SCONS_ARGS
 }
 
+String nltMemcheckArgs() {
+    // For release builds, the default memcheck value (some) will adapt testing
+    // based on what's available (Go binaries can't be memchecked for release).
+    if (sconsArgs().contains('BUILD_TYPE=release')) {
+        return ''
+    }
+    // For non-release builds, force memcheck to be enabled so that Go binaries
+    // will fail if they aren't instrumented for memcheck testing.
+    return ' --memcheck yes'
+}
+
 /**
  * Update default commit pragmas based on files modified.
  */
@@ -1012,6 +1023,7 @@ pipeline {
                                                   " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
                                                   /* groovylint-disable-next-line LineLength */
                                                   (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
+                                                  nltMemcheckArgs() +
                                                   ' all',
                                      with_valgrind: 'memcheck',
                                      valgrind_pattern: '*memcheck.xml',
