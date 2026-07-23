@@ -436,7 +436,9 @@ class PoolListConsolidationTest(TestWithServers):
                     check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
                     if check_out[0]:
                         command = f"rm {rdb_pool_path}"
-                        self.run_cmd_check_result(command=command)
+                        command_root = command_as_user(command=command, user="root")
+                        if not run_remote(log=self.log, hosts=node, command=command_root).passed:
+                            self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                         self.log.info("Remove %s from %s", rdb_pool_path, str(node))
                         count += 1
 
