@@ -3476,7 +3476,9 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
 	D_ASSERT(atomic_load(&pool->sp_rebuilding) >= arg.tls_stopped);
-	atomic_fetch_sub(&pool->sp_rebuilding, arg.tls_stopped);
+	rc = atomic_fetch_sub(&pool->sp_rebuilding, arg.tls_stopped);
+	D_INFO(DF_UUID " sp_rebuilding sub old=%d new=%d tls_stopped=%u\n", DP_UUID(pool->sp_uuid),
+	       rc, rc - arg.tls_stopped, arg.tls_stopped);
 	ABT_mutex_free(&arg.stop_lock);
 
 	D_INFO(DF_UUID " ver %d, gen %d migrate stopped\n", DP_UUID(pool->sp_uuid), version,
@@ -3945,6 +3947,8 @@ migrate_ult(void *arg)
 
 	D_ASSERT(pool_tls != NULL);
 	pool = pool_tls->mpt_pool;
+	D_INFO(DF_RB ": migrate_ult start root=%" PRIx64 "\n", DP_RB_MPT(pool_tls),
+	       pool_tls->mpt_root_hdl.cookie);
 	while (atomic_load(&pool->spc_pool->sp_discarding) != 0) {
 		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(pool_tls));
 		dss_sleep(2 * 1000);
@@ -3982,6 +3986,12 @@ migrate_ult(void *arg)
 out:
 	if (pool_tls->mpt_status == 0)
 		pool_tls->mpt_status = rc;
+
+	D_INFO(DF_RB ": migrate_ult end rc=%d status=%d obj_ults=%u key_ults=%u inflight=" DF_U64
+		     " obj=" DF_U64 " rec=" DF_U64 "\n",
+	       DP_RB_MPT(pool_tls), rc, pool_tls->mpt_status, pool_tls->mpt_tgt_obj_ult_cnt,
+	       pool_tls->mpt_tgt_dkey_ult_cnt, pool_tls->mpt_inflight_size, pool_tls->mpt_obj_count,
+	       pool_tls->mpt_rec_count);
 
 	pool_tls->mpt_ult_running = 0;
 	migrate_pool_tls_put(pool_tls);
@@ -4156,8 +4166,11 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 		  uint32_t count, unsigned int tgt_idx, uint32_t new_layout_ver)
 {
 	struct migrate_pool_tls   *tls = NULL;
+	int                        exist_cnt  = 0;
+	int                        insert_cnt = 0;
 	int                        i;
 	int                        rc;
+	int                        rb_old;
 	d_rank_list_t             *svc_list = NULL;
 	struct daos_prop_entry    *entry;
 	struct ds_pool_migrate_arg arg    = {0};
@@ -4176,6 +4189,11 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 	if (rc || arg.pma_pool == NULL)
 		D_GOTO(out, rc);
 
+	D_INFO(DF_UUID ": migrate req begin ver=%u gen=%u opc=%u cnt=%u tgt_idx=%u local_tgt=%u "
+		       "no_iv=%d tls_preexist=%s sp_rebuilding=%d\n",
+	       DP_UUID(pool_uuid), version, generation, opc, count, tgt_idx, tgt_id, arg.pma_no_iv,
+	       tls ? "yes" : "no", atomic_load(&arg.pma_pool->sp_rebuilding));
+
 	if (tls)
 		goto skip_create;
 
@@ -4186,16 +4204,22 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 	/* prepare might yield */
 	tls = migrate_pool_tls_lookup(pool_uuid, version, generation);
 	if (tls) {
+		D_INFO(DF_RB ": tls became available during prepare\n", DP_RB_MPT(tls));
 		goto skip_create;
 	}
 
-	atomic_fetch_add(&arg.pma_pool->sp_rebuilding, 1);
+	rb_old = atomic_fetch_add(&arg.pma_pool->sp_rebuilding, 1);
+	D_INFO(DF_UUID ": sp_rebuilding add old=%d new=%d\n", DP_UUID(pool_uuid), rb_old,
+	       rb_old + 1);
 
 	rc = migrate_pool_tls_create(pool_uuid, version, generation, po_hdl, co_hdl, max_eph,
 				     new_layout_ver, opc, &tls, svc_list, arg.pma_tgt_status,
 				     arg.pma_tgt_in_ver);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	D_INFO(DF_RB ": tls created status=%u in_ver=%u\n", DP_RB_MPT(tls), arg.pma_tgt_status,
+	       arg.pma_tgt_in_ver);
 skip_create:
 	if (tls->mpt_fini)
 		D_GOTO(out, rc = migrate_pool_tls_get_status(tls));
@@ -4210,6 +4234,7 @@ skip_create:
 		rc = migrate_try_obj_insert(tls, co_uuid, oids[i], epochs[i], punched_epochs[i],
 					    shards[i], tgt_idx);
 		if (rc == -DER_EXIST) {
+			exist_cnt++;
 			D_DEBUG(DB_TRACE, DF_RB ": " DF_UOID "/" DF_UUID "exists.\n",
 				DP_RB_MPT(tls), DP_UOID(oids[i]), DP_UUID(co_uuid));
 			rc = 0;
@@ -4220,16 +4245,28 @@ skip_create:
 				 shards[i]);
 			break;
 		}
+
+		insert_cnt++;
 	}
 	if (rc < 0)
 		D_GOTO(out, rc);
 
-	if (tls->mpt_ult_running)
+	D_INFO(DF_RB ": enqueue summary cnt=%u inserted=%d existed=%d\n", DP_RB_MPT(tls), count,
+	       insert_cnt, exist_cnt);
+
+	if (tls->mpt_ult_running) {
+		D_INFO(DF_RB
+		       ": migrate_ult already running obj_ults=%u key_ults=%u inflight=" DF_U64
+		       " obj=" DF_U64 " rec=" DF_U64 "\n",
+		       DP_RB_MPT(tls), tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt,
+		       tls->mpt_inflight_size, tls->mpt_obj_count, tls->mpt_rec_count);
 		D_GOTO(out, rc);
+	}
 
 	/* Check and create task to iterate the to-be-rebuilt tree */
 	tls->mpt_ult_running = 1;
 	migrate_pool_tls_get(tls);
+	D_INFO(DF_RB ": starting migrate_ult\n", DP_RB_MPT(tls));
 	rc = dss_ult_create(migrate_ult, tls, DSS_XS_SELF, 0, MIGRATE_STACK_SIZE, NULL);
 	if (rc) {
 		DL_ERROR(rc, DF_RB ": create migrate ULT failed", DP_RB_MPT(tls));
@@ -4238,6 +4275,14 @@ skip_create:
 	}
 
 out:
+	if (tls != NULL) {
+		D_INFO(DF_RB ": migrate req end rc=%d ult_running=%u obj_ults=%u key_ults=%u "
+			     "inflight=" DF_U64 " obj=" DF_U64 " rec=" DF_U64 "\n",
+		       DP_RB_MPT(tls), rc, tls->mpt_ult_running, tls->mpt_tgt_obj_ult_cnt,
+		       tls->mpt_tgt_dkey_ult_cnt, tls->mpt_inflight_size, tls->mpt_obj_count,
+		       tls->mpt_rec_count);
+	}
+
 	migrate_pool_tls_put(tls);
 	if (arg.pma_pool)
 		D_ASSERT(dss_ult_execute(ds_migrate_end_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0) ==
@@ -4287,6 +4332,11 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	D_INFO(DF_RB ": migrate rpc recv cnt=%u tgt_idx=%u ver=%u gen=%u opc=%u max_eph=" DF_U64
+		     "\n",
+	       DP_RB_OMI(migrate_in), oids_count, migrate_in->om_tgt_idx, migrate_in->om_version,
+	       migrate_in->om_generation, migrate_in->om_opc, migrate_in->om_max_eph);
+
 	uuid_copy(co_uuid, migrate_in->om_cont_uuid);
 	uuid_copy(co_hdl_uuid, migrate_in->om_coh_uuid);
 	uuid_copy(po_uuid, migrate_in->om_pool_uuid);
@@ -4296,6 +4346,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 			       migrate_in->om_generation, migrate_in->om_max_eph,
 			       migrate_in->om_opc, oids, ephs, punched_ephs, shards, oids_count,
 			       migrate_in->om_tgt_idx, migrate_in->om_new_layout_ver);
+	D_INFO(DF_RB ": migrate rpc done rc=%d\n", DP_RB_OMI(migrate_in), rc);
 out:
 	migrate_out = crt_reply_get(rpc);
 	migrate_out->om_status = rc;
@@ -4872,6 +4923,12 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		migrate_in->om_shards.ca_arrays = shards;
 		migrate_in->om_shards.ca_count = cnt;
 	}
+
+	D_INFO(DF_RB ": migrate rpc send-> rank=%d tag=%d tgt_idx=%u cnt=%d ver=%u gen=%u "
+		     "opc=%u max_eph=" DF_U64 " enqueue_id=" DF_U64 "\n",
+	       DP_RB_OMI(migrate_in), tgt_ep.ep_rank, tgt_ep.ep_tag, index, cnt, version,
+	       generation, migrate_opc, max_eph, *enqueue_id);
+
 	rc = dss_rpc_send(rpc);
 	if (rc) {
 		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
@@ -4885,6 +4942,10 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		*max_delay = rpc_timeout;
 	}
 out:
+	if (migrate_in != NULL)
+		D_INFO(DF_RB ": migrate rpc send done rc=%d max_delay=%u enqueue_id=" DF_U64 "\n",
+		       DP_RB_OMI(migrate_in), rc, *max_delay, *enqueue_id);
+
 	D_DEBUG(DB_REBUILD, DF_RB ": rc=%d\n", DP_RB_OMI(migrate_in), rc);
 	if (rpc)
 		crt_req_decref(rpc);

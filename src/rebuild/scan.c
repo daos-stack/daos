@@ -94,6 +94,7 @@ static int
 rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 {
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
+	int                              attempt = 0;
 	int				rc;
 	uint64_t			enqueue_id;
 	uint32_t			max_delay;
@@ -115,8 +116,12 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		DF_RB " send rebuild objects to tgt %d cnt %d stable epoch " DF_U64 "\n",
 		DP_RB_RPT(rpt), arg->tgt_id, arg->count, rpt->rt_stable_epoch);
 	while (1) {
+		attempt++;
 		enqueue_id = 0;
 		max_delay = 0;
+		D_INFO(DF_RB ": migrate send attempt=%d tgt=%u cnt=%d ver=%u gen=%u\n",
+		       DP_RB_RPT(rpt), attempt, arg->tgt_id, arg->count, rpt->rt_rebuild_ver,
+		       rpt->rt_rebuild_gen);
 		rc = ds_object_migrate_send(rpt->rt_pool, rpt->rt_poh_uuid,
 					    rpt->rt_coh_uuid, arg->cont_uuid,
 					    arg->tgt_id, rpt->rt_rebuild_ver,
@@ -124,6 +129,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 					    arg->oids, arg->ephs, arg->punched_ephs, arg->shards,
 					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op,
 					    &enqueue_id, &max_delay);
+		D_INFO(DF_RB ": migrate send attempt=%d rc=%d max_delay=%u enqueue_id=" DF_U64 "\n",
+		       DP_RB_RPT(rpt), attempt, rc, max_delay, enqueue_id);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_OVERLOAD_RETRY && rc != -DER_AGAIN &&
