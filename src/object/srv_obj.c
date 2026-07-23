@@ -1444,6 +1444,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	uint64_t			bio_pre_latency = 0;
 	uint64_t			bio_post_latency = 0;
 	uint32_t			tgt_off = 0;
+	uint32_t                         i;
 	int				rc = 0;
 
 	create_map = orw->orw_flags & ORF_CREATE_MAP;
@@ -1463,6 +1464,20 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	}
 
 	dkey = (daos_key_t *)&orw->orw_dkey;
+	for (i = 0; i < iods_nr; i++) {
+		if (iods[i].iod_type != DAOS_IOD_ARRAY || iods[i].iod_nr == 0 ||
+		    iods[i].iod_recxs != NULL)
+			continue;
+
+		D_ERROR(DF_CONT " " DF_UOID
+				" invalid array IOD[%u] from RPC: iod=%p nr=%u recxs=NULL, "
+				"flags=%x api_flags=" DF_X64 " co_hdl=" DF_UUID "\n",
+			DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid), DP_UOID(orw->orw_oid), i,
+			&iods[i], iods[i].iod_nr, orw->orw_flags, orw->orw_api_flags,
+			DP_UUID(orw->orw_co_hdl));
+		return -DER_IO_INVAL;
+	}
+
 	D_DEBUG(DB_IO,
 		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64" flags %x.\n",
 		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
@@ -1707,7 +1722,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
 		if (orw->orw_iod_array.oia_iods != iods) {
 			/* Need to copy iod sizes for checksums */
-			int i, j;
+			int j;
 
 			for (i = 0, j = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
 				if (skips != NULL && isset(skips, i)) {
