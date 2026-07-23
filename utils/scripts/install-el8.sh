@@ -54,6 +54,7 @@ dnf --nodocs install ${dnf_install_args} \
     librdmacm-devel \
     libtool \
     libtool-ltdl-devel \
+    libtsan \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
