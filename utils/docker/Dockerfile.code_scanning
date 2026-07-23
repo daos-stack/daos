@@ -29,9 +29,11 @@ ENV NO_PROXY=${DAOS_NO_PROXY}
 RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
     echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
 
-# Setup local repo if available
-RUN --mount=type=bind,source=utils/scripts/helpers/repo-helper-el9.sh,target=/tmp/repo-helper.sh \
-    /tmp/repo-helper.sh
+# Script to setup local repo if available
+COPY ./utils/scripts/helpers/repo-helper-el9.sh /tmp/repo-helper.sh
+RUN chmod +x /tmp/repo-helper.sh && \
+    /tmp/repo-helper.sh &&          \
+    rm -f /tmp/repo-helper.sh
 
 # Script to install OS packages needed for code scanning, including python and bandit.
 ARG PYTHON_VERSION
