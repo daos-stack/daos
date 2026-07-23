@@ -67,8 +67,8 @@ RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/install.sh
 
 # Add DAOS user
 ARG UID=1000
-RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos-server-user-setup.sh \
-    /tmp/daos-server-user-setup.sh
+RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos/daos-server-user-setup.sh \
+    /tmp/daos/daos-server-user-setup.sh
 
 # Create directory for DAOS build backend storage
 RUN mkdir -p /home/daos /opt/daos && \
@@ -83,10 +83,10 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 WORKDIR /home/daos
-RUN --mount=type=bind,source=requirements-build.txt,target=/home/daos/requirements-build.txt \
+RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirements-build.txt \
     . /home/daos/venv/bin/activate &&                              \
     pip --no-cache-dir install --upgrade pip &&                    \
-    pip --no-cache-dir install -r /home/daos/requirements-build.txt
+    pip --no-cache-dir install -r /tmp/daos/requirements-build.txt
 
 # Install DAOS dependencies if available
 ARG DAOS_DEPS_INSTALL=yes
@@ -104,8 +104,8 @@ FROM build-ci AS build-local
 # Install remaining tools and dependencies needed for internal build.
 # This is done in a separate stage to allow for a smaller image for CI building only.
 USER root:root
-RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/install.sh \
-    /tmp/install.sh && \
+RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/daos/install.sh \
+    /tmp/daos/install.sh && \
     dnf clean all
 
 # Create directory for DAOS dependencies build storage
