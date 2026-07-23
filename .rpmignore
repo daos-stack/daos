@@ -3,11 +3,6 @@
 # but should not be included in the current release
 #
 
-el8/daos-*tests*.rpm
-el8/daos-mofed*.rpm
-el8/daos-serialize*.rpm
-el8/ucx*.rpm
-
 el9/daos-*tests*.rpm
 el9/daos-mofed*.rpm
 el9/daos-serialize*.rpm
