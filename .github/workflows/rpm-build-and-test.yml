@@ -11,8 +11,6 @@ env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list except the highest
-  EL8_BUILD_VERSION: ${{ vars.EL8_BUILD_VERSION_MASTER }}
-  EL8_VERSION: ${{ vars.EL8_VERSION_MASTER }}
   EL9_BUILD_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
   EL9_VERSION: ${{ vars.EL9_VERSION_MASTER }}
   LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
@@ -37,10 +35,10 @@ on:
         required: false
       functional-test-distros-json:
         # yamllint disable-line rule:line-length
-        description: 'Distros to run Functional testing on in a JSON array (i.e. ["el8", "el9", "leap15", "etc."])'
+        description: 'Distros to run Functional testing on in a JSON array (i.e. ["el9", "leap15", "etc."])'
         required: false
       functional-test-distros:
-        description: 'Distros to run Functional testing on (i.e. el8 el9 leap15, etc.)'
+        description: 'Distros to run Functional testing on (i.e. el9 leap15, etc.)'
         required: false
       run-gha:
         description: 'Run the GHA build and tests'
@@ -78,7 +76,6 @@ jobs:
       NAME: ${{ env.NAME }}
       DISTROS: ${{ env.COVFN_DISABLED == 'true' && vars.DISTROS_MASTER ||
                                                    vars.COVERAGE_DISTROS_MASTER }}
-      EL8_BUILD_VERSION: ${{ env.EL8_BUILD_VERSION }}
       EL9_BUILD_VERSION: ${{ env.EL9_BUILD_VERSION }}
       LEAP15_VERSION: ${{ env.LEAP15_VERSION }}
       PACKAGING_DIR: ${{ env.PACKAGING_DIR }}
@@ -99,7 +96,6 @@ jobs:
     with:
       NAME: ${{ needs.Variables.outputs.NAME }}
       DISTROS: ${{ needs.Variables.outputs.DISTROS }}
-      EL8_BUILD_VERSION: ${{ needs.Variables.outputs.EL8_BUILD_VERSION }}
       EL9_BUILD_VERSION: ${{ needs.Variables.outputs.EL9_BUILD_VERSION }}
       LEAP15_VERSION: ${{ needs.Variables.outputs.LEAP15_VERSION }}
       PACKAGING_DIR: ${{ needs.Variables.outputs.PACKAGING_DIR }}
@@ -165,12 +161,6 @@ jobs:
              fi
 
              if ./launch.py --list "$(get_test_tags "vm")"; then
-                 if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
-                    ! ${CP_SKIP_FUNC_TEST_EL8:-false}; then
-                     # it would definitely be nicer to get these into the environment
-                     # as unquoted strings so that we didn't have to double quote here
-                     l+=('"el8"')
-                 fi
                  if ${{ github.event_name == 'push' }} ||
                     (${{ github.event_name == 'pull_request' }} &&
                     ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
@@ -224,11 +214,9 @@ jobs:
       CP_PR_REPOS:
       CP_FEATURES:
       CP_TEST_TAG:
-      CP_EL8_VM9_LABEL:
       CP_EL9_VM9_LABEL:
       CP_LEAP15_VM9_LABEL:
       CP_PRIORITY:
-      CP_EL8_VERSION:
       CP_EL9_VERSION:
       CP_LEAP15_VERSION:
       CP_RPM_TEST_VERSION:
@@ -275,18 +263,6 @@ jobs:
                 DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
             fi
             case '${{ matrix.distro }}' in
-                'el8')
-                    CHROOT_NAME="rocky+epel-8-x86_64"
-                    DISTRO_NAME="EL"
-                    DISTRO_NAME_UPPER="EL"
-                    DISTRO_NAME_LOWER="el"
-                    DISTRO_VERSION='${{ env.CP_EL8_VERSION &&
-                                        env.CP_EL8_VERSION || env.EL8_VERSION }}'
-                    DISTRO_VERSION_MAJOR="8"
-                    OPENMPI="openmpi"
-                    LABEL='${{ env.CP_EL8_VM9_LABEL &&
-                               env.CP_EL8_VM9_LABEL || 'all_vm9' }}'
-                    ;;
                 'el9')
                     CHROOT_NAME="rocky+epel-9-x86_64"
                     DISTRO_NAME="EL"
@@ -516,8 +492,8 @@ jobs:
       CP_HW_MEDIUM_LABEL:
       CP_HW_LARGE_LABEL:
       CP_PRIORITY:
-      CP_EL8_VERSION:
-      CP_EL8_TARGET:
+      CP_EL9_VERSION:
+      CP_EL9_TARGET:
       CLUSTER_REQUEST_reqid:
       STAGE_NAME:
       QUEUE_URL:
@@ -548,15 +524,15 @@ jobs:
             else
                 DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
             fi
-            CHROOT_NAME="rocky+epel-8-x86_64"
+            CHROOT_NAME="rocky+epel-9-x86_64"
             DISTRO_NAME="EL"
             DISTRO_NAME_UPPER="EL"
             DISTRO_NAME_LOWER="el"
-            DISTRO_VERSION='${{ env.CP_EL8_TARGET &&
-                                env.CP_EL8_TARGET ||
-                                env.CP_EL8_VERSION &&
-                                env.CP_EL8_VERSION || env.EL8_VERSION }}'
-            DISTRO_VERSION_MAJOR="8"
+            DISTRO_VERSION='${{ env.CP_EL9_TARGET &&
+                                env.CP_EL9_TARGET ||
+                                env.CP_EL9_VERSION &&
+                                env.CP_EL9_VERSION || env.EL9_VERSION }}'
+            DISTRO_VERSION_MAJOR="9"
             if [[ '${{ matrix.stage }}' = Medium* ]]; then
                 LABEL=${{ env.CP_HW_MEDIUM_LABEL &&
                           env.CP_HW_MEDIUM_LABEL || 'ci_nvme5' }}

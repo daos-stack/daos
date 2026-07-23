@@ -12,7 +12,7 @@ set_lib_name() {
   suse_lib="$1"; shift
   deb_lib="$1"; shift
   local extension=""
-  local dist="${DISTRO:-el8}"
+  local dist="${DISTRO:-el9}"
   local -n _lib="${comp}_${vartype}"
   if [ "${vartype}" = "dev" ]; then
     if [[ "${dist}" =~ suse|el ]]; then
@@ -32,7 +32,7 @@ set_lib_name() {
   fi
 }
 
-distro_name=".${DISTRO:-el8}"
+distro_name=".${DISTRO:-el9}"
 
 export libfabric_min_version="1.20"
 export libfabric_version="1.22.0"
@@ -134,7 +134,7 @@ set_lib_name libasan lib libasan libasan8 libasan8
 export libasan_lib
 
 lmod="Lmod"
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el9}" =~ suse ]]; then
   lmod="lua-lmod"
 fi
 export lmod

@@ -7,12 +7,6 @@ set -uex
 
 if [ -n "${STAGE_NAME:?}" ]; then
   case $STAGE_NAME in
-    *CentOS\ 7*|*el7*|*centos7*)
-      : "${TARGET:=centos7}"
-      ;;
-    *CentOS\ 8*|*EL\ 8*|*el8*|*centos8*)
-      : "${TARGET:=centos8}"
-      ;;
     *CentOS\ 9*|*EL\ 9*|*el9*|*centos9*)
       : "${TARGET:=centos9}"
       ;;
