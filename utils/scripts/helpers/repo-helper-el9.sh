@@ -92,7 +92,7 @@ if [ -n "$REPO_FILE_URL" ]; then
 else
     PT_REPO=crb
 fi
-dnf install epel-release
+dnf -y install epel-release
 dnf config-manager --enable "$PT_REPO"
 dnf clean all
 
