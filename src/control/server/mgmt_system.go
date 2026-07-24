@@ -1988,7 +1988,10 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 	svc.log.Infof("System Erase Exec'ing %s to restart control plane", myPath)
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		// Allow sufficient time for the gRPC response to be sent to the client
+		// before restarting the process. 50ms was insufficient and caused EOF errors
+		// when the process restarted before the client finished reading the response.
+		time.Sleep(500 * time.Millisecond)
 		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
 			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
