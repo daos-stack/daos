@@ -186,6 +186,9 @@ RUN mkdir -p /home/daos/daos
 
 # Build DAOS
 WORKDIR /home/daos/daos/
+
+COPY --chown=daos_server:daos_server src /home/daos/daos/src
+
 RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
     --mount=type=bind,source=LICENSE,target=/home/daos/daos/LICENSE \
     --mount=type=bind,source=ftest.sh,target=/home/daos/daos/ftest.sh \
@@ -193,7 +196,6 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
     --mount=type=bind,source=requirements-ftest.txt,target=/home/daos/daos/requirements-ftest.txt \
     --mount=type=bind,source=.clang-format,target=/home/daos/daos/.clang-format \
     --mount=type=bind,source=site_scons,target=/home/daos/daos/site_scons \
-    --mount=type=bind,source=src,target=/home/daos/daos/src \
     --mount=type=bind,source=utils/build.config,target=/home/daos/daos/utils/build.config \
     --mount=type=bind,source=utils/certs,target=/home/daos/daos/utils/certs \
     --mount=type=bind,source=utils/completion,target=/home/daos/daos/utils/completion \
