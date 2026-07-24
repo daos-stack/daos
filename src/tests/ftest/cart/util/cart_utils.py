@@ -1,10 +1,10 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import glob
-import logging
 import os
 import re
 import shlex
@@ -27,8 +27,6 @@ class CartTest(TestWithoutServers):
     def __init__(self, *args, **kwargs):
         """Initialize a CartTest object."""
         super().__init__(*args, **kwargs)
-        self.stdout = logging.getLogger('avocado.test.stdout')
-        self.progress_log = logging.getLogger("progress")
         self.module_init = False
         self.module = lambda *x: False
         self.supp_file = "/etc/daos/memcheck-cart.supp"
@@ -48,7 +46,7 @@ class CartTest(TestWithoutServers):
 
         for file in filtered:
             to_del = os.path.join(self.attach_dir, file)
-            print("WARN: stale file {} found, deleting...\n".format(to_del))
+            self.log.info("WARN: stale file %s found, deleting...", to_del)
             os.remove(to_del)
 
         # Add test binaries and daos binaries to PATH
@@ -63,21 +61,22 @@ class CartTest(TestWithoutServers):
                 if os.path.basename(path_dirname) == "TESTING":
                     added_path = os.path.join(path_dirname, test_dirs["TESTING"])
                     os.environ["PATH"] += os.pathsep + added_path
-                    self.print("\nAdding {} to PATH\n".format(added_path))
+                    self.log.info("Adding %s to PATH", added_path)
                     found_path = True
                 elif os.path.basename(path_dirname) == "install":
                     self.supp_file = path_dirname + "/etc/memcheck-cart.supp"
                     added_path = os.path.join(path_dirname, test_dirs["install"])
                     if os.path.isdir(added_path):
                         os.environ["PATH"] += os.pathsep + added_path
-                        self.print("\nAdding {} to PATH\n".format(added_path))
+                        self.log.info("Adding %s to PATH", added_path)
                         found_path = True
                     else:
-                        print("ERROR: Directory does not exist: " + added_path)
+                        self.log.info("ERROR: Directory does not exist: %s", added_path)
                 elif re.match(r"^\s*\/+\s*$", path_dirname) is not None:
                     if not found_path:
-                        print("ERROR: Couldn't find a directory named 'TESTING' or 'install' "
-                              + "to add to your PATH.\n")
+                        self.log.info(
+                            "ERROR: Couldn't find a directory named 'TESTING' or 'install' to add "
+                            "to your PATH.")
                     break
 
                 path_dirname = os.path.dirname(path_dirname)
@@ -89,8 +88,8 @@ class CartTest(TestWithoutServers):
             if os.path.isdir(tests_dir):
                 os.environ["PATH"] += os.pathsep + tests_dir
             else:
-                print("WARNING: I didn't find the daos tests directory. "
-                      + "No test directories have been added to your PATH..\n")
+                self.log.info("WARNING: I didn't find the daos tests directory. "
+                              "No test directories have been added to your PATH..")
 
     def tearDown(self):
         """Tear down the test case."""
@@ -129,8 +128,7 @@ class CartTest(TestWithoutServers):
             retry += 1
             file_list = glob.glob(glob_pattern)
 
-            self.log.info("Found completion files: [%s]\n",
-                          ", ".join(file_list))
+            self.log.info("Found completion files: [%s]", ", ".join(file_list))
 
             if len(file_list) == count:
                 found_files = True
@@ -139,8 +137,7 @@ class CartTest(TestWithoutServers):
             time.sleep(1)
 
         if not found_files:
-            self.log.info("Expected %d completion files, ", count)
-            self.log.info("but only found %d.\n", len(file_list))
+            self.log.info("Expected %d completion files, but only found %d.", count, len(file_list))
 
         # Clean up completion file(s) for next test for next run
         for _file in file_list:
@@ -356,13 +353,14 @@ class CartTest(TestWithoutServers):
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)
         job.processes.update(tst_processes)
+
         return str(job)
 
     def convert_xml(self, xml_file):
         """Modify the xml file"""
 
-        with open(xml_file, 'r') as fd:
-            with open('{}.xml'.format(xml_file), 'w') as ofd:
+        with open(xml_file, 'r', encoding='utf-8') as fd:
+            with open('{}.xml'.format(xml_file), 'w', encoding='utf-8') as ofd:
                 for line in fd:
                     if self.src_dir in line:
                         ofd.write(re.sub(r'<dir>\/*' + self.src_dir + r'\/*', r'<dir>', line))
@@ -398,15 +396,13 @@ class CartTest(TestWithoutServers):
         # Verify the server is still running.
         if not self.check_process(srv_rtn):
             procrtn = self.stop_process(srv_rtn)
-            self.fail("Server did not launch, return code {}".format(procrtn))
+            self.fail(f"Server did not launch, return code {procrtn}")
 
         cli_rtn = self.launch_test(clicmd, srv_rtn)
         srv_rtn = self.stop_process(srv_rtn)
 
         if srv_rtn:
-            self.fail(
-                "Failed, return codes client {} server {}".format(
-                    cli_rtn, srv_rtn))
+            self.fail(f"Failed, return codes client {cli_rtn} server {srv_rtn}")
 
         self.convert_xml_files()
 
@@ -414,18 +410,18 @@ class CartTest(TestWithoutServers):
 
     def launch_test(self, cmd, srv1=None, srv2=None):
         """Launch a test."""
-        self.print("\nCMD : {}\n".format(cmd))
-        self.print("\nENV : {}\n".format(os.environ))
+        self.log.info("CMD : %s", cmd)
+        self.log.info("ENV : %s", os.environ)
 
         cmd = shlex.split(cmd)
-        rtn = subprocess.call(cmd)
+        rtn = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         if rtn:
             if srv1 is not None:
                 self.stop_process(srv1)
             if srv2 is not None:
                 self.stop_process(srv2)
-            self.fail("Failed, return codes {}".format(rtn))
+            self.fail(f"Failed, return codes {rtn}")
 
         self.convert_xml_files()
 
@@ -433,11 +429,11 @@ class CartTest(TestWithoutServers):
 
     def launch_cmd_bg(self, cmd):
         """Launch the given cmd in background."""
-        self.print("\nCMD : {}\n".format(cmd))
+        self.log.info("CMD : %s", cmd)
 
         cmd = shlex.split(cmd)
         # pylint: disable-next=consider-using-with
-        rtn = subprocess.Popen(cmd)
+        rtn = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         if rtn is None:
             self.fail("Failed to start command\n")
@@ -446,12 +442,6 @@ class CartTest(TestWithoutServers):
         self.convert_xml_files()
 
         return rtn
-
-    def print(self, cmd):
-        """Print the given cmd at runtime and stdout."""
-        self.log.info(cmd)
-        self.stdout.info(cmd)
-        self.progress_log.info(cmd)
 
     def log_check(self):
         """Check log files for consistency."""
