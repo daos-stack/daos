@@ -257,6 +257,12 @@ type SystemQueryResp struct {
 // Wrap sysResponse handling of absent hosts and ranks in a helper to be called from response
 // UnmarshalJSON implementations.
 func unmarshalSysRespJsonFields(data []byte, sr *sysResponse) error {
+	// A JSON literal null (e.g. from an empty/unset MS response) unmarshals into a nil
+	// pointer, so guard against it here to avoid a nil pointer dereference below.
+	if string(data) == "null" {
+		return nil
+	}
+
 	resp := &sysResponse{}
 	type Alias sysResponse
 	aux := &struct {

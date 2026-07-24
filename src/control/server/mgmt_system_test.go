@@ -3582,6 +3582,21 @@ func TestServer_MgmtSvc_SystemSelfHealEval(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
+	// SystemErase() unconditionally schedules a real process restart via execRestart()
+	// (unix.Exec()) from a background goroutine after a short (500ms) delay. Stub it out
+	// for the lifetime of this test function so that running these subtests does not
+	// replace the test binary's process image mid-suite.
+	//
+	// NB: this is intentionally NOT restored (e.g. via defer/t.Cleanup) once the test
+	// function returns. execRestart is invoked asynchronously ~500ms after each subtest's
+	// SystemErase() call returns, which is often after the subtest (or even the whole
+	// top-level test) has already finished; restoring the real unix.Exec() before that
+	// delayed goroutine fires would defeat the mock and trigger a genuine self-exec of the
+	// test binary, silently restarting (and replaying) the entire suite.
+	execRestart = func(argv0 string, argv []string, envv []string) error {
+		return nil
+	}
+
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
 			Addr:    test.MockHostAddr(a).String(),
