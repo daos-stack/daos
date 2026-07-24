@@ -244,8 +244,9 @@ func newTestMgmtSvcWithProvider(t *testing.T, log logging.Logger, provider *stor
 
 	db := raft.MockDatabase(t, log)
 	ms := system.MockMembership(t, log, db, mockTCPResolver)
-	ctx := test.Context(t)
+	ctx, cancel := context.WithCancel(test.Context(t))
 	svc := newMgmtSvc(harness, ms, db, nil, events.NewPubSub(ctx, log))
+	svc.cancel = cancel
 	svc.batchInterval = 100 * time.Microsecond // Speed up tests
 	svc.startAsyncLoops(ctx)
 	svc.startLeaderLoops(ctx)
