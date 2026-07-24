@@ -4,5 +4,6 @@ avocado-framework-plugin-varianter-yaml-to-mux==82
 clustershell
 distro
 paramiko
-setuptools
+# Newer setuptools does not have pkg_resources, which avocado 82 uses
+setuptools<82
 torch
