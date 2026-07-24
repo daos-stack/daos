@@ -192,7 +192,17 @@ RUN mkdir -p /home/daos/daos
 # Build DAOS
 WORKDIR /home/daos/daos/
 
-# COPY --chown=daos_server:daos_server src /home/daos/daos/src
+# We need to copy the source code into the image as we need read/write copy 
+# of raft source code. Otherwise we would not be able to build it:
+# make -C src/rdb/raft/ BUILDDIR=/home/daos/daos/build/release/clang/src/rdb/raft/src GCOV_CCFLAGS= tests_main
+# make: Entering directory '/home/daos/daos/src/rdb/raft'
+# cd ./tests && sh make-tests.sh "test_*.c" > main_test.c && cd ..
+# /bin/bash: line 1: main_test.c: Permission denied
+# make: *** [Makefile:40: tests/main_test.c] Error 1
+# make: Leaving directory '/home/daos/daos/src/rdb/raft'
+# scons: *** [build/release/clang/src/rdb/raft/src/tests_main] Error 2
+
+COPY --chown=daos_server:daos_server src /home/daos/daos/src
 
 RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
     --mount=type=bind,source=LICENSE,target=/home/daos/daos/LICENSE \
@@ -205,11 +215,10 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
     --mount=type=bind,source=utils/certs,target=/home/daos/daos/utils/certs \
     --mount=type=bind,source=utils/completion,target=/home/daos/daos/utils/completion \
     --mount=type=bind,source=utils/config,target=/home/daos/daos/utils/config \
-    --mount=type=bind,source=src,target=/home/daos/daos/src,readwrite \
     [ "$DAOS_BUILD" != "yes" ] || {                                     \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER  \
               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE \
-              FIRMWARE_MGMT=1 &&                                        \
+              FIRMWARE_MGMT=1 USE_INSTALLED=all &&                      \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&        \
         go clean -cache &&                                              \
         cp -r utils/config/examples /opt/daos;                          \
