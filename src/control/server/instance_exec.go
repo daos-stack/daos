@@ -190,6 +190,12 @@ func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.Ru
 		}
 	}()
 
+	// Reinitialize the storageReady channel for this engine start attempt.
+	// The channel may have been closed by a previous format operation, and
+	// reading from a closed channel returns immediately, which would bypass
+	// the format wait in awaitStorageReady().
+	ei.storageReady = make(chan struct{})
+
 	if err = ei.format(ctx); err != nil {
 		return
 	}
