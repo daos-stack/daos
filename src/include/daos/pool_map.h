@@ -60,21 +60,27 @@ typedef enum pool_comp_state {
 } pool_comp_state_t;
 
 enum pool_component_flags {
-	PO_COMPF_NONE		= 0,
+	PO_COMPF_NONE = 0,
 	/**
 	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
 	 */
-	PO_COMPF_DOWN2OUT	= (1 << 0),
+	PO_COMPF_DOWN2OUT = (1 << 0),
 	/**
 	 * If the target status is UP, then it indicates the UP status is
 	 * from DOWN directly, instead of NEW and DOWNOUT.
 	 */
-	PO_COMPF_DOWN2UP	= (1 << 1),
+	PO_COMPF_DOWN2UP = (1 << 1),
 	/**
 	 * The component has been processed by DAOS check, only in DRAM.
 	 */
-	PO_COMPF_CHK_DONE	= (1 << 2),
+	PO_COMPF_CHK_DONE = (1 << 2),
+	/**
+	 * In status PO_COMP_ST_DOWNOUT, indicates the component was never UP:
+	 * it was excluded at pool creation time. It carries no prior data and
+	 * must not be counted as a failed component.
+	 */
+	PO_COMPF_NEVER_UP = (1 << 3),
 };
 
 #define co_in_ver	co_out_ver
@@ -106,6 +112,10 @@ struct pool_component {
 	 * it means the map version when the target is excluded.
 	 * Otherwise, it is the map version when the target is
 	 * extended or reintegrated.
+	 *
+	 * For creation-time DOWNOUT (PO_COMPF_NEVER_UP), this is the pool
+	 * creation map version (typically 1). It does NOT mean the target
+	 * was excluded at that version after having been UP.
 	 */
 	uint32_t		co_out_ver; /* co_in_ver */
 
@@ -114,6 +124,29 @@ struct pool_component {
 	/** number of children or storage partitions */
 	uint32_t	co_nr;
 };
+
+/** True if the component is a DOWNOUT that resulted from a real failure and rebuild. */
+static inline bool
+pool_comp_is_failed_downout(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_DOWNOUT && (comp->co_flags & PO_COMPF_DOWN2OUT) &&
+	       !(comp->co_flags & PO_COMPF_NEVER_UP);
+}
+
+/** True if the component is a DOWNOUT that resulted from DRAIN. */
+static inline bool
+pool_comp_is_drain_downout(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_DOWNOUT && !(comp->co_flags & PO_COMPF_DOWN2OUT) &&
+	       !(comp->co_flags & PO_COMPF_NEVER_UP);
+}
+
+/** True if the component was excluded at pool creation time and never UP. */
+static inline bool
+pool_comp_is_creation_downout(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_DOWNOUT && (comp->co_flags & PO_COMPF_NEVER_UP);
+}
 
 /** a leaf of pool map */
 struct pool_target {

@@ -1616,6 +1616,8 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
 				rank_status = PO_COMP_ST_DOWNOUT;
 			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version, rank_status,
 				       nr_tgts, &map_comp);
+			if (rank_status == PO_COMP_ST_DOWNOUT)
+				map_comp.co_flags |= PO_COMPF_NEVER_UP;
 
 			D_ASSERT(i < ordered_ranks->rl_nr);
 			ordered_ranks->rl_ranks[i++] = node.fdn_val.rank;
@@ -1748,7 +1750,8 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			map_comp.co_ver = map_version;
 			map_comp.co_in_ver = map_version;
 			map_comp.co_fseq = 1;
-			map_comp.co_flags = PO_COMPF_NONE;
+			map_comp.co_flags =
+			    target_status == PO_COMP_ST_DOWNOUT ? PO_COMPF_NEVER_UP : PO_COMPF_NONE;
 			map_comp.co_nr = 1;
 
 			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, id=%d, "
@@ -2612,18 +2615,15 @@ pmap_fail_stat_fini(struct pmap_fail_stat *stat)
 static bool
 pmap_comp_failed(struct pool_component *comp)
 {
-	return (comp->co_status == PO_COMP_ST_DOWN) ||
-	       (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_flags & PO_COMPF_DOWN2OUT);
+	return (comp->co_status == PO_COMP_ST_DOWN) || pool_comp_is_failed_downout(comp);
 }
 
 static bool
 pmap_comp_failed_earlier(struct pool_component *comp, uint32_t ver)
 {
-	return ((comp->co_status == PO_COMP_ST_DOWNOUT &&
+	return (((pool_comp_is_failed_downout(comp) || pool_comp_is_drain_downout(comp)) &&
 		 comp->co_out_ver <= ver) ||
-		(comp->co_status == PO_COMP_ST_DOWN &&
-		 comp->co_fseq <= ver));
+		(comp->co_status == PO_COMP_ST_DOWN && comp->co_fseq <= ver));
 }
 
 static int

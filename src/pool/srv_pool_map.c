@@ -156,6 +156,7 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_in_ver = ++(*version);
+			target->ta_comp.co_flags &= ~(PO_COMPF_DOWN2OUT | PO_COMPF_NEVER_UP);
 			if (print_changes)
 				D_PRINT(DF_MAP ": " DF_TARGET " start reintegration.\n",
 					DP_MAP(pool_uuid, map), DP_TARGET(target));
