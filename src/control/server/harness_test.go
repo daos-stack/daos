@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -248,7 +248,10 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
 
-				msc := &sysprov.MockSysConfig{IsMountedBool: true}
+				msc := &sysprov.MockSysConfig{
+					IsMountedBool: true,
+					RealReadFile:  true,
+				}
 				sysp := sysprov.NewMockSysProvider(log, msc)
 				provider := storage.MockProvider(
 					log, 0, &engineCfg.Storage,
@@ -289,6 +292,13 @@ func TestServer_Harness_Start(t *testing.T) {
 				ei.setSuperblock(&Superblock{
 					UUID: uuid, Rank: rank, ValidRank: isValid,
 				})
+
+				// Write superblock to disk if rank is preset so it can be read back
+				if tc.rankInSuperblock {
+					if err := ei.WriteSuperblock(); err != nil {
+						t.Fatal(err)
+					}
+				}
 
 				if err := harness.AddInstance(ei); err != nil {
 					t.Fatal(err)
