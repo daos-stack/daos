@@ -82,20 +82,18 @@ fi
 dnf -y --disablerepo \*epel\* install dnf-plugins-core
 dnf -y config-manager --save --setopt=assumeyes=True
 dnf config-manager --save --setopt=install_weak_deps=False
-if [ ! -f /etc/fedora-release ]; then
-    dnf --disablerepo \*epel\* install epel-release
-    if [ -n "$REPO_FILE_URL" ]; then
-        PT_REPO="daos_ci-${DISTRO}${MAJOR_VER}-crb-${REPOSITORY_NAME}"
-        true > /etc/yum.repos.d/epel.repo
-        true > /etc/yum.repos.d/epel-modular.repo
-        sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
-            -i /etc/dnf/dnf.conf
-    else
-        PT_REPO=crb
-    fi
-    dnf install epel-release
-    dnf config-manager --enable "$PT_REPO"
+dnf --disablerepo \*epel\* install epel-release
+if [ -n "$REPO_FILE_URL" ]; then
+    PT_REPO="daos_ci-${DISTRO}${MAJOR_VER}-crb-${REPOSITORY_NAME}"
+    true > /etc/yum.repos.d/epel.repo
+    true > /etc/yum.repos.d/epel-modular.repo
+    sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
+        -i /etc/dnf/dnf.conf
+else
+    PT_REPO=crb
 fi
+dnf install epel-release
+dnf config-manager --enable "$PT_REPO"
 dnf clean all
 
 daos_base="job/daos-stack/job/"
