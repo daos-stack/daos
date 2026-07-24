@@ -1405,7 +1405,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 static int
 rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker *rgt,
 		       struct pool_target_id_list *tgts_failed, uint32_t layout_version,
-		       daos_rebuild_opc_t rebuild_op)
+		       daos_rebuild_opc_t rebuild_op, bool stop_admin, uint32_t orig_rb_ver)
 {
 	struct rebuild_scan_in	*rsi;
 	struct rebuild_scan_out	*rso;
@@ -1455,12 +1455,20 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 			D_DEBUG(DB_REBUILD, DF_RB " rank %u co_in_ver %u, rebuild_ver %u.\n",
 				DP_RB_RGT(rgt), up_ranks.rl_ranks[i], dom->do_comp.co_in_ver,
 				rgt->rgt_rebuild_ver);
-			if (dom->do_comp.co_in_ver <= rgt->rgt_rebuild_ver)
+			/* For admin stopped reintegration, FAIL_RECLAIM needs to broadcast
+			 * to reint engines to cleanup space, as following rebuild start will
+			 * not do pool_discard again.
+			 */
+			if (dom->do_comp.co_in_ver <= rgt->rgt_rebuild_ver ||
+			    (stop_admin && rebuild_op == RB_OP_FAIL_RECLAIM &&
+			     dom->do_comp.co_in_ver <= orig_rb_ver)) {
 				continue;
+			}
 
-			D_INFO(DF_RB " bypass UP rank %u co_in_ver %u exceed rebuild_ver %u\n",
+			D_INFO(DF_RB " bypass UP rank %u co_in_ver %u, rebuild_ver %u, "
+				     "stop_admin %d, rebuild_op %d, orig_rb_ver %d",
 			       DP_RB_RGT(rgt), up_ranks.rl_ranks[i], dom->do_comp.co_in_ver,
-			       rgt->rgt_rebuild_ver);
+			       rgt->rgt_rebuild_ver, stop_admin, rebuild_op, orig_rb_ver);
 			excluded->rl_ranks[nr++] = up_ranks.rl_ranks[i];
 		}
 		excluded->rl_nr = nr;
@@ -1832,8 +1840,9 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	D_INFO(DF_RB "\n", DP_RB_RGT(*p_rgt));
 
 	/* broadcast scan RPC to all targets */
-	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts,
-				    task->dst_new_layout_version, task->dst_rebuild_op);
+	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
+				    task->dst_rebuild_op, task->dst_stop_admin,
+				    task->dst_retry_map_ver);
 	if (rc)
 		DL_ERROR(rc, DF_RB ": object scan failed", DP_RB_RGT(*p_rgt));
 	else
