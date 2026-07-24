@@ -406,6 +406,8 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		if (DFS_IS_HARDLINK(entry.mode))
+			dfs_set_hardlink(&obj->mode);
 		break;
 	case S_IFDIR:
 		rc = open_dir(dfs, parent, flags, cid, &entry, len, obj);

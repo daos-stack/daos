@@ -12,6 +12,7 @@
 #include <daos_types.h>
 #include <daos/placement.h>
 #include <pthread.h>
+#include <sys/xattr.h>
 
 /** global DFS mount used for all tests */
 static uuid_t		co_uuid;
@@ -63,6 +64,20 @@ test_akey_present(dfs_obj_t *parent_dir, const char *file_name, const char *akey
 
 	assert_rc_equal(rc, 0);
 	return true;
+}
+
+/** Scan a NULL-terminated xattr name list (as returned by dfs_listxattr) for a name. */
+static bool
+xattr_name_in_list(const char *list, daos_size_t size, const char *name)
+{
+	const char *p = list;
+
+	while (p < list + size) {
+		if (strcmp(p, name) == 0)
+			return true;
+		p += strlen(p) + 1;
+	}
+	return false;
 }
 
 static void
@@ -4104,6 +4119,273 @@ dfs_test_link_remove(void **state)
 	assert_int_equal(rc, 0);
 }
 
+/**
+ * Test xattr operations across hardlinks. After a regular file is converted to a
+ * hardlink, its xattrs migrate to the GIT object and are keyed by OID, so all
+ * links must observe a single shared set of xattrs.
+ *
+ * Handle usage depends on the mount mode (DFS_USE_DTX): in balanced mode the
+ * shared-xattr checks reuse the duplicate handles (simulates remote handle) opened before the
+ * conversion, which must be transparently redirected to GIT.
+ *
+ * Note: the DTX path in dfs_setxattr is covered automatically because the whole
+ * suite is re-run with DFS_USE_DTX=1 (see run_dfs_unit_test()).
+ *
+ * Steps:
+ *  1.  Create regular file f and three extra handles (hA write-source, hB, hC).
+ *  2.  Set k1=v1, k2=v2 and an empty-value k3 while f is a regular file.
+ *  3.  getxattr size-probe (value=NULL) then sized fetch; verify empty k3.
+ *  4.  listxattr on the regular file returns {k1,k2,k3}; size-probe (list=NULL).
+ *  5.  Convert f to a hardlink via dfs_link (l2_obj returned, nlink=2) and verify
+ *      the x: akeys were removed from the parent dentry (migrated to GIT).
+ *  6.  get/list via the duplicate handles (stale in balanced mode, reopened in
+ *      relaxed mode) and the new l2_obj -> shared data.
+ *  7.  set k4 via one link, get via another -> visible (cross-link write).
+ *  8.  overwrite k1 via one link, get via another -> last writer wins.
+ *  9.  XATTR_CREATE/XATTR_REPLACE flag semantics on a hardlink.
+ * 10.  remove k4 via one link, get via another -> ENODATA.
+ * 11.  Negative: get a missing xattr on a hardlink -> ENODATA; remove -> ENOENT.
+ * 12.  Persistence: release l2_obj, reopen by path, value still present.
+ * 13.  Remove all xattrs; listxattr on a hardlink with no entries -> size 0.
+ * 14.  After all links are removed (inode destroyed), a get on a surviving handle
+ *      returns ENODATA instead of stale data.
+ */
+static void
+dfs_test_xattr_hardlink(void **state)
+{
+	test_arg_t *arg = *state;
+	dfs_obj_t  *dir1;
+	dfs_obj_t  *hA, *hB, *hC, *l2_obj, *reopen_obj;
+	const char *k1 = "user.k1", *k2 = "user.k2", *k3 = "user.k3", *k4 = "user.k4";
+	const char *v1 = "v1", *v2 = "v2", *v4 = "v4", *v1b = "v1_overwritten";
+	char        xakey[64];
+	char        buf[64];
+	char        list[128];
+	daos_size_t size;
+	struct stat statbuf;
+	bool        use_dtx = false;
+	int         rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/**
+	 * dfs_mt is mounted on a relaxed container, so its balanced (DTX) behavior is driven by the
+	 * DFS_USE_DTX environment override. The flag selects how the post-conversion shared-xattr
+	 * checks pick their handles (stale duplicates vs handles reopened after the conversion).
+	 */
+	d_getenv_bool("DFS_USE_DTX", &use_dtx);
+
+	/** Step 1: create directory and a regular file with multiple open handles. */
+	rc = dfs_open(dfs_mt, NULL, "xhl_dir1", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &hA);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hB);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hC);
+	assert_int_equal(rc, 0);
+
+	/** Step 2: set two valued xattrs and one empty-value xattr on the regular file. */
+	print_message("Step 1-2: set k1, k2 and empty k3 on the regular file\n");
+	rc = dfs_setxattr(dfs_mt, hA, k1, v1, strlen(v1) + 1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, hA, k2, v2, strlen(v2) + 1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, hA, k3, NULL, 0, 0);
+	assert_int_equal(rc, 0);
+
+	/** Step 3: getxattr size-probe then sized fetch; verify empty xattr. */
+	print_message("Step 3: getxattr size-probe and sized fetch\n");
+	size = 0;
+	rc   = dfs_getxattr(dfs_mt, hA, k1, NULL, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(v1) + 1);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, hA, k1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, v1);
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, hA, k3, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	/** Step 4: list on the regular file returns all three names; size-probe too. */
+	print_message("Step 4: listxattr on the regular file\n");
+	size = 0;
+	rc   = dfs_listxattr(dfs_mt, hA, NULL, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, strlen(k1) + 1 + strlen(k2) + 1 + strlen(k3) + 1);
+	size = sizeof(list);
+	memset(list, 0, sizeof(list));
+	rc = dfs_listxattr(dfs_mt, hA, list, &size);
+	assert_int_equal(rc, 0);
+	assert_true(xattr_name_in_list(list, size, k1));
+	assert_true(xattr_name_in_list(list, size, k2));
+	assert_true(xattr_name_in_list(list, size, k3));
+
+	/** Step 5: convert to hardlink and confirm xattrs migrated out of the dentry. */
+	print_message("Step 5: convert file1 to a hardlink and verify dentry akeys cleared\n");
+	l2_obj = NULL;
+	rc     = dfs_link(dfs_mt, hA, dir1, "file1_l2", &l2_obj, &statbuf);
+	assert_int_equal(rc, 0);
+	assert_non_null(l2_obj);
+	assert_int_equal((int)statbuf.st_nlink, 2);
+	snprintf(xakey, sizeof(xakey), "x:%s", k1);
+	assert_false(test_akey_present(dir1, "file1", xakey));
+	snprintf(xakey, sizeof(xakey), "x:%s", k2);
+	assert_false(test_akey_present(dir1, "file1", xakey));
+	snprintf(xakey, sizeof(xakey), "x:%s", k3);
+	assert_false(test_akey_present(dir1, "file1", xakey));
+
+	/**
+	 * Handle selection for the shared-xattr checks that follow:
+	 *  - Balanced mode (use_dtx): simulate concurrent balanced-mode operation by keeping the
+	 *    multiple duplicate handles hA/hB/hC opened to the same file while it was a regular
+	 *    file. Once one handle converts the file to a hardlink, the others become stale, which
+	 *    mimics a remote client operating on the same file; dfs_{get,list,remove}xattr must
+	 *    detect this and transparently redirect these stale handles to GIT.
+	 *  - Relaxed mode: stale handles are not supported, so release the duplicates and reopen
+	 *    them as valid hardlink handles (opened after the conversion).
+	 */
+	if (!use_dtx) {
+		rc = dfs_release(hA);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(hB);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(hC);
+		assert_int_equal(rc, 0);
+		rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hA);
+		assert_int_equal(rc, 0);
+		rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hB);
+		assert_int_equal(rc, 0);
+		rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hC);
+		assert_int_equal(rc, 0);
+	}
+
+	/** Step 6: stale handles (hB, hC, hA) and the new link see the shared xattrs. */
+	print_message("Step 6: get/list via stale handles and the new link\n");
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, hB, k1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, v1);
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, l2_obj, k1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, v1);
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, hA, k1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, v1);
+	size = sizeof(list);
+	memset(list, 0, sizeof(list));
+	rc = dfs_listxattr(dfs_mt, hC, list, &size);
+	assert_int_equal(rc, 0);
+	assert_true(xattr_name_in_list(list, size, k1));
+	assert_true(xattr_name_in_list(list, size, k2));
+	assert_true(xattr_name_in_list(list, size, k3));
+
+	/** Step 7: write a new xattr via one link, read it via another. */
+	print_message("Step 7: set k4 via l2_obj, get via hA\n");
+	rc = dfs_setxattr(dfs_mt, l2_obj, k4, v4, strlen(v4) + 1, 0);
+	assert_int_equal(rc, 0);
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, hA, k4, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, v4);
+
+	/** Step 8: overwrite an existing xattr via one link, read newest via another. */
+	print_message("Step 8: overwrite k1 via hB, get via l2_obj (last writer wins)\n");
+	rc = dfs_setxattr(dfs_mt, hB, k1, v1b, strlen(v1b) + 1, 0);
+	assert_int_equal(rc, 0);
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, l2_obj, k1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, v1b);
+
+	/** Step 9: XATTR_CREATE/XATTR_REPLACE flag semantics on a hardlink. */
+	print_message("Step 9: XATTR_CREATE / XATTR_REPLACE semantics on a hardlink\n");
+	rc = dfs_setxattr(dfs_mt, l2_obj, k4, v4, strlen(v4) + 1, XATTR_CREATE);
+	assert_int_equal(rc, EEXIST);
+	rc = dfs_setxattr(dfs_mt, l2_obj, "user.missing", v4, strlen(v4) + 1, XATTR_REPLACE);
+	assert_int_equal(rc, ENOENT);
+	rc = dfs_setxattr(dfs_mt, l2_obj, k1, v1, strlen(v1) + 1, XATTR_REPLACE);
+	assert_int_equal(rc, 0);
+
+	/** Step 10: remove a xattr via one link, confirm it is gone from another. */
+	print_message("Step 10: remove k4 via hB, get via hC -> ENODATA\n");
+	rc = dfs_removexattr(dfs_mt, hB, k4);
+	assert_int_equal(rc, 0);
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, hC, k4, buf, &size);
+	assert_int_equal(rc, ENODATA);
+
+	/** Step 11: missing-xattr negatives on a hardlink. */
+	print_message(
+	    "Step 11: get a missing xattr -> ENODATA, remove a missing xattr -> ENOENT\n");
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, l2_obj, "user.none", buf, &size);
+	assert_int_equal(rc, ENODATA);
+	rc = dfs_removexattr(dfs_mt, l2_obj, "user.none");
+	assert_int_equal(rc, ENOENT);
+
+	/** Step 12: persistence across a fresh handle opened by path. */
+	print_message("Step 12: reopen by path and verify xattr persists\n");
+	rc = dfs_release(l2_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir1, "file1_l2", S_IFREG, O_RDWR, 0, 0, NULL, &reopen_obj);
+	assert_int_equal(rc, 0);
+	size = sizeof(buf);
+	memset(buf, 0, sizeof(buf));
+	rc = dfs_getxattr(dfs_mt, reopen_obj, k1, buf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(buf, v1);
+
+	/** Step 13: remove all xattrs, then list on a hardlink with no entries. */
+	print_message("Step 13: remove all xattrs and verify empty listxattr\n");
+	rc = dfs_removexattr(dfs_mt, reopen_obj, k1);
+	assert_int_equal(rc, 0);
+	rc = dfs_removexattr(dfs_mt, hA, k2);
+	assert_int_equal(rc, 0);
+	rc = dfs_removexattr(dfs_mt, hB, k3);
+	assert_int_equal(rc, 0);
+	size = sizeof(list);
+	rc   = dfs_listxattr(dfs_mt, reopen_obj, list, &size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 0);
+	rc = dfs_release(reopen_obj);
+	assert_int_equal(rc, 0);
+
+	/** Step 14: after all links are removed the inode is gone; get -> ENODATA. */
+	print_message("Step 14: handle after full unlink -> ENODATA\n");
+	rc = dfs_remove(dfs_mt, dir1, "file1_l2", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "file1", 0, NULL);
+	assert_int_equal(rc, 0);
+	size = sizeof(buf);
+	rc   = dfs_getxattr(dfs_mt, hB, "user.none", buf, &size);
+	assert_int_equal(rc, ENODATA);
+
+	/** Cleanup */
+	rc = dfs_release(hA);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(hB);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(hC);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "xhl_dir1", true, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
@@ -4145,6 +4427,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
      test_case_teardown},
     {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST29: dfs hard link and remove", dfs_test_link_remove, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST30: dfs xattr hardlink", dfs_test_xattr_hardlink, async_disable,
      test_case_teardown},
 };
 
