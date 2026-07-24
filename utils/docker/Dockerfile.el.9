@@ -108,15 +108,20 @@ ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_TARGET_TYPE=release
 ARG DAOS_PACKAGES_BUILD=yes
+ARG DNF_UPGRADE_EXCLUDES=libfabric-devel,libfabric,mercury-devel,mercury,\
+mercury-ucx,argobots-devel,argobots,fused-devel,isa-l-devel,libisa-l,\
+isa-l_crypto-devel,libisa-l_crypto,daos-spdk-devel,daos-spdk,libpmemobj-devel,\
+libpmem,libpmem-devel,libpmemobj,\
+spdk,spdk-devel,dpdk,dpdk-devel
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-        dnf upgrade                      \ 
-            --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        dnf clean all;                   \
+        dnf upgrade \
+            --exclude="$DNF_UPGRADE_EXCLUDES" && \
+        dnf clean all; \
     }
 
 # Build dependencies
@@ -155,7 +160,7 @@ ARG CB1
 USER root:root
 RUN [ -z "$CB1" ] || { \
         dnf upgrade    \
-            --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+            --exclude="$DNF_UPGRADE_EXCLUDES" && \
         dnf clean all; \
     }
 
@@ -199,6 +204,7 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
     --mount=type=bind,source=utils/build.config,target=/home/daos/daos/utils/build.config \
     --mount=type=bind,source=utils/certs,target=/home/daos/daos/utils/certs \
     --mount=type=bind,source=utils/completion,target=/home/daos/daos/utils/completion \
+    --mount=type=bind,source=utils/config,target=/home/daos/daos/utils/config \
     --mount=type=bind,source=src,target=/home/daos/daos/src,readwrite \
     [ "$DAOS_BUILD" != "yes" ] || {                                     \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER  \
