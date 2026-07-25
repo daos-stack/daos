@@ -39,3 +39,7 @@ sudo dnf install --allowerasing -y "${pmdk_pkg}" || echo "${pmdk_pkg} not availa
 sudo dnf install --allowerasing -y "${isal_pkg}" || echo "${isal_pkg} not available"
 sudo dnf install --allowerasing -y "${isal_crypto_pkg}" || echo "${isal_crypto_pkg} not available"
 popd || exit 1
+
+cat /etc/pip.conf || true
+cat /etc/gemrc || true
+cat /etc/uv/uv.toml || true
