@@ -83,8 +83,9 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 WORKDIR /home/daos
-RUN --mount=type=cache,id=uv-cache-el9,target=/home/daos/.cache/uv,mode=0777 \
+RUN --mount=type=cache,id=uv-cache-el9-tmp,target=/tmp/uv-cache,mode=0777 \
     --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirements-build.txt \
+    export UV_CACHE_DIR=/tmp/uv-cache &&                         \
     . /home/daos/venv/bin/activate &&                              \
     pip --no-cache-dir install --upgrade pip &&                    \
     pip --no-cache-dir install -r /tmp/daos/requirements-build.txt && \
@@ -132,7 +133,7 @@ USER daos_server:daos_server
 WORKDIR /home/daos/pre
 ARG DEPS_JOBS=32
 
-RUN --mount=type=cache,id=uv-cache-el9,target=/home/daos/.cache/uv,mode=0777 \
+RUN --mount=type=cache,id=uv-cache-el9-tmp,target=/tmp/uv-cache,mode=0777 \
     --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
     --mount=type=bind,source=deps,target=/home/daos/pre/deps \
     --mount=type=bind,source=site_scons/prereq_tools,target=/home/daos/pre/site_scons/prereq_tools \
@@ -142,6 +143,7 @@ RUN --mount=type=cache,id=uv-cache-el9,target=/home/daos/.cache/uv,mode=0777 \
     --mount=type=bind,source=utils/scripts/create_spdk_pkgconfig.sh,target=/home/daos/pre/utils/scripts/create_spdk_pkgconfig.sh \
     --mount=type=bind,source=ci/rpm/build_deps.sh,target=/home/daos/pre/utils/scripts/build_deps.sh \
     [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                 \
+        export UV_CACHE_DIR=/tmp/uv-cache &&                                 \
         DAOS_DEPS_JOBS="$DEPS_JOBS" DAOS_TARGET_TYPE="$DAOS_TARGET_TYPE" \
         utils/scripts/build_deps.sh &&                                   \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz);      \
