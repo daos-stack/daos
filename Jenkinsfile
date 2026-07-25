@@ -825,7 +825,6 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --target build-ci' +
-                                                ' --network=host' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
