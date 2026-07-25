@@ -83,7 +83,7 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 WORKDIR /home/daos
-RUN --mount=type=cache,id=uv-cache-el9-tmp,target=/tmp/uv-cache,mode=0777 \
+RUN --mount=type=cache,id=uv-cache-el9-v3,target=/tmp/uv-cache,uid=${UID},gid=${UID},mode=0777 \
     --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirements-build.txt \
     export UV_CACHE_DIR=/tmp/uv-cache &&                         \
     . /home/daos/venv/bin/activate &&                              \
@@ -133,7 +133,7 @@ USER daos_server:daos_server
 WORKDIR /home/daos/pre
 ARG DEPS_JOBS=32
 
-RUN --mount=type=cache,id=uv-cache-el9-tmp,target=/tmp/uv-cache,mode=0777 \
+RUN --mount=type=cache,id=uv-cache-el9-v3,target=/tmp/uv-cache,uid=${UID},gid=${UID},mode=0777 \
     --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
     --mount=type=bind,source=deps,target=/home/daos/pre/deps \
     --mount=type=bind,source=site_scons/prereq_tools,target=/home/daos/pre/site_scons/prereq_tools \
