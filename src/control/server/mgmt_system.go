@@ -1991,7 +1991,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		// Allow sufficient time for the gRPC response to be sent to the client
 		// before restarting the process. 50ms was insufficient and caused EOF errors
 		// when the process restarted before the client finished reading the response.
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(time.Second)
 		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
 			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
