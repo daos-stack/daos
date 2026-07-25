@@ -97,9 +97,26 @@ func TestDdb_Cmds(t *testing.T) {
 		}
 	}
 
-	featureFnCheckingShow := func(t *testing.T, wantShow bool) func(string, string, string, string, bool) error {
-		return func(_, _, _, _ string, show bool) error {
+	string2FlagsCapturing := func(captured *string) func(string) (uint64, uint64, error) {
+		return func(s string) (uint64, uint64, error) {
+			*captured = s
+			return 0, 0, nil
+		}
+	}
+
+	featureFnChecking := func(t *testing.T, wantPath, wantDbPath string,
+		capturedEnable *string, capturedDisable *string, wantFlagValue string,
+		wantShow bool) func(string, string, string, string, bool) error {
+		return func(path, dbPath, enable, disable string, show bool) error {
 			fmt.Println("feature called")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "dbPath", wantDbPath, dbPath)
+			if capturedEnable != nil {
+				test.CmpAny(t, "enable", wantFlagValue, *capturedEnable)
+			}
+			if capturedDisable != nil {
+				test.CmpAny(t, "disable", wantFlagValue, *capturedDisable)
+			}
 			test.CmpAny(t, "show", wantShow, show)
 			return nil
 		}
@@ -120,12 +137,8 @@ func TestDdb_Cmds(t *testing.T) {
 		setup     func(*testing.T)
 		expStdout []string
 		expErr    error
-		// skipCmdLine skips the command-line sub-test with a message. Use when
-		// a flag is shared between the CLI layer and the grumble command: go-flags
-		// consumes it before grumble can see it, making a clean command-line test
-		// impossible for that particular flag.
-		skipCmdLine string
 	}{
+		// --- ls command ---
 		"ls invalid options": {
 			args:   []string{"ls", "--bar"},
 			expErr: ddbTestErr("invalid flag: --bar"),
@@ -167,11 +180,6 @@ func TestDdb_Cmds(t *testing.T) {
 		},
 
 		// --- open command ---
-		// Note: the -w/--write_mode and -p/--db_path flags of the grumble 'open'
-		// command share names with CLI-level flags that are consumed by go-flags
-		// before reaching grumble in command-line mode. The command-line test for
-		// those flags would silently test wrong values. They are correctly exercised
-		// in command-file mode; see TestRun for CLI-level flag coverage.
 		"open default": {
 			args: []string{"open", "/path/to/vos-0"},
 			setup: func(t *testing.T) {
@@ -179,17 +187,29 @@ func TestDdb_Cmds(t *testing.T) {
 			},
 			expStdout: []string{"open called"},
 		},
-		"open write mode": {
-			args:        []string{"open", "-w", "/path/to/vos-0"},
-			skipCmdLine: "-w is consumed by the CLI write_mode flag before reaching grumble",
+		"open short write mode": {
+			args: []string{"open", "-w", "/path/to/vos-0"},
 			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnChecking(t, "/path/to/vos-0", "", true)
 			},
 			expStdout: []string{"open called"},
 		},
-		"open with db path": {
-			args:        []string{"open", "-p", "/sysdb", "/path/to/vos-0"},
-			skipCmdLine: "-p is consumed by the CLI db_path flag before reaching grumble",
+		"open long write mode": {
+			args: []string{"open", "--write_mode", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/path/to/vos-0", "", true)
+			},
+			expStdout: []string{"open called"},
+		},
+		"open with short db path": {
+			args: []string{"open", "-p", "/sysdb", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_open_Fn = openFnChecking(t, "/path/to/vos-0", "/sysdb", false)
+			},
+			expStdout: []string{"open called"},
+		},
+		"open with long db path": {
+			args: []string{"open", "--db_path", "/sysdb", "/path/to/vos-0"},
 			setup: func(t *testing.T) {
 				ddb_run_open_Fn = openFnChecking(t, "/path/to/vos-0", "/sysdb", false)
 			},
@@ -197,45 +217,80 @@ func TestDdb_Cmds(t *testing.T) {
 		},
 
 		// --- feature command ---
-		// feature --show: verifies the show flag is forwarded to the C layer.
-		"feature show": {
+		"feature without flags": {
+			args:   []string{"feature"},
+			expErr: ddbTestErr(featureOnlyOneOptErr),
+		},
+		"feature with enable and disable flags": {
+			args:   []string{"feature", "--enable=a", "--disable=b"},
+			expErr: ddbTestErr(featureOnlyOneOptErr),
+		},
+		"feature with enable and show flags": {
+			args:   []string{"feature", "--enable=a", "--show"},
+			expErr: ddbTestErr(featureOnlyOneOptErr),
+		},
+		"feature with disable and show flags": {
+			args:   []string{"feature", "--disable=a", "--show"},
+			expErr: ddbTestErr(featureOnlyOneOptErr),
+		},
+		"feature with db_path but no path": {
+			args:   []string{"feature", "--db_path=/sysdb", "--show"},
+			expErr: ddbTestErr(vosPathMissErr),
+		},
+		"feature with long show flag": {
 			args: []string{"feature", "--show"},
 			setup: func(t *testing.T) {
-				ddb_run_feature_Fn = featureFnCheckingShow(t, true)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", nil, nil, "", true)
 			},
 			expStdout: []string{"feature called"},
 		},
-		// feature --enable: verifies that the enable string reaches ddb_feature_string2flags.
-		"feature enable": {
+		"feature with short show flag": {
+			args: []string{"feature", "-s"},
+			setup: func(t *testing.T) {
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", nil, nil, "", true)
+			},
+			expStdout: []string{"feature called"},
+		},
+		"feature with long enable flag": {
 			args: []string{"feature", "--enable=myflag"},
 			setup: func(t *testing.T) {
 				var capturedFlag string
-				ddb_feature_string2flags_Fn = func(s string) (uint64, uint64, error) {
-					capturedFlag = s
-					return 0, 0, nil
-				}
-				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
-					fmt.Println("feature called")
-					test.CmpAny(t, "enable flag string", "myflag", capturedFlag)
-					return nil
-				}
+				ddb_feature_string2flags_Fn = string2FlagsCapturing(&capturedFlag)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", &capturedFlag, nil, "myflag", false)
 			},
 			expStdout: []string{"feature called"},
 		},
-		// feature --disable: verifies that the disable string reaches ddb_feature_string2flags.
-		"feature disable": {
-			args: []string{"feature", "--disable=otherflag"},
+		"feature with short enable flag": {
+			args: []string{"feature", "-e", "myflag"},
 			setup: func(t *testing.T) {
 				var capturedFlag string
-				ddb_feature_string2flags_Fn = func(s string) (uint64, uint64, error) {
-					capturedFlag = s
-					return 0, 0, nil
-				}
-				ddb_run_feature_Fn = func(path, dbPath, enable, disable string, show bool) error {
-					fmt.Println("feature called")
-					test.CmpAny(t, "disable flag string", "otherflag", capturedFlag)
-					return nil
-				}
+				ddb_feature_string2flags_Fn = string2FlagsCapturing(&capturedFlag)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", &capturedFlag, nil, "myflag", false)
+			},
+			expStdout: []string{"feature called"},
+		},
+		"feature with long disable flag": {
+			args: []string{"feature", "--disable=myflag"},
+			setup: func(t *testing.T) {
+				var capturedFlag string
+				ddb_feature_string2flags_Fn = string2FlagsCapturing(&capturedFlag)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", nil, &capturedFlag, "myflag", false)
+			},
+			expStdout: []string{"feature called"},
+		},
+		"feature with short disable flag": {
+			args: []string{"feature", "-d", "myflag"},
+			setup: func(t *testing.T) {
+				var capturedFlag string
+				ddb_feature_string2flags_Fn = string2FlagsCapturing(&capturedFlag)
+				ddb_run_feature_Fn = featureFnChecking(t, "", "", nil, &capturedFlag, "myflag", false)
+			},
+			expStdout: []string{"feature called"},
+		},
+		"feature with cmd-level db_path": {
+			args: []string{"feature", "--db_path=/sysdb", "--show", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_feature_Fn = featureFnChecking(t, "/path/to/vos-0", "/sysdb", nil, nil, "", true)
 			},
 			expStdout: []string{"feature called"},
 		},
@@ -245,11 +300,11 @@ func TestDdb_Cmds(t *testing.T) {
 		// --cmt_date is provided. These tests exercise that Go-layer validation.
 		"dtx_aggr both cmt_time and cmt_date": {
 			args:   []string{"dtx_aggr", "--cmt_time=0", "--cmt_date=2024-01-01"},
-			expErr: ddbTestErr("mutually exclusive"),
+			expErr: ddbTestErr(dtxAggrMutuallyExclusiveErr),
 		},
 		"dtx_aggr neither cmt_time nor cmt_date": {
 			args:   []string{"dtx_aggr"},
-			expErr: ddbTestErr("has to be defined"),
+			expErr: ddbTestErr(dtxAggrRequiredOptErr),
 		},
 		"dtx_aggr cmt_time": {
 			args: []string{"dtx_aggr", "--cmt_time=1000"},
@@ -297,14 +352,57 @@ func TestDdb_Cmds(t *testing.T) {
 			expStdout: []string{"version called"},
 		},
 
+		// --- rm_pool command ---
+		"rm_pool with db_path": {
+			args: []string{"rm_pool", "--db_path", "/sysdb", "/mnt/pool/rdb-pool"},
+			setup: func(t *testing.T) {
+				ddb_run_rm_pool_Fn = func(path, dbPath string) error {
+					fmt.Println("rm_pool called")
+					test.CmpAny(t, "path", "/mnt/pool/rdb-pool", path)
+					test.CmpAny(t, "dbPath", "/sysdb", dbPath)
+					return nil
+				}
+			},
+			expStdout: []string{"rm_pool called"},
+		},
+		"rm_pool without db_path": {
+			args: []string{"rm_pool", "/mnt/pool/rdb-pool"},
+			setup: func(t *testing.T) {
+				ddb_run_rm_pool_Fn = func(path, dbPath string) error {
+					fmt.Println("rm_pool called")
+					test.CmpAny(t, "path", "/mnt/pool/rdb-pool", path)
+					test.CmpAny(t, "dbPath", "", dbPath)
+					return nil
+				}
+			},
+			expStdout: []string{"rm_pool called"},
+		},
+
+		// --- prov_mem command: flag conflict ---
+		// -s / --tmpfs_size: short flag -s was consumed as global VosPath before PassAfterNonOption.
+		"prov_mem with tmpfs_size short flag": {
+			args: []string{"prov_mem", "-s", "10", "/db", "/mnt"},
+			setup: func(t *testing.T) {
+				ddb_run_prov_mem_Fn = func(dbPath, tmpfsMount string, tmpfsMountSize uint) error {
+					fmt.Println("prov_mem called")
+					test.CmpAny(t, "dbPath", "/db", dbPath)
+					test.CmpAny(t, "tmpfsMount", "/mnt", tmpfsMount)
+					test.CmpAny(t, "tmpfsMountSize", uint(10), tmpfsMountSize)
+					return nil
+				}
+			},
+			expStdout: []string{"prov_mem called"},
+		},
+
 		// TODO(follow-up PR): Add TestCmds cases for the remaining commands.
 		// Each new test case follows the same pattern as the cases above: set the
 		// corresponding ddb_run_<cmd>_Fn hook in setup() to verify argument passing,
 		// then add the case to this table.
 		// Commands still to be covered: superblock_dump, value_dump, rm,
 		// value_load, ilog_dump, ilog_commit, ilog_clear, dtx_dump, dtx_cmt_clear,
-		// smd_sync, vea_dump, vea_update, dtx_act_commit, dtx_act_abort, rm_pool,
-		// dtx_act_discard_invalid, dev_list, dev_replace, dtx_stat, prov_mem.
+		// smd_sync, vea_dump, vea_update, dtx_act_commit, dtx_act_abort,
+		// dtx_act_discard_invalid, dev_list, dev_replace, dtx_stat,
+		// prov_mem (default, no flag).
 	} {
 		t.Run(name, func(t *testing.T) {
 			checkCmd := func(t *testing.T, stdout string, err error) {
@@ -320,9 +418,6 @@ func TestDdb_Cmds(t *testing.T) {
 			}
 
 			t.Run("command-line", func(t *testing.T) {
-				if tc.skipCmdLine != "" {
-					t.Skipf("skipping command-line mode: %s", tc.skipCmdLine)
-				}
 				ctx := newTestContext(t)
 				if tc.setup != nil {
 					tc.setup(t)

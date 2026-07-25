@@ -2286,7 +2286,7 @@ class PosixTests():
             ofd.write('hello')
 
         data = run_fs_get_attr(self.conf, '--path', dir1)
-        assert check_dir_attr(data, 'S2', 'S2', 'S4', 1048576)
+        assert check_dir_attr(data, 'S2', 'S4', 'S2', 1048576)
 
         data = run_fs_get_attr(self.conf, '--path', file1)
         assert check_file_attr(data, 'S4', 1048576)
@@ -4000,17 +4000,17 @@ class PosixTests():
 
         # Run a command to get attr of new dir and file
         data = run_fs_get_attr(self.conf, '--path', dir1)
-        assert check_dir_attr(data, 'S1', 'S1', None, 1048576)
+        assert check_dir_attr(data, 'S1', None, 'S1', 1048576)
 
         # run same command using pool, container, dfs-path, and dfs-prefix
         data = run_fs_get_attr(self.conf, pool, uns_container.id(),
                                '--dfs-path', dir1, '--dfs-prefix', uns_path)
-        assert check_dir_attr(data, 'S1', 'S1', None, 1048576)
+        assert check_dir_attr(data, 'S1', None, 'S1', 1048576)
 
         # run same command using pool, container, dfs-path
         data = run_fs_get_attr(self.conf, pool, uns_container.id(),
                                '--dfs-path', '/d1')
-        assert check_dir_attr(data, 'S1', 'S1', None, 1048576)
+        assert check_dir_attr(data, 'S1', None, 'S1', 1048576)
 
         data = run_fs_get_attr(self.conf, '--path', file1)
         assert check_file_attr(data, None, 1048576)

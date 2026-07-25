@@ -218,7 +218,7 @@ EOF
   chmod +x "${tmp}/pre_uninstall_server"
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
-  if [[ "${DISTRO:-el8}" =~ suse ]]; then
+  if [[ "${DISTRO:-el9}" =~ suse ]]; then
     cat << EOF  > "${tmp}/post_uninstall_server"
 #!/bin/bash
 ldconfig
@@ -355,7 +355,7 @@ EOF
 chmod +x "${tmp}/pre_uninstall_client"
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el9}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
 #!/bin/bash
 set -x
@@ -430,7 +430,7 @@ fi
 EXTERNAL_DEPENDS+=("${capstone_lib}")
 EXTERNAL_DEPENDS+=("pciutils")
 EXTERNAL_DEPENDS+=("${ndctl_dev}")
-if [[ "${DISTRO:-el8}" =~ el ]]; then
+if [[ "${DISTRO:-el9}" =~ el ]]; then
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
 DEPENDS=( "${base_name}-client = ${VERSION}-${RELEASE}")
