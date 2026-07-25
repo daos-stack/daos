@@ -100,7 +100,6 @@ RUN --mount=type=bind,source=ci/rpm/install_deps.sh,target=/tmp/daos/ci/rpm/inst
 
 # Setup docker image for build using local copy of sources.
 # Include also clang and java compilers installation
-FROM build-ci AS build-local
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.
@@ -168,6 +167,7 @@ RUN [ -z "$CB1" ] || { \
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
 LABEL DAOS=true
+FROM build-ci AS build-local
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
