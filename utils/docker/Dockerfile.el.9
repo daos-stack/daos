@@ -83,10 +83,14 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 WORKDIR /home/daos
-RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirements-build.txt \
+RUN --mount=type=cache,id=uv-cache-el9,target=/home/daos/.cache/uv,mode=0777 \
+    --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirements-build.txt \
     . /home/daos/venv/bin/activate &&                              \
     pip --no-cache-dir install --upgrade pip &&                    \
-    pip --no-cache-dir install -r /tmp/daos/requirements-build.txt
+    pip --no-cache-dir install -r /tmp/daos/requirements-build.txt && \
+    n=0; until uv pip install --python /home/daos/venv/bin/python hatchling; do \
+        n=$((n+1)); [ "$n" -ge 3 ] && exit 1; sleep $((n*10)); \
+    done
 
 # Install DAOS dependencies if available
 ARG DAOS_DEPS_INSTALL=yes
@@ -128,7 +132,8 @@ USER daos_server:daos_server
 WORKDIR /home/daos/pre
 ARG DEPS_JOBS=32
 
-RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
+RUN --mount=type=cache,id=uv-cache-el9,target=/home/daos/.cache/uv,mode=0777 \
+    --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
     --mount=type=bind,source=deps,target=/home/daos/pre/deps \
     --mount=type=bind,source=site_scons/prereq_tools,target=/home/daos/pre/site_scons/prereq_tools \
     --mount=type=bind,source=site_scons/components,target=/home/daos/pre/site_scons/components \
