@@ -148,16 +148,8 @@ if [ -n "$REPO_FILE_URL" ]; then
     no_color = true
     quiet = 1
 EOF
-
-# Set up the uv (a part of SPDK installer)
-# to use the artifactory as the installation packages source
-        mkdir -p /etc/uv
-        cat <<EOF > /etc/uv/uv.toml
-index-url = "${pypi_proxy_url}"
-native-tls = true
-EOF
     else
-        echo "Skipping pip/uv proxy setup: ${pypi_proxy_url} is unreachable"
+        echo "Skipping pip proxy setup: ${pypi_proxy_url} is unreachable"
     fi
 
 # Setup RubyGems to use artifactory/repository as the installation source only
