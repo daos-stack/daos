@@ -1247,11 +1247,19 @@ vos_dtx_reuse_cmt_blob(struct vos_container *cont)
 	if (rc != 0)
 		goto out;
 
-	/* P5: delete victim blob from victim container committed DTX table (head). */
+	/* P5: prepare to refresh victim container cd_newest_aggregated. */
+	if (epoch != vcm_cont_df->cd_newest_aggregated) {
+		rc = vos_dtx_add_ptr(cont->vc_pool, &vcm_cont_df->cd_newest_aggregated,
+				     sizeof(vcm_cont_df->cd_newest_aggregated));
+		if (rc != 0)
+			goto out;
+	}
+
+	/* P6: delete victim blob from victim container committed DTX table (head). */
 	vcm_cont_df->cd_dtx_committed_head = new_head_off;
 	new_head->dbd_prev                 = UMOFF_NULL;
 
-	/* P6: insert victim blob to current container committed DTX table (tail). */
+	/* P7: insert victim blob to current container committed DTX table (tail). */
 	cur_cont_df->cd_dtx_committed_tail = vcm_dbd_off;
 	vcm_dbd->dbd_prev                  = cur_tail_off;
 	vcm_dbd->dbd_next                  = UMOFF_NULL;
@@ -1260,11 +1268,15 @@ vos_dtx_reuse_cmt_blob(struct vos_container *cont)
 	if (cur_tail != NULL)
 		cur_tail->dbd_next = vcm_dbd_off;
 
-	/* P7: reset victim DTX blob counter. */
+	/* P8: reset victim DTX blob counter. */
 	vcm_dbd->dbd_count = 0;
 	vcm_dbd->dbd_index = 0;
 
-	/* P8: refresh DTX related metrics. */
+	/* P9: Refresh victim container cd_newest_aggregated. */
+	if (epoch != vcm_cont_df->cd_newest_aggregated)
+		vcm_cont_df->cd_newest_aggregated = epoch;
+
+	/* P10: refresh DTX related metrics. */
 	if (count > 0) {
 		D_ASSERTF(vcm_cont->vc_dtx_committed_count >= count,
 			  "Unexpected committed DTX entries count for " DF_UUID ": %u vs %u\n",
