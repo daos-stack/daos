@@ -197,8 +197,12 @@ class DaosServer():
             suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
             if not os.path.exists(suppression_file):
                 suppression_file = join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')
-
             valgrind_args.append(f'--suppressions={os.path.realpath(suppression_file)}')
+
+            go_suppression_file = join('src', 'cart', 'utils', 'memcheck-go.supp')
+            if not os.path.exists(go_suppression_file):
+                go_suppression_file = join(self.conf['PREFIX'], 'etc', 'memcheck-go.supp')
+            valgrind_args.append(f'--suppressions={os.path.realpath(go_suppression_file)}')
 
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 

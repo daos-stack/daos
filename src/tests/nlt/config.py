@@ -136,10 +136,18 @@ def get_base_env(clean=False):
 
 
 def check_memcheck_build(conf):
-    """Fail early if the daos binary is not valgrind-tagged for a memcheck run."""
+    """Fail early if Go binaries are not valgrind-tagged for a memcheck run."""
     daos_bin = join(conf['PREFIX'], 'bin', 'daos')
     with open(daos_bin, 'rb') as fd:
         if b'runtime.valgrindRegisterStack' not in fd.read():
             raise NLTestFail(
                 f'{daos_bin} is not built with the Go "valgrind" tag (needs '
                 'Go 1.25+ and BUILD_GO_VALGRIND=1), to run under memcheck.')
+
+    control_so = join(conf['PREFIX'], 'lib64', 'libdaos_control.so')
+    if os.path.exists(control_so):
+        with open(control_so, 'rb') as fd:
+            if b'runtime.valgrindRegisterStack' not in fd.read():
+                raise NLTestFail(
+                    f'{control_so} is not built with the Go "valgrind" tag '
+                    '(needs BUILD_GO_VALGRIND=1), to run under memcheck.')
