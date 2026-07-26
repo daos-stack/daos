@@ -1,11 +1,12 @@
 diff --git a/python/Makefile b/python/Makefile
 --- a/python/Makefile
 +++ b/python/Makefile
-@@ -31,7 +31,7 @@ check: build
+@@ -31,7 +31,8 @@ check: build
  	$(Q)python -m twine check $(SPDK_ROOT_DIR)/python/dist/*
  
  install:
 -	$(Q)uv pip install --prefix=$(CONFIG_PREFIX) $(SPDK_ROOT_DIR)/python
++	# Keep hatchling local: PEP 517 isolation would try to resolve it again during Docker build.
 +	$(Q)uv pip install --no-build-isolation --prefix=$(CONFIG_PREFIX) $(SPDK_ROOT_DIR)/python
  	rm -rf $(SPDK_ROOT_DIR)/python/spdk.egg-info
  
