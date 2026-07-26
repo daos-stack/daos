@@ -14,6 +14,7 @@ if [ -z "${SL_PREFIX:-}" ]; then
   echo "daos is not built"
   exit 1
 fi
+
 daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"

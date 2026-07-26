@@ -173,7 +173,3 @@ EOF
         echo "Skipping /etc/gemrc setup: ${gem_proxy_url} is unreachable"
     fi
 fi
-
-cat /etc/pip.conf || true
-cat /etc/gemrc || true
-cat /etc/uv/uv.toml || true

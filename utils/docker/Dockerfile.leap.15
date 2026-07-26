@@ -60,6 +60,18 @@ RUN dnf upgrade && \
 
 # Setup docker image for gcc build only
 FROM basic AS build-ci
+# Accept DAOS_HTTP_PROXY, DAOS_HTTPS_PROXY, and DAOS_NO_PROXY at build time
+ARG DAOS_HTTP_PROXY
+ARG DAOS_HTTPS_PROXY
+ARG DAOS_NO_PROXY
+# Propagate into the build environment
+ENV http_proxy=${DAOS_HTTP_PROXY} \
+    HTTP_PROXY=${DAOS_HTTP_PROXY} \
+    https_proxy=${DAOS_HTTPS_PROXY} \
+    HTTPS_PROXY=${DAOS_HTTPS_PROXY} \
+    no_proxy=${DAOS_NO_PROXY} \
+    NO_PROXY=${DAOS_NO_PROXY}
+    
 RUN --mount=type=bind,source=utils/scripts/install-leap15.sh,target=/tmp/daos/install.sh \
     dnf upgrade &&                                  \
     INSTALL_BUILD_CI_ONLY="true" /tmp/daos/install.sh && \
