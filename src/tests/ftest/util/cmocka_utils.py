@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,6 +10,7 @@ from agent_utils import include_local_host
 from command_utils import ExecutableCommand
 from command_utils_base import BasicParameter, EnvironmentVariables
 from exception_utils import CommandFailure
+from general_utils import get_log_file
 from results_utils import Job, Results, TestName, TestResult, create_xml
 from run_utils import get_clush_command, run_local, run_remote
 
@@ -114,6 +116,14 @@ class CmockaUtils():
         return EnvironmentVariables({
             "CMOCKA_XML_FILE": os.path.join(self.cmocka_dir, "%g_cmocka_results.xml"),
             "CMOCKA_MESSAGE_OUTPUT": "xml",
+            # Route libdaos_control (the C-bindings backing dmg_* helpers in
+            # tests_dmg_helpers.c) log into DAOS_TEST_LOG_DIR. Every cmocka test
+            # links libdaos_control, so this belongs here rather than per-caller.
+            # collection_utils.py sweeps DAOS_TEST_LOG_DIR after each test, so
+            # the log gets archived. Without this, the C side falls back to
+            # /tmp/libdaos_control.log, which CI never collects.
+            "DAOS_TEST_CONTROL_LOG_FILE": get_log_file(
+                f"{self.test_name}_libdaos_control.log"),
         })
 
     def run_cmocka_test(self, test, command):

@@ -241,14 +241,14 @@ static inline int
 cr_system_start(void)
 {
 	print_message("CR: starting system ...\n");
-	return dmg_system_start_rank(dmg_config_file, CRT_NO_RANK);
+	return dmg_system_start(dmg_config_file);
 }
 
 static inline int
 cr_system_stop(bool force)
 {
 	print_message("CR: stopping system with %s ...\n", force ? "force" : "non-force");
-	return dmg_system_stop_rank(dmg_config_file, CRT_NO_RANK, force);
+	return dmg_system_stop(dmg_config_file, force);
 }
 
 static inline int
