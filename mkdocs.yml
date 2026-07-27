@@ -8,7 +8,8 @@ repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
 # edit_uri: blob/release/2.6/docs/
 edit_uri: blob/master/docs/
-copyright: Copyright 2016-2024 Intel Corporation
+# yamllint disable-line rule:line-length
+copyright: Copyright 2025-2026 Hewlett Packard Enterprise Development LP. Copyright 2016-2024 Intel Corporation.
 
 # Theme
 theme:
@@ -107,6 +108,7 @@ nav:
   - Developer Zone:
       - 'Dev Environment': 'dev/development.md'
       - 'Contributing': 'dev/contributing.md'
+      - 'Documentation': 'dev/documentation.md'
       - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
       - 'DAOS API Documentation': 'https://docs.daos.io/v2.6/doxygen/html/index.html'
       # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...

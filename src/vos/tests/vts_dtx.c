@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +15,8 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 #include "vts_io.h"
+
+#define VTS_DTX_VER 3
 
 static void
 vts_init_dte(struct dtx_entry *dte)
@@ -33,7 +36,7 @@ vts_init_dte(struct dtx_entry *dte)
 
 	/** Use unique API so new UUID is generated even on same thread */
 	daos_dti_gen_unique(&dte->dte_xid);
-	dte->dte_ver = 1;
+	dte->dte_ver  = VTS_DTX_VER;
 	dte->dte_refs = 1;
 	dte->dte_mbs = mbs;
 }
@@ -357,8 +360,16 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	/* The update DTX is 'prepared'. */
 	vts_dtx_end(dth);
 
+	/* Abort with old epoch should fail. */
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch - 1, VTS_DTX_VER);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	/* Abort with old version should fail. */
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER - 1);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_rc_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -390,7 +401,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_end(dth);
 
 	/* Aborted the punch DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_rc_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -489,7 +500,7 @@ dtx_14(void **state)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Committed DTX cannot be aborted. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_int_not_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -551,11 +562,11 @@ dtx_15(void **state)
 	vts_dtx_end(dth);
 
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_rc_equal(rc, 0);
 
 	/* Double aborted the DTX is harmless. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_int_not_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
