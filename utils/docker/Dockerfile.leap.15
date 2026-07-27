@@ -289,7 +289,7 @@ FROM build-local AS full
 # This is done in a separate stage to allow for a smaller image for CI
 # and local build
 USER root:root
-RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/daos/install.sh \
+RUN --mount=type=bind,source=utils/scripts/install-leap15.sh,target=/tmp/daos/install.sh \
     /tmp/daos/install.sh && \
     dnf clean all
 
