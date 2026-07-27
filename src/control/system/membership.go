@@ -123,13 +123,35 @@ func (m *Membership) Count() (int, error) {
 	return m.db.MemberCount()
 }
 
-// FindRankFromJoinRequest finds the first rank that matches join request parameters. UUID shouldn't
-// match.
-func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
-	if !req.Rank.Equals(NilRank) {
-		return NilRank, errors.New("unexpected rank in replace-rank request")
+// findRankByExplicitRequest validates and returns the rank when an explicit rank is provided
+// in the replace request.
+func (m *Membership) findRankByExplicitRequest(req *JoinRequest) (Rank, error) {
+	cm, err := m.db.FindMemberByRank(req.Rank)
+	if err != nil {
+		return NilRank, errors.Wrapf(err,
+			"failed to find system member with rank %d", req.Rank)
 	}
 
+	// Verify fields match
+	if matched, missing := memberFieldsMatch(cm, req); !matched {
+		m.log.Errorf("replace-rank join request for rank %d failed, "+
+			"fields %v didn't match", cm.Rank, missing)
+		return NilRank, FaultJoinReplaceRankNotFound(len(missing))
+	}
+
+	// Verify UUID is different (indicating this is actually a replacement)
+	if cm.UUID == req.UUID {
+		m.log.Errorf("uuid %q already exists for rank %d; not a replacement",
+			req.UUID, cm.Rank)
+		return NilRank, ErrUuidExists(req.UUID)
+	}
+
+	return cm.Rank, nil
+}
+
+// findRankByAutoDetection finds a rank to replace by searching for a member with matching
+// attributes but different UUID.
+func (m *Membership) findRankByAutoDetection(req *JoinRequest) (Rank, error) {
 	currentMembers, err := m.db.AllMembers()
 	if err != nil {
 		return NilRank, errors.Wrap(err, "failed to get all system members")
@@ -166,6 +188,19 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 	}
 
 	return rank, nil
+}
+
+// FindRankFromJoinRequest finds the rank to replace based on the join request.
+// If req.Rank is not NilRank, validates that the specified rank matches the request.
+// Otherwise, auto-detects the rank by finding a member with matching attributes but different UUID.
+func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
+	if !req.Rank.Equals(NilRank) {
+		m.log.Debugf("explicit rank %d provided in request", req.Rank)
+		return m.findRankByExplicitRequest(req)
+	}
+
+	m.log.Debug("auto-detecting rank to replace")
+	return m.findRankByAutoDetection(req)
 }
 
 // JoinRequest contains information needed for join membership update.
@@ -259,6 +294,9 @@ func (m *Membership) checkForMatchingMember(req *JoinRequest) error {
 		}
 
 		// All fields match except UUID - this rank needs to use --replace
+		if cm.State == MemberStateAdminExcluded {
+			return FaultJoinMemberExistsAdminExcluded(req.UUID, cm.UUID)
+		}
 		return FaultJoinMemberExists(req.UUID, cm.UUID)
 	}
 

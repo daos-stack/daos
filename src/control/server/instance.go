@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -38,6 +39,11 @@ type (
 	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, uint64, error, int) error
 )
 
+func errReplaceSuperblockHasRank(r ranklist.Rank) error {
+	return errors.Errorf("cannot replace: superblock already has valid rank %d (reformat "+
+		"required)", r)
+}
+
 // EngineInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O Engine instances. The distinction
 // between this structure and what's in the engine package is that the
@@ -53,7 +59,7 @@ type EngineInstance struct {
 	incarnation     uint64
 	storage         *storage.Provider
 	waitFormat      atm.Bool
-	storageReady    chan bool
+	storageReady    chan struct{}
 	waitDrpc        atm.Bool
 	drpcReady       chan *srvpb.NotifyReadyReq
 	ready           atm.Bool
@@ -61,7 +67,7 @@ type EngineInstance struct {
 	fsRoot          string
 	hostFaultDomain *system.FaultDomain
 	joinSystem      systemJoinFn
-	replaceRank     atm.Bool
+	replaceRank     atomic.Pointer[ranklist.Rank]
 	onAwaitFormat   []onAwaitFormatFn
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
@@ -86,7 +92,7 @@ func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r
 		storage:          p,
 		joinSystem:       jf,
 		drpcReady:        make(chan *srvpb.NotifyReadyReq),
-		storageReady:     make(chan bool),
+		storageReady:     make(chan struct{}),
 		startRequested:   make(chan bool),
 		Publisher:        ps,
 		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
@@ -202,6 +208,19 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		r = *superblock.Rank
 	}
 
+	// Check if we're in replace mode and if a specific rank was provided
+	replaceRank := ei.replaceRank.Load()
+	isReplace := replaceRank != nil
+	if isReplace {
+		// During replace operations, fail if superblock already has a valid rank
+		// Prior checks in replace flow should prevent this failsafe from being reached
+		if superblock.ValidRank {
+			return ranklist.NilRank, false, 0, errReplaceSuperblockHasRank(r)
+		}
+		// Explicit rank specified for replacement if not NilRank
+		r = *replaceRank
+	}
+
 	joinReq := &control.SystemJoinReq{
 		UUID:                 superblock.UUID,
 		Rank:                 r,
@@ -213,11 +232,11 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		InstanceIdx:          ei.Index(),
 		Incarnation:          ready.GetIncarnation(),
 		CheckMode:            ready.GetCheckMode(),
-		Replace:              ei.replaceRank.Load(),
+		Replace:              isReplace,
 	}
 
 	// Reset replaceRank state for instance after joinSystem() has been attempted.
-	defer ei.replaceRank.SetFalse()
+	defer ei.replaceRank.Store(nil)
 
 	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
@@ -226,7 +245,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		// If this is a replace operation and join failed, clean up the formatted storage to
 		// prevent leaving the rank in a formatted state. This prevents the engine
 		// inadvertently being joined later with a new rank.
-		if ei.replaceRank.Load() {
+		if isReplace {
 			ei.log.Infof("cleaning up after join failure during replace")
 			if cleanupErr := ei.cleanupFailedJoinReplace(ctx); cleanupErr != nil {
 				ei.log.Errorf("failed to cleanup after join failure: %v", cleanupErr)
