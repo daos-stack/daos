@@ -152,7 +152,9 @@ retry_dnf() {
     local attempt=0
     local rc=0
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        if monitor_cmd "$monitor_threshold" "${args[@]}"; then
+        rc=0
+        monitor_cmd "$monitor_threshold" "${args[@]}" || rc=$?
+        if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 # shellcheck disable=SC2154
@@ -171,8 +173,6 @@ retry_dnf() {
             return 0
         fi
         # Command failed, retry
-        # $? after a failed if-condition correctly holds the command's exit code.
-        rc=$?
         (( attempt++ )) || true
         if [ "$attempt" -gt 0 ]; then
             # shellcheck disable=SC2154
@@ -244,7 +244,9 @@ retry_cmd() {
     local rc=0
     local non_retry_codes=" ${DAOS_STACK_NON_RETRY_EXIT_CODES} "
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        if monitor_cmd "$monitor_threshold" "$@"; then
+        rc=0
+        monitor_cmd "$monitor_threshold" "$@" || rc=$?
+        if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
@@ -252,8 +254,6 @@ retry_cmd() {
             fi
             return 0
         fi
-        # $? after a failed if-condition correctly holds the command's exit code.
-        rc=$?
         if [[ "$non_retry_codes" == *" $rc "* ]]; then
             echo "Command retry aborted for non-retryable exit status: $rc"
             break
@@ -281,8 +281,8 @@ timeout_cmd() {
     local attempt=0
     local rc=1
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        monitor_cmd "$DAOS_STACK_MONITOR_SECONDS" timeout "$timeout" "$@"
-        rc=$?
+        rc=0
+        monitor_cmd "$DAOS_STACK_MONITOR_SECONDS" timeout "$timeout" "$@" || rc=$?
         if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then

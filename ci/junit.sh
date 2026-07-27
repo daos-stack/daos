@@ -63,7 +63,7 @@ EOF
 }
 
 junit_on_error() {
-    local rc=$?
+    local rc="${1:-1}"
 
     # Prevent recursive ERR trap loops while collecting error diagnostics.
     trap - ERR
@@ -307,4 +307,4 @@ mkdir -p /var/tmp/artifacts
 set -E
 
 # set an error trap to create a junit result for any unhandled error
-trap 'junit_on_error' ERR
+trap 'junit_on_error $?' ERR
