@@ -27,7 +27,6 @@
 
 #include <cart/api.h>
 #include "crt_utils.h"
-#include "test_corpc_bulks.h"
 
 #define TEST_CORPC_BULKS_BASE   0x010000000
 #define TEST_CORPC_BULKS_VER    0
