@@ -170,6 +170,10 @@ func TestCommon_ParseHostList(t *testing.T) {
 			in:     mockHostList("2001:db8::1"),
 			expOut: mockHostList("[2001:db8::1]:12345"),
 		},
+		"bracketed IPv6 address without port": {
+			in:     mockHostList("[2001:db8::1]"),
+			expOut: mockHostList("[2001:db8::1]:12345"),
+		},
 		"IPv6 address with port": {
 			in:     mockHostList("[2001:db8::1]:4242"),
 			expOut: mockHostList("[2001:db8::1]:4242"),
@@ -177,6 +181,7 @@ func TestCommon_ParseHostList(t *testing.T) {
 		"deduplicate IPv6 addresses": {
 			in: mockHostList(
 				"2001:db8::1",
+				"[2001:db8::1]",
 				"[2001:db8::1]:12345",
 			),
 			expOut: mockHostList("[2001:db8::1]:12345"),
