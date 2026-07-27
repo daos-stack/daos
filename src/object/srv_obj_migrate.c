@@ -3912,10 +3912,13 @@ migrate_ult(void *arg)
 {
 	struct migrate_pool_tls	*pool_tls = arg;
 	struct ds_pool_child    *pool;
+	bool                     root_empty;
 	int                      rc = 0;
 
 	D_ASSERT(pool_tls != NULL);
 	pool = pool_tls->mpt_pool;
+	D_DEBUG(DB_REBUILD, DF_RB ": migrate_ult start root=%" PRIx64 "\n", DP_RB_MPT(pool_tls),
+		pool_tls->mpt_root_hdl.cookie);
 	while (atomic_load(&pool->spc_pool->sp_discarding) != 0) {
 		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(pool_tls));
 		dss_sleep(2 * 1000);
@@ -3951,8 +3954,16 @@ migrate_ult(void *arg)
 		}
 	}
 out:
+	root_empty = dbtree_is_empty(pool_tls->mpt_root_hdl);
 	if (pool_tls->mpt_status == 0)
 		pool_tls->mpt_status = rc;
+
+	D_DEBUG(DB_REBUILD,
+		DF_RB ": migrate_ult end rc=%d status=%d fini=%u root_empty=%u obj_ults=%u "
+		      "key_ults=%u inflight=" DF_U64 " obj=" DF_U64 " rec=" DF_U64 "\n",
+		DP_RB_MPT(pool_tls), rc, pool_tls->mpt_status, pool_tls->mpt_fini, root_empty,
+		pool_tls->mpt_tgt_obj_ult_cnt, pool_tls->mpt_tgt_dkey_ult_cnt,
+		pool_tls->mpt_inflight_size, pool_tls->mpt_obj_count, pool_tls->mpt_rec_count);
 
 	pool_tls->mpt_ult_running = 0;
 	migrate_pool_tls_put(pool_tls);
@@ -4127,6 +4138,8 @@ ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid
 		  uint32_t count, unsigned int tgt_idx, uint32_t new_layout_ver)
 {
 	struct migrate_pool_tls   *tls = NULL;
+	int                        exist_cnt  = 0;
+	int                        insert_cnt = 0;
 	int                        i;
 	int                        rc;
 	d_rank_list_t             *svc_list = NULL;
@@ -4181,6 +4194,7 @@ skip_create:
 		rc = migrate_try_obj_insert(tls, co_uuid, oids[i], epochs[i], punched_epochs[i],
 					    shards[i], tgt_idx);
 		if (rc == -DER_EXIST) {
+			exist_cnt++;
 			D_DEBUG(DB_TRACE, DF_RB ": " DF_UOID "/" DF_UUID "exists.\n",
 				DP_RB_MPT(tls), DP_UOID(oids[i]), DP_UUID(co_uuid));
 			rc = 0;
@@ -4191,6 +4205,8 @@ skip_create:
 				 shards[i]);
 			break;
 		}
+
+		insert_cnt++;
 	}
 	if (rc < 0)
 		D_GOTO(out, rc);
@@ -4209,6 +4225,16 @@ skip_create:
 	}
 
 out:
+	if (tls != NULL) {
+		D_DEBUG(DB_REBUILD,
+			DF_RB ": migrate req end rc=%d cnt=%u inserted=%d existed=%d "
+			      "ult_running=%u obj_ults=%u key_ults=%u inflight=" DF_U64
+			      " obj=" DF_U64 " rec=" DF_U64 "\n",
+			DP_RB_MPT(tls), rc, count, insert_cnt, exist_cnt, tls->mpt_ult_running,
+			tls->mpt_tgt_obj_ult_cnt, tls->mpt_tgt_dkey_ult_cnt, tls->mpt_inflight_size,
+			tls->mpt_obj_count, tls->mpt_rec_count);
+	}
+
 	migrate_pool_tls_put(tls);
 	if (arg.pma_pool)
 		D_ASSERT(dss_ult_execute(ds_migrate_end_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0) ==
@@ -4843,14 +4869,25 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		migrate_in->om_shards.ca_arrays = shards;
 		migrate_in->om_shards.ca_count = cnt;
 	}
+
+	D_DEBUG(DB_REBUILD,
+		DF_RB ": migrate send start dst_rank=%u dst_idx=%u dst_tag=%u enqueue_in=" DF_U64
+		      " opc=%u\n",
+		DP_RB_OMI(migrate_in), tgt_ep.ep_rank, index, tgt_ep.ep_tag, *enqueue_id,
+		migrate_in->om_opc);
+
 	rc = dss_rpc_send(rpc);
 	if (rc) {
-		D_ERROR("dss_rpc_send failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, DF_RB ": migrate send transport failed", DP_RB_OMI(migrate_in));
 		D_GOTO(out, rc);
 	}
 
 	migrate_out = crt_reply_get(rpc);
 	rc = migrate_out->om_status;
+	D_DEBUG(
+	    DB_REBUILD,
+	    DF_RB ": migrate send reply status=%d enqueue_in=" DF_U64 " enqueue_out=" DF_U64 "\n",
+	    DP_RB_OMI(migrate_in), rc, *enqueue_id, migrate_out->om_comm_out.req_out_enqueue_id);
 	if (rc == -DER_OVERLOAD_RETRY) {
 		*enqueue_id = migrate_out->om_comm_out.req_out_enqueue_id;
 		*max_delay = rpc_timeout;
