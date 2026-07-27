@@ -112,7 +112,7 @@ verify_implicit_bulk(crt_bulk_t bulk_hdl, uint64_t expected_size)
 
 	rc = crt_bulk_access(bulk_hdl, &sgl);
 	if (rc != -DER_TRUNC) {
-		DL_ERROR(rc, "crt_bulk_access() probe failed\n");
+		DL_ERROR(rc, "crt_bulk_access() probe failed");
 		error_exit();
 	}
 
@@ -130,7 +130,7 @@ verify_implicit_bulk(crt_bulk_t bulk_hdl, uint64_t expected_size)
 	sgl.sg_iovs = iovs;
 	rc          = crt_bulk_access(bulk_hdl, &sgl);
 	if (rc != 0) {
-		DL_ERROR(rc, "crt_bulk_access() read failed\n");
+		DL_ERROR(rc, "crt_bulk_access() read failed");
 		D_FREE(iovs);
 		error_exit();
 	}
@@ -159,7 +159,7 @@ bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	}
 
 	if (info->bci_rc != 0) {
-		DL_ERROR(info->bci_rc, "Bulk transfer failed\n");
+		DL_ERROR(info->bci_rc, "Bulk transfer failed");
 		error_exit();
 	}
 
@@ -168,7 +168,7 @@ bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 
 	rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
 	if (rc != 0) {
-		DL_ERROR(rc, "Failed to send bulk reply\n");
+		DL_ERROR(rc, "Failed to send bulk reply");
 		error_exit();
 	}
 
@@ -238,7 +238,7 @@ corpc_hdlr(crt_rpc_t *rpc)
 
 		rc = crt_bulk_transfer(&bulk_desc, bulk_transfer_done_cb, dst_buf, NULL);
 		if (rc != 0) {
-			DL_ERROR(rc, "bulk transfer failed\n");
+			DL_ERROR(rc, "bulk transfer failed");
 			error_exit();
 		}
 	}
