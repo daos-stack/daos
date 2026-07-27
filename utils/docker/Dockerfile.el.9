@@ -86,8 +86,7 @@ WORKDIR /home/daos
 RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirements-build.txt \
     . /home/daos/venv/bin/activate &&                              \
     pip --no-cache-dir install --upgrade pip &&                    \
-    pip --no-cache-dir install -r /tmp/daos/requirements-build.txt && \
-    uv pip install --python /home/daos/venv/bin/python hatchling
+    pip --no-cache-dir install -r /tmp/daos/requirements-build.txt
 
 # Install DAOS dependencies if available
 ARG DAOS_DEPS_INSTALL=yes
