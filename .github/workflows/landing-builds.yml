@@ -44,7 +44,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu, rocky, fedora, leap.15]
+        distro: [ubuntu, rocky, leap.15]
         include:
           - distro: ubuntu
             base: ubuntu
@@ -53,10 +53,6 @@ jobs:
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
-            python: 3.11
-          - distro: fedora
-            base: el.8
-            with: fedora:38
             python: 3.11
           - distro: leap.15
             base: leap.15
@@ -88,12 +84,14 @@ jobs:
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
+                            --target build-local
       - name: Build dependencies in Docker
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
+                            --target build-local
       - name: Prune images not required for build.
         run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
 
@@ -169,7 +167,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        distro: [ubuntu, rocky, fedora, leap.15]
+        distro: [ubuntu, rocky, leap.15]
         compiler: [clang, gcc]
         include:
           - distro: ubuntu
@@ -179,10 +177,6 @@ jobs:
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
-            python: 3.11
-          - distro: fedora
-            base: el.8
-            with: fedora:38
             python: 3.11
           - distro: leap.15
             base: leap.15
@@ -227,6 +221,7 @@ jobs:
                             --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER
+                            --target build-local
       - name: Build debug in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -235,6 +230,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER
+                            --target build-local
       - name: Build devel in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -243,6 +239,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
+                            --target build-local
         # Fails with Ubuntu still for the spdk issue.
         # - name: Run NLT
         # run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
@@ -255,19 +252,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.8, alma.9, rocky.8, ubuntu]
+        distro: [alma.9, rocky.9, ubuntu]
         include:
-          - distro: alma.8
-            base: el.8
-            with: almalinux:8
-            python: 3.11
           - distro: alma.9
             base: el.9
             with: almalinux:9
             python: 3.11
-          - distro: rocky.8
-            base: el.8
-            with: rockylinux/rockylinux:8
+          - distro: rocky.9
+            base: el.9
+            with: rockylinux/rockylinux:9
             python: 3.11
           - distro: ubuntu
             base: ubuntu
@@ -289,6 +282,7 @@ jobs:
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
                             --build-arg DAOS_BUILD=no
+                            --target build-local
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -305,6 +299,7 @@ jobs:
                             --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -313,6 +308,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build devel in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -321,6 +317,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -328,6 +325,7 @@ jobs:
                             --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -336,6 +334,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Build devel in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -344,6 +343,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
@@ -357,16 +357,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu, alma.8, leap.15]
+        distro: [ubuntu, alma.9, leap.15]
         compiler: [clang]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
             python: 3
-          - distro: alma.8
-            base: el.8
-            with: almalinux:8
+          - distro: alma.9
+            base: el.9
+            with: almalinux:9
             python: 3.11
           - distro: leap.15
             base: leap.15
@@ -390,6 +390,7 @@ jobs:
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
                             --build-arg DAOS_BUILD=no
+                            --target build-local
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -406,6 +407,7 @@ jobs:
                             --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -414,6 +416,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build devel in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -422,6 +425,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -429,6 +433,7 @@ jobs:
                             --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -437,6 +442,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Build devel in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -445,6 +451,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
