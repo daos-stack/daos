@@ -84,7 +84,6 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 # Install latest versions of python tools.
 WORKDIR /home/daos
 RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirements-build.txt \
-    export UV_CACHE_DIR=/tmp/uv-cache &&                         \
     . /home/daos/venv/bin/activate &&                              \
     pip --no-cache-dir install --upgrade pip &&                    \
     pip --no-cache-dir install -r /tmp/daos/requirements-build.txt && \
