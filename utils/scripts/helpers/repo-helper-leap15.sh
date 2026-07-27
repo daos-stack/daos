@@ -16,8 +16,8 @@ set -uex
 : "${BASE_DISTRO:=opensuse/leap:15.6}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
-: "${REPOSITORY_NAME:=artifactory}"
 : "${DAOS_LAB_CA_FILE_URL:=}"
+: "${REPOSITORY_NAME:=artifactory}"
 
 # shellcheck disable=SC2120
 disable_repos () {

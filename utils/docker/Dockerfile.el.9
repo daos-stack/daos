@@ -137,7 +137,7 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
     --mount=type=bind,source=utils/scripts/create_spdk_pkgconfig.sh,target=/home/daos/pre/utils/scripts/create_spdk_pkgconfig.sh \
     --mount=type=bind,source=ci/rpm/build_deps.sh,target=/home/daos/pre/utils/scripts/build_deps.sh \
     [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                 \
-        export UV_NO_BUILD_ISOLATION=1 &&                                    \
+        export UV_NO_BUILD_ISOLATION=1 &&                                \
         DAOS_DEPS_JOBS="$DEPS_JOBS" DAOS_TARGET_TYPE="$DAOS_TARGET_TYPE" \
         utils/scripts/build_deps.sh &&                                   \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz);      \
@@ -165,10 +165,10 @@ RUN [ -z "$CB1" ] || { \
         dnf clean all; \
     }
 
+FROM build-ci AS build-local
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
 LABEL DAOS=true
-FROM build-ci AS build-local
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then

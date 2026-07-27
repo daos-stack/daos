@@ -69,14 +69,15 @@ fi
 
 MAJOR_VER="${BASE_DISTRO##*:}"
 MAJOR_VER="${MAJOR_VER%%.*}"
+repos_dir=/etc/yum.repos.d/
 if [ -n "$REPO_FILE_URL" ]; then
     install_curl
     install_optional_ca
-    mkdir -p /etc/yum.repos.d
-    pushd /etc/yum.repos.d/
+    mkdir -p "$repos_dir"
+    pushd "$repos_dir"
     curl -k --noproxy '*' -sSf -o "daos_ci-el${MAJOR_VER}-${REPOSITORY_NAME}.repo"  \
          "${REPO_FILE_URL}daos_ci-el${MAJOR_VER}-${REPOSITORY_NAME}.repo"
-    disable_repos /etc/yum.repos.d/
+    disable_repos "$repos_dir"
     popd
 fi
 dnf -y --disablerepo \*epel\* install dnf-plugins-core
@@ -85,8 +86,8 @@ dnf config-manager --save --setopt=install_weak_deps=False
 dnf --disablerepo \*epel\* install epel-release
 if [ -n "$REPO_FILE_URL" ]; then
     PT_REPO="daos_ci-${DISTRO}${MAJOR_VER}-crb-${REPOSITORY_NAME}"
-    true > /etc/yum.repos.d/epel.repo
-    true > /etc/yum.repos.d/epel-modular.repo
+    true > "${repos_dir}epel.repo"
+    true > "${repos_dir}epel-modular.repo"
     sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
         -i /etc/dnf/dnf.conf
 else
@@ -119,12 +120,12 @@ name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
 gpgcheck=False\n
-module_hotfixes=true\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
-    cat /etc/yum.repos.d/"$repo:$branch:$build_number".repo
+module_hotfixes=true\n" >> "$repos_dir$repo:$branch:$build_number".repo
+    cat "$repos_dir$repo:$branch:$build_number".repo
     save_repos+=("$repo:$branch:$build_number")
 done
 
-disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
+disable_repos "$repos_dir" "${save_repos[@]}"
 
 if [ -n "$REPO_FILE_URL" ]; then
 # Calculate trusted-host and trusted_base_url for artifactory/repository
