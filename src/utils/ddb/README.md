@@ -166,16 +166,14 @@ This command is used when working with DAOS in md-on-ssd (metadata-on-SSD) mode.
 
 ### Examples
 
-**Note**: Please do not omit the first empty argument.
-
 **Note**: The user you use have to have access to specified resources and be able to mount(2).
 
 ```bash
 # Prepare memory environment with auto-calculated tmpfs size
-ddb "" prov_mem /path/to/sys/db /mnt/tmpfs
+ddb prov_mem /path/to/sys/db /mnt/tmpfs
 
 # Prepare memory environment with specific tmpfs size of 16 GiB
-ddb "" prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
+ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
 ```
 
 ### Notes

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,10 +53,8 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
-
         """
-        return self._get_json_result(
-            ("pool", "query"), pool=pool, sys_name=sys_name, sys=sys)
+        return self._get_json_result(("pool", "query"), pool=pool, sys_name=sys_name, sys=sys)
 
     def pool_autotest(self, pool):
         """Runs autotest for pool
@@ -70,8 +69,7 @@ class DaosCommand(DaosCommandBase):
         Raises:
             CommandFailure: if the daos pool autotest command fails.
         """
-        return self._get_result(
-            ("pool", "autotest"), pool=pool)
+        return self._get_result(("pool", "autotest"), pool=pool)
 
     def container_create(self, pool, sys_name=None, path=None, cont_type=None,
                          oclass=None, dir_oclass=None, file_oclass=None, chunk_size=None,
@@ -104,7 +102,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container create command fails.
-
         """
         # Default to RANK fault domain (rd_lvl:1) when not specified
         if properties:
@@ -132,10 +129,8 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container clone command fails.
-
         """
-        return self._get_result(
-            ("container", "clone"), src=src, dst=dst)
+        return self._get_result(("container", "clone"), src=src, dst=dst)
 
     def container_destroy(self, pool, cont, force=None, sys_name=None):
         """Destroy a container.
@@ -154,11 +149,9 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container destroy command fails.
-
         """
         return self._get_result(
-            ("container", "destroy"), pool=pool, sys_name=sys_name,
-            cont=cont, force=force)
+            ("container", "destroy"), pool=pool, sys_name=sys_name, cont=cont, force=force)
 
     def container_check(self, pool, cont, sys_name=None, path=None):
         """Check the integrity of container objects.
@@ -175,11 +168,9 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container check command fails.
-
         """
         return self._get_json_result(
-            ("container", "check"), pool=pool, cont=cont,
-            sys_name=sys_name, path=path)
+            ("container", "check"), pool=pool, cont=cont, sys_name=sys_name, path=path)
 
     def container_get_acl(self, pool, cont, verbose=False, outfile=None):
         """Get the ACL for a given container.
@@ -196,11 +187,9 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container get-acl command fails.
-
         """
         return self._get_json_result(
-            ("container", "get-acl"), pool=pool, cont=cont,
-            verbose=verbose, outfile=outfile)
+            ("container", "get-acl"), pool=pool, cont=cont, verbose=verbose, outfile=outfile)
 
     def container_delete_acl(self, pool, cont, principal):
         """Delete an entry for a given principal in an existing container ACL.
@@ -216,11 +205,9 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container delete-acl command fails.
-
         """
         return self._get_result(
-            ("container", "delete-acl"), pool=pool, cont=cont,
-            principal=principal)
+            ("container", "delete-acl"), pool=pool, cont=cont, principal=principal)
 
     def container_overwrite_acl(self, pool, cont, acl_file):
         """Overwrite the ACL for a given container.
@@ -236,11 +223,9 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container overwrite-acl command fails.
-
         """
         return self._get_result(
-            ("container", "overwrite-acl"), pool=pool, cont=cont,
-            acl_file=acl_file)
+            ("container", "overwrite-acl"), pool=pool, cont=cont, acl_file=acl_file)
 
     def container_update_acl(self, pool, cont, entry=None, acl_file=None):
         """Add or update the ACL entries for a given container.
@@ -257,11 +242,9 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container get-acl command fails.
-
         """
         return self._get_result(
-            ("container", "update-acl"), pool=pool, cont=cont,
-            entry=entry, acl_file=acl_file)
+            ("container", "update-acl"), pool=pool, cont=cont, entry=entry, acl_file=acl_file)
 
     def container_list(self, pool, sys_name=None):
         """List containers in the given pool.
@@ -275,7 +258,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container list command fails.
-
         """
         # Sample output.
         # {
@@ -310,7 +292,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos pool set-attr command fails.
-
         """
         return self._get_result(
             ("pool", "set-attr"), pool=pool, attr=list_to_str([attr, value], ':'),
@@ -330,7 +311,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos pool set-attr command fails.
-
         """
         return self._get_result(
             ("pool", "set-attr"), pool=pool, attr=dict_to_str(attrs, ",", ":"), sys_name=sys_name)
@@ -348,10 +328,8 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos pool query command fails.
-
         """
-        return self._get_json_result(
-            ("pool", "get-attr"), pool=pool, attr=attr, sys_name=sys_name)
+        return self._get_json_result(("pool", "get-attr"), pool=pool, attr=attr, sys_name=sys_name)
 
     def pool_list_attrs(self, pool, sys_name=None, verbose=False):
         """List pool attributes.
@@ -385,10 +363,8 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos pool list-containers command fails.
-
         """
-        return self._get_json_result(
-            ("pool", "list-containers"), pool=pool, sys_name=sys_name)
+        return self._get_json_result(("pool", "list-containers"), pool=pool, sys_name=sys_name)
 
     def pool_list(self, no_query=False, verbose=False):
         """List pools.
@@ -402,7 +378,6 @@ class DaosCommand(DaosCommandBase):
 
         Returns:
             dict: the daos json command output converted to a python dictionary
-
         """
         # Sample verbose JSON Output:
         # {
@@ -437,8 +412,7 @@ class DaosCommand(DaosCommandBase):
         #     "error": null,
         #     "status": 0
         # }
-        return self._get_json_result(
-            ("pool", "list"), no_query=no_query, verbose=verbose)
+        return self._get_json_result(("pool", "list"), no_query=no_query, verbose=verbose)
 
     def _parse_pool_list(self, key=None, **kwargs):
         """Parse the daos pool list json output for the requested information.
@@ -455,7 +429,6 @@ class DaosCommand(DaosCommandBase):
                 for the requested json dictionary key. This will be an empty
                 list if the key does not exist or the json output was not in
                 the expected format.
-
         """
         pool_list = self.pool_list(**kwargs)
         try:
@@ -476,7 +449,6 @@ class DaosCommand(DaosCommandBase):
         Returns:
             list: a list of dictionaries containing information for each pool
                 from the daos pool list json output
-
         """
         return self._parse_pool_list(**kwargs)
 
@@ -494,7 +466,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container query command fails.
-
         """
         return self._get_json_result(
             ("container", "query"), pool=pool, cont=cont, sys_name=sys_name)
@@ -514,12 +485,9 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container set-prop command fails.
-
         """
         prop_value = list_to_str([prop, value], ":")
-        return self._get_result(
-            ("container", "set-prop"),
-            pool=pool, cont=cont, prop=prop_value)
+        return self._get_result(("container", "set-prop"), pool=pool, cont=cont, prop=prop_value)
 
     def container_set_props(self, pool, cont, props, sys_name=None):
         """Set multiple container properties.
@@ -539,7 +507,6 @@ class DaosCommand(DaosCommandBase):
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
-
         """
         return self._get_result(
             ("container", "set-prop"), pool=pool, cont=cont, attr=dict_to_str(props, ",", ":"),
@@ -558,7 +525,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container get-prop command fails.
-
         """
         # pylint: disable=wrong-spelling-in-comment
         # Sample output
@@ -683,8 +649,7 @@ class DaosCommand(DaosCommandBase):
         # }
         props = list_to_str(properties, ',') if properties else None
 
-        return self._get_json_result(
-            ("container", "get-prop"), pool=pool, cont=cont, prop=props)
+        return self._get_json_result(("container", "get-prop"), pool=pool, cont=cont, prop=props)
 
     def container_set_owner(self, pool, cont, user=None, group=None, uid=None, gid=None,
                             no_check=False):
@@ -705,7 +670,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container set-owner command fails.
-
         """
         return self._get_result(
             ("container", "set-owner"),
@@ -726,7 +690,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos pool set-attr command fails.
-
         """
         return self._get_result(
             ("container", "set-attr"), pool=pool, cont=cont,
@@ -747,7 +710,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos get-attr command fails.
-
         """
         if isinstance(attr, (list, tuple)):
             attr = list_to_str(attr, ",")
@@ -769,11 +731,9 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container list-attrs command fails.
-
         """
         return self._get_json_result(
-            ("container", "list-attrs"), pool=pool, cont=cont, sys_name=sys_name,
-            verbose=verbose)
+            ("container", "list-attrs"), pool=pool, cont=cont, sys_name=sys_name, verbose=verbose)
 
     def container_list_objects(self, pool, cont, sys_name=None):
         """Call daos container list-objects.
@@ -789,7 +749,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container list-objects command fails.
-
         """
         return self._get_json_result(
             ("container", "list-objects"), pool=pool, cont=cont, sys_name=sys_name)
@@ -811,7 +770,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container create-snap command fails.
-
         """
         return self._get_json_result(
             ("container", "create-snap"), pool=pool, cont=cont,
@@ -834,7 +792,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos container destroy-snap command fails.
-
         """
         return self._get_json_result(
             ("container", "destroy-snap"), pool=pool, cont=cont,
@@ -852,10 +809,8 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the command fails.
-
         """
-        return self._get_json_result(
-            ("container", "list-snaps"), pool=pool, cont=cont)
+        return self._get_json_result(("container", "list-snaps"), pool=pool, cont=cont)
 
     def object_query(self, pool, cont, oid, sys_name=None):
         """Call daos object query and return its output with a dictionary.
@@ -877,9 +832,7 @@ class DaosCommand(DaosCommandBase):
         Raises:
             CommandFailure: if the daos object query command fails.
         """
-        self._get_result(
-            ("object", "query"), pool=pool, cont=cont,
-            oid=oid, sys_name=sys_name)
+        self._get_result(("object", "query"), pool=pool, cont=cont, oid=oid, sys_name=sys_name)
 
         # Sample daos object query output.
         # oid: 1152922453794619396.1 ver 0 grp_nr: 2
@@ -938,11 +891,27 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the command fails.
-
         """
         return self._get_json_result(
             ("faults", "container"), pool=pool, cont=cont, location=location,
             sys_name=sys_name, path=path, rank=rank, frequency=frequency)
+
+    def faults_set_param(self, rank=None, frequency=None, location=None):
+        """For 'daos faults set-param'
+
+        Args:
+            rank (str): Rank to inject fault on (default: all). Defaults to None.
+            frequency (str): Fault injection frequency (default: once). Defaults to None.
+            location (str): Fault injection location (default: none). Defaults to None.
+
+        Returns:
+            dict: JSON output
+
+        Raises:
+            CommandFailure: if the command fails.
+        """
+        return self._get_json_result(
+            ("faults", "set-param"), rank=rank, frequency=frequency, location=location)
 
     def filesystem_copy(self, src, dst, preserve_props=None):
         """Copy a POSIX container or path to another POSIX container or path.
@@ -960,7 +929,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos filesystem copy command fails.
-
         """
         return self._get_result(
             ("filesystem", "copy"), src=src, dst=dst, preserve_props=preserve_props)
@@ -981,7 +949,6 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos filesystem copy command fails.
-
         """
         return self._get_result(("filesystem", "evict"), path=path)
 
@@ -993,6 +960,5 @@ class DaosCommand(DaosCommandBase):
 
         Raises:
             CommandFailure: if the daos version command fails.
-
         """
         return self._get_json_result(("version",))

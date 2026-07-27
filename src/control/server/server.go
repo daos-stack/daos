@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -109,10 +109,12 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		if err := ec.UpdateABTEnvarsUCX(); err != nil {
 			return err
 		}
-	}
 
-	for _, ec := range cfg.Engines {
 		if err := ec.UpdatePMDKEnvars(); err != nil {
+			return err
+		}
+
+		if err := ec.UpdateABTEnvarsMdOnSsd(); err != nil {
 			return err
 		}
 	}
@@ -161,6 +163,7 @@ type server struct {
 	mgmtSvc       *mgmtSvc
 	grpcServer    *grpc.Server
 	controlClient *control.Client
+	restartMgr    *engineRestartManager
 
 	cbLock           sync.Mutex
 	onEnginesStarted []func(context.Context) error
@@ -187,6 +190,7 @@ func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.Fault
 		runningUser: cu,
 		faultDomain: faultDomain,
 		harness:     harness,
+		restartMgr:  newEngineRestartManager(log, cfg),
 	}, nil
 }
 
@@ -254,6 +258,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 
 	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
 		network.DefaultFabricScanner(srv.log))
+	srv.ctlSvc.restartMgr = srv.restartMgr
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
 
 	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
@@ -281,6 +286,9 @@ func (srv *server) OnShutdown(fns ...func()) {
 }
 
 func (srv *server) shutdown() {
+	// Stop the restart manager first
+	srv.restartMgr.stop()
+
 	srv.cbLock.Lock()
 	onShutdownCbs := srv.onShutdown
 	srv.cbLock.Unlock()
@@ -308,21 +316,37 @@ func (srv *server) setCoreDumpFilter() error {
 func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
-	ctlAddr, err := getControlAddr(ctlAddrParams{
+	params := ctlAddrParams{
 		port:           srv.cfg.ControlPort,
 		replicaAddrSrc: srv.sysdb,
 		lookupHost:     net.LookupIP,
-	})
+	}
+
+	// If a control interface is configured, look it up and pass it to getControlAddr.
+	// Also track whether we should bind to a specific IP (only when control_iface is set).
+	bindToCtlAddr := false
+	if srv.cfg.ControlInterface != "" {
+		iface, err := net.InterfaceByName(srv.cfg.ControlInterface)
+		if err != nil {
+			return config.FaultConfigBadControlInterface(srv.cfg.ControlInterface, err)
+		}
+		params.ctlIface = iface
+		bindToCtlAddr = true
+		srv.log.Debugf("using control interface %s for listener", srv.cfg.ControlInterface)
+	}
+
+	ctlAddr, err := getControlAddr(params)
 	if err != nil {
 		return err
 	}
 
-	listener, err := createListener(ctlAddr, net.Listen)
+	listener, err := createListener(ctlAddr, net.Listen, bindToCtlAddr)
 	if err != nil {
 		return err
 	}
 	srv.ctlAddr = ctlAddr
 	srv.listener = listener
+	srv.log.Debugf("control plane listener bound to %s", ctlAddr)
 
 	return nil
 }
@@ -388,6 +412,9 @@ func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error
 		allStarted.Wait()
 		srv.log.Debug("engines have started")
 
+		// Start the restart manager
+		srv.restartMgr.start(ctx)
+
 		srv.cbLock.Lock()
 		onEnginesStartedCbs := srv.onEnginesStarted
 		srv.cbLock.Unlock()
@@ -448,7 +475,7 @@ func (srv *server) setupGrpc() error {
 }
 
 func (srv *server) registerEvents() {
-	registerFollowerSubscriptions(srv)
+	registerSubscriptions(srv)
 
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
@@ -489,7 +516,7 @@ func (srv *server) registerEvents() {
 	)
 	srv.sysdb.OnLeadershipLost(func() error {
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
-		registerFollowerSubscriptions(srv)
+		registerSubscriptions(srv)
 		return nil
 	})
 }

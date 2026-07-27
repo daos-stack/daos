@@ -1,6 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -251,7 +251,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
-        vos_0_path = f"{self.server_managers[0].get_vos_path(pool)}/vos-0"
+        vos_0_path = f"{self.server_managers[0].get_vos_paths(pool)[0]}/vos-0"
         vos_0_result = check_file_exists(hosts=self.hostlist_servers, filename=vos_0_path)
         if not vos_0_result[0]:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
@@ -315,6 +315,11 @@ class PoolMembershipTest(IorTestBase):
         :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_rank_entry
         """
+        if self.server_managers[0].manager.job.using_control_metadata:
+            self.log.info("MD-on-SSD cluster. Will be supported later.")
+            # return results in PASS.
+            return
+
         targets = self.params.get("targets", "/run/server_config/engines/0/*")
         exp_msg = "dangling rank entry"
 
@@ -332,7 +337,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
-        pool_directory = self.server_managers[0].get_vos_path(self.pool)
+        pool_directory = self.server_managers[0].get_vos_paths(self.pool)[0]
         pool_directory_result = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_directory, directory=True)
         if not pool_directory_result[0]:

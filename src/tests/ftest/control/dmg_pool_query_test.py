@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -77,9 +77,11 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             "rebuild": {
                 "status": self.params.get("rebuild_status", path="/run/exp_vals/rebuild/*"),
                 "state": self.params.get("state", path="/run/exp_vals/rebuild/*"),
+                "derived_state": self.params.get("state", path="/run/exp_vals/rebuild/*"),
                 "objects": self.params.get("objects", path="/run/exp_vals/rebuild/*"),
                 "records": self.params.get("records", path="/run/exp_vals/rebuild/*"),
-                "total_objects": self.params.get("total_objects", path="/run/exp_vals/rebuild/*")
+                "total_objects": self.params.get("total_objects", path="/run/exp_vals/rebuild/*"),
+                'degraded': self.params.get("degraded", path="/run/exp_vals/rebuild/*")
             },
             "tier_stats": [
                 {

@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -34,7 +35,6 @@ class EcodFaultInjection(IorTestBase, FioBase):
 
         for oclass in obj_class:
             self.ior_cmd.dfs_oclass.update(oclass)
-            self.ior_cmd.dfs_dir_oclass.update(oclass)
             self.run_ior_with_pool()
 
     def test_ec_fio_fault(self):

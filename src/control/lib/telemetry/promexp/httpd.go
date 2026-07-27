@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,9 +30,10 @@ type (
 
 	// ExporterConfig defines the configuration for the Prometheus exporter.
 	ExporterConfig struct {
-		Port     int
-		Title    string
-		Register RegMonFn
+		Port        int
+		BindAddress string // optional: IP address to bind to (default: 0.0.0.0)
+		Title       string
+		Register    RegMonFn
 	}
 )
 
@@ -60,7 +62,11 @@ func StartExporter(ctx context.Context, log logging.Logger, cfg *ExporterConfig)
 		return nil, errors.Wrap(err, "failed to register client monitor")
 	}
 
-	listenAddress := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
+	bindAddr := cfg.BindAddress
+	if bindAddr == "" {
+		bindAddr = "0.0.0.0"
+	}
+	listenAddress := fmt.Sprintf("%s:%d", bindAddr, cfg.Port)
 
 	srv := http.Server{Addr: listenAddress}
 	http.Handle("/metrics", promhttp.HandlerFor(

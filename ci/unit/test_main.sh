@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -38,14 +38,17 @@ if $USE_BULLSEYE; then
 fi
 
 NODE=${NODELIST%%,*}
+: "${PYTHON_VERSION:=3.11}"
 
 # Copy over the install tree and some of the build tree.
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . jenkins@"$NODE":build/
 
 # shellcheck disable=SC2029
-ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME        \
-                                         HOSTPWD=$PWD              \
+ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME \
+                                         HOSTPWD=$PWD \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
-                                         BDEV_TEST=$BDEV_TEST       \
+                                         DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\" \
+                                         BDEV_TEST=$BDEV_TEST \
+                                         PYTHON_VERSION=\"${PYTHON_VERSION}\" \
                                          ./build/ci/unit/test_main_node.sh"

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -724,8 +725,8 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 		if (rc == 0) {
 			if (!shard->do_rebuilding && !shard->do_reintegrating) {
 				tmp_tgt.dct_rank = shard->do_target_rank;
-				dct = bsearch(&tmp_tgt, coa->coa_dcts, coa->coa_dct_nr,
-					      sizeof(tmp_tgt), &dc_coll_sort_cmp);
+				dct              = bsearch(&tmp_tgt, coa->coa_dcts, coa->coa_dct_nr,
+							   sizeof(tmp_tgt), dc_coll_sort_cmp);
 				D_ASSERT(dct != NULL);
 
 				goto gen_mbs;

@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -165,7 +166,7 @@ crt_proc_struct_crt_grp_cache(crt_proc_t proc, crt_proc_op_t proc_op,
 	return crt_proc_crt_grp_cache(proc, data);
 }
 
-/* !! All of the following 4 RPC definition should have the same input fields !!
+/* !! All of the following 5 RPC definition should have the same input fields !!
  * All of them are verified in one function:
  * int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
  */
@@ -173,6 +174,7 @@ CRT_RPC_DEFINE(crt_ctl_get_uri_cache, CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_URI_CACHE)
 CRT_RPC_DEFINE(crt_ctl_ep_ls,         CRT_ISEQ_CTL, CRT_OSEQ_CTL_EP_LS)
 CRT_RPC_DEFINE(crt_ctl_get_host,      CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_HOST)
 CRT_RPC_DEFINE(crt_ctl_get_pid,       CRT_ISEQ_CTL, CRT_OSEQ_CTL_GET_PID)
+CRT_RPC_DEFINE(crt_ctl_dump_counters, CRT_ISEQ_CTL, CRT_OSEQ_CTL_DUMP_COUNTERS)
 
 CRT_RPC_DEFINE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 
@@ -295,7 +297,7 @@ crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 			break;
 		case DAOS_CONT_MODULE:
 			switch (op_id) {
-				CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8)
+				CONT_PROTO_CLI_RPC_LIST(9)
 				CONT_PROTO_SRV_RPC_LIST
 			}
 			break;
@@ -579,6 +581,7 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
 
+	D_FREE(rpc_priv->crp_orig_uri);
 	D_FREE(rpc_priv);
 }
 
@@ -1177,6 +1180,10 @@ crt_req_is_self(struct crt_rpc_priv *rpc_priv)
 	bool			 same_rank;
 
 	D_ASSERT(rpc_priv != NULL);
+
+	if (!crt_is_service())
+		return false;
+
 	grp_priv_self = crt_grp_pub2priv(NULL);
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	same_group = (tgt_ep->ep_grp == NULL) ||
@@ -1235,9 +1242,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 				D_GOTO(out, rc);
 			}
 
-			rc = crt_grp_lc_uri_insert(grp_priv,
-						   tgt_ep->ep_rank,
-						   dst_tag, base_addr);
+			rc = crt_grp_lc_uri_insert(grp_priv, tgt_ep->ep_rank, dst_tag, uri);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -1273,6 +1278,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	hg_return_t		 hg_ret;
 	struct crt_context	*crt_ctx;
 	int			 rc = 0;
+	int                      rc2;
 
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
@@ -1284,12 +1290,17 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
-	rc = crt_grp_lc_addr_insert(rpc_priv->crp_grp_priv, crt_ctx,
-				    rpc_priv->crp_pub.cr_ep.ep_rank,
-				    rpc_priv->crp_pub.cr_ep.ep_tag,
-				    &hg_addr);
+	rc = crt_grp_hg_addr_cache_insert(rpc_priv->crp_grp_priv, crt_ctx,
+					  rpc_priv->crp_pub.cr_ep.ep_rank,
+					  rpc_priv->crp_pub.cr_ep.ep_tag, &hg_addr);
 	if (rc != 0) {
-		D_ERROR("Failed to insert: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to insert entry for (%d:%d). rc: " DF_RC "\n",
+			rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag, DP_RC(rc));
+
+		rc2 = crt_hg_addr_free(&crt_ctx->cc_hg_ctx, hg_addr);
+		if (rc2 != 0)
+			D_ERROR("crt_hg_addr_free() failed. rc " DF_RC "\n", DP_RC(rc2));
+
 		D_GOTO(out, rc);
 	}
 
@@ -1356,8 +1367,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			if (rc == 0)
 				rc = crt_req_send_immediately(rpc_priv);
 			else
-				D_ERROR("crt_req_hg_addr_lookup() failed, "
-					"rc %d, opc: %#x.\n", rc, req->cr_opc);
+				D_ERROR("crt_req_hg_addr_lookup() failed for opc %#x "
+					"rc " DF_RC "\n",
+					req->cr_opc, DP_RC(rc));
 		} else {
 			/* base_addr == NULL, send uri lookup req */
 			rpc_priv->crp_state = RPC_STATE_URI_LOOKUP;
@@ -1548,8 +1560,8 @@ crt_reply_send(crt_rpc_t *req)
 		RPC_TRACE(DB_ALL, rpc_priv, "reply_send\n");
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)
-			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.\n",
-				rc, rpc_priv->crp_pub.cr_opc);
+			D_ERROR("crt_hg_reply_send failed, rc: %d opc: %#x orig: %s\n", rc,
+				rpc_priv->crp_pub.cr_opc, crt_req_origin_addr_get(req));
 	}
 
 	rpc_priv->crp_reply_pending = 0;
@@ -1705,6 +1717,9 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	rpc_priv->crp_pub.cr_opc = opc;
 	rpc_priv->crp_pub.cr_ctx = crt_ctx;
+
+	if (rpc_priv->crp_forward)
+		CRT_METRIC_INC(ctx, CM_RPC_FWD);
 
 	crt_rpc_inout_buff_init(rpc_priv);
 

@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1796,10 +1796,10 @@ error_tree:
  *
  * \param buf		[IN]	The buffer to input pool components.
  * \param version	[IN]	Version for the new created pool map.
- * \param mapp		[OUT]	The returned pool map.
+ * \param map_ptr	[OUT]	The returned pool map.
  */
 int
-pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
+pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **map_ptr)
 {
 	struct pool_domain *tree = NULL;
 	struct pool_map	   *map;
@@ -1844,7 +1844,7 @@ out:
 	if (rc != 0)
 		D_FREE(map);
 	else
-		*mapp = map;
+		*map_ptr = map;
 	return rc;
 }
 
@@ -1877,7 +1877,7 @@ child_status_check(struct pool_domain *domain, uint32_t status)
 /* Domain status update state machine */
 static int
 update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint32_t version,
-		  bool *updated)
+		  bool *updated, bool for_revert)
 {
 	int i;
 
@@ -1893,7 +1893,7 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 		struct pool_domain *child = &domain->do_children[i];
 		int found;
 
-		found = update_dom_status(child, id, status, version, updated);
+		found = update_dom_status(child, id, status, version, updated, for_revert);
 		if (!found)
 			continue;
 
@@ -1947,14 +1947,14 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 			/* Only change to DOWNOUT/DOWN if all of children are DOWNOUT/DOWN */
 			if (child_status_check(child, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT) &&
 			    (child->do_comp.co_status != status)) {
-				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
+				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u, for_revert %d",
 					child->do_comp.co_rank, child->do_comp.co_id,
-					child->do_comp.co_status, status);
+					child->do_comp.co_status, status, for_revert);
 				if (child->do_comp.co_status == PO_COMP_ST_DOWN)
 					child->do_comp.co_flags = PO_COMPF_DOWN2OUT;
 
 				child->do_comp.co_status = status;
-				if (status == PO_COMP_ST_DOWN)
+				if (status == PO_COMP_ST_DOWN && !for_revert)
 					child->do_comp.co_fseq = version;
 				*updated = true;
 			}
@@ -1975,12 +1975,12 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 
 int
 update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t status,
-			    uint32_t version, bool *updated)
+			    uint32_t version, bool *updated, bool for_revert)
 {
 	int rc;
 
 	D_ASSERT(map->po_tree != NULL);
-	rc = update_dom_status(map->po_tree, tgt_id, status, version, updated);
+	rc = update_dom_status(map->po_tree, tgt_id, status, version, updated, for_revert);
 	if (rc < 0)
 		return rc;
 	return 0;
@@ -2064,7 +2064,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 	sorter = &map->po_domain_sorters[i];
 	D_ASSERT(sorter->cs_type == type);
 
-	if (id == PO_COMP_ID_ALL) {
+	if (type == PO_COMP_TP_ROOT || id == PO_COMP_ID_ALL) {
 		if (domain_pp != NULL)
 			*domain_pp = tmp;
 		return sorter->cs_nr;
@@ -2429,7 +2429,7 @@ update_failed_cnt_helper(struct pool_domain *dom,
 
 	if (dom->do_children == NULL) {
 		for (i = 0; i < dom->do_target_nr; ++i) {
-			if (pool_target_down(&dom->do_targets[i]))
+			if (pool_target_is_down(&dom->do_targets[i]))
 				num_failed++;
 		}
 	} else {

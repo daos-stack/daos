@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,24 +46,22 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term,
 	struct rdb     *db;
 	int		rc;
 
-	D_DEBUG(DB_MD,
-		DF_UUID ": creating db %s with %d replicas: caller_term=" DF_X64 " size=" DF_U64
-			" vos_df_version=%u layout_version=%u self=" RDB_F_RID "\n",
-		DP_UUID(uuid), path, params->rcp_replicas_len, caller_term, params->rcp_size,
-		params->rcp_vos_df_version, params->rcp_layout_version, RDB_P_RID(params->rcp_id));
+	D_INFO(DF_UUID ": creating DB replica %s with %d-replica conf: caller_term=" DF_X64
+		       " size=" DF_U64 " vos_df_version=%u layout_version=%u self=" RDB_F_RID "\n",
+	       DP_UUID(uuid), path, params->rcp_replicas_len, caller_term, params->rcp_size,
+	       params->rcp_vos_df_version, params->rcp_layout_version, RDB_P_RID(params->rcp_id));
 
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
 	 * basic system memory reservation and VOS_POF_EXCL for concurrent
 	 * access protection.
 	 */
-	rc = vos_pool_create(path, (unsigned char *)uuid, params->rcp_size, 0 /* data_sz */,
-			     0 /* meta_sz */,
-			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
-			     params->rcp_vos_df_version, &pool);
+	rc = dss_vos_pool_create(
+	    path, (unsigned char *)uuid, params->rcp_size, 0 /* data_sz */, 0 /* meta_sz */,
+	    VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
+	    params->rcp_vos_df_version, &pool);
 	if (rc != 0)
 		goto out;
-	ABT_thread_yield();
 
 	/* Create and open the metadata container. */
 	rc = vos_cont_create(pool, (unsigned char *)uuid);
@@ -145,7 +143,7 @@ rdb_destroy(const char *path, const uuid_t uuid)
 {
 	int rc;
 
-	D_INFO(DF_UUID ": destroying db %s\n", DP_UUID(uuid), path);
+	D_INFO(DF_UUID ": destroying DB replica %s\n", DP_UUID(uuid), path);
 	rc = vos_pool_destroy_ex(path, (unsigned char *)uuid, VOS_POF_RDB);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy %s: "DF_RC"\n",
@@ -427,9 +425,9 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 	 * RDB pools specify VOS_POF_SMALL for basic system memory reservation
 	 * and VOS_POF_EXCL for concurrent access protection.
 	 */
-	rc = vos_pool_open(path, (unsigned char *)uuid,
-			   VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
-			   &pool);
+	rc = dss_vos_pool_open(path, (unsigned char *)uuid,
+			       VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB | VOS_POF_EXTERNAL_CHKPT,
+			       &pool);
 	if (rc == -DER_ID_MISMATCH) {
 		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
 				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
@@ -442,7 +440,6 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 			path, DP_RC(rc));
 		goto err;
 	}
-	ABT_thread_yield();
 
 	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);
 	if (rc != 0) {
@@ -801,7 +798,12 @@ out:
 }
 
 /**
- * Modify \a replicas.
+ * Perform \a op on \a replicas in the membership.
+ *
+ * Note that when \a op is RDB_REPLICA_ADD, even if this function returns an
+ * error, one of \a replicas [out] may have been added to the local membership.
+ * The caller must check the local membership before destroying \a replicas
+ * [out].
  *
  * \param[in]		db		database
  * \param[in]		op		operation to perform
@@ -840,9 +842,12 @@ rdb_modify_replicas(struct rdb *db, enum rdb_replica_op op, rdb_replica_id_t *re
 	}
 	for (i = 0; i < *replicas_len; ++i) {
 		rc = rdb_raft_append_apply_cfg(db, type, replicas[i]);
+		if (rc == 0 && DAOS_FAIL_CHECK(DAOS_RDB_FAIL_MODIFY_REPLICAS))
+			rc = -DER_NOTLEADER;
 		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to do op %d on replica " RDB_F_RID, DP_DB(db),
-				 op, RDB_P_RID(replicas[i]));
+			DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
+				  DF_DB ": failed to do op %d on replica " RDB_F_RID, DP_DB(db), op,
+				  RDB_P_RID(replicas[i]));
 			break;
 		}
 	}

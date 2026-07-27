@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -138,10 +139,17 @@ class FioCommand(ExecutableCommand):
     def update_directory(self, directory):
         """Helper method for setting Fio directory command line option.
 
+        If "global" job is defined, update global. Otherwise, update all jobs in the list of jobs.
+
         Args:
             directory (str): fio directory argument value
         """
-        self.update("global", "directory", directory, "fio --name=global --directory")
+        if "global" in self._jobs:
+            job_names = ["global"]
+        else:
+            job_names = self._jobs.keys()
+        for job_name in job_names:
+            self.update(job_name, "directory", directory, f"fio --name={job_name} --directory")
 
     @property
     def command_with_params(self):

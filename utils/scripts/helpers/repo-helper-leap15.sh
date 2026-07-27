@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+#  Copyright 2022-2023 Intel Corporation.
+#  Copyright 2024-2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -uex
 
 # This script is used by dockerfiles to optionally use
@@ -170,13 +176,51 @@ fi
 # run here.  Running this command just makes sure things work.
 update-ca-certificates
 
-# Setup the PyPi to use the artifactory as the installation packages source
 if [ -n "$REPO_FILE_URL" ]; then
-    trusted_host="${REPO_FILE_URL##*//}"
-    trusted_host="${trusted_host%%/*}"; \
+# Calculate trusted-host and trusted_base_url for artifactory/repository
+    repo_url_scheme="${REPO_FILE_URL%%://*}"
+    repo_url_no_scheme="${REPO_FILE_URL#*://}"
+    trusted_host_port="${repo_url_no_scheme%%/*}"
+    trusted_host="${trusted_host_port%%:*}"
+    first_path_element="${repo_url_no_scheme#*/}"
+    first_path_element="${first_path_element%%/*}"
+    trusted_base_url="${repo_url_scheme}://${trusted_host_port}/${first_path_element}"
+
+# Setup pip/uv to use the proxy only when the endpoint is reachable.
+    pypi_proxy_url="${trusted_base_url}/api/pypi/pypi-proxy/simple"
+    if curl -k --noproxy '*' -fsS --connect-timeout 5 --max-time 10 \
+        "${pypi_proxy_url}" > /dev/null 2>&1; then
     cat <<EOF > /etc/pip.conf
 [global]
     trusted-host = ${trusted_host}
-    index-url = https://${trusted_host}/artifactory/api/pypi/pypi-proxy/simple
+    index-url = ${pypi_proxy_url}
+    progress_bar = off
+    no_color = true
+    quiet = 1
 EOF
+
+# Set up the uv (a part of SPDK installer)
+# to use the artifactory as the installation packages source
+    mkdir -p /etc/uv
+    cat <<EOF > /etc/uv/uv.toml
+index-url = "${pypi_proxy_url}"
+native-tls = true
+EOF
+    else
+        echo "Skipping pip/uv proxy setup: ${pypi_proxy_url} is unreachable"
+    fi
+
+# Setup RubyGems to use artifactory/repository as the installation source only
+# when the endpoint is reachable.
+    gem_proxy_url="${trusted_base_url}/api/gems/rubygems-proxy/"
+    if curl -k --noproxy '*' -fsS --connect-timeout 5 --max-time 10 \
+        "${gem_proxy_url}" > /dev/null 2>&1; then
+        cat <<EOF > /etc/gemrc
+:sources:
+- ${gem_proxy_url}
+EOF
+    else
+        echo "Skipping /etc/gemrc setup: ${gem_proxy_url} is unreachable"
+    fi
+
 fi

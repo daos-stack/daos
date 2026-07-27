@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -288,7 +288,6 @@ class OSAUtils(MdtestBase, IorTestBase):
                 "Detected container redundancy factor: %s",
                 self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
-            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
             self.container.oclass.update(None)
 
     def get_random_test_ranks(self, total_ranks=2, join_ranks=True):
@@ -396,7 +395,6 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.pool, None)
         self.log.info("Redundancy Factor : %s", self.test_with_rf)
         self.ior_cmd.dfs_oclass.update(oclass)
-        self.ior_cmd.dfs_dir_oclass.update(oclass)
         if single_cont_read is True:
             # Prepare the containers created and use in a specific
             # way defined in prepare_cont_ior_write.
@@ -421,7 +419,6 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.log.info(
                 "Detected container redundancy factor: %s", self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
-            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
         # Run run_ior_with_pool without invoking the pool query method for
         # displaying pool space information (display_space=False)
         self.run_ior_with_pool(create_pool=False, create_cont=False,

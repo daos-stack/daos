@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -61,6 +61,7 @@ const (
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
 	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
 	ConfSetAutoFaultyProps       = C.NVME_CONF_SET_AUTO_FAULTY
+	ConfIobufSetOptions          = "iobuf_set_options"
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -192,6 +193,7 @@ type NvmeHealth struct {
 	UnsafeShutdowns         uint64  `json:"unsafe_shutdowns"`
 	MediaErrors             uint64  `json:"media_errs"`
 	ErrorLogEntries         uint64  `json:"err_log_entries"`
+	PercentageUsed          uint32  `json:"percentage_used"`
 	ReadErrors              uint32  `json:"bio_read_errs"`
 	WriteErrors             uint32  `json:"bio_write_errs"`
 	UnmapErrors             uint32  `json:"bio_unmap_errs"`
@@ -616,6 +618,7 @@ type (
 		AccelProps        AccelProps
 		SpdkRpcSrvProps   SpdkRpcServer
 		AutoFaultyProps   BdevAutoFaulty
+		SpdkIobufProps    SpdkIobuf
 		VMDEnabled        bool
 		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
 	}

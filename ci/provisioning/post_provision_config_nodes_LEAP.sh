@@ -1,14 +1,14 @@
 #!/bin/bash
 #
 #  Copyright 2021-2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
 bootstrap_dnf() {
     rm -rf "$REPOS_DIR"
     ln -s ../zypp/repos.d "$REPOS_DIR"
-    dnf -y remove lua54 lua-lmod
+    dnf -y remove lua-lmod
     dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*'
 }
 
@@ -23,4 +23,9 @@ distro_custom() {
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                     \
                /etc/profile.d/lmod.sh;                                        \
     fi
+
+    # Use a more recent python version for unit testing, this allows us to also test installing
+    # pydaos into virtual environments.
+    : "${PYTHON_VERSION:=3.11}"
+    dnf -y install "python${PYTHON_VERSION//./}" "python${PYTHON_VERSION//./}-devel"
 }

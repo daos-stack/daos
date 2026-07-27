@@ -1,6 +1,6 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1111,10 +1111,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             ior_cmd.transfer_size.update(t_size)
             if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 ior_cmd.dfs_oclass.update(None)
-                ior_cmd.dfs_dir_oclass.update(None)
             else:
                 ior_cmd.dfs_oclass.update(file_dir_oclass[0])
-                ior_cmd.dfs_dir_oclass.update(file_dir_oclass[1])
             if ior_cmd.api.value == "DFS":
                 ior_cmd.test_file.update(os.path.join("/", "testfile"))
             if not cont:
@@ -1348,10 +1346,8 @@ def create_racer_cmdline(self, job_spec):
     # daos_racer needs its own pool; does not run using jobs pool
     add_pools(self, ["pool_racer"])
     add_containers(self, self.pool[-1], "SX")
-    racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
     daos_racer = DaosRacerCommand(
-        self.bin, self.hostlist_clients[0])
-    daos_racer.namespace = racer_namespace
+        self.bin, self.hostlist_clients[0], namespace=os.path.join(os.sep, "run", job_spec, "*"))
     daos_racer.get_params(self)
     daos_racer.pool_uuid.update(self.pool[-1].uuid)
     daos_racer.cont_uuid.update(self.container[-1].uuid)

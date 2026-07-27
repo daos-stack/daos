@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -43,6 +43,7 @@
 		case -DER_BUSY:                                                                    \
 		case -DER_EXIST:                                                                   \
 		case -DER_NONEXIST:                                                                \
+		case -DER_OP_CANCELED:                                                             \
 			__is_err = false;                                                          \
 			break;                                                                     \
 		}                                                                                  \
@@ -62,6 +63,7 @@
 		case -DER_BUSY:                                                                    \
 		case -DER_EXIST:                                                                   \
 		case -DER_NONEXIST:                                                                \
+		case -DER_OP_CANCELED:                                                             \
 			__is_err = false;                                                          \
 			break;                                                                     \
 		}                                                                                  \
@@ -263,7 +265,8 @@ struct vos_cache_metrics {
 	struct d_tm_node_t	*vcm_obj_hit;
 };
 
-void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrcis, const char *path, int tgt_id);
+void
+vos_cache_metrics_init(struct vos_cache_metrics *vc_metrics, const char *path, int tgt_id);
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
@@ -299,7 +302,8 @@ struct vos_pool {
 	uint32_t                vp_dying:1,
 				vp_opening:1,
 	/** exclusive handle (see VOS_POF_EXCL) */
-				vp_excl:1;
+				vp_excl:1,
+				vp_gc_nospc:1;
 	ABT_mutex		vp_mutex;
 	ABT_cond		vp_cond;
 	/* this pool is for sysdb */
@@ -315,9 +319,7 @@ struct vos_pool {
 	/** memory attribute of the @vp_umm */
 	struct umem_attr	vp_uma;
 	/** memory class instance of the pool */
-	struct umem_instance	vp_umm;
-	/** Size of pool file */
-	uint64_t		vp_size;
+	struct umem_instance     vp_umm;
 	/** Features enabled for this pool */
 	uint64_t		vp_feats;
 	/** btr handle for the container table */
@@ -330,6 +332,10 @@ struct vos_pool {
 	d_list_t		vp_gc_link;
 	/** List of open containers with objects in gc pool */
 	d_list_t		vp_gc_cont;
+
+	/** List of open containers */
+	d_list_t                 vp_cont_list;
+
 	/** address of durable-format pool in SCM */
 	struct vos_pool_df	*vp_pool_df;
 	/** Dummy data I/O context */
@@ -388,6 +394,10 @@ struct vos_container {
 	d_list_t		vc_dtx_unsorted_list;
 	/* The list for the active DTX entries that are re-indexed when open the container. */
 	d_list_t		vc_dtx_reindex_list;
+
+	/* Link into vos_pool::vp_cont_list */
+	d_list_t                 vc_pool_link;
+
 	/* The largest epoch difference for re-indexed DTX entries max/min pairs. */
 	uint64_t		vc_dtx_reindex_eph_diff;
 	/* The latest calculated local stable epoch. */
@@ -439,9 +449,7 @@ struct vos_container {
 	/* GC runtime for container */
 	struct vos_gc_info	vc_gc_info;
 	/* Various flags */
-	unsigned int		vc_in_aggregation:1,
-				vc_in_discard:1,
-				vc_cmt_dtx_indexed:1;
+	uint32_t vc_in_aggregation : 1, vc_in_discard : 1, vc_cmt_dtx_indexed : 1, vc_dtx_reset : 1;
 	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 	/* The latest pool map version that DTX resync has been done. */
@@ -470,10 +478,6 @@ struct vos_dtx_act_ent {
 	 * then 'dae_oids' points to the 'dae_oid_inline'.
 	 *
 	 * Otherwise, 'dae_oids' points to new buffer to hold more.
-	 *
-	 * These information is used for EC aggregation optimization.
-	 * If server restarts, then we will lose the optimization but
-	 * it is not fatal.
 	 */
 	daos_unit_oid_t			*dae_oids;
 	/* The time (hlc) when the DTX entry is created. */
@@ -484,6 +488,9 @@ struct vos_dtx_act_ent {
 	d_list_t			 dae_link;
 	/* Back pointer to the DTX handle. */
 	struct dtx_handle		*dae_dth;
+
+	/* The capacity of dae_oids if it points to new allocated area. */
+	uint32_t                         dae_oid_cap;
 
 	unsigned int			 dae_committable:1,
 					 dae_committing:1,
@@ -854,6 +861,9 @@ vos_dtx_post_handle(struct vos_container *cont,
  */
 int
 vos_dtx_act_reindex(struct vos_container *cont);
+
+int
+vos_dtx_record_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t oid);
 
 enum vos_tree_class {
 	/** the first reserved tree class */
@@ -1336,7 +1346,8 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh, struct vos_object *obj);
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
+	     struct vos_object *obj);
 
 /** Finish the transaction and publish or cancel the reservations or
  *  return if err == 0 and it's a multi-modification transaction that
@@ -1424,10 +1435,10 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_PURGE;
 	if (iter->it_for_discard)
 		return DAOS_INTENT_DISCARD;
-	if (iter->it_ignore_uncommitted)
-		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_ignore_uncommitted)
+		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_check)
 		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;
@@ -1927,20 +1938,6 @@ vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum v
 
 	return false;
 }
-
-/**
- * Insert object ID and its parent container into the array of objects touched by the ongoing
- * local transaction.
- *
- * \param[in] dth	DTX handle for ongoing local transaction
- * \param[in] cont	VOS container
- * \param[in] oid	Object ID
- *
- * \return		0		: Success.
- *			-DER_NOMEM	: Run out of the volatile memory.
- */
-int
-vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
 
 static inline bool
 vos_pool_is_p2(struct vos_pool *pool)

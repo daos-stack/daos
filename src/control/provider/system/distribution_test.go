@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -93,6 +94,19 @@ func TestSystem_getDistribution(t *testing.T) {
 				Name: "Ubuntu",
 				Version: DistributionVersion{
 					Major: 22,
+					Minor: 4,
+				},
+			},
+		},
+		"ubuntu-24.04": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/ubuntu24.04-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "ubuntu",
+				Name: "Ubuntu",
+				Version: DistributionVersion{
+					Major: 24,
 					Minor: 4,
 				},
 			},

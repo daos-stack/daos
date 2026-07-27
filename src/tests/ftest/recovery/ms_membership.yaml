@@ -7,12 +7,17 @@ server_config:
   engines_per_host: 2
   engines:
     0:
+      targets: 4
       pinned_numa_node: 0
       nr_xs_helpers: 1
       log_file: daos_server0.log
       storage: auto
     1:
+      targets: 4
       pinned_numa_node: 1
       nr_xs_helpers: 1
       log_file: daos_server1.log
       storage: auto
+
+pool:
+  size: 80G

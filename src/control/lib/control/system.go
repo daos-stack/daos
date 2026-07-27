@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1318,6 +1318,7 @@ func SystemRebuildManage(ctx context.Context, rpcClient UnaryInvoker, req *Syste
 type SystemSelfHealEvalReq struct {
 	unaryRequest
 	msRequest
+	retryableRequest
 }
 
 // SystemSelfHealEvalResp contains the response.
@@ -1341,6 +1342,10 @@ func SystemSelfHealEval(ctx context.Context, rpcClient UnaryInvoker, req *System
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemSelfHealEval(ctx, pbReq)
 	})
+	req.retryTestFn = func(err error, _ uint) bool {
+		return (system.IsUnavailable(err) || IsRetryableConnErr(err) ||
+			system.IsNotLeader(err) || system.IsNotReplica(err))
+	}
 
 	rpcClient.Debugf("DAOS system self-heal eval request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)

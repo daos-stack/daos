@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -174,7 +174,7 @@ func extractReqIDs(log logging.Logger, ids string, addrs idMap, uuids idMap) err
 	tokens := strings.Split(ids, ",")
 
 	for _, token := range tokens {
-		if addr, e := hardware.NewPCIAddress(token); e == nil && addr.IsVMDBackingAddress() {
+		if addr, e := hardware.NewPCIAddress(token); e == nil {
 			addrs[addr.String()] = true
 			continue
 		}
@@ -184,7 +184,7 @@ func extractReqIDs(log logging.Logger, ids string, addrs idMap, uuids idMap) err
 			continue
 		}
 
-		return errors.Errorf("req id entry %q is neither a valid vmd backing device pci "+
+		return errors.Errorf("req id entry %q is neither a valid device pci "+
 			"address or uuid", token)
 	}
 
@@ -240,7 +240,7 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 	matchAll := false
 
 	if ids == "" {
-		// Selecting all is not supported unless using transport addresses.
+		// Selecting all not supported unless using transport addresses.
 		if !useTrAddr {
 			return nil, errors.New("empty id string")
 		}

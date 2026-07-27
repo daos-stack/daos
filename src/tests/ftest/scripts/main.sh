@@ -1,8 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC1113
 # /*
-#  * (C) Copyright 2016-2024 Intel Corporation.
-#  * Copyright 2025 Hewlett Packard Enterprise Development LP
+#  * Copyright 2016-2024 Intel Corporation.
+#  * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -18,17 +18,14 @@ fi
 # shellcheck disable=SC2153
 mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
 
-if  [ -d venv ]
-then
-    rm -rf venv
+# use the ftest python virtual environment created by setup_nodes.sh
+if [ -f "${DAOS_FTEST_VENV}"/bin/activate ] ; then
+    # shellcheck disable=SC1091
+    source "${DAOS_FTEST_VENV}"/bin/activate
+else
+    echo "Missing python virtual environment (${DAOS_FTEST_VENV}/bin/activate)!"
+    exit 1
 fi
-
-python3 -m venv venv
-# shellcheck disable=SC1091
-source venv/bin/activate
-
-pip install --upgrade pip
-pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
@@ -45,20 +42,13 @@ else
     cd "$DAOS_BASE"
 fi
 
-# Copy the pydaos source locally and install it, in an ideal world this would install
-# from the read-only tree directly but for now that isn't working.
-# https://github.com/pypa/setuptools/issues/3237
-cp -a "$PREFIX"/lib/daos/python pydaos
-pip install ./pydaos
-rm -rf pydaos
-
 # Disable D_PROVIDER to allow launch.py to set it
 unset D_PROVIDER
 
 # Disable D_INTERFACE to allow launch.py to pick the fastest interface
 unset D_INTERFACE
 
-# At Oct2018 Longmond F2F it was decided that per-server logs are preferred
+# At Oct2018 Longmont F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.
 # shellcheck disable=SC2153
@@ -74,7 +64,7 @@ if ${SETUP_ONLY:-false}; then
     exit 0
 fi
 
-# need to increase the number of oopen files (on EL8 at least)
+# need to increase the number of open files (on EL8 at least)
 ulimit -n 4096
 
 # Clean stale job results
@@ -93,6 +83,9 @@ export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test
 if [ -n "$DAOS_HTTPS_PROXY" ]; then
     # shellcheck disable=SC2154
     export HTTPS_PROXY="${DAOS_HTTPS_PROXY:-""}"
+fi
+if [ -n "$DAOS_NO_PROXY" ]; then
+    export NO_PROXY="${DAOS_NO_PROXY:-""}"
 fi
 
 launch_node_args="-ts ${TEST_NODES}"

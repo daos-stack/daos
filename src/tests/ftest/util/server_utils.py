@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -157,9 +157,11 @@ class DaosServerManager(SubprocessManager):
         """Get the rank and host pairing for all of the engines.
 
         Returns:
-            dict: rank key with host value
+            dict: rank key with host value, or empty dict if not initialized
 
         """
+        if self._expected_states is None:
+            return {}
         return {rank: value["host"] for rank, value in self._expected_states.items()}
 
     @property
@@ -669,9 +671,7 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
-        # be further investigated.
-        self.dmg.storage_format(timeout=self.storage_format_timeout.value)
+        self.storage_format()
 
         # Wait for all the engines to start
         self.detect_engine_start()
@@ -1002,6 +1002,23 @@ class DaosServerManager(SubprocessManager):
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
+    def storage_format(self, **kwargs):
+        """Wrapper for dmg storage format that uses self.storage_format_timeout.
+
+        Args:
+            kwargs (dict): keyword args for DmgCommand.storage_format
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage format command fails.
+        """
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = self.storage_format_timeout.value
+        return self.dmg.storage_format(**kwargs)
+
     @fail_on(CommandFailure)
     def system_exclude(self, ranks, copy=False, rank_hosts=None):
         """Exclude the specific server ranks.
@@ -1164,16 +1181,20 @@ class DaosServerManager(SubprocessManager):
             engines.append(result)
         return engines
 
-    def get_vos_path(self, pool):
-        """Get the VOS file path.
+    def get_vos_paths(self, pool):
+        """Get the VOS file paths.
 
         Args:
             pool (TestPool): the pool containing the vos file
 
         Returns:
-            str: the full path to the vos file
+            list: the full path list to the vos file
         """
-        return os.path.join(self.get_config_value("scm_mount"), pool.uuid.lower())
+        vos_paths = []
+        for engine_params in self.manager.job.yaml.engine_params:
+            scm_mount = engine_params.get_value("scm_mount")
+            vos_paths.append(os.path.join(scm_mount, pool.uuid.lower()))
+        return vos_paths
 
     def get_vos_files(self, pool, pattern="vos"):
         """Get all the VOS file paths containing the pattern.
@@ -1187,7 +1208,7 @@ class DaosServerManager(SubprocessManager):
                 /mnt/daos0/<pool_uuid>/vos-0. If no matches are found the list will be empty.
         """
         vos_files = []
-        vos_path = self.get_vos_path(pool)
+        vos_path = self.get_vos_paths(pool)[0]
         command = command_as_user(f"ls {vos_path}", "root")
         result = run_remote(self.log, self.hosts[0:1], command)
         if result.passed:

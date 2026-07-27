@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,7 +81,16 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 
 		/** what is the default oclass files and dirs will be created with in this dir */
 		if (obj->d.oclass) {
-			info->doi_dir_oclass_id  = obj->d.oclass;
+			/** if parent oclass is EC, dir would be chosen as container default */
+			if (!daos_cid_is_ec(obj->d.oclass)) {
+				info->doi_dir_oclass_id = obj->d.oclass;
+			} else {
+				if (dfs->attr.da_dir_oclass_id)
+					info->doi_dir_oclass_id = dfs->attr.da_dir_oclass_id;
+				else
+					rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0,
+								 0, &info->doi_dir_oclass_id);
+			}
 			info->doi_file_oclass_id = obj->d.oclass;
 		} else {
 			if (dfs->attr.da_dir_oclass_id)
@@ -89,6 +98,10 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 			else
 				rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0, 0,
 							 &info->doi_dir_oclass_id);
+			if (rc) {
+				D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
 
 			if (dfs->attr.da_file_oclass_id)
 				info->doi_file_oclass_id = dfs->attr.da_file_oclass_id;
@@ -487,18 +500,33 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 			D_GOTO(err, rc = daos_der2errno(rc));
 		break;
 	case S_IFREG: {
-		char    buf[1024];
-		d_iov_t ghdl;
-
-		d_iov_set(&ghdl, buf, 1024);
+		d_iov_t ghdl = {NULL, 0, 0};
+		char   *buf  = NULL;
 
 		rc = daos_array_local2global(obj->oh, &ghdl);
 		if (rc)
 			D_GOTO(err, rc = daos_der2errno(rc));
 
+		D_ALLOC(buf, ghdl.iov_buf_len);
+		if (buf == NULL)
+			D_GOTO(err, rc = ENOMEM);
+
+		ghdl.iov_buf = buf;
+		ghdl.iov_len = ghdl.iov_buf_len;
+		rc           = daos_array_local2global(obj->oh, &ghdl);
+		if (rc)
+			D_GOTO(out_free, rc = daos_der2errno(rc));
+
 		rc = daos_array_global2local(dfs->coh, ghdl, daos_mode, &new_obj->oh);
 		if (rc)
-			D_GOTO(err, rc = daos_der2errno(rc));
+			D_GOTO(out_free, rc = daos_der2errno(rc));
+
+		D_FREE(buf);
+		break;
+out_free:
+		D_FREE(buf);
+		if (rc)
+			D_GOTO(err, rc);
 		break;
 	}
 	case S_IFLNK:
@@ -683,6 +711,11 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	obj->flags              = flags ? flags : obj_glob->flags;
 
 	daos_mode = get_daos_obj_mode(obj->flags);
+	if (daos_mode == -1) {
+		D_FREE(obj);
+		return EINVAL;
+	}
+
 	if (S_ISDIR(obj->mode)) {
 		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 		if (rc) {
@@ -1695,6 +1728,8 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 
 	if (obj == NULL || !S_ISLNK(obj->mode))
 		return EINVAL;
+	if (size == NULL)
+		return EINVAL;
 	if (obj->value == NULL)
 		return EINVAL;
 
@@ -1704,10 +1739,14 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 		return 0;
 	}
 
-	if (*size < val_size)
-		strncpy(buf, obj->value, *size);
-	else
+	if (*size < val_size) {
+		if (*size > 0) {
+			strncpy(buf, obj->value, *size - 1);
+			buf[*size - 1] = '\0';
+		}
+	} else {
 		strcpy(buf, obj->value);
+	}
 
 	*size = val_size;
 	DFS_OP_STAT_INCR(obj->dfs, DOS_READLINK);

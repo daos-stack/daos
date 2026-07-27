@@ -57,18 +57,13 @@ typedef struct _Mgmt__PoolSelfHealEvalReq Mgmt__PoolSelfHealEvalReq;
 /* --- enums --- */
 
 typedef enum _Mgmt__PoolRebuildStatus__State {
-  /*
-   * DRS_IN_PROGRESS
-   */
   MGMT__POOL_REBUILD_STATUS__STATE__BUSY = 0,
-  /*
-   * DRS_NOT_STARTED
-   */
   MGMT__POOL_REBUILD_STATUS__STATE__IDLE = 1,
-  /*
-   * DRS_COMPLETED
-   */
-  MGMT__POOL_REBUILD_STATUS__STATE__DONE = 2
+  MGMT__POOL_REBUILD_STATUS__STATE__DONE = 2,
+  MGMT__POOL_REBUILD_STATUS__STATE__STOPPING = 3,
+  MGMT__POOL_REBUILD_STATUS__STATE__STOPPED = 4,
+  MGMT__POOL_REBUILD_STATUS__STATE__FAILING = 5,
+  MGMT__POOL_REBUILD_STATUS__STATE__FAILED = 6
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_REBUILD_STATUS__STATE)
 } Mgmt__PoolRebuildStatus__State;
 typedef enum _Mgmt__PoolQueryTargetInfo__TargetState {
@@ -779,10 +774,15 @@ struct  _Mgmt__PoolRebuildStatus
   Mgmt__PoolRebuildStatus__State state;
   uint64_t objects;
   uint64_t records;
+  Mgmt__PoolRebuildStatus__State derived_state;
+  /*
+   * data redundancy degraded
+   */
+  protobuf_c_boolean degraded;
 };
 #define MGMT__POOL_REBUILD_STATUS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_rebuild_status__descriptor) \
-    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0 }
+    , 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0, 0, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, 0 }
 
 
 /*
@@ -898,7 +898,8 @@ struct  _Mgmt__PoolQueryResp
 typedef enum {
   MGMT__POOL_PROPERTY__VALUE__NOT_SET = 0,
   MGMT__POOL_PROPERTY__VALUE_STRVAL = 2,
-  MGMT__POOL_PROPERTY__VALUE_NUMVAL = 3
+  MGMT__POOL_PROPERTY__VALUE_NUMVAL = 3,
+  MGMT__POOL_PROPERTY__VALUE_BYTEVAL = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_PROPERTY__VALUE)
 } Mgmt__PoolProperty__ValueCase;
 
@@ -919,6 +920,10 @@ struct  _Mgmt__PoolProperty
      * pool property numeric value
      */
     uint64_t numval;
+    /*
+     * pool property byte array value
+     */
+    ProtobufCBinaryData byteval;
   };
 };
 #define MGMT__POOL_PROPERTY__INIT \

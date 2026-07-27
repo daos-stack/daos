@@ -1,6 +1,6 @@
 #
 # (C) Copyright 2024-2025 Google LLC
-# (C) Copyright 2024-2025 Enakta Labs Ltd
+# (C) Copyright 2024-2026 Enakta Labs Ltd
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -11,11 +11,14 @@ to access training data on DAOS DFS via POSIX container.
 In addition, it provides Checkpoint class to save and load PyTorch model checkpoints.
 """
 
+import errno
 import io
 import math
 import os
 import stat
-from multiprocessing import Process, Queue
+import sys
+from multiprocessing import Pool, Process, Queue, current_process
+from pathlib import Path
 
 from torch.utils.data import Dataset as TorchDataset
 from torch.utils.data import IterableDataset as TorchIterableDataset
@@ -66,7 +69,8 @@ class Dataset(TorchDataset):
         Number of directory entries to read for each readdir call.
     dir_cache_size: int (optional)
         Number of directory object entries to cache in memory.
-
+    readdir_workers: int (optional)
+        Number of parallel workers for namespace scanning.
 
     Methods
     -------
@@ -89,7 +93,8 @@ class Dataset(TorchDataset):
     def __init__(self, pool=None, cont=None, path=None,
                  transform_fn=transform_fn_default,
                  readdir_batch_size=READDIR_BATCH_SIZE,
-                 dir_cache_size=DIR_CACHE_SIZE):
+                 dir_cache_size=DIR_CACHE_SIZE,
+                 readdir_workers=PARALLEL_SCAN_WORKERS):
         super().__init__()
 
         self._pool = pool
@@ -99,7 +104,8 @@ class Dataset(TorchDataset):
         self._readdir_batch_size = readdir_batch_size
         self._closed = False
 
-        self.objects = self._dfs.parallel_list(path, readdir_batch_size=self._readdir_batch_size)
+        self.objects = self._dfs.parallel_list(
+            path, readdir_batch_size=self._readdir_batch_size, workers=readdir_workers)
 
     def __len__(self):
         """ Returns number of items in this dataset """
@@ -213,6 +219,8 @@ class IterableDataset(TorchIterableDataset):
         Number of samples to fetch per iteration.
     dir_cache_size: int (optional)
         Number of directory object entries to cache in memory.
+    readdir_workers: int (optional)
+        Number of parallel workers for namespace scanning.
 
 
     Methods
@@ -230,7 +238,8 @@ class IterableDataset(TorchIterableDataset):
                  transform_fn=transform_fn_default,
                  readdir_batch_size=READDIR_BATCH_SIZE,
                  batch_size=ITER_BATCH_SIZE,
-                 dir_cache_size=DIR_CACHE_SIZE):
+                 dir_cache_size=DIR_CACHE_SIZE,
+                 readdir_workers=PARALLEL_SCAN_WORKERS):
         super().__init__()
 
         self._pool = pool
@@ -241,7 +250,8 @@ class IterableDataset(TorchIterableDataset):
         self._batch_size = batch_size
         self._closed = False
 
-        self.objects = self._dfs.parallel_list(path, readdir_batch_size=self._readdir_batch_size)
+        self.objects = self._dfs.parallel_list(
+            path, readdir_batch_size=self._readdir_batch_size, workers=readdir_workers)
         self.workset = self.objects
 
     def __iter__(self):
@@ -372,15 +382,19 @@ class WriteBuffer(io.BufferedIOBase):
                 self._workers.append(worker)
 
     def _worker_fn(self, queue):
-        self._dfs.worker_init()
-        while True:
-            work = queue.get()
-            if work is None:
-                break
+        try:
+            self._dfs.worker_init()
+            while True:
+                work = queue.get()
+                if work is None:
+                    break
 
-            (offset, chunk) = work
-            self._dfs.write(self._path, self._mode, self._oflags,
-                            self._class_name, self._file_chunk_size, offset, chunk)
+                (offset, chunk) = work
+                self._dfs.write(self._path, self._mode, self._oflags,
+                                self._class_name, self._file_chunk_size, offset, chunk)
+        # pylint: disable=broad-exception-caught
+        except Exception as e:
+            sys.exit(getattr(e, 'errno', errno.EIO))
 
     def write(self, data):
         """ Writes data to the buffer."""
@@ -430,6 +444,11 @@ class WriteBuffer(io.BufferedIOBase):
             self._queue.put(None)
         for worker in self._workers:
             worker.join()
+
+        # lets see if any worker exited abnormally and if so, raise an error
+        for worker in self._workers:
+            if worker.exitcode != 0:
+                raise OSError(worker.exitcode, os.strerror(worker.exitcode))
 
         super().close()
 
@@ -524,7 +543,7 @@ class Checkpoint():
 
     # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(self, pool, cont, prefix=os.sep,
-                 mode=stat.S_IFREG | stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH,
+                 mode=stat.S_IFREG | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
                  open_flags=os.O_CREAT | os.O_RDWR,
                  class_name="OC_UNKNOWN",
                  file_chunk_size=0,
@@ -619,16 +638,48 @@ class Checkpoint():
         stream.seek(0)
         return stream
 
-    def writer(self, file):
+    def writer(self, file, ensure_path=True):
         """ Returns write buffer to save the checkpoint file """
 
         if file is None:
             raise ValueError("file is required")
 
         path = os.path.join(self._prefix, file)
+        if ensure_path:
+            self._dfs.mkdirall(os.path.dirname(path))
+
         return WriteBuffer(self._dfs, path, self._mode, self._oflags,
                            self._class_name, self._file_chunk_size, self._transfer_chunk_size,
                            self._chunks_limit, self._workers)
+
+
+def _readdir_worker_init(dfs, readdir_batch_size):
+    """
+    Worker init for parallel readdir.
+
+    Receives `self` as an argument to re-init DAOS after fork, per worker process.
+
+    It has to be module function since the multiprocessing.Pool methods to init workers
+    will pickle instance method with main process's _Dfs class reference.
+    """
+
+    dfs.worker_init()
+    proc = current_process()
+    proc.dfs = dfs
+    proc.readdir_batch_size = readdir_batch_size
+
+
+def _readdir_batch(work):
+    """
+    Reads the anchored directory at `path` with `anchor_index` and returns
+    list of discovered directories and files.
+
+    It has to be module function since the multiprocessing.Pool methods to submit jobs
+    will pickle instance method with main process's _Dfs class reference.
+    """
+    path, anchor_index = work
+    proc = current_process()
+    return proc.dfs.readdir_anchored(path, anchor_index, proc.readdir_batch_size)
 
 
 class _Dfs():
@@ -661,49 +712,10 @@ class _Dfs():
             raise OSError(ret, os.strerror(ret))
         self._dfs = None
 
-    def list_worker_fn(self, in_work, out_dirs, out_files, readdir_batch_size=READDIR_BATCH_SIZE):
-        """
-        Worker function to scan directory in parallel.
-        It expects to receive tuples (path, index) to scan the directory with an anchor index,
-        from the `in_work` queue.
-        It should emit tuples (scanned, to_scan) to the `out_dirs` queue, where `scanned` is the
-        number of scanned directories and `to_scan` is the list of directories to scan in parallel.
-        Upon completion it should emit the list of files in the `out_files` queue.
-        """
-
-        self.worker_init()
-
-        result = []
-        while True:
-            work = in_work.get()
-            if work is None:
-                break
-
-            (path, index) = work
-
-            dirs = []
-            files = []
-            ret = torch_shim.torch_list_with_anchor(DAOS_MAGIC, self._dfs,
-                                                    path, index, files, dirs, readdir_batch_size
-                                                    )
-            if ret != 0:
-                raise OSError(ret, os.strerror(ret), path)
-
-            dirs = [chunk for d in dirs for chunk in self.split_dir_for_parallel_scan(
-                os.path.join(path, d))
-            ]
-            # Even if there are no dirs, we should emit the tuple to notify the main process
-            out_dirs.put((1, dirs))
-
-            files = [(os.path.join(path, file), size) for (file, size) in files]
-            result.extend(files)
-
-        out_files.put(result)
-
     def split_dir_for_parallel_scan(self, path):
         """
         Splits dir for parallel readdir.
-        It returns list of tuples (dirname, anchor index) to be consumed by worker function
+        It returns list of tuples (dirname, anchor_index) to be consumed by workers
         """
 
         ret, splits = torch_shim.torch_recommended_dir_split(DAOS_MAGIC, self._dfs, path)
@@ -711,6 +723,28 @@ class _Dfs():
             raise OSError(ret, os.strerror(ret), path)
 
         return [(path, idx) for idx in range(0, splits)]
+
+    def readdir_anchored(self, path, anchor_index, readdir_batch_size):
+        """
+        Scans one anchored by index directory at `path`.
+
+        Returns (dirs, files):
+            `dirs` are (path, anchor_index) work items for directories found in this batch,
+            `files` is a list of resulting tuples: (full_path, size).
+        """
+        dirs = []
+        files = []
+        ret = torch_shim.torch_list_with_anchor(
+            DAOS_MAGIC, self._dfs, path, anchor_index, files, dirs, readdir_batch_size)
+        if ret != 0:
+            raise OSError(ret, os.strerror(ret), path)
+
+        subdirs = [split
+                   for name in dirs
+                   for split in self.split_dir_for_parallel_scan(os.path.join(path, name))]
+
+        files = [(os.path.join(path, name), size) for (name, size) in files]
+        return subdirs, files
 
     def parallel_list(self, path=None,
                       readdir_batch_size=READDIR_BATCH_SIZE,
@@ -721,43 +755,42 @@ class _Dfs():
 
         To fully use this feature the container should be configured with directory object classes
         supporting this mode, e.g. OC_SX.
+
+        Using multiprocessing.Pool ensures propagation of errors in the workers and cleaning up
+        resources, regardless of operation outcome.
+
+        It would be even better to use `concurrent.futures.ProcessPoolExecutor`; however,
+        its `initializer` and `initargs` arguments are available only in Python 3.7+.
+
+        Although Python 3.6 is EOL, many distributions still ship it by default.
+        Keeping `_readdir_worker_init` and `_readdir_batch` as module-level functions
+        instead of private class methods, is a small price that allows us to support
+        a much broader range of platforms.
         """
+
         if path is None:
             path = os.sep
 
         if not path.startswith(os.sep):
             raise ValueError("relative path is unacceptable")
 
-        procs = []
-        work = Queue()
-        dirs = Queue()
-        files = Queue()
-        for _ in range(workers):
-            worker = Process(target=self.list_worker_fn, args=(
-                work, dirs, files, readdir_batch_size))
-            worker.start()
-            procs.append(worker)
+        if readdir_batch_size <= 0:
+            raise ValueError("readdir batch size should be a positive number")
 
-        queued = 0
-        processed = 0
-        for anchored_dir in self.split_dir_for_parallel_scan(path):
-            work.put(anchored_dir)
-            queued += 1
-
-        while processed < queued:
-            (scanned, to_scan) = dirs.get()
-            processed += scanned
-            for d in to_scan:
-                work.put(d)
-                queued += 1
+        if workers <= 0:
+            raise ValueError("at least one worker is required for namespace scanning")
 
         result = []
-        for _ in range(workers):
-            work.put(None)
-            result.extend(files.get())
-
-        for worker in procs:
-            worker.join()
+        batch = self.split_dir_for_parallel_scan(path)
+        with Pool(workers,
+                  initializer=_readdir_worker_init,
+                  initargs=(self, readdir_batch_size)) as pool:
+            while batch:
+                next_batch = []
+                for dirs, files in pool.imap_unordered(_readdir_batch, batch):
+                    next_batch.extend(dirs)
+                    result.extend(files)
+                batch = next_batch
 
         return result
 
@@ -810,3 +843,18 @@ class _Dfs():
         if ret != 0:
             raise OSError(ret, os.strerror(ret), path)
         return size
+
+    def mkdirall(self, path, mode=0o755):
+        """ Creates directory, making parent directories if needed """
+
+        path = os.path.normpath(path)
+        dirs = list(Path(path).parts)
+        if not dirs:
+            raise ValueError(f"invalid path: {path}")
+
+        parent = dirs.pop(0)
+        for name in dirs:
+            parent = os.path.join(parent, name)
+            ret = torch_shim.torch_mkdir(DAOS_MAGIC, self._dfs, parent, mode)
+            if ret not in (0, errno.EEXIST):
+                raise OSError(ret, os.strerror(ret), parent)

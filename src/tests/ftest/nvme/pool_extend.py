@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,7 +55,7 @@ class NvmePoolExtend(OSAUtils):
         pools = []
         for _ in range(0, num_pool):
             pools.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
-                         properties="reclaim:disabled"))
+                         properties="rd_fac:0,space_rb:0,reclaim:disabled"))
 
         # On each pool (max 3), extend the ranks
         # eg: ranks : 4,5 ; 6,7; 8,9.

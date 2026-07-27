@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -46,7 +46,9 @@ daos_prop_co_status_val(uint32_t status, uint32_t flag, uint32_t ver)
 	return DAOS_PROP_CO_STATUS_VAL(status, flag, ver);
 }
 
-#cgo LDFLAGS: -ldaos_common -lgurt -lcart
+#cgo LDFLAGS: -lgurt -lcart
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 

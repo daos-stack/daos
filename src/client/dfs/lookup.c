@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,7 +27,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_ob
 	int              daos_mode;
 	struct dfs_entry entry = {0};
 	size_t           len;
-	int              rc;
+	int              rc = 0;
 	bool             parent_fully_valid;
 
 	/* Arbitrarily stop to avoid infinite recursion */

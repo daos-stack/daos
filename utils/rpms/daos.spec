@@ -12,9 +12,9 @@
 %global daos_build_args client test
 %endif
 %global mercury_version   2.4
-%global libfabric_version 1.15.1-1
 %global argobots_version 1.2
 %global __python %{__python3}
+%global daos_sys_dir "/var/daos"
 %global daos_log_dir "/var/log/daos"
 
 %if (0%{?rhel} >= 8)
@@ -24,8 +24,8 @@
 %endif
 
 Name:          daos
-Version:       2.7.103
-Release:       1%{?relval}%{?dist}
+Version:       2.9.100
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -40,7 +40,6 @@ BuildRequires: python3-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
@@ -63,7 +62,7 @@ BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
 %if %{with server}
-BuildRequires: libpmemobj-devel >= 2.1.0
+BuildRequires: libpmemobj-devel >= 2.1.3
 %endif
 BuildRequires: fused-devel
 %if (0%{?suse_version} >= 1500)
@@ -78,7 +77,7 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
+BuildRequires: spdk-devel >= 26.01
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -161,18 +160,16 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
+Requires: spdk-tools >= 26.01
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.1.0-1.suse1500
-Requires: libfabric1 >= %{libfabric_version}
+Requires: libpmemobj1 >= 2.1.3
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.1.0-1%{?dist}
+Requires: libpmemobj >= 2.1.3
 %endif
-Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
@@ -195,10 +192,6 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-Requires: libfabric >= %{libfabric_version}
-%if (0%{?suse_version} >= 1500)
-Requires: libfabric1 >= %{libfabric_version}
-%endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
 
@@ -415,6 +408,12 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
+# Ensure daos_sys_dir exists
+if [ ! -d %{daos_sys_dir} ]; then
+    mkdir -p %{daos_sys_dir}
+    chown daos_server:daos_daemons %{daos_sys_dir}
+    chmod 775 %{daos_sys_dir}
+fi
 # Ensure daos_log_dir exists
 if [ ! -d %{daos_log_dir} ]; then
     mkdir -p %{daos_log_dir}
@@ -474,6 +473,7 @@ fi
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
 %{_libdir}/libdaos_common.so
+%{_libdir}/libdaos_mgmt_crtproto.so
 
 %if %{with server}
 %files server

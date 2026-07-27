@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,26 +46,20 @@ typedef struct crt_init_options {
 	 * evnironment variable.
 	 */
 	int		cio_crt_timeout;
-	uint32_t	cio_sep_override:1,	/**< Deprecated */
-			cio_use_sep:1,		/**< Deprecated */
-			/** whether or not to inject faults */
-			cio_fault_inject:1,
-			/**
-			 * whether or not to override credits. When set
-			 * overrides CRT_CTX_EP_CREDITS envariable
-			 */
-			cio_use_credits:1,
-			/** whether or not to enable per-context sensors */
-			cio_use_sensors:1,
+	uint32_t        cio_sep_override : 1, /**< Deprecated */
+	    cio_use_sep                  : 1, /**< Deprecated */
+	    /** whether or not to inject faults */
+	    cio_fault_inject             : 1,
+	    /** whether or not to enable per-context sensors */
+	    cio_use_sensors              : 1,
 
-			/** whether or not to use expected sizes */
-			cio_use_expected_size:1,
-			cio_use_unexpected_size:1;
+	    /** whether or not to use expected sizes */
+	    cio_use_expected_size : 1, cio_use_unexpected_size : 1;
 
 	/** overrides the value of the environment variable CRT_CTX_NUM */
 	int		cio_ctx_max_num;
 
-	/** Used with cio_use_credits to set credit limit */
+	/** set credit limit */
 	int		cio_ep_credits;
 
 	/**
@@ -94,11 +88,33 @@ typedef struct crt_init_options {
 	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
 	char            *cio_auth_key;
 
+	/**
+	 * If set, used as the preferred address family for fabric init instead of
+	 * the D_ADDR_FORMAT env. Accepted values: "unspec" (default), "ipv4",
+	 * "ipv6", "native". The value is forwarded to Mercury via
+	 * na_init_info.addr_format, which lets libfabric's fabric scan find
+	 * interfaces of the chosen family. Useful for IPv6-only fabric
+	 * deployments where the default IPv4 preference would otherwise hide
+	 * the only usable interfaces. For multi-provider configurations, the
+	 * value may be a comma-separated list (one entry per provider, same
+	 * ordering as cio_provider).
+	 */
+	char            *cio_addr_format;
+
 	/** use single thread to access context */
 	bool             cio_thread_mode_single;
 
 	/** force busy wait (testing only, not in production) */
 	bool             cio_progress_busy;
+
+	/** use memory device */
+	bool             cio_mem_device;
+
+	/** use legacy progress method */
+	bool             cio_progress_legacy;
+
+	/** progress spindown time in milliseconds */
+	unsigned int     cio_progress_spindown;
 } crt_init_options_t;
 
 typedef int		crt_status_t;

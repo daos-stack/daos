@@ -323,6 +323,15 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 					     const char*, const int));
 
 /**
+ * \brief D_FATAL the provided memory range in hex.
+ *
+ * \param[in] ptr	Start of the memory range.
+ * \param[in] size	Size of the memory range.
+ */
+void
+d_log_memory(const uint8_t *ptr, size_t size);
+
+/**
  * D_PRINT can be used for output to stdout with or without clog being enabled
  */
 #define D_PRINT(fmt, ...)						\
@@ -341,6 +350,17 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		if (d_alt_assert != NULL)				\
 			d_alt_assert(0, #e, __FILE__, __LINE__);	\
 		assert(0);						\
+	} while (0)
+
+#define D_ASSERTF_MEM(cond, ptr, size, fmt, ...)                                                   \
+	do {                                                                                       \
+		if (likely(cond))                                                                  \
+			break;                                                                     \
+		D_FATAL("Assertion '%s' failed: " fmt, #cond, ##__VA_ARGS__);                      \
+		d_log_memory((uint8_t *)ptr, size);                                                \
+		if (d_alt_assert != NULL)                                                          \
+			d_alt_assert(0, #cond, __FILE__, __LINE__);                                \
+		assert(0);                                                                         \
 	} while (0)
 
 /* Assert cond is true with message to report on failure */

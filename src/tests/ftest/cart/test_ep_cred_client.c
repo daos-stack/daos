@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,8 +37,10 @@ static void
 rpc_handle_ping_front_q(const struct crt_cb_info *info)
 {
 	DBG_PRINT("Response from front queued rpc\n");
-	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n",
-		  info->cci_rc);
+	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n", info->cci_rc);
+
+	/* sent_count == resp_count means rpc didn't get queued in the front */
+	D_ASSERTF(sent_count != resp_count, "Send count matches response count\n");
 	sem_post(&test.tg_queue_front_token);
 }
 
@@ -61,7 +64,6 @@ test_run()
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
 
-	opt.cio_use_credits = 1;
 	opt.cio_ep_credits = test.tg_credits;
 
 	DBG_PRINT("Number of credits: %d Number of burst: %d\n",
@@ -79,9 +81,6 @@ test_run()
 
 	rc = sem_init(&test.tg_queue_front_token, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
-
-	rc = crt_group_rank(NULL, &test.tg_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 
 	rc = crt_proto_register(&my_proto_fmt_0);
 	D_ASSERTF(rc == 0, "registration failed with rc: %d\n", rc);
@@ -130,8 +129,6 @@ test_run()
 		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
 		crtu_sem_timedwait(&test.tg_queue_front_token, 61, __LINE__);
-		D_ASSERTF(sent_count != resp_count,
-			"Send count matches response count\n");
 	}
 
 	DBG_PRINT("Waiting for responses to %d rpcs\n",
@@ -149,6 +146,12 @@ test_run()
 		crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 	}
 
+	crtu_progress_stop();
+
+	rc = pthread_join(test.tg_tid, NULL);
+	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
+	DBG_PRINT("joined progress thread.\n");
+
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
 
@@ -160,12 +163,6 @@ test_run()
 		D_ASSERTF(rc == 0,
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
-
-	crtu_progress_stop();
-
-	rc = pthread_join(test.tg_tid, NULL);
-	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	DBG_PRINT("joined progress thread.\n");
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");

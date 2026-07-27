@@ -44,27 +44,28 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu, rocky, fedora, leap.15]
+        distro: [ubuntu, rocky, leap.15]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
-          - distro: fedora
-            base: el.8
-            with: fedora:38
+            python: 3.11
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
+            python: 3.11
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -82,11 +83,15 @@ jobs:
                             --build-arg DAOS_DEPS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
+                            --target build-local
       - name: Build dependencies in Docker
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
+                            --target build-local
       - name: Prune images not required for build.
         run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
 
@@ -105,14 +110,16 @@ jobs:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: clang
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -132,6 +139,7 @@ jobs:
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
@@ -144,7 +152,7 @@ jobs:
       - name: Publish NLT test results
         if: always()
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f  # v2.22.0
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3  # v2.24.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
@@ -159,29 +167,30 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        distro: [ubuntu, rocky, fedora, leap.15]
+        distro: [ubuntu, rocky, leap.15]
         compiler: [clang, gcc]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
-          - distro: fedora
-            base: el.8
-            with: fedora:38
+            python: 3.11
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
+            python: 3.11
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -200,6 +209,7 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER
                             --build-arg DAOS_KEEP_SRC=yes
@@ -208,22 +218,28 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER
+                            --target build-local
       - name: Build debug in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER
+                            --target build-local
       - name: Build devel in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
+                            --target build-local
         # Fails with Ubuntu still for the spdk issue.
         # - name: Run NLT
         # run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
@@ -236,26 +252,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.8, alma.9, rocky.8, ubuntu]
+        distro: [alma.9, rocky.9, ubuntu]
         include:
-          - distro: alma.8
-            base: el.8
-            with: almalinux:8
           - distro: alma.9
             base: el.9
             with: almalinux:9
-          - distro: rocky.8
-            base: el.8
-            with: rockylinux/rockylinux:8
+            python: 3.11
+          - distro: rocky.9
+            base: el.9
+            with: rockylinux/rockylinux:9
+            python: 3.11
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:24.04
+            python: 3
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -263,11 +280,14 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_BUILD=no
+                            --target build-local
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=clang
                             --build-arg DAOS_KEEP_SRC=yes
@@ -276,42 +296,54 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build devel in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Build devel in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
@@ -325,26 +357,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu, alma.8, leap.15]
+        distro: [ubuntu, alma.9, leap.15]
         compiler: [clang]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
-          - distro: alma.8
-            base: el.8
-            with: almalinux:8
+            python: 3
+          - distro: alma.9
+            base: el.9
+            with: almalinux:9
+            python: 3.11
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
+            python: 3.11
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -352,11 +388,14 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_BUILD=no
+                            --target build-local
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=clang
                             --build-arg DAOS_KEEP_SRC=yes
@@ -365,42 +404,54 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build devel in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=clang
+                            --target build-local
       - name: Build in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Build devel in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg PYTHON_VERSION
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
+                            --target build-local
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
