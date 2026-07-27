@@ -1242,9 +1242,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 				D_GOTO(out, rc);
 			}
 
-			rc = crt_grp_lc_uri_insert(grp_priv,
-						   tgt_ep->ep_rank,
-						   dst_tag, base_addr);
+			rc = crt_grp_lc_uri_insert(grp_priv, tgt_ep->ep_rank, dst_tag, uri);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -1280,6 +1278,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	hg_return_t		 hg_ret;
 	struct crt_context	*crt_ctx;
 	int			 rc = 0;
+	int                      rc2;
 
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
@@ -1291,12 +1290,17 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
-	rc = crt_grp_lc_addr_insert(rpc_priv->crp_grp_priv, crt_ctx,
-				    rpc_priv->crp_pub.cr_ep.ep_rank,
-				    rpc_priv->crp_pub.cr_ep.ep_tag,
-				    &hg_addr);
+	rc = crt_grp_hg_addr_cache_insert(rpc_priv->crp_grp_priv, crt_ctx,
+					  rpc_priv->crp_pub.cr_ep.ep_rank,
+					  rpc_priv->crp_pub.cr_ep.ep_tag, &hg_addr);
 	if (rc != 0) {
-		D_ERROR("Failed to insert: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to insert entry for (%d:%d). rc: " DF_RC "\n",
+			rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag, DP_RC(rc));
+
+		rc2 = crt_hg_addr_free(&crt_ctx->cc_hg_ctx, hg_addr);
+		if (rc2 != 0)
+			D_ERROR("crt_hg_addr_free() failed. rc " DF_RC "\n", DP_RC(rc2));
+
 		D_GOTO(out, rc);
 	}
 
@@ -1363,8 +1367,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			if (rc == 0)
 				rc = crt_req_send_immediately(rpc_priv);
 			else
-				D_ERROR("crt_req_hg_addr_lookup() failed, "
-					"rc %d, opc: %#x.\n", rc, req->cr_opc);
+				D_ERROR("crt_req_hg_addr_lookup() failed for opc %#x "
+					"rc " DF_RC "\n",
+					req->cr_opc, DP_RC(rc));
 		} else {
 			/* base_addr == NULL, send uri lookup req */
 			rpc_priv->crp_state = RPC_STATE_URI_LOOKUP;

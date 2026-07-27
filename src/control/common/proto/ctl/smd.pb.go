@@ -308,6 +308,7 @@ type BioHealthResp struct {
 	LinkNegWidth  uint32  `protobuf:"varint,53,opt,name=link_neg_width,json=linkNegWidth,proto3" json:"link_neg_width,omitempty"`  // negotiated width (number of lanes)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
+  PercentageUsed uint32  `protobuf:"varint,54,opt,name=percentage_used,json=percentageUsed,proto3" json:"percentage_used,omitempty"`
 }
 
 func (x *BioHealthResp) Reset() {
@@ -686,6 +687,13 @@ func (x *BioHealthResp) GetLinkNegSpeed() float32 {
 func (x *BioHealthResp) GetLinkNegWidth() uint32 {
 	if x != nil {
 		return x.LinkNegWidth
+	}
+	return 0
+}
+
+func (x *BioHealthResp) GetPercentageUsed() uint32 {
+	if x != nil {
+		return x.PercentageUsed
 	}
 	return 0
 }
@@ -2175,6 +2183,7 @@ const file_ctl_smd_proto_rawDesc = "" +
 	"\x03GET\x10\x00\x12\a\n" +
 	"\x03SET\x10\x01\x12\t\n" +
 	"\x05RESET\x10\x02B9Z7github.com/daos-stack/daos/src/control/common/proto/ctlb\x06proto3"
+
 
 var (
 	file_ctl_smd_proto_rawDescOnce sync.Once

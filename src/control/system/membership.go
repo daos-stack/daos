@@ -825,6 +825,60 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 	return append([]uint32{md}, compressTree(subtree)...), nil
 }
 
+// FaultDomainLevel returns the fault domain level of the domain tree.
+// It assumes the tree is balanced and that the rank level is present.
+// So, the fault domain level is the second to last level of the tree.
+func (m *Membership) FaultDomainLevel() (int, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return 0, errors.New("uninitialized fault domain tree")
+	}
+
+	depth := tree.Depth()
+	// The depth includes the rank level but it does NOT include the root level.
+	// So, the tree needs to have more than one level to have a fault domain level.
+	if depth <= 1 {
+		return 0, errors.New("domain tree has no fault domain level")
+	}
+
+	return depth - 1, nil
+}
+
+// domainNrAtLevel returns the number of domains in the tree at the given level.
+// It traverses the tree recursively to reach the specified level.
+func domainNrAtLevel(tree *FaultDomainTree, level int) int {
+	if level == 1 {
+		return len(tree.Children)
+	}
+
+	count := 0
+	for _, child := range tree.Children {
+		count += domainNrAtLevel(child, level-1)
+	}
+	return count
+}
+
+// DomainNr returns the number of domains in the subtree of the domain tree
+// specified by the given ranks at the given level.
+// If no ranks are provided, the entire tree is considered.
+func (m *Membership) DomainNr(level int, ranks ...uint32) (int, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return 0, errors.New("uninitialized fault domain tree")
+	}
+
+	subtree, err := getFaultDomainSubtree(tree, ranks...)
+	if err != nil {
+		return 0, err
+	}
+
+	if level >= subtree.Depth() {
+		return 0, errors.Errorf("level %d >= subtree depth %d", level, subtree.Depth())
+	}
+
+	return domainNrAtLevel(subtree, level), nil
+}
+
 const (
 	DomTreeMetadataHasFaultDom uint32 = (1 << iota)
 	DomTreeMetadataHasPerfDom
