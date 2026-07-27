@@ -102,8 +102,16 @@ func ParseHostList(in []string, defaultPort int) (out []string, err error) {
 		return
 	}
 
+	normalized := make([]string, len(in))
+	for i, host := range in {
+		normalized[i] = host
+		if net.ParseIP(host) != nil && strings.ContainsRune(host, ':') {
+			normalized[i] = net.JoinHostPort(host, strconv.Itoa(defaultPort))
+		}
+	}
+
 	var set *hostlist.HostSet
-	set, err = hostlist.CreateSet(strings.Join(in, ","))
+	set, err = hostlist.CreateSet(strings.Join(normalized, ","))
 	if err != nil {
 		return nil, err
 	}

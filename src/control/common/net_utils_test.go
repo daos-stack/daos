@@ -166,6 +166,21 @@ func TestCommon_ParseHostList(t *testing.T) {
 			in:     mockHostList(":42"),
 			expErr: errors.New("invalid host"),
 		},
+		"IPv6 address without port": {
+			in:     mockHostList("2001:db8::1"),
+			expOut: mockHostList("[2001:db8::1]:12345"),
+		},
+		"IPv6 address with port": {
+			in:     mockHostList("[2001:db8::1]:4242"),
+			expOut: mockHostList("[2001:db8::1]:4242"),
+		},
+		"deduplicate IPv6 addresses": {
+			in: mockHostList(
+				"2001:db8::1",
+				"[2001:db8::1]:12345",
+			),
+			expOut: mockHostList("[2001:db8::1]:12345"),
+		},
 		"should append missing port": {
 			in:     mockHostList("foo"),
 			expOut: mockHostList(fmt.Sprintf("foo:%d", testPort)),
