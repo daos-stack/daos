@@ -2018,6 +2018,7 @@ run_daos_pipeline_test(int rank, int size)
 						 test_teardown);
 	else
 		print_message("DAOS PIPELINE is not enabled (set DAOS_PIPELINE=1 to enable)\n");
+		skip();
 
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
