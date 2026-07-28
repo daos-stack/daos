@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,6 +43,8 @@ dfs_test_mount(void **state)
 	daos_handle_t		poh_tmp, coh_tmp;
 	dfs_t			*dfs;
 	int			rc;
+	dfs_attr_t               attr = {0};
+	daos_oclass_id_t         exp_doc, exp_foc;
 
 	if (arg->myrank != 0)
 		return;
@@ -84,6 +86,17 @@ dfs_test_mount(void **state)
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
+
+	/** check if dir/file oclass is what is expected*/
+	rc = dfs_query(dfs, &attr);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_get_oclass(coh, DAOS_OT_MULTI_HASHED, 0, 0, &exp_doc);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(attr.da_dir_oclass_id, exp_doc);
+	rc = daos_obj_get_oclass(coh, DAOS_OT_ARRAY_BYTE, 0, 0, &exp_foc);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(attr.da_file_oclass_id, exp_foc);
+
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
@@ -2233,6 +2246,7 @@ compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
 {
 	int		rc;
 	daos_obj_id_t	oid = {};
+	daos_oclass_id_t normalized_ecid;
 
 	/*
 	 * get the expected oclass - this is needed to convert things with GX to fit them in current
@@ -2240,12 +2254,21 @@ compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
 	 */
 	rc = daos_obj_generate_oid(coh, &oid, 0, ecid, 0, 0);
 	assert_rc_equal(rc, 0);
-	ecid = daos_obj_id2class(oid);
+	normalized_ecid = daos_obj_id2class(oid);
 
-	if (acid == ecid)
+	if (acid == ecid || acid == normalized_ecid)
 		return 0;
 	else
 		return 1;
+}
+
+static daos_oclass_id_t
+expected_dir_oclass(daos_oclass_id_t cid, daos_oclass_id_t fallback)
+{
+	if (daos_cid_is_ec(cid))
+		return fallback;
+
+	return cid;
 }
 
 static void
@@ -2256,11 +2279,12 @@ dfs_test_oclass_hints(void **state)
 	daos_oclass_id_t	cid;
 	daos_handle_t		coh;
 	dfs_t			*dfs_l;
-	dfs_obj_t		*obj;
+	dfs_obj_t               *obj, *dir;
 	daos_obj_id_t		oid;
 	daos_oclass_id_t	ecidx;
 	daos_prop_t             *prop = NULL;
 	dfs_attr_t		dattr = {0};
+	dfs_obj_info_t           oinfo = {0};
 	struct pl_map_attr      attr = {0};
 	int			rc;
 
@@ -2416,6 +2440,21 @@ dfs_test_oclass_hints(void **state)
 	rc = compare_oclass(coh, cid, OC_RP_2GX);
 	assert_rc_equal(rc, 0);
 
+	/** create a directory and set EC to be used on the directory */
+	rc = dfs_open(dfs_l, NULL, "d1", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0, NULL,
+		      &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_set_oclass(dfs_l, dir, 0, ecidx);
+	assert_int_equal(rc, 0);
+	/** get the dir info to query what oclass will be used */
+	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_2G1));
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
+	assert_int_equal(rc, 0);
+	dfs_release(dir);
+
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
@@ -2467,6 +2506,21 @@ dfs_test_oclass_hints(void **state)
 	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
 	rc = compare_oclass(coh, cid, OC_RP_3GX);
 	assert_rc_equal(rc, 0);
+
+	/** create a directory and set EC to be used on the directory */
+	rc = dfs_open(dfs_l, NULL, "d1", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0, NULL,
+		      &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_set_oclass(dfs_l, dir, 0, ecidx);
+	assert_int_equal(rc, 0);
+	/** get the dir info to query what oclass will be used */
+	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_3G1));
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
+	assert_int_equal(rc, 0);
+	dfs_release(dir);
 
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
@@ -2520,6 +2574,22 @@ dfs_test_oclass_hints(void **state)
 	rc = compare_oclass(coh, cid, OC_RP_4GX);
 	assert_rc_equal(rc, 0);
 
+	/** create a directory and set EC to be used on the directory */
+	rc = dfs_open(dfs_l, NULL, "d1", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0, NULL,
+		      &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_set_oclass(dfs_l, dir, 0, ecidx);
+	assert_int_equal(rc, 0);
+	/** get the dir info to query what oclass will be used */
+	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_4G1));
+	assert_int_equal(rc, 0);
+	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
+	assert_int_equal(rc, 0);
+	dfs_release(dir);
+
+	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
@@ -3628,21 +3698,29 @@ dfs_teardown(void **state)
 }
 
 int
-run_dfs_unit_test(int rank, int size)
+run_dfs_unit_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	int selected = sub_tests_size;
+
+	if (sub_tests_size == 0) {
+		sub_tests = NULL;
+		selected  = ARRAY_SIZE(dfs_unit_tests);
+	}
 
 	par_barrier(PAR_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
-					 dfs_teardown);
+	rc = run_daos_sub_tests("DAOS_FileSystem_DFS_Unit", dfs_unit_tests,
+				ARRAY_SIZE(dfs_unit_tests), sub_tests, selected, dfs_setup,
+				dfs_teardown);
 	par_barrier(PAR_COMM_WORLD);
 
 	/** run tests again with DTX */
 	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
-	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
-					  dfs_setup, dfs_teardown);
+	rc += run_daos_sub_tests("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
+				 ARRAY_SIZE(dfs_unit_tests), sub_tests, selected, dfs_setup,
+				 dfs_teardown);
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
+ * Copyright 2022-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,73 +61,6 @@ basic_pda_test(void **state)
 	free_pool_and_placement_map(po_map, pl_map);
 }
 
-/* set a fault domain's status */
-void
-test_set_tgt(struct pool_map *po_map, uint32_t id, uint32_t status)
-{
-	struct pool_target	*tgt = NULL;
-	static int		 fseq = 10;
-	int			 rc;
-
-	rc = pool_map_find_target(po_map, id, &tgt);
-	assert_rc_equal(rc, 1);
-	D_ASSERT(tgt != NULL);
-
-	tgt->ta_comp.co_status = status;
-	tgt->ta_comp.co_fseq = fseq++;
-	rc = pool_map_set_version(po_map, fseq);
-	assert_rc_equal(rc, 0);
-
-	print_message("set target id %d status as %d\n", id, status);
-}
-
-static bool
-layout_with_tgts_on_same_dom(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
-{
-	uint32_t	i, j, dom, new_dom, tgt, new_tgt;
-
-	for (i = 0; i < layout->ol_nr; i++) {
-		tgt =  layout->ol_shards[i].po_target;
-		dom = tgt / tgts_per_dom;
-		for (j = i + 1; j < layout->ol_nr; j++) {
-			new_tgt = layout->ol_shards[j].po_target;
-			assert_true(new_tgt != tgt);
-			assert_true(tgt != -1 && new_tgt != -1);
-			new_dom = new_tgt / tgts_per_dom;
-			if (dom == new_dom) {
-				print_message("shards %d - %d, on same dom %d\n", i, j, dom);
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-static bool
-layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
-{
-	uint32_t	i, j, dom, new_dom, tgt, new_tgt;
-
-	print_message("grp_nr %d, grp_size %d\n", layout->ol_grp_nr, layout->ol_grp_size);
-	for (i = 0; i < layout->ol_nr; i++) {
-		tgt =  layout->ol_shards[i].po_target;
-		dom = tgt / tgts_per_dom;
-		for (j = i + 1; j < roundup(i, layout->ol_grp_size); j++) {
-			new_tgt = layout->ol_shards[j].po_target;
-			assert_true(new_tgt != tgt);
-			assert_true(tgt != -1 && new_tgt != -1);
-			new_dom = new_tgt / tgts_per_dom;
-			if (dom == new_dom) {
-				print_message("colocated shards %d - %d, on dom %d\n", i, j, dom);
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
 static void
 pd_use_all_dom(void **state)
 {
@@ -152,7 +86,8 @@ pd_use_all_dom(void **state)
 	pda = 3;
 	gen_oid(&oid, 1, UINT64_MAX, OC_RP_4G2);
 	assert_success(plt_obj_place(oid, pda, &layout, pl_map, true));
-	assert_true(layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) == false);
+	assert_true(plt_layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) ==
+		    false);
 	pl_obj_layout_free(layout);
 }
 
@@ -181,9 +116,9 @@ pd_shards_colocated(void **state)
 	pda = 3;
 	gen_oid(&oid, 1, UINT64_MAX, OC_EC_4P2G2);
 	assert_success(plt_obj_place(oid, pda, &layout, pl_map, true));
-	assert_true(layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) == true);
-	assert_true(layout_with_tgts_on_same_dom_for_same_grp(layout, nodes_per_fdom * vos_per_tgt)
-		    == false);
+	assert_true(plt_layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) == true);
+	assert_true(plt_layout_with_tgts_on_same_dom_for_same_grp(
+			layout, nodes_per_fdom * vos_per_tgt) == false);
 	pl_obj_layout_free(layout);
 }
 
@@ -223,7 +158,7 @@ pd_with_failed_dom(void **state)
 	start = fault_dom * nodes_per_fdom * vos_per_tgt;
 	num = nodes_per_fdom * vos_per_tgt;
 	for (i = start; i < start + num; i++)
-		test_set_tgt(po_map, i, PO_COMP_ST_DOWN);
+		plt_set_tgt_status(i, PO_COMP_ST_DOWN, NULL, po_map, true);
 	layout = NULL;
 	assert_success(plt_obj_place(oid, pda, &layout, pl_map, true));
 	new_tgt = layout->ol_shards[shard].po_target;
@@ -233,7 +168,8 @@ pd_with_failed_dom(void **state)
 	print_message("shard[%d] changed from tgt[%d]/dom[%d] to tgt[%d]/dom[%d]\n",
 		      shard, tgt, fault_dom, new_tgt, new_dom);
 	print_message("checking should not with co-located shards ...\n");
-	assert_true(layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) == false);
+	assert_true(plt_layout_with_tgts_on_same_dom(layout, nodes_per_fdom * vos_per_tgt) ==
+		    false);
 
 	pl_obj_layout_free(layout);
 	free_pool_and_placement_map(po_map, pl_map);
@@ -268,8 +204,8 @@ grp_colocated_shard_check(void **state)
 		print_message("layout of lo %d\n", i);
 		gen_oid(&oid, i, UINT64_MAX, OC_EC_4P1GX);
 		assert_success(plt_obj_place(oid, pda, &layout, pl_map, true));
-		assert_true(layout_with_tgts_on_same_dom_for_same_grp(
-			    layout, nodes_per_fdom * vos_per_tgt) == false);
+		assert_true(plt_layout_with_tgts_on_same_dom_for_same_grp(
+				layout, nodes_per_fdom * vos_per_tgt) == false);
 		pl_obj_layout_free(layout);
 	}
 }

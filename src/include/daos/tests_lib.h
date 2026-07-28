@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -176,19 +176,20 @@ enum test_cr_class {
 };
 
 enum test_cr_action {
-	TCA_DEFAULT		= 0,
-	TCA_INTERACT		= 1,
-	TCA_IGNORE		= 2,
-	TCA_DISCARD		= 3,
-	TCA_READD		= 4,
-	TCA_TRUST_MS		= 5,
-	TCA_TRUST_PS		= 6,
-	TCA_TRUST_TARGET	= 7,
-	TCA_TRUST_MAJORITY	= 8,
-	TCA_TRUST_LATEST	= 9,
-	TCA_TRUST_OLDEST	= 10,
-	TCA_TRUST_EC_PARITY	= 11,
-	TCA_TRUST_EC_DATA	= 12,
+	TCA_STALE           = 0xffff,
+	TCA_DEFAULT         = 0,
+	TCA_INTERACT        = 1,
+	TCA_IGNORE          = 2,
+	TCA_DISCARD         = 3,
+	TCA_READD           = 4,
+	TCA_TRUST_MS        = 5,
+	TCA_TRUST_PS        = 6,
+	TCA_TRUST_TARGET    = 7,
+	TCA_TRUST_MAJORITY  = 8,
+	TCA_TRUST_LATEST    = 9,
+	TCA_TRUST_OLDEST    = 10,
+	TCA_TRUST_EC_PARITY = 11,
+	TCA_TRUST_EC_DATA   = 12,
 };
 
 struct daos_check_pool_info {
@@ -198,22 +199,24 @@ struct daos_check_pool_info {
 };
 
 struct daos_check_report_info {
-	uuid_t		dcri_uuid;
-	uint64_t	dcri_seq;
-	uint32_t	dcri_class;
-	uint32_t	dcri_act;
-	int		dcri_result;
-	int		dcri_option_nr;
-	int		dcri_options[4];
+	uuid_t   dcri_uuid;
+	uint64_t dcri_seq;
+	uint32_t dcri_class;
+	uint32_t dcri_act;
+	int      dcri_rank;
+	int      dcri_result;
+	int      dcri_option_nr;
+	int      dcri_options[3];
 };
 
 struct daos_check_info {
-	char				*dci_status;
-	char				*dci_phase;
-	int				 dci_pool_nr;
-	int				 dci_report_nr;
-	struct daos_check_pool_info	*dci_pools;
-	struct daos_check_report_info	*dci_reports;
+	char                          *dci_status;
+	char                          *dci_phase;
+	int                            dci_leader;
+	int                            dci_pool_nr;
+	int                            dci_report_nr;
+	struct daos_check_pool_info   *dci_pools;
+	struct daos_check_report_info *dci_reports;
 };
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers

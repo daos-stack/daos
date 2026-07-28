@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -11,10 +12,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/cmd/daos/pretty"
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/daos/api"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -82,7 +83,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 
 	sysInfo, err := cmd.apiProvider.GetSystemInfo(ctx)
 	if err != nil {
-		cmd.Errorf("failed to query system information: %v", err)
+		return errors.Wrapf(err, "failed to query system information")
 	}
 	systemHealth.SystemInfo = sysInfo
 
@@ -154,9 +155,7 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 }
 
 type netTestCmd struct {
-	cmdutil.JSONOutputCmd
-	cmdutil.LogCmd
-	sysCmd
+	daosCmd
 	Ranks       ui.RankSetFlag  `short:"r" long:"ranks" description:"Use the specified ranks as test endpoints (default: all)"`
 	Tags        ui.RankSetFlag  `short:"t" long:"tags" description:"Use the specified tags on ranks" default:"0"`
 	XferSize    ui.ByteSizeFlag `short:"s" long:"size" description:"Per-RPC transfer size (send/reply)"`
@@ -167,8 +166,22 @@ type netTestCmd struct {
 }
 
 func (cmd *netTestCmd) Execute(_ []string) error {
+	ctx := cmd.MustLogCtx()
+
+	sys := cmd.SysName
+	if sys == "" {
+		sysInfo, err := cmd.apiProvider.GetSystemInfo(ctx)
+		if err != nil {
+			return errors.Wrapf(err, "failed to query system information")
+		}
+		sys = sysInfo.Name
+	}
+	// Cart self-test requires the ability to initialize as server, so we have to clean up our
+	// client initialization.
+	cmd.apiProvider.Cleanup()
+
 	cfg := &daos.SelfTestConfig{
-		GroupName:       cmd.SysName,
+		GroupName:       sys,
 		EndpointRanks:   cmd.Ranks.Ranks(),
 		EndpointTags:    ranklist.RanksToUint32(cmd.Tags.Ranks()),
 		MaxInflightRPCs: cmd.MaxInflight,
@@ -192,7 +205,7 @@ func (cmd *netTestCmd) Execute(_ []string) error {
 		cmd.Info("Starting non-destructive network test (duration depends on performance)...\n\n")
 	}
 
-	res, err := RunSelfTest(cmd.MustLogCtx(), cfg)
+	res, err := RunSelfTest(ctx, cfg)
 	if err != nil {
 		return err
 	}

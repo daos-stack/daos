@@ -13,8 +13,23 @@ updates:
       python-packages:
         patterns:
           - "*"
+
   - package-ecosystem: github-actions
     target-branch: master
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gha-versions:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: github-actions
+    target-branch: release/2.8
     directory: /
     schedule:
       interval: weekly
@@ -34,6 +49,34 @@ updates:
       interval: weekly
     groups:
       gha-versions:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: maven
+    target-branch: master
+    directory: /src/client/java/hadoop-daos
+    schedule:
+      interval: weekly
+    groups:
+      java-packages:
+        patterns:
+          - "*"
+    reviewers:
+      - daos-stack/actions-watchers
+    commit-message:
+      prefix: "Doc-only: true \n"
+
+  - package-ecosystem: maven
+    target-branch: release/2.8
+    directory: /src/client/java/hadoop-daos
+    schedule:
+      interval: weekly
+    groups:
+      java-packages:
         patterns:
           - "*"
     reviewers:

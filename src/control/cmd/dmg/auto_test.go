@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -606,6 +606,7 @@ mgmt_svc_replicas:
 - hostX:10002
 fault_cb: ""
 hyperthreads: false
+disable_engine_auto_restart: false
 `
 	)
 

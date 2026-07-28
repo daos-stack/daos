@@ -58,7 +58,12 @@ def _base_setup(env):
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
-    if 'SANITIZERS' in env and env['SANITIZERS'] != "":
+    if env.get('SANITIZERS'):
+
+        if env.get('HEAP_PROFILER'):
+            print('Google Sanitizers and Gperftools.Heap.Profiler can not be mixed')
+            Exit(2)
+
         cc = 'gcc'
         if 'COMPILER' in env:
             cc = env['COMPILER']
@@ -87,6 +92,10 @@ def _base_setup(env):
                 env.AppendUnique(LINKFLAGS=flag)
                 print(f"Enabling {flag.split('=')[1]} sanitizer for C code")
 
+    if env.get('HEAP_PROFILER'):
+        env.AppendUnique(LINKFLAGS="-ltcmalloc")
+        print("Enabling Gperftools Heap Profiler")
+
     if '-Wmismatched-dealloc' in env['CCFLAGS']:
         env.AppendUnique(CPPDEFINES={'HAVE_DEALLOC': '1'})
 
@@ -114,12 +123,6 @@ def _base_setup(env):
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
-    if compiler == 'icx' and not GetOption('no_rpath'):
-        # Hack to add rpaths
-        for path in env['ENV']['LD_LIBRARY_PATH'].split(':'):
-            if 'oneapi' in path:
-                env.AppendUnique(RPATH_FULL=[path])
-
     if GetOption('preprocess'):
         # Could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
@@ -129,11 +132,7 @@ def _base_setup(env):
 
 def _check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
-    if compiler in ["icc", "icpc"]:
-        flags = ["-diag-error=10006", "-diag-error=10148", "-Werror-all", flag]
-        # bug in older scons, need CFLAGS to exist, -O2 is default.
-        context.env.Replace(CFLAGS=['-O2'])
-    elif compiler in ["gcc", "g++"]:
+    if compiler in ["gcc", "g++"]:
         # pylint: disable=wrong-spelling-in-comment
         # remove -no- for test
         # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
@@ -224,13 +223,17 @@ def _check_func(env, func_name):
     """Check if a function is usable"""
     denv = env.Clone()
     # NOTE Remove sanitizers to not scramble the test output
-    if 'SANITIZERS' in denv and denv['SANITIZERS'] != "":
+    if denv.get('SANITIZERS'):
         for sanitizer in denv['SANITIZERS'].split(','):
             flag = f"-fsanitize={sanitizer}"
             if flag not in denv["CCFLAGS"]:
                 continue
             denv["CCFLAGS"].remove(flag)
             denv["LINKFLAGS"].remove(flag)
+
+    # NOTE Remove Heap Profiler to not scramble the test output
+    if denv.get('HEAP_PROFILER'):
+        denv["LINKFLAGS"].remove("-ltcmalloc")
 
     config = Configure(denv)
     res = config.CheckFunc(func_name)

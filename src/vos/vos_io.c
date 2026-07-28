@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,14 +32,14 @@ struct vos_io_context {
 	/** The epoch bound including uncertainty */
 	daos_epoch_t		 ic_bound;
 	daos_epoch_range_t	 ic_epr;
+	/** Actual stored epoch of the single value found during fetch; 0 if none was fetched */
+	daos_epoch_t              ic_sv_epoch;
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
 	daos_iod_t		*ic_iods;
 	struct dcs_iod_csums	*ic_iod_csums;
 	/** reference on the object */
-	struct vos_object	*ic_obj;
-	/** used only for md-on-ssd phase2 evictable pool */
-	struct vos_object	*ic_pinned_obj;
+	struct vos_object        *ic_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
 	struct bio_desc		*ic_biod;
 	struct vos_ts_set	*ic_ts_set;
@@ -81,7 +81,7 @@ struct vos_io_context {
 	    ic_dedup        : 1, /** candidate for dedup */
 	    ic_dedup_verify : 1, ic_read_ts_only : 1, ic_check_existence : 1, ic_remove : 1,
 	    ic_skip_fetch : 1, ic_agg_needed : 1, ic_skip_akey_support : 1, ic_rebuild : 1,
-	    ic_ec : 1; /**< see VOS_OF_EC */
+	    ic_csum_fetch : 1, ic_ec : 1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -603,9 +603,6 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	if (ioc->ic_obj)
 		vos_obj_release(ioc->ic_obj, 0, evict);
 
-	if (ioc->ic_pinned_obj)
-		vos_obj_release(ioc->ic_pinned_obj, 0, evict);
-
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
 	vos_ilog_fetch_finish(&ioc->ic_akey_info);
@@ -717,6 +714,15 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_rebuild    = ((vos_flags & VOS_OF_REBUILD) != 0);
+	ioc->ic_csum_fetch = ((vos_flags & VOS_OF_FETCH_CSUM) != 0);
+	/* VOS_OF_FETCH_CSUM and VOS_OF_FETCH_RECX_LIST both write ic_recx_lists
+	 * with incompatible semantics (full stored extent vs. selected range) and
+	 * must not be combined.
+	 */
+	if (ioc->ic_csum_fetch && ioc->ic_save_recx) {
+		D_ERROR("VOS_OF_FETCH_CSUM and VOS_OF_FETCH_RECX_LIST are mutually exclusive\n");
+		D_GOTO(error, rc = -DER_INVAL);
+	}
 	ioc->ic_umoffs_cnt = 0;
 	ioc->ic_iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
@@ -796,7 +802,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		}
 
 		/* Don't bother to initialize SGLs for size fetch */
-		if (ioc->ic_size_fetch)
+		if (ioc->ic_size_fetch || ioc->ic_csum_fetch)
 			continue;
 
 		bsgl = bio_iod_sgl(ioc->ic_biod, i);
@@ -819,7 +825,7 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	struct bio_sglist *bsgl;
 	int iov_nr, iov_at;
 
-	if (ioc->ic_size_fetch)
+	if (ioc->ic_size_fetch || ioc->ic_csum_fetch)
 		return 0;
 
 	bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
@@ -873,7 +879,7 @@ iod_gang_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	uint32_t	data_len;
 	int		i, rc = 0;
 
-	if (ioc->ic_size_fetch)
+	if (ioc->ic_size_fetch || ioc->ic_csum_fetch)
 		return 0;
 
 	if (biov->bi_addr.ba_gang_nr < 2) {
@@ -958,10 +964,15 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	} else if (key.sk_epoch > epr->epr_hi) {
 		/* Uncertainty violation */
 		D_GOTO(out, rc = -DER_TX_RESTART);
+	} else {
+		/* Real SV found within the valid epoch range; record its actual stored epoch. */
+		ioc->ic_sv_epoch = key.sk_epoch;
 	}
 
 	if (ci_is_valid(&csum_info))
 		save_csum(ioc, &csum_info, NULL, 0);
+	if (ioc->ic_csum_fetch)
+		goto out; /* iod_size not updated on csum-only fetch; caller must not rely on it */
 
 	if (BIO_ADDR_IS_CORRUPTED(&rbund.rb_biov->bi_addr)) {
 		D_DEBUG(DB_CSUM, "Found corrupted record\n");
@@ -1051,8 +1062,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	daos_size_t		 holes; /* hole width */
 	daos_size_t		 rsize;
 	daos_off_t		 index;
-	daos_off_t		 end;
-	bool			 csum_enabled = false;
+	daos_off_t               end;
 	bool			 with_shadow = (shadow_ep != DAOS_EPOCH_MAX);
 	uint32_t		 inob;
 	int			 rc;
@@ -1164,6 +1174,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		D_ASSERT(rsize == inob);
 
 		if (ioc->ic_save_recx) {
+			D_ASSERT(!ioc->ic_csum_fetch);
 			rc = save_recx(ioc, lo, nr, ent->en_epoch,
 				       inob, DRT_NORMAL);
 			if (rc != 0)
@@ -1176,17 +1187,28 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			if (rc != 0)
 				goto failed;
 			biov_align_lens(&biov, ent, rsize);
-			csum_enabled = true;
 		} else {
 			bio_iov_set_extra(&biov, 0, 0);
-			if (csum_enabled)
-				D_ERROR("Checksum found in some entries, "
-					"but not all\n");
 		}
 
-		rc = iod_fetch(ioc, &biov);
-		if (rc != 0)
-			goto failed;
+		if (ioc->ic_csum_fetch) {
+			daos_off_t  ex_lo;
+			daos_size_t ex_nr;
+
+			D_ASSERT(!ioc->ic_save_recx);
+			D_ASSERT(!with_shadow);
+			D_ASSERT(ioc->ic_iod_nr == 1);
+
+			ex_lo = ent->en_ext.ex_lo;
+			ex_nr = ent->en_ext.ex_hi - ex_lo + 1;
+			rc    = save_recx(ioc, ex_lo, ex_nr, ent->en_epoch, inob, DRT_NORMAL);
+			if (rc != 0)
+				goto failed;
+		} else {
+			rc = iod_fetch(ioc, &biov);
+			if (rc != 0)
+				goto failed;
+		}
 
 		index = lo + nr;
 	}
@@ -1223,7 +1245,7 @@ ioc_trim_tail_holes(struct vos_io_context *ioc)
 	struct bio_iov *biov;
 	int i;
 
-	if (ioc->ic_size_fetch)
+	if (ioc->ic_size_fetch || ioc->ic_csum_fetch)
 		return;
 
 	bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
@@ -2027,7 +2049,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		else
 			akey_flags = ioc->ic_ts_set->ts_flags;
 
-		switch (akey_flags) {
+		switch (akey_flags & VOS_COND_AKEY_UPDATE_MASK) {
 		case VOS_OF_COND_AKEY_UPDATE:
 			update_cond = VOS_ILOG_COND_UPDATE;
 			break;
@@ -2210,7 +2232,7 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	if (media == DAOS_MEDIA_SCM) {
 		umem_off_t	umoff;
 
-		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size, ioc->ic_pinned_obj);
+		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size, ioc->ic_obj);
 		if (!UMOFF_IS_NULL(umoff)) {
 			ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
 			ioc->ic_umoffs_cnt++;
@@ -2553,32 +2575,6 @@ update_cancel(struct vos_io_context *ioc)
 }
 
 int
-vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid)
-{
-	struct dtx_local_oid_record *oid_array = NULL;
-	struct dtx_local_oid_record *record    = NULL;
-
-	/** The array has to grow to accommodate the next record. */
-	if (dth->dth_local_oid_cnt == dth->dth_local_oid_cap) {
-		D_REALLOC_ARRAY(oid_array, dth->dth_local_oid_array, dth->dth_local_oid_cap,
-				dth->dth_local_oid_cap << 1);
-		if (oid_array == NULL)
-			return -DER_NOMEM;
-
-		dth->dth_local_oid_array = oid_array;
-		dth->dth_local_oid_cap <<= 1;
-	}
-
-	record           = &dth->dth_local_oid_array[dth->dth_local_oid_cnt];
-	record->dor_cont = cont;
-	vos_cont_addref(cont);
-	record->dor_oid = *oid;
-	dth->dth_local_oid_cnt++;
-
-	return 0;
-}
-
-int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth)
 {
@@ -2598,15 +2594,21 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
+	if (ioc->ic_obj == NULL) {
+		err = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_obj);
+		if (err != 0)
+			goto abort;
+	} else if (unlikely(vos_obj_is_evicted(ioc->ic_obj))) {
+		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted during update, need to retry.\n",
+			DP_UOID(ioc->ic_oid));
+
+		D_GOTO(abort, err = -DER_AGAIN);
+	}
+
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
 
-	err = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
-			   flags, DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
-	if (err != 0)
-		goto abort;
-
-	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
+	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb, ioc->ic_obj);
 	if (err != 0)
 		goto abort;
 
@@ -2663,9 +2665,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 	}
 
-	if (dtx_is_valid_handle(dth) && dth->dth_local) {
-		err = vos_insert_oid(dth, ioc->ic_cont, &ioc->ic_oid);
-	}
+	err = vos_dtx_record_oid(dth, ioc->ic_cont, ioc->ic_oid);
 
 abort:
 	if (err == -DER_NONEXIST || err == -DER_EXIST ||
@@ -2727,7 +2727,7 @@ abort:
 		*size = ioc->ic_io_size;
 	D_FREE(daes);
 	D_FREE(dces);
-	vos_ioc_destroy(ioc, err != 0);
+	vos_ioc_destroy(ioc, err != 0 && tx_started);
 
 	return err;
 }
@@ -2787,14 +2787,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	/* Hold the object for the evictable md-on-ssd phase2 pool */
 	if (vos_pool_is_evictable(vos_cont2pool(ioc->ic_cont))) {
-		/*
-		 * FIXME:
-		 * The same object will be referenced by vos_obj_acquire() and vos_obj_hold()
-		 * (in vos_update_end()) twice, this is for avoiding the complication of adding
-		 * object ilog to ts_set. We'll re-org vos_obj_hold() in the future to make the
-		 * code look cleaner.
-		 */
-		rc = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_pinned_obj);
+		rc = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_obj);
 		if (rc != 0)
 			goto error;
 	}
@@ -2840,6 +2833,12 @@ vos_ioh2ci_nr(daos_handle_t ioh)
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
 	return ioc->ic_csum_list.dcl_csum_infos_nr;
+}
+
+daos_epoch_t
+vos_ioh2sv_epoch(daos_handle_t ioh)
+{
+	return vos_ioh2ioc(ioh)->ic_sv_epoch;
 }
 
 struct bio_sglist *

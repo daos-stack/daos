@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -64,25 +65,26 @@ class ListContainerTest(TestWithServers):
         """
         expected_uuids_labels1 = []
         pool = []
+        self.log_step('Create the first pool')
         pool.append(self.get_pool(connect=False))
 
-        # 1. Create 1 container and list.
+        self.log_step('Create 1 container in the first pool and verify container list')
         self.create_list(1, pool[0], expected_uuids_labels1)
 
-        # 2. Create 1 more container and list; 2 total.
+        self.log_step('Create 1 more container in the first pool and verify container list')
         self.create_list(1, pool[0], expected_uuids_labels1)
 
-        # 3. Create 98 more containers and list; 100 total.
+        self.log_step('Create 98 more containers in the first pool and verify container list')
         self.create_list(98, pool[0], expected_uuids_labels1)
 
-        # 4. Create 2 additional pools and create 10 containers in each pool.
+        self.log_step('Create 2 additional pools')
         pool.append(self.get_pool(connect=False))
         pool.append(self.get_pool(connect=False))
 
-        # Create 10 containers in pool 2 and verify.
+        self.log_step('Create 10 containers in the second pool and verify container list')
         expected_uuids_labels2 = []
         self.create_list(10, pool[1], expected_uuids_labels2)
 
-        # Create 10 containers in pool 3 and verify.
+        self.log_step('Create 10 containers in the third pool and verify container list')
         expected_uuids_labels3 = []
         self.create_list(10, pool[2], expected_uuids_labels3)

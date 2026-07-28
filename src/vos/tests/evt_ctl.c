@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2161,7 +2162,7 @@ test_evt_ent_alloc_bug(void **state)
 	rc = evt_destroy(toh);
 	assert_rc_equal(rc, 0);
 
-	assert_in_range(count, last, last * 3);
+	assert_int_in_range(count, last, last * 3);
 }
 
 static void

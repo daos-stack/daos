@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -103,6 +103,7 @@ class TestEnvironment():
         'shared_dir': 'DAOS_TEST_SHARED_DIR',
         'user_dir': 'DAOS_TEST_USER_DIR',
         'interface': 'DAOS_TEST_FABRIC_IFACE',
+        'control_interface': 'DAOS_TEST_CONTROL_IFACE',
         'provider': 'D_PROVIDER',
         'insecure_mode': 'DAOS_TEST_INSECURE_MODE',
         'bullseye_src': 'DAOS_TEST_BULLSEYE_SRC',
@@ -172,6 +173,8 @@ class TestEnvironment():
             self.user_dir = os.path.join(self.log_dir, "user")
         if self.interface is None:
             self.interface = self._default_interface(logger, servers)
+        if self.control_interface is None:
+            self.control_interface = self._default_control_interface(logger, servers)
         if self.provider is None:
             self.provider = self._default_provider(logger, servers)
         if self.insecure_mode is None:
@@ -338,6 +341,67 @@ class TestEnvironment():
 
         logger.debug("  Found interface(s): %s", ",".join(interfaces))
         return ",".join(interfaces)
+
+    @property
+    def control_interface(self):
+        """Get the control plane interface device.
+
+        Returns:
+            str: the control plane interface device
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['control_interface'])
+
+    @control_interface.setter
+    def control_interface(self, value):
+        """Set the control plane interface device.
+
+        Args:
+            value (str): the control plane interface device
+        """
+        self.__set_value('control_interface', value)
+
+    def _default_control_interface(self, logger, hosts):
+        """Get the default control plane interface.
+
+        Finds the network interface whose IP address matches the hostname resolution.
+        This is the interface that should be used for control plane traffic.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to find the control interface
+
+        Returns:
+            str: the default control interface; can be None
+        """
+        if not hosts or not logger:
+            return None
+
+        # Get the first host to query
+        first_host = NodeSet(str(list(hosts)[0]))
+
+        logger.debug(
+            "Detecting control interface on %s - %s not set",
+            first_host, self.__ENV_VAR_MAP['control_interface'])
+
+        # Find the interface whose IP matches the hostname resolution
+        command = (
+            "python3 -c \""
+            "import socket, subprocess; "
+            "ip = socket.gethostbyname(socket.gethostname()); "
+            "out = subprocess.check_output(['ip', '-o', 'addr', 'show']).decode(); "
+            "print(next((l.split()[1] for l in out.split(chr(10)) if f'inet {ip}/' in l), ''))\""
+        )
+        result = run_remote(logger, first_host, command)
+        if result.passed and result.output:
+            for data in result.output:
+                if data.stdout:
+                    interface = data.stdout[0].strip()
+                    if interface:
+                        logger.debug("  Found control interface: %s", interface)
+                        return interface
+
+        logger.debug("  Could not detect control interface")
+        return None
 
     @property
     def provider(self):

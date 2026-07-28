@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +31,8 @@
  */
 #define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 #define NVME_MONITOR_SHORT_PERIOD   (3ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
+
+#define NVME_POWER_MGMT_UNINIT      UINT32_MAX
 
 struct bio_bulk_args {
 	void		*ba_bulk_ctxt;
@@ -133,77 +135,59 @@ struct bio_dma_buffer {
 	uint64_t		 bdb_dump_ts;
 };
 
-#define BIO_PROTO_NVME_STATS_LIST					\
-	X(bdh_du_written, "commands/data_units_written",		\
-	  "number of 512b data units written to the controller",	\
-	  "data units", D_TM_COUNTER)					\
-	X(bdh_du_read, "commands/data_units_read",			\
-	  "number of 512b data units read from to the controller",	\
-	  "data units", D_TM_COUNTER)					\
-	X(bdh_write_cmds, "commands/host_write_cmds",			\
-	  "number of write commands completed by to the controller",	\
-	  "cmds", D_TM_COUNTER)						\
-	X(bdh_read_cmds, "commands/host_read_cmds",			\
-	  "number of read commands completed by to the controller",	\
-	  "cmds", D_TM_COUNTER)						\
-	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",		\
-	  "Amount of time the controller is busy with I/O commands",	\
-	  "minutes", D_TM_COUNTER)					\
-	X(bdh_media_errs, "commands/media_errs",			\
-	  "Number of unrecovered data integrity error",			\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_read_errs, "commands/read_errs",				\
-	  "Number of errors reported to the engine on read commands",	\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_write_errs, "commands/write_errs",			\
-	  "Number of errors reported to the engine on write commands",	\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_unmap_errs, "commands/unmap_errs",			\
-	  "Number of errors reported to the engine on unmap/trim commands",\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
-	  "Number of checksum mismatch detected by the engine",		\
-	  "errs", D_TM_COUNTER)						\
-	X(bdh_power_cycles, "power_cycles",				\
-	  "Number of power cycles",					\
-	  "cycles", D_TM_COUNTER)					\
-	X(bdh_power_on_hours, "power_on_hours",				\
-	  "Number of power-on hours cycles",				\
-	  "hours", D_TM_COUNTER)					\
-	X(bdh_unsafe_shutdowns, "unsafe_shutdowns",			\
-	  "Number of unsafe shutdowns (no notification prior to power loss)",  \
-	  "shutdowns", D_TM_COUNTER)					\
-	X(bdh_temp, "temp/current",					\
-	  "Current SSD temperature",					\
-	  "kelvins", D_TM_GAUGE)					\
-	X(bdh_temp_warn, "temp/warn",					\
-	  "Set to 1 if temperature is above threshold",			\
-	  "", D_TM_GAUGE)						\
-	X(bdh_temp_warn_time, "temp/warn_time",				\
-	  "Amount of time the controller operated above warn temp threshold",  \
-	  "minutes", D_TM_COUNTER)					\
-	X(bdh_temp_crit_time, "temp/crit_time",				\
-	  "Amount of time the controller operated above crit temp threshold",  \
-	  "minutes", D_TM_COUNTER)					\
-	X(bdh_avail_spare, "reliability/avail_spare",			\
-	  "Percentage of remaining spare capacity available",		\
-	  "%", D_TM_GAUGE)						\
-	X(bdh_avail_spare_thres, "reliability/avail_spare_threshold",	\
-	  "Threshold for available spare value",			\
-	  "%", D_TM_GAUGE)						\
-	X(bdh_avail_spare_warn, "reliability/avail_spare_warn",		\
-	  "Set to 1 when available spare has fallen below threshold",	\
-	  "", D_TM_GAUGE)						\
-	X(bdh_reliability_warn, "reliability/reliability_warn",		\
-	  "Set to 1 when NVM subsystem has been degraded due to significant "  \
-	  "media-related errors",					\
-	  "", D_TM_GAUGE)						\
-	X(bdh_read_only_warn, "read_only_warn",				\
-	  "Set to 1 when media has been placed in read-only mode",	\
-	  "", D_TM_GAUGE)						\
-	X(bdh_volatile_mem_warn, "volatile_mem_warn",			\
-	  "Set to 1 when volatile memory backup device has failed",	\
-	  "", D_TM_GAUGE)
+#define BIO_PROTO_NVME_STATS_LIST                                                                  \
+	X(bdh_du_written, "commands/data_units_written",                                           \
+	  "number of 512b data units written to the controller", "data units", D_TM_COUNTER)       \
+	X(bdh_du_read, "commands/data_units_read",                                                 \
+	  "number of 512b data units read from to the controller", "data units", D_TM_COUNTER)     \
+	X(bdh_write_cmds, "commands/host_write_cmds",                                              \
+	  "number of write commands completed by to the controller", "cmds", D_TM_COUNTER)         \
+	X(bdh_read_cmds, "commands/host_read_cmds",                                                \
+	  "number of read commands completed by to the controller", "cmds", D_TM_COUNTER)          \
+	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",                                           \
+	  "Amount of time the controller is busy with I/O commands", "minutes", D_TM_COUNTER)      \
+	X(bdh_media_errs, "commands/media_errs", "Number of unrecovered data integrity error",     \
+	  "errs", D_TM_COUNTER)                                                                    \
+	X(bdh_read_errs, "commands/read_errs",                                                     \
+	  "Number of errors reported to the engine on read commands", "errs", D_TM_COUNTER)        \
+	X(bdh_write_errs, "commands/write_errs",                                                   \
+	  "Number of errors reported to the engine on write commands", "errs", D_TM_COUNTER)       \
+	X(bdh_unmap_errs, "commands/unmap_errs",                                                   \
+	  "Number of errors reported to the engine on unmap/trim commands", "errs", D_TM_COUNTER)  \
+	X(bdh_checksum_errs, "commands/checksum_mismatch",                                         \
+	  "Number of checksum mismatch detected by the engine", "errs", D_TM_COUNTER)              \
+	X(bdh_power_cycles, "power_cycles", "Number of power cycles", "cycles", D_TM_COUNTER)      \
+	X(bdh_power_on_hours, "power_on_hours", "Number of power-on hours cycles", "hours",        \
+	  D_TM_COUNTER)                                                                            \
+	X(bdh_unsafe_shutdowns, "unsafe_shutdowns",                                                \
+	  "Number of unsafe shutdowns (no notification prior to power loss)", "shutdowns",         \
+	  D_TM_COUNTER)                                                                            \
+	X(bdh_percentage_used, "percentage_used",                                                  \
+	  "Percentage of rated lifetime used - indicates drive endurance consumption (0-100%)",    \
+	  "percents", D_TM_GAUGE)                                                                  \
+	X(bdh_temp, "temp/current", "Current SSD temperature", "kelvins", D_TM_GAUGE)              \
+	X(bdh_temp_warn, "temp/warn", "Set to 1 if temperature is above threshold", "",            \
+	  D_TM_GAUGE)                                                                              \
+	X(bdh_temp_warn_time, "temp/warn_time",                                                    \
+	  "Amount of time the controller operated above warn temp threshold", "minutes",           \
+	  D_TM_COUNTER)                                                                            \
+	X(bdh_temp_crit_time, "temp/crit_time",                                                    \
+	  "Amount of time the controller operated above crit temp threshold", "minutes",           \
+	  D_TM_COUNTER)                                                                            \
+	X(bdh_avail_spare, "reliability/avail_spare",                                              \
+	  "Percentage of remaining spare capacity available", "%", D_TM_GAUGE)                     \
+	X(bdh_avail_spare_thres, "reliability/avail_spare_threshold",                              \
+	  "Threshold for available spare value", "%", D_TM_GAUGE)                                  \
+	X(bdh_avail_spare_warn, "reliability/avail_spare_warn",                                    \
+	  "Set to 1 when available spare has fallen below threshold", "", D_TM_GAUGE)              \
+	X(bdh_reliability_warn, "reliability/reliability_warn",                                    \
+	  "Set to 1 when NVM subsystem has been degraded due to significant "                      \
+	  "media-related errors",                                                                  \
+	  "", D_TM_GAUGE)                                                                          \
+	X(bdh_read_only_warn, "read_only_warn",                                                    \
+	  "Set to 1 when media has been placed in read-only mode", "", D_TM_GAUGE)                 \
+	X(bdh_volatile_mem_warn, "volatile_mem_warn",                                              \
+	  "Set to 1 when volatile memory backup device has failed", "", D_TM_GAUGE)
 
 #define BIO_PROTO_NVME_VENDOR_STATS_LIST				\
 	Y(bdh_prog_fail_cnt_norm, "vendor/program_fail_cnt_norm",	\
@@ -317,17 +301,19 @@ struct bio_bdev {
 	 * saved and when it is reached the prior LED state will be restored.
 	 */
 	uint64_t		 bb_led_expiry_time;
-	unsigned int		 bb_removed:1,
-				 bb_replacing:1,
-				 bb_trigger_reint:1,
-	/*
-	 * If a faulty device is replaced but still plugged, we'll keep
-	 * the 'faulty' information here, so that we know this device was
-	 * marked as faulty (at least before next server restart).
-	 */
-				bb_faulty:1,
-				bb_tgt_cnt_init:1,
-				bb_unmap_supported:1;
+	unsigned int             bb_removed : 1, bb_replacing : 1, bb_trigger_reint : 1,
+	    /*
+	     * If a faulty device is replaced but still plugged, we'll keep
+	     * the 'faulty' information here, so that we know this device was
+	     * marked as faulty (at least before next server restart).
+	     */
+	    bb_faulty              : 1,
+	    /*
+	     * Track if LED is actively blinking for device identification.
+	     * Set when IDENTIFY/QUICK_BLINK state is applied, cleared when
+	     * identify completes (timer expires or manual reset).
+	     */
+	    bb_led_identify_active : 1, bb_tgt_cnt_init : 1, bb_unmap_supported : 1;
 	/* bdev roles data/meta/wal */
 	unsigned int		bb_roles;
 };
@@ -598,20 +584,22 @@ extern struct bio_faulty_criteria	glb_criteria;
 
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
-extern bool		bio_spdk_inited;
-extern bool                             bio_vmd_enabled;
+extern bool                             bio_spdk_inited;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern unsigned int	bio_numa_node;
 extern unsigned int	bio_spdk_max_unmap_cnt;
 extern unsigned int	bio_max_async_sz;
 extern unsigned int                     bio_io_timeout;
+extern unsigned int                     bio_spdk_power_mgmt_val;
 
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		       uint64_t timeout);
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		       void *event_ctx);
 struct spdk_thread *init_thread(void);
+struct bio_xs_context           *
+init_xs_context(void);
 void bio_release_bdev(void *arg);
 bool is_server_started(void);
 d_list_t *bio_bdev_list(void);
@@ -720,6 +708,8 @@ void trigger_faulty_reaction(struct bio_blobstore *bbs);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 struct bio_dev_info *
 alloc_dev_info(uuid_t dev_id, struct bio_bdev *d_bdev, struct smd_dev_info *s_info);
+int
+bio_set_power_mgmt(struct bio_xs_context *ctxt, const char *bdev_name);
 
 /* bio_config.c */
 int

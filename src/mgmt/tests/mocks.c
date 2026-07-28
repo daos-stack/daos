@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -562,6 +562,13 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks)
 int
 ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid)
 {
+	/* Populate test data for bio_health query tests */
+	mbh->mb_dev_state.percentage_used  = 49;
+	mbh->mb_dev_state.media_errs       = 100;
+	mbh->mb_dev_state.err_log_entries  = 50;
+	mbh->mb_dev_state.unsafe_shutdowns = 10;
+	mbh->mb_dev_state.power_on_hours   = 1000;
+	uuid_copy(mbh->mb_devid, uuid);
 	return 0;
 }
 
@@ -694,7 +701,7 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 int
 ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		    Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
-		    uint32_t flags, int phase)
+		    uint32_t flags)
 {
 	return 0;
 }

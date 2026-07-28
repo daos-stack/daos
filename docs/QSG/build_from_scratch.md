@@ -45,11 +45,11 @@ distribution.
 
 ### RHEL and Clones
 
-For RHEL8-compatible distributions (e.g. Rocky Linux 8 or AlmaLinux 8), please
+For RHEL9-compatible distributions (e.g. Rocky Linux 9 or AlmaLinux 9), please
 run the following command from the DAOS tree as root or via sudo:
 
 ```bash
-$ sudo ./utils/scripts/install-el8.sh
+$ sudo ./utils/scripts/install-el9.sh
 ```
 
 ### openSUSE
@@ -102,7 +102,7 @@ The installation path can be modified by adding the PREFIX= option to the above
 command line (e.g., PREFIX=/usr/local).
 
 !!! note
-    Several parameters can be set (e.g., COMPILER=clang or COMPILER=icc) on the
+    Several parameters can be set (e.g., COMPILER=clang) on the
     scons command line. Please see `scons --help` for all the possible options.
     Those options are also saved for future compilations.
 

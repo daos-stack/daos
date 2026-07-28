@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  * (C) Copyright 2025 Vdura Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -11,6 +11,7 @@
 
 #include <daos_prop.h>
 #include <daos_srv/vos_types.h>
+#include "ddb_parse.h"
 #include "ddb_tree_path.h"
 
 struct ddb_cont {
@@ -20,19 +21,19 @@ struct ddb_cont {
 };
 
 struct ddb_obj {
-	daos_obj_id_t			ddbo_oid;
-	uint32_t			ddbo_idx;
-	enum daos_otype_t		ddbo_otype;
-	char				ddbo_otype_str[32];
-	uint32_t			ddbo_nr_grps;
-	struct dv_indexed_tree_path	*ddbo_path;
+	daos_obj_id_t                ddbo_oid;
+	uint32_t                     ddbo_idx;
+	uint32_t                     ddbo_nr_grps;
+	char                         ddbo_otype_str[32];
+	struct dv_indexed_tree_path *ddbo_path;
 };
 
 struct ddb_key {
-	daos_key_t			ddbk_key;
-	uint32_t			ddbk_idx;
-	vos_iter_type_t			ddbk_child_type;
-	struct dv_indexed_tree_path	*ddbk_path;
+	daos_key_t                   ddbk_key;
+	uint32_t                     ddbk_idx;
+	enum daos_otype_t            ddbk_otype;
+	vos_iter_type_t              ddbk_child_type;
+	struct dv_indexed_tree_path *ddbk_path;
 };
 
 struct ddb_sv {
@@ -50,12 +51,26 @@ struct ddb_array {
 	struct dv_indexed_tree_path *ddba_path;
 };
 
-/* Open and close a pool for a ddb_ctx */
+/**
+ * Open a VOS pool file.
+ *
+ * @param path		VOS pool file path in the format "[/dir/]<pool-uuid>/(vos-N|rdb-pool)".
+ * @param db_path	Path to the VOS metadata DB directory (SMD/NVMe). If NULL or empty,
+ *			the DB directory is derived from the leading path component of path.
+ * @param poh		Pool handle set on success.
+ * @param flags		Flags forwarded to vos_pool_open() (e.g. VOS_POF_FOR_FEATURE_FLAG to
+ *			skip VEA load when only reading/writing pool feature flags).
+ * @param write_mode	When false the pool is mapped copy-on-write so that internal PMEMOBJ
+ *			bookkeeping (SDS, ULOG replay) does not persist to the storage medium.
+ * @return		0 on success, negative DER error code otherwise.
+ */
 int
-    dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags);
-int dv_pool_close(daos_handle_t poh);
+dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
+	     bool write_mode);
 int
-dv_pool_destroy(const char *path);
+dv_pool_close(daos_handle_t poh);
+int
+dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx);
 
 /* Update vos pool flags */
 int
@@ -139,6 +154,40 @@ int dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args);
 typedef int (*dv_dump_value_cb)(void *cb_arg, d_iov_t *value);
 int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb,
 		  void *cb_arg);
+
+/**
+ * Callback invoked by dv_dump_csum() with the fetched checksum information.
+ *
+ * @param cb_arg    User-provided argument passed through from dv_dump_csum().
+ * @param recx_rel  Recx/epoch list describing the stored extents. Non-NULL for array akeys;
+ *                  NULL for single-value akeys. The caller must not free this pointer.
+ * @param sv_epoch  Actual stored epoch of the single value. Non-zero for single-value akeys
+ *                  when an SV was found within the requested epoch range; 0 for array akeys
+ *                  or when no SV was found (hole or -DER_NONEXIST).
+ * @param cil       Checksum info list. Valid only for the duration of the callback.
+ * @return          0 on success; a negative error code is propagated back to the caller of
+ *                  dv_dump_csum().
+ */
+typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
+			       daos_epoch_t sv_epoch, struct dcs_ci_list *cil);
+
+/**
+ * Fetch and dump the checksum information for the akey identified by \a path.
+ *
+ * @param poh      Open pool handle.
+ * @param path     VOS tree path identifying the container, object, dkey, and akey.
+ *                 For array akeys, path->vtp_recx selects the extent to inspect.
+ * @param epoch    Epoch for the fetch. For single-value akeys, controls which version is
+ *                 returned — pass DAOS_EPOCH_MAX to get the latest, or a snapshot epoch to
+ *                 access an earlier version. For array akeys, selects the visible extent set.
+ * @param dump_cb  Callback invoked with the result. If NULL, the function returns 0
+ *                 without opening the container or calling VOS.
+ * @param cb_arg   Opaque argument forwarded to \a dump_cb.
+ * @return         0 on success, or a negative error code.
+ */
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	     dv_dump_csum_cb dump_cb, void *cb_arg);
 
 struct ddb_ilog_entry {
 	uint32_t	die_idx;

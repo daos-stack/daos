@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -486,7 +486,8 @@ again:
 				/* convert to more specific errno */
 				if (rc == -DER_NONEXIST)
 					rc = -DER_CONT_NONEXIST;
-				DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
+				DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_CONT_NONEXIST,
+					  DLOG_INFO, DLOG_ERR, rc,
 					  DF_CONT " create IV_CONT_PROP iv entry failed",
 					  DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
 			} else if (class_id == IV_CONT_CAPA) {
@@ -731,8 +732,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 out:
 	if (rc < 0 && rc != -DER_IVCB_FORWARD)
-		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
-			  "failed to insert");
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST || rc == -DER_NOTLEADER,
+			  DB_ANY, DLOG_ERR, rc, "failed to insert");
 
 	return rc;
 }
@@ -866,8 +867,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = cont_iv_len;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST, DB_ANY, DLOG_ERR, rc,
-			  DF_UUID " iv update failed", DP_UUID(key_uuid));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST,
+			  DB_ANY, DLOG_ERR, rc, DF_UUID " iv update failed", DP_UUID(key_uuid));
 
 	return rc;
 }
@@ -1150,8 +1151,8 @@ cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_ag
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry), shortcut, sync_mode,
 			    false);
 	if (rc && !cont_iv_retryable_error(rc))
-		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
-			DP_UUID(cont_uuid), op, DP_RC(rc));
+		DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_ANY, DLOG_ERR, rc,
+			  DF_UUID " op %d, cont_iv_update failed", DP_UUID(cont_uuid), op);
 	return rc;
 }
 
@@ -1587,7 +1588,7 @@ cont_iv_prop_fetch_ult(void *data)
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_CONT_NONEXIST, DB_ANY, DLOG_ERR, rc,
 			  DF_CONT ": cont_iv_fetch failed", DP_CONT(pool->sp_uuid, arg->cont_uuid));
 		D_GOTO(out, rc);
 	}

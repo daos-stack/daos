@@ -1,11 +1,9 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2023 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(tests)
-
 #ifndef __PL_MAP_COMMON_H__
 #define __PL_MAP_COMMON_H__
 
@@ -235,5 +233,15 @@ gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
 				   pl_map, false);				\
 		assert_rc_equal(rc, -DER_INVAL);				\
 	} while (0)
+
+bool
+plt_layout_with_tgts_on_same_dom(struct pl_obj_layout *layout, uint32_t tgts_per_dom);
+bool
+plt_layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint32_t tgts_per_dom);
+void
+plt_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);
+int
+plt_obj_place_mode(daos_obj_id_t oid, struct pl_obj_layout **layout, struct pl_map *pl_map,
+		   unsigned int mode);
 
 #endif /*   PL_MAP_COMMON_H   */

@@ -61,7 +61,7 @@ A set of replicated shard, or a set of data and parity shards belonging to the s
 is called redundancy group. An object can be chunked into multiple redundancy groups, which spread
 across many storage targets, in order to achieve higher I/O concurrency for better performance and
 large capacity. Targets for placing shards of a same redundancy group are selected from different
-fault domains, the default fault domain is "engine", it can be set to other domain like "node" or
+fault domains, the default fault domain is "node", it can be set to other domain like "rank" or
 "rack" in future releases.
 
 DAOS has over a hundred pre-defined object classes and specific naming conventions for these
@@ -201,7 +201,7 @@ The checksum feature attempts to provide end-to-end data integrity. On an update
 the DAOS client calculates checksums for user data and sends with the RPC to
 the DAOS server. The DAOS server returns the checksum with the data on a fetch
 so the DAOS client can verify the integrity of the data. See [End-to-end Data
-Integrity Overiew](../../docs/overview/data_integrity.md) for more information.
+Integrity Overview](../../docs/overview/data_integrity.md) for more information.
 
 Checksums are configured at the container level and when a client opens a
 container, the checksum properties will be queried automatically, and, if

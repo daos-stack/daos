@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,7 +55,8 @@
 	ACTION(il, il, arg)                                                                        \
 	ACTION(csum, csum, arg)                                                                    \
 	ACTION(pipeline, pipeline, arg)                                                            \
-	ACTION(stack, stack, arg)
+	ACTION(stack, stack, arg)                                                                  \
+	ACTION(ddb, ddb, arg)
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\
 	/** metadata operation */				\

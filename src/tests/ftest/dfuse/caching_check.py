@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,22 +37,21 @@ class DfuseCachingCheck(IorTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DfuseCachingCheck,test_dfuse_caching_check
         """
-        # get params
-        flags = self.params.get("iorflags", '/run/ior/*')
+        # Get params
+        ior_flags_write = self.params.get("flags_write", self.ior_cmd.namespace)
+        ior_flags_read = self.params.get("flags_read", self.ior_cmd.namespace)
         read_x = self.params.get("read_x", "/run/ior/*", 1)
 
-        # update flag
-        self.ior_cmd.update_params(flags=flags[0])
-
         self.log_step('Write to the dfuse mount point')
+        self.ior_cmd.update_params(flags=ior_flags_write)
         self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
 
         self.log_step('Get baseline read performance from dfuse with caching disabled')
-        self.ior_cmd.update_params(flags=flags[1])
+        self.ior_cmd.update_params(flags=ior_flags_read)
         base_read_arr = []
-        out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
+        out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False, create_cont=False)
         base_read_arr.append(IorCommand.get_ior_metrics(out))
-        out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
+        out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False, create_cont=False)
         base_read_arr.append(IorCommand.get_ior_metrics(out))
 
         # the index of max_mib
@@ -62,12 +62,11 @@ class DfuseCachingCheck(IorTestBase):
         self.dfuse.update_params(disable_caching=False)
         self.dfuse.run()
 
-        self.log_step('Get first read performance with caching enabled')
-        out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
-        base_read_arr.append(IorCommand.get_ior_metrics(out))
+        self.log_step('Discard first read performance with caching enabled')
+        _ = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False, create_cont=False)
 
         self.log_step('Get cached read performance')
-        out = self.run_ior_with_pool(fail_on_warning=False)
+        out = self.run_ior_with_pool(fail_on_warning=False, create_cont=False)
         with_caching = IorCommand.get_ior_metrics(out)
 
         self.log_step('Verify cached read performance is greater than first read')
@@ -78,4 +77,4 @@ class DfuseCachingCheck(IorTestBase):
         for base_read in base_read_arr:
             actual_change = percent_change(base_read[0][max_mib], with_caching[0][max_mib])
             if actual_change < read_x:
-                self.fail('Expected a speedup of {} but got {}'.format(read_x, actual_change))
+                self.fail(f'Expected a speedup of {read_x} but got {actual_change}')

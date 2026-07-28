@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
  * (C) Copyright 2024-2025 Google LLC
- * (C) Copyright 2024-2025 Enakta Labs Ltd
+ * (C) Copyright 2024-2026 Enakta Labs Ltd
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1061,6 +1061,39 @@ out:
 	return Py_BuildValue("iK", rc, st.st_size);
 }
 
+static PyObject *
+__shim_handle__torch_mkdir(PyObject *self, PyObject *args)
+{
+	struct dfs_handle *hdl  = NULL;
+	char              *path = NULL;
+	char              *dir  = NULL;
+	char              *name = NULL;
+	mode_t             mode;
+	dfs_obj_t         *parent = NULL;
+
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LsI", &hdl, &path, &mode);
+
+	assert(hdl->dfs != NULL);
+
+	int rc = split_path(path, &dir, &name);
+	if (rc) {
+		return PyLong_FromLong(rc);
+	}
+
+	rc = lookup_or_insert_dir_obj(hdl, dir, &parent);
+	if (rc) {
+		D_ERROR("Could not lookup '%s': %s (rc=%d)", dir, strerror(rc), rc);
+		goto out;
+	}
+
+	rc = dfs_mkdir(hdl->dfs, parent, name, mode, 0);
+
+out:
+	D_FREE(dir);
+	D_FREE(name);
+	return PyLong_FromLong(rc);
+}
+
 /**
  * Python shim module
  */
@@ -1080,6 +1113,7 @@ static PyMethodDef torchMethods[] = {
     EXPORT_PYTHON_METHOD(torch_recommended_dir_split),
     EXPORT_PYTHON_METHOD(torch_list_with_anchor),
     EXPORT_PYTHON_METHOD(torch_get_fsize),
+    EXPORT_PYTHON_METHOD(torch_mkdir),
 
     EXPORT_PYTHON_METHOD(module_init),
     EXPORT_PYTHON_METHOD(module_fini),

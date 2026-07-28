@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,9 +69,9 @@ enum daos_module_id {
 #define DAOS_VOS_VERSION      1
 #define DAOS_MGMT_VERSION     4
 #define DAOS_POOL_VERSION     7
-#define DAOS_CONT_VERSION     8
+#define DAOS_CONT_VERSION     9
 #define DAOS_OBJ_VERSION      10
-#define DAOS_REBUILD_VERSION  4
+#define DAOS_REBUILD_VERSION  5
 #define DAOS_RSVC_VERSION     5
 #define DAOS_RDB_VERSION      5
 #define DAOS_RDBT_VERSION     3
@@ -310,8 +310,6 @@ daos_rpc_unregister(struct crt_proto_format *proto_fmt)
 int daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task);
 int daos_rpc_send_wait(crt_rpc_t *rpc);
-
-#define DAOS_DEFAULT_SYS_NAME "daos_server"
 
 /* Currently, this is used on rcs in metadata RPC reply buffers. */
 static inline bool

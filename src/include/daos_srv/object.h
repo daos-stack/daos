@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,7 +35,7 @@ struct ds_obj_enum_arg {
 			int			kds_cap;
 			int			kds_len;
 			d_sg_list_t	       *sgl;
-			d_iov_t			csum_iov;
+			d_iov_t                 oea_csum_iov;
 			uint32_t		ec_cell_sz;
 			int			sgl_idx;
 		};

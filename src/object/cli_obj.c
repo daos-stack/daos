@@ -1,8 +1,7 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
- * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -387,7 +386,7 @@ obj_layout_refresh(struct dc_object *obj)
 
 	D_RWLOCK_WRLOCK(&obj->cob_lock);
 	obj_layout_free(obj);
-	rc = obj_layout_create(obj, 0, true);
+	rc = obj_layout_create(obj, obj->cob_mode, true);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return rc;
@@ -1575,6 +1574,7 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	md->omd_id	= oid;
 	md->omd_ver	= 0;
 	md->omd_pda	= 0;
+	md->omd_flags   = 0;
 	return 0;
 }
 
@@ -1725,7 +1725,7 @@ dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
 	/* Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case. */
 	if (err == -DER_OVERLOAD_RETRY) {
 		delay = daos_rpc_rand_delay(timeout_sec) << 20;
-	} else if (++(*retry_cnt) > 1) {
+	} else if (++(*retry_cnt) > 1 || obj_is_modification_opc(opc)) {
 		/* Randomly delay [31 ~ 1023] us if it is not the first retried object RPC. */
 		delay = (d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1);
 		/* Rebuild is being established on the server side, wait a bit longer */
@@ -1739,16 +1739,18 @@ dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
 				delay <<= 8;
 				break;
 			case DAOS_OBJ_RPC_CPD:
-				/* 8 times of the delay for compounded RPC. */
-				delay <<= 3;
+				delay <<= (*retry_cnt + 3);
 				break;
 			default:
+				if (obj_is_modification_opc(opc))
+					delay <<= (*retry_cnt + 1);
+				else
+					delay <<= (*retry_cnt - 1);
 				break;
 			}
 
-			/* Increase delay after multiple times retry. */
-			if (*retry_cnt >= 5)
-				delay <<= 1;
+			if (*retry_cnt > 10 || delay > 3000000)
+				delay = 3000000 + ((d_rand() | ((1 << 5) - 1)) & ((1 << 10) - 1));
 		}
 	}
 
@@ -4150,7 +4152,7 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 
 		obj_args = dc_task_get_args(obj_auxi->obj_task);
 		sub_anchors_free(obj_args, obj_auxi->opc);
-	} else if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE) {
+	} else if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE && D_LOG_ENABLED(DB_REBUILD)) {
 		for (int i = 0; i < sub_anchors->sa_anchors_nr; i++) {
 			daos_anchor_t *sub_anchor;
 
@@ -4708,7 +4710,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	d_sg_list_t         *sg, *sg_dup;
 	d_iov_t             *iov, *iov_dup;
 	bool                 dup = false;
-	uint32_t             i, j, k, sgl_idx, count = 0, bitmap_sz;
+	uint32_t             i, j, k, sgl_idx, bitmap_sz;
 	int                  rc  = 0;
 	struct sgl_merge_ctx ctx = {0};
 	bool                 merge_iov =
@@ -4723,6 +4725,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	for (i = 0; i < args->nr; i++) {
 		iod = &args->iods[i];
 		sg                  = &sgls[i];
+		uint32_t valid_iov_count = 0;
 		uint32_t frag_chain = 0;
 		uint32_t frag_start = 0;
 
@@ -4750,7 +4753,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			/* Detect need for iov_buf_len normalization */
 			if (update && iov->iov_len < iov->iov_buf_len)
 				dup = true;
-			count++;
+			valid_iov_count++;
 
 			/* Skip merging logic for single-IOV SGLs */
 			if (sg->sg_nr == 1)
@@ -4782,7 +4785,7 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 			}
 		}
 		/* Validate non-empty SGL for non-ANY size requests */
-		if (count == 0 && iod->iod_size != DAOS_REC_ANY) {
+		if (valid_iov_count == 0 && iod->iod_size != DAOS_REC_ANY) {
 			DL_ERROR(-DER_INVAL, "invalid args, sgl contained only 0 length entries");
 			rc = -DER_INVAL;
 			goto cleanup;
@@ -4940,8 +4943,26 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 			uint32_t     dup_data_len = 0;
 			char        *dup_buf;
 
-			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i])
+			if (!ctx->alloc_bitmaps || !ctx->alloc_bitmaps[i]) {
+				/* SGL was duplicated (e.g. to strip zero-buf-len
+				 * entries) but has no merged/allocated buffers.
+				 * Dup IOVs share the same iov_buf pointers as the
+				 * originals, so fetch data is already in place.
+				 * Copy iov_len back so the caller sees actual bytes
+				 * read, and update sg_nr_out accordingly.
+				 */
+				uint32_t dup_idx = 0;
+
+				for (j = 0; j < sg_orig->sg_nr && dup_idx < sg_dup->sg_nr_out;
+				     j++) {
+					iov = &sg_orig->sg_iovs[j];
+					if (skip_sgl_iov(false, iov))
+						continue;
+					iov->iov_len = sg_dup->sg_iovs[dup_idx++].iov_len;
+				}
+				sg_orig->sg_nr_out = j;
 				continue;
+			}
 
 			D_ASSERT(ctx->merged_bitmaps[i] != NULL);
 			for (j = 0; j < sg_orig->sg_nr && dup_sg_idx < sg_dup->sg_nr_out; j++) {
@@ -4985,7 +5006,6 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 	sgls_dup_free(ctx, obj_auxi->iod_nr);
 	D_FREE(ctx);
 	obj_auxi->rw_args.merge_ctx = NULL;
-	api_args                    = dc_task_get_args(obj_auxi->obj_task);
 	api_args                    = dc_task_get_args(obj_auxi->obj_task);
 	api_args->sgls              = obj_auxi->reasb_req.orr_usgls;
 }

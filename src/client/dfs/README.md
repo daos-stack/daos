@@ -26,6 +26,64 @@ the filesystem, which will be another reserved object with a predefined OID
 section). The OID of the root id will be inserted as an entry in the superblock
 object.
 
+## DFS OID Management
+
+DFS uses a two-level strategy to assign object IDs for new files and
+directories.
+
+At mount time, a read-write mount seeds the in-memory OID state by:
+
+- choosing a random starting value for `dfs->last_hi`
+- forcing that value away from `0` and `1`, which are reserved for the
+  superblock (`0.0`) and root object (`1.0`)
+- allocating one container-unique low portion with `daos_cont_alloc_oids()`
+
+That low portion is kept in `dfs->oid.lo` and is unique across the container.
+DFS then uses the local `dfs->oid.hi` value to generate many object IDs from
+that single allocation while the mount stays active.
+
+When DFS later creates a file or directory, `oid_gen()` in
+`src/client/dfs/dfs_internal.h` combines:
+
+- `oid.lo`: the container-allocated low 96-bit portion
+- `oid.hi`: a mount-local 32-bit sequence value
+
+DFS keeps cycling only the local high portion until it reaches the mount's
+terminal value (`dfs->last_hi`). Once that happens, DFS asks the container for
+another low portion with `daos_cont_alloc_oids()` and repeats the process.
+
+This is why the mount code initializes `dfs->oid.hi` from `dfs->last_hi` and
+immediately calls `daos_obj_oid_cycle()`: the cycle call advances to the first
+usable per-mount value so that `dfs->last_hi` remains the sentinel marking the
+end of the current local cycle.
+
+DFS also skips the reserved combinations that would collide with the predefined
+superblock and root object IDs. In practice, if the low portion matches the
+reserved low value, DFS avoids `hi <= 1` before handing out an OID.
+
+After DFS has selected the caller-visible bits, it passes the OID to
+`daos_obj_generate_oid()`, which encodes the DAOS-managed metadata in the high
+32 bits, such as the object type and object-class selection.
+
+### `daos_obj_oid_cycle()`
+
+`daos_obj_oid_cycle()` is a small inline helper in `src/include/daos_obj.h`:
+
+~~~~c
+oid->hi = (oid->hi + 999999937) & UINT_MAX;
+~~~~
+
+Conceptually, it advances `oid->hi` by a fixed stride modulo `2^32`.
+
+- The arithmetic wraps naturally in the 32-bit space.
+- The stride `999999937` is odd, so it is relatively prime to `2^32`.
+- Because the stride and modulus are relatively prime, repeated calls walk
+  every possible 32-bit value exactly once before repeating.
+
+For DFS, that means a single `dfs->oid.lo` allocation can be paired with every
+possible local high value without duplicates, while still allowing DFS to avoid
+reserved values explicitly.
+
 The SB will look like this:
 
 ~~~~
@@ -134,7 +192,14 @@ Object testdir
 By default, all directories are created with an object class with 1 shard. This means, that if the
 container redundancy factor (RF) is 0, OC_S1 oclass will be used; if RF=1 OC_RP_2G1 is used, and so
 on. The user can of course change that when creating the directory and set the desired object class
-manually, or set the default object class when creating the container.
+manually, or set the default object class when creating the container. Using an EC object class
+class for directories is not recommended since directory entries are small and EC overhead will be
+large anyway. Thus when setting the directory object class on container creation to an EC object
+class, DAOS will ignore the user setting and use the default replication object class depending on
+the redundancy factory of the container as explained earlier. If one uses the DAOS tool to change
+the object class of new files and directories to be created under an existing directory (daos fs
+set-attr), and that object class is EC, that setting will apply only to files. New directories will
+use the container default in that case.
 
 Note that with this mapping, the inode information is stored with the entry that it corresponds to
 in the parent directory object. Thus, hard links won't be supported, since it won't be possible to
@@ -197,22 +262,21 @@ Symlink Object
 
 ## Access Permissions
 
-All DFS objects (files, directories, and symlinks) inherit the access
-permissions of the DFS container that they are created with. So the permission
-checks are done on dfs_mount(). If that succeeds and the user has access to the
-container, then they will be able to access all objects in the DFS
-namespace.
+DFS checks access at multiple levels. Container access is checked at mount/open
+time, and per-object permissions are also enforced using each entry's
+uid/gid/mode metadata. Mutating operations are additionally gated by mount mode
+(read-only vs read-write).
 
 setuid(), setgid() programs, supplementary groups, ACLs are not supported in the
 DFS namespace.
 
 ## Time settings
 
-DFS stores the mtime (modify) and ctime (change) in the inode information of an object. the mtime is
-actively maintained for just file objects (changing a file contents updates the mtime value that
-would be returned on stat). At this time, mtime for directory objects and ctime for all objects are
-not actively maintained. atime (access) is not stored in DFS and stat returns the max value between
-mtime and ctime for atime.
+DFS stores mtime (modify) and ctime (change) in inode metadata. mtime is
+actively maintained for file content changes and may also be set explicitly via
+attribute updates. ctime is actively maintained for metadata changes (for
+example chmod and xattr updates). atime (access) is not stored in DFS; stat
+returns atime as max(mtime, ctime).
 
 ## Container Hints
 
@@ -242,6 +306,45 @@ pool):
  - SX if rd\_fac == 0
  - EC\_nP1GX if rd\_fac == 1
  - EC\_nP2GX if rd\_fac == 2
+
+## Snapshot Mount Semantics
+
+DFS can be mounted against a snapshot epoch, in which case operations use a
+snapshot transaction handle internally. This provides a stable, read-consistent
+view for APIs that use the mount transaction handle.
+
+When no snapshot epoch is requested, DFS uses `DAOS_TX_NONE` for regular
+non-transactional access.
+
+## Handle Serialization and Transfer
+
+DFS supports exporting/importing mount handles for process transfer:
+
+- `dfs_local2global` / `dfs_global2local`: serialize and restore a DFS mount
+  using already-available pool/container handles.
+- `dfs_local2global_all` / `dfs_global2local_all`: serialize and restore with
+  pool/container context included.
+
+`dfs_global2local_all` requires DFS module initialization (`dfs_init`) before
+use.
+
+## Path Resolution and Symlink Limits
+
+Relative-path lookup follows symlinks recursively, with a bounded recursion
+depth to avoid infinite loops in cyclic links. If that bound is exceeded, DFS
+returns `ELOOP`.
+
+## Concurrency and Thread Safety
+
+DFS includes internal locking for mount/module state and selected shared state.
+This prevents races in mount/finalize and handle-management paths. Callers
+should still treat individual DFS objects and user buffers with normal
+application-level synchronization rules.
+
+## Error Model
+
+DFS public APIs return errno-style error codes. Internally, lower-level DAOS
+DER return codes are translated before being surfaced by DFS APIs.
 
 # DFS control flow
 
@@ -297,7 +400,7 @@ sequenceDiagram
     Note over B: Check permissions
     B->>C: daos_obj_open
     Note over C: Allocate handle<br/>Calculate object layout<br/>Check class validity
-    C->>B: Return array object handle
+    C->>B: Return object handle
     Note over B: Allocate directory handle<br/>Save object info
     B->>A: Return directory handle
 ```

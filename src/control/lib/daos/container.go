@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -22,7 +23,8 @@ import (
 #include <daos_cont.h>
 #include <daos/common.h>
 
-#cgo LDFLAGS: -ldaos_common
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 

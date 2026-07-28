@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -122,6 +123,12 @@ vos_obj_release(struct vos_object *obj, uint64_t flags, bool evict);
 void vos_obj_evict(struct vos_object *obj);
 
 int vos_obj_evict_by_oid(struct vos_container *cont, daos_unit_oid_t oid);
+
+static inline bool
+vos_obj_is_evicted(struct vos_object *obj)
+{
+	return daos_lru_is_evicted(&obj->obj_llink);
+}
 
 /**
  * Create an object cache.

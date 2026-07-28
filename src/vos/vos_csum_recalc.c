@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,16 +40,13 @@
  */
 
 /* Determine checksum parameters for verification of an input segment. */
-static unsigned int
+static uint64_t
 calc_csum_params(struct dcs_csum_info *csum_info, struct csum_recalc *recalc,
-		 unsigned int prefix_len, unsigned int suffix_len,
-		 unsigned int rec_size)
+		 unsigned int prefix_len, unsigned int suffix_len, unsigned int rec_size)
 {
-
-	unsigned int cs_cnt, low_idx = recalc->cr_log_ext.ex_lo -
-							prefix_len / rec_size;
-	unsigned int high_idx = recalc->cr_log_ext.ex_hi +
-							suffix_len / rec_size;
+	unsigned int cs_cnt;
+	uint64_t     low_idx  = recalc->cr_log_ext.ex_lo - prefix_len / rec_size;
+	uint64_t     high_idx = recalc->cr_log_ext.ex_hi + suffix_len / rec_size;
 
 	assert(prefix_len % rec_size == 0);
 	cs_cnt = csum_chunk_count(recalc->cr_phy_csum->cs_chunksize,
@@ -80,20 +78,16 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	 * matches the offset of the (csum-extended) output segment.
 	 */
 	if (new_csum->cs_nr != recalc->cr_phy_csum->cs_nr) {
-		unsigned int chunksize = new_csum->cs_chunksize;
-		unsigned int orig_offset =
-			(recalc->cr_phy_ext->ex_lo +
-			 recalc->cr_phy_off)  * rec_size;
-		unsigned int out_offset = recalc->cr_log_ext.ex_lo * rec_size -
-								prefix_len;
+		uint64_t chunksize   = new_csum->cs_chunksize;
+		uint64_t orig_offset = (recalc->cr_phy_ext->ex_lo + recalc->cr_phy_off) * rec_size;
+		uint64_t out_offset  = recalc->cr_log_ext.ex_lo * rec_size - prefix_len;
 
 		D_ASSERT(new_csum->cs_nr <
 				 recalc->cr_phy_csum->cs_nr);
 		D_ASSERT(orig_offset <= out_offset);
 		if (orig_offset != out_offset) {
-			unsigned int add_start = chunksize -
-							orig_offset % chunksize;
-			unsigned int offset = orig_offset + add_start;
+			uint64_t add_start = chunksize - orig_offset % chunksize;
+			uint64_t offset    = orig_offset + add_start;
 
 			if (add_start)
 				j++;
@@ -154,7 +148,8 @@ vos_csum_recalc_fn(void *recalc_args)
 				    csum_info.cs_chunksize, 0);
 	for (i = 0; i < args->cra_seg_cnt; i++) {
 		bool		is_valid = false;
-		unsigned int	this_rec_nr, this_rec_idx;
+		unsigned int    this_rec_nr;
+		uint64_t        this_rec_idx;
 
 		biov = &bsgl->bs_iovs[i];
 		/* Number of records in this input segment */

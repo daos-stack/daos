@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,8 +30,8 @@ class AggregationPunching(MdtestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=aggregation,mdtest,mdtest
-        :avocado: tags=AggregationPunching,aggregatepunching,test_aggregation_punching
+        :avocado: tags=aggregation,mdtest
+        :avocado: tags=AggregationPunching,test_aggregation_punching
         """
         if self.pool is None:
             self.add_pool(connect=False)

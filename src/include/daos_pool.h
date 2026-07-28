@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,6 +94,12 @@ enum daos_rebuild_state_t {
 	DRS_COMPLETED		= 2,
 };
 
+/** For daos_rebuild_status.rs_flags */
+enum daos_rebuild_status_flag {
+	/** Data redundancy degraded (the pool has one or more DOWN targets) */
+	DAOS_RSF_DEGRADED = (1 << 0),
+};
+
 /** Pool rebuild status */
 struct daos_rebuild_status {
 	/** pool map version in rebuilding or last completed rebuild */
@@ -111,8 +117,10 @@ struct daos_rebuild_status {
 	};
 	/** Maximum supported layout version */
 	uint16_t                rs_max_supported_layout_ver;
-	/** padding of rebuild status */
-	int16_t                 rs_padding16;
+	/** See daos_rebuild_status_flag. */
+	uint8_t                 rs_flags;
+	/** Do not access this field by name. */
+	uint8_t                 rs_reserved_;
 
 	/** Failure on which rank */
 	int32_t			rs_fail_rank;

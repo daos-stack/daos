@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -69,10 +69,11 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 	return nil
 }
 
-func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, engines []Engine) (func(), error) {
+func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, bindAddr string, engines []Engine) (func(), error) {
 	expCfg := &promexp.ExporterConfig{
-		Port:  port,
-		Title: "DAOS Engine Telemetry",
+		Port:        port,
+		BindAddress: bindAddr,
+		Title:       "DAOS Engine Telemetry",
 		Register: func(ctx context.Context, log logging.Logger) error {
 			return regPromEngineSources(ctx, log, engines)
 		},

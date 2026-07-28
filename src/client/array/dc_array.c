@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2579,14 +2579,11 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		args->sgl->sg_nr = 1;
 		d_iov_set(&args->sgl->sg_iovs[0], props->buf, props->buf_len);
 
-		rc = tse_task_register_cbs(task, NULL, NULL, 0, adjust_array_size_cb, &props,
-					   sizeof(props));
+		rc = tse_task_register_comp_cb_and_reinit(task, adjust_array_size_cb, &props,
+							  sizeof(props), 0 /* delay */);
 		if (rc)
-			goto out;
-
-		rc = tse_task_reinit(task);
-		if (rc)
-			D_ERROR("FAILED to reinit task\n");
+			D_ERROR("FAILED to register comp cb and reinit task: " DF_RC "\n",
+				DP_RC(rc));
 
 		goto out;
 	}

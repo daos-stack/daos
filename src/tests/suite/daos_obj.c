@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -130,7 +131,7 @@ ioreq_io_akey_set(struct ioreq *req, const char **akey, int nr)
 {
 	int i;
 
-	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
+	assert_int_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	/** akey */
 	for (i = 0; i < nr; i++)
 		d_iov_set(&req->iod[i].iod_name, (void *)akey[i],
@@ -144,7 +145,7 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value, daos_size_t *data_size,
 	d_sg_list_t *sgl = req->sgl;
 	int i;
 
-	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
+	assert_int_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	for (i = 0; i < nr; i++) {
 		sgl[i].sg_nr = 1;
 		sgl[i].sg_nr_out = 0;
@@ -159,7 +160,7 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *iod_size, bool lookup,
 	daos_iod_t *iod = req->iod;
 	int i;
 
-	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
+	assert_int_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	for (i = 0; i < nr; i++) {
 		/** record extent */
 		iod[i].iod_type = req->iod_type;
@@ -179,7 +180,7 @@ ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
 {
 	daos_iod_t *iod = &req->iod[idx];
 
-	assert_in_range(nr, 1, IOREQ_IOD_NR);
+	assert_int_in_range(nr, 1, IOREQ_IOD_NR);
 	iod->iod_type = req->iod_type;
 	iod->iod_size = size;
 	if (req->iod_type == DAOS_IOD_ARRAY) {
@@ -196,7 +197,7 @@ insert_recxs_nowait(const char *dkey, const char *akey, daos_size_t iod_size,
 		    daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 		    daos_size_t data_size, struct ioreq *req)
 {
-	assert_in_range(nr, 1, IOREQ_IOD_NR);
+	assert_int_in_range(nr, 1, IOREQ_IOD_NR);
 
 	/* dkey */
 	ioreq_dkey_set(req, dkey);
@@ -222,7 +223,7 @@ insert_nowait(const char *dkey, int nr, const char **akey,
 	daos_size_t	data_size[nr];
 	int		i;
 
-	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
+	assert_int_in_range(nr, 1, IOREQ_SG_IOD_NR);
 
 	for (i = 0; i < nr; i++)
 		data_size[i] = iod_size[i] * rx_nr[i];
@@ -330,7 +331,7 @@ inset_recxs_dkey_uint64(uint64_t *dkey, const char *akey, daos_size_t iod_size,
 	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req)
 {
-	assert_in_range(nr, 1, IOREQ_IOD_NR);
+	assert_int_in_range(nr, 1, IOREQ_IOD_NR);
 
 	/* dkey */
 	d_iov_set(&req->dkey, (void *)dkey, sizeof(uint64_t));
@@ -508,7 +509,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	int		i;
 	int		rx_nr[nr];
 
-	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
+	assert_int_in_range(nr, 1, IOREQ_SG_IOD_NR);
 
 	for (i = 0; i < nr; i++) {
 		if (iod_size[i] != DAOS_REC_ANY) /* extent is known */

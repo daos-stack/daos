@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -186,6 +187,12 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'm':
 			test.tg_test_mode = atoi(optarg);
+			if ((test.tg_test_mode != TEST_MODE_ASYNC) &&
+			    (test.tg_test_mode != TEST_MODE_SYNC)) {
+				printf("Unknown test_mode=%d specified, defaulting to sync",
+				       test.tg_test_mode);
+				test.tg_test_mode = TEST_MODE_SYNC;
+			}
 			break;
 		case 'n':
 			test.tg_num_iterations = atoi(optarg);

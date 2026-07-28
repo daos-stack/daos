@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -981,6 +981,37 @@ test_drpc_pool_set_prop_success(void **state)
 }
 
 /*
+ * TODO (DAOS-18783): Add happy-path byteval test with new property.
+ */
+
+static void
+test_drpc_pool_set_prop_byteval_invalid_type(void **state)
+{
+	Drpc__Call           call        = DRPC__CALL__INIT;
+	Drpc__Response       resp        = DRPC__RESPONSE__INIT;
+	Mgmt__PoolSetPropReq req         = MGMT__POOL_SET_PROP_REQ__INIT;
+	uint8_t              byte_data[] = {0x01, 0x02, 0x03, 0x04};
+
+	req.id           = TEST_UUID;
+	req.properties   = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+
+	req.properties[0]->number       = DAOS_PROP_PO_MAX;
+	req.properties[0]->byteval.data = byte_data;
+	req.properties[0]->byteval.len  = sizeof(byte_data);
+	req.properties[0]->value_case   = MGMT__POOL_PROPERTY__VALUE_BYTEVAL;
+	setup_pool_set_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+
+	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
  * dRPC Pool GetProp setup/teardown
  */
 
@@ -1406,7 +1437,7 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 }
 
 static void
-test_drpc_pool_query_success(void **state)
+test_drpc_pool_query_rebuild_idle_success(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
@@ -1443,7 +1474,31 @@ test_drpc_pool_query_success(void **state)
 }
 
 static void
-test_drpc_pool_query_success_rebuild_busy(void **state)
+test_drpc_pool_query_rebuild_done_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	daos_pool_info_t	exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	init_test_rebuild_status(&exp_info.pi_rebuild_st);
+	exp_info.pi_rebuild_st.rs_version = 1;
+	exp_info.pi_rebuild_st.rs_state   = DRS_COMPLETED;
+	ds_mgmt_pool_query_info_out = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__DONE, &resp);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_rebuild_busy_success(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
@@ -1459,42 +1514,76 @@ test_drpc_pool_query_success_rebuild_busy(void **state)
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info,
-				    MGMT__POOL_REBUILD_STATUS__STATE__BUSY,
-				    &resp);
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__BUSY, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
 
 static void
-test_drpc_pool_query_success_rebuild_done(void **state)
+test_drpc_pool_query_rebuild_idle_err(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	daos_pool_info_t	exp_info = {0};
+	Drpc__Call       call     = DRPC__CALL__INIT;
+	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
+	daos_pool_info_t exp_info = {0};
 
 	init_test_pool_info(&exp_info);
-	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	exp_info.pi_rebuild_st.rs_version = 1;
-	exp_info.pi_rebuild_st.rs_state = DRS_COMPLETED;
-	ds_mgmt_pool_query_info_out = exp_info;
+	exp_info.pi_rebuild_st.rs_errno   = -DER_MISC;
+	exp_info.pi_rebuild_st.rs_state   = DRS_NOT_STARTED;
+
+	ds_mgmt_pool_query_info_out  = exp_info;
 	ds_mgmt_pool_query_mem_bytes = 11;
+	/*
+	 * rebuild results returned to us shouldn't include the number of
+	 * objects/records if there's an error.
+	 */
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_obj_nr = 42;
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_rec_nr = 999;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
-	expect_query_resp_with_info(&exp_info,
-				    MGMT__POOL_REBUILD_STATUS__STATE__DONE,
-				    &resp);
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__IDLE, &resp);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
 
 static void
-test_drpc_pool_query_success_rebuild_err(void **state)
+test_drpc_pool_query_rebuild_done_err(void **state)
+{
+	Drpc__Call       call     = DRPC__CALL__INIT;
+	Drpc__Response   resp     = DRPC__RESPONSE__INIT;
+	daos_pool_info_t exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	exp_info.pi_rebuild_st.rs_version = 1;
+	exp_info.pi_rebuild_st.rs_errno   = -DER_MISC;
+	exp_info.pi_rebuild_st.rs_state   = DRS_COMPLETED;
+
+	ds_mgmt_pool_query_info_out  = exp_info;
+	ds_mgmt_pool_query_mem_bytes = 11;
+	/*
+	 * rebuild results returned to us shouldn't include the number of
+	 * objects/records if there's an error.
+	 */
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_obj_nr = 42;
+	ds_mgmt_pool_query_info_out.pi_rebuild_st.rs_rec_nr = 999;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	expect_query_resp_with_info(&exp_info, MGMT__POOL_REBUILD_STATUS__STATE__DONE, &resp);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_rebuild_busy_err(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
@@ -3248,6 +3337,63 @@ test_drpc_dev_set_faulty_success(void **state)
 }
 
 /*
+ * dRPC bio health query tests
+ */
+
+static void
+setup_bio_health_drpc_call(Drpc__Call *call, const char *uuid_str)
+{
+	Ctl__BioHealthReq req = CTL__BIO_HEALTH_REQ__INIT;
+	size_t            len;
+	uint8_t          *body;
+
+	req.dev_uuid = (char *)uuid_str;
+
+	len = ctl__bio_health_req__get_packed_size(&req);
+	D_ALLOC(body, len);
+	ctl__bio_health_req__pack(&req, body);
+
+	call->body.data = body;
+	call->body.len  = len;
+}
+
+static void
+expect_bio_health_resp_with_fields(Drpc__Response *resp, uint8_t exp_percentage)
+{
+	Ctl__BioHealthResp *bh_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	bh_resp = ctl__bio_health_resp__unpack(NULL, resp->body.len, resp->body.data);
+	assert_non_null(bh_resp);
+	assert_int_equal(bh_resp->status, 0);
+	assert_int_equal(bh_resp->percentage_used, exp_percentage);
+
+	ctl__bio_health_resp__free_unpacked(bh_resp, NULL);
+}
+
+static void
+test_drpc_bio_health_query_success(void **state)
+{
+	Drpc__Call     call            = DRPC__CALL__INIT;
+	Drpc__Response resp            = DRPC__RESPONSE__INIT;
+	uint8_t        test_percentage = 49;
+
+	/* Mock will populate response with test data including percentage_used=49 */
+	setup_bio_health_drpc_call(&call, TEST_UUID);
+
+	/* Call the handler */
+	ds_mgmt_drpc_bio_health_query(&call, &resp);
+
+	/* Verify percentage_used is properly copied to response */
+	expect_bio_health_resp_with_fields(&resp, test_percentage);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
  * dRPC check start tests
  */
 
@@ -3354,6 +3500,8 @@ test_drpc_check_act_success(void **state)
 
 #define SET_FAULTY_TEST(x)	cmocka_unit_test_setup(x, drpc_dev_set_faulty_setup)
 
+#define BIO_HEALTH_TEST(x)      cmocka_unit_test(x)
+
 #define CHECK_START_TEST(x)	cmocka_unit_test(x)
 
 #define CHECK_STOP_TEST(x)	cmocka_unit_test(x)
@@ -3392,6 +3540,7 @@ main(void)
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_invalid_value_type),
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
 	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
+	    POOL_SET_PROP_TEST(test_drpc_pool_set_prop_byteval_invalid_type),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_bad_uuid),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_num_success),
 	    POOL_GET_PROP_TEST(test_drpc_pool_get_prop_str_success),
@@ -3409,10 +3558,12 @@ main(void)
 	    REINT_TEST(test_drpc_reint_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
-	    QUERY_TEST(test_drpc_pool_query_success),
-	    QUERY_TEST(test_drpc_pool_query_success_rebuild_busy),
-	    QUERY_TEST(test_drpc_pool_query_success_rebuild_done),
-	    QUERY_TEST(test_drpc_pool_query_success_rebuild_err),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_success),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_done_success),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_success),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_err),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_done_err),
+	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_err),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_bad_uuid),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_mgmt_svc_fails),
 	    QUERY_TARGETS_TEST(test_drpc_pool_query_targets_with_targets),
@@ -3449,6 +3600,7 @@ main(void)
 	    SET_FAULTY_TEST(test_drpc_dev_set_faulty_bad_uuid),
 	    SET_FAULTY_TEST(test_drpc_dev_set_faulty_fails),
 	    SET_FAULTY_TEST(test_drpc_dev_set_faulty_success),
+	    BIO_HEALTH_TEST(test_drpc_bio_health_query_success),
 	    CHECK_START_TEST(test_drpc_check_start_success),
 	    CHECK_STOP_TEST(test_drpc_check_stop_success),
 	    CHECK_QUERY_TEST(test_drpc_check_query_success),

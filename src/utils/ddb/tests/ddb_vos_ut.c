@@ -1,5 +1,6 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
+ * Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,7 +21,7 @@ __wrap_vos_dtx_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *disca
 	assert_ptr_equal(dti, DTX_ID_PTR);
 	assert_ptr_equal(discarded, DISCARDED_PTR);
 
-	return mock();
+	return mock_type(int);
 }
 
 #define SOME_ERROR (-DER_BAD_CERT)
@@ -31,11 +32,11 @@ dtx_act_discard_invalid_test(void **state)
 	daos_handle_t coh = {.cookie = COH_COOKIE};
 	int           rc;
 
-	will_return(__wrap_vos_dtx_discard_invalid, SOME_ERROR);
+	will_return_int(__wrap_vos_dtx_discard_invalid, SOME_ERROR);
 	rc = dv_dtx_active_entry_discard_invalid(coh, DTX_ID_PTR, DISCARDED_PTR);
 	assert_int_equal(rc, SOME_ERROR);
 
-	will_return(__wrap_vos_dtx_discard_invalid, 0);
+	will_return_int(__wrap_vos_dtx_discard_invalid, 0);
 	rc = dv_dtx_active_entry_discard_invalid(coh, DTX_ID_PTR, DISCARDED_PTR);
 	assert_int_equal(rc, 0);
 }
@@ -50,7 +51,7 @@ const struct CMUnitTest dv_test_cases[] = {
 };
 
 int
-ddb_vos_tests_run()
+ddb_vos_ut_run()
 {
 	return cmocka_run_group_tests_name("DDB VOS Interface Unit Tests", dv_test_cases, NULL,
 					   NULL);

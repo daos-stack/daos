@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -391,6 +391,8 @@ co_properties(void **state)
 	char			*exp_owner;
 	char			*exp_owner_grp;
 	char			 str[37];
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -945,6 +947,106 @@ co_op_retry(void **state)
 }
 
 static void
+co_create_label_async_retry(void **state)
+{
+	test_arg_t   *arg   = *state;
+	const char   *label = "co_create_label_async_retry_cont";
+	daos_handle_t eqh;
+	daos_event_t  ev;
+	daos_event_t *evp = NULL;
+	uuid_t        uuid;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = daos_eq_create(&eqh);
+	assert_rc_equal(rc, 0);
+	rc = daos_event_init(&ev, eqh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Force a "lost" reply so the create RPC is retried (task re-run). */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("creating container %s asynchronously (retry / use-after-free) ... ", label);
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid, &ev);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_eq_poll(eqh, 1, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(ev.ev_error, 0);
+	print_message("success, created container: " DF_UUID "\n", DP_UUID(uuid));
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	rc = daos_eq_destroy(eqh, 0);
+	assert_rc_equal(rc, 0);
+
+	print_message("destroying container %s ... ", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+}
+
+static void
+co_create_label_rf_async_retry(void **state)
+{
+	test_arg_t   *arg   = *state;
+	const char   *label = "co_create_label_props_async_retry_cont";
+	daos_prop_t  *prop;
+	daos_handle_t eqh;
+	daos_event_t  ev;
+	daos_event_t *evp = NULL;
+	uuid_t        uuid;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val  = DAOS_PROP_CO_REDUN_RF0;
+
+	rc = daos_eq_create(&eqh);
+	assert_rc_equal(rc, 0);
+	rc = daos_event_init(&ev, eqh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Force a "lost" reply so the create RPC is retried (task re-run). */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("creating container %s with props asynchronously (retry / use-after-free) "
+		      "... ",
+		      label);
+	rc = daos_cont_create_with_label(arg->pool.poh, label, prop, &uuid, &ev);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_eq_poll(eqh, 1, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(ev.ev_error, 0);
+	print_message("success, created container: " DF_UUID "\n", DP_UUID(uuid));
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	rc = daos_eq_destroy(eqh, 0);
+	assert_rc_equal(rc, 0);
+
+	daos_prop_free(prop);
+
+	print_message("destroying container %s ... ", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+}
+
+static void
 co_acl_get(test_arg_t *arg, struct daos_acl *exp_acl,
 	   const char *exp_owner, const char *exp_owner_grp)
 {
@@ -1041,6 +1143,8 @@ co_acl(void **state)
 	char			*user;
 	d_string_t		 name_to_remove = "friendlyuser@";
 	uint8_t			 type_to_remove = DAOS_ACL_USER;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("create container with access props, and verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -2613,6 +2717,8 @@ co_rf_simple(void **state)
 	daos_recx_t		 recx;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs 3 alive nodes after excluding 3 */
 	if (!test_runable(arg0, 6))
 		skip();
@@ -2845,6 +2951,8 @@ delet_container_during_aggregation(void **state)
 	int		 i;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* Prepare records */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 
@@ -3024,6 +3132,8 @@ co_redun_lvl(void **state)
 	int			 nrank_per_node, ndom;
 	d_rank_t		 ranks[3];
 	int			 i, rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg0, 8))
 		skip();
@@ -3848,6 +3958,8 @@ co_op_dup_timing(void **state)
 	double             t_fp_loop[NUM_FP];
 	int                rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* Create a separate pool with svc_ops_entry_age property (dummy workload duration). */
 	prop = daos_prop_alloc(3);
 	/* label - set arg->pool_label to use daos_pool_connect() */
@@ -4039,6 +4151,45 @@ co_op_dup_timing(void **state)
 	test_teardown((void **)&arg);
 }
 
+/* Opening a DESTROYING container should fail. */
+static void
+co_open_destroying(void **state)
+{
+	test_arg_t   *arg   = *state;
+	char         *label = "c_open_destroying";
+	uuid_t        uuid;
+	daos_handle_t coh;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	par_barrier(PAR_COMM_WORLD);
+
+	if (arg->myrank != 0)
+		goto out;
+
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("created container '%s' (" DF_UUIDF ")\n", label, DP_UUID(uuid));
+
+	print_message("destroying container '%s' with fault injection\n", label);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_DESTROY_FAIL_POST | DAOS_FAIL_ALWAYS);
+	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	assert_rc_equal(rc, -DER_NOMEM);
+
+	print_message("attempting to open DESTROYING container '%s'\n", label);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_CONT_DESTROYING);
+
+	print_message("destroying container '%s'\n", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+
+out:
+	par_barrier(PAR_COMM_WORLD);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -4111,6 +4262,11 @@ static const struct CMUnitTest co_tests[] = {
     {"CONT33: exclusive open", co_exclusive_open, NULL, test_case_teardown},
     {"CONT34: evict handles", co_evict_hdls, NULL, test_case_teardown},
     {"CONT35: container duplicate op detection timing", co_op_dup_timing, NULL, test_case_teardown},
+    {"CONT36: open DESTROYING", co_open_destroying, NULL, test_case_teardown},
+    {"CONT37: retry async cont create with label", co_create_label_async_retry, NULL,
+     test_case_teardown},
+    {"CONT38: retry async cont create with label and RF", co_create_label_rf_async_retry, NULL,
+     test_case_teardown},
 };
 
 int

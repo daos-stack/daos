@@ -1,7 +1,9 @@
 hosts:
   test_servers: 2
   test_clients: 2
+
 timeout: 1800
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -10,20 +12,30 @@ server_config:
       nr_xs_helpers: 1
       log_file: daos_server0.log
       storage: auto
-pool:
-  mode: 146
-  name: daos_server
+
+pool_common: &pool_common
+  properties: rd_fac:0,space_rb:0,reclaim:disabled
+
 pool_qty_1:
   size: 50%
+  <<: *pool_common
+
 pool_qty_2:
   size: 25%
+  <<: *pool_common
+
 pool_qty_3:
   size: 16%
+  <<: *pool_common
+
 pool_qty_10:
   size: 5%
+  <<: *pool_common
+
 container:
   type: POSIX
   control_method: daos
+
 ior:
   no_parallel_job: 10
   clientslots:

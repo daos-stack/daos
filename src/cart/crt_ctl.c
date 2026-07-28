@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,6 +150,28 @@ out:
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send() failed with rc %d\n", rc);
+}
+
+void
+crt_hdlr_ctl_dump_counters(crt_rpc_t *rpc_req)
+{
+	char old_dlog_mask[1024];
+
+	/* HG counters require log levels to be at debug to be printed */
+
+	/* store current log mask */
+	d_log_getmasks(old_dlog_mask, 0, sizeof(old_dlog_mask), 0);
+	d_log_setmasks("DEBUG", -1);
+	HG_Set_log_level("debug");
+
+	HG_Diag_dump_counters();
+
+	/* restore log masks */
+	/* Note: we cannot query log level from HG today so we restore back to 'warning' */
+	HG_Set_log_level("warning");
+	d_log_setmasks(old_dlog_mask, -1);
+
+	crt_reply_send(rpc_req);
 }
 
 void

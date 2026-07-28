@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -29,7 +30,9 @@ import (
 // NB: There should only be one set of CFLAGS/LDFLAGS definitions
 // for the whole package!
 #cgo CFLAGS: -I${SRCDIR}/../../../utils
-#cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common -lduns -ldfs -luuid -ldaos_cmd_hdlrs
+#cgo LDFLAGS: -lgurt -lcart -ldaos -lduns -ldfs -luuid -ldaos_cmd_hdlrs
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 
 #include "util.h"
 
