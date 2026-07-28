@@ -2252,6 +2252,9 @@ obj_ioc_fini(struct obj_io_context *ioc, int err)
 	}
 }
 
+static void
+obj_ioc_end(struct obj_io_context *ioc, int err);
+
 /* Setup lite IO context, it is only for compound RPC so far:
  * - no associated object yet
  * - no permission check (not sure it's read/write)
@@ -2355,6 +2358,10 @@ out:
 	d_tm_inc_gauge(tls->ot_op_active[opc_get(rpc->cr_opc)], 1);
 	ioc->ioc_start_time = daos_get_ntime();
 	ioc->ioc_began = 1;
+
+	if (rc != 0)
+		obj_ioc_end(ioc, rc);
+
 	return rc;
 }
 
