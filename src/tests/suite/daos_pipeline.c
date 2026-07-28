@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,12 +10,9 @@
  * src/tests/suite/daos_pipeline.c
  */
 #include <daos.h>
-#if BUILD_PIPELINE
 #include <daos_pipeline.h>
-#endif
 #include "daos_test.h"
 
-#if BUILD_PIPELINE
 #define NUM_AKEYS 4
 #define VALUE_MAX_SIZE 10
 
@@ -2007,19 +2005,20 @@ pipeline_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
 }
-#endif
 
 int
 run_daos_pipeline_test(int rank, int size)
 {
-	int rc = 0;
+	int  rc               = 0;
+	bool pipeline_enabled = false;
 
-#if BUILD_PIPELINE
-	rc = cmocka_run_group_tests_name("DAOS_Pipeline", pipeline_tests, pipeline_setup,
-					 test_teardown);
-#else
-	print_message("DAOS PIPELINE is not enabled in release builds\n");
-#endif
+	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
+	if (pipeline_enabled)
+		rc = cmocka_run_group_tests_name("DAOS_Pipeline", pipeline_tests, pipeline_setup,
+						 test_teardown);
+	else
+		print_message("DAOS PIPELINE is not enabled (set DAOS_PIPELINE=1 to enable)\n");
+
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
