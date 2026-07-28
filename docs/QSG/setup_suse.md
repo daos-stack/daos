@@ -423,7 +423,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		dmg system query -v
 
 		# all the server ranks should show 'Joined' STATE
-		Rank UUID                                 Control Address  Fault Domain                  State  Reason
+		Rank UUID                                 Fabric Address   Fault Domain                  State  Reason
 		---- ----                                 ---------------  ------------                  -----  ------
 		0    604c4ffa-563a-49dc-b702-3c87293dbcf3 10.8.1.179:10001 /server-1.test.example.com Joined
 		1    f0791f98-4379-4ace-a083-6ca3ffa65756 10.8.1.179:10001 /server-1.test.example.com Joined
