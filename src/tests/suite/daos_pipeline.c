@@ -255,8 +255,10 @@ skip_if_pipeline_disabled(void)
 	bool pipeline_enabled = false;
 
 	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
-	if (!pipeline_enabled)
+	if (!pipeline_enabled) {
+		print_message("DAOS PIPELINE is not enabled (set DAOS_PIPELINE=1 to enable)\n");
 		skip();
+	}
 }
 
 static void
