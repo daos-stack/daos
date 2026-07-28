@@ -39,7 +39,7 @@ ior: &ior_base
   repetitions: 1
   api: DFS
   dfs_oclass: SX
-  transfer_size: 8388608 # 8MiB
+  transfer_size: 2097152  # 2MiB
   block_size: 805306368 # 768MiB
 
 ior_write:
