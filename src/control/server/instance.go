@@ -86,7 +86,7 @@ func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r
 		storage:          p,
 		joinSystem:       jf,
 		drpcReady:        make(chan *srvpb.NotifyReadyReq),
-		storageReady:     make(chan bool),
+		storageReady:     make(chan bool, 1),
 		startRequested:   make(chan bool),
 		Publisher:        ps,
 		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
