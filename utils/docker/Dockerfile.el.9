@@ -195,6 +195,7 @@ COPY --chown=daos_server:daos_server utils/completion utils/completion
 
 # select compiler to use
 ARG COMPILER=gcc
+ARG SANITIZERS
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
@@ -203,7 +204,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                     \
         scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER  \
               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE \
-              FIRMWARE_MGMT=1 &&                                        \
+              FIRMWARE_MGMT=1 ${SANITIZERS:+SANITIZERS=$SANITIZERS} &&  \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&        \
         go clean -cache &&                                              \
         cp -r utils/config/examples /opt/daos;                          \
