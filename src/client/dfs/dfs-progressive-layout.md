@@ -376,11 +376,6 @@ Implemented behavior:
 - Relink directory descent (`fetch_mark_oids`): when descending a leaked directory (Pass 1 of
   `--relink`), each child entry is read for its tail fields (`tail_oid`/`tail_state`, only present at
   layout >= v4) and any active tail oid is marked too, so it is not double-relinked or removed.
-- Consequence for the other modes:
-  - `--print`: tail objects of intact files are no longer reported as leaked.
-  - `--remove`: tail objects of intact files are no longer punched (previously this destroyed the
-    file's `[split_off, EOF)` data).
-  - `--relink`: tail objects of intact files are no longer relinked as bogus standalone files.
 
 Orphan (leaked) handling and its limitation:
 
