@@ -110,6 +110,42 @@ Ranks Action Result
 	}
 }
 
+func TestPretty_fabricAddress(t *testing.T) {
+	for name, tc := range map[string]struct {
+		uri        string
+		expAddress string
+	}{
+		"IPv4 UCX": {
+			uri:        "ucx+dc_x://10.92.62.190:20000",
+			expAddress: "10.92.62.190:20000",
+		},
+		"IPv6 UCX": {
+			uri:        "ucx+dc_x://[2a04:f547:93:30fa::3e83]:20000",
+			expAddress: "[2a04:f547:93:30fa::3e83]:20000",
+		},
+		"IPv4 OFI": {
+			uri:        "ofi+verbs;ofi_rxm://10.92.62.190:20000",
+			expAddress: "10.92.62.190:20000",
+		},
+		"legacy address": {
+			uri:        "10.92.62.190:20000",
+			expAddress: "10.92.62.190:20000",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expAddress, fabricAddress(tc.uri), "fabric address")
+		})
+	}
+}
+
+func mockMemberWithFabricURI(t *testing.T, idx uint32, uri string) *Member {
+	t.Helper()
+
+	member := MockMember(t, idx, MemberStateJoined)
+	member.PrimaryFabricURI = uri
+	return member
+}
+
 func TestPretty_PrintSystemQueryResp(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp           *control.SystemQueryResp
@@ -172,15 +208,16 @@ Unknown 3 hosts: foo[7-9]
 		"single response verbose": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
+					mockMemberWithFabricURI(t, 0,
+						"ucx+dc_x://[2a04:f547:93:30fa::3e83]:20000"),
 				},
 			},
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State  Reason 
----- ----                                 --------------- ------------ -----  ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined        
+Rank UUID                                 Control Address Fabric Address                  Fault Domain State  Reason 
+---- ----                                 --------------- --------------                  ------------ -----  ------ 
+0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 [2a04:f547:93:30fa::3e83]:20000 /            Joined        
 
 `,
 		},
@@ -195,9 +232,9 @@ Rank UUID                                 Control Address Fault Domain State  Re
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State  Reason 
----- ----                                 --------------- ------------ -----  ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined        
+Rank UUID                                 Control Address Fabric Address  Fault Domain State  Reason 
+---- ----                                 --------------- --------------  ------------ -----  ------ 
+0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 127.0.0.0:10001 /            Joined        
 
 Unknown 3 hosts: foo[7-9]
 Unknown 3 ranks: 7-9
@@ -383,15 +420,15 @@ Unknown 3 hosts: foo[7-9]
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State    Reason 
----- ----                                 --------------- ------------ -----    ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined          
-1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 /            Joined          
-2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 /            Stopped         
-3    00000003-0003-0003-0003-000000000003 127.0.0.3:10001 /            Excluded        
-4    00000004-0004-0004-0004-000000000004 127.0.0.4:10001 /            Stopped         
-5    00000005-0005-0005-0005-000000000005 127.0.0.5:10001 /            Joined          
-6    00000006-0006-0006-0006-000000000006 127.0.0.6:10001 /            Joined          
+Rank UUID                                 Control Address Fabric Address  Fault Domain State    Reason 
+---- ----                                 --------------- --------------  ------------ -----    ------ 
+0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 127.0.0.0:10001 /            Joined          
+1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 127.0.0.1:10001 /            Joined          
+2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 127.0.0.2:10001 /            Stopped         
+3    00000003-0003-0003-0003-000000000003 127.0.0.3:10001 127.0.0.3:10001 /            Excluded        
+4    00000004-0004-0004-0004-000000000004 127.0.0.4:10001 127.0.0.4:10001 /            Stopped         
+5    00000005-0005-0005-0005-000000000005 127.0.0.5:10001 127.0.0.5:10001 /            Joined          
+6    00000006-0006-0006-0006-000000000006 127.0.0.6:10001 127.0.0.6:10001 /            Joined          
 
 `,
 		},
@@ -412,15 +449,15 @@ Rank UUID                                 Control Address Fault Domain State    
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State    Reason 
----- ----                                 --------------- ------------ -----    ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined          
-1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 /            Joined          
-2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 /            Stopped         
-3    00000003-0003-0003-0003-000000000003 127.0.0.3:10001 /            Excluded        
-4    00000004-0004-0004-0004-000000000004 127.0.0.4:10001 /            Stopped         
-5    00000005-0005-0005-0005-000000000005 127.0.0.5:10001 /            Joined          
-6    00000006-0006-0006-0006-000000000006 127.0.0.6:10001 /            Joined          
+Rank UUID                                 Control Address Fabric Address  Fault Domain State    Reason 
+---- ----                                 --------------- --------------  ------------ -----    ------ 
+0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 127.0.0.0:10001 /            Joined          
+1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 127.0.0.1:10001 /            Joined          
+2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 127.0.0.2:10001 /            Stopped         
+3    00000003-0003-0003-0003-000000000003 127.0.0.3:10001 127.0.0.3:10001 /            Excluded        
+4    00000004-0004-0004-0004-000000000004 127.0.0.4:10001 127.0.0.4:10001 /            Stopped         
+5    00000005-0005-0005-0005-000000000005 127.0.0.5:10001 127.0.0.5:10001 /            Joined          
+6    00000006-0006-0006-0006-000000000006 127.0.0.6:10001 127.0.0.6:10001 /            Joined          
 
 Unknown 3 hosts: foo[7-9]
 Unknown 3 ranks: 7-9

@@ -101,18 +101,23 @@ func printSystemQuery(out io.Writer, members system.Members, absentRanks *rankli
 func printSystemQueryVerbose(out io.Writer, members system.Members) {
 	rankTitle := "Rank"
 	uuidTitle := "UUID"
-	addrTitle := "Control Address"
+	controlAddrTitle := "Control Address"
+	fabricAddrTitle := "Fabric Address"
 	faultDomainTitle := "Fault Domain"
 	stateTitle := "State"
 	reasonTitle := "Reason"
 
-	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, addrTitle, faultDomainTitle, stateTitle, reasonTitle)
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, controlAddrTitle, fabricAddrTitle,
+		faultDomainTitle, stateTitle, reasonTitle)
 	var table []txtfmt.TableRow
 
 	for _, m := range members {
 		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
 		row[uuidTitle] = m.UUID.String()
-		row[addrTitle] = m.Addr.String()
+		row[controlAddrTitle] = m.Addr.String()
+		// The fabric URI reflects the server's addr_format selection, while Addr
+		// remains the management endpoint used for control-plane operations.
+		row[fabricAddrTitle] = fabricAddress(m.PrimaryFabricURI)
 		row[faultDomainTitle] = m.FaultDomain.String()
 		row[stateTitle] = m.State.String()
 		row[reasonTitle] = m.Info
@@ -121,6 +126,13 @@ func printSystemQueryVerbose(out io.Writer, members system.Members) {
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
+}
+
+func fabricAddress(uri string) string {
+	if _, addr, found := strings.Cut(uri, "://"); found {
+		return addr
+	}
+	return uri
 }
 
 // PrintSystemQueryResponse generates a human-readable representation of the supplied
