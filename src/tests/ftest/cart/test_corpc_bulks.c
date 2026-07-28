@@ -66,16 +66,6 @@ enum {
 TEST_CORPC_BULKS_RPC(bulk_test, CRT_ISEQ_BULK_TEST, CRT_OSEQ_BULK_TEST);
 TEST_CORPC_BULKS_RPC(shutdown, CRT_ISEQ_SHUTDOWN, CRT_OSEQ_SHUTDOWN);
 
-static int
-corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
-{
-	return 0;
-}
-
-struct crt_corpc_ops corpc_bulk_ops = {
-    .co_aggregate = corpc_aggregate,
-};
-
 static void
 __error_exit(int line, const char *fn)
 {
@@ -284,7 +274,7 @@ static struct crt_proto_rpc_format proto_rpc_fmt[] = {{
 							  .prf_flags   = 0,
 							  .prf_req_fmt = &CQF_bulk_test,
 							  .prf_hdlr    = corpc_hdlr,
-							  .prf_co_ops  = &corpc_bulk_ops,
+							  .prf_co_ops  = NULL,
 						      },
 						      {
 							  .prf_flags   = 0,
