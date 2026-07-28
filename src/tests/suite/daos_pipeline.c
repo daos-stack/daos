@@ -250,10 +250,22 @@ cleanup_pipe(daos_pipeline_t *p)
 }
 
 static void
+skip_if_pipeline_disabled(void)
+{
+	bool pipeline_enabled = false;
+
+	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
+	if (!pipeline_enabled)
+		skip();
+}
+
+static void
 check_pipelines(void **state)
 {
 	daos_pipeline_t	*p0 = NULL;
 	int		rc = 0;
+
+	skip_if_pipeline_disabled();
 
 	print_message(" A. Check that NULL pipelines get detected.\n");
 	rc = daos_pipeline_check(p0);
@@ -1089,6 +1101,8 @@ simple_pipeline(void **state)
 	static char	*fields[NR_IODS] = {"Owner", "Species", "Sex", "Age"};
 	int		nr_aggr;
 
+	skip_if_pipeline_disabled();
+
 	rc = daos_cont_create_with_label(arg->pool.poh, "simple_pipeline_cont", NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1557,6 +1571,8 @@ simple_pipeline_arrays(void **state)
 	static char	field[] = "Array";
 	int		rc;
 
+	skip_if_pipeline_disabled();
+
 	rc = daos_cont_create_with_label(arg->pool.poh, "simple_pipeline_arrays", NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1955,6 +1971,8 @@ simple_pipeline_dfs(void **state)
 	static char	field[] = "DFS_ENTRY";
 	int		rc;
 
+	skip_if_pipeline_disabled();
+
 	rc = daos_cont_create_with_label(arg->pool.poh, "simple_pipeline_dfs", NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -2009,17 +2027,10 @@ pipeline_setup(void **state)
 int
 run_daos_pipeline_test(int rank, int size)
 {
-	int  rc               = 0;
-	bool pipeline_enabled = false;
+	int rc = 0;
 
-	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
-	if (pipeline_enabled)
-		rc = cmocka_run_group_tests_name("DAOS_Pipeline", pipeline_tests, pipeline_setup,
-						 test_teardown);
-	else
-		print_message("DAOS PIPELINE is not enabled (set DAOS_PIPELINE=1 to enable)\n");
-		skip();
-
+	rc = cmocka_run_group_tests_name("DAOS_Pipeline", pipeline_tests, pipeline_setup,
+					 test_teardown);
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
