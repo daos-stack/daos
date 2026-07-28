@@ -101,22 +101,18 @@ func printSystemQuery(out io.Writer, members system.Members, absentRanks *rankli
 func printSystemQueryVerbose(out io.Writer, members system.Members) {
 	rankTitle := "Rank"
 	uuidTitle := "UUID"
-	controlAddrTitle := "Control Address"
 	fabricAddrTitle := "Fabric Address"
 	faultDomainTitle := "Fault Domain"
 	stateTitle := "State"
 	reasonTitle := "Reason"
 
-	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, controlAddrTitle, fabricAddrTitle,
+	formatter := txtfmt.NewTableFormatter(rankTitle, uuidTitle, fabricAddrTitle,
 		faultDomainTitle, stateTitle, reasonTitle)
 	var table []txtfmt.TableRow
 
 	for _, m := range members {
 		row := txtfmt.TableRow{rankTitle: fmt.Sprintf("%d", m.Rank)}
 		row[uuidTitle] = m.UUID.String()
-		row[controlAddrTitle] = m.Addr.String()
-		// The fabric URI reflects the server's addr_format selection, while Addr
-		// remains the management endpoint used for control-plane operations.
 		row[fabricAddrTitle] = fabricAddress(m.PrimaryFabricURI)
 		row[faultDomainTitle] = m.FaultDomain.String()
 		row[stateTitle] = m.State.String()
