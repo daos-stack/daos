@@ -131,6 +131,9 @@ func TestPretty_fabricAddress(t *testing.T) {
 			uri:        "10.92.62.190:20000",
 			expAddress: "10.92.62.190:20000",
 		},
+		"missing address": {
+			expAddress: "N/A",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.AssertEqual(t, tc.expAddress, fabricAddress(tc.uri), "fabric address")
@@ -224,7 +227,7 @@ Rank UUID                                 Fabric Address                  Fault 
 		"single response verbose with missing hosts and ranks": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
+					mockMemberWithFabricURI(t, 0, ""),
 				},
 			},
 			absentHosts:    "foo[7,8,9]",
@@ -232,9 +235,9 @@ Rank UUID                                 Fabric Address                  Fault 
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Fabric Address  Fault Domain State  Reason 
----- ----                                 --------------  ------------ -----  ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined        
+Rank UUID                                 Fabric Address Fault Domain State  Reason 
+---- ----                                 -------------- ------------ -----  ------ 
+0    00000000-0000-0000-0000-000000000000 N/A            /            Joined        
 
 Unknown 3 hosts: foo[7-9]
 Unknown 3 ranks: 7-9

@@ -125,6 +125,9 @@ func printSystemQueryVerbose(out io.Writer, members system.Members) {
 }
 
 func fabricAddress(uri string) string {
+	if uri == "" {
+		return "N/A"
+	}
 	if _, addr, found := strings.Cut(uri, "://"); found {
 		return addr
 	}
