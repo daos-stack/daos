@@ -72,9 +72,10 @@ func (ei *EngineInstance) MountScm() error {
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
 func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
-	go func() {
-		ei.storageReady <- replaceRank
-	}()
+	select {
+	case ei.storageReady <- replaceRank:
+	default:
+	}
 }
 
 func (ei *EngineInstance) clearFormat(ctx context.Context, stopEngineFn func(context.Context, *EngineInstance) error) error {
