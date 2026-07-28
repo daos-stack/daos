@@ -1,0 +1,29 @@
+# (C) Copyright 2025 Intel Corporation.
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+"""Build cuFile plugin test/example programs."""
+
+import os
+
+
+def scons():
+    """Build cuFile test programs."""
+    Import('env_cufile')
+
+    env_test = env_cufile.Clone()
+    env_test.AppendUnique(LIBS=['daos_cufile'])
+
+    # Example program showing Mode 1: cuFile + dfuse (fd-based)
+    example = env_test.d_test_program('daos_cufile_example',
+                                      ['daos_cufile_example.c'])
+    env_test.Install(os.path.join('$PREFIX', 'bin'), example)
+
+    # Example program showing Mode 2: explicit DAOS API (no dfuse)
+    mode2_example = env_test.d_test_program('daos_cufile_mode2_example',
+                                             ['daos_cufile_mode2_example.c'])
+    env_test.Install(os.path.join('$PREFIX', 'bin'), mode2_example)
+
+
+if __name__ == "SCons.Script":
+    scons()

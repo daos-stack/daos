@@ -19,6 +19,7 @@ def scons():
         SConscript("dfuse/SConscript")
         SConscript("serialize/SConscript")
         SConscript("ds3/SConscript")
+        SConscript("cufile/SConscript")
 
         SConscript("pydaos/SConscript")
         env.Install(os.path.join("$PREFIX", "lib/daos/python"), "setup.py")

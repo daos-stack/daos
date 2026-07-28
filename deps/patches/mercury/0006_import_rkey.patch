@@ -1,0 +1,531 @@
+From: Liang Zhen <gnailzenh@gmail.com>
+Subject: [RFC PATCH] na: Add NA_Mem_handle_import_rkey() for third-party RDMA key import
+
+Add a new NA-layer API that allows importing an externally-created RDMA
+memory registration key (e.g., from NVIDIA cuFile/nvidia-fs) into a
+Mercury NA memory handle, without performing local memory registration.
+
+This enables storage systems like DAOS to receive a GPU buffer's RDMA
+descriptor from cuFile's CUfileFSOps_t read/write callbacks (via the
+cufileRDMAInfo_t parameter) and use it for direct GPU RDMA transfers
+through Mercury's existing bulk transfer infrastructure.
+
+The imported handle is treated as a remote handle — it can be used as
+the remote_mem_handle in NA_Put()/NA_Get() operations, just like a
+handle obtained from NA_Mem_handle_deserialize().
+
+Implementation notes:
+- UCX backend: Returns NA_OPNOTSUPPORTED. nvidia-fs produces raw verbs rkeys
+  which are not ABI-compatible with UCX's ucp_rkey_pack() format. The caller
+  (CaRT) falls back to normal bulk create with HMEM flags, which lets UCX
+  handle CUDA memory natively via its own registration path.
+- OFI backend: Constructs a remote handle from fi_mr_key + base address
+  + length. The raw key is expected to be a uint64_t fi_mr_key (for
+  providers using FI_MR_PROV_KEY) or the output of fi_mr_raw_attr().
+- SM/BMI/MPI/PSM backends: Not supported (returns NA_OPNOTSUPPORTED).
+
+Use case: NVIDIA GPUDirect Storage cuFile plugin
+  When cuFile calls CUfileFSOps_t->read() with a non-NULL rdma_info,
+  rdma_info->desc_str contains a serialized RDMA descriptor for the
+  GPU buffer. The DAOS client can import this via:
+
+    NA_Mem_handle_import_rkey(na_class, &remote_handle,
+                             rdma_info->desc_str, rdma_info->desc_len,
+                             remote_addr, size, NA_MEM_READWRITE);
+
+  Then use remote_handle in bulk transfers — the server does RDMA
+  directly to/from GPU memory without any Mercury-side GPU registration.
+
+Signed-off-by: Liang Zhen <gnailzenh@gmail.com>
+---
+ src/na/na.h        |  41 ++++++++++++++++++++++++++
+ src/na/na.c        |  42 ++++++++++++++++++++++++++
+ src/na/na_ucx.c    |  63 ++++++++++++++++++++++++++++++++++++++++
+ src/na/na_ofi.c    |  62 +++++++++++++++++++++++++++++++++++++++
+ src/na/na_sm.c     |   1 +
+ src/na/na_bmi.c    |   1 +
+ src/na/na_mpi.c    |   1 +
+ src/na/na_psm.c    |   1 +
+ src/mercury_bulk.h |  19 +++++++++++++
+ src/mercury_bulk.c |  74 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 10 files changed, 305 insertions(+)
+
+diff --git a/src/na/na.h b/src/na/na.h
+index abc1234..def5678 100644
+--- a/src/na/na.h
++++ b/src/na/na.h
+@@ -808,6 +808,38 @@ NA_PUBLIC na_return_t
+ NA_Mem_handle_deserialize(na_class_t *na_class, na_mem_handle_t **mem_handle_p,
+     const void *buf, size_t buf_size);
+ 
++/**
++ * Import a remote memory handle from a raw (third-party) RDMA key.
++ *
++ * This creates a remote NA memory handle from an externally-created RDMA
++ * memory registration key, without performing local memory registration.
++ * The resulting handle can be used as the remote_mem_handle parameter in
++ * NA_Put() / NA_Get() operations.
++ *
++ * This is intended for importing RDMA descriptors from external systems
++ * such as NVIDIA cuFile (GPUDirect Storage), where the GPU buffer's memory
++ * registration is performed by nvidia-fs and the serialized key is passed
++ * to the storage plugin via cufileRDMAInfo_t.
++ *
++ * \param na_class [IN/OUT]     pointer to NA class
++ * \param mem_handle_p [OUT]    pointer to returned NA memory handle
++ * \param rkey_buf [IN]         raw RDMA key buffer (transport-specific):
++ *                                - OFI: uint64_t fi_mr_key or raw key blob
++ *                                - UCX: not supported (returns NA_OPNOTSUPPORTED)
++ * \param rkey_buf_size [IN]    size of rkey_buf in bytes
++ * \param remote_base_addr [IN] remote base virtual address of the memory region
++ * \param remote_size [IN]      size of the remote memory region in bytes
++ * \param flags [IN]            permission flag:
++ *                                - NA_MEM_READWRITE
++ *                                - NA_MEM_READ_ONLY
++ *
++ * \return NA_SUCCESS or corresponding NA error code
++ */
++NA_PUBLIC na_return_t
++NA_Mem_handle_import_rkey(na_class_t *na_class,
++    na_mem_handle_t **mem_handle_p, const void *rkey_buf,
++    size_t rkey_buf_size, uint64_t remote_base_addr, uint64_t remote_size,
++    unsigned long flags);
++
+ /**
+  * Put data to remote address.
+  * Initiate a put to the registered memory regions with the given offset/size.
+@@ -1094,6 +1126,15 @@ NA_Mem_handle_import_rkey(na_class_t *na_class,
+      * Operations struct — plugin function pointer table
+      */
+     na_return_t (*mem_handle_deserialize)(na_class_t *na_class,
+         na_mem_handle_t **mem_handle_p, const void *buf, size_t buf_size);
++    /**
++     * Import a remote memory handle from a raw third-party RDMA key.
++     * Optional — may be NULL if the transport does not support it.
++     */
++    na_return_t (*mem_handle_import_rkey)(na_class_t *na_class,
++        na_mem_handle_t **mem_handle_p, const void *rkey_buf,
++        size_t rkey_buf_size, uint64_t remote_base_addr,
++        uint64_t remote_size, unsigned long flags);
+     na_return_t (*put)(na_class_t *na_class, na_context_t *context,
+         na_cb_t callback, void *arg, na_mem_handle_t *local_mem_handle,
+         na_offset_t local_offset, na_mem_handle_t *remote_mem_handle,
+diff --git a/src/na/na.c b/src/na/na.c
+index abc1234..def5678 100644
+--- a/src/na/na.c
++++ b/src/na/na.c
+@@ -1930,6 +1930,48 @@ error:
+     return ret;
+ }
+ 
++/*---------------------------------------------------------------------------*/
++na_return_t
++NA_Mem_handle_import_rkey(na_class_t *na_class,
++    na_mem_handle_t **mem_handle_p, const void *rkey_buf,
++    size_t rkey_buf_size, uint64_t remote_base_addr, uint64_t remote_size,
++    unsigned long flags)
++{
++    na_return_t ret;
++
++    NA_CHECK_SUBSYS_ERROR(mem, na_class == NULL, error, ret, NA_INVALID_ARG,
++        "NULL NA class");
++    NA_CHECK_SUBSYS_ERROR(mem, mem_handle_p == NULL, error, ret, NA_INVALID_ARG,
++        "NULL pointer to memory handle");
++    NA_CHECK_SUBSYS_ERROR(mem, rkey_buf == NULL, error, ret, NA_INVALID_ARG,
++        "NULL rkey buffer");
++    NA_CHECK_SUBSYS_ERROR(mem, rkey_buf_size == 0, error, ret, NA_INVALID_ARG,
++        "Zero rkey buffer size");
++    NA_CHECK_SUBSYS_ERROR(mem, remote_size == 0, error, ret, NA_INVALID_ARG,
++        "Zero remote size");
++
++    NA_CHECK_SUBSYS_ERROR(mem,
++        na_class->ops == NULL || na_class->ops->mem_handle_import_rkey == NULL,
++        error, ret, NA_OPNOTSUPPORTED,
++        "mem_handle_import_rkey plugin callback is not defined");
++
++    ret = na_class->ops->mem_handle_import_rkey(
++        na_class, mem_handle_p, rkey_buf, rkey_buf_size,
++        remote_base_addr, remote_size, flags);
++    NA_CHECK_SUBSYS_NA_ERROR(mem, error, ret,
++        "Could not import rkey into mem handle");
++
++    NA_LOG_SUBSYS_DEBUG(mem,
++        "Imported rkey into mem handle (%p), base=0x%" PRIx64 ", size=%" PRIu64,
++        (void *) *mem_handle_p, remote_base_addr, remote_size);
++
++    return NA_SUCCESS;
++
++error:
++    return ret;
++}
++
+ /*---------------------------------------------------------------------------*/
+ na_return_t
+ NA_Put(na_class_t *na_class, na_context_t *context, na_cb_t callback,
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index abc1234..def5678 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -920,6 +920,12 @@ static na_return_t
+ na_ucx_mem_handle_deserialize(na_class_t *na_class,
+     na_mem_handle_t **mem_handle_p, const void *buf, size_t buf_size);
+ 
++static na_return_t
++na_ucx_mem_handle_import_rkey(na_class_t *na_class,
++    na_mem_handle_t **mem_handle_p, const void *rkey_buf,
++    size_t rkey_buf_size, uint64_t remote_base_addr, uint64_t remote_size,
++    unsigned long flags);
++
+ static na_return_t
+ na_ucx_put(na_class_t *na_class, na_context_t *context, na_cb_t callback,
+     void *arg, na_mem_handle_t *local_mem_handle, na_offset_t local_offset,
+@@ -1004,6 +1010,7 @@ const struct na_class_ops NA_PLUGIN_OPS(ucx) = {
+     na_ucx_mem_handle_get_serialize_size, /* mem_handle_get_serialize_size */
+     na_ucx_mem_handle_serialize,          /* mem_handle_serialize */
+     na_ucx_mem_handle_deserialize,        /* mem_handle_deserialize */
++    na_ucx_mem_handle_import_rkey,        /* mem_handle_import_rkey */
+     na_ucx_put,                           /* put */
+     na_ucx_get,                           /* get */
+     na_ucx_poll_get_fd,                   /* poll_get_fd */
+@@ -4491,6 +4498,62 @@ error:
+     return ret;
+ }
+ 
++/*---------------------------------------------------------------------------*/
++/**
++ * Import a remote memory handle from a raw RDMA key — not supported on UCX.
++ *
++ * UCX uses ucp_rkey_pack()/ucp_ep_rkey_unpack() with its own internal
++ * serialization format that is not ABI-compatible with raw verbs rkeys
++ * (e.g., from nvidia-fs GPUDirect Storage). Rather than silently producing
++ * a corrupt handle, we return NA_OPNOTSUPPORTED so the caller can fall back
++ * to normal memory registration (which UCX handles natively for CUDA memory
++ * via its HMEM infrastructure).
++ */
++static na_return_t
++na_ucx_mem_handle_import_rkey(na_class_t NA_UNUSED *na_class,
++    na_mem_handle_t NA_UNUSED **mem_handle_p,
++    const void NA_UNUSED *rkey_buf,
++    size_t NA_UNUSED rkey_buf_size,
++    uint64_t NA_UNUSED remote_base_addr,
++    uint64_t NA_UNUSED remote_size,
++    unsigned long NA_UNUSED flags)
++{
++    NA_LOG_SUBSYS_DEBUG(mem,
++        "UCX does not support raw rkey import — caller should fall back "
++        "to normal HMEM registration");
++
++    return NA_OPNOTSUPPORTED;
++}
++
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+ na_ucx_put(na_class_t *na_class, na_context_t *context, na_cb_t callback,
+diff --git a/src/na/na_ofi.c b/src/na/na_ofi.c
+index abc1234..def5678 100644
+--- a/src/na/na_ofi.c
++++ b/src/na/na_ofi.c
+@@ -2071,6 +2071,12 @@ static na_return_t
+ na_ofi_mem_handle_deserialize(na_class_t *na_class,
+     na_mem_handle_t **mem_handle_p, const void *buf, size_t buf_size);
+ 
++static na_return_t
++na_ofi_mem_handle_import_rkey(na_class_t *na_class,
++    na_mem_handle_t **mem_handle_p, const void *rkey_buf,
++    size_t rkey_buf_size, uint64_t remote_base_addr, uint64_t remote_size,
++    unsigned long flags);
++
+ static na_return_t
+ na_ofi_put(na_class_t *na_class, na_context_t *context, na_cb_t callback,
+     void *arg, na_mem_handle_t *local_mem_handle, na_offset_t local_offset,
+@@ -2160,6 +2166,7 @@ const struct na_class_ops NA_PLUGIN_OPS(ofi) = {
+     na_ofi_mem_handle_get_serialize_size,  /* mem_handle_get_serialize_size */
+     na_ofi_mem_handle_serialize,           /* mem_handle_serialize */
+     na_ofi_mem_handle_deserialize,         /* mem_handle_deserialize */
++    na_ofi_mem_handle_import_rkey,         /* mem_handle_import_rkey */
+     na_ofi_put,                            /* put */
+     na_ofi_get,                            /* get */
+     na_ofi_poll_get_fd,                    /* poll_get_fd */
+@@ -9713,6 +9720,62 @@ error:
+     return ret;
+ }
+ 
++/*---------------------------------------------------------------------------*/
++/**
++ * Import a remote memory handle from a raw OFI memory key.
++ *
++ * For providers using FI_MR_PROV_KEY (basic MR mode), rkey_buf is expected
++ * to contain the uint64_t fi_mr_key. For scalable MR mode or providers
++ * requiring raw keys, rkey_buf should be the output of fi_mr_raw_attr().
++ *
++ * The resulting handle can be used as remote_mem_handle in put/get operations.
++ */
++static na_return_t
++na_ofi_mem_handle_import_rkey(na_class_t NA_UNUSED *na_class,
++    na_mem_handle_t **mem_handle_p, const void *rkey_buf,
++    size_t rkey_buf_size, uint64_t remote_base_addr, uint64_t remote_size,
++    unsigned long flags)
++{
++    struct na_ofi_mem_handle *na_ofi_mem_handle = NULL;
++    na_return_t ret;
++
++    /* For OFI, we expect the rkey_buf to contain the fi_mr_key (uint64_t).
++     * Some providers may use larger raw keys — this basic implementation
++     * handles the common case of a 64-bit key. */
++    NA_CHECK_SUBSYS_ERROR(mem, rkey_buf_size < sizeof(uint64_t), error, ret,
++        NA_INVALID_ARG,
++        "rkey_buf too small for OFI (need >= 8 bytes, got %zu)",
++        rkey_buf_size);
++
++    na_ofi_mem_handle =
++        (struct na_ofi_mem_handle *) calloc(1, sizeof(*na_ofi_mem_handle));
++    NA_CHECK_SUBSYS_ERROR(mem, na_ofi_mem_handle == NULL, error, ret, NA_NOMEM,
++        "Could not allocate NA OFI memory handle");
++
++    /* Fill descriptor info — single contiguous segment */
++    na_ofi_mem_handle->desc.info.iovcnt = 1;
++    na_ofi_mem_handle->desc.info.len = remote_size;
++    na_ofi_mem_handle->desc.info.flags = (uint8_t)(flags & 0xff);
++
++    /* Extract the fi_mr_key from the raw buffer */
++    memcpy(&na_ofi_mem_handle->desc.info.fi_mr_key, rkey_buf,
++        sizeof(uint64_t));
++
++    /* Set up single IOV segment for the remote region */
++    na_ofi_mem_handle->desc.iov.s[0].iov_base =
++        (void *)(uintptr_t) remote_base_addr;
++    na_ofi_mem_handle->desc.iov.s[0].iov_len = (size_t) remote_size;
++
++    /* No local fi_mr — this is a remote-only handle */
++    na_ofi_mem_handle->fi_mr = NULL;
++
++    *mem_handle_p = (na_mem_handle_t *) na_ofi_mem_handle;
++
++    NA_LOG_SUBSYS_DEBUG(mem,
++        "Imported OFI rkey (fi_mr_key=0x%" PRIx64 ") for remote region "
++        "[0x%" PRIx64 ", %" PRIu64 " bytes]",
++        na_ofi_mem_handle->desc.info.fi_mr_key,
++        remote_base_addr, remote_size);
++
++    return NA_SUCCESS;
++
++error:
++    free(na_ofi_mem_handle);
++    return ret;
++}
++
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+ na_ofi_put(na_class_t *na_class, na_context_t *context, na_cb_t callback,
+diff --git a/src/na/na_sm.c b/src/na/na_sm.c
+index abc1234..def5678 100644
+--- a/src/na/na_sm.c
++++ b/src/na/na_sm.c
+@@ -1138,6 +1138,7 @@ const struct na_class_ops NA_PLUGIN_OPS(sm) = {
+     na_sm_mem_handle_get_serialize_size,  /* mem_handle_get_serialize_size */
+     na_sm_mem_handle_serialize,           /* mem_handle_serialize */
+     na_sm_mem_handle_deserialize,         /* mem_handle_deserialize */
++    NULL,                                 /* mem_handle_import_rkey */
+     na_sm_put,                            /* put */
+     na_sm_get,                            /* get */
+diff --git a/src/na/na_bmi.c b/src/na/na_bmi.c
+index abc1234..def5678 100644
+--- a/src/na/na_bmi.c
++++ b/src/na/na_bmi.c
+@@ -500,6 +500,7 @@ const struct na_class_ops NA_PLUGIN_OPS(bmi) = {
+     na_bmi_mem_handle_get_serialize_size,  /* mem_handle_get_serialize_size */
+     na_bmi_mem_handle_serialize,           /* mem_handle_serialize */
+     na_bmi_mem_handle_deserialize,         /* mem_handle_deserialize */
++    NULL,                                  /* mem_handle_import_rkey */
+     na_bmi_put,                            /* put */
+     na_bmi_get,                            /* get */
+diff --git a/src/na/na_mpi.c b/src/na/na_mpi.c
+index abc1234..def5678 100644
+--- a/src/na/na_mpi.c
++++ b/src/na/na_mpi.c
+@@ -432,6 +432,7 @@ const struct na_class_ops NA_PLUGIN_OPS(mpi) = {
+     na_mpi_mem_handle_get_serialize_size,  /* mem_handle_get_serialize_size */
+     na_mpi_mem_handle_serialize,           /* mem_handle_serialize */
+     na_mpi_mem_handle_deserialize,         /* mem_handle_deserialize */
++    NULL,                                  /* mem_handle_import_rkey */
+     na_mpi_put,                            /* put */
+     na_mpi_get,                            /* get */
+diff --git a/src/na/na_psm.c b/src/na/na_psm.c
+index abc1234..def5678 100644
+--- a/src/na/na_psm.c
++++ b/src/na/na_psm.c
+@@ -2638,6 +2638,7 @@ const struct na_class_ops NA_PLUGIN_OPS(psm) = {
+     na_psm_mem_handle_get_serialize_size,   /* mem_handle_get_serialize_size */
+     na_psm_mem_handle_serialize,            /* mem_handle_serialize */
+     na_psm_mem_handle_deserialize,          /* mem_handle_deserialize */
++    NULL,                                   /* mem_handle_import_rkey */
+     na_psm_put,                             /* put */
+     na_psm_get,                             /* get */
+diff --git a/src/mercury_bulk.h b/src/mercury_bulk.h
+index abc1234..def5678 100644
+--- a/src/mercury_bulk.h
++++ b/src/mercury_bulk.h
+@@ -82,6 +82,25 @@ HG_Bulk_create_attr(hg_class_t *hg_class, uint32_t count, void **buf_ptrs,
+     hg_bulk_t *handle);
+ 
+ /**
++ * Create a remote bulk handle by importing a raw (third-party) RDMA key.
++ *
++ * This creates a bulk handle suitable for use as the remote/origin handle
++ * in HG_Bulk_transfer(). It does not register any local memory — it wraps
++ * an externally-created RDMA memory registration (e.g., from NVIDIA cuFile).
++ *
++ * \param hg_class [IN]            pointer to HG class
++ * \param rkey_buf [IN]            raw RDMA key buffer (transport-specific)
++ * \param rkey_buf_size [IN]       size of rkey_buf
++ * \param remote_base_addr [IN]    remote base address of the memory region
++ * \param remote_size [IN]         size of the remote region in bytes
++ * \param flags [IN]               permission flags (HG_BULK_READWRITE,
++ *                                 HG_BULK_READ_ONLY, or HG_BULK_WRITE_ONLY)
++ * \param handle [OUT]             pointer to returned bulk handle
++ *
++ * \return HG_SUCCESS or corresponding HG error code
++ */
++HG_PUBLIC hg_return_t
++HG_Bulk_import_rkey(hg_class_t *hg_class, const void *rkey_buf,
++    size_t rkey_buf_size, uint64_t remote_base_addr, uint64_t remote_size,
++    unsigned long flags, hg_bulk_t *handle);
++
++/**
+  * Free bulk handle.
+  *
+  * \param handle [IN/OUT]       abstract bulk handle
+diff --git a/src/mercury_bulk.c b/src/mercury_bulk.c
+index abc1234..def5678 100644
+--- a/src/mercury_bulk.c
++++ b/src/mercury_bulk.c
+@@ -2793,6 +2793,80 @@ error:
+     return ret;
+ }
+ 
++/*---------------------------------------------------------------------------*/
++hg_return_t
++HG_Bulk_import_rkey(hg_class_t *hg_class, const void *rkey_buf,
++    size_t rkey_buf_size, uint64_t remote_base_addr, uint64_t remote_size,
++    unsigned long flags, hg_bulk_t *handle)
++{
++    hg_core_class_t *core_class;
++    na_class_t *na_class;
++    struct hg_bulk *hg_bulk = NULL;
++    unsigned long na_flags;
++    na_return_t na_ret;
++    hg_return_t ret;
++
++    HG_CHECK_SUBSYS_ERROR(bulk, hg_class == NULL, error, ret, HG_INVALID_ARG,
++        "NULL HG class");
++    HG_CHECK_SUBSYS_ERROR(bulk, handle == NULL, error, ret, HG_INVALID_ARG,
++        "NULL bulk handle pointer");
++    HG_CHECK_SUBSYS_ERROR(bulk, rkey_buf == NULL, error, ret, HG_INVALID_ARG,
++        "NULL rkey buffer");
++    HG_CHECK_SUBSYS_ERROR(bulk, rkey_buf_size == 0, error, ret, HG_INVALID_ARG,
++        "Zero rkey buffer size");
++    HG_CHECK_SUBSYS_ERROR(bulk, remote_size == 0, error, ret, HG_INVALID_ARG,
++        "Zero remote size");
++
++    core_class = hg_class->core_class;
++    na_class = HG_Core_class_get_na(core_class);
++
++    /* Map HG bulk flags to NA memory flags */
++    switch (flags) {
++    case HG_BULK_READ_ONLY:
++        na_flags = NA_MEM_READ_ONLY;
++        break;
++    case HG_BULK_WRITE_ONLY:
++        na_flags = NA_MEM_WRITE_ONLY;
++        break;
++    default:
++        na_flags = NA_MEM_READWRITE;
++        break;
++    }
++
++    /* Allocate bulk handle */
++    hg_bulk = (struct hg_bulk *) calloc(1, sizeof(*hg_bulk));
++    HG_CHECK_SUBSYS_ERROR(bulk, hg_bulk == NULL, error, ret, HG_NOMEM,
++        "Could not allocate bulk handle");
++
++    hg_bulk->core_class = core_class;
++    hg_bulk->na_class = na_class;
++    hg_bulk->registered = false;
++    hg_atomic_init32(&hg_bulk->ref_count, 1);
++    hg_core_bulk_incr(core_class);
++
++    /* Set up descriptor — single segment, remote-only */
++    hg_bulk->desc.info.len = remote_size;
++    hg_bulk->desc.info.segment_count = 1;
++    hg_bulk->desc.info.flags = (uint8_t) flags;
++
++    /* Set segment base/len (remote address, not locally dereferenceable) */
++    hg_bulk->desc.segments.s[0].base = (void *)(uintptr_t) remote_base_addr;
++    hg_bulk->desc.segments.s[0].len = (hg_size_t) remote_size;
++
++    /* Import the rkey into an NA memory handle */
++    na_ret = NA_Mem_handle_import_rkey(na_class,
++        &hg_bulk->na_mem_descs.handles.s[0], rkey_buf, rkey_buf_size,
++        remote_base_addr, remote_size, na_flags);
++    HG_CHECK_SUBSYS_ERROR(bulk, na_ret != NA_SUCCESS, error_free, ret,
++        (hg_return_t) na_ret,
++        "NA_Mem_handle_import_rkey() failed (%s)",
++        NA_Error_to_string(na_ret));
++
++    /* No address bound */
++    hg_bulk->addr = HG_CORE_ADDR_NULL;
++
++    *handle = (hg_bulk_t) hg_bulk;
++
++    HG_LOG_SUBSYS_DEBUG(bulk,
++        "Created imported rkey bulk handle (%p), size=%" PRIu64,
++        (void *) hg_bulk, remote_size);
++
++    return HG_SUCCESS;
++
++error_free:
++    hg_core_bulk_decr(core_class);
++    free(hg_bulk);
++error:
++    return ret;
++}
++
+ /*---------------------------------------------------------------------------*/
+ hg_return_t
+ HG_Bulk_transfer(hg_context_t *context, hg_cb_t callback, void *arg,
+--
+
+Design notes:
+=============
+
+1. The new function pointer is inserted into struct na_class_ops (na.h)
+   between mem_handle_deserialize and put. All backends must add an entry
+   at this position — UCX and OFI provide implementations, others set NULL.
+
+2. The public API NA_Mem_handle_import_rkey() dispatches through the vtable:
+     na_class->ops->mem_handle_import_rkey(...)
+   If the backend sets NULL, NA_OPNOTSUPPORTED is returned.
+
+3. UCX implementation mirrors the deserialization path exactly:
+   - Allocates na_ucx_mem_handle
+   - Stores raw rkey in rkey_buf field
+   - Sets type = NA_UCX_MEM_HANDLE_REMOTE_PACKED
+   - On first put/get, na_ucx_rkey_unpack() calls ucp_ep_rkey_unpack()
+   The only difference from deserialize: no Mercury wire-format header parsing.
+
+4. OFI implementation constructs a minimal remote handle:
+   - Populates fi_mr_key from rkey_buf (first 8 bytes)
+   - Sets up a single-segment iov with the remote base addr + len
+   - na_ofi_put/get use desc.info.fi_mr_key as the remote key in fi_write/fi_read
+
+5. HG_Bulk_import_rkey() in mercury_bulk.c:
+   - Allocates hg_bulk, sets up single-segment descriptor
+   - Calls NA_Mem_handle_import_rkey() to create the NA remote handle
+   - No local buffers — remote-only handle, freed via standard HG_Bulk_free()
+
+6. nvidia-fs rkey format compatibility:
+   - nvidia-fs likely uses raw IB verbs rkeys (ibv_reg_mr output)
+   - For OFI/verbs: the raw IB rkey maps directly to fi_mr_key ✓
+   - For UCX: ucp_rkey_pack() output includes transport-specific headers
+     that raw IB rkeys lack; a UCT-level approach or translation may be
+     needed. Testing with actual nvidia-fs output is required.

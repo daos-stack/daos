@@ -264,6 +264,7 @@ struct crt_event_cb_priv {
 	ENV(D_CLIENT_METRICS_RETAIN)                                                               \
 	ENV_STR(D_DOMAIN)                                                                          \
 	ENV_STR(D_FI_CONFIG)                                                                       \
+	ENV(D_GPU_DIRECT)                                                                          \
 	ENV_STR(D_INTERFACE)                                                                       \
 	ENV_STR(D_LOG_FILE)                                                                        \
 	ENV_STR(D_LOG_FILE_APPEND_PID)                                                             \
@@ -463,15 +464,22 @@ struct crt_quotas {
  *
  * Deferred allocation is only supported on clients through D_QUOTA_BULKS env
  */
+struct crt_bulk_mem_attr {
+	daos_mem_type_t	cbma_mem_type;
+	uint64_t	cbma_device_id;
+	bool		cbma_has_mem_type;
+};
+
 struct crt_bulk {
-	d_sg_list_t     sgl;         /** original sgl */
-	d_iov_t        *iovs;        /** original iovs */
-	hg_bulk_t       hg_bulk_hdl; /** mercury bulk handle */
-	crt_context_t   crt_ctx;     /** context on which bulk is to be created  */
-	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
-	ATOMIC uint32_t refcount;    /** reference count for this struct */
-	bool            bound;       /** whether crt_bulk_bind() was used on it */
-	bool            deferred;    /** whether handle allocation was deferred */
+	d_sg_list_t	     sgl;         /** original sgl */
+	d_iov_t		    *iovs;        /** original iovs */
+	hg_bulk_t	     hg_bulk_hdl; /** mercury bulk handle */
+	crt_context_t	     crt_ctx;     /** context on which bulk is to be created  */
+	crt_bulk_perm_t	     bulk_perm;   /** bulk permissions */
+	struct crt_bulk_mem_attr mem_attr;    /** bulk memory attributes */
+	ATOMIC uint32_t	     refcount;    /** reference count for this struct */
+	bool		     bound;       /** whether crt_bulk_bind() was used on it */
+	bool		     deferred;    /** whether handle allocation was deferred */
 };
 
 #define CRT_METRIC_INC(ctx, name)                                                                  \

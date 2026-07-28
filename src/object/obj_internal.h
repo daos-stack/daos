@@ -479,6 +479,7 @@ struct obj_auxi_args {
 	uint32_t                         retry_warn_ts;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
+	daos_mem_attr_t			*mem_attrs_dup;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
 	uint32_t			 initial_shard;
@@ -666,6 +667,8 @@ struct obj_pool_metrics {
 	struct d_tm_node_t *opm_update_ec_partial;
 	/** Total number of EC agg conflicts with VOS aggregation or discard */
 	struct d_tm_node_t *opm_ec_agg_blocked;
+	/** Total number of GPU direct object operations */
+	struct d_tm_node_t *opm_gpu_direct;
 };
 
 void
@@ -769,8 +772,8 @@ int obj_recx_ec2_daos(struct daos_oclass_attr *oca, uint32_t tgt_off,
 int obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj,
 		       daos_iod_t *iods, uint32_t iod_nr);
 void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
-int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
-		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
+int obj_bulk_prep(d_sg_list_t *sgls, daos_mem_attr_t *mem_attrs, unsigned int nr,
+		  bool bulk_bind, crt_bulk_perm_t bulk_perm, tse_task_t *task,
 		  crt_bulk_t **p_bulks);
 struct daos_oclass_attr *obj_get_oca(struct dc_object *obj);
 bool obj_is_ec(struct dc_object *obj);

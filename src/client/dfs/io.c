@@ -13,6 +13,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/object.h>
+#include <daos_obj.h>
 
 #include "dfs_internal.h"
 
@@ -177,6 +178,51 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_size
 }
 
 int
+dfs_read_gpu(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	     daos_size_t *read_size, daos_mem_attr_t *mem_attr)
+{
+	daos_size_t      buf_size;
+	daos_array_iod_t arr_iod;
+	daos_range_t     rg;
+	int              i, rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if (sgl == NULL || read_size == NULL || mem_attr == NULL)
+		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_WRONLY)
+		return EPERM;
+
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++)
+		buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0) {
+		*read_size = 0;
+		return 0;
+	}
+
+	D_DEBUG(DB_TRACE, "DFS GPU Read: Off %" PRIu64 ", Len %zu\n", off, buf_size);
+
+	rg.rg_idx = off;
+	rg.rg_len = buf_size;
+	arr_iod.arr_nr = 1;
+	arr_iod.arr_rgs = &rg;
+
+	rc = daos_array_read_gpu(obj->oh, dfs->th, &arr_iod, sgl, mem_attr, NULL);
+	if (rc) {
+		D_ERROR("daos_array_read_gpu() failed: " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	DFS_OP_STAT_INCR(dfs, DOS_READ);
+	*read_size = arr_iod.arr_nr_read;
+	dfs_update_file_metrics(dfs, arr_iod.arr_nr_read, 0);
+	return 0;
+}
+
+int
 dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_size_t *read_size,
 	  daos_event_t *ev)
 {
@@ -278,6 +324,51 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_eve
 	}
 
 	return daos_der2errno(rc);
+}
+
+int
+dfs_write_gpu(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	      daos_mem_attr_t *mem_attr)
+{
+	daos_size_t      buf_size;
+	daos_array_iod_t arr_iod;
+	daos_range_t     rg;
+	int              i, rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (dfs->amode != O_RDWR)
+		return EPERM;
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if ((obj->flags & O_ACCMODE) == O_RDONLY)
+		return EPERM;
+	if (mem_attr == NULL)
+		return EINVAL;
+
+	buf_size = 0;
+	if (sgl)
+		for (i = 0; i < sgl->sg_nr; i++)
+			buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0)
+		return 0;
+
+	D_DEBUG(DB_TRACE, "DFS GPU Write: Off %" PRIu64 ", Len %zu\n", off, buf_size);
+
+	rg.rg_idx = off;
+	rg.rg_len = buf_size;
+	arr_iod.arr_nr = 1;
+	arr_iod.arr_rgs = &rg;
+
+	rc = daos_array_write_gpu(obj->oh, dfs->th, &arr_iod, sgl, mem_attr, NULL);
+	if (rc) {
+		D_ERROR("daos_array_write_gpu() failed: " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	DFS_OP_STAT_INCR(dfs, DOS_WRITE);
+	dfs_update_file_metrics(dfs, 0, buf_size);
+	return 0;
 }
 
 int

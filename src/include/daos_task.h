@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -726,6 +727,8 @@ typedef struct {
 	daos_iod_t		*iods;
 	/** Scatter / gather list for a memory descriptor. */
 	d_sg_list_t		*sgls;
+	/** Optional per-sgl memory attributes for GPU direct I/O. */
+	daos_mem_attr_t	*mem_attrs;
 	/** IO Map - only valid for fetch. */
 	daos_iom_t		*ioms;
 	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
@@ -921,6 +924,8 @@ typedef struct {
 	daos_array_iod_t	*iod;
 	/** memory descriptors. */
 	d_sg_list_t		*sgl;
+	/** Optional memory attributes for GPU direct I/O. */
+	daos_mem_attr_t		*mem_attr;
 } daos_array_io_t;
 
 /** Array get size args */

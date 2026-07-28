@@ -1431,7 +1431,7 @@ out:
 static int
 dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	    daos_array_iod_t *rg_iod, d_sg_list_t *user_sgl,
-	    daos_opc_t op_type, tse_task_t *task)
+	    daos_mem_attr_t *mem_attr, daos_opc_t op_type, tse_task_t *task)
 {
 	struct dc_array *array = NULL;
 	daos_handle_t	oh;
@@ -1753,6 +1753,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			io_arg->nr	= 1;
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
+			if (mem_attr != NULL) {
+				io_arg->flags = DAOS_OBJ_IO_GPU_DIRECT;
+				io_arg->mem_attrs = mem_attr;
+			}
 
 			/** if this is a byte array, add ioms for hole mgmt */
 			if (array->byte_array) {
@@ -1790,6 +1794,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			io_arg->nr	= 1;
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
+			if (mem_attr != NULL) {
+				io_arg->flags = DAOS_OBJ_IO_GPU_DIRECT;
+				io_arg->mem_attrs = mem_attr;
+			}
 			rc = tse_task_register_deps(task, 1, &io_task);
 			if (rc) {
 				tse_task_complete(io_task, rc);
@@ -1866,7 +1874,7 @@ dc_array_read(tse_task_t *task)
 	daos_array_io_t *args = daos_task_get_args(task);
 
 	return dc_array_io(args->oh, args->th, args->iod, args->sgl,
-			   DAOS_OPC_ARRAY_READ, task);
+			   args->mem_attr, DAOS_OPC_ARRAY_READ, task);
 }
 
 int
@@ -1875,7 +1883,7 @@ dc_array_write(tse_task_t *task)
 	daos_array_io_t *args = daos_task_get_args(task);
 
 	return dc_array_io(args->oh, args->th, args->iod, args->sgl,
-			   DAOS_OPC_ARRAY_WRITE, task);
+			   args->mem_attr, DAOS_OPC_ARRAY_WRITE, task);
 }
 
 int
@@ -1884,7 +1892,7 @@ dc_array_punch(tse_task_t *task)
 	daos_array_io_t *args = daos_task_get_args(task);
 
 	return dc_array_io(args->oh, args->th, args->iod, NULL,
-			   DAOS_OPC_ARRAY_PUNCH, task);
+			   NULL, DAOS_OPC_ARRAY_PUNCH, task);
 }
 
 #define ENUM_DESC_BUF    512
