@@ -32,7 +32,8 @@
 
 #define VOS_TX_LOG_FAIL(rc, ...)                                                                   \
 	do {                                                                                       \
-		bool __is_err = true;                                                              \
+		bool __is_err  = true;                                                             \
+		bool __is_warn = false;                                                            \
                                                                                                    \
 		if (rc >= 0)                                                                       \
 			break;                                                                     \
@@ -46,8 +47,13 @@
 		case -DER_OP_CANCELED:                                                             \
 			__is_err = false;                                                          \
 			break;                                                                     \
+		case -DER_KEY2BIG:                                                                 \
+			__is_err  = false;                                                         \
+			__is_warn = true;                                                          \
+			break;                                                                     \
 		}                                                                                  \
 		D_CDEBUG(__is_err, DLOG_ERR, DB_IO, __VA_ARGS__);                                  \
+		D_CDEBUG(__is_warn, DLOG_WARN, DB_IO, __VA_ARGS__);                                \
 	} while (0)
 
 #define VOS_TX_TRACE_FAIL(rc, ...)                                                                 \
