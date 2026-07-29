@@ -796,6 +796,7 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int                      err;
 	int			 rc = 0;
+	uint64_t                 ts = daos_gettime_coarse();
 
 	ap = container_of(entry, struct ec_agg_param, ap_agg_entry);
 
@@ -829,9 +830,14 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 			}
 			D_ASSERT(iod_csums != NULL);
 		}
+
+again1:
 		rc = vos_obj_update(ap->ap_cont_handle, entry->ae_oid,
 				    entry->ae_cur_stripe.as_hi_epoch, 0, VOS_OF_CRIT,
 				    &entry->ae_dkey, 1, &iod, iod_csums, &sgl);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", entry->ae_oid, again1);
+
 		if (csummer != NULL && iod_csums != NULL)
 			daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
@@ -844,8 +850,13 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 	recx.rx_nr         = ec_age2ss(entry);
 	epoch_range.epr_lo = ap->ap_epr.epr_lo;
 	epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
+
+again2:
 	err = vos_obj_array_remove(ap->ap_cont_handle, entry->ae_oid, &epoch_range, &entry->ae_dkey,
 				   &entry->ae_akey, &recx);
+
+	OBJ_CHECK_EAGAIN(err, ts, "vos_obj_array_remove", entry->ae_oid, again2);
+
 	if (err)
 		D_ERROR("array_remove fails: " DF_RC "\n", DP_RC(err));
 	if (!rc && err)
@@ -1330,13 +1341,14 @@ agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	int                    rc;
 
 	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
+		rc = -DER_OP_CANCELED;
 		/* We currently pause EC aggregation for rebuild, so just cancel the
 		 * aggregation for the current stripe. It means the following peer status
 		 * check may not be checked at all, but let's keep the code because it could
 		 * be useful in the future.
 		 */
-		D_ERROR(DF_UOID " pauses EC aggregation for rebuild\n", DP_UOID(entry->ae_oid));
-		return -DER_OP_CANCELED;
+		DL_ERROR(rc, DF_UOID " pauses EC aggregation for rebuild", DP_UOID(entry->ae_oid));
+		return rc;
 	}
 
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map, &targets,
@@ -1817,6 +1829,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	struct ec_agg_param	*agg_param;
 	int			 tid, rc = 0;
 	int			*status;
+	uint64_t                 ts = daos_gettime_coarse();
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
@@ -1868,10 +1881,15 @@ agg_process_holes(struct ec_agg_entry *entry)
 		if (iod->iod_nr) {
 			/* write the reps to vos */
 			entry->ae_sgl.sg_nr = 1;
+
+again1:
 			rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
 					    entry->ae_cur_stripe.as_hi_epoch, 0, VOS_OF_CRIT,
 					    &entry->ae_dkey, 1, iod, stripe_ud.asu_iod_csums,
 					    &entry->ae_sgl);
+
+			OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", entry->ae_oid, again1);
+
 			if (rc) {
 				DL_ERROR(rc, "vos_obj_update failed");
 				goto ev_out;
@@ -1884,10 +1902,13 @@ agg_process_holes(struct ec_agg_entry *entry)
 		recx.rx_nr = ec_age2cs(entry);
 		recx.rx_idx = (entry->ae_cur_stripe.as_stripenum * recx.rx_nr) |
 			      PARITY_INDICATOR;
+
+again2:
 		rc = vos_obj_array_remove(agg_param->ap_cont_handle,
 					  entry->ae_oid, &epoch_range,
 					  &entry->ae_dkey, &entry->ae_akey,
 					  &recx);
+		OBJ_CHECK_EAGAIN(rc, rc, "vos_obj_array_remove", entry->ae_oid, again2);
 	} else {
 		D_DEBUG(DB_EPC, "no valid hole, set ae_process_partial flag\n");
 		entry->ae_process_partial = 1;
@@ -1919,9 +1940,9 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	/* avoid race between EC aggregation and rebuild scanner */
 	agg_param->ap_cont->sc_ec_agg_updates++;
 	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
-		D_DEBUG(DB_EPC, DF_UOID " abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		rc = -DER_OP_CANCELED;
+		DL_INFO(rc, DF_UOID " abort as rebuild started", DP_UOID(entry->ae_oid));
 		update_vos = false;
-		rc         = -1;
 		goto out;
 	}
 
@@ -2561,11 +2582,12 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	 * (see obj_inflight_io_check()).
 	 */
 	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
-		D_INFO(DF_CONT " abort as rebuild started, sp_rebuilding %d\n",
-		       DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
-			       agg_param->ap_pool_info.api_cont_uuid),
-		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
-		return -1;
+		rc = -DER_OP_CANCELED;
+		DL_INFO(rc, DF_CONT " abort as rebuild started, sp_rebuilding %d.",
+			DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
+				agg_param->ap_pool_info.api_cont_uuid),
+			atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
+		return rc;
 	}
 
 	switch (type) {
@@ -2589,9 +2611,9 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR(DF_UUID " EC aggregation (rebuilding %d) failed: " DF_RC "\n",
-			DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
-			atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID " EC aggregation (rebuilding %d) failed",
+			 DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
+			 atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
 		return rc;
 	}
 

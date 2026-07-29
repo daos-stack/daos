@@ -19,6 +19,7 @@ daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
 sysctl_script_name="10-daos_server.conf"
+daos_sys_dir="/var/daos"
 daos_log_dir="/var/log/daos"
 
 VERSION=${daos_version}
@@ -149,6 +150,12 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
+# Ensure daos_sys_dir exists
+if [ ! -d ${daos_sys_dir} ]; then
+    mkdir -p ${daos_sys_dir}
+    chown daos_server:daos_daemons ${daos_sys_dir}
+    chmod 775 ${daos_sys_dir}
+fi
 # Ensure daos_log_dir exists
 if [ ! -d ${daos_log_dir} ]; then
     mkdir -p ${daos_log_dir}
@@ -293,23 +300,33 @@ if [ ! -d ${daos_log_dir} ]; then
     chmod 775 ${daos_log_dir}
 fi
 EOF
+chmod +x "${tmp}/pre_install_client"
 EXTRA_OPTS+=("--before-install" "${tmp}/pre_install_client")
 
 cat << EOF  > "${tmp}/post_install_client"
+#!/bin/bash
+set -x
+ldconfig
 systemctl --no-reload preset daos_agent.service  &>/dev/null || :
 EOF
+chmod +x "${tmp}/post_install_client"
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_client")
 
 cat << EOF  > "${tmp}/pre_uninstall_client"
 systemctl --no-reload disable --now daos_agent.service >& /dev/null || :
 EOF
+chmod +x "${tmp}/pre_uninstall_client"
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
 if [[ "${DISTRO:-el8}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
+#!/bin/bash
+set -x
+ldconfig
 rm -f "/var/lib/systemd/migrated/daos_agent.service" || :
 /usr/bin/systemctl daemon-reload || :
 EOF
+  chmod +x "${tmp}/post_uninstall_client"
   EXTRA_OPTS+=("--after-remove" "${tmp}/post_uninstall_client")
 fi
 
