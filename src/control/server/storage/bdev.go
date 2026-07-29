@@ -544,8 +544,6 @@ type (
 		Format(BdevFormatRequest) (*BdevFormatResponse, error)
 		WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfigResponse, error)
 		ReadConfig(BdevReadConfigRequest) (*BdevReadConfigResponse, error)
-		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
-		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
 	}
 
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
@@ -654,46 +652,6 @@ type (
 	BdevFormatResponse struct {
 		DeviceResponses BdevDeviceFormatResponses
 	}
-
-	// NVMeFirmwareQueryRequest defines the parameters for a Nvme firmware query.
-	NVMeFirmwareQueryRequest struct {
-		pbin.ForwardableRequest
-		DeviceAddrs []string // requested device PCI addresses, empty for all
-		ModelID     string   // filter devices by model ID
-		FirmwareRev string   // filter devices by current FW revision
-	}
-
-	// NVMeDeviceFirmwareQueryResult represents the result of a firmware query for
-	// a specific NVMe controller.
-	NVMeDeviceFirmwareQueryResult struct {
-		Device NvmeController
-	}
-
-	// NVMeFirmwareQueryResponse contains the results of the firmware query.
-	NVMeFirmwareQueryResponse struct {
-		Results []NVMeDeviceFirmwareQueryResult
-	}
-
-	// NVMeFirmwareUpdateRequest defines the parameters for a firmware update.
-	NVMeFirmwareUpdateRequest struct {
-		pbin.ForwardableRequest
-		DeviceAddrs  []string // requested device PCI addresses, empty for all
-		FirmwarePath string   // location of the firmware binary
-		ModelID      string   // filter devices by model ID
-		FirmwareRev  string   // filter devices by current FW revision
-	}
-
-	// NVMeDeviceFirmwareUpdateResult represents the result of a firmware update for
-	// a specific NVMe controller.
-	NVMeDeviceFirmwareUpdateResult struct {
-		Device NvmeController
-		Error  string
-	}
-
-	// NVMeFirmwareUpdateResponse contains the results of the firmware update.
-	NVMeFirmwareUpdateResponse struct {
-		Results []NVMeDeviceFirmwareUpdateResult
-	}
 )
 
 // getNumaNodeBusidRange sets range parameters in the input request either to user configured
@@ -769,13 +727,11 @@ func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) (*
 
 type BdevForwarder struct {
 	BdevAdminForwarder
-	NVMeFirmwareForwarder
 }
 
 func NewBdevForwarder(log logging.Logger) *BdevForwarder {
 	return &BdevForwarder{
-		BdevAdminForwarder:    *NewBdevAdminForwarder(log),
-		NVMeFirmwareForwarder: *NewNVMeFirmwareForwarder(log),
+		BdevAdminForwarder: *NewBdevAdminForwarder(log),
 	}
 }
 
@@ -848,69 +804,6 @@ func (f *BdevAdminForwarder) ReadConfig(req BdevReadConfigRequest) (*BdevReadCon
 
 	res := new(BdevReadConfigResponse)
 	if err := f.SendReq("BdevReadConfig", req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-const (
-	// NVMeFirmwareQueryMethod is the name of the method used to forward the request to
-	// update NVMe device firmware.
-	NVMeFirmwareQueryMethod = "NvmeFirmwareQuery"
-
-	// NVMeFirmwareUpdateMethod is the name of the method used to forward the request to
-	// update NVMe device firmware.
-	NVMeFirmwareUpdateMethod = "NvmeFirmwareUpdate"
-)
-
-// NVMeFirmwareForwarder forwards firmware requests to a privileged binary.
-type NVMeFirmwareForwarder struct {
-	pbin.Forwarder
-}
-
-// NewNVMeFirmwareForwarder returns a new bdev FirmwareForwarder.
-func NewNVMeFirmwareForwarder(log logging.Logger) *NVMeFirmwareForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosFWName)
-
-	return &NVMeFirmwareForwarder{
-		Forwarder: *pf,
-	}
-}
-
-// checkSupport verifies that the firmware support binary is installed.
-func (f *NVMeFirmwareForwarder) checkSupport() error {
-	if f.CanForward() {
-		return nil
-	}
-
-	return errors.Errorf("NVMe firmware operations are not supported on this system")
-}
-
-// QueryFirmware forwards a request to query firmware on the NVMe device.
-func (f *NVMeFirmwareForwarder) QueryFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
-	if err := f.checkSupport(); err != nil {
-		return nil, err
-	}
-	req.Forwarded = true
-
-	res := new(NVMeFirmwareQueryResponse)
-	if err := f.SendReq(NVMeFirmwareQueryMethod, req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-// UpdateFirmware forwards a request to update firmware on the NVMe device.
-func (f *NVMeFirmwareForwarder) UpdateFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
-	if err := f.checkSupport(); err != nil {
-		return nil, err
-	}
-	req.Forwarded = true
-
-	res := new(NVMeFirmwareUpdateResponse)
-	if err := f.SendReq(NVMeFirmwareUpdateMethod, req, res); err != nil {
 		return nil, err
 	}
 
