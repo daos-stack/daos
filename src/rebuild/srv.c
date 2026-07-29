@@ -1045,6 +1045,22 @@ ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 	return rc;
 }
 
+/* For admin stopped reintegration, FAIL_RECLAIM needs to broadcast to reint engines to cleanup
+ * space, as following rebuild start will not do pool_discard again.
+ */
+static bool
+rgt_up_dom_included(struct rebuild_global_pool_tracker *rgt, struct pool_domain *dom)
+{
+	if (dom->do_comp.co_status != PO_COMP_ST_UP)
+		return false;
+
+	if (dom->do_comp.co_in_ver <= rgt->rgt_rebuild_ver ||
+	    (rgt->rgt_include_up && dom->do_comp.co_in_ver <= rgt->rgt_orig_rb_ver))
+		return true;
+
+	return false;
+}
+
 /*
  * Check rebuild status on the leader. Every other target sends
  * its own rebuild status by IV.
@@ -1131,10 +1147,9 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			 * skip.
 			 * 1) PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW ranks
 			 * 2) PO_COMP_ST_UP but co_in_ver > rebuild_ver also will be excluded from
-			 *    rebuild request, see rebuild_scan_broadcast().
+			 *    rebuild request, see rebuild_scan_broadcast()/rgt_up_dom_included().
 			 */
-			if (dom->do_comp.co_status != PO_COMP_ST_UP ||
-			    dom->do_comp.co_in_ver > rgt->rgt_rebuild_ver)
+			if (rgt_up_dom_included(rgt, dom) == false)
 				rebuild_leader_set_status(rgt, dom->do_comp.co_rank,
 							  RB_DTX_RESYNC_VER_SKIP,
 							  SCAN_DONE | PULL_DONE);
@@ -1456,12 +1471,14 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 			D_DEBUG(DB_REBUILD, DF_RB " rank %u co_in_ver %u, rebuild_ver %u.\n",
 				DP_RB_RGT(rgt), up_ranks.rl_ranks[i], dom->do_comp.co_in_ver,
 				rgt->rgt_rebuild_ver);
-			if (dom->do_comp.co_in_ver <= rgt->rgt_rebuild_ver)
+			if (rgt_up_dom_included(rgt, dom))
 				continue;
 
-			D_INFO(DF_RB " bypass UP rank %u co_in_ver %u exceed rebuild_ver %u\n",
+			D_INFO(DF_RB " bypass UP rank %u co_in_ver %u, rebuild_ver %u, "
+				     "include_up %d, rebuild_op %d, orig_rb_ver %d",
 			       DP_RB_RGT(rgt), up_ranks.rl_ranks[i], dom->do_comp.co_in_ver,
-			       rgt->rgt_rebuild_ver);
+			       rgt->rgt_rebuild_ver, rgt->rgt_include_up, rebuild_op,
+			       rgt->rgt_orig_rb_ver);
 			excluded->rl_ranks[nr++] = up_ranks.rl_ranks[i];
 		}
 		excluded->rl_nr = nr;
@@ -1796,7 +1813,7 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	uint64_t        leader_term, rebuild_leader_term;
 	uint32_t        leader_rank, rebuild_leader_rank;
 	uint32_t	version;
-	uint32_t	generation;
+	uint32_t        generation;
 	int		rc;
 
 	rc = ds_pool_svc_term_get(pool->sp_uuid, &leader_term);
@@ -1832,9 +1849,16 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	(*p_rgt)->rgt_num_op_freclaim_fail = task->dst_num_op_freclaim_fail;
 	D_INFO(DF_RB "\n", DP_RB_RGT(*p_rgt));
 
-	/* broadcast scan RPC to all targets */
-	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts,
-				    task->dst_new_layout_version, task->dst_rebuild_op);
+	/* For admin stopped reintegration, FAIL_RECLAIM needs to broadcast
+	 * to reint engines to cleanup space, as following rebuild start will
+	 * not do pool_discard again.
+	 */
+	if (task->dst_stop_admin && task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		(*p_rgt)->rgt_include_up  = true;
+		(*p_rgt)->rgt_orig_rb_ver = task->dst_retry_map_ver;
+	}
+	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
+				    task->dst_rebuild_op);
 	if (rc)
 		DL_ERROR(rc, DF_RB ": object scan failed", DP_RB_RGT(*p_rgt));
 	else
