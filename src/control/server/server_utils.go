@@ -483,12 +483,6 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 		}
 	}
 
-	if cfg.FWHelperLogFile != "" {
-		if err := setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
-			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
-		}
-	}
-
 	return nil
 }
 

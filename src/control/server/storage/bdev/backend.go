@@ -696,18 +696,3 @@ func (sb *spdkBackend) ReadConfig(req storage.BdevReadConfigRequest) (*storage.B
 	resp := &storage.BdevReadConfigResponse{}
 	return resp, nil
 }
-
-// UpdateFirmware uses the SPDK bindings to update an NVMe controller's firmware.
-func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
-	sb.log.Debug("spdk backend update firmware")
-
-	if pciAddr == "" {
-		return FaultBadPCIAddr("")
-	}
-
-	if err := sb.binding.Update(sb.log, pciAddr, path, slot); err != nil {
-		return err
-	}
-
-	return nil
-}

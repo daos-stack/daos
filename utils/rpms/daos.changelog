@@ -1,4 +1,7 @@
 %changelog
+* Fri Jul 10 2026 Kris Jacque <kris.jacque@hpe.com> 2.9.100-6
+- Remove defunct daos_firmware package
+
 * Wed Jul 08 2026 Michael Hennecke <michael.hennecke@hpe.com> 2.9.100-5
 - Add a /var/daos directory writable for daos_server
 
