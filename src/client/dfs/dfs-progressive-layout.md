@@ -363,7 +363,30 @@ No model changes expected. Existing DFS mount mode and uid/gid/mode checks remai
 
 ## MWC tools update
 
-The DFS check tool needs to be updated to account for tail object scanning and not just the existing oid. Any orphaned objects (head or tail) will be stored in the lost+found. There will be no way to determine if an orphaned object was a head or tail object.
+The DFS check tool (`daos fs check`, `dfs_cont_check()`) must account for the tail object in addition
+to the head oid stored in the directory entry. A progressive-layout file is backed by two objects
+(head and tail), and the object index table (OIT) lists both, so both must be marked as reachable
+during the namespace scan; otherwise the tail is treated as a leaked object.
+
+Implemented behavior:
+
+- Namespace marking (`oit_mark_cb`): after looking up an entry, if it is a regular file with an
+  active tail (`obj->f.has_tail`), the checker marks `obj->f.tail_oid` in the OIT in addition to the
+  head oid. Under `--verify` the tail object is also passed to `daos_obj_verify()`.
+- Relink directory descent (`fetch_mark_oids`): when descending a leaked directory (Pass 1 of
+  `--relink`), each child entry is read for its tail fields (`tail_oid`/`tail_state`, only present at
+  layout >= v4) and any active tail oid is marked too, so it is not double-relinked or removed.
+
+Orphan (leaked) handling and its limitation:
+
+- When a file is itself leaked (its parent directory entry is lost), both the head and tail become
+  unmarked orphans and are relinked into `lost+found` as independent objects. There is no way to
+  determine whether an orphaned array was a head or a tail: the head->tail association
+  (`tail_oid`/`split_off`/`tail_state`) lived only in the lost parent entry, and both objects are
+  plain byte arrays with no back-reference. Each orphan is relinked as a separate, non-PL file — the
+  head holding logical bytes `[0, split_off)` and the tail holding `[split_off, EOF)` reindexed from
+  0 — leaving the user to stitch the data back together manually if needed.
+
 
 ## Test Plan
 

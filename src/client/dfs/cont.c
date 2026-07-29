@@ -462,14 +462,16 @@ out_prop:
 #define DFS_ELAPSED_TIME   30
 
 struct dfs_oit_args {
-	daos_handle_t oit;
-	uint64_t      flags;
-	uint64_t      snap_epoch;
-	uint64_t      skipped;
-	uint64_t      failed;
-	time_t        start_time;
-	time_t        print_time;
-	uint64_t      num_scanned;
+	daos_handle_t    oit;
+	uint64_t         flags;
+	uint64_t         snap_epoch;
+	uint64_t         skipped;
+	uint64_t         failed;
+	time_t           start_time;
+	time_t           print_time;
+	uint64_t         num_scanned;
+	/** container layout version, used to locate progressive-layout tail fields in entries */
+	dfs_layout_ver_t layout_v;
 };
 
 static int
@@ -478,8 +480,8 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 {
 	daos_handle_t oh;
 	d_sg_list_t   sgl, entry_sgl;
-	d_iov_t       iov, sg_iov;
-	daos_recx_t   recx;
+	d_iov_t       iov, sg_iovs[3];
+	daos_recx_t   recxs[3];
 	uint32_t      nr;
 	daos_iod_t    iod;
 	d_iov_t       marker;
@@ -500,17 +502,30 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 	sgl.sg_iovs = &iov;
 
 	/** set sgl for fetch */
-	entry_sgl.sg_nr     = 1;
 	entry_sgl.sg_nr_out = 0;
-	entry_sgl.sg_iovs   = &sg_iov;
+	entry_sgl.sg_iovs   = sg_iovs;
 
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
-	recx.rx_idx   = OID_IDX;
-	recx.rx_nr    = sizeof(daos_obj_id_t);
-	iod.iod_nr    = 1;
-	iod.iod_recxs = &recx;
-	iod.iod_type  = DAOS_IOD_ARRAY;
-	iod.iod_size  = 1;
+	recxs[0].rx_idx = OID_IDX;
+	recxs[0].rx_nr  = sizeof(daos_obj_id_t);
+	iod.iod_nr      = 1;
+	iod.iod_recxs   = recxs;
+	iod.iod_type    = DAOS_IOD_ARRAY;
+	iod.iod_size    = 1;
+	/*
+	 * For progressive-layout containers (layout >= DFS_PL_LAYOUT_VERSION) each entry also
+	 * stores a tail object id and tail state. Fetch those alongside the head oid so a regular
+	 * file's tail array can be marked too (see oit_mark_cb for why an unmarked tail is
+	 * dangerous).
+	 */
+	if (args->layout_v >= DFS_PL_LAYOUT_VERSION) {
+		recxs[1].rx_idx = TAIL_OID_IDX;
+		recxs[1].rx_nr  = sizeof(daos_obj_id_t);
+		recxs[2].rx_idx = TAIL_STATE_IDX;
+		recxs[2].rx_nr  = sizeof(uint8_t);
+		iod.iod_nr      = 3;
+	}
+	entry_sgl.sg_nr = iod.iod_nr;
 
 	d_iov_set(&marker, &mark_data, sizeof(mark_data));
 	while (!daos_anchor_is_eof(&anchor)) {
@@ -524,13 +539,17 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 			D_GOTO(out_obj, rc = daos_der2errno(rc));
 		}
 
-		/** for every entry, fetch its oid and mark it in the oit table */
+		/** for every entry, fetch its oid(s) and mark them in the oit table */
 		for (ptr = enum_buf, i = 0; i < nr; i++) {
 			daos_obj_id_t entry_oid;
+			daos_obj_id_t tail_oid   = DAOS_OBJ_NIL;
+			uint8_t       tail_state = DFS_TAIL_NONE;
 			daos_key_t    dkey;
 
 			d_iov_set(&dkey, ptr, kds[i].kd_key_len);
-			d_iov_set(&sg_iov, &entry_oid, sizeof(daos_obj_id_t));
+			d_iov_set(&sg_iovs[0], &entry_oid, sizeof(daos_obj_id_t));
+			d_iov_set(&sg_iovs[1], &tail_oid, sizeof(daos_obj_id_t));
+			d_iov_set(&sg_iovs[2], &tail_state, sizeof(uint8_t));
 
 			rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_DKEY_FETCH, &dkey, 1, &iod,
 					    &entry_sgl, NULL, NULL);
@@ -539,13 +558,28 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 				D_GOTO(out_obj, rc = daos_der2errno(rc));
 			}
 
-			/** mark oid in the oit table */
+			/** mark the head oid in the oit table */
 			rc = daos_oit_mark(args->oit, entry_oid, &marker, NULL);
 			if (rc && rc != -DER_NONEXIST) {
 				D_ERROR("daos_oit_mark() failed " DF_RC "\n", DP_RC(rc));
 				D_GOTO(out_obj, rc = daos_der2errno(rc));
 			}
 			rc = 0;
+
+			/*
+			 * Mark the progressive-layout tail oid too, if this entry has an active
+			 * tail. Without this the tail array would be treated as a leaked OID.
+			 */
+			if (args->layout_v >= DFS_PL_LAYOUT_VERSION &&
+			    tail_state == DFS_TAIL_ACTIVE && !daos_obj_id_is_nil(tail_oid)) {
+				rc = daos_oit_mark(args->oit, tail_oid, &marker, NULL);
+				if (rc && rc != -DER_NONEXIST) {
+					D_ERROR("daos_oit_mark() of tail failed " DF_RC "\n",
+						DP_RC(rc));
+					D_GOTO(out_obj, rc = daos_der2errno(rc));
+				}
+				rc = 0;
+			}
 			ptr += kds[i].kd_key_len;
 		}
 	}
@@ -616,6 +650,40 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 	rc = 0;
+
+	/*
+	 * A progressive-layout regular file is backed by two objects: the head array (obj->oid,
+	 * marked above) and a separate tail array (obj->f.tail_oid). The tail has no directory
+	 * entry of its own but is a real object in the OIT, so it must be marked (and verified)
+	 * together with the head. Otherwise the checker would report it as a leaked OID and, with
+	 * --remove, punch it (destroying the file's [split_off, EOF) data) or, with --relink,
+	 * relink it into lost+found as a bogus standalone file.
+	 */
+	if (S_ISREG(obj->mode) && obj->f.has_tail) {
+		daos_obj_id_t tail_oid = obj->f.tail_oid;
+
+		if (oit_args->flags & DFS_CHECK_VERIFY) {
+			rc = daos_obj_verify(dfs->coh, tail_oid, oit_args->snap_epoch);
+			if (rc == -DER_NOSYS) {
+				oit_args->skipped++;
+			} else if (rc == -DER_MISMATCH) {
+				oit_args->failed++;
+				if (oit_args->flags & DFS_CHECK_PRINT)
+					D_PRINT("" DF_OID " failed data consistency check!\n",
+						DP_OID(tail_oid));
+			} else if (rc) {
+				D_ERROR("daos_obj_verify() failed " DF_RC "\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+		}
+
+		rc = daos_oit_mark(oit_args->oit, tail_oid, &marker, NULL);
+		if (rc && rc != -DER_NONEXIST) {
+			D_ERROR("Failed to mark tail OID in OIT: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+		}
+		rc = 0;
+	}
 
 	/** descend into directories */
 	if (S_ISDIR(obj->mode)) {
@@ -783,6 +851,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	oit_args->snap_epoch = snap_epoch;
 	oit_args->start_time = now.tv_sec;
 	oit_args->print_time = now.tv_sec;
+	oit_args->layout_v   = dfs->layout_v;
 
 	/** Open OIT table */
 	rc = daos_oit_open(coh, snap_epoch, &oit_args->oit, NULL);
@@ -1044,6 +1113,19 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			entry.mtime = entry.ctime = now.tv_sec;
 			entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 			entry.chunk_size                    = dfs->attr.da_chunk_size;
+
+			/*
+			 * Progressive-layout limitation: a regular file that was itself leaked from
+			 * the namespace cannot be faithfully reconstructed as a head+tail pair. The
+			 * head->tail association (tail_oid/split_off/tail_state) lived only in the
+			 * now-lost parent directory entry, and both the head and tail are plain
+			 * byte arrays with no back-reference, so they are indistinguishable here.
+			 * Each unmarked array is therefore relinked into lost+found as an
+			 * independent, non-PL file (the reconstructed entry leaves has_tail false):
+			 * the head holds logical bytes [0, split_off) and the tail holds
+			 * [split_off, EOF) reindexed from 0. The user can stitch the data back
+			 * together manually if needed.
+			 */
 
 			/*
 			 * If this is a regular file / array object, the user might have used a

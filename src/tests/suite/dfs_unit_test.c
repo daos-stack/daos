@@ -4611,6 +4611,250 @@ out:
 	d_freeenv_str(&prev_env);
 }
 
+/*
+ * Verify the MWC container checker handles progressive-layout files, which are backed by two
+ * objects (head + tail). Both must be marked as reachable so the tail of an intact file is never
+ * treated as leaked (and, with --remove, punched). This covers three scenarios: an intact PL file
+ * is left untouched by --remove; a leaked PL file has both objects reclaimed; and a leaked
+ * directory containing a PL file is relinked without its child's tail leaking out as a stray
+ * lost+found file.
+ */
+static void
+dfs_test_checker_pl(void **state)
+{
+	test_arg_t    *arg = *state;
+	dfs_t         *dfs;
+	dfs_obj_t     *root, *file, *dir, *lf;
+	dfs_obj_info_t info = {0};
+	daos_obj_id_t  root_oid;
+	daos_handle_t  coh, root_oh;
+	uint64_t       nr_oids = 0;
+	daos_size_t    split;
+	char          *cname    = "cont_chkr_pl";
+	char          *prev_env = NULL;
+	bool           env_was_set;
+	d_sg_list_t    sgl;
+	d_iov_t        iov;
+	d_iov_t        dkey;
+	char           name[] = "plfile";
+	char           buf[4096];
+	daos_anchor_t  anchor;
+	struct dirent  ents[10];
+	struct stat    stbufs[10];
+	uint32_t       num_ents;
+	int            num_files, num_dirs;
+	int            i;
+	int            rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/*
+	 * Force progressive layout regardless of the pool target count. Save and restore any
+	 * pre-existing value so other tests in this binary are unaffected.
+	 */
+	rc          = d_agetenv_str(&prev_env, "DFS_PL_BYPASS_TARGET_LIMIT");
+	env_was_set = (rc == 0 && prev_env != NULL);
+	rc          = d_setenv("DFS_PL_BYPASS_TARGET_LIMIT", "1", 1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* save the root object ID for later */
+	rc = dfs_lookup(dfs, "/", O_RDWR, &root, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(root, &root_oid);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(root);
+	assert_int_equal(rc, 0);
+
+	/* a default-class file should be created as a progressive-layout head+tail file */
+	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      NULL, &file);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_get_info(dfs, file, &info);
+	assert_int_equal(rc, 0);
+	split = info.doi_pl_nr > 0 ? info.doi_pl_segs[0].pls_split_off : 0;
+	if (split == 0) {
+		/* PL did not engage in this environment; nothing to check. */
+		print_message("PL not active; skipping PL checker test\n");
+		rc = dfs_release(file);
+		assert_int_equal(rc, 0);
+		rc = dfs_disconnect(dfs);
+		assert_int_equal(rc, 0);
+		rc = dfs_fini();
+		assert_int_equal(rc, 0);
+		rc = daos_cont_destroy(arg->pool.poh, cname, 1, NULL);
+		assert_rc_equal(rc, 0);
+		goto restore_env;
+	}
+
+	/* write into both the head (offset 0) and the tail (>= split_off) so both objects exist */
+	memset(buf, 'p', sizeof(buf));
+	d_iov_set(&iov, buf, sizeof(buf));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs, file, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_write(dfs, file, &sgl, split + 4096, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	/* release the cached container handle so the checker can run */
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Intact PL file: the checker must mark BOTH the head and the tail. Run with REMOVE and
+	 * confirm nothing is reclaimed. Without the tail being marked, the tail would be treated as
+	 * a leaked OID and punched, silently destroying the file's [split_off, EOF) data.
+	 */
+	get_nr_oids(arg->pool.poh, cname, &nr_oids);
+	/* SB + root + file head + file tail */
+	assert_int_equal((int)nr_oids, 4);
+
+	rc = dfs_cont_check(arg->pool.poh, cname,
+			    DFS_CHECK_PRINT | DFS_CHECK_REMOVE | DFS_CHECK_VERIFY, NULL);
+	assert_int_equal(rc, 0);
+
+	get_nr_oids(arg->pool.poh, cname, &nr_oids);
+	/* unchanged: the tail must NOT have been removed */
+	assert_int_equal((int)nr_oids, 4);
+
+	/*
+	 * Now leak the file itself by punching its directory entry. Both the head and the tail
+	 * become orphans, and the checker (REMOVE) should reclaim both.
+	 */
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_open(coh, root_oid, DAOS_OO_RW, &root_oh, NULL);
+	assert_rc_equal(rc, 0);
+	d_iov_set(&dkey, name, strlen(name));
+	rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_close(root_oh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	get_nr_oids(arg->pool.poh, cname, &nr_oids);
+	assert_int_equal((int)nr_oids, 4);
+
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_REMOVE, NULL);
+	assert_int_equal(rc, 0);
+
+	get_nr_oids(arg->pool.poh, cname, &nr_oids);
+	/* both head and tail reclaimed: SB + root only */
+	assert_int_equal((int)nr_oids, 2);
+
+	/*
+	 * fetch_mark_oids relink-descent coverage: leak a directory that still contains a PL file.
+	 * Under --relink the checker descends the leaked directory (Pass 1) and must mark the child
+	 * file's head AND tail. If the tail is not marked it gets relinked as a stray regular file
+	 * at the top of lost+found instead of remaining inside the relinked directory.
+	 */
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* create /pl_dir (default oclass so children inherit PL) with a default-class PL file in it
+	 */
+	rc = dfs_open(dfs, NULL, "pl_dir", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs, dir, "pl_file", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj_get_info(dfs, file, &info);
+	assert_int_equal(rc, 0);
+	/* the child must also be a PL file for this scenario to be meaningful */
+	assert_true(info.doi_pl_nr > 0);
+	d_iov_set(&iov, buf, sizeof(buf));
+	rc = dfs_write(dfs, file, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_write(dfs, file, &sgl, split + 4096, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/* leak the directory by punching its entry from the root object */
+	rc = daos_cont_open(arg->pool.poh, cname, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_open(coh, root_oid, DAOS_OO_RW, &root_oh, NULL);
+	assert_rc_equal(rc, 0);
+	d_iov_set(&dkey, "pl_dir", strlen("pl_dir"));
+	rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_close(root_oh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	/* relink: the leaked dir is descended, so its child head+tail are marked (not relinked) */
+	rc = dfs_cont_check(arg->pool.poh, cname, DFS_CHECK_PRINT | DFS_CHECK_RELINK, "tlf");
+	assert_int_equal(rc, 0);
+
+	/*
+	 * readdir /lost+found/tlf: it must contain exactly the relinked directory and no stray tail
+	 * file. Without the tail being marked during the descent, the child's tail array would be
+	 * relinked here as an extra regular file.
+	 */
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup(dfs, "/lost+found/tlf", O_RDWR, &lf, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	num_files = 0;
+	num_dirs  = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	num_ents = 10;
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs, lf, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+		for (i = 0; i < num_ents; i++) {
+			if (S_ISREG(stbufs[i].st_mode))
+				num_files++;
+			else if (S_ISDIR(stbufs[i].st_mode))
+				num_dirs++;
+		}
+		num_ents = 10;
+	}
+	/* the child's tail must NOT have leaked out as a stray top-level file */
+	assert_int_equal(num_files, 0);
+	assert_int_equal(num_dirs, 1);
+	rc = dfs_release(lf);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_destroy(arg->pool.pool_str, arg->group, cname, 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+restore_env:
+	if (env_was_set)
+		d_setenv("DFS_PL_BYPASS_TARGET_LIMIT", prev_env, 1);
+	else
+		d_unsetenv("DFS_PL_BYPASS_TARGET_LIMIT");
+	d_freeenv_str(&prev_env);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
@@ -4655,6 +4899,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
      async_disable, test_case_teardown},
     {"DFS_UNIT_TEST30: dfs progressive layout IO paths", dfs_test_pl_io, async_disable,
      test_case_teardown},
+    {"DFS_UNIT_TEST31: dfs MWC container checker with progressive layout", dfs_test_checker_pl,
+     async_disable, test_case_teardown},
 };
 
 static int
