@@ -49,8 +49,9 @@ type SupportConfig struct {
 }
 
 type deprecatedParams struct {
-	AccessPoints  []string `yaml:"access_points,omitempty"`  // deprecated in 2.8
-	EnableHotplug *bool    `yaml:"enable_hotplug,omitempty"` // deprecated in 2.8
+	AccessPoints    []string `yaml:"access_points,omitempty"`            // deprecated in 2.8
+	EnableHotplug   *bool    `yaml:"enable_hotplug,omitempty"`           // deprecated in 2.8
+	FWHelperLogFile string   `yaml:"firmware_helper_log_file,omitempty"` // deprecated in 3.0
 }
 
 // Server describes configuration options for DAOS control plane.
@@ -74,7 +75,6 @@ type Server struct {
 	ControlLogFile     string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON     bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile      string                    `yaml:"helper_log_file,omitempty"`
-	FWHelperLogFile    string                    `yaml:"firmware_helper_log_file,omitempty"`
 	FaultPath          string                    `yaml:"fault_path,omitempty"`
 	TelemetryPort      int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter     uint8                     `yaml:"core_dump_filter,omitempty"`
@@ -99,7 +99,9 @@ type Server struct {
 	Path string `yaml:"-"` // path to config file
 
 	// Behavior flags
-	AutoFormat bool `yaml:"-"`
+	AutoFormat                bool `yaml:"-"`
+	DisableEngineAutoRestart  bool `yaml:"disable_engine_auto_restart"`
+	EngineAutoRestartMinDelay int  `yaml:"engine_auto_restart_min_delay,omitempty"`
 
 	deprecatedParams `yaml:",inline"`
 }
@@ -350,15 +352,21 @@ func (cfg *Server) WithHelperLogFile(filePath string) *Server {
 	return cfg
 }
 
-// WithFirmwareHelperLogFile sets the path to the daos_firmware_helper logfile.
-func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
-	cfg.FWHelperLogFile = filePath
-	return cfg
-}
-
 // WithTelemetryPort sets the port for the telemetry exporter.
 func (cfg *Server) WithTelemetryPort(port int) *Server {
 	cfg.TelemetryPort = port
+	return cfg
+}
+
+// WithDisableEngineAutoRestart enables or disables automatic engine restarts on self-termination.
+func (cfg *Server) WithDisableEngineAutoRestart(disabled bool) *Server {
+	cfg.DisableEngineAutoRestart = disabled
+	return cfg
+}
+
+// WithEngineAutoRestartMinDelay sets minimum time between automatic engine restarts.
+func (cfg *Server) WithEngineAutoRestartMinDelay(secs uint) *Server {
+	cfg.EngineAutoRestartMinDelay = int(secs)
 	return cfg
 }
 
@@ -835,6 +843,11 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	if cfg.SystemRamReserved <= 0 {
 		return FaultConfigSysRsvdZero
+	}
+
+	if cfg.EngineAutoRestartMinDelay < 0 {
+		return errors.Errorf("engine_auto_restart_min_delay must be >= 0 (got %d)",
+			cfg.EngineAutoRestartMinDelay)
 	}
 
 	// A config without engines is valid when initially discovering hardware prior to adding
