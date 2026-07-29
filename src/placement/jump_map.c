@@ -197,6 +197,12 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *old_lo,
 		bool                remap   = false;
 		struct pool_target *new_pot;
 
+		if (new_tgt == (uint32_t)-1) {
+			D_DEBUG(DB_PL, "pool " DF_UUID ", skip shard index %d, po_target -1",
+				DP_UUID(jmap->jmp_map.pl_uuid), index);
+			continue;
+		}
+
 		if (new_tgt != old_tgt)
 			remap = true; /* migrate to a new target, e.g. drain, regular reint */
 		else if (rebuilding && old_lo->ol_shards[index].po_rebuilding)
@@ -204,7 +210,10 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *old_lo,
 
 		if (remap) {
 			rc = pool_map_find_target(jmap->jmp_map.pl_poolmap, new_tgt, &new_pot);
-			D_ASSERT(rc == 1);
+			D_ASSERTF(rc == 1,
+				  "pool " DF_UUID ", cannot find %u in pool map, index %d,"
+				  " old_tgt %u\n",
+				  DP_UUID(jmap->jmp_map.pl_uuid), new_tgt, index, old_tgt);
 
 			if (pool_target_avail(new_pot,
 					      PO_COMP_ST_UPIN | PO_COMP_ST_UP | PO_COMP_ST_DRAIN)) {
