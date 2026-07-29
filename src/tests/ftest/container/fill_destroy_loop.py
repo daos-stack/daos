@@ -118,6 +118,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy,
                 bytes_to_human(free_space_after_destroy), free_space_after_destroy))
         # Wait for a minute if the initial space is not released.
+        time.sleep(60)
         for _ in range(10):
             if (free_space_after_destroy - free_space_init) < delta_bytes:
                 break
