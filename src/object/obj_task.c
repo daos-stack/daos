@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -224,6 +225,7 @@ dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t api_flags,
 	args->extra_flags	= extra_flags;
 	args->iods		= iods;
 	args->sgls		= sgls;
+	args->mem_attrs		= NULL;
 	args->ioms		= ioms;
 	args->extra_arg		= extra_arg;
 	args->csum_iov		= csum;
@@ -249,11 +251,12 @@ dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	args = dc_task_get_args(*task);
 	args->oh	= oh;
 	args->th	= th;
-	args->flags	= flags;
-	args->dkey	= dkey;
-	args->nr	= nr;
-	args->iods	= iods;
-	args->sgls	= sgls;
+	args->flags		= flags;
+	args->dkey		= dkey;
+	args->nr		= nr;
+	args->iods		= iods;
+	args->sgls		= sgls;
+	args->mem_attrs	= NULL;
 
 	return 0;
 }
