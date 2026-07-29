@@ -414,7 +414,7 @@ class CartTest(TestWithoutServers):
         self.log.info("ENV : %s", os.environ)
 
         cmd = shlex.split(cmd)
-        rtn = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        rtn = subprocess.call(cmd)
 
         if rtn:
             if srv1 is not None:
