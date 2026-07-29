@@ -2284,7 +2284,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 			/* regular RPCs must have a valid handle */
 			if (!rpc_priv->crp_coll) {
 				RPC_ERROR(rpc_priv, "Unexpected crp_hg_hdl=NULL\n");
-				D_GOTO(out, rc = -DER_INVAL);
+				D_ASSERT(0);
 			}
 
 			remote_ctx_idx = ctx->cc_idx;

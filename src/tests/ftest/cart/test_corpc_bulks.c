@@ -18,15 +18,15 @@
  *
  */
 
+#include "crt_utils.h"
+#include <cart/api.h>
+
 #include <assert.h>
 #include <semaphore.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <cart/api.h>
-#include "crt_utils.h"
 
 #define TEST_CORPC_BULKS_BASE   0x010000000
 #define TEST_CORPC_BULKS_VER    0
