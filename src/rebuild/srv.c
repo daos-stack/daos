@@ -1035,10 +1035,10 @@ ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 		       force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
 	}
 
-	/* admin stop command does not usually terminate op:Fail_reclaim, but it is always
-	 * remembered to avoid retrying the original op:Rebuild.
-	 */
-	if (rgt->rgt_abort || (rgt->rgt_opc == RB_OP_FAIL_RECLAIM))
+	/* Only remember the admin-stop (to suppress retry of the original op:Rebuild) when the
+	 * stop was actually honored. A rejected stop (rc != 0, e.g. -DER_NO_PERM because another
+	 * rebuild is queued) must NOT latch rgt_stop_admin. */
+	if (rgt->rgt_abort || (rgt->rgt_opc == RB_OP_FAIL_RECLAIM && rc == 0))
 		rgt->rgt_stop_admin = 1;
 	rgt_put(rgt);
 	return rc;
