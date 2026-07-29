@@ -379,13 +379,13 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 		 * add the spare target to the fail list for remap, and
 		 * try next spare.
 		 */
-		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN)
-			D_ASSERTF(spare_tgt->ta_comp.co_status !=
-				  PO_COMP_ST_DOWNOUT,
-				  "down fseq(%u) < downout fseq(%u)\n",
-				  f_shard->fs_fseq,
-				  spare_tgt->ta_comp.co_fseq);
+		if ((f_shard->fs_status == PO_COMP_ST_DOWN ||
+		     f_shard->fs_status == PO_COMP_ST_DRAIN) &&
+		    spare_tgt->ta_comp.co_status == PO_COMP_ST_DOWNOUT)
+			D_DEBUG(DB_PL,
+				"failed shard (" DF_FAILEDSHARD
+				") remaps through DOWNOUT spare " DF_TARGET "\n",
+				DP_FAILEDSHARD(*f_shard), DP_TARGET(spare_tgt));
 
 		f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 		f_shard->fs_status = spare_tgt->ta_comp.co_status;

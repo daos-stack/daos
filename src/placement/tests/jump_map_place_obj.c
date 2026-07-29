@@ -1055,6 +1055,47 @@ chained_rebuild_completes_first_shard(void **state)
 }
 
 /*
+ * A rebuild resumed by rebuild start can run with an older rebuild version
+ * against a newer pool map. In that case a failed DOWN shard may remap through
+ * a spare candidate that has already become DOWNOUT. Placement should continue
+ * the remap chain instead of aborting or selecting the DOWNOUT target.
+ */
+static void
+chained_rebuild_remaps_through_downout_spare(void **state)
+{
+	struct jm_test_ctx ctx;
+	uint32_t           failed_tgt;
+	uint32_t           downout_spare;
+	uint32_t           rebuild_tgt;
+
+	jtc_init_with_layout(&ctx, 9, 1, 1, OC_EC_2P1G1, g_verbose);
+
+	failed_tgt = jtc_layout_shard_tgt(&ctx, 0);
+	jtc_set_status_on_target(&ctx, DOWN, failed_tgt);
+	jtc_assert_scan_and_layout(&ctx);
+
+	assert_int_equal(1, ctx.rebuild.out_nr);
+
+	downout_spare = jtc_layout_shard_tgt(&ctx, 0);
+	assert_int_not_equal(failed_tgt, downout_spare);
+
+	jtc_set_status_on_target(&ctx, DOWN, downout_spare);
+	jtc_set_status_on_target(&ctx, DOWNOUT, downout_spare);
+	jtc_assert_scan_and_layout(&ctx);
+
+	assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
+	assert_int_equal(1, ctx.rebuild.out_nr);
+	assert_int_equal(0, ctx.rebuild.ids[0]);
+
+	rebuild_tgt = jtc_get_layout_shard(&ctx, 0)->po_target;
+	assert_int_not_equal(failed_tgt, rebuild_tgt);
+	assert_int_not_equal(downout_spare, rebuild_tgt);
+	assert_int_equal(rebuild_tgt, ctx.rebuild.tgt_ranks[0]);
+
+	jtc_fini(&ctx);
+}
+
+/*
  * This test simulates all the shards' targets have failed and the new
  * targets are rebuilt successfully (failed goes to DOWNOUT state). Keep
  * "failing" until only enough targets are left for a single layout.
@@ -2548,6 +2589,8 @@ static const struct CMUnitTest tests[] = {
       down_continuously),
     /* DOWNOUT */
     T("Rebuild first shard's target repeatedly", chained_rebuild_completes_first_shard),
+    T("Rebuild remaps through a DOWNOUT spare candidate",
+      chained_rebuild_remaps_through_downout_spare),
     T("Rebuild all shards' targets", chained_rebuild_completes_all_at_once),
     /* UP */
     T("For each shard at a time, take the shard's target "
