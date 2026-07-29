@@ -1749,6 +1749,34 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 			merge_task = merge_post_task;
 	}
 
+	/* No queued task to merge with. If this task is only being (re-)scheduled to wait for a
+	 * merge opportunity (delay_sec == -1, e.g. re-scheduling the original op:Rebuild targets
+	 * after a "dmg pool rebuild stop"), also check for a same-op task that is *currently
+	 * running* for this pool. A running rebuild task scans up to (at least) its own pool map
+	 * version, and since these targets were already down before that scan started, the
+	 * running task will implicitly rebuild their data anyway as part of that broader,
+	 * version-based scan. If we don't fold these targets into that running task's dst_tgts
+	 * here, they would end up in a brand new task with dst_schedule_time left at -1, which
+	 * rebuild_ults() skips forever waiting for a merge that may never come: the target's
+	 * data ends up rebuilt, but ds_pool_tgt_finish_rebuild() is never called for it, so it
+	 * never leaves PO_COMP_ST_DOWN, which can later trip the fseq-ordering assertion in
+	 * determine_valid_spares().
+	 */
+	if (merge_task == NULL && delay_sec == (uint64_t)(-1)) {
+		d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
+			if (uuid_compare(task->dst_pool_uuid, pool->sp_uuid) == 0 &&
+			    task->dst_rebuild_op == rebuild_op && task->dst_map_ver > map_ver) {
+				merge_task = task;
+				break;
+			}
+		}
+		if (merge_task != NULL)
+			D_INFO("pool " DF_UUID " ver=%u, pti_number %d, (id[0] %u) merge to "
+			       "running task %p op=%s\n",
+			       DP_UUID(pool->sp_uuid), map_ver, tgts->pti_number,
+			       tgts->pti_ids[0].pti_id, merge_task, RB_OP_STR(rebuild_op));
+	}
+
 	/* Did not find a suitable target. The task will be added to the @rg_queue_list. */
 	if (merge_task == NULL)
 		return 0;
@@ -1907,6 +1935,65 @@ retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker
 	DL_CDEBUG(error, DLOG_ERR, DLOG_INFO, error, DF_UUID " opc %u/%u, retry.",
 		  DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver);
 	*opc = RB_OP_REBUILD;
+}
+
+static bool
+rebuild_tgt_in_list(struct pool_target_id_list *tgts, uint32_t tgt_id)
+{
+	int i;
+
+	for (i = 0; tgts != NULL && i < tgts->pti_number; i++) {
+		if (tgts->pti_ids[i].pti_id == tgt_id)
+			return true;
+	}
+
+	return false;
+}
+
+static void
+rebuild_log_finish_scope(struct ds_pool *pool, struct rebuild_task *task,
+			 struct rebuild_global_pool_tracker *rgt)
+{
+	struct pool_target *tgts;
+	unsigned int        tgts_nr;
+	unsigned int        i;
+
+	D_DEBUG(DB_REBUILD, DF_RB " finish scope check: task_ver=%u dst_tgts=%d pool_map_ver=%u",
+		DP_RB_RGT(rgt), task->dst_map_ver, task->dst_tgts.pti_number, pool->sp_map_version);
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+
+	for (i = 0; i < task->dst_tgts.pti_number; i++) {
+		struct pool_target *target = NULL;
+		int                 rc;
+
+		rc = pool_map_find_target(pool->sp_map, task->dst_tgts.pti_ids[i].pti_id, &target);
+		if (rc == 1 && target != NULL)
+			D_DEBUG(DB_REBUILD, DF_RB " finish dst_tgt " DF_TARGET, DP_RB_RGT(rgt),
+				DP_TARGET(target));
+		else
+			D_ERROR(DF_RB " finish dst_tgt id %u not found in pool map", DP_RB_RGT(rgt),
+				task->dst_tgts.pti_ids[i].pti_id);
+	}
+
+	tgts    = pool_map_targets(pool->sp_map);
+	tgts_nr = pool_map_target_nr(pool->sp_map);
+	for (i = 0; i < tgts_nr; i++) {
+		struct pool_target *target = &tgts[i];
+
+		if (target->ta_comp.co_status != PO_COMP_ST_DOWN &&
+		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
+			continue;
+		if (target->ta_comp.co_fseq == 0 || target->ta_comp.co_fseq > task->dst_map_ver)
+			continue;
+		if (rebuild_tgt_in_list(&task->dst_tgts, target->ta_comp.co_id))
+			continue;
+
+		D_WARN(DF_RB " covered DOWN/DRAIN target not in finish dst_tgts: " DF_TARGET,
+		       DP_RB_RGT(rgt), DP_TARGET(target));
+	}
+
+	ABT_rwlock_unlock(pool->sp_lock);
 }
 
 static void
@@ -2274,6 +2361,7 @@ done:
 			goto iv_stop;
 
 		if (task->dst_rebuild_op == RB_OP_REBUILD) {
+			rebuild_log_finish_scope(pool, task, rgt);
 			rc = ds_pool_tgt_finish_rebuild(pool->sp_uuid, &task->dst_tgts,
 							&obj_reclaim_ver);
 		}
