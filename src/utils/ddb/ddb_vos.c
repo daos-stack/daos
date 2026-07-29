@@ -1110,8 +1110,7 @@ dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod
 	}
 
 	cil = vos_ioh2ci(ioh);
-
-	cb_rc = dump_cb(cb_arg, NULL, cil);
+	cb_rc = dump_cb(cb_arg, NULL, vos_ioh2sv_epoch(ioh), cil);
 	if (!SUCCESS(cb_rc))
 		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(cb_rc));
@@ -1146,8 +1145,7 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 
 	cil = vos_ioh2ci(ioh);
 	rel = vos_ioh2recx_list(ioh);
-
-	cb_rc = dump_cb(cb_arg, rel, cil);
+	cb_rc = dump_cb(cb_arg, rel, 0, cil);
 	if (!SUCCESS(cb_rc))
 		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(cb_rc));
@@ -2311,7 +2309,8 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 
 	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
 	if (!md_on_ssd) {
-		D_ERROR("Not in MD-on-SSD mode; skipping memory environment provisioning.");
+		D_ERROR("Provided db_path is not configured in MD-on-SSD mode.");
+		rc = -DER_INVAL;
 		goto out;
 	}
 

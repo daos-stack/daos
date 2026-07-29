@@ -2313,45 +2313,107 @@ pool_map_refreshes_fallback(void **state)
 	pool_map_refreshes_common(state, true /* fall_back */);
 }
 
+/*
+ * A reconfiguration interrupted by a -DER_NOTLEADER should not destroy the new
+ * replica who may have been added to the leader's local membership.
+ */
+static void
+reconf_notleader_handling(void **state)
+{
+	test_arg_t      *arg0 = *state;
+	test_arg_t      *arg  = NULL;
+	daos_prop_t     *prop;
+	daos_pool_info_t pinfo       = {0};
+	d_rank_t         extend_rank = 1;
+	uuid_t           cont_uuid;
+	int              rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	par_barrier(PAR_COMM_WORLD);
+
+	if (arg0->myrank == 0) {
+		rc = test_pool_get_info(arg0, &pinfo, NULL);
+		assert_rc_equal(rc, 0);
+		if (pinfo.pi_nnodes < 2) {
+			print_message("need at least 2 ranks\n");
+			skip();
+		}
+	}
+
+	if (arg0->myrank != 0)
+		return;
+
+	/* Create a pool on rank 0 only, with svc_rf = 1. */
+	rc = test_setup((void **)&arg, SETUP_EQ, false /* multi_rank */, SMALL_POOL_SIZE,
+			1 /* node_size */, NULL);
+	assert_rc_equal(rc, 0);
+	prop = daos_prop_alloc(1);
+	assert_ptr_not_equal(prop, NULL);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_SVC_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val  = 1;
+	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
+	assert_rc_equal(rc, 0);
+	daos_prop_free(prop);
+
+	/* Inject fault on rank 0 (the only PS leader). */
+	test_set_engine_fail_loc(arg, 0 /* rank */, DAOS_RDB_FAIL_MODIFY_REPLICAS | DAOS_FAIL_ONCE);
+
+	/*
+	 * Extend the pool to rank 1, and wait for the rank to become UPIN,
+	 * triggering ds_rsvc_add_replicas_s, which used to destroy the new PS
+	 * replica on rank 1 incorrectly, even though it has been added to the
+	 * leader's local membership.
+	 */
+	print_message("extending pool to rank %u\n", extend_rank);
+	rc = dmg_pool_extend(arg->dmg_config, arg->pool.pool_uuid, arg->group, &extend_rank, 1);
+	assert_rc_equal(rc, 0);
+	print_message("waiting for rebuild to complete\n");
+	test_rebuild_wait(&arg, 1);
+
+	print_message("wait 5 s for the PS to reconfigure\n");
+	sleep(5);
+
+	print_message("creating a container\n");
+	rc = daos_cont_create(arg->pool.poh, &cont_uuid, NULL /* prop */, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+
+	print_message("cleaning up\n");
+	test_teardown((void **)&arg);
+}
+
 static const struct CMUnitTest pool_tests[] = {
-	{ "POOL1: connect to non-existing pool",
-	  pool_connect_nonexist, NULL, test_case_teardown},
-	{ "POOL2: connect/disconnect to pool",
-	  pool_connect, async_disable, test_case_teardown},
-	{ "POOL3: connect/disconnect to pool (async)",
-	  pool_connect, async_enable, test_case_teardown},
-	{ "POOL4: pool handle local2global and global2local",
-	  pool_connect, hdl_share_enable, test_case_teardown},
-	{ "POOL5: exclusive connection",
-	  pool_connect_exclusively, NULL, test_case_teardown},
-	{ "POOL6: exclude targets and query pool info",
-	  pool_exclude, async_disable, NULL},
-	{ "POOL7: set/get/list user-defined pool attributes (sync)",
-	  pool_attribute, NULL, test_case_teardown},
-	{ "POOL8: set/get/list user-defined pool attributes (async)",
-	  pool_attribute, NULL, test_case_teardown},
-	{ "POOL9: pool reconnect after daos re-init",
-	  init_fini_conn, NULL, test_case_teardown},
-	{ "POOL10: pool create with properties and query",
-	  pool_properties, NULL, test_case_teardown},
-	{ "POOL11: pool list containers (zero)",
-	  list_containers_test, setup_zerocontainers, teardown_containers},
-	{ "POOL12: pool list containers (many)",
-	  list_containers_test, setup_manycontainers, teardown_containers},
-	{ "POOL13: retry POOL_{CONNECT,DISCONNECT,QUERY}",
-	  pool_op_retry, NULL, test_case_teardown},
-	{ "POOL14: pool connect access based on ACL",
-	  pool_connect_access, NULL, test_case_teardown},
-	{ "POOL15: label property string validation",
-	  label_strings_test, NULL, test_case_teardown},
-	{ "POOL16: pool map refreshes",
-	  pool_map_refreshes, pool_map_refreshes_setup, test_case_teardown},
-	{ "POOL17: pool map refreshes (fallback)",
-	  pool_map_refreshes_fallback, pool_map_refreshes_setup, test_case_teardown},
-	{ "POOL18: pool filter containers (zero)",
-	  filter_containers_test, setup_zerocontainers, teardown_containers},
-	{ "POOL19: pool filter containers (many)",
-	  filter_containers_test, setup_manycontainers, teardown_containers},
+    {"POOL1: connect to non-existing pool", pool_connect_nonexist, NULL, test_case_teardown},
+    {"POOL2: connect/disconnect to pool", pool_connect, async_disable, test_case_teardown},
+    {"POOL3: connect/disconnect to pool (async)", pool_connect, async_enable, test_case_teardown},
+    {"POOL4: pool handle local2global and global2local", pool_connect, hdl_share_enable,
+     test_case_teardown},
+    {"POOL5: exclusive connection", pool_connect_exclusively, NULL, test_case_teardown},
+    {"POOL6: exclude targets and query pool info", pool_exclude, async_disable, NULL},
+    {"POOL7: set/get/list user-defined pool attributes (sync)", pool_attribute, NULL,
+     test_case_teardown},
+    {"POOL8: set/get/list user-defined pool attributes (async)", pool_attribute, NULL,
+     test_case_teardown},
+    {"POOL9: pool reconnect after daos re-init", init_fini_conn, NULL, test_case_teardown},
+    {"POOL10: pool create with properties and query", pool_properties, NULL, test_case_teardown},
+    {"POOL11: pool list containers (zero)", list_containers_test, setup_zerocontainers,
+     teardown_containers},
+    {"POOL12: pool list containers (many)", list_containers_test, setup_manycontainers,
+     teardown_containers},
+    {"POOL13: retry POOL_{CONNECT,DISCONNECT,QUERY}", pool_op_retry, NULL, test_case_teardown},
+    {"POOL14: pool connect access based on ACL", pool_connect_access, NULL, test_case_teardown},
+    {"POOL15: label property string validation", label_strings_test, NULL, test_case_teardown},
+    {"POOL16: pool map refreshes", pool_map_refreshes, pool_map_refreshes_setup,
+     test_case_teardown},
+    {"POOL17: pool map refreshes (fallback)", pool_map_refreshes_fallback, pool_map_refreshes_setup,
+     test_case_teardown},
+    {"POOL18: pool filter containers (zero)", filter_containers_test, setup_zerocontainers,
+     teardown_containers},
+    {"POOL19: pool filter containers (many)", filter_containers_test, setup_manycontainers,
+     teardown_containers},
+    {"POOL20: reconf interrupted by -DER_NOTLEADER", reconf_notleader_handling, NULL,
+     test_case_teardown},
 };
 
 int

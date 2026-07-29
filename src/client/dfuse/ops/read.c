@@ -352,7 +352,7 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 		goto err;
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
@@ -556,7 +556,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	}
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
@@ -663,7 +663,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		goto err;
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_pre_read_slab);

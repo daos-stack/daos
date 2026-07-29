@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,7 +29,7 @@ class StorageTiers(TestWithServers):
             Does not test or rely on actual hardware being present.
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,medium
         :avocado: tags=server,storage,storage_tiers
         :avocado: tags=StorageTiers,test_tiers
         """
