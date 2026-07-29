@@ -13,6 +13,7 @@ timeouts:
   test_daos_pool: 360
   test_daos_container: 700
   test_daos_epoch: 125
+  test_daos_single_rdg_tx: 700
   test_daos_verify_consistency: 105
   test_daos_io: 350
   test_daos_ec_io: 510
