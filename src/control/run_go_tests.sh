@@ -187,7 +187,7 @@ $output
 
 function get_test_runner()
 {
-	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection,test_stubs,spdk"
+	test_args="-mod vendor -race -cover -v ./... -tags fault_injection,test_stubs,spdk"
 	test_runner="go test"
 
 	if which gotestsum >/dev/null; then
@@ -243,7 +243,7 @@ if $DLV_MODE; then
 		echo "Usage: $0 --dlv [--run <TestName>] <package>" >&2
 		exit 1
 	fi
-	DLV_BUILD_FLAGS="-mod vendor -tags firmware,fault_injection,test_stubs,spdk"
+	DLV_BUILD_FLAGS="-mod vendor -tags fault_injection,test_stubs,spdk"
 	DLV_ARGS=()
 	[[ -n "$DLV_TEST_NAME" ]] && DLV_ARGS=(-- -test.run "$DLV_TEST_NAME")
 	echo "Environment:"
