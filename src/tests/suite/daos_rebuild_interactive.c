@@ -257,7 +257,9 @@ int_rebuild_many_objects_with_failure(void **state)
 	/* For interactive rebuild, we need:
 	 * 1. trigger rebuild (which will fail), wait until op:Fail_reclaim begins.
 	 * 2. During op:Fail_reclaim, issue dmg system stop (test that stop does not interrupt
-	 *    reclaim, but takes effect by not retrying the rebuild.
+	 *    reclaim, but takes effect by deferring the rebuild retry rather than running it -
+	 *    the retry is re-queued with delay=-1 and only runs if a later same-pool rebuild
+	 *    merges it).
 	 */
 	arg->rebuild_cb      = rebuild_wait_error_reset_fail_cb;
 	arg->rebuild_post_cb = rebuild_resume_wait;
@@ -697,7 +699,8 @@ int_rebuild_dkeys_stop_failing(void **state)
 	}
 
 	/* Trigger exclude and rebuild, fail twice, force-stop command during second Fail_reclaim
-	 * NB: stop will be deferred until after Fail_reclaim (since it did not fail).
+	 * NB: stop will be deferred until after Fail_reclaim (since it did not fail); the stopped
+	 *     rebuild's retry is then parked (delay=-1) and merges into the reintegrate below.
 	 */
 	arg->no_rebuild = 1;
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
@@ -725,7 +728,9 @@ int_rebuild_dkeys_stop_failing(void **state)
 
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
-	/* Do not restart the rebuild ; instead, go directly to reintegrate the rank */
+	/* Do not explicitly restart the rebuild; the parked (deferred) retry of the stopped
+	 * rebuild merges into this reintegrate of the same rank.
+	 */
 	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_rc_equal(rc, 0);
@@ -851,10 +856,19 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	rc = rebuild_stop_with_dmg(arg);
 	assert_rc_equal(rc, -DER_NO_PERM);
 
-	/* (5) Release the hang so rebuild-2 (rank_B, higher fseq) can run. */
+	/* (5) Release the hang so rebuild-2 (rank_B, higher fseq) can run. Clear the fault on each
+	 *     surviving engine directly rather than via a rank=-1 broadcast: the broadcast is
+	 *     always routed through rank 0, which may itself be a killed victim (rank_A/rank_B).
+	 */
 	if (arg->myrank == 0) {
+		d_rank_t r;
+
 		print_message("clear rebuild pull hang; let rebuild-2 (rank %u) run\n", rank_B);
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		for (r = 0; r < (d_rank_t)arg->srv_nnodes; r++) {
+			if (r == rank_A || r == rank_B)
+				continue;
+			daos_debug_set_params(arg->group, r, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		}
 	}
 
 	/* (6) As soon as rebuild-2 (rank_B, higher version) is detected RUNNING, issue
