@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,9 +25,7 @@
 #include <daos/placement.h>
 #include <daos/job.h>
 #include <daos/metrics.h>
-#if BUILD_PIPELINE
 #include <daos/pipeline.h>
-#endif
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -36,6 +34,9 @@ static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** refcount on how many times daos_init has been called */
 static int                 module_initialized;
+
+/** whether the pipeline feature was enabled at daos_init() time */
+static bool                pipeline_enabled;
 
 /* clang-format off */
 
@@ -136,10 +137,8 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_snap_oit_create, sizeof(daos_cont_snap_oit_create_t)},
 	{dc_cont_snap_oit_destroy, sizeof(daos_cont_snap_oit_destroy_t)},
 
-#if BUILD_PIPELINE
 	/** Pipeline */
 	{dc_pipeline_run, sizeof(daos_pipeline_run_t)},
-#endif
 };
 
 /* clang-format on */
@@ -265,20 +264,21 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-#if BUILD_PIPELINE
-	/** set up pipeline */
-	rc = dc_pipeline_init();
-	if (rc != 0)
-		D_GOTO(out_obj, rc);
-#endif
+	/** set up pipeline if the feature is enabled (disabled by default) */
+	pipeline_enabled = false;
+	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
+	if (pipeline_enabled) {
+		rc = dc_pipeline_init();
+		if (rc != 0)
+			D_GOTO(out_obj, rc);
+	}
+
 	daos_array_env_init();
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
-#if BUILD_PIPELINE
 out_obj:
 	dc_obj_fini();
-#endif
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -340,9 +340,8 @@ daos_fini(void)
 
 	/** clean up all registered per-module metrics */
 	daos_metrics_fini();
-#if BUILD_PIPELINE
-	dc_pipeline_fini();
-#endif
+	if (pipeline_enabled)
+		dc_pipeline_fini();
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();
