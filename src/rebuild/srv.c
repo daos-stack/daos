@@ -1932,28 +1932,6 @@ retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker
 	*opc = RB_OP_REBUILD;
 }
 
-static void
-check_to_retry_orig_rebuild(struct rebuild_task *task, struct rebuild_global_pool_tracker *rgt)
-{
-	/* Only called for Fail_reclaim (whether it fails or succeeds) to know if the original
-	 * op:Rebuild should be retried later when Fail_reclaim is (successfully) done.
-	 */
-	if (task->dst_rebuild_op != RB_OP_FAIL_RECLAIM)
-		return;
-
-	/* If this Fail_reclaim was stopped, and the original Rebuild was not stopped,
-	 * we no longer want the original Rebuild to be retried.
-	 */
-	if (rgt->rgt_stop_admin && (task->dst_retry_rebuild_op != RB_OP_NONE)) {
-		D_INFO(
-		    DF_RB
-		    ": rebuild stop command during Fail_reclaim - do NOT retry original %u(%s)\n",
-		    DP_RB_RGT(rgt), task->dst_retry_rebuild_op,
-		    RB_OP_STR(task->dst_retry_rebuild_op));
-		task->dst_retry_rebuild_op = RB_OP_NONE;
-	}
-}
-
 static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			       struct rebuild_global_pool_tracker *rgt, uint32_t obj_reclaim_ver,
@@ -1994,9 +1972,6 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			  DP_UUID(task->dst_pool_uuid), DP_RC(rc1));
 	}
 
-	/* see if we got stop during Fail_reclaim, configure whether to retry original rebuild */
-	check_to_retry_orig_rebuild(task, rgt);
-
 	if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0) {
 		daos_rebuild_opc_t retry_opc = 0;
 
@@ -2013,11 +1988,14 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		/* reclaim or fail_reclaim failed - retry */
 		if (task->dst_rebuild_op == RB_OP_RECLAIM ||
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
-			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
-						 task->dst_new_layout_version, &task->dst_tgts,
-						 task->dst_rebuild_op, task->dst_retry_rebuild_op,
-						 task->dst_retry_map_ver, task->dst_stop_admin,
-						 task, delay_sec);
+			/* carry a stop latched during this Fail_reclaim across its retry so a
+			 * later successful pass still parks the original rebuild (delay=-1)
+			 */
+			rc = ds_rebuild_schedule(
+			    pool, task->dst_map_ver, rgt->rgt_stable_epoch,
+			    task->dst_new_layout_version, &task->dst_tgts, task->dst_rebuild_op,
+			    task->dst_retry_rebuild_op, task->dst_retry_map_ver,
+			    task->dst_stop_admin || rgt->rgt_stop_admin, task, delay_sec);
 			DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
 				  DF_RB ": errno " DF_RC ", schedule retry %u(%s)", DP_RB_RGT(rgt),
 				  DP_RC(rgt->rgt_status.rs_errno), task->dst_rebuild_op,
