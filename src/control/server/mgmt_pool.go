@@ -170,12 +170,12 @@ func minPoolNvme(tgtCount, rankCount uint64) uint64 {
 }
 
 // poolCreateActiveRankCount returns the number of ranks in req.Ranks that are
-// not also present in req.DownoutRanks (i.e. the ranks that will actually host
+// not also present in req.UnavailableRanks (i.e. the ranks that will actually host
 // storage for the pool). The input rank lists are treated as sets: duplicate
-// entries in req.Ranks are only counted once against req.DownoutRanks.
+// entries in req.Ranks are only counted once against req.UnavailableRanks.
 func poolCreateActiveRankCount(req *mgmtpb.PoolCreateReq) int {
-	downout := make(map[uint32]struct{}, len(req.GetDownoutRanks()))
-	for _, r := range req.GetDownoutRanks() {
+	downout := make(map[uint32]struct{}, len(req.GetUnavailableRanks()))
+	for _, r := range req.GetUnavailableRanks() {
 		downout[r] = struct{}{}
 	}
 	n := 0
@@ -394,7 +394,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 
 	ranksRequested := len(req.GetRanks()) > 0
 	numRanksRequested := req.GetNumRanks() > 0
-	autoRanks := req.GetRanksAutoSelected()
+	includeSystemUnavailableRanks := req.GetIncludeSystemUnavailableRanks()
 	if ranksRequested {
 		// If the request supplies a rank list, use it. Note that the rank list
 		// may include downed ranks, in which case the create will fail with an
@@ -449,15 +449,16 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, errors.New("pool request contains zero target ranks")
 	}
 
-	// Compute DownoutRanks from the authoritative membership state. For the
+	// Compute UnavailableRanks from the authoritative membership state. For the
 	// default/full-cluster paths, keep req.Ranks as active target ranks and pass
-	// downout ranks separately so they are pool-map-only DOWNOUT entries. For
-	// an explicit rank list, split req.Ranks into active target ranks and
-	// pool-map-only downout ranks so both paths present a uniform semantic to
-	// the pool service: req.Ranks == VOS target creators, req.DownoutRanks ==
+	// all system-known unavailable ranks separately so they are pool-map-only
+	// DOWNOUT entries. For an explicit rank list, do not auto-add other system
+	// unavailable ranks; only split the user-requested unavailable ranks out of
+	// req.Ranks. After this point both paths present a uniform semantic to the
+	// pool service: req.Ranks == VOS target creators, req.UnavailableRanks ==
 	// pool-map-only DOWNOUT entries.
 	downout := make([]uint32, 0, len(downoutRanks))
-	if autoRanks || (!ranksRequested && !numRanksRequested) {
+	if includeSystemUnavailableRanks || (!ranksRequested && !numRanksRequested) {
 		for _, r := range downoutRanks {
 			downout = append(downout, r.Uint32())
 		}
@@ -472,7 +473,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 		req.Ranks = active
 	}
-	req.DownoutRanks = downout
+	req.UnavailableRanks = downout
 
 	// Clamp the maximum allowed svc replicas to the smaller of requested
 	// storage ranks or MaxPoolServiceReps. DOWNOUT ranks are pool-map-only
@@ -513,7 +514,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	// IO engine needs the fault domain tree for placement purposes. Include
 	// both active target ranks and pool-map-only DOWNOUT ranks.
 	mapRankSet := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(req.GetRanks()))
-	for _, r := range req.GetDownoutRanks() {
+	for _, r := range req.GetUnavailableRanks() {
 		mapRankSet.Add(ranklist.Rank(r))
 	}
 	req.FaultDomains, err = svc.membership.CompressedFaultDomainTree(
@@ -570,11 +571,11 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 	}()
 
-	// RanksAutoSelected is a control-plane-only hint used above to decide
+	// IncludeSystemUnavailableRanks is a control-plane-only hint used above to decide
 	// whether to auto-include system DOWNOUT ranks in the pool map. Clear it
 	// before invoking the engine so the flag does not leak across the dRPC
 	// boundary; the engine ignores this field.
-	req.RanksAutoSelected = false
+	req.IncludeSystemUnavailableRanks = false
 	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodPoolCreate, req)
 	if err != nil {
 		svc.log.Errorf("pool create dRPC call failed: %s", err)

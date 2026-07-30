@@ -200,14 +200,17 @@ struct  _Mgmt__PoolCreateReq
    */
   float mem_ratio;
   /*
-   * Excluded/admin-excluded ranks that enter pool map as DOWNOUT
+   * Ranks that are unavailable (excluded/admin-excluded/stopped); enter the pool map as DOWNOUT
    */
-  size_t n_downout_ranks;
-  uint32_t *downout_ranks;
+  size_t n_unavailable_ranks;
+  uint32_t *unavailable_ranks;
   /*
-   * true if control auto-selected ranks from joined membership
+   * If true, the management service includes all system-known unavailable
+   * ranks as DOWNOUT pool-map entries. This is for auto/full-system rank
+   * selection only; explicit rank requests carry any user-selected
+   * unavailable ranks in unavailable_ranks instead.
    */
-  protobuf_c_boolean ranks_auto_selected;
+  protobuf_c_boolean include_system_unavailable_ranks;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \

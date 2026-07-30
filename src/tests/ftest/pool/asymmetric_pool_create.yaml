@@ -38,16 +38,6 @@ server_config:
           scm_mount: /mnt/daos1
           scm_size: 4
   system_ram_reserved: 1
-  transport_config:
-    allow_insecure: true
-
-agent_config:
-  transport_config:
-    allow_insecure: true
-
-dmg:
-  transport_config:
-    allow_insecure: true
 
 pool:
   size: 30%

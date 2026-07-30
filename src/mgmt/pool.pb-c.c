@@ -1765,24 +1765,24 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "downout_ranks",
+    "unavailable_ranks",
     15,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolCreateReq, n_downout_ranks),
-    offsetof(Mgmt__PoolCreateReq, downout_ranks),
+    offsetof(Mgmt__PoolCreateReq, n_unavailable_ranks),
+    offsetof(Mgmt__PoolCreateReq, unavailable_ranks),
     NULL,
     NULL,
     0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ranks_auto_selected",
+    "include_system_unavailable_ranks",
     16,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateReq, ranks_auto_selected),
+    offsetof(Mgmt__PoolCreateReq, include_system_unavailable_ranks),
     NULL,
     NULL,
     0,             /* flags */
@@ -1791,18 +1791,18 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
 };
 static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
   4,   /* field[4] = acl */
-  14,   /* field[14] = downout_ranks */
   6,   /* field[6] = fault_domains */
+  15,   /* field[15] = include_system_unavailable_ranks */
   13,   /* field[13] = mem_ratio */
   10,   /* field[10] = num_ranks */
   7,   /* field[7] = num_svc_reps */
   5,   /* field[5] = properties */
   11,   /* field[11] = ranks */
-  15,   /* field[15] = ranks_auto_selected */
   1,   /* field[1] = sys */
   12,   /* field[12] = tier_bytes */
   9,   /* field[9] = tier_ratio */
   8,   /* field[8] = total_bytes */
+  14,   /* field[14] = unavailable_ranks */
   2,   /* field[2] = user */
   3,   /* field[3] = user_group */
   0,   /* field[0] = uuid */

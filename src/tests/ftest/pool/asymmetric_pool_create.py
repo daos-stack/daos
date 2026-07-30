@@ -39,9 +39,9 @@ class AsymmetricPoolCreate(TestWithServers):
             query reports the stopped/excluded rank in the pool's disabled rank
             list.
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=daos_test,pool,control
+        :avocado: tags=pool,control
         :avocado: tags=AsymmetricPoolCreate,test_create_with_excluded_rank
         """
         ranks_by_domain = self._get_joined_ranks_by_fault_domain()
@@ -53,15 +53,11 @@ class AsymmetricPoolCreate(TestWithServers):
                 f"Fault domain {fault_domain} has fewer than two joined ranks: {ranks}")
 
         ms_ranks = set(self.server_managers[0].get_host_ranks(self.mgmt_svc_replicas))
-        candidate_ranks = [
-            rank
-            for ranks in ranks_by_domain.values()
-            for rank in ranks
-            if rank not in ms_ranks
-        ]
+        all_ranks = [rank for ranks in ranks_by_domain.values() for rank in ranks]
+        candidate_ranks = list(set(all_ranks) - ms_ranks)
         if not candidate_ranks:
-            candidate_ranks = [rank for ranks in ranks_by_domain.values() for rank in ranks]
-        rank_to_stop = sorted(candidate_ranks)[0]
+            candidate_ranks = all_ranks
+        rank_to_stop = self.random.choice(candidate_ranks)
 
         self.log.info("Stopping rank %s before pool create", rank_to_stop)
         self.server_managers[0].stop_ranks([rank_to_stop], force=True)
@@ -70,8 +66,8 @@ class AsymmetricPoolCreate(TestWithServers):
         self.assertListEqual(
             failed, [], f"Rank {rank_to_stop} did not reach excluded state before pool create")
 
-        pool = self.get_pool(connect=False, size="30%")
-        query = self.get_dmg_command().pool_query(pool.identifier, show_enabled=True)["response"]
+        pool = self.get_pool(connect=False)
+        query = pool.query(show_enabled=True)["response"]
         self.assertIn(
             rank_to_stop, query.get("disabled_ranks", []),
             f"Stopped rank {rank_to_stop} not found in pool query disabled_ranks: {query}")

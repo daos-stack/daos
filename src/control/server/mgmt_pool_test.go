@@ -784,7 +784,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 
 	// We should only be trying to create on the Joined ranks.
 	wantReq.Ranks = []uint32{0, 2, 3}
-	wantReq.DownoutRanks = []uint32{1}
+	wantReq.UnavailableRanks = []uint32{1}
 	fdTree, err = mgmtSvc.membership.CompressedFaultDomainTree(0, 1, 2, 3)
 	if err != nil {
 		t.Fatal(err)
@@ -859,13 +859,13 @@ func TestServer_MgmtSvc_PoolCreateExcludedRanksAsDownout(t *testing.T) {
 
 	totalBytes := uint64(100 * humanize.GiByte)
 	req := &mgmtpb.PoolCreateReq{
-		Sys:               build.DefaultSystemName,
-		Uuid:              test.MockUUID(),
-		TotalBytes:        totalBytes,
-		TierRatio:         []float64{0.06, 0.94},
-		Ranks:             []uint32{0, 2, 3},
-		RanksAutoSelected: true,
-		Properties:        testPoolLabelProp(),
+		Sys:                           build.DefaultSystemName,
+		Uuid:                          test.MockUUID(),
+		TotalBytes:                    totalBytes,
+		TierRatio:                     []float64{0.06, 0.94},
+		Ranks:                         []uint32{0, 2, 3},
+		IncludeSystemUnavailableRanks: true,
+		Properties:                    testPoolLabelProp(),
 	}
 	wantReq := new(mgmtpb.PoolCreateReq)
 	*wantReq = *req
@@ -876,8 +876,8 @@ func TestServer_MgmtSvc_PoolCreateExcludedRanksAsDownout(t *testing.T) {
 	}
 	wantReq.TierRatio = nil
 	wantReq.Ranks = []uint32{0, 2, 3}
-	wantReq.RanksAutoSelected = false
-	wantReq.DownoutRanks = []uint32{1, 4}
+	wantReq.IncludeSystemUnavailableRanks = false
+	wantReq.UnavailableRanks = []uint32{1, 4}
 	fdTree, err := mgmtSvc.membership.CompressedFaultDomainTree(0, 1, 2, 3, 4)
 	if err != nil {
 		t.Fatal(err)

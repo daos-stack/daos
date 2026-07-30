@@ -500,8 +500,9 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	if (req->n_downout_ranks > 0) {
-		downout_ranks = uint32_array_to_rank_list(req->downout_ranks, req->n_downout_ranks);
+	if (req->n_unavailable_ranks > 0) {
+		downout_ranks =
+		    uint32_array_to_rank_list(req->unavailable_ranks, req->n_unavailable_ranks);
 		if (downout_ranks == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
