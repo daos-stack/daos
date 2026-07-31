@@ -906,6 +906,25 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	T_END();
 }
 
+/*
+ * IREBUILD7's pool spans only 3 ranks, so it can host at most 3 (odd) service replicas. Clamp
+ * svc_nreplicas around setup so a larger global -s (e.g. the -s 5 that IREBUILD9 requires) does
+ * not make this 3-node pool-create fail ("replicas number should be an odd number between 1 and
+ * 3"). Scoped to this file to leave the shared rebuild_sub_3nodes_rf0_setup callers untouched.
+ */
+static int
+int_rebuild_3nodes_rf0_setup(void **state)
+{
+	unsigned int saved = svc_nreplicas;
+	int          rc;
+
+	if (svc_nreplicas > 3)
+		svc_nreplicas = 3;
+	rc            = rebuild_sub_3nodes_rf0_setup(state);
+	svc_nreplicas = saved;
+	return rc;
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_interactive_tests[] = {
     {"IREBUILD1: interactive exclude: records with multiple snapshots",
@@ -921,7 +940,7 @@ static const struct CMUnitTest rebuild_interactive_tests[] = {
     {"IREBUILD6: interactive drain: overwrite during rebuild", int_dfs_drain_overwrite,
      rebuild_sub_rf0_setup, test_teardown},
     {"IREBUILD7: interactive extend: enumerate object during two rebuilds",
-     int_dfs_extend_enumerate_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
+     int_dfs_extend_enumerate_extend, int_rebuild_3nodes_rf0_setup, test_teardown},
     {"IREBUILD8: interactive exclude: stop repeatedly-failing rebuild",
      int_rebuild_dkeys_stop_failing, rebuild_small_sub_setup, test_teardown},
     {"IREBUILD9: interactive kill: stranded lower-fseq target (DAOS-19381)",
