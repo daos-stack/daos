@@ -8129,6 +8129,9 @@ out:
 	return rc;
 }
 
+static int
+pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list);
+
 void
 ds_pool_extend_handler(crt_rpc_t *rpc)
 {
@@ -8163,6 +8166,12 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
+	rc = pool_recov_cont(rpc->cr_ctx, svc, &tgt_addr_list);
+	if (rc != 0) {
+		DL_INFO(rc, DF_UUID ": recover containers", DP_UUID(in->pei_op.pi_uuid));
+		goto failed;
+	}
+
 	rc = pool_discard(rpc->cr_ctx, svc, &tgt_addr_list, false);
 	if (rc) {
 		DL_ERROR(rc, DF_UUID ": pool_discard failed.", DP_UUID(in->pei_op.pi_uuid));
@@ -8172,7 +8181,7 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */, &rank_list, domains, ndomains, NULL,
 				 NULL, &out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG,
-				 POOL_TGT_UPDATE_SKIP_RF_CHECK);
+				 POOL_TGT_UPDATE_SKIP_RF_CHECK | POOL_RESET_RECOV_CONT);
 
 failed:
 	pool_svc_put_leader(svc);
@@ -8325,14 +8334,15 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 		goto out;
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT) {
+		flags |= POOL_RESET_RECOV_CONT;
+		rc = pool_recov_cont(rpc->cr_ctx, svc, &list);
+		if (rc != 0)
+			goto out_svc;
 		if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
 			rc = pool_discard(rpc->cr_ctx, svc, &list, true);
-		} else if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_INCREMENTAL) {
-			flags |= POOL_RESET_RECOV_CONT;
-			rc = pool_recov_cont(rpc->cr_ctx, svc, &list);
+			if (rc != 0)
+				goto out_svc;
 		}
-		if (rc)
-			goto out_svc;
 	}
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
