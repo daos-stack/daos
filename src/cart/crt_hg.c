@@ -2296,13 +2296,13 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 					     remote_bulk, bulk_desc->bd_remote_off, local_bulk,
 					     bulk_desc->bd_local_off, bulk_desc->bd_len,
 					     opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
-		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n",
-				DP_HG_RC(hg_ret));
-			D_FREE(bulk_cbinfo);
-			D_FREE(bulk_desc_dup);
-			rc = crt_hgret_2_der(hg_ret);
-		}
+	}
+
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
+		D_FREE(bulk_cbinfo);
+		D_FREE(bulk_desc_dup);
+		rc = crt_hgret_2_der(hg_ret);
 	}
 
 out:
