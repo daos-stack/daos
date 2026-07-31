@@ -54,6 +54,8 @@ utest_tx_add(struct utest_context *utx, void *ptr, size_t size)
 
 #define utest_tx_add_ptr(utx, ptr) utest_tx_add(utx, ptr, sizeof(*ptr))
 
+#ifdef DAOS_PMEM_BUILD
+
 int
 utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 		  struct umem_store *store, struct utest_context **utx)
@@ -123,6 +125,8 @@ free_ctx:
 	return rc;
 }
 
+#endif /* DAOS_PMEM_BUILD */
+
 int
 utest_vmem_create(size_t root_size, struct utest_context **utx)
 {
@@ -178,6 +182,8 @@ utest_utx_destroy(struct utest_context *utx)
 		return 0;
 	}
 
+#ifdef DAOS_PMEM_BUILD
+
 	/* Ok, PMEM is a bit more complicated */
 	rc = utest_tx_begin(utx);
 	if (rc != 0) {
@@ -209,6 +215,9 @@ end:
 		rc = -DER_IO;
 	}
 	D_FREE(utx);
+
+#endif /* DAOS_PMEM_BUILD */
+
 	return rc;
 }
 
@@ -275,6 +284,8 @@ utest_utx2uma(struct utest_context *utx)
 {
 	return &utx->uc_uma;
 }
+
+#ifdef DAOS_PMEM_BUILD
 
 int
 utest_get_scm_used_space(struct utest_context *utx,
@@ -435,3 +446,5 @@ end:
 done:
 	return rc;
 }
+
+#endif /* DAOS_PMEM_BUILD */
