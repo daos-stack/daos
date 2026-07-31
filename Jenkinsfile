@@ -1171,7 +1171,9 @@ pipeline {
                         ),
                         'Fault injection testing': scriptedUnitTestStage(
                             name: 'Fault injection testing',
-                            runStage: shouldStageRun('Fault injection testing'),
+                            // Release builds compile out fault injection
+                            runStage: shouldStageRun('Fault injection testing') &&
+                                      !sconsArgs().contains('BUILD_TYPE=release'),
                             label: params.CI_FI_1_LABEL,
                             jobStatus: job_status_internal,
                             distro: 'el9',
