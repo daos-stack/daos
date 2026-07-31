@@ -3157,7 +3157,6 @@ ds_pool_recov_cont_handler(crt_rpc_t *rpc)
 	crt_bulk_t                  bulk      = CRT_BULK_NULL;
 	d_sg_list_t                 sgl;
 	d_iov_t                     cont_iov;
-	uint32_t                    ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	int                         rc;
 
 	D_DEBUG(DB_REBUILD, "Try to recover ( " DF_U64 ") containers for the pool " DF_UUID "\n",
@@ -3231,7 +3230,8 @@ lock:
 	 * aware that easily. So here, holding sp_recov_lock to prevent such race.
 	 */
 	ABT_rwlock_wrlock(pool->sp_recov_lock);
-	rc = ds_pool_thread_collective(prci->prci_uuid, ex_status, pool_tgt_recov_cont, &prca, 0);
+	rc = ds_pool_thread_collective(prci->prci_uuid, 0 /* ex_status */, pool_tgt_recov_cont,
+				       &prca, 0);
 	ABT_rwlock_unlock(pool->sp_recov_lock);
 
 	if (rc == 0)
