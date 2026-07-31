@@ -762,7 +762,8 @@ out:
 
 static inline int
 vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
-	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts)
+	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts,
+	    bool *cb_rc)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int		rc;
@@ -770,6 +771,9 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	vos_iter_sched_sync(iter);
 	D_ASSERT(iter_cb != NULL);
 	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
+	if (rc < 0) {
+		*cb_rc = true; /* Callback failed. */
+	}
 	if (vos_iter_sched_check(iter)) {
 		*acts |= VOS_ITER_CB_YIELD;
 		if (rc == 0 && iter->it_parent != NULL &&
@@ -830,6 +834,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	unsigned int		acts;
 	uint32_t		probe_flags = 0;
 	int			stage = VOS_ITER_STAGE_FILTER;
+	bool                     cb_rc       = false; /* Is rc produced by a callback? */
 	int			rc;
 	bool                     evictable = false;
 
@@ -912,7 +917,7 @@ probe:
 		if (pre_cb && stage == VOS_ITER_STAGE_PRE) {
 			acts = 0;
 			anchors->ia_probe_level = 0;
-			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts);
+			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts, &cb_rc);
 			if (rc != 0)
 				break;
 			if (anchors->ia_probe_level != 0 &&
@@ -987,7 +992,7 @@ probe:
 		if (post_cb) {
 			acts = 0;
 			anchors->ia_probe_level = 0;
-			rc = vos_iter_cb(post_cb, ih, &iter_ent, type, param, arg, &acts);
+			rc = vos_iter_cb(post_cb, ih, &iter_ent, type, param, arg, &acts, &cb_rc);
 			if (rc != 0)
 				break;
 
@@ -1029,8 +1034,10 @@ out:
 	if (rc >= 0)
 		rc = vos_iter_ts_set_update(ih, read_time, rc);
 
-	VOS_TX_LOG_FAIL(rc, "abort iteration type:%d, "DF_RC"\n", type,
-			DP_RC(rc));
+	/* Do not print error messages for errors produced by callbacks. */
+	if (!cb_rc) {
+		VOS_TX_LOG_FAIL(rc, "abort iteration type:%d, " DF_RC "\n", type, DP_RC(rc));
+	}
 
 finish:
 	vos_iter_finish(ih);
