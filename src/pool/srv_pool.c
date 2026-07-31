@@ -8288,29 +8288,20 @@ pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr
 		rc = crt_bulk_create(ctx, &cont_sgl, CRT_BULK_RO, &bulk);
 		if (rc != 0)
 			goto out;
-
-		if (ranks->rl_nr > 1) {
-			rc = crt_bulk_bind(bulk, ctx);
-			if (rc != 0)
-				goto out;
-		}
 	}
 
-	rc = crt_corpc_req_create(ctx, NULL, ranks, opc, NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
+	rc = crt_corpc_req_create(ctx, NULL, ranks, opc, bulk /* co_bulk_hdl */, NULL,
+				  CRT_RPC_FLAG_FILTER_INVERT, crt_tree_topo(CRT_TREE_KNOMIAL, 32),
+				  &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	prci                       = crt_req_get(rpc);
 	prci->prci_cont_nr         = cont_nr;
-	prci->prci_cont_bulk       = bulk;
 	prci->prci_addrs.ca_count  = list->pta_number;
 	prci->prci_addrs.ca_arrays = list->pta_addrs;
 	uuid_copy(prci->prci_uuid, svc->ps_uuid);
-	if (ranks->rl_nr > 1)
-		prci->prci_flags = PRCF_BIND_BULK;
-	else
-		prci->prci_flags = 0;
+	prci->prci_flags = 0;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
