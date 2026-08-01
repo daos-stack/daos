@@ -257,7 +257,9 @@ int_rebuild_many_objects_with_failure(void **state)
 	/* For interactive rebuild, we need:
 	 * 1. trigger rebuild (which will fail), wait until op:Fail_reclaim begins.
 	 * 2. During op:Fail_reclaim, issue dmg system stop (test that stop does not interrupt
-	 *    reclaim, but takes effect by not retrying the rebuild.
+	 *    reclaim, but takes effect by deferring the rebuild retry rather than running it -
+	 *    the retry is re-queued with delay=-1 and only runs if a later same-pool rebuild
+	 *    merges it).
 	 */
 	arg->rebuild_cb      = rebuild_wait_error_reset_fail_cb;
 	arg->rebuild_post_cb = rebuild_resume_wait;
@@ -697,7 +699,8 @@ int_rebuild_dkeys_stop_failing(void **state)
 	}
 
 	/* Trigger exclude and rebuild, fail twice, force-stop command during second Fail_reclaim
-	 * NB: stop will be deferred until after Fail_reclaim (since it did not fail).
+	 * NB: stop will be deferred until after Fail_reclaim (since it did not fail); the stopped
+	 *     rebuild's retry is then parked (delay=-1) and merges into the reintegrate below.
 	 */
 	arg->no_rebuild = 1;
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
@@ -725,11 +728,201 @@ int_rebuild_dkeys_stop_failing(void **state)
 
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
-	/* Do not restart the rebuild ; instead, go directly to reintegrate the rank */
+	/* Do not explicitly restart the rebuild; the parked (deferred) retry of the stopped
+	 * rebuild merges into this reintegrate of the same rank.
+	 */
 	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_rc_equal(rc, 0);
 	T_END();
+}
+
+/*
+ * Reproducer for DAOS-19381: engine assertion in determine_valid_spares() caused by a
+ * failure-sequence (fseq) inversion between two rebuild lineages.
+ *
+ * Flow (mirrors the Aurora PS-leader log for pool f43bb1b7) is narrated inline in steps
+ * (1)-(7) below; this header only records the non-obvious constraints that make it reproduce.
+ *
+ * CRITICAL #1 (kill, not exclude): the leader's cancel-on-new-DOWN path
+ *      (rebuild_leader_status_check()) tests the RANK DOMAIN status (PO_COMP_ST_DOWN).  "dmg
+ *      pool exclude" only marks the TARGETS down (domain stays UPIN), so the cancel never fires
+ *      and rebuild-1 is never converted into a Fail_reclaim (the test hangs).  We KILL the
+ *      engine so the rank domain itself goes DOWN.
+ *
+ * CRITICAL #2 (merge window): rank_A's rebuild must leave the ~5s scheduler-delay queue before
+ *      rank_B is killed, else rebuild_try_merge_tgts() coalesces both failures into ONE task and
+ *      the separate lower-fseq lineage never forms.  The pull-phase hang lets rebuild-1's scan
+ *      finish (task moves to rg_running_list); we wait via test_rebuild_wait_to_scanning_next()
+ *      before killing rank_B.
+ *
+ * WHY MANY OBJECTS: the assert only fires when the spare walk for a rank_A shard lands on
+ *      rank_B.  get_target() skips domains the object already uses, so a single object with
+ *      shards on both ranks always heals; across many objects some rank_A shard does not occupy
+ *      rank_B and trips the assert.
+ *
+ * EXPECTED: WITHOUT the fix an engine aborts; WITH the fix rank_A's rebuild is re-queued and
+ *      merged into the still-queued rebuild-2, so the run completes cleanly (test passes).
+ *
+ * NB (timing): race-sensitive; the hang/clear points may need tuning on faster/slower rigs.
+ * NB: this test drives the real incident's REJECTED stop (-DER_NO_PERM), which without the fix
+ *      still latched rgt_stop_admin and suppressed rebuild-1's retry, stranding rank_A.
+ */
+#define STRANDED_OBJ_NR 300
+static void
+int_rebuild_stranded_lower_fseq_target(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oids[STRANDED_OBJ_NR];
+	struct ioreq  req;
+	d_rank_t      rank_A;
+	d_rank_t      rank_B;
+	int           i;
+	int           j;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	/* Need >= 2 survivable rank failures: rebuild_sub_setup uses RF2 / 3-replica objects.
+	 * We KILL two engines, so the pool service must have enough replicas to keep quorum
+	 * (same constraint the rebuild_kill_multiple test uses).
+	 */
+	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 5)
+		return;
+
+	T_BEGIN();
+
+	/* Create MANY 3-replica objects (see "why MANY objects" above). Two ranks are failed in
+	 * sequence; across this many objects, at least one has a rank_A shard whose spare lands on
+	 * rank_B.
+	 */
+	for (i = 0; i < STRANDED_OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		for (j = 0; j < KEY_NR; j++) {
+			char key[32] = {0};
+
+			sprintf(key, "dkey_%d", j);
+			insert_single(key, "a_key", 0, "data", strlen("data") + 1, DAOS_TX_NONE,
+				      &req);
+		}
+		ioreq_fini(&req);
+	}
+
+	rank_A = get_rank_by_oid_shard(arg, oids[0], 0);
+	rank_B = get_rank_by_oid_shard(arg, oids[0], 1);
+	assert_int_not_equal(rank_A, rank_B);
+
+	print_message("DAOS-19381 repro: rank_A(low fseq)=%u, rank_B(high fseq)=%u\n", rank_A,
+		      rank_B);
+
+	/* (1) Hang the rebuild PULL phase (after scan) so rebuild-1 (rank_A) completes its scan,
+	 *     leaves rg_queue_list, and stays running (cancellable) but does not finish. Using the
+	 *     pull-phase hang (not the scan hang) is what lets the task leave the mergeable queue
+	 *     window so the later rank_B exclude forms a SEPARATE lineage instead of merging.
+	 */
+	if (arg->myrank == 0) {
+		print_message("inject DAOS_REBUILD_TGT_REBUILD_HANG on all engines\n");
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
+	}
+
+	/* (2) Kill engine rank_A -> rebuild-1 (lower fseq). Do not wait for completion.
+	 *     NB: KILL (not exclude) so the rank DOMAIN goes DOWN - required for the leader's
+	 *     cancel-on-new-DOWN check in step (3).
+	 */
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, rank_A, true);
+	arg->no_rebuild = 0;
+	/* Wait until rebuild-1 is actually SCANNING (in-progress, out of the queue), NOT merely
+	 * queued -- otherwise the rank_B failure below would be merged into rebuild-1's task.
+	 */
+	print_message("wait for rebuild-1 (rank %u) to leave the queue and start scanning\n",
+		      rank_A);
+	test_rebuild_wait_to_scanning_next(&arg, 1);
+
+	/* (3) Kill engine rank_B while rebuild-1 is running -> leader cancels rebuild-1 (new DOWN
+	 *     rank, fseq > rebuild-1 ver) -> op:Fail_reclaim for rebuild-1; rebuild-2 (rank_B,
+	 *     higher fseq) queued.
+	 */
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, rank_B, true);
+	arg->no_rebuild = 0;
+	print_message("wait for rebuild-1 Fail_reclaim (lower version) to start\n");
+	test_rebuild_wait_to_start_lower(&arg, 1);
+
+	/* (4) Stop during Fail_reclaim -> suppresses rebuild-1 auto-retry, strands rank_A DOWN. */
+	print_message("issue dmg pool rebuild stop during Fail_reclaim\n");
+	rc = rebuild_stop_with_dmg(arg);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	/* (5) Release the hang so rebuild-2 (rank_B, higher fseq) can run. Clear the fault on each
+	 *     surviving engine directly rather than via a rank=-1 broadcast: the broadcast is
+	 *     always routed through rank 0, which may itself be a killed victim (rank_A/rank_B).
+	 */
+	if (arg->myrank == 0) {
+		d_rank_t r;
+
+		print_message("clear rebuild pull hang; let rebuild-2 (rank %u) run\n", rank_B);
+		for (r = 0; r < (d_rank_t)arg->srv_nnodes; r++) {
+			if (r == rank_A || r == rank_B)
+				continue;
+			daos_debug_set_params(arg->group, r, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		}
+	}
+
+	/* (6) As soon as rebuild-2 (rank_B, higher version) is detected RUNNING, issue
+	 *     "dmg pool rebuild start" to re-queue rank_A's stranded rebuild -- faithful to the
+	 *     observed incident order (start issued WHILE rebuild-2 is still in flight, not after
+	 * it finished). Either order reproduces the fseq inversion.
+	 */
+	print_message("wait for rebuild-2 (rank %u, higher version) to start\n", rank_B);
+	test_rebuild_wait_to_start_next(&arg, 1);
+	print_message("issue dmg pool rebuild start to re-queue stranded rank_A rebuild\n");
+	rc = rebuild_start_with_dmg(arg);
+	assert_rc_equal(rc, 0);
+
+	/* (7) Wait for all rebuild activity to settle. As rebuild-2 completes, rank_B reaches
+	 *     DOWNOUT (high fseq) while rank_A's re-queued rebuild is still DOWN (low fseq).
+	 *     Bug: DOWN(rank_A, low fseq) vs DOWNOUT(rank_B, high fseq) -> engine assert.
+	 *     Fixed: completes cleanly.
+	 */
+	test_rebuild_wait(&arg, 1);
+
+	/* If the engine did not assert, all objects must still verify. */
+	for (i = 0; i < STRANDED_OBJ_NR; i++) {
+		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
+		assert_rc_equal(rc, 0);
+	}
+
+	/* Restart the killed engines so teardown's pool destroy can broadcast to every rank and
+	 * reclaim their storage instead of stranding it.
+	 */
+	print_message("restart killed engines rank_A=%u, rank_B=%u before teardown\n", rank_A,
+		      rank_B);
+	daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, rank_A);
+	daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, rank_B);
+	sleep(10);
+	T_END();
+}
+
+/*
+ * IREBUILD7's pool spans only 3 ranks, so it can host at most 3 (odd) service replicas. Clamp
+ * svc_nreplicas around setup so a larger global -s (e.g. the -s 5 that IREBUILD9 requires) does
+ * not make this 3-node pool-create fail ("replicas number should be an odd number between 1 and
+ * 3"). Scoped to this file to leave the shared rebuild_sub_3nodes_rf0_setup callers untouched.
+ */
+static int
+int_rebuild_3nodes_rf0_setup(void **state)
+{
+	unsigned int saved = svc_nreplicas;
+	int          rc;
+
+	if (svc_nreplicas > 3)
+		svc_nreplicas = 3;
+	rc            = rebuild_sub_3nodes_rf0_setup(state);
+	svc_nreplicas = saved;
+	return rc;
 }
 
 /** create a new pool/container for each test */
@@ -747,9 +940,11 @@ static const struct CMUnitTest rebuild_interactive_tests[] = {
     {"IREBUILD6: interactive drain: overwrite during rebuild", int_dfs_drain_overwrite,
      rebuild_sub_rf0_setup, test_teardown},
     {"IREBUILD7: interactive extend: enumerate object during two rebuilds",
-     int_dfs_extend_enumerate_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
+     int_dfs_extend_enumerate_extend, int_rebuild_3nodes_rf0_setup, test_teardown},
     {"IREBUILD8: interactive exclude: stop repeatedly-failing rebuild",
      int_rebuild_dkeys_stop_failing, rebuild_small_sub_setup, test_teardown},
+    {"IREBUILD9: interactive kill: stranded lower-fseq target (DAOS-19381)",
+     int_rebuild_stranded_lower_fseq_target, rebuild_sub_setup, test_teardown},
 };
 
 int
