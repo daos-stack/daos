@@ -22,4 +22,5 @@ rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" .build_vars* opt-daos-install.tar utils re
 ssh -T "$SSH_KEY_ARGS" jenkins@"$NODE" \
     "DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
      DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\" \
+     NLT_FI_STALL_SECS=\"${NLT_FI_STALL_SECS:-}\" \
      bash -s -- $*" < "$mydir/test_nlt_node.sh"

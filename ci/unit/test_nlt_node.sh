@@ -51,7 +51,10 @@ mkdir -p nlt_logs
 sudo mount -t tmpfs tmpfs nlt_logs
 sudo chown jenkins:jenkins nlt_logs
 
+# Unbuffered so the console shows exactly where a hang occurs.
 TMPDIR="$(pwd)/nlt_logs" \
+    PYTHONUNBUFFERED=1 \
+    NLT_FI_STALL_SECS="${NLT_FI_STALL_SECS:-}" \
     HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
     NO_PROXY="${DAOS_NO_PROXY:-}" \
     exec ./utils/node_local_test.py "$@"

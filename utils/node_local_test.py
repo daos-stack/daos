@@ -125,10 +125,39 @@ class NLTConf():
             os.makedirs(self.tmp_dir)
 
         self._compress_procs = []
+        self._cleaned = False
 
     def __del__(self):
-        self.flush_bz2()
-        os.rmdir(self.dfuse_parent_dir)
+        self.cleanup()
+
+    def cleanup(self, timeout=60):
+        """Flush compression and remove the working directory, giving up if it blocks"""
+        if self._cleaned:
+            return
+        self._cleaned = True
+
+        def _work():
+            self.flush_bz2()
+            try:
+                os.rmdir(self.dfuse_parent_dir)
+            except OSError:
+                pass
+
+        try:
+            worker = threading.Thread(target=_work, daemon=True)
+            worker.start()
+            worker.join(timeout)
+        except RuntimeError:
+            # Too late in shutdown to start a thread; skip rather than risk blocking.
+            return
+        if worker.is_alive():
+            print(f'Cleanup blocked after {timeout}s; aborting backed-up FUSE connections',
+                  flush=True)
+            for line in _abort_fuse_connections():
+                print(line, flush=True)
+            worker.join(timeout // 2)
+        if worker.is_alive():
+            print('Cleanup still blocked; abandoning it', flush=True)
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
@@ -1519,7 +1548,8 @@ class DFuse():
         print('Stopping fuse')
 
         if self.container:
-            self.run_query(use_json=True)
+            # This queries the mount that may itself be wedged.
+            self.run_query(use_json=True, timeout=120)
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1606,10 +1636,10 @@ class DFuse():
         assert ret.returncode == 0, ret
         return ret
 
-    def run_query(self, use_json=False, quiet=False):
+    def run_query(self, use_json=False, quiet=False, timeout=None):
         """Run filesystem query"""
         rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dir],
-                          use_json=use_json, log_check=quiet, valgrind=quiet)
+                          use_json=use_json, log_check=quiet, valgrind=quiet, timeout=timeout)
         print(rc)
         return rc
 
@@ -1730,12 +1760,14 @@ def run_daos_cmd(conf,
                  log_check=True,
                  ignore_busy=False,
                  use_json=False,
-                 cwd=None):
+                 cwd=None,
+                 timeout=None):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
 
-    Enable logging, and valgrind for the command.
+    Enable logging, and valgrind for the command.  A timeout, where given, kills the
+    command rather than blocking forever on an unresponsive filesystem.
     """
     dcr = DaosCmdReturn()
     valgrind_hdl = ValgrindHelper(conf)
@@ -1777,8 +1809,13 @@ def run_daos_cmd(conf,
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
-    rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                        env=cmd_env, check=False, cwd=cwd)
+    try:
+        rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, check=False, cwd=cwd, timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        print(f'Timeout after {timeout}s running {" ".join(cmd)}')
+        rc = subprocess.CompletedProcess(exec_cmd, (-signal.SIGKILL), error.stdout or b'',
+                                         error.stderr or b'')
 
     if rc.stderr != b'':
         print('Stderr from command')
@@ -1807,7 +1844,15 @@ def run_daos_cmd(conf,
         conf.valgrind_errors = True
         rc.returncode = 0
     if use_json:
-        rc.json = json.loads(rc.stdout.decode('utf-8'))
+        try:
+            rc.json = json.loads(rc.stdout.decode('utf-8'))
+        except json.JSONDecodeError:
+            # A killed command has no output; a decode error here would hide the timeout.
+            if rc.returncode == -signal.SIGKILL:
+                print(f'No JSON output from timed-out command: {" ".join(cmd)}')
+                rc.json = None
+            else:
+                raise
     dcr.rc = rc
     return dcr
 
@@ -5616,6 +5661,198 @@ def test_pydaos_kv_obj_class(server, conf):
 #
 
 
+# Generous upper bounds, not tuned values; they exist so a hang fails the run.
+DIAG_TIMEOUT = 60
+STACK_READ_TIMEOUT = 15
+FI_CMD_TIMEOUT = 600
+FI_VALGRIND_TIMEOUT = 1800
+
+
+def _run_diag(cmd, timeout=DIAG_TIMEOUT):
+    """Run a diagnostic command returning its output, never raising or blocking"""
+    try:
+        # pylint: disable-next=consider-using-with
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, start_new_session=True)
+    except OSError as err:
+        return f'<{cmd[0]} failed: {err}>'
+    try:
+        return proc.communicate(timeout=timeout)[0].decode('utf-8', errors='replace').rstrip()
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except OSError:
+        pass
+    try:
+        text = proc.communicate(timeout=15)[0].decode('utf-8', errors='replace').rstrip()
+    except subprocess.TimeoutExpired:
+        return f'<{cmd[0]} exceeded {timeout}s and could not be reaped>'
+    return f'{text}\n<{cmd[0]} exceeded {timeout}s>'
+
+
+def _proc_state(pid):
+    """Return blocked system-call state for a pid from /proc"""
+    out = []
+    for name in ('wchan', 'syscall'):
+        try:
+            with open(f'/proc/{pid}/{name}', encoding='utf-8', errors='replace') as pfile:
+                out.append(f'{name}={pfile.read().strip()}')
+        except OSError as err:
+            out.append(f'{name}=<unreadable {err.errno}>')
+    try:
+        with open(f'/proc/{pid}/status', encoding='utf-8') as pfile:
+            for line in pfile:
+                if line.startswith(('State:', 'Threads:')):
+                    out.append(line.strip())
+    except OSError:
+        pass
+    return ' '.join(out)
+
+
+def _proc_threads(pid):
+    """Report every thread of a process from /proc.
+
+    Debuggers cannot attach to a thread in uninterruptible sleep, which is the state
+    of interest here.  /proc always answers.
+    """
+    lines = []
+    try:
+        tids = sorted(os.listdir(f'/proc/{pid}/task'), key=int)
+    except OSError as err:
+        return f'<cannot list threads of {pid}: {err}>'
+    for tid in tids:
+        base = f'/proc/{pid}/task/{tid}'
+        fields = []
+        for name in ('comm', 'wchan'):
+            try:
+                with open(f'{base}/{name}', encoding='utf-8', errors='replace') as tfile:
+                    fields.append(f'{name}={tfile.read().strip()}')
+            except OSError:
+                fields.append(f'{name}=?')
+        try:
+            with open(f'{base}/stat', encoding='utf-8') as tfile:
+                fields.append(f'state={tfile.read().split(") ", 1)[1].split()[0]}')
+        except (OSError, IndexError):
+            pass
+        lines.append(f'  TID {tid}: ' + ' '.join(f for f in fields if f))
+        kstack = _run_diag(['sudo', 'cat', f'{base}/stack'], timeout=STACK_READ_TIMEOUT)
+        if kstack and not kstack.startswith('<') and 'denied' not in kstack:
+            for kline in kstack.splitlines()[:12]:
+                lines.append(f'      {kline.strip()}')
+    return '\n'.join(lines)
+
+
+def dump_fi_stall(active, log_dir=None):
+    """Dump diagnostics for wedged fault-injection children, to stdout and to a file"""
+    dump_file = None
+    if log_dir:
+        try:
+            # pylint: disable-next=consider-using-with
+            dump_file = open(join(log_dir, 'fi_stall_dump.txt'), 'w', encoding='utf-8')
+        except OSError:
+            dump_file = None
+
+    def emit(text):
+        # File first; a stalled stdout consumer must not cost us the dump.
+        if dump_file:
+            try:
+                dump_file.write(f'{text}\n')
+                dump_file.flush()
+            except OSError:
+                pass
+        print(text, flush=True)
+
+    try:
+        emit(f'\n===== NLT FI STALL DETECTED {time.strftime("%Y-%m-%d %H:%M:%S")} =====')
+        # /proc cannot block, so gather it before anything that can.
+        for child in active:
+            pid = child.pid()
+            emit(f'--- stalled child: loc={child.loc} pid={pid} elapsed={child.elapsed():.0f}s')
+            emit(_proc_threads(pid))
+        daemons = _run_diag(['pgrep', '-a', 'daos_engine|daos_agent|dfuse'])
+        emit(f'--- daemons:\n{daemons}')
+        daemon_pids = [int(line.split()[0]) for line in daemons.splitlines()
+                       if line and line.split()[0].isdigit()]
+        for pid in daemon_pids:
+            emit(f'--- daemon pid={pid}:')
+            emit(_proc_threads(pid))
+        emit('--- process tree:')
+        emit(_run_diag(['ps', 'auxwwf']))
+        emit('===== NLT FI STALL DUMP COMPLETE =====')
+    except Exception as err:  # pylint: disable=broad-except
+        emit(f'===== NLT FI STALL DUMP ABORTED: {err!r} =====')
+        traceback.print_exc(file=sys.stdout)
+        sys.stdout.flush()
+    finally:
+        if dump_file:
+            dump_file.close()
+
+
+def _abort_fuse_connections():
+    """Abort every backed-up FUSE connection, returning what was done.
+
+    A process blocked in an unanswered FUSE request cannot be killed.  Aborting the
+    connection fails the request with EIO, which is what lets it die.
+    """
+    done = []
+    try:
+        conns = sorted(os.listdir('/sys/fs/fuse/connections'))
+    except OSError as err:
+        return [f'<cannot list fuse connections: {err}>']
+    for conn in conns:
+        waiting = ''
+        try:
+            with open(f'/sys/fs/fuse/connections/{conn}/waiting', encoding='utf-8') as wfile:
+                waiting = wfile.read().strip()
+        except OSError:
+            continue
+        if waiting in ('', '0'):
+            continue
+        path = f'/sys/fs/fuse/connections/{conn}/abort'
+        res = _run_diag(['sudo', 'sh', '-c', f'echo 1 > {path}'])
+        done.append(f'aborted fuse connection {conn} (waiting={waiting}): {res or "ok"}')
+    return done or ['<no backed-up fuse connections found>']
+
+
+def handle_fi_stall(active, log_dir=None):
+    """Dump diagnostics then clear the wedged children, so the run fails fast.
+
+    Returns whether a mount had to be aborted, which leaves it unusable for anything
+    that follows.
+    """
+    dump_fi_stall(active, log_dir=log_dir)
+    aborted_mount = False
+    for child in active:
+        child.hang_kill()
+
+    def _survivors(seconds):
+        deadline = time.monotonic() + seconds
+        alive = list(active)
+        while alive and time.monotonic() < deadline:
+            alive = [c for c in alive if not c.is_dead()]
+            if alive:
+                time.sleep(1)
+        return alive
+
+    survivors = _survivors(30)
+    if survivors:
+        stuck_on_fuse = [c for c in survivors
+                         if 'request_wait_answer' in _proc_state(c.pid())]
+        if stuck_on_fuse:
+            print(f'{len(stuck_on_fuse)} child(ren) unkillable in a FUSE wait; '
+                  f'aborting the connection to release them', flush=True)
+            for line in _abort_fuse_connections():
+                print(line, flush=True)
+            aborted_mount = True
+            survivors = _survivors(60)
+
+    for child in survivors:
+        print(f'WARNING: pid {child.pid()} (loc {child.loc}) survived SIGKILL: '
+              f'{_proc_state(child.pid())}', flush=True)
+    return aborted_mount
+
+
 class AllocFailTestRun():
     """Class to run a fault injection command with a single fault"""
 
@@ -5631,6 +5868,9 @@ class AllocFailTestRun():
         self.dir_handle = None
         self.stdout = None
         self.returncode = None
+        # Set when the stall watchdog killed this run.
+        self.was_killed = False
+        self._start_time = None
 
         # Set this to disable memory leak checking if the command outputs a DER_BUSY message.  This
         # is to allow tests to leak memory if there are errors during shutdown.
@@ -5715,6 +5955,24 @@ class AllocFailTestRun():
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
+        self._start_time = time.monotonic()
+
+    def pid(self):
+        """Return the pid of the command"""
+        return self._sp.pid
+
+    def elapsed(self):
+        """Return seconds since the command started"""
+        return time.monotonic() - self._start_time
+
+    def hang_kill(self):
+        """Kill a wedged command; result checks are skipped on reap"""
+        self.was_killed = True
+        self._sp.kill()
+
+    def is_dead(self):
+        """Return whether the command has exited, without blocking"""
+        return self._sp.poll() is not None
 
     def has_finished(self):
         """Check if the command has completed"""
@@ -5724,15 +5982,43 @@ class AllocFailTestRun():
         rc = self._sp.poll()
         if rc is None:
             return False
-        self._post(rc)
+        self._reap(rc)
         return True
 
-    def wait(self):
+    def wait(self, timeout=None):
         """Wait for the command to complete"""
         if self.returncode is not None:
             return
 
-        self._post(self._sp.wait())
+        if timeout is not None:
+            try:
+                self._reap(self._sp.wait(timeout=timeout))
+                return
+            except subprocess.TimeoutExpired:
+                handle_fi_stall([self], log_dir=self._aft.log_dir)
+
+        self._reap(self._sp.wait())
+
+    def _reap(self, rc):
+        """Process a completed command, bypassing result checks for watchdog kills"""
+        if self.was_killed:
+            self._post_killed(rc)
+        else:
+            self._post(rc)
+
+    def _post_killed(self, rc):
+        """Reap after a watchdog kill.
+
+        The shell-style positive returncode stops launch() scheduling a valgrind re-run.
+        """
+        print()
+        self.returncode = 128 - rc if rc < 0 else rc
+        try:
+            self.stdout, self._stderr = self._sp.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            self.stdout = b'<stdout unavailable: pipe held open after kill>'
+            self._stderr = b''
+        self.fault_injected = True
 
     def _post(self, rc):
         """Helper function, called once after command is complete.
@@ -5929,7 +6215,7 @@ class AllocFailTest():
 
         def _prep(self):
             rc = self._run_cmd(None)
-            rc.wait()
+            rc.wait(timeout=FI_CMD_TIMEOUT)
             self.expected_stdout = rc.stdout
             assert not rc.fault_injected
 
@@ -5964,6 +6250,10 @@ class AllocFailTest():
         fatal_errors = False
 
         max_load_avg = 100
+
+        # Iterations normally complete in ~1s.
+        stall_secs = int(os.environ.get('NLT_FI_STALL_SECS', '300'))
+        last_progress = time.monotonic()
 
         # Now run all iterations in parallel up to max_child.  Iterations will be launched
         # in order but may not finish in order, rather they are processed in the order they
@@ -6005,6 +6295,7 @@ class AllocFailTest():
                 if not ret.has_finished():
                     continue
                 active.remove(ret)
+                last_progress = time.monotonic()
                 print()
                 print(ret)
                 if ret.returncode < 0:
@@ -6016,6 +6307,13 @@ class AllocFailTest():
                     finished = True
                 break
 
+            if active and time.monotonic() - last_progress > stall_secs:
+                if handle_fi_stall(active, log_dir=self.log_dir):
+                    print('Mount was aborted to clear the stall; ending this sweep')
+                    finished = True
+                fatal_errors = True
+                last_progress = time.monotonic()
+
         print(f'Completed, fid {fid}')
         print(f'Max in flight {max_count}/{max_child}')
         if to_rerun:
@@ -6024,7 +6322,7 @@ class AllocFailTest():
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)
             print(rerun)
-            rerun.wait()
+            rerun.wait(timeout=FI_VALGRIND_TIMEOUT)
 
         return fatal_errors
 
@@ -6805,6 +7103,9 @@ def run(wf, args):
         print(fs)
         if fs.returncode == 0:
             run_fi = True
+        elif fi_test or fi_test_dfuse:
+            print("Unable to detect fault injection feature - cannot run requested FI tests")
+            sys.exit(1)
         else:
             print("Unable to detect fault injection feature - skipping FI testing")
 
@@ -6880,9 +7181,21 @@ def run(wf, args):
 
     wf_server.close()
     close_log_test(conf)
+    conf.cleanup()
     print(f'Total time in log analysis: {conf.log_timer.total:.2f} seconds')
     print(f'Total time in log compression: {conf.compress_timer.total:.2f} seconds')
     return fatal_errors
+
+
+def _exit_now(code):
+    """Terminate without running interpreter shutdown.
+
+    Cleanup handlers block in the kernel against a wedged mount, so the process would
+    otherwise outlive its own exit.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)  # pylint: disable=protected-access
 
 
 def _positive_int(value):
@@ -6988,7 +7301,8 @@ Tests are:
 
     if fatal_errors.errors:
         print("Significant errors encountered")
-        sys.exit(1)
+        _exit_now(1)
+    _exit_now(0)
 
 
 if __name__ == '__main__':
