@@ -11,6 +11,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 # pylint: disable=too-many-lines
 
 import os
+import signal
 import subprocess  # nosec
 import tempfile
 import time
@@ -18,13 +19,14 @@ from os.path import join
 
 import yaml
 
-from .base import NLTestNoFi
+from .base import NLTestFail, NLTestNoFi
 from .client import ValgrindHelper, create_cont, run_daos_cmd
 from .config import get_base_env, load_conf
 from .dfuse import DFuse
 from .logging_utils import log_test, setup_log_test
 from .reporting import WarningsFactory
 from .server import DaosServer
+from .watchdog import KILL_GRACE, MEMCHECK_STALL_SECS, STALL_SECS, handle_stalled
 
 # Fault injection testing.
 #
@@ -61,6 +63,8 @@ class AllocFailTestRun():
         self.dir_handle = None
         self.stdout = None
         self.returncode = None
+        self.was_killed = False
+        self._start_time = None
 
         # Set this to disable memory leak checking if the command outputs a DER_BUSY message.  This
         # is to allow tests to leak memory if there are errors during shutdown.
@@ -145,6 +149,26 @@ class AllocFailTestRun():
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
+        self._start_time = time.monotonic()
+
+    def pid(self):
+        """Return the pid of the command"""
+        return self._sp.pid
+
+    def elapsed(self):
+        """Return seconds since the command started"""
+        return time.monotonic() - self._start_time
+
+    def hang_kill(self):
+        """Kill a wedged command; result checks are skipped on reap"""
+        if self._sp.poll() is not None:
+            return
+        self.was_killed = True
+        self._sp.kill()
+
+    def is_dead(self):
+        """Return whether the command has exited, without blocking"""
+        return self._sp.poll() is not None
 
     def has_finished(self):
         """Check if the command has completed"""
@@ -154,15 +178,45 @@ class AllocFailTestRun():
         rc = self._sp.poll()
         if rc is None:
             return False
-        self._post(rc)
+        self._reap(rc)
         return True
 
-    def wait(self):
+    def wait(self, timeout=None):
         """Wait for the command to complete"""
         if self.returncode is not None:
             return
 
-        self._post(self._sp.wait())
+        if timeout is not None:
+            try:
+                self._reap(self._sp.wait(timeout=timeout))
+            except subprocess.TimeoutExpired:
+                handle_stalled([self], log_dir=self._aft.log_dir)
+                try:
+                    self._reap(self._sp.wait(timeout=KILL_GRACE))
+                except subprocess.TimeoutExpired:
+                    # Blocked in the kernel; record the kill rather than joining the hang.
+                    self._post_killed(-signal.SIGKILL)
+            return
+
+        self._reap(self._sp.wait())
+
+    def _reap(self, rc):
+        """Process a completed command, bypassing result checks for watchdog kills"""
+        if self.was_killed:
+            self._post_killed(rc)
+        else:
+            self._post(rc)
+
+    def _post_killed(self, rc):
+        """Reap after a watchdog kill; the positive returncode stops a valgrind re-run"""
+        print()
+        self.returncode = 128 - rc if rc < 0 else rc
+        try:
+            self.stdout, self._stderr = self._sp.communicate(timeout=KILL_GRACE)
+        except subprocess.TimeoutExpired:
+            self.stdout = b'<stdout unavailable: pipe held open after kill>'
+            self._stderr = b''
+        self.fault_injected = True
 
     def _post(self, rc):
         """Helper function, called once after command is complete.
@@ -359,7 +413,9 @@ class AllocFailTest():
 
         def _prep(self):
             rc = self._run_cmd(None)
-            rc.wait()
+            rc.wait(timeout=STALL_SECS)
+            if rc.was_killed:
+                raise NLTestFail('prep run (no faults enabled) stalled and was killed')
             self.expected_stdout = rc.stdout
             assert not rc.fault_injected
 
@@ -394,6 +450,9 @@ class AllocFailTest():
         fatal_errors = False
 
         max_load_avg = 100
+
+        last_progress = time.monotonic()
+        stalled_out = False
 
         # Now run all iterations in parallel up to max_child.  Iterations will be launched
         # in order but may not finish in order, rather they are processed in the order they
@@ -435,6 +494,7 @@ class AllocFailTest():
                 if not ret.has_finished():
                     continue
                 active.remove(ret)
+                last_progress = time.monotonic()
                 print()
                 print(ret)
                 if ret.returncode < 0:
@@ -446,15 +506,35 @@ class AllocFailTest():
                     finished = True
                 break
 
+            if active and time.monotonic() - last_progress > STALL_SECS:
+                fatal_errors = True
+                stalled_out = True
+                finished = True
+                handle_stalled(active, log_dir=self.log_dir)
+                print('Sweep stalled; abandoning remaining iterations')
+                # Reap the children that died; waiting for one that is stuck in
+                # the kernel would hang the run.
+                for child in active:
+                    if not child.has_finished():
+                        print(f'Abandoning stuck pid {child.pid()} (loc {child.loc})',
+                              flush=True)
+                active.clear()
+
         print(f'Completed, fid {fid}')
         print(f'Max in flight {max_count}/{max_child}')
         if to_rerun:
             print(f'Number of indexes to re-run {len(to_rerun)}')
+            if stalled_out:
+                print('Skipping valgrind re-runs; the mount did not survive the sweep')
+                to_rerun = []
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)
             print(rerun)
-            rerun.wait()
+            rerun.wait(timeout=MEMCHECK_STALL_SECS)
+            if rerun.was_killed and self.conf.args.failfast:
+                print(f'--failfast set; skipping remaining re-runs after stall at {fid}')
+                break
 
         return fatal_errors
 

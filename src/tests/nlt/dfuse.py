@@ -210,7 +210,8 @@ class DFuse():
         print('Stopping fuse')
 
         if self.container:
-            self.run_query(use_json=True)
+            # This queries the mount that may itself be wedged.
+            self.run_query(use_json=True, timeout=120)
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -297,10 +298,10 @@ class DFuse():
         assert ret.returncode == 0, ret
         return ret
 
-    def run_query(self, use_json=False, quiet=False):
+    def run_query(self, use_json=False, quiet=False, timeout=None):
         """Run filesystem query"""
         rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dir],
-                          use_json=use_json, log_check=quiet, valgrind=quiet)
+                          use_json=use_json, log_check=quiet, valgrind=quiet, timeout=timeout)
         print(rc)
         return rc
 

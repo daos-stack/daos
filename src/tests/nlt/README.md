@@ -74,6 +74,7 @@ The former ~7k-line script is split into a dependency-ordered package (low level
 | Module                | Responsibility                                                        |
 | --------------------- | -------------------------------------------------------------------- |
 | `base.py`             | exceptions, ids, per-thread active-test context, timers, ratchet     |
+| `watchdog.py`         | FUSE-wedge watchdog (`WedgeWatch`) and stall diagnostics             |
 | `config.py`           | build config (`NLTConf`) and environment helpers                     |
 | `reporting.py`        | `WarningsFactory`: JUnit/JSON output and the `nlt-summary.md` report  |
 | `logging_utils.py`    | output capture and DAOS log-file analysis (`log_test`)               |

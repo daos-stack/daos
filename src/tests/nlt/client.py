@@ -12,6 +12,7 @@ import json
 import os
 import pprint
 import re
+import signal
 import subprocess  # nosec
 import tempfile
 from os.path import join
@@ -19,6 +20,7 @@ from os.path import join
 from .base import get_inc_id
 from .config import get_base_env
 from .logging_utils import log_test
+from .watchdog import KILL_GRACE
 
 
 class DaosPool():
@@ -253,7 +255,8 @@ def run_daos_cmd(conf,
                  log_check=True,
                  ignore_busy=False,
                  use_json=False,
-                 cwd=None):
+                 cwd=None,
+                 timeout=None):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -300,8 +303,24 @@ def run_daos_cmd(conf,
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
-    rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                        env=cmd_env, check=False, cwd=cwd)
+    # Avoid getting stuck on child processes that are blocked in the kernel.
+    # pylint: disable-next=consider-using-with
+    proc = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            env=cmd_env, cwd=cwd)
+    timed_out = False
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        print(f'Timeout after {timeout}s running {" ".join(cmd)}', flush=True)
+        proc.kill()
+        try:
+            stdout, stderr = proc.communicate(timeout=KILL_GRACE)
+        except subprocess.TimeoutExpired:
+            print(f'Command did not exit after kill: {" ".join(cmd)}', flush=True)
+            stdout, stderr = b'', b''
+    returncode = -signal.SIGKILL if proc.returncode is None else proc.returncode
+    rc = subprocess.CompletedProcess(exec_cmd, returncode, stdout, stderr)
 
     if rc.stderr != b'':
         print('Stderr from command')
@@ -330,7 +349,14 @@ def run_daos_cmd(conf,
         conf.valgrind_errors = True
         rc.returncode = 0
     if use_json:
-        rc.json = json.loads(rc.stdout.decode('utf-8'))
+        try:
+            rc.json = json.loads(rc.stdout.decode('utf-8'))
+        except json.JSONDecodeError:
+            if timed_out:
+                print(f'No JSON output from timed-out command: {" ".join(cmd)}')
+                rc.json = None
+            else:
+                raise
     dcr.rc = rc
     return dcr
 
