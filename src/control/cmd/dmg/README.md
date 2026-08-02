@@ -11,7 +11,7 @@ from a login node.
 
 ## Commandline interface
 
-The [go-flags](github.com/jessevdk/go-flags) package is used
+The [go-flags](https://github.com/jessevdk/go-flags) package is used
 to implement a commandline interface. Command tree is built starting
 with top-level commands defined in the `cliOptions` struct defined in
 `main.go`, subcommands are then defined in functionality specific
