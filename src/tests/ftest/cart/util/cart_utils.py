@@ -88,8 +88,8 @@ class CartTest(TestWithoutServers):
             if os.path.isdir(tests_dir):
                 os.environ["PATH"] += os.pathsep + tests_dir
             else:
-                self.log.info("WARNING: I didn't find the daos tests directory. "
-                              "No test directories have been added to your PATH..")
+                self.log.warning("Did not find the daos tests directory. "
+                                 "No test directories have been added to your PATH.")
 
     def tearDown(self):
         """Tear down the test case."""

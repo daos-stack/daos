@@ -52,6 +52,6 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
 
         # Verify the server(s) exited gracefully
         if not self.check_files(glob_pat, count=3, retries=4):
-            self.log.info("Didn't find completion file(s): '%s'.", glob_pat)
-            self.log.info("This indicates not all CaRT binaries exited gracefully.")
-            self.log.info("Marking test pass while DAOS-7892 remains unresolved.")
+            self.log.error("Didn't find completion file(s): '%s'.", glob_pat)
+            self.log.error("This indicates not all CaRT binaries exited gracefully.")
+            self.fail("Not all CaRT binaries exited gracefully")
