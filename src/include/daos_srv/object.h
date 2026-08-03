@@ -49,11 +49,12 @@ struct ds_obj_enum_arg {
 	int			rnum;		/* records num (type == S||R) */
 	daos_size_t		rsize;		/* record size (type == S||R) */
 	daos_unit_oid_t		oid;		/* for unpack */
-	uint32_t		fill_recxs:1,	/* type == S||R */
-				chk_key2big:1,
-				need_punch:1,	/* need to pack punch epoch */
-				obj_punched:1,	/* object punch is packed   */
-				size_query:1;	/* Only query size */
+	uint32_t                fill_recxs : 1, /* type == S||R */
+	    chk_key2big : 1, need_punch : 1,    /* need to pack punch epoch */
+	    obj_punched : 1,                    /* object punch is packed   */
+	    size_query  : 1,                    /* Only query size */
+	    rc_key2big  : 1; /* [out] The requested key is too big. kds[0].kd_key_len contains the
+				minimal required buffer size. */
 };
 
 struct dtx_handle;

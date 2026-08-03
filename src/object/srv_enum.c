@@ -244,10 +244,10 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		    (arg->chk_key2big && arg->kds_len <= 2)) {
 			if (arg->kds[0].kd_key_len < total_size)
 				arg->kds[0].kd_key_len = total_size;
-			return -DER_KEY2BIG;
-		} else {
-			return 1;
+			arg->rc_key2big = 1;
 		}
+
+		return 1;
 	}
 
 	iov = &arg->sgl->sg_iovs[arg->sgl_idx];
@@ -622,7 +622,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 			    (arg->kds_len < 3 || (arg->kds_len == 3 && !bump_kds_len))) {
 				if (arg->kds[0].kd_key_len < size)
 					arg->kds[0].kd_key_len = size;
-				D_GOTO(out, rc = -DER_KEY2BIG);
+				arg->rc_key2big = 1;
 			}
 			D_GOTO(out, rc = 1);
 		} else {
@@ -757,6 +757,11 @@ ds_obj_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	rc = iter_cb(param, type, recursive, anchors, enum_pack_cb, NULL,
 		     arg, dth);
 
-	D_DEBUG(DB_IO, "enum type %d rc %d\n", type, rc);
+	D_DEBUG(DB_IO, "enum type %d rc %d rc_key2big %d\n", type, rc, arg->rc_key2big == 1);
+
+	if (arg->rc_key2big) {
+		rc = -DER_KEY2BIG;
+	}
+
 	return rc;
 }
