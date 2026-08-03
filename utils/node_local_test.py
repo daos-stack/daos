@@ -132,33 +132,22 @@ class NLTConf():
         self.cleanup()
 
     def cleanup(self, timeout=60):
-        """Flush compression and remove the working directory, giving up if it blocks"""
+        """Flush compression and remove the working directory, giving up if it blocks
+
+        No thread is used to bound this.  cleanup() runs from __del__, which can fire during
+        garbage collection, and Thread.start() waits for a thread the collector will not let
+        run - so the mechanism meant to bound a hang becomes one.
+        """
         if self._cleaned:
             return
         self._cleaned = True
 
-        def _work():
-            self.flush_bz2()
-            try:
-                os.rmdir(self.dfuse_parent_dir)
-            except OSError:
-                pass
+        self.flush_bz2(timeout=timeout)
 
         try:
-            worker = threading.Thread(target=_work, daemon=True)
-            worker.start()
-            worker.join(timeout)
-        except RuntimeError:
-            # Too late in shutdown to start a thread; skip rather than risk blocking.
-            return
-        if worker.is_alive():
-            print(f'Cleanup blocked after {timeout}s; aborting backed-up FUSE connections',
-                  flush=True)
-            for line in _abort_fuse_connections():
-                print(line, flush=True)
-            worker.join(timeout // 2)
-        if worker.is_alive():
-            print('Cleanup still blocked; abandoning it', flush=True)
+            os.rmdir(self.dfuse_parent_dir)
+        except OSError:
+            pass
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
@@ -192,11 +181,19 @@ class NLTConf():
         self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll() is None)
         self._compress_procs.append(subprocess.Popen(['nice', '-19', 'bzip2', '--best', filename]))
 
-    def flush_bz2(self):
-        """Wait for all bzip2 subprocess to finish"""
+    def flush_bz2(self, timeout=None):
+        """Wait for all bzip2 subprocess to finish, killing any that outstay timeout"""
         self.compress_timer.start()
         for proc in self._compress_procs:
-            proc.wait()
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                print(f'bzip2 {proc.pid} did not finish; killing it', flush=True)
+                proc.kill()
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass
         self._compress_procs = []
         self.compress_timer.stop()
 
