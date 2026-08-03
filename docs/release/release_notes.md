@@ -2,6 +2,26 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
+## DAOS Version 2.6.5.p2 (2026-08-03)
+
+The DAOS 2.6.5.p2 release includes the daos-2.6.5.p2 RPM packages and their prerequisites.
+It contains the following updates on top of DAOS 2.6.5.p1:
+
+### Bug fixes and improvements
+
+The DAOS 2.6.5.p2 release includes fixes and improvements in the following areas:
+
+#### Object
+
+* Reject array IODs with a positive extent count and no recx array during client validation and
+  RPC encoding. Also add a server-side guard to prevent malformed requests from reaching VOS
+  (DAOS-19350).
+
+#### RDB (Replicated Database)
+
+* The lease in an AE or IS response may be zero. Fix the invalid release handling by letting
+  raft process the rest of the response instead of dropping them (DAOS-19369).
+
 ## DAOS Version 2.6.5.p1 (2026-06-17)
 
 The DAOS 2.6.5.p1 release includes the daos-2.6.5.p1 RPM packages and their prerequisites.
