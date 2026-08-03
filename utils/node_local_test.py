@@ -20,6 +20,7 @@ the client with fault injection of D_ALLOC() usage.
 import argparse
 import copy
 import errno
+import faulthandler
 import functools
 import importlib
 import json
@@ -7215,6 +7216,12 @@ def main():
     Test names can either be 'pure' or include suffices that encode a particular caching
     regimen (e.g., read_caching_off).
     """
+    # SIGUSR1 dumps every thread's Python stack.  A run that stops making progress is
+    # otherwise only readable from outside as a futex wait with no indication of which
+    # wait it is.  sys.__stderr__ rather than sys.stderr: NLT replaces the latter with a
+    # wrapper that has no fileno(), which faulthandler requires.
+    faulthandler.register(signal.SIGUSR1, file=sys.__stderr__, all_threads=True)
+
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
