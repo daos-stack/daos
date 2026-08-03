@@ -6249,8 +6249,9 @@ class AllocFailTest():
 
         max_load_avg = 100
 
-        # Iterations normally complete in ~1s.
-        stall_secs = int(os.environ.get('NLT_FI_STALL_SECS', '300'))
+        # Iterations normally complete in ~1s.  The CI wrapper passes this through as an
+        # empty string when unset, which is not the same as absent.
+        stall_secs = int(os.environ.get('NLT_FI_STALL_SECS') or 300)
         last_progress = time.monotonic()
 
         # Now run all iterations in parallel up to max_child.  Iterations will be launched
