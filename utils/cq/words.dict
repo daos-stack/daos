@@ -184,6 +184,7 @@ epilog
 errored
 ethernet
 fallocate
+faulthandler
 fchmod
 fcntl
 filename
@@ -200,6 +201,7 @@ fstat
 ftest
 fuseblk
 fusermount
+futex
 gcc
 gdb
 getattr
