@@ -23,7 +23,7 @@ class RbldInteractive(TestWithServers):
     """
 
     REBUILD_STOP_MAX_WAIT_TIME = 30
-    REBUILD_STOP_SLEEP = 3
+    REBUILD_STOP_SLEEP_TIME = 3
 
     def _pool_rebuild_stop(self, pool):
         """Stop rebuild with dmg pool rebuild stop.
@@ -49,8 +49,8 @@ class RbldInteractive(TestWithServers):
                 # Otherwise, sleep and retry
                 self.log.info(
                     'Assuming rebuild is not started yet. Retrying in %s seconds...',
-                    self.REBUILD_STOP_SLEEP)
-                time.sleep(self.REBUILD_STOP_SLEEP)
+                    self.REBUILD_STOP_SLEEP_TIME)
+                time.sleep(self.REBUILD_STOP_SLEEP_TIME)
 
     def _system_rebuild_stop(self, dmg):
         """Stop rebuild with dmg system rebuild stop.
@@ -94,8 +94,8 @@ class RbldInteractive(TestWithServers):
             # Otherwise, sleep and retry
             self.log.info(
                 'Assuming rebuild is not started yet. Retrying in %s seconds...',
-                self.REBUILD_STOP_SLEEP)
-            time.sleep(self.REBUILD_STOP_SLEEP)
+                self.REBUILD_STOP_SLEEP_TIME)
+            time.sleep(self.REBUILD_STOP_SLEEP_TIME)
 
     def test_rebuild_interactive(self):
         """
