@@ -802,22 +802,43 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 	return resp, nil
 }
 
-func (cs *ControlService) formatMetadata(instances []Engine, reformat bool) (bool, error) {
+func (cs *ControlService) formatMetadata(instances []Engine, reformat, replace bool) (bool, error) {
 	// Format control metadata first, if needed
 	if needs, err := cs.storage.ControlMetadataNeedsFormat(); err != nil {
 		return false, errors.Wrap(err, "detecting if metadata format is needed")
 	} else if needs || reformat {
+		// Full format needed
 		engineIdxs := make([]uint, len(instances))
 		for i, eng := range instances {
 			engineIdxs[i] = uint(eng.Index())
 		}
 
-		cs.log.Debug("formatting control metadata storage")
+		cs.log.Debug("formatting control metadata storage (all engines)")
 		if err := cs.storage.FormatControlMetadata(engineIdxs); err != nil {
 			return false, errors.Wrap(err, "formatting control metadata storage")
 		}
 
 		return true, nil
+	} else if replace {
+		// Selective format: only format engines that need SCM format
+		var needFormatIdxs []uint
+		for idx, eng := range instances {
+			needs, err := eng.GetStorage().ScmNeedsFormat()
+			if err != nil {
+				return false, errors.Wrapf(err, "detecting if engine %d SCM needs format", idx)
+			}
+			if needs {
+				needFormatIdxs = append(needFormatIdxs, uint(eng.Index()))
+			}
+		}
+
+		if len(needFormatIdxs) > 0 {
+			cs.log.Debugf("formatting control metadata storage for engines %v (--replace)", needFormatIdxs)
+			if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
+				return false, errors.Wrap(err, "formatting control metadata storage")
+			}
+			return true, nil
+		}
 	}
 
 	cs.log.Debug("no control metadata format needed")
@@ -1059,10 +1080,10 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
-	// DAOS-15947: control_metadata format is valid in --replace case where multiple engines
-	// require replacement or format on the same host. No need to handle independently for
-	// individual engine as if control_metadata is missing then it needs to be created.
-	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
+	// DAOS-15947, DAOS-19385: control_metadata format is required in --replace case
+	// to ensure old rank metadata is cleared. Only engines requiring SCM format will
+	// have their control_metadata subdirectories reformatted, preserving healthy engines.
+	mdFormatted, err := cs.formatMetadata(instances, req.Reformat, req.Replace)
 	if err != nil {
 		return nil, err
 	}
