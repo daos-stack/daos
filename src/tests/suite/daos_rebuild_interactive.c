@@ -775,8 +775,10 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	test_arg_t   *arg = *state;
 	daos_obj_id_t oids[STRANDED_OBJ_NR];
 	struct ioreq  req;
-	d_rank_t      rank_A;
-	d_rank_t      rank_B;
+	d_rank_t      leader;
+	d_rank_t      shard_ranks[3];
+	d_rank_t      stop_ranks[2];
+	int           n;
 	int           i;
 	int           j;
 	int           rc;
@@ -809,12 +811,30 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 		ioreq_fini(&req);
 	}
 
-	rank_A = get_rank_by_oid_shard(arg, oids[0], 0);
-	rank_B = get_rank_by_oid_shard(arg, oids[0], 1);
-	assert_int_not_equal(rank_A, rank_B);
+	/* Neither killed rank may be the PS service leader. Killing the leader forces a raft term
+	 * change; the new leader discards the in-flight lower-fseq rebuild as "stale IV after PS
+	 * leader switch" and heals the current map with a single consolidated rebuild, so the
+	 * single-leader lower-version Fail_reclaim lineage this test polls for does not occur under
+	 * the new term (the test would hang to timeout).
+	 * OC_RP_3G1 gives 3 shard ranks; pick two that avoid the leader.
+	 */
+	rc = test_get_leader(arg, &leader);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < 3; i++)
+		shard_ranks[i] = get_rank_by_oid_shard(arg, oids[0], i);
+	/* stop_ranks[0] = "rank A" (killed 1st, low fseq); stop_ranks[1] = "rank B" (killed 2nd).
+	 */
+	for (n = 0, i = 0; i < 3 && n < 2; i++) {
+		if (shard_ranks[i] == leader)
+			continue;
+		stop_ranks[n++] = shard_ranks[i];
+	}
+	assert_int_equal(n, 2);
+	assert_int_not_equal(stop_ranks[0], stop_ranks[1]);
 
-	print_message("DAOS-19381 repro: rank_A(low fseq)=%u, rank_B(high fseq)=%u\n", rank_A,
-		      rank_B);
+	print_message("DAOS-19381 repro: leader=%u, stop order: rank A(1st, low fseq)=%u, "
+		      "rank B(2nd, high fseq)=%u\n",
+		      leader, stop_ranks[0], stop_ranks[1]);
 
 	/* (1) Hang the rebuild PULL phase (after scan) so rebuild-1 (rank_A) completes its scan,
 	 *     leaves rg_queue_list, and stays running (cancellable) but does not finish. Using the
@@ -832,13 +852,13 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	 *     cancel-on-new-DOWN check in step (3).
 	 */
 	arg->no_rebuild = 1;
-	rebuild_single_pool_rank(arg, rank_A, true);
+	rebuild_single_pool_rank(arg, stop_ranks[0], true);
 	arg->no_rebuild = 0;
 	/* Wait until rebuild-1 is actually SCANNING (in-progress, out of the queue), NOT merely
 	 * queued -- otherwise the rank_B failure below would be merged into rebuild-1's task.
 	 */
-	print_message("wait for rebuild-1 (rank %u) to leave the queue and start scanning\n",
-		      rank_A);
+	print_message("wait for rebuild-1 (rank A %u) to leave the queue and start scanning\n",
+		      stop_ranks[0]);
 	test_rebuild_wait_to_scanning_next(&arg, 1);
 
 	/* (3) Kill engine rank_B while rebuild-1 is running -> leader cancels rebuild-1 (new DOWN
@@ -846,7 +866,7 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	 *     higher fseq) queued.
 	 */
 	arg->no_rebuild = 1;
-	rebuild_single_pool_rank(arg, rank_B, true);
+	rebuild_single_pool_rank(arg, stop_ranks[1], true);
 	arg->no_rebuild = 0;
 	print_message("wait for rebuild-1 Fail_reclaim (lower version) to start\n");
 	test_rebuild_wait_to_start_lower(&arg, 1);
@@ -863,9 +883,10 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	if (arg->myrank == 0) {
 		d_rank_t r;
 
-		print_message("clear rebuild pull hang; let rebuild-2 (rank %u) run\n", rank_B);
+		print_message("clear rebuild pull hang; let rebuild-2 (rank B %u) run\n",
+			      stop_ranks[1]);
 		for (r = 0; r < (d_rank_t)arg->srv_nnodes; r++) {
-			if (r == rank_A || r == rank_B)
+			if (r == stop_ranks[0] || r == stop_ranks[1])
 				continue;
 			daos_debug_set_params(arg->group, r, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 		}
@@ -876,7 +897,7 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	 *     observed incident order (start issued WHILE rebuild-2 is still in flight, not after
 	 * it finished). Either order reproduces the fseq inversion.
 	 */
-	print_message("wait for rebuild-2 (rank %u, higher version) to start\n", rank_B);
+	print_message("wait for rebuild-2 (rank B %u, higher version) to start\n", stop_ranks[1]);
 	test_rebuild_wait_to_start_next(&arg, 1);
 	print_message("issue dmg pool rebuild start to re-queue stranded rank_A rebuild\n");
 	rc = rebuild_start_with_dmg(arg);
@@ -898,10 +919,10 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	/* Restart the killed engines so teardown's pool destroy can broadcast to every rank and
 	 * reclaim their storage instead of stranding it.
 	 */
-	print_message("restart killed engines rank_A=%u, rank_B=%u before teardown\n", rank_A,
-		      rank_B);
-	daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, rank_A);
-	daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, rank_B);
+	print_message("restart killed engines rank A=%u, rank B=%u before teardown\n",
+		      stop_ranks[0], stop_ranks[1]);
+	daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, stop_ranks[0]);
+	daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, stop_ranks[1]);
 	sleep(10);
 	T_END();
 }
