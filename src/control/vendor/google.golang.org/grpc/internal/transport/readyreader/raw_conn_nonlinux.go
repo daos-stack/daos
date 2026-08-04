@@ -1,6 +1,8 @@
+//go:build !linux
+
 /*
  *
- * Copyright 2022 gRPC authors.
+ * Copyright 2026 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +18,18 @@
  *
  */
 
-package grpcsync
+package readyreader
 
-import (
-	"sync"
-)
+func isRawConnSupported() bool {
+	return false
+}
 
-// OnceFunc returns a function wrapping f which ensures f is only executed
-// once even if the returned function is executed multiple times.
-func OnceFunc(f func()) func() {
-	var once sync.Once
-	return func() {
-		once.Do(f)
-	}
+// sysRead is not implemented. Support can be added in the future if necessary.
+func sysRead(uintptr, []byte) (int, error) {
+	panic("RawConn functionality is not implemented for non-unix platforms.")
+}
+
+// wouldBlock is not implemented. Support can be added in the future if necessary.
+func wouldBlock(error) bool {
+	panic("RawConn functionality is not implemented for non-unix platforms.")
 }

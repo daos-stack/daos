@@ -14,7 +14,7 @@ require (
 	github.com/desertbit/go-shlex v0.1.1
 	github.com/desertbit/grumble v1.1.3
 	github.com/dustin/go-humanize v1.0.0
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-hclog v1.2.2
 	github.com/hashicorp/raft v1.3.9
@@ -29,8 +29,8 @@ require (
 	golang.org/x/net v0.56.0
 	golang.org/x/sys v0.46.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
-	google.golang.org/grpc v1.66.2
-	google.golang.org/protobuf v1.34.1
+	google.golang.org/grpc v1.82.1
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -41,7 +41,7 @@ require (
 	github.com/desertbit/closer/v3 v3.1.2 // indirect
 	github.com/desertbit/readline v1.5.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-msgpack v1.1.5 // indirect
