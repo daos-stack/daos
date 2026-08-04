@@ -90,8 +90,10 @@ class DaosCoreBase(TestWithServers):
         daos_test_env["COVFILE"] = "/tmp/test.cov"
         daos_test_env["POOL_SCM_SIZE"] = str(scm_size)
         daos_test_env["POOL_NVME_SIZE"] = str(nvme_size)
+        daos_test_env["DAOS_PIPELINE"] = "1"
         if env:
             daos_test_env.update(env)
+
         parameters = " ".join(filter(None, [f"-n {dmg_config_file}", f"-{subtest}", str(args)]))
         daos_test_cmd = get_cmocka_command(command, parameters)
         job = get_job_manager(self, "Orterun", daos_test_cmd, mpi_type="openmpi")

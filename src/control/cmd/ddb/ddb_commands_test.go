@@ -10,6 +10,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -32,6 +33,10 @@ func TestDdb_HelpCmds(t *testing.T) {
 			cmdStr:     "open",
 			helpSubStr: "Usage:\n  open [flags] path\n",
 		},
+		"help for 'csum_dump' command": {
+			cmdStr:     "csum_dump",
+			helpSubStr: "Usage:\n  csum_dump [flags] path [dst]\n",
+		},
 		// TODO(follow-up PR): Add help tests for the remaining commands.
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -52,8 +57,7 @@ func TestDdb_HelpCmds(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error when running '%s --help' via command file: want nil, got %v", tc.cmdStr, err)
 			}
-			test.AssertTrue(t, strings.Contains(stdoutCmdFile, tc.helpSubStr),
-				fmt.Sprintf("expected stdout to contain %q: got\n%s", tc.helpSubStr, stdoutCmdFile))
+			test.AssertStringContains(t, stdoutCmdFile, tc.helpSubStr)
 
 			// Run the help command with a command line
 			args = test.JoinArgs(nil, tc.cmdStr, "--help")
@@ -63,8 +67,7 @@ func TestDdb_HelpCmds(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error when running '%s --help' via command line: want nil, got %v", tc.cmdStr, err)
 			}
-			test.AssertTrue(t, strings.Contains(stdoutCmdLine, tc.helpSubStr),
-				fmt.Sprintf("expected stdout to contain %q: got\n%s", tc.helpSubStr, stdoutCmdLine))
+			test.AssertStringContains(t, stdoutCmdLine, tc.helpSubStr)
 
 			// Compare command line and command file outputs
 			test.AssertEqual(t, stdoutCmdFile, stdoutCmdLine,
@@ -128,6 +131,16 @@ func TestDdb_Cmds(t *testing.T) {
 			test.CmpAny(t, "path", wantPath, path)
 			test.CmpAny(t, "cmtTime", wantCmtTime, cmtTime)
 			test.CmpAny(t, "cmtDate", wantCmtDate, cmtDate)
+			return nil
+		}
+	}
+
+	csumDumpFnChecking := func(t *testing.T, wantPath, wantDst string, wantEpoch uint64) func(string, string, uint64) error {
+		return func(path, dst string, epoch uint64) error {
+			fmt.Println("csum_dump called")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "dst", wantDst, dst)
+			test.CmpAny(t, "epoch", wantEpoch, epoch)
 			return nil
 		}
 	}
@@ -392,6 +405,51 @@ func TestDdb_Cmds(t *testing.T) {
 				}
 			},
 			expStdout: []string{"prov_mem called"},
+		},
+
+		// --- csum_dump command ---
+		"csum_dump missing path": {
+			args:   []string{"csum_dump"},
+			expErr: ddbTestErr("missing argument 'path'"),
+		},
+		"csum_dump invalid options": {
+			args:   []string{"csum_dump", "--bar"},
+			expErr: ddbTestErr("invalid flag: --bar"),
+		},
+		"csum_dump default": {
+			args: []string{"csum_dump", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_dump_Fn = csumDumpFnChecking(t, "/[0]", "", math.MaxUint64)
+			},
+			expStdout: []string{"csum_dump called"},
+		},
+		"csum_dump epoch short": {
+			args: []string{"csum_dump", "-e", "999", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_dump_Fn = csumDumpFnChecking(t, "/[0]", "", 999)
+			},
+			expStdout: []string{"csum_dump called"},
+		},
+		"csum_dump epoch long": {
+			args: []string{"csum_dump", "--epoch=666", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_dump_Fn = csumDumpFnChecking(t, "/[0]", "", 666)
+			},
+			expStdout: []string{"csum_dump called"},
+		},
+		"csum_dump destination": {
+			args: []string{"csum_dump", "/[0]", "/tmp/csum_dump.out"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_dump_Fn = csumDumpFnChecking(t, "/[0]", "/tmp/csum_dump.out", math.MaxUint64)
+			},
+			expStdout: []string{"csum_dump called"},
+		},
+		"csum_dump destination with epoch": {
+			args: []string{"csum_dump", "-e", "500", "/[0]", "/tmp/csum_dump.out"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_dump_Fn = csumDumpFnChecking(t, "/[0]", "/tmp/csum_dump.out", 500)
+			},
+			expStdout: []string{"csum_dump called"},
 		},
 
 		// TODO(follow-up PR): Add TestCmds cases for the remaining commands.

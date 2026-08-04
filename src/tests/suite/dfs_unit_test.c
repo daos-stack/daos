@@ -3437,9 +3437,7 @@ dfs_test_oflags(void **state)
 static void
 test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 {
-#ifndef BUILD_PIPELINE
-	skip();
-#endif
+	bool             pipeline_enabled = false;
 	dfs_obj_t	*dir1, *f1;
 	int		i;
 	time_t		ts = 0;
@@ -3447,6 +3445,10 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 	char		*dirname = "pipeline_dir";
 	int		rc;
+
+	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
+	if (!pipeline_enabled)
+		skip();
 
 	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags, dir_oclass, 0,
 		      NULL, &dir1);
