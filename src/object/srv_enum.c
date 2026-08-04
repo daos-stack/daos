@@ -754,12 +754,14 @@ ds_obj_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	D_ASSERT(!arg->fill_recxs ||
 		 type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
+	arg->rc_key2big = 0;
+
 	rc = iter_cb(param, type, recursive, anchors, enum_pack_cb, NULL,
 		     arg, dth);
 
 	D_DEBUG(DB_IO, "enum type %d rc %d rc_key2big %d\n", type, rc, arg->rc_key2big == 1);
 
-	if (arg->rc_key2big) {
+	if (arg->rc_key2big == 1) {
 		rc = -DER_KEY2BIG;
 	}
 
