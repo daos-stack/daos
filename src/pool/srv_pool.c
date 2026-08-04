@@ -8326,6 +8326,10 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 		for (i = 1; i < list.pta_number; i++) {
 			if ((exclude_rank && list.pta_addrs[i].pta_target != -1) ||
 			    (!exclude_rank && list.pta_addrs[i].pta_target == -1)) {
+				D_ERROR(DF_UUID ": invalid exclude rank/target parameter: "
+						"exclude_rank=%d target[%d]=%d\n",
+					DP_UUID(in->pti_op.pi_uuid), exclude_rank, i,
+					list.pta_addrs[i].pta_target);
 				rc = -DER_INVAL;
 				goto out;
 			}
