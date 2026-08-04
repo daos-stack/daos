@@ -465,23 +465,6 @@ if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
   build_package "${base_name}-serialize"
 fi
 
-if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
-  TARGET_PATH="${bindir}/daos_firmware_helper"
-  list_files files "${SL_PREFIX}/bin/daos_firmware_helper"
-  append_install_list "${files[@]}"
-
-cat << EOF > "${tmp}/post_install_firmware"
-#!/bin/bash
-chown root:daos_server ${bindir}/daos_firmware_helper
-chmod 4750 ${bindir}/daos_firmware_helper
-EOF
-  chmod +x "${tmp}/post_install_firmware"
-  EXTRA_OPTS+=("--after-install" "${tmp}/post_install_firmware")
-
-  DEPENDS=("${base_name}-server = ${VERSION}-${RELEASE}")
-  build_package "${base_name}-firmware"
-fi
-
 TARGET_PATH="${libdir}"
 DEPENDS=("${base_name}-client-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("hdf5-${openmpi_lib}")

@@ -6,6 +6,8 @@
 
 set -uex
 
+code_coverage="${1:-false}"
+
 scons install --build-deps=only USE_INSTALLED=all PREFIX=/opt/daos TARGET_TYPE=release -j 32
 
 if [[ "${code_coverage}" == "true" ]] ; then

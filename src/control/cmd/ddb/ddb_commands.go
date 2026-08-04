@@ -481,4 +481,30 @@ If --db_path is provided, a VOS file path must also be given as a positional arg
 		},
 		Completer: nil,
 	})
+	// Command csum_dump
+	app.AddCommand(&grumble.Command{
+		Name:    "csum_dump",
+		Aliases: nil,
+		Help:    "Dump visible checksum(s)",
+		LongHelp: `Dump visible checksum(s) to the screen or in a file.  The vos
+path should be a complete path, including the akey and if the value is an array
+value it should include the extent. If a path to a file was provided then the
+value(s) will be written to the file, else it will be printed to the screen.
+The --epoch flag selects which version of the checksum to dump: for a single
+value akey it selects the value visible at or before that epoch, and for an
+array value it defines the maximal epoch of the visible record extent to
+select`,
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to dump.")
+			a.String("dst", "Optional, file path to dump the value to.", grumble.Default(""))
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("e", "epoch", math.MaxUint64, "Maximal epoch of the checksum value to select (default EPOCH_MAX).")
+		},
+		Run: func(c *grumble.Context) error {
+			return ctx.CsumDump(c.Args.String("path"), c.Args.String("dst"), c.Flags.Uint64("epoch"))
+		},
+		Completer: nil,
+	})
 }

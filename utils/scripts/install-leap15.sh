@@ -91,7 +91,7 @@ fi
 if [ "$arch" = x86_64 ]; then
     # shellcheck disable=SC2086
     dnf --nodocs install ${dnf_install_args} \
-        ipmctl-devel
+        ipmctl
 fi
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} ruby-devel
