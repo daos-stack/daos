@@ -91,6 +91,7 @@ nav:
       - 'Environment Variables': 'admin/env_variables.md'
   - Test and Benchmarking:
       - 'Run DAOS Autotest': 'testing/autotest.md'
+      - 'Node Local Test': 'testing/nlt.md'
       - 'Run IOR and mdtest': 'testing/ior.md'
       - 'Run dbench': 'testing/dbench.md'
       - 'Run Datamover test': 'testing/datamover.md'
