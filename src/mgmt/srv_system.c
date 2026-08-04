@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,6 +141,42 @@ free_server_list(struct server_entry *list, int len)
 	D_FREE(list);
 }
 
+static bool
+map_update_verbose_enabled(void)
+{
+	static bool initialized;
+	static bool enabled;
+
+	if (!initialized) {
+		d_getenv_bool("DAOS_MAP_UPDATE_VERBOSE", &enabled);
+		initialized = true;
+	}
+
+	return enabled;
+}
+
+static void
+warn_map_update_timeout_missing_uri(uint32_t map_version, int nservers,
+				    struct server_entry servers[])
+{
+	int i;
+	int missing = 0;
+
+	for (i = 0; i < nservers; i++) {
+		if (servers[i].se_uri == NULL || servers[i].se_uri[0] == '\0') {
+			D_WARN("MGMT_TGT_MAP_UPDATE timeout: missing target URI rank=%u map_ver=%u "
+			       "idx=%d/%d\n",
+			       servers[i].se_rank, map_version, i + 1, nservers);
+			missing++;
+		}
+	}
+
+	if (missing > 0) {
+		D_WARN("MGMT_TGT_MAP_UPDATE timeout: missing URI targets=%d/%d map_ver=%u\n",
+		       missing, nservers, map_version);
+	}
+}
+
 static struct server_entry *
 dup_server_list(struct server_entry *in, int in_len)
 {
@@ -221,10 +258,27 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 	struct mgmt_tgt_map_update_out *out;
 	crt_opcode_t			opc;
 	crt_rpc_t		       *rpc;
+	int                             i;
 	int				rc;
+	bool                            verbose;
 
+	verbose = map_update_verbose_enabled();
 	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d\n", map_version,
 		nservers);
+	if (verbose) {
+		for (i = 0; i < nservers; i++) {
+			const char *uri = "<none>";
+
+			if (servers[i].se_uri != NULL)
+				uri = servers[i].se_uri;
+
+			D_DEBUG(DB_MGMT, "map[%d/%d]: rank=%u inc=%lu uri=%s flags=%u nctxs=%u\n",
+				i + 1, nservers, servers[i].se_rank,
+				(unsigned long)servers[i].se_incarnation, uri,
+				(unsigned int)servers[i].se_flags,
+				(unsigned int)servers[i].se_nctxs);
+		}
+	}
 
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
@@ -244,8 +298,11 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 	in->tm_map_version = map_version;
 
 	rc = dss_rpc_send(rpc);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == -DER_TIMEDOUT)
+			warn_map_update_timeout_missing_uri(map_version, nservers, servers);
 		goto out_rpc;
+	}
 
 	out = crt_reply_get(rpc);
 	if (out->tm_rc != 0)
@@ -254,8 +311,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: "DF_RC"\n",
-		map_version, nservers, DP_RC(rc));
+	DL_CDEBUG(rc, DLOG_WARN, DB_MGMT, rc, "map update bcast: version=%u nservers=%d",
+		  map_version, nservers);
 	return rc;
 }
 
