@@ -13,6 +13,7 @@
 #include <daos/common.h>
 #include <daos/container.h>
 #include <daos/object.h>
+#include <daos/pool.h>
 
 #include "dfs_internal.h"
 
@@ -37,6 +38,7 @@ dfs_set_pl_pool_info(dfs_t *dfs, const daos_pool_info_t *pool_info)
 	dfs->pl_target_nr  = pool_info->pi_ntargets;
 	dfs->pl_total_nvme = pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
 	dfs->pl_total_scm  = pool_info->pi_space.ps_space.s_total[DAOS_MEDIA_SCM];
+	dfs->pl_map_ver    = pool_info->pi_map_ver;
 }
 
 static void
@@ -56,6 +58,46 @@ dfs_cache_pl_pool_info(dfs_t *dfs)
 	}
 
 	dfs_set_pl_pool_info(dfs, &pool_info);
+}
+
+/*
+ * Re-query the PL pool values only when the client's cached pool map advanced (e.g. a pool extend).
+ * The version read is a local, no-RPC check, so the pool service is queried at most once per map
+ * change rather than on every file create.
+ */
+void
+dfs_refresh_pl_pool_info(dfs_t *dfs)
+{
+	struct dc_pool  *pool;
+	daos_pool_info_t pool_info = {.pi_bits = DPI_SPACE};
+	uint32_t         cur_ver;
+	int              rc;
+
+	if (dfs == NULL)
+		return;
+
+	pool = dc_hdl2pool(dfs->poh);
+	if (pool == NULL)
+		return;
+	cur_ver = dc_pool_get_version(pool);
+	dc_pool_put(pool);
+
+	if (cur_ver <= dfs->pl_map_ver)
+		return;
+
+	rc = daos_pool_query(dfs->poh, NULL, &pool_info, NULL, NULL);
+	if (rc != 0) {
+		D_WARN("daos_pool_query() failed while refreshing PL pool info, " DF_RC "\n",
+		       DP_RC(rc));
+		return;
+	}
+
+	/* Only move the cached values forward if a racing refresh has not already applied a newer
+	 * map. */
+	D_MUTEX_LOCK(&dfs->lock);
+	if (pool_info.pi_map_ver > dfs->pl_map_ver)
+		dfs_set_pl_pool_info(dfs, &pool_info);
+	D_MUTEX_UNLOCK(&dfs->lock);
 }
 
 static inline struct dfs_mnt_hdls *

@@ -182,6 +182,10 @@ file_oclasses(dfs_t *dfs, daos_oclass_id_t parent_oclass, daos_oclass_id_t cid,
 	if (cid != 0 || !dfs_file_layout_has_tail(dfs->layout_v, S_IFREG))
 		return 0;
 
+	/* Pick up target/space growth (e.g. a pool extend) without querying the pool every create.
+	 */
+	dfs_refresh_pl_pool_info(dfs);
+
 	if (dfs->pl_target_nr == 0)
 		return 0;
 
