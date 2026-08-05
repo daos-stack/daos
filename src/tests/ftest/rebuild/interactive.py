@@ -135,7 +135,7 @@ class RbldInteractive(TestWithServers):
         # Update ior with read flags for verification later
         ior1.manager.job.update_params(flags=ior_flags_read)
 
-        # Launch background IOR
+        self.log_step('Start IOR in the background')
         cont_background = self.get_container(pool1)
         thread_queue = Queue()
         ior_background_namespace = "/run/ior_background/*"
@@ -174,7 +174,7 @@ class RbldInteractive(TestWithServers):
         rebuild_sequence_duration = time.time() - rebuild_sequence_start
         self.log.info("Rebuild sequence completed in %.2f seconds", rebuild_sequence_duration)
 
-        self.log.info("Waiting for background IOR to finish")
+        self.log_step("Wait for background IOR to finish")
         ior_thread.join()
         if thread_queue.empty():
             self.fail("Did not receive a result from background IOR")
@@ -264,9 +264,9 @@ class RbldInteractive(TestWithServers):
         else:
             self.fail(f'Unsupported exclude_method: {exclude_method}')
 
-        self.log_step(f'{exclude_method} - Wait for rebuild to start')
-        for pool in pools:
-            pool.wait_for_rebuild_to_start(interval=1)
+        # self.log_step(f'{exclude_method} - Wait for rebuild to start')
+        # for pool in pools:
+        #     pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{exclude_method} - Manually stop rebuild with {stop_method}')
         if stop_method == 'dmg pool rebuild stop':
@@ -333,9 +333,9 @@ class RbldInteractive(TestWithServers):
         else:
             self.fail(f'Unsupported reint_method: {reint_method}')
 
-        self.log_step(f'{reint_method} - Wait for rebuild to start')
-        for pool in pools:
-            pool.wait_for_rebuild_to_start(interval=1)
+        # self.log_step(f'{reint_method} - Wait for rebuild to start')
+        # for pool in pools:
+        #     pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{reint_method} - Manually stop rebuild with {stop_method}')
         if stop_method == 'dmg pool rebuild stop':

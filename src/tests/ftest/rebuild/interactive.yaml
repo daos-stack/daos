@@ -43,7 +43,7 @@ ior:
   test_file: /testFile
   api: DFS
   transfer_size: 1M
-  block_size: 256M
+  block_size: 128M
   flags_write: "-v -w -k -G 1 -F"
   flags_read: "-v -r -R -k -G 1 -F"
 

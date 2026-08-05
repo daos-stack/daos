@@ -133,7 +133,7 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
                                           pool, container, processes, ppn, intercept,
                                           plugin_path, dfuse, display_space, fail_on_warning,
                                           namespace, ior_params)
-    except CommandFailure as error:
+    except Exception as error:  # pylint: disable=broad-except
         thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
     finally:
         manager.verbose = saved_verbose
