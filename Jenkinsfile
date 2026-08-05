@@ -40,6 +40,7 @@ String bashName(String name) {
 }
 
 // Update the runStage map
+/* groovylint-disable-next-line MethodSize */
 void updateRunStage() {
     Map reasons = [:]
 
@@ -63,8 +64,8 @@ void updateRunStage() {
         'Functional on Leap 15',
         'Functional on Ubuntu 20.04',
         'Fault injection testing',
-        'Test RPMs on EL 9.6',
-        'Test RPMs on Leap 15.5',
+        'Test RPMs on EL 9',
+        'Test RPMs on Leap 15',
         'Test Hardware',
         'Functional Hardware Medium',
         'Functional Hardware Medium MD on SSD',
@@ -79,20 +80,20 @@ void updateRunStage() {
     // Initialize the run state of each stage using the parameter stage keys
     for (name in stageOrder) {
         value = params.get(bashName(name), null)
-        if (value instanceof Boolean && !name.startsWith('CI_')) {
+        if (value != null && value.class == Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
-            reasons[name] = "parameter selection or default"
+            reasons[name] = 'parameter selection or default'
         }
     }
 
     // Debug
-    String buildCause = currentBuild.getBuildCauses().toString()
-    println("updateRunStage: Build cause: ${buildCause}")
+    List buildCauses = currentBuild.buildCauses
+    println("updateRunStage: Build cause: ${buildCauses}")
     println("updateRunStage: Started by user: ${startedByUser()}")
 
     // Handle landing builds
     if (startedByLanding()) {
-        println("updateRunStage: Detected landing build, overwriting defaults")
+        println('updateRunStage: Detected landing build, overwriting defaults')
         for (stage in runStage.keySet()) {
             if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'Test']
                     || stage.contains('Build on')
@@ -105,7 +106,7 @@ void updateRunStage() {
             } else {
                 runStage[stage] = false
             }
-            reasons[stage] = "landing build"
+            reasons[stage] = 'landing build'
         }
         displayRunStage(reasons)
         return
@@ -113,11 +114,11 @@ void updateRunStage() {
 
     // Handle doc-only changes: Only run default or selected build stages
     if (docOnlyChange(target_branch)) {
-        println("updateRunStage: Detected doc-only change, skipping testing")
+        println('updateRunStage: Detected doc-only change, skipping testing')
         for (stage in runStage.keySet()) {
             if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
                 runStage[stage] = false
-                reasons[stage] = "doc-only change"
+                reasons[stage] = 'doc-only change'
             }
         }
         displayRunStage(reasons)
@@ -126,13 +127,13 @@ void updateRunStage() {
 
     // Handle user setting CI_RPM_TEST_VERSION or specifying RPM-test-version
     if (rpmTestVersion()) {
-        println("updateRunStage: Detected RPM test version, skipping build/RPM test stages")
+        println('updateRunStage: Detected RPM test version, skipping build/RPM test stages')
         for (stage in runStage.keySet()) {
             if (stage.contains('Build')
                     || stage.contains('Unit Tests')
                     || stage.contains('Test RPMs')) {
                 runStage[stage] = false
-                reasons[stage] = "RPM test version"
+                reasons[stage] = 'RPM test version'
             }
         }
         displayRunStage(reasons)
@@ -141,14 +142,14 @@ void updateRunStage() {
 
     // Handle user setting CI_BUILD_PACKAGES_ONLY
     if (params.CI_BUILD_PACKAGES_ONLY) {
-        println("updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages")
+        println('updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages')
         for (stage in runStage.keySet()) {
             if (stage.contains('Unit Tests')) {
                 runStage[stage] = false
-                reasons[stage] = "CI_BUILD_PACKAGES_ONLY"
+                reasons[stage] = 'CI_BUILD_PACKAGES_ONLY'
             } else if (stage.contains('Build')) {
                 runStage[stage] = true
-                reasons[stage] = "CI_BUILD_PACKAGES_ONLY"
+                reasons[stage] = 'CI_BUILD_PACKAGES_ONLY'
             }
         }
         displayRunStage(reasons)
@@ -158,7 +159,7 @@ void updateRunStage() {
     // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
     if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
         println(
-            "updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas")
+            'updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas')
         displayRunStage(reasons)
         return
     }
@@ -166,12 +167,13 @@ void updateRunStage() {
     // Update stage running based on commit pragmas
     println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
     Map<String, String> commitPragmas = envToPragmas()
-    println("updateRunStage: Checking skip commit pragmas from commit message:")
+    println('updateRunStage: Checking skip commit pragmas from commit message:')
     commitPragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        /* groovylint-disable-next-line NestedForLoop */
         for (pragma in skipPragmas) {
             // commitPragmas will already contain lower case keys from pragmasToMap()
             println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
@@ -189,17 +191,18 @@ void updateRunStage() {
 
     // Handle quick functional commit pragma
     if (quickFunctional()) {
-        println("updateRunStage: Detected quick functional testing")
+        println('updateRunStage: Detected quick functional testing')
         // These stages must be run for functional testing
         for (stage in ['Pre-build', 'Python Bandit check', 'Build']) {
             runStage[stage] = true
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // These stages are unrelated to functional testing and should be skipped
+        /* groovylint-disable-next-line BracesForForLoop */
         for (stage in ['Unit Tests', 'Fault injection testing',
-                       'Test RPMs on EL 9.6', 'Test RPMs on Leap 15.5']) {
+                       'Test RPMs on EL 9', 'Test RPMs on Leap 15']) {
             runStage[stage] = false
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // Build stages should only be run if their RPMs are needed
         String hwBuildStage = 'Build on '
@@ -223,13 +226,13 @@ void updateRunStage() {
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
             runStage[stage] = false
-            reasons[stage] = "Quick functional testing"
+            reasons[stage] = 'Quick functional testing'
         }
         // The mapped build stage must be run to generate RPMs for the functional test stage
         for (stage in testBuildStage.keySet()) {
             if (runStage[stage]) {
                 runStage[testBuildStage[stage]] = true
-                reasons[testBuildStage[stage]] = "Quick functional testing"
+                reasons[testBuildStage[stage]] = 'Quick functional testing'
             }
         }
     }
@@ -239,7 +242,7 @@ void updateRunStage() {
 
 // Log which stages will be run and why based on the current state of the runStage map
 void displayRunStage(Map reasons = [:]) {
-    println("Stage run conditions:")
+    println('Stage run conditions:')
     for (stage in runStage.keySet()) {
         String reason = reasons.get(stage, 'default')
         if (runStage[stage]) {
@@ -251,6 +254,7 @@ void displayRunStage(Map reasons = [:]) {
 }
 
 // Get a list of skip commit pragmas to check for a given stage name
+/* groovylint-disable-next-line MethodSize */
 List<String> getStageNameSkipPragmas(String stageName) {
     String stagePragma = "skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
     List<String> pragmas = []
@@ -259,13 +263,11 @@ List<String> getStageNameSkipPragmas(String stageName) {
     if (stageName in ['Cancel Previous Builds', 'Pre-build']) {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
     } else if (stageName == 'Python Bandit check') {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
         // Compatibility with existing commit pragmas
         pragmas.add(stagePragma.replace('-bandit-check', '-bandit'))
-
     } else if (stageName.contains('Build')) {
         // Add skip pragma for parent stage
         if (stageName != 'Build') {
@@ -277,7 +279,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('build-on-')) {
             pragmas.add(stagePragma.replace('build-on-', 'build-'))
         }
-
     } else if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
         // Add skip pragma for parent stage
         if (stageName != 'Unit Tests') {
@@ -289,7 +290,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('-with-')) {
             pragmas.add(stagePragma.replace('-with-', '-'))
         }
-
     } else if (stageName == 'Test' || stageName.contains('Functional on')
             || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
         // Add skip pragma for parent stage
@@ -316,7 +316,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
         pragmas.add(stagePragma)
 
     } else if (stageName.contains('Hardware')) {
-        // 
+        // Add skip pragma for parent stage
         if (stageName != 'Test Hardware') {
             pragmas.add('skip-test-hardware')
         }
@@ -338,6 +338,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
     List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
     List<String> copyPragmas = pragmas.clone()
     for (distro in distros) {
+        /* groovylint-disable-next-line NestedForLoop */
         for (_pragma in copyPragmas) {
             if (_pragma.contains("-${distro}-")) {
                 Integer _index = pragmas.indexOf(_pragma)
@@ -362,7 +363,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
 
 // Initialize the runStage map with the current state of the build parameters and any commit
 // pragmas related to skipping/running stages. Should only be called once per build.
-def setupRunStage() {
+void setupRunStage() {
     pragmasToEnv()
     update_default_commit_pragmas()
     updateRunStage()
@@ -463,19 +464,6 @@ String vm9_label(String distro) {
     return cachedCommitPragma(pragma: distro + '-VM9-label',
                               def_val: cachedCommitPragma(pragma: 'VM9-label',
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
-}
-
-void rpm_test_post(String stageName, String node) {
-    // Extract first node from comma-delimited list
-    String firstNode = node.split(',')[0].trim()
-    sh label: 'Fetch and stage artifacts',
-       script: 'hostname; ssh -i ci_key jenkins@' + firstNode +
-               ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
-               'scp -i ci_key jenkins@' + firstNode +
-               ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
-               stageName + '/"'
-    archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-    job_status_update()
 }
 
 String sconsArgs() {
@@ -633,12 +621,12 @@ pipeline {
         booleanParam(name: bashName('Fault injection testing'),
                      defaultValue: true,
                      description: 'Run the Fault injection testing stage.')
-        booleanParam(name: bashName('Test RPMs on EL 9.6'),
+        booleanParam(name: bashName('Test RPMs on EL 9'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs on EL 9.6 stage.')
-        booleanParam(name: bashName('Test RPMs on Leap 15.5'),
+                     description: 'Run the Test RPMs on EL 9 stage.')
+        booleanParam(name: bashName('Test RPMs on Leap 15'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs on Leap 15.5 stage.')
+                     description: 'Run the Test RPMs on Leap 15 stage.')
         booleanParam(name: bashName('Test Hardware'),
                      defaultValue: true,
                      description: 'Run the Test Hardware stage.')
@@ -784,7 +772,8 @@ pipeline {
                             filename 'utils/docker/Dockerfile.code_scanning'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false) +
-                                                ' --build-arg FVERSION=37'
+                                                ' --build-arg POINT_RELEASE=.7' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -828,6 +817,7 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                ' --target build-ci' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
@@ -881,8 +871,8 @@ pipeline {
                                                                 deps_build: false) +
                                                 ' --build-arg DAOS_PACKAGES_BUILD=no ' +
                                                 ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc" + 
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
+                                                " -t ${sanitized_JOB_NAME()}-leap15" + 
+                                                ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
@@ -1090,215 +1080,121 @@ pipeline {
                 beforeAgent true
                 expression { shouldStageRun('Test') }
             }
-            parallel {
-                stage('Functional on EL 9.7 with Valgrind') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on EL 9.7 with Valgrind') }
-                    }
-                    agent {
-                        label vm9_label('EL9')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 9.7 with Valgrind')
-                stage('Functional on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on EL 9') }
-                    }
-                    agent {
-                        label vm9_label('EL9')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 9')
-                stage('Functional on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on Leap 15') }
-                    }
-                    agent {
-                        label vm9_label('Leap15')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'leap15.6'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Functional on Ubuntu 20.04') }
-                    }
-                    agent {
-                        label vm9_label('Ubuntu')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal') +
-                                           ' mercury-libfabric',
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Fault injection testing') }
-                    }
-                    agent {
-                        label params.CI_FI_1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 240,
-                                     inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh --memcheck no' +
-                                                  ' --system-ram-reserved 4 --server-debug WARN' +
-                                                  ' --log-usage-import nltr.json' +
-                                                  ' --log-usage-save nltr.xml' +
-                                                  ' --class-name fault-injection fi',
-                                     with_valgrind: '',
-                                     always_script: 'ci/unit/test_nlt_post.sh',
-                                     testResults: 'nlt-junit.xml',
-                                     unstash_opt: true,
-                                     unstash_tests: false,
-                                     inst_rpms: unitPackages(target: 'el9') + ' daos-client-tests',
-                                     image_version: 'el9.7',
-                                     prov_env_vars: 'VM_CPUS=14'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['nlt_logs/'],
-                                         testResults: 'nlt-junit.xml',
-                                         referenceJobName: 'daos-stack/daos/release%252F2.8',
-                                         with_valgrind: '',
-                                         FI: true
-                            archiveArtifacts artifacts: 'nlt_logs/fault-injection/',
-                                             allowEmptyArchive: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Fault injection testing')
-                stage('Test RPMs on EL 9.6') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Test RPMs on EL 9.6') }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
+            steps {
+                script {
+                    parallel(
+                        'Functional on EL 9': getFunctionalTestStage(
+                            name: 'Functional on EL 9',
+                            runStage: shouldStageRun('Functional on EL 9'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('EL9'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional on Leap 15': getFunctionalTestStage(
+                            name: 'Functional on Leap 15',
+                            runStage: shouldStageRun('Functional on Leap 15'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Leap15'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'leap15.6'
+                        ),
+                        'Functional on SLES 15': getFunctionalTestStage(
+                            name: 'Functional on SLES 15',
+                            runStage: shouldStageRun('Functional on SLES 15'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Leap15'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'sles15.7'
+                        ),
+                        'Functional on Ubuntu 20.04': getFunctionalTestStage(
+                            name: 'Functional on Ubuntu 20.04',
+                            runStage: shouldStageRun('Functional on Ubuntu 20.04'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Ubuntu'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            job_status: job_status_internal
+                        ),
+                        'Fault injection testing': scriptedUnitTestStage(
+                            name: 'Fault injection testing',
+                            runStage: shouldStageRun('Fault injection testing'),
+                            label: params.CI_FI_1_LABEL,
+                            jobStatus: job_status_internal,
+                            distro: 'el9',
+                            unitTestArgs: [
+                                timeout_time: 240,
+                                test_script: 'ci/unit/test_nlt.sh --memcheck no' +
+                                             ' --system-ram-reserved 4 --server-debug WARN' +
+                                             ' --log-usage-import nltr.json' +
+                                             ' --log-usage-save nltr.xml' +
+                                             ' --class-name fault-injection fi',
+                                always_script: 'ci/unit/test_nlt_post.sh',
+                                testResults: 'nlt-junit.xml',
+                                unstash_opt: true,
+                                unstash_tests: false,
+                                image_version: 'el9.7',
+                                prov_env_vars: 'VM_CPUS=14'
+                            ],
+                            unitTestPostArgs: [
+                                /* groovylint-disable-next-line DuplicateListLiteral */
+                                artifacts: ['nlt_logs/'],
+                                testResults: 'nlt-junit.xml',
+                                with_valgrind: '',
+                                FI: true],
+                            archiveArtifactsArgs: [
+                                artifacts: 'nlt_logs/fault-injection/',
+                                allowEmptyArchive: true]
+                        ),
+                        'Test RPMs on EL 9': scriptedTestRpmStage(
+                            name: 'Test RPMs on EL 9',
+                            runStage: shouldStageRun('Test RPMs on EL 9'),
+                            label: params.CI_UNIT_VM1_LABEL,
+                            jobStatus: job_status_internal,
+                            testRpmArgs: [
+                                target: 'el9.6',
+                                inst_rpms: 'mercury-libfabric',
+                                ignoreFailure: false],
+                            nextVersion: next_version(),
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
+                            archiveArtifactsArgs: [
+                                artifacts: 'Test RPMs on EL 9/']
+                        ),
+                        'Test RPMs on Leap 15': scriptedTestRpmStage(
+                            name: 'Test RPMs on Leap 15',
+                            runStage: shouldStageRun('Test RPMs on Leap 15'),
+                            label: params.CI_UNIT_VM1_LABEL,
+                            jobStatus: job_status_internal,
+                            testRpmArgs: [
+                                target: 'leap15.6',
+                                inst_rpms: 'mercury-libfabric',
+                                ignoreFailure: false],
+                            nextVersion: next_version(),
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
+                            archiveArtifactsArgs: [
+                                artifacts: 'Test RPMs on Leap 15/']
                         )
-                    }
-                    post {
-                        always {
-                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                        }
-                    }
-                } // stage('Test RPMs on EL 9.6')
-                stage('Test RPMs on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Test RPMs on Leap 15.5') }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        /* neither of these work as FTest strips the first node
-                           out of the pool requiring 2 node clusters at minimum
-                         * additionally for this use-case, can't override
-                           ftest_arg with this :-(
-                        script {
-                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.5',
-                                pragma_suffix: '',
-                                label: params.CI_UNIT_VM1_LABEL,
-                                next_version: next_version(),
-                                stage_tags: '',
-                                default_tags: 'test_daos_management',
-                                nvme: 'auto',
-                                run_if_pr: true,
-                                run_if_landing: true,
-                                job_status: job_status_internal
-                            )
-                        }
-                           job_step_update(
-                            functionalTest(
-                                test_tag: 'test_daos_management',
-                                ftest_arg: '--yaml_extension single_host',
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } */
-                        job_step_update(
-                            testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()),
-                                    inst_rpms: 'mercury-libfabric')
-                        )
-                    }
-                    post {
-                        always {
-                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                        }
-                    }
-                } // stage('Test RPMs on Leap 15.5')
-            } // parallel
+                    )
+                }
+            }
         } // stage('Test')
         stage('Test Storage Prep on EL 9.7') {
             when {
