@@ -21,7 +21,7 @@ const char *server_group;
 const char *dmg_config_file;
 
 /** Pool service replicas */
-unsigned int    svc_nreplicas = 1;
+unsigned int    svc_nreplicas = 3;
 
 /** Checksum Config */
 unsigned int	dt_csum_type;
