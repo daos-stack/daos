@@ -17,6 +17,9 @@
 
 #include "obj_internal.h"
 
+#define RC_ENUM_OVERFLOW 1
+#define RC_ENUM_KEY2BIG 2
+
 static int
 fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 	   struct ds_obj_enum_arg *arg, vos_iter_type_t type)
@@ -231,7 +234,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		arg->kds_len++;
 		arg->kds[0].kd_key_len += total_size;
 		if (arg->kds_len >= kds_cap)
-			return 1;
+			return RC_ENUM_OVERFLOW;
 		return 0;
 	}
 
@@ -244,10 +247,10 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		    (arg->chk_key2big && arg->kds_len <= 2)) {
 			if (arg->kds[0].kd_key_len < total_size)
 				arg->kds[0].kd_key_len = total_size;
-			arg->rc_key2big = 1;
+			return RC_ENUM_KEY2BIG;
+		} else {
+			return RC_ENUM_OVERFLOW;
 		}
-
-		return 1;
 	}
 
 	iov = &arg->sgl->sg_iovs[arg->sgl_idx];
@@ -605,7 +608,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		arg->kds_len++;
 		arg->kds[0].kd_key_len += size;
 		if (arg->kds_len >= arg->kds_cap)
-			return 1;
+			return RC_ENUM_OVERFLOW;
 		return 0;
 	}
 
@@ -622,9 +625,9 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 			    (arg->kds_len < 3 || (arg->kds_len == 3 && !bump_kds_len))) {
 				if (arg->kds[0].kd_key_len < size)
 					arg->kds[0].kd_key_len = size;
-				arg->rc_key2big = 1;
+				D_GOTO(out, rc = RC_ENUM_KEY2BIG);
 			}
-			D_GOTO(out, rc = 1);
+			D_GOTO(out, rc = RC_ENUM_OVERFLOW);
 		} else {
 			insert_new_rec(arg, key_ent, type, iod_size, &rec);
 		}
@@ -754,14 +757,12 @@ ds_obj_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	D_ASSERT(!arg->fill_recxs ||
 		 type == VOS_ITER_SINGLE || type == VOS_ITER_RECX);
 
-	arg->rc_key2big = 0;
-
 	rc = iter_cb(param, type, recursive, anchors, enum_pack_cb, NULL,
 		     arg, dth);
 
-	D_DEBUG(DB_IO, "enum type %d rc %d rc_key2big %d\n", type, rc, arg->rc_key2big == 1);
+	D_DEBUG(DB_IO, "enum type %d rc %d\n", type, rc);
 
-	if (arg->rc_key2big == 1) {
+	if (rc == RC_ENUM_KEY2BIG) {
 		rc = -DER_KEY2BIG;
 	}
 
