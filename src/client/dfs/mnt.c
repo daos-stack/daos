@@ -85,19 +85,30 @@ dfs_refresh_pl_pool_info(dfs_t *dfs)
 	if (cur_ver <= dfs->pl_map_ver)
 		return;
 
+	/*
+	 * Serialize refreshers on a dedicated lock so a single thread issues the (potentially
+	 * expensive) pool query while the rest wait and then short-circuit on the re-check below. A
+	 * separate lock is used so the query does not block the create path's oid_gen() on
+	 * dfs->lock.
+	 */
+	D_MUTEX_LOCK(&dfs->pl_refresh_lock);
+	if (cur_ver <= dfs->pl_map_ver) {
+		D_MUTEX_UNLOCK(&dfs->pl_refresh_lock);
+		return;
+	}
+
 	rc = daos_pool_query(dfs->poh, NULL, &pool_info, NULL, NULL);
 	if (rc != 0) {
 		D_WARN("daos_pool_query() failed while refreshing PL pool info, " DF_RC "\n",
 		       DP_RC(rc));
+		D_MUTEX_UNLOCK(&dfs->pl_refresh_lock);
 		return;
 	}
 
-	/* Only move the cached values forward if a racing refresh has not already applied a newer
-	 * map. */
-	D_MUTEX_LOCK(&dfs->lock);
+	/* Only move the cached values forward to keep the map version monotonic. */
 	if (pool_info.pi_map_ver > dfs->pl_map_ver)
 		dfs_set_pl_pool_info(dfs, &pool_info);
-	D_MUTEX_UNLOCK(&dfs->lock);
+	D_MUTEX_UNLOCK(&dfs->pl_refresh_lock);
 }
 
 static inline struct dfs_mnt_hdls *
@@ -700,6 +711,12 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	if (rc != 0)
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 
+	rc = D_MUTEX_INIT(&dfs->pl_refresh_lock, NULL);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&dfs->lock);
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
+
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	D_ASSERT(entry != NULL);
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
@@ -930,6 +947,7 @@ dfs_umount(dfs_t *dfs)
 	dfs_metrics_fini(dfs);
 
 	D_FREE(dfs->prefix);
+	D_MUTEX_DESTROY(&dfs->pl_refresh_lock);
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
 
@@ -1277,6 +1295,13 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 		return daos_der2errno(rc);
 	}
 
+	rc = D_MUTEX_INIT(&dfs->pl_refresh_lock, NULL);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&dfs->lock);
+		D_FREE(dfs);
+		return daos_der2errno(rc);
+	}
+
 	/** Open SB object */
 	rc = daos_obj_open(coh, dfs->super_oid, DAOS_OO_RO, &dfs->super_oh, NULL);
 	if (rc) {
@@ -1315,6 +1340,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 
 	return rc;
 err_dfs:
+	D_MUTEX_DESTROY(&dfs->pl_refresh_lock);
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
 	return rc;

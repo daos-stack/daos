@@ -221,6 +221,8 @@ struct dfs {
 	uint64_t             pl_total_nvme;
 	/** Pool map version the cached PL pool values above were queried at */
 	uint32_t             pl_map_ver;
+	/** serialize PL pool info refreshers so only one issues the pool query */
+	pthread_mutex_t      pl_refresh_lock;
 	/** Optional prefix to account for when resolving an absolute path */
 	char                *prefix;
 	daos_size_t          prefix_len;
