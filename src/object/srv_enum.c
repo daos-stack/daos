@@ -18,7 +18,7 @@
 #include "obj_internal.h"
 
 #define RC_ENUM_OVERFLOW 1
-#define RC_ENUM_KEY2BIG 2
+#define RC_ENUM_KEY2BIG  2
 
 static int
 fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
