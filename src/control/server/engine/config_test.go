@@ -693,6 +693,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithFabricProvider(provider).
 		WithFabricInterface(interfaceName).
 		WithFabricInterfacePort(interfacePort).
+		WithFabricAddrFormat("ipv6").
 		WithPinnedNumaNode(pinnedNumaNode).
 		WithBypassHealthChk(&bypass).
 		WithModules(modules).
@@ -727,6 +728,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"D_INTERFACE=" + interfaceName,
 		"D_PORT=" + strconv.Itoa(interfacePort),
 		"D_PROVIDER=" + provider,
+		"D_ADDR_FORMAT=ipv6",
 		"D_LOG_FILE=" + logFile,
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
@@ -893,6 +895,47 @@ func TestFabricConfig_GetInterfaces(t *testing.T) {
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expInterfaces, interfaces); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_GetAddrFormats(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg            *FabricConfig
+		expAddrFormats []string
+	}{
+		"nil": {
+			expAddrFormats: nil,
+		},
+		"unset": {
+			cfg:            &FabricConfig{},
+			expAddrFormats: []string{},
+		},
+		"single": {
+			cfg: &FabricConfig{
+				AddrFormat: "ipv6",
+			},
+			expAddrFormats: []string{"ipv6"},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				AddrFormat: multiProviderString("ipv6", "ipv4"),
+			},
+			expAddrFormats: []string{"ipv6", "ipv4"},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				AddrFormat: multiProviderString(" ipv6  ", "", "ipv4 "),
+			},
+			expAddrFormats: []string{"ipv6", "ipv4"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			addrFormats := tc.cfg.GetAddrFormats()
+
+			if diff := cmp.Diff(tc.expAddrFormats, addrFormats); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 		})
