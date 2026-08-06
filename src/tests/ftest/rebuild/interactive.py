@@ -179,6 +179,8 @@ class RbldInteractive(TestWithServers):
         if thread_queue.empty():
             self.fail("Did not receive a result from background IOR")
         ior_result = thread_queue.get()
+        if isinstance(ior_result["result"], Exception):
+            self.fail(f"Background IOR failed with exception: {ior_result['result']}")
         self.log.debug("Result from background IOR:")
         for name in ("command", "exit_status", "interrupted", "duration"):
             self.log.debug("  %s: %s", name, getattr(ior_result["result"], name))
