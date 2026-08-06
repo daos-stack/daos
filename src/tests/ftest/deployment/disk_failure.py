@@ -37,7 +37,7 @@ class DiskFailureTest(OSAUtils):
         Test disk failures during the IO operation.
 
         :avocado: tags=all,fuill_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,hw_vmd,medium
         :avocado: tags=deployment,disk_failure
         :avocado: tags=DiskFailureTest,test_disk_failure_w_rf
         """
@@ -94,26 +94,28 @@ class DiskFailureTest(OSAUtils):
             for thread in threads:
                 thread.join()
 
-            # Now replace the faulty NVME device.
-            self.log_step(
-                f"Loop {val + 1}/{num_pools}: Replacing evicted target {evict_device['uuid']}")
-            try:
-                get_dmg_response(self.dmg_command.storage_replace_nvme,
-                                 host=evict_device["hosts"].split(":")[0],
-                                 old_uuid=evict_device["uuid"],
-                                 new_uuid=evict_device["uuid"])
-            except CommandFailure as error:
-                self.fail(str(error))
-            time.sleep(10)
-            self.log_step(
-                f"Loop {val + 1}/{num_pools}: Reintegrating evicted target: {evict_device}")
-            self.pool.reintegrate(evict_device["rank"], list_to_str(evict_device["tgt_ids"]))
-            time.sleep(15)
+            if evict_device["has_sys_xs"]:
+                # Now replace the faulty NVME device.
+                self.log_step(
+                    f"Loop {val + 1}/{num_pools}: Replacing evicted target {evict_device['uuid']}")
+                try:
+                    get_dmg_response(
+                        self.dmg_command.storage_replace_nvme,
+                        host=evict_device["hosts"].split(":")[0],
+                        old_uuid=evict_device["uuid"],
+                        new_uuid=evict_device["uuid"])
+                except CommandFailure as error:
+                    self.fail(str(error))
+                time.sleep(10)
+                self.log_step(
+                    f"Loop {val + 1}/{num_pools}: Reintegrating evicted target: {evict_device}")
+                self.pool.reintegrate(evict_device["rank"], list_to_str(evict_device["tgt_ids"]))
+                time.sleep(15)
 
-            self.log_step(f"Loop {val + 1}/{num_pools}: Waiting for rebuild to complete")
-            done = "Faulty NVMEs replaced"
-            self.print_and_assert_on_rebuild_failure(done)
-            self.log.info("Loop %s/%s: Rebuild completed / Loop done", val + 1, num_pools)
+                self.log_step(f"Loop {val + 1}/{num_pools}: Waiting for rebuild to complete")
+                done = "Faulty NVMEs replaced"
+                self.print_and_assert_on_rebuild_failure(done)
+                self.log.info("Loop %s/%s: Rebuild completed / Loop done", val + 1, num_pools)
 
         # After completing the test, check for container integrity
         self.log_step("Checking pool space and container integrity")
