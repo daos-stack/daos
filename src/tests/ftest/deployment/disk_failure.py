@@ -118,7 +118,7 @@ class DiskFailureTest(OSAUtils):
         # After completing the test, check for container integrity
         self.log_step("Checking pool space and container integrity")
         for val in range(0, num_pools):
-            display_string = "Pool{} space at the End".format(val)
+            display_string = f"Pool{val} space at the End"
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
             self.run_ior_thread("Read", oclass=self.ior_cmd.dfs_oclass.value,
