@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,12 +11,15 @@ from avocado import fail_on
 from dmg_utils import get_dmg_response, get_storage_query_device_info
 from exception_utils import CommandFailure
 from general_utils import list_to_str
+from nvme_utils import set_device_faulty
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
 
 
 class DiskFailureTest(OSAUtils):
     # pylint: disable=too-many-ancestors
+    # pylint: disable=attribute-defined-outside-init
+    # pylint: disable=invalid-name
     """Test class Description: Verify disk failure is properly handled.
 
     :avocado: recursive
@@ -28,26 +31,31 @@ class DiskFailureTest(OSAUtils):
         self.targets = self.params.get("targets", "/run/server_config/servers/0/*")
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/*')
 
-    @fail_on(CommandFailure)
-    def verify_disk_failure(self, num_pool):
-        """Run IOR and create disk failures while IO is happening.
+    def test_disk_failure_w_rf(self):
+        """Jira ID: DAOS-11284.
 
-        Args:
-            num_pool (int) : Total number of pools to run the testing.
+        Test disk failures during the IO operation.
+
+        :avocado: tags=all,fuill_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,disk_failure
+        :avocado: tags=DiskFailureTest,test_disk_failure_w_rf
         """
+        num_pools = self.params.get("num_pool", "/run/test_options/*", 1)
         pool = {}
 
         # Get the device information.
+        self.log_step("Getting device information")
         device_info = get_storage_query_device_info(self.dmg_command)
-
         self.log.info("Device information")
-        self.log.info("==================")
+        self.log.info("------------------")
         for index, entry in enumerate(device_info):
             self.log.info("Device %s:", index)
             for key in sorted(entry):
                 self.log.info("  %s: %s", key, entry[key])
 
-        for val in range(0, num_pool):
+        for val in range(0, num_pools):
+            self.log_step(f"Loop {val + 1}/{num_pools}: Starting loop / Creating pool")
             pool[val] = add_pool(self, connect=False)
             threads = []
             self.pool = pool[val]
@@ -58,6 +66,7 @@ class DiskFailureTest(OSAUtils):
                                                     "test": self.ior_test_sequence[0],
                                                     "fail_on_warning": False}))
             # Launch the IOR threads
+            self.log_step(f"Loop {val + 1}/{num_pools}: Starting ior thread")
             for thread in threads:
                 self.log.info("Thread : %s", thread)
                 thread.start()
@@ -65,20 +74,29 @@ class DiskFailureTest(OSAUtils):
 
             # Evict a random target from the system
             evict_device = self.random.choice(device_info)
-            self.log.info("Evicting random target: %s", evict_device["uuid"])
+            self.log_step(
+                f"Loop {val + 1}/{num_pools}: Evicting random target {evict_device['uuid']}")
             try:
-                get_dmg_response(self.dmg_command.storage_set_faulty,
-                                 host=evict_device["hosts"].split(":")[0],
-                                 uuid=evict_device["uuid"])
+                set_device_faulty(self, self.dmg_command, evict_device["hosts"].split(":")[0],
+                                  evict_device["uuid"], None, evict_device["has_sys_xs"])
+
+                # get_dmg_response(self.dmg_command.storage_set_faulty,
+                #                     host=evict_device["hosts"].split(":")[0],
+                #                     uuid=evict_device["uuid"])
             except CommandFailure:
-                self.fail("Error evicting target {}".format(evict_device["uuid"]))
+                self.fail(f"Error evicting target {evict_device['uuid']}")
+
+            self.log_step(f"Loop {val + 1}/{num_pools}: Waiting for rebuild to complete")
             done = "Completed setting all devices to fault"
             self.print_and_assert_on_rebuild_failure(done)
+
+            self.log_step(f"Loop {val + 1}/{num_pools}: Waiting for ior thread to complete")
             for thread in threads:
                 thread.join()
 
             # Now replace the faulty NVME device.
-            self.log.info("Replacing evicted target: %s", evict_device["uuid"])
+            self.log_step(
+                f"Loop {val + 1}/{num_pools}: Replacing evicted target {evict_device['uuid']}")
             try:
                 get_dmg_response(self.dmg_command.storage_replace_nvme,
                                  host=evict_device["hosts"].split(":")[0],
@@ -87,18 +105,19 @@ class DiskFailureTest(OSAUtils):
             except CommandFailure as error:
                 self.fail(str(error))
             time.sleep(10)
-            self.log.info(
-                "Reintegrating evicted target: uuid=%s, rank=%s, targets=%s",
-                evict_device["uuid"], evict_device["rank"], evict_device["tgt_ids"])
-            output = self.pool.reintegrate(
-                evict_device["rank"], list_to_str(evict_device["tgt_ids"]))
+            self.log_step(
+                f"Loop {val + 1}/{num_pools}: Reintegrating evicted target: {evict_device}")
+            self.pool.reintegrate(evict_device["rank"], list_to_str(evict_device["tgt_ids"]))
             time.sleep(15)
+
+            self.log_step(f"Loop {val + 1}/{num_pools}: Waiting for rebuild to complete")
             done = "Faulty NVMEs replaced"
-            self.print_and_assert_on_rebuild_failure(output)
-            self.log.info(done)
+            self.print_and_assert_on_rebuild_failure(done)
+            self.log.info("Loop %s/%s: Rebuild completed / Loop done", val + 1, num_pools)
 
         # After completing the test, check for container integrity
-        for val in range(0, num_pool):
+        self.log_step("Checking pool space and container integrity")
+        for val in range(0, num_pools):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
@@ -107,16 +126,7 @@ class DiskFailureTest(OSAUtils):
             self.container = self.pool_cont_dict[self.pool][0]
             self.container.check()
 
-    def test_disk_failure_w_rf(self):
-        """Jira ID: DAOS-11284.
-
-        Test disk failures during the IO operation.
-
-        :avocado: tags=all,manual
-        :avocado: tags=deployment,disk_failure
-        :avocado: tags=DiskFailureTest,test_disk_failure_w_rf
-        """
-        self.verify_disk_failure(1)
+        self.log.info("Test passed")
 
     @fail_on(CommandFailure)
     def test_disk_fault_to_normal(self):
