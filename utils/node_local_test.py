@@ -1375,7 +1375,7 @@ class DFuse():
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
                  caching=True, wbcache=True, multi_user=False, ro=False, dump_h=False,
-                 read_h=False, file_h=None):
+                 read_h=False, file_h=None, thread_count=None):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1391,6 +1391,7 @@ class DFuse():
         self.conf = conf
         self.multi_user = multi_user
         self.cores = 0
+        self.thread_count = thread_count
         self._daos = daos
         self.caching = caching
         self.wbcache = wbcache
@@ -1465,7 +1466,9 @@ class DFuse():
         if self.multi_user:
             cmd.append('--multi-user')
 
-        if not self.cores:
+        if self.thread_count:
+            cmd.extend(['--thread-count', str(self.thread_count)])
+        elif not self.cores:
             # Use a lower default thread-count for NLT due to running tests in parallel.
             cmd.extend(['--thread-count', '4'])
 
@@ -4721,6 +4724,142 @@ class PosixTests():
         return importlib.import_module('pydaos.torch')
 
 
+class StressTests(PosixTests):
+    """Stress and race reproducers, run sequentially against a dedicated server"""
+
+    @staticmethod
+    def generate_test_list():
+        """Generate list of stress tests"""
+        return [x for x in dir(StressTests)
+                if x.startswith('test') and x not in dir(PosixTests)]
+
+    def _run_uns_wedge_test(self, v_hint, churn_sh, create_path_fn, create_must_succeed):
+        """Race UNS container-create against a churn script; detect a wedged mount.
+
+        Fails by timing out - a wedged mount answers nothing further and blocked
+        processes cannot be killed.  churn_sh is a shell template with {dfuse_dir}/
+        {stop_file} placeholders; create_path_fn(dfuse_dir, idx) builds the create path.
+        """
+        # --thread-count is reduced by the event-queue count, so this leaves exactly one
+        # worker; more would need enough concurrency to consume every worker to wedge.
+        dfuse = DFuse(self.server, self.conf, caching=True, container=self.container,
+                      thread_count=2)
+        dfuse.use_valgrind = False
+        # Churn generates high op volume; debug logs would blow the NLT log budget.
+        dfuse.log_mask = 'WARN'
+        dfuse.start(v_hint=v_hint)
+
+        churn = []
+        stop_file = join(dfuse.dir, 'stop_churn')
+        cmd = churn_sh.format(dfuse_dir=dfuse.dir, stop_file=stop_file)
+
+        cmd_env = get_base_env()
+        cmd_env['D_LOG_MASK'] = 'WARN'
+        cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
+
+        wedged = False
+        aborted = False
+        stuck = False
+        successes = 0
+        proc = None
+        try:
+            for _ in range(4):
+                # pylint: disable-next=consider-using-with
+                churn.append(subprocess.Popen(['sh', '-c', cmd]))
+
+            for idx in range(8):
+                create_cmd = [join(self.conf['PREFIX'], 'bin', 'daos'), 'container', 'create',
+                              '--type', 'POSIX', '--path', create_path_fn(dfuse.dir, idx)]
+                # Popen rather than run(timeout=): a wedged mount leaves this process in
+                # uninterruptible sleep, so run() would hang trying to kill it.  The
+                # connection has to be aborted before the process can be reaped.
+                # pylint: disable-next=consider-using-with
+                proc = subprocess.Popen(create_cmd, env=cmd_env, stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT)
+                try:
+                    stdout, _ = proc.communicate(timeout=60)
+                except subprocess.TimeoutExpired:
+                    print(f'container create {idx} did not return; mount is wedged')
+                    wedged = True
+                    break
+                if proc.returncode == 0:
+                    successes += 1
+                else:
+                    print(f'container create {idx} failed rc={proc.returncode}')
+                    print(stdout.decode('utf-8', errors='replace'))
+                    if create_must_succeed:
+                        self.fail()
+
+            if wedged:
+                # Nothing below can complete against a wedged mount and the processes cannot
+                # be signalled, so break the connection before trying to clean up.
+                _, lines = _abort_fuse_connections()
+                for line in lines:
+                    print(line)
+                aborted = True
+                proc.wait(timeout=60)
+                self.fail()
+
+            if not create_must_succeed and successes == 0:
+                print(f'None of 8 creates against {v_hint} succeeded')
+                self.fail()
+        finally:
+            try:
+                with open(stop_file, 'w'):
+                    pass
+            except OSError:
+                pass
+            for cproc in churn:
+                try:
+                    cproc.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    cproc.kill()
+                    try:
+                        cproc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        print('Churn process is unkillable; mount is still wedged')
+                        stuck = True
+            if stuck and not aborted:
+                # The create loop never saw the wedge, so it was never aborted above; abort
+                # now or dfuse.stop() below hangs the same way the churn children did.
+                _, lines = _abort_fuse_connections()
+                for line in lines:
+                    print(line)
+            if dfuse.stop():
+                self.fatal_errors = True
+        if stuck and not aborted:
+            self.fail()
+
+    def test_uns_create_vs_dir_lock(self):
+        """Race UNS container-create against mkdir churn holding the mount root locked.
+
+        Exercises the setxattr notification path.  Fails by timing out.
+        """
+        churn_sh = ('i=0; while [ ! -e {stop_file} ]; do '
+                    'mkdir {dfuse_dir}/churn_$$_$i 2>/dev/null; i=$((i+1)); done')
+        self._run_uns_wedge_test(
+            'uns_create_vs_dir_lock', churn_sh,
+            lambda dfuse_dir, idx: join(dfuse_dir, f'uns_{idx}'),
+            create_must_succeed=True)
+
+    def test_uns_create_vs_rmdir_churn(self):
+        """Race UNS container-create against rmdir/rename churn on the same paths.
+
+        Exercises the unlink and rename notification paths.  Fails by timing out.
+        """
+        num_paths = 4
+        churn_sh = ('i=0; while [ ! -e {stop_file} ]; do '
+                    f'n=$((i % {num_paths})); '
+                    'mkdir {dfuse_dir}/uns_$n 2>/dev/null; '
+                    'mv {dfuse_dir}/uns_$n {dfuse_dir}/uns_${{n}}_old 2>/dev/null; '
+                    'rmdir {dfuse_dir}/uns_${{n}}_old 2>/dev/null; '
+                    'i=$((i+1)); done')
+        self._run_uns_wedge_test(
+            'uns_create_vs_rmdir_churn', churn_sh,
+            lambda dfuse_dir, idx: join(dfuse_dir, f'uns_{idx % num_paths}'),
+            create_must_succeed=False)
+
+
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
 
@@ -4798,12 +4937,14 @@ class NltStderrWrapper():
         sys.stderr = self._stderr
 
 
-def run_posix_tests(server, conf, test_list):
+def run_posix_tests(server, conf, test_list, klass=None, sequential=False):
     """Run one or all posix tests
 
     Create a new container per test, to ensure that every test is
     isolated from others.
     """
+    if klass is None:
+        klass = PosixTests
 
     def _run_test(ptl=None, function=None, test_cb=None):
         ptl.call_index = 0
@@ -4860,7 +5001,7 @@ def run_posix_tests(server, conf, test_list):
     out_wrapper = NltStdoutWrapper()
     err_wrapper = NltStderrWrapper()
 
-    pto = PosixTests(server, conf, pool=pool)
+    pto = klass(server, conf, pool=pool)
     if len(test_list) == 1:
         obj = getattr(pto, test_list[0])
 
@@ -4874,9 +5015,13 @@ def run_posix_tests(server, conf, test_list):
         test_list.sort(key=lambda x: x not in slow_tests)
 
         for function in test_list:
-            ptl = PosixTests(server, conf, pool=pool)
+            ptl = klass(server, conf, pool=pool)
             obj = getattr(ptl, function)
             if not callable(obj):
+                continue
+
+            if sequential:
+                _run_test(ptl=ptl, test_cb=obj, function=function)
                 continue
 
             thread = threading.Thread(None,
@@ -7103,6 +7248,8 @@ def run(wf, args):
 
     if args.mode == 'fi':
         fi_test = True
+    elif args.mode == 'stress':
+        pass
     else:
         for rep in range(args.repeat):
             if args.repeat > 1:
@@ -7127,6 +7274,13 @@ def run(wf, args):
             if args.failfast and fatal_errors.errors and rep < args.repeat - 1:
                 print(f'--failfast set; stopping after iteration {rep + 1}/{args.repeat}')
                 break
+
+    if args.mode in ('all', 'stress'):
+        with DaosServer(conf, test_class='stress', wf=wf_server,
+                        fatal_errors=fatal_errors) as server:
+            fatal_errors.add_result(
+                run_posix_tests(server, conf, StressTests.generate_test_list(),
+                                klass=StressTests, sequential=True))
 
     if args.mode == 'all':
         with DaosServer(conf, test_class='restart', wf=wf_server,

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -976,6 +976,15 @@ out_fini:
 					  atomic_load_relaxed(&dfuse_info->di_container_count));
 		}
 	}
+
+	if (dfuse_info)
+		DFUSE_TRA_INFO(dfuse_info,
+			       "Notify: enqueued=" DF_U64 " coalesced=" DF_U64 " delivered=" DF_U64
+			       " dropped=" DF_U64,
+			       atomic_load_relaxed(&dfuse_info->di_notify_enqueued),
+			       atomic_load_relaxed(&dfuse_info->di_notify_coalesced),
+			       atomic_load_relaxed(&dfuse_info->di_notify_delivered),
+			       atomic_load_relaxed(&dfuse_info->di_notify_dropped));
 
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
