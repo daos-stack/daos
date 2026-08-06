@@ -821,100 +821,140 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	}
 }
 
-func TestServer_MgmtSvc_PoolCreateExcludedRanksAsDownout(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	mgmtSvc := newTestMgmtSvc(t, log)
-	ec := engine.MockConfig().
-		WithTargetCount(1).
-		WithStorage(
-			storage.NewTierConfig().
-				WithStorageClass("ram").
-				WithScmMountPoint("/foo/bar"),
-			storage.NewTierConfig().
-				WithStorageClass("nvme").
-				WithBdevDeviceList("foo", "bar"),
-		)
-	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil, nil)
-	mgmtSvc.harness.instances[0] = newTestEngine(log, false, sp, ec)
-
-	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
-	dc.cfg.setSendMsgResponse(drpc.Status_SUCCESS, nil, nil)
-	mgmtSvc.harness.instances[0].(*EngineInstance).getDrpcClientFn = func(s string) drpc.DomainSocketClient {
-		return dc
-	}
-
-	for _, m := range []*system.Member{
-		system.MockMember(t, 0, system.MemberStateJoined),
-		system.MockMember(t, 1, system.MemberStateExcluded),
-		system.MockMember(t, 2, system.MemberStateJoined),
-		system.MockMember(t, 3, system.MemberStateJoined),
-		system.MockMember(t, 4, system.MemberStateStopped),
-	} {
-		if err := mgmtSvc.sysdb.AddMember(m); err != nil {
-			t.Fatal(err)
+// TestServer_MgmtSvc_PoolCreateAsymmetricRanks exercises the asymmetric pool
+// create path where the management service must split an explicit rank list
+// into active target ranks (VOS/blob-store creators) and unavailable ranks
+// (pool-map-only DOWNOUT entries). Cases:
+//   - mixed joined+non-joined ranks are split and dispatched to the engine
+//   - a request where every rank is currently non-joined is rejected before
+//     any dRPC call is made
+func TestServer_MgmtSvc_PoolCreateAsymmetricRanks(t *testing.T) {
+	totalBytes := uint64(100 * humanize.GiByte)
+	baseReq := func(ranks []uint32) *mgmtpb.PoolCreateReq {
+		return &mgmtpb.PoolCreateReq{
+			Sys:        build.DefaultSystemName,
+			Uuid:       test.MockUUID(),
+			TotalBytes: totalBytes,
+			TierRatio:  []float64{0.06, 0.94},
+			Ranks:      ranks,
+			Properties: testPoolLabelProp(),
 		}
 	}
 
-	totalBytes := uint64(100 * humanize.GiByte)
-	req := &mgmtpb.PoolCreateReq{
-		Sys:                           build.DefaultSystemName,
-		Uuid:                          test.MockUUID(),
-		TotalBytes:                    totalBytes,
-		TierRatio:                     []float64{0.06, 0.94},
-		Ranks:                         []uint32{0, 2, 3},
-		IncludeSystemUnavailableRanks: true,
-		Properties:                    testPoolLabelProp(),
-	}
-	wantReq := new(mgmtpb.PoolCreateReq)
-	*wantReq = *req
-	wantReq.TotalBytes = 0
-	wantReq.TierBytes = []uint64{
-		uint64(float64(totalBytes)*DefaultPoolScmRatio) / 3,
-		uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / 3,
-	}
-	wantReq.TierRatio = nil
-	wantReq.Ranks = []uint32{0, 2, 3}
-	wantReq.IncludeSystemUnavailableRanks = false
-	wantReq.UnavailableRanks = []uint32{1, 4}
-	fdTree, err := mgmtSvc.membership.CompressedFaultDomainTree(0, 1, 2, 3, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantReq.FaultDomains = fdTree
-	// These properties are automatically added by PoolCreate.
-	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
-		Number: daos.PoolPropertyScrubMode,
-		Value: &mgmtpb.PoolProperty_Numval{
-			Numval: 0,
+	for name, tc := range map[string]struct {
+		members             []*system.Member
+		req                 *mgmtpb.PoolCreateReq
+		expErr              error
+		expActiveRanks      []uint32
+		expUnavailableRanks []uint32
+	}{
+		"mixed joined and non-joined ranks are split into DOWNOUT": {
+			members: []*system.Member{
+				system.MockMember(t, 0, system.MemberStateJoined),
+				system.MockMember(t, 1, system.MemberStateExcluded),
+				system.MockMember(t, 2, system.MemberStateJoined),
+				system.MockMember(t, 3, system.MemberStateJoined),
+				system.MockMember(t, 4, system.MemberStateStopped),
+				system.MockMember(t, 5, system.MemberStateReady),
+			},
+			req:                 baseReq([]uint32{0, 1, 2, 3, 4, 5}),
+			expActiveRanks:      []uint32{0, 2, 3},
+			expUnavailableRanks: []uint32{1, 4, 5},
 		},
-	})
-	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
-		Number: daos.PoolPropertyScrubThresh,
-		Value: &mgmtpb.PoolProperty_Numval{
-			Numval: 0,
+		"all requested ranks non-joined rejects before dRPC dispatch": {
+			members: []*system.Member{
+				system.MockMember(t, 0, system.MemberStateJoined),
+				system.MockMember(t, 1, system.MemberStateExcluded),
+				system.MockMember(t, 2, system.MemberStateStopped),
+			},
+			req:    baseReq([]uint32{1, 2}),
+			expErr: errors.New("none of the requested ranks"),
 		},
-	})
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-	_, err = mgmtSvc.PoolCreate(test.Context(t), req)
-	if err != nil {
-		t.Fatal(err)
-	}
+			mgmtSvc := newTestMgmtSvc(t, log)
+			ec := engine.MockConfig().
+				WithTargetCount(1).
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("ram").
+						WithScmMountPoint("/foo/bar"),
+					storage.NewTierConfig().
+						WithStorageClass("nvme").
+						WithBdevDeviceList("foo", "bar"),
+				)
+			sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil, nil)
+			mgmtSvc.harness.instances[0] = newTestEngine(log, false, sp, ec)
 
-	gotReq := new(mgmtpb.PoolCreateReq)
-	if err := proto.Unmarshal(dc.calls.get()[0].Body, gotReq); err != nil {
-		t.Fatal(err)
-	}
+			dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
+			dc.cfg.setSendMsgResponse(drpc.Status_SUCCESS, nil, nil)
+			mgmtSvc.harness.instances[0].(*EngineInstance).getDrpcClientFn =
+				func(s string) drpc.DomainSocketClient { return dc }
 
-	cmpOpts := append(test.DefaultCmpOpts(),
-		// Ensure stable ordering of properties to avoid intermittent failures.
-		protocmp.SortRepeated(func(a, b *mgmtpb.PoolProperty) bool {
-			return a.Number < b.Number
-		}),
-	)
-	if diff := cmp.Diff(wantReq, gotReq, cmpOpts...); diff != "" {
-		t.Fatalf("unexpected pool create req (-want, +got):\n%s\n", diff)
+			for _, m := range tc.members {
+				if err := mgmtSvc.sysdb.AddMember(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			_, gotErr := mgmtSvc.PoolCreate(test.Context(t), tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				if len(dc.calls.get()) != 0 {
+					t.Fatalf("expected no dRPC call on error, got %d", len(dc.calls.get()))
+				}
+				return
+			}
+
+			// Build wantReq from the sent req plus the storage/fault-domain/
+			// properties automatically populated by PoolCreate.
+			wantReq := new(mgmtpb.PoolCreateReq)
+			*wantReq = *tc.req
+			wantReq.TotalBytes = 0
+			wantReq.TierBytes = []uint64{
+				uint64(float64(totalBytes)*DefaultPoolScmRatio) / uint64(len(tc.expActiveRanks)),
+				uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / uint64(len(tc.expActiveRanks)),
+			}
+			wantReq.TierRatio = nil
+			wantReq.Ranks = tc.expActiveRanks
+			wantReq.UnavailableRanks = tc.expUnavailableRanks
+			memberRanks := make([]uint32, 0, len(tc.members))
+			for _, m := range tc.members {
+				memberRanks = append(memberRanks, m.Rank.Uint32())
+			}
+			fdTree, err := mgmtSvc.membership.CompressedFaultDomainTree(memberRanks...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantReq.FaultDomains = fdTree
+			wantReq.Properties = append(wantReq.Properties,
+				&mgmtpb.PoolProperty{
+					Number: daos.PoolPropertyScrubMode,
+					Value:  &mgmtpb.PoolProperty_Numval{Numval: 0},
+				},
+				&mgmtpb.PoolProperty{
+					Number: daos.PoolPropertyScrubThresh,
+					Value:  &mgmtpb.PoolProperty_Numval{Numval: 0},
+				},
+			)
+
+			gotReq := new(mgmtpb.PoolCreateReq)
+			if err := proto.Unmarshal(dc.calls.get()[0].Body, gotReq); err != nil {
+				t.Fatal(err)
+			}
+
+			cmpOpts := append(test.DefaultCmpOpts(),
+				protocmp.SortRepeated(func(a, b *mgmtpb.PoolProperty) bool {
+					return a.Number < b.Number
+				}),
+			)
+			if diff := cmp.Diff(wantReq, gotReq, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected pool create req (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 

@@ -309,6 +309,15 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 	       DP_UUID(pool_uuid), dummy != NULL ? dummy->rl_nr : create_ranks->rl_nr,
 	       downout_ranks != NULL ? downout_ranks->rl_nr : 0);
 
+	/*
+	 * Pass the caller-supplied `targets` (which spans BOTH active and DOWNOUT
+	 * ranks) rather than the filtered `create_ranks` (active only). The pool
+	 * service builds its initial pool map from this list, and DOWNOUT ranks
+	 * must appear as pool-map nodes so subsequent reintegration/exclusion
+	 * ops can address them. `downout_ranks` is passed alongside so the pool
+	 * service knows which of `targets` should be recorded as DOWNOUT and
+	 * therefore skipped for VOS/blob-store creation.
+	 */
 	rc = ds_mgmt_pool_svc_create(pool_uuid, group, targets, prop, downout_ranks, svcp,
 				     domains_nr, domains);
 	if (rc) {

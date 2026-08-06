@@ -170,17 +170,15 @@ func minPoolNvme(tgtCount, rankCount uint64) uint64 {
 }
 
 // poolCreateActiveRankCount returns the number of ranks in req.Ranks that are
-// not also present in req.UnavailableRanks (i.e. the ranks that will actually host
-// storage for the pool). The input rank lists are treated as sets: duplicate
-// entries in req.Ranks are only counted once against req.UnavailableRanks.
+// not also present in req.UnavailableRanks (i.e. the ranks that will actually
+// host storage for the pool). After PoolCreate's split logic the two lists are
+// disjoint; the RankSet-based overlap check below is defensive so this helper
+// stays correct if a future code path breaks that invariant.
 func poolCreateActiveRankCount(req *mgmtpb.PoolCreateReq) int {
-	downout := make(map[uint32]struct{}, len(req.GetUnavailableRanks()))
-	for _, r := range req.GetUnavailableRanks() {
-		downout[r] = struct{}{}
-	}
+	downoutSet := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(req.GetUnavailableRanks()))
 	n := 0
 	for _, r := range req.GetRanks() {
-		if _, ok := downout[r]; !ok {
+		if !downoutSet.Contains(ranklist.Rank(r)) {
 			n++
 		}
 	}
@@ -373,50 +371,45 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, FaultPoolNoLabel
 	}
 
-	allRanks, err := svc.sysdb.MemberRanks(system.AvailableMemberFilter)
+	allRanks, err := svc.sysdb.MemberRanks(system.MemberStateJoined)
 	if err != nil {
 		return nil, err
 	}
 
-	// Asymmetric pool create: also enumerate ranks that are currently excluded
-	// or stopped in the system. These ranks are not target create candidates,
-	// but may be passed separately to the pool service so they enter the pool
-	// map as DOWNOUT.
-	downoutRanks, err := svc.sysdb.MemberRanks(system.MemberStateExcluded |
-		system.MemberStateAdminExcluded | system.MemberStateStopped)
+	// Enumerate every rank that is not currently joined. Uses the broad
+	// `All ^ Joined` filter so ranks in any real non-Joined state
+	// (Ready/Excluded/AdminExcluded/Stopped/Stopping/Errored/Unresponsive/
+	// AwaitFormat/Starting/...) enter the pool map as DOWNOUT. Ranks that
+	// recover after pool creation can subsequently be reintegrated; freezing
+	// them into the map now avoids the "unknown rank" class of failures
+	// during future membership changes.
+	downoutRanks, err := svc.sysdb.MemberRanks(system.AllMemberFilter ^ system.MemberStateJoined)
 	if err != nil {
 		return nil, err
-	}
-	downoutSet := make(map[uint32]struct{}, len(downoutRanks))
-	for _, r := range downoutRanks {
-		downoutSet[r.Uint32()] = struct{}{}
 	}
 
 	ranksRequested := len(req.GetRanks()) > 0
 	numRanksRequested := req.GetNumRanks() > 0
-	includeSystemUnavailableRanks := req.GetIncludeSystemUnavailableRanks()
 	if ranksRequested {
-		// If the request supplies a rank list, use it. Note that the rank list
-		// may include downed ranks, in which case the create will fail with an
-		// error.
-		reqRanks := ranklist.RanksFromUint32(req.GetRanks())
-		// Create a RankSet to sort/dedupe the ranks.
-		reqRanks = ranklist.RankSetFromRanks(reqRanks).Ranks()
-
-		// Consider the full set of "known" ranks (available + downout) as
-		// valid membership candidates; downout ranks passed in are OK; they
-		// will be flagged as DOWNOUT in the pool map.
-		knownRanks := make([]ranklist.Rank, 0, len(allRanks)+len(downoutRanks))
-		knownRanks = append(knownRanks, allRanks...)
-		knownRanks = append(knownRanks, downoutRanks...)
-		if invalid := ranklist.CheckRankMembership(knownRanks, reqRanks); len(invalid) > 0 {
+		// The caller supplied an explicit rank list. Deduplicate via RankSet
+		// and verify every rank is a known system member (joined or currently
+		// non-joined). Any requested rank that is currently non-joined will be
+		// split out of req.Ranks into req.UnavailableRanks below so that it
+		// becomes a pool-map-only DOWNOUT entry rather than a VOS target
+		// create target. Do NOT auto-add other system-wide non-joined ranks in
+		// this path: an explicit list is the caller's exact intent.
+		requestedSet := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(req.GetRanks()))
+		knownSet := ranklist.RankSetFromRanks(allRanks)
+		for _, r := range downoutRanks {
+			knownSet.Add(r)
+		}
+		if invalid := ranklist.CheckRankMembership(knownSet.Ranks(), requestedSet.Ranks()); len(invalid) > 0 {
 			return nil, FaultPoolInvalidRanks(invalid)
 		}
-
-		req.Ranks = ranklist.RanksToUint32(reqRanks)
+		req.Ranks = ranklist.RanksToUint32(requestedSet.Ranks())
 	} else {
 		// Otherwise, create the pool across the requested number of
-		// available ranks in the system (if the request does not
+		// joined ranks in the system (if the request does not
 		// specify a number of ranks, all are used).
 		nAllRanks := len(allRanks)
 		if numRanksRequested {
@@ -428,7 +421,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 
 			// TODO (DAOS-6263): Improve rank selection algorithm.
 			// In the short term, we can just randomize the set of
-			// available ranks in order to avoid always choosing the
+			// joined ranks in order to avoid always choosing the
 			// first N ranks.
 			rand.Seed(time.Now().UnixNano())
 			rand.Shuffle(nAllRanks, func(i, j int) {
@@ -439,7 +432,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			req.Ranks = ranklist.RanksToUint32(allRanks[:nRanks])
 		} else {
 			// Full-cluster default preserves the original target-create behavior:
-			// only available ranks receive VOS/blob-store creation.
+			// only Joined ranks receive VOS/blob-store creation.
 			req.Ranks = ranklist.RanksToUint32(allRanks)
 		}
 		sort.Slice(req.Ranks, func(i, j int) bool { return req.Ranks[i] < req.Ranks[j] })
@@ -449,35 +442,56 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, errors.New("pool request contains zero target ranks")
 	}
 
-	// Compute UnavailableRanks from the authoritative membership state. For the
-	// default/full-cluster paths, keep req.Ranks as active target ranks and pass
-	// all system-known unavailable ranks separately so they are pool-map-only
-	// DOWNOUT entries. For an explicit rank list, do not auto-add other system
-	// unavailable ranks; only split the user-requested unavailable ranks out of
-	// req.Ranks. After this point both paths present a uniform semantic to the
-	// pool service: req.Ranks == VOS target creators, req.UnavailableRanks ==
-	// pool-map-only DOWNOUT entries.
-	downout := make([]uint32, 0, len(downoutRanks))
-	if includeSystemUnavailableRanks || (!ranksRequested && !numRanksRequested) {
-		for _, r := range downoutRanks {
-			downout = append(downout, r.Uint32())
-		}
-	} else {
-		active := req.Ranks[:0]
+	// Populate req.UnavailableRanks with the ranks that must appear in the pool
+	// map as DOWNOUT but must NOT receive VOS/blob-store creation.
+	//
+	//   * Explicit rank list: split any user-supplied non-joined rank out of
+	//     req.Ranks and merge it into any UnavailableRanks the caller already
+	//     provided. We do not auto-add other system-wide non-joined ranks
+	//     because the explicit list is the caller's exact intent.
+	//   * NumRanks: keep the shuffled subset of joined ranks untouched; the
+	//     caller asked for a specific active-rank count, so we do not admit
+	//     any DOWNOUT ranks either.
+	//   * Default (no rank spec, no client-populated UnavailableRanks): admit
+	//     every non-joined rank as DOWNOUT so the resulting pool map
+	//     faithfully reflects the whole system. Well-behaved clients pre-
+	//     populate both lists in this case, in which case we keep the caller's
+	//     UnavailableRanks as-is.
+	//
+	// After this block both paths present a uniform semantic to the pool
+	// service: req.Ranks == VOS target creators, req.UnavailableRanks ==
+	// pool-map-only DOWNOUT entries, and the two lists are disjoint.
+	unavailSet := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(req.GetUnavailableRanks()))
+	if ranksRequested {
+		downoutSet := ranklist.RankSetFromRanks(downoutRanks)
+		active := make([]uint32, 0, len(req.Ranks))
 		for _, r := range req.Ranks {
-			if _, ok := downoutSet[r]; ok {
-				downout = append(downout, r)
+			if downoutSet.Contains(ranklist.Rank(r)) {
+				unavailSet.Add(ranklist.Rank(r))
 			} else {
 				active = append(active, r)
 			}
 		}
 		req.Ranks = active
+		req.UnavailableRanks = ranklist.RanksToUint32(unavailSet.Ranks())
+		if len(req.Ranks) == 0 {
+			return nil, errors.Errorf(
+				"pool create requires at least one joined target rank; "+
+					"none of the requested ranks (%s) are currently joined",
+				unavailSet.String())
+		}
+	} else if !numRanksRequested && unavailSet.Count() == 0 {
+		for _, r := range downoutRanks {
+			unavailSet.Add(r)
+		}
+		req.UnavailableRanks = ranklist.RanksToUint32(unavailSet.Ranks())
 	}
-	req.UnavailableRanks = downout
 
-	// Clamp the maximum allowed svc replicas to the smaller of requested
-	// storage ranks or MaxPoolServiceReps. DOWNOUT ranks are pool-map-only
-	// unless they were explicitly present in req.Ranks; only subtract overlaps.
+	// Clamp the maximum allowed svc replicas to the smaller of active target
+	// ranks or MaxPoolServiceReps. req.Ranks and req.UnavailableRanks are
+	// disjoint after the split block above, so the active count is simply
+	// len(req.Ranks); poolCreateActiveRankCount handles any residual overlap
+	// defensively.
 	activeRankCount := poolCreateActiveRankCount(req)
 	maxSvcReps := func(allRanks int) uint32 {
 		if allRanks > MaxPoolServiceReps {
@@ -571,11 +585,6 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 	}()
 
-	// IncludeSystemUnavailableRanks is a control-plane-only hint used above to decide
-	// whether to auto-include system DOWNOUT ranks in the pool map. Clear it
-	// before invoking the engine so the flag does not leak across the dRPC
-	// boundary; the engine ignores this field.
-	req.IncludeSystemUnavailableRanks = false
 	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodPoolCreate, req)
 	if err != nil {
 		svc.log.Errorf("pool create dRPC call failed: %s", err)

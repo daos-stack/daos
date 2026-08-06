@@ -3172,16 +3172,17 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 	devStateNew := storage.NvmeStateNew
 
 	for name, tc := range map[string]struct {
-		hostsConfigArray  []MockHostStorageConfig
-		tgtRanks          []ranklist.Rank
-		memberStates      map[ranklist.Rank]system.MemberState
-		memRatio          float32
-		queryError        error
-		expCreateReqRanks []ranklist.Rank
-		expScmBytes       uint64
-		expNvmeBytes      uint64
-		expError          error
-		expDebug          string
+		hostsConfigArray    []MockHostStorageConfig
+		tgtRanks            []ranklist.Rank
+		memberStates        map[ranklist.Rank]system.MemberState
+		memRatio            float32
+		queryError          error
+		expCreateReqRanks   []ranklist.Rank
+		expUnavailableRanks []ranklist.Rank
+		expScmBytes         uint64
+		expNvmeBytes        uint64
+		expError            error
+		expDebug            string
 	}{
 		"single server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3684,7 +3685,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			},
 			expError: errors.New("No SCM storage space available"),
 		},
-		"requested stopped rank retained but not scanned": {
+		"all requested ranks non-joined": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3696,7 +3697,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			memberStates: map[ranklist.Rank]system.MemberState{
 				0: system.MemberStateStopped,
 			},
-			expError: errors.New("No SCM storage space available"),
+			expError: errors.New("none of the requested ranks"),
 		},
 		"multiple requested ranks with downout retained but not scanned": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3765,7 +3766,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			expScmBytes:  100 * humanize.GByte,
 			expNvmeBytes: humanize.TByte,
 		},
-		"no requested ranks; records joined ranks only": {
+		"no requested ranks; records joined ranks and all non-joined as downout": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3791,10 +3792,12 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				1: system.MemberStateJoined,
 				2: system.MemberStateStopped,
 				3: system.MemberStateExcluded,
+				4: system.MemberStateReady,
 			},
-			expCreateReqRanks: ranklist.RankList{0, 1},
-			expScmBytes:       100 * humanize.GByte,
-			expNvmeBytes:      humanize.TByte,
+			expCreateReqRanks:   ranklist.RankList{0, 1},
+			expUnavailableRanks: ranklist.RankList{2, 3, 4},
+			expScmBytes:         100 * humanize.GByte,
+			expNvmeBytes:        humanize.TByte,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -3866,6 +3869,11 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expCreateReqRanks, createReq.Ranks); diff != "" {
 				t.Fatalf("Unexpected ranks in create request (-want, +got):\n%s\n", diff)
+			}
+			if tc.expUnavailableRanks != nil {
+				if diff := cmp.Diff(tc.expUnavailableRanks, createReq.UnavailableRanks); diff != "" {
+					t.Fatalf("Unexpected unavailable ranks in create request (-want, +got):\n%s\n", diff)
+				}
 			}
 
 			test.AssertEqual(t, tc.expScmBytes, scmBytes,

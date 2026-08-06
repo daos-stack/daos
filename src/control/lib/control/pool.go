@@ -223,18 +223,19 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
-		UUID       uuid.UUID            `json:"uuid,omitempty"` // Optional UUID; auto-generate if not supplied
-		User       string               `json:"user"`
-		UserGroup  string               `json:"user_group"`
-		ACL        *AccessControlList   `json:"-"`
-		NumSvcReps uint32               `json:"num_svc_reps"`
-		Properties []*daos.PoolProperty `json:"-"`
-		TotalBytes uint64               `json:"total_bytes"` // Auto-sizing param
-		TierRatio  []float64            `json:"tier_ratio"`  // Auto-sizing param
-		NumRanks   uint32               `json:"num_ranks"`   // Auto-sizing param
-		Ranks      []ranklist.Rank      `json:"ranks"`       // Manual-sizing param
-		TierBytes  []uint64             `json:"tier_bytes"`  // Per-rank values
-		MemRatio   float32              `json:"mem_ratio"`   // mem_file_size:meta_blob_size
+		UUID             uuid.UUID            `json:"uuid,omitempty"` // Optional UUID; auto-generate if not supplied
+		User             string               `json:"user"`
+		UserGroup        string               `json:"user_group"`
+		ACL              *AccessControlList   `json:"-"`
+		NumSvcReps       uint32               `json:"num_svc_reps"`
+		Properties       []*daos.PoolProperty `json:"-"`
+		TotalBytes       uint64               `json:"total_bytes"`       // Auto-sizing param
+		TierRatio        []float64            `json:"tier_ratio"`        // Auto-sizing param
+		NumRanks         uint32               `json:"num_ranks"`         // Auto-sizing param
+		Ranks            []ranklist.Rank      `json:"ranks"`             // Manual-sizing param
+		UnavailableRanks []ranklist.Rank      `json:"unavailable_ranks"` // Pool-map-only DOWNOUT entries; merged with MS-populated set
+		TierBytes        []uint64             `json:"tier_bytes"`        // Per-rank values
+		MemRatio         float32              `json:"mem_ratio"`         // mem_file_size:meta_blob_size
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -314,14 +315,6 @@ func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCre
 		return
 	}
 
-	// Snapshot whether the caller left rank selection to the control plane
-	// before poolCreateReqChkSizes/getMaxPoolSize populates in.Ranks.
-	// This flag only controls auto-inclusion of system-wide unavailable ranks
-	// by the MS. Explicit rank requests can still include unavailable ranks,
-	// but those ranks are carried in the request rank list and split out by the
-	// MS rather than enabled by this flag.
-	includeSystemUnavailableRanks := len(in.Ranks) == 0
-
 	getMaxPoolSz := func(createReq *PoolCreateReq) (uint64, uint64, error) {
 		return getMaxPoolSize(ctx, rpcClient, createReq)
 	}
@@ -334,7 +327,6 @@ func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCre
 	if err = convert.Types(in, out); err != nil {
 		return
 	}
-	out.IncludeSystemUnavailableRanks = includeSystemUnavailableRanks
 
 	if out.Uuid == "" {
 		out.Uuid = uuid.New().String()
@@ -1309,40 +1301,77 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 	for _, member := range queryResp.Members {
 		switch member.State {
 		case system.MemberStateJoined:
+			// Joined ranks are eligible target-create candidates.
 			joinedRanks = append(joinedRanks, member.Rank)
-		case system.MemberStateExcluded, system.MemberStateAdminExcluded, system.MemberStateStopped:
+		case system.MemberStateUnknown:
+			// Not a real membership state; nothing to encode.
+		default:
+			// Every other known state (Ready/Excluded/AdminExcluded/Stopped/
+			// Stopping/Errored/Unresponsive/AwaitFormat/Starting/...) is
+			// treated as pool-map DOWNOUT. This mirrors the server-side use
+			// of `AllMemberFilter ^ MemberStateJoined` so client and
+			// management service agree on the DOWNOUT candidate set.
 			downoutRanks = append(downoutRanks, member.Rank)
 		}
 	}
 
-	// Refuse if any requested ranks are not known to the system. Use only joined ranks for the
-	// storage scan. If no ranks were requested, keep createReq.Ranks populated with the joined
-	// ranks only; the management service is authoritative for membership and will include
-	// system-wide DOWNOUT ranks in the pool map when include_system_unavailable_ranks is true.
-	// For explicit rank requests, keep the user's requested unavailable ranks in createReq.Ranks;
-	// the MS will split them into UnavailableRanks so they are pool-map-only DOWNOUT entries.
+	// Determine which ranks the storage scan should be restricted to. Only
+	// Joined ranks host storage; DOWNOUT ranks are pool-map-only entries.
+	//
+	// For an explicit rank request:
+	//   - Deduplicate via RankSet (natural ordering).
+	//   - Reject any rank that is neither joined nor known non-joined.
+	//   - Fail early if every requested rank is currently non-joined; the create
+	//     will fail anyway and this gives the caller a clear message.
+	//   - Scan storage on the subset of requested ranks that are joined.
+	//   - Do not overwrite any caller-supplied createReq.UnavailableRanks; the
+	//     management service will merge them with the non-joined ranks it
+	//     splits out of createReq.Ranks.
+	// For an implicit request (no Ranks): populate createReq.Ranks with the
+	// full joined set and createReq.UnavailableRanks with the full non-joined
+	// set, so the management service has a complete rank plan and does not
+	// need any auto-inclusion hint.
 	filterRanks := ranklist.RankList{}
 	if len(createReq.Ranks) == 0 {
-		filterRanks = joinedRanks
+		// Copy so downstream slices.Sort does not mutate joinedRanks.
+		filterRanks = append(ranklist.RankList{}, joinedRanks...)
 		createReq.Ranks = append(ranklist.RankList{}, joinedRanks...)
+		createReq.UnavailableRanks = append(ranklist.RankList{}, downoutRanks...)
 	} else {
-		knownRanks := make(ranklist.RankList, 0, len(joinedRanks)+len(downoutRanks))
-		knownRanks = append(knownRanks, joinedRanks...)
-		knownRanks = append(knownRanks, downoutRanks...)
+		// Use RankSet from the start for natural deduplication.
+		requestedSet := ranklist.RankSetFromRanks(createReq.Ranks)
 
-		for _, rank := range createReq.Ranks {
-			if !rank.InList(knownRanks) {
-				return 0, 0, errors.Errorf("specified rank %d is not a known system member", rank)
-			}
-			if rank.InList(joinedRanks) {
+		// Build the set of all known ranks (joined + any non-joined).
+		knownSet := ranklist.RankSetFromRanks(joinedRanks)
+		for _, rank := range downoutRanks {
+			knownSet.Add(rank)
+		}
+
+		// Refuse anything the system does not know about. Report every
+		// unknown rank in a single error to match the server-side pattern
+		// used by CheckRankMembership / FaultPoolInvalidRanks.
+		if invalid := ranklist.CheckRankMembership(knownSet.Ranks(), requestedSet.Ranks()); len(invalid) > 0 {
+			return 0, 0, errors.Errorf("specified ranks (%s) are not known system members",
+				ranklist.RankSetFromRanks(invalid).String())
+		}
+
+		// filterRanks = joined ∩ requested. Iterate joinedRanks so the
+		// storage scan order stays deterministic w.r.t. membership.
+		for _, rank := range joinedRanks {
+			if requestedSet.Contains(rank) {
 				filterRanks = append(filterRanks, rank)
 			}
 		}
+		if len(filterRanks) == 0 {
+			return 0, 0, errors.Errorf(
+				"pool create requires at least one joined target rank; "+
+					"none of the requested ranks (%s) are currently joined",
+				requestedSet.String())
+		}
+		// requestedSet.Ranks() is already deduplicated and sorted.
+		createReq.Ranks = requestedSet.Ranks()
 	}
 	slices.Sort(filterRanks)
-	if len(createReq.Ranks) > 0 {
-		createReq.Ranks = ranklist.RankSetFromRanks(createReq.Ranks).Ranks()
-	}
 	rpcClient.Debugf("requested/joined/downout/filter ranks: %v/%v/%v/%v", createReq.Ranks,
 		joinedRanks, downoutRanks, filterRanks)
 

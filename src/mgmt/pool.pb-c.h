@@ -200,21 +200,19 @@ struct  _Mgmt__PoolCreateReq
    */
   float mem_ratio;
   /*
-   * Ranks that are unavailable (excluded/admin-excluded/stopped); enter the pool map as DOWNOUT
+   * Ranks that are not currently joined (Ready/Excluded/AdminExcluded/Stopped/
+   * Stopping/Errored/Unresponsive/AwaitFormat/Starting/...).
+   * May be populated by either the client (auto rank-selection paths) or the
+   * management service; if both supply values, they are merged. Listed ranks
+   * enter the initial pool map as DOWNOUT and do NOT receive VOS/blob-store
+   * creation, so subsequent membership changes can address them by rank.
    */
   size_t n_unavailable_ranks;
   uint32_t *unavailable_ranks;
-  /*
-   * If true, the management service includes all system-known unavailable
-   * ranks as DOWNOUT pool-map entries. This is for auto/full-system rank
-   * selection only; explicit rank requests carry any user-selected
-   * unavailable ranks in unavailable_ranks instead.
-   */
-  protobuf_c_boolean include_system_unavailable_ranks;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL, 0, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL, 0, 0,NULL }
 
 
 /*

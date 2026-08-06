@@ -67,7 +67,27 @@ class AsymmetricPoolCreate(TestWithServers):
             failed, [], f"Rank {rank_to_stop} did not reach excluded state before pool create")
 
         pool = self.get_pool(connect=False)
+        self.assertIsNotNone(
+            pool.uuid, f"Pool create returned no UUID despite stopped rank {rank_to_stop}")
+
         query = pool.query(show_enabled=True)["response"]
+
+        # dmg pool query response exposes the pool map version as "version"
+        # (pi_map_ver in the engine). pool_layout_ver is the pool global
+        # upgrade version and is unrelated.
+        pool_map_ver = query.get("version")
+        self.assertEqual(
+            pool_map_ver, 1,
+            f"Initial pool map version should be 1, got {pool_map_ver}: {query}")
+
+        enabled = set(query.get("enabled_ranks", []) or [])
+        disabled = set(query.get("disabled_ranks", []) or [])
         self.assertIn(
-            rank_to_stop, query.get("disabled_ranks", []),
+            rank_to_stop, disabled,
             f"Stopped rank {rank_to_stop} not found in pool query disabled_ranks: {query}")
+        self.assertNotIn(
+            rank_to_stop, enabled,
+            f"Stopped rank {rank_to_stop} unexpectedly appears in enabled_ranks: {query}")
+        self.assertEqual(
+            enabled | disabled, set(all_ranks),
+            f"Initial pool map does not include every system rank: {query}")
