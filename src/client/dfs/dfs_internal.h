@@ -219,6 +219,10 @@ struct dfs {
 	uint64_t             pl_total_scm;
 	/** Cached total NVMe capacity for progressive-layout selection */
 	uint64_t             pl_total_nvme;
+	/** Pool map version the cached PL pool values above were queried at */
+	uint32_t             pl_map_ver;
+	/** serialize PL pool info refreshers so only one issues the pool query */
+	pthread_mutex_t      pl_refresh_lock;
 	/** Optional prefix to account for when resolving an absolute path */
 	char                *prefix;
 	daos_size_t          prefix_len;
@@ -500,6 +504,8 @@ file_truncate_zero(dfs_obj_t *obj, daos_handle_t th);
 int
 dfs_default_file_pl(dfs_t *dfs, daos_size_t chunk_size, daos_oclass_id_t *head_cid,
 		    daos_oclass_id_t *tail_cid, daos_size_t *split_off, bool *has_tail);
+void
+dfs_refresh_pl_pool_info(dfs_t *dfs);
 int
 get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr, bool check_empty);
 int

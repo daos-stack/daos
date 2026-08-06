@@ -185,6 +185,29 @@ Worked examples:
 - Do not recompute split_off per file or per I/O.
 - Existing files keep the policy effective at their creation time (unless a future explicit migration feature is added).
 
+### 6) Tuning constants and rationale
+
+The policy above depends on three tunables. All are initial heuristics chosen to keep the head
+compact while still scaling with pool size; they should be validated with rebuild and performance
+benchmarks and are the intended knobs to adjust.
+
+- **1000 targets (PL enable gate).** Below this a pool is too small to benefit from a compact
+  non-GX head: with few targets there is little placement diversity to exploit, and the metadata
+  and rebuild savings of a narrow head do not outweigh the added complexity of a second object. It
+  is a round order-of-magnitude threshold, not a hard boundary.
+
+- **0.2% (head_capacity_fraction, 0.002).** The fraction of per-target pool capacity budgeted to
+  head data before switching to the tail. It is deliberately conservative: it keeps the head small
+  enough to preserve the rebuild/metadata benefit while still giving a meaningful head region.
+  Lower values switch to the tail earlier (more compact); higher values keep more data in the head.
+
+- **Divide by 8 (head group compactness bias).** `g_raw = floor(max_groups_pool / 8)` starts the
+  head at roughly one-eighth of the pool's maximum scalable group count, keeping the head
+  materially narrower than the wide tail. Being a power of two, it composes cleanly with the
+  allowed group set `{1,2,4,6,8,12,16,32}`, and after clamping the head only reaches the maximum
+  of 32 groups on very large pools (`max_groups_pool >= 256`). A smaller divisor widens the head; a
+  larger one narrows it.
+
 ## On-Disk Metadata Design
 
 ### Existing Inode Entry (base fields)
