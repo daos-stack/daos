@@ -1189,6 +1189,13 @@ ival_drop_inode(struct dfuse_inode_entry *inode);
 int
 ival_update_inode(struct dfuse_inode_entry *inode, double timeout);
 
+/* Queue a dentry for invalidation by the invalidation thread.  Request handlers must use this
+ * rather than calling fuse_lowlevel_notify_inval_entry() directly, which deadlocks against a
+ * client holding the parent inode lock.
+ */
+int
+ival_dentry_invalidate(fuse_ino_t parent, const char *name);
+
 int
 ival_init(struct dfuse_info *dfuse_info);
 

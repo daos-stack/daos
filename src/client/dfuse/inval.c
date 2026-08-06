@@ -113,6 +113,27 @@ struct inode_core {
  */
 #define EVICT_COUNT 8
 
+/* A dentry queued for immediate invalidation.
+ *
+ * fuse_lowlevel_notify_inval_entry() blocks in the kernel whilst it acquires the parent inode
+ * lock, so it must never be called from a fuse service thread.  A client performing any
+ * operation which takes that same lock (mkdir, rename, unlink, ...) holds it whilst waiting for
+ * dfuse to reply, so a service thread which blocks on it can never make progress.  With enough
+ * concurrency every service thread ends up blocked this way and the whole daemon deadlocks.
+ *
+ * Request handlers therefore queue the invalidation here and the invalidation thread performs
+ * the notify.  The invalidation becomes asynchronous, so a lookup racing with it may briefly
+ * still see the old dentry, but the queue is drained immediately on wakeup so the window is
+ * very small - and a stale dentry expires on its own, whereas the deadlock does not.
+ */
+struct ival_now_entry {
+	d_list_t   ine_list;
+	fuse_ino_t ine_parent;
+	char       ine_name[NAME_MAX + 1];
+};
+
+static D_LIST_HEAD(ival_now_list);
+
 static pthread_mutex_t   ival_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool              ival_stop;
 static pthread_t         ival_thread;
@@ -200,6 +221,68 @@ out:
 	return (idx == EVICT_COUNT);
 }
 
+/* Queue a dentry for invalidation by the invalidation thread.
+ *
+ * Safe to call from a fuse request handler - see struct ival_now_entry above for why calling
+ * fuse_lowlevel_notify_inval_entry() directly from one is not.
+ */
+int
+ival_dentry_invalidate(fuse_ino_t parent, const char *name)
+{
+	struct ival_now_entry *ine;
+
+	D_ALLOC_PTR(ine);
+	if (ine == NULL)
+		return ENOMEM;
+
+	ine->ine_parent = parent;
+	strncpy(ine->ine_name, name, NAME_MAX + 1);
+	ine->ine_name[NAME_MAX] = '\0';
+
+	D_MUTEX_LOCK(&ival_lock);
+	d_list_add_tail(&ine->ine_list, &ival_now_list);
+	D_MUTEX_UNLOCK(&ival_lock);
+
+	sem_post(&ival_sem);
+
+	return 0;
+}
+
+/* Perform any queued immediate invalidations.  Runs on the invalidation thread only. */
+static void
+ival_drain_now_list(void)
+{
+	while (1) {
+		struct ival_now_entry *ine;
+		int                    rc;
+
+		D_MUTEX_LOCK(&ival_lock);
+		ine = d_list_pop_entry(&ival_now_list, struct ival_now_entry, ine_list);
+		D_MUTEX_UNLOCK(&ival_lock);
+
+		if (ine == NULL)
+			return;
+
+		if (ival_data.session_dead) {
+			D_FREE(ine);
+			continue;
+		}
+
+		DFUSE_TRA_DEBUG(&ival_data, "Invalidating entry %#lx " DF_DE, ine->ine_parent,
+				DP_DE(ine->ine_name));
+
+		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ine->ine_parent,
+						      ine->ine_name,
+						      strnlen(ine->ine_name, NAME_MAX));
+		if (rc && rc != -ENOENT && rc != -EBADF)
+			DHS_ERROR(&ival_data, -rc, "notify_inval_entry() failed");
+		if (rc == -EBADF)
+			ival_data.session_dead = true;
+
+		D_FREE(ine);
+	}
+}
+
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
  * over all newly expired dentries.
  */
@@ -226,6 +309,8 @@ ival_thread_fn(void *arg)
 			if (errno != ETIMEDOUT)
 				DS_ERROR(rc, "sem_wait");
 		}
+
+		ival_drain_now_list();
 
 		while (ival_loop(&sleep_time))
 			;
@@ -320,6 +405,13 @@ void
 ival_fini()
 {
 	struct dfuse_time_entry *dte, *dtep;
+	struct ival_now_entry   *ine;
+
+	/* Discard anything still queued for immediate invalidation.  The thread has stopped by
+	 * this point so there is nothing left to perform these.
+	 */
+	while ((ine = d_list_pop_entry(&ival_now_list, struct ival_now_entry, ine_list)) != NULL)
+		D_FREE(ine);
 
 	/* Walk the list, oldest first */
 	d_list_for_each_entry_safe(dte, dtep, &ival_data.time_entry_list, dte_list) {

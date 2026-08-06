@@ -50,18 +50,21 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 * If the xattr is to set a UNS entry point, and dentry_dir
 		 * caching is enabled then invalidate the dentry here, to force
 		 * a lookup which will check the xattr and return the linked
-		 * container.  The fuse header says this potentially deadlocks
-		 * however it does appear to work, and calling this after the
-		 * reply will introduce a race condition that future lookups
-		 * will be skipped.
+		 * container.
+		 *
+		 * This must not call fuse_lowlevel_notify_inval_entry() directly: it blocks in
+		 * the kernel taking the parent inode lock, which a concurrent mkdir/rename in
+		 * that directory holds whilst waiting for dfuse to reply.  Doing so from this
+		 * service thread deadlocks the whole daemon once every service thread is stuck
+		 * this way, which is exactly what concurrent UNS container creates into one
+		 * directory produce.  Queue it for the invalidation thread instead.
 		 */
 		if (duns_attr && inode->ie_dfs->dfc_dentry_dir_timeout > 0) {
-			struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+			int rcq;
 
-			rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
-							      inode->ie_parent, inode->ie_name,
-							      strnlen(inode->ie_name, NAME_MAX));
-			DFUSE_TRA_INFO(inode, "inval_entry() rc is %d", rc);
+			rcq = ival_dentry_invalidate(inode->ie_parent, inode->ie_name);
+			if (rcq != 0)
+				DHS_ERROR(inode, rcq, "Unable to queue dentry invalidation");
 		}
 		DFUSE_REPLY_ZERO(inode, req);
 		return;
