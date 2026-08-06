@@ -722,7 +722,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
 	if (daos_obj_id_is_nil(roots->cr_oids[0]) || daos_obj_id_is_nil(roots->cr_oids[1])) {
 		D_ERROR("Invalid superblock or root object ID\n");
-		D_GOTO(err_dfs, rc = EIO);
+		D_GOTO(err_mutex, rc = EIO);
 	}
 
 	dfs->super_oid       = roots->cr_oids[0];
@@ -733,7 +733,7 @@ dfs_mount_int(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epoc
 	rc = open_sb(coh, false, false, omode, dfs->super_oid, &dfs->attr, &dfs->super_oh,
 		     &dfs->layout_v);
 	if (rc)
-		D_GOTO(err_dfs, rc);
+		D_GOTO(err_mutex, rc);
 
 	/** set oid hints for files and dirs */
 	if (dfs->attr.da_hints[0] != 0) {
@@ -838,6 +838,9 @@ err_root:
 	daos_obj_close(dfs->root.oh, NULL);
 err_super:
 	daos_obj_close(dfs->super_oh, NULL);
+err_mutex:
+	D_MUTEX_DESTROY(&dfs->pl_refresh_lock);
+	D_MUTEX_DESTROY(&dfs->lock);
 err_dfs:
 	D_FREE(dfs);
 err_prop:
