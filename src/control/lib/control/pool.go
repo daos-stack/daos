@@ -1368,9 +1368,11 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 					"none of the requested ranks (%s) are currently joined",
 				requestedSet.String())
 		}
-		// requestedSet.Ranks() is already deduplicated and sorted.
+		// requestedSet.Ranks() deduplicates the explicit request.
 		createReq.Ranks = requestedSet.Ranks()
 	}
+	slices.Sort(createReq.Ranks)
+	slices.Sort(createReq.UnavailableRanks)
 	slices.Sort(filterRanks)
 	rpcClient.Debugf("requested/joined/downout/filter ranks: %v/%v/%v/%v", createReq.Ranks,
 		joinedRanks, downoutRanks, filterRanks)
