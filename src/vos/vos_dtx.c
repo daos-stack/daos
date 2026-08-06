@@ -1293,8 +1293,14 @@ vos_dtx_extend_cmt_table(struct vos_container *cont)
 	umem_off_t              dbd_off = UMOFF_NULL;
 	int                     rc;
 
+	/* NO_ABORT: on ENOSPC the fallback below (vos_dtx_reuse_cmt_blob)
+	 * keeps working inside the same transaction; a plain alloc failure
+	 * would have aborted the tx and any further tx_add would be a fatal
+	 * usage error in the allocator (engine abort).
+	 */
 	if (!DAOS_FAIL_CHECK(DAOS_DTX_NOSPACE_NOREFRESH))
-		dbd_off = umem_zalloc(umm, DTX_CMT_BLOB_SIZE);
+		dbd_off = umem_alloc_verb(umm, UMEM_FLAG_ZERO | UMEM_FLAG_NO_ABORT,
+					  DTX_CMT_BLOB_SIZE, UMEM_DEFAULT_MBKT_ID);
 
 	if (UMOFF_IS_NULL(dbd_off))
 		return vos_dtx_reuse_cmt_blob(cont);

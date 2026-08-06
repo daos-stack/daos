@@ -806,6 +806,8 @@ pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned i
 		pflags |= POBJ_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= POBJ_FLAG_NO_FLUSH;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= POBJ_XALLOC_NO_ABORT;
 	return umem_id2off(umm, pmemobj_tx_xalloc(size, type_num, pflags));
 }
 
@@ -1244,6 +1246,8 @@ bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned i
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= DAV_XALLOC_NO_ABORT;
 	return dav_tx_xalloc(size, type_num, pflags);
 }
 
@@ -1483,6 +1487,8 @@ bmem_tx_alloc_v2(struct umem_instance *umm, size_t size, uint64_t flags, unsigne
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= DAV_XALLOC_NO_ABORT;
 	if (mbkt_id != 0)
 		pflags |= DAV_EZONE_ID(mbkt_id);
 	return dav_tx_alloc_v2(size, type_num, pflags);

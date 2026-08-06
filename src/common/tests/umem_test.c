@@ -360,6 +360,58 @@ done:
 	assert_int_equal(rc, 0);
 }
 
+/* A failed allocation with UMEM_FLAG_NO_ABORT must leave the transaction
+ * alive so in-tx fallbacks (e.g. vos_dtx_reuse_cmt_blob) keep working;
+ * without the flag the failure aborts the TX and any further tx_add is a
+ * fatal usage error in the allocator.
+ */
+static void
+test_alloc_no_abort(void **state)
+{
+	struct test_arg		*arg = *state;
+	struct umem_instance	*umm = utest_utx2umm(arg->ta_utx);
+	int			*value;
+	umem_off_t		 umoff = 0;
+	umem_off_t		 huge;
+	int			 rc;
+
+	rc = utest_tx_begin(arg->ta_utx);
+	if (rc != 0)
+		goto done;
+
+	/* Larger than the pool: must fail, but must NOT abort the TX */
+	huge = umem_alloc_verb(umm, UMEM_FLAG_ZERO | UMEM_FLAG_NO_ABORT,
+			       POOL_SIZE, UMEM_DEFAULT_MBKT_ID);
+	if (!UMOFF_IS_NULL(huge)) {
+		print_message("huge allocation unexpectedly succeeded\n");
+		rc = 1;
+		goto end;
+	}
+
+	/* TX still alive: alloc + snapshot + write must all work */
+	umoff = umem_zalloc(umm, 4);
+	if (UMOFF_IS_NULL(umoff)) {
+		print_message("small alloc failed after NO_ABORT failure\n");
+		rc = 1;
+		goto end;
+	}
+
+	value = umem_off2ptr(umm, umoff);
+	rc = umem_tx_add_ptr(umm, value, 4);
+	if (rc != 0) {
+		print_message("tx_add_ptr failed after NO_ABORT failure\n");
+		rc = 1;
+		goto end;
+	}
+	*value = 42;
+
+	rc = umem_free(umm, umoff);
+end:
+	rc = utest_tx_end(arg->ta_utx, rc);
+done:
+	assert_int_equal(rc, 0);
+}
+
 static int
 flush_prep(struct umem_store *store, struct umem_store_iod *iod, daos_handle_t *fh)
 {
@@ -757,6 +809,7 @@ main(int argc, char **argv)
 	    {"UMEM002: Test null flags vmem", test_invalid_flags, setup_vmem, teardown_vmem},
 	    {"UMEM003: Test alloc pmem", test_alloc, setup_pmem, teardown_pmem},
 	    {"UMEM004: Test alloc vmem", test_alloc, setup_vmem, teardown_vmem},
+	    {"UMEM010: Test alloc NO_ABORT pmem", test_alloc_no_abort, setup_pmem, teardown_pmem},
 	    {"UMEM005: Test page cache", test_page_cache, NULL, NULL},
 	    {"UMEM006: Test page cache many pages", test_many_pages, NULL, NULL},
 	    {"UMEM007: Test page cache many writes", test_many_writes, NULL, NULL},
