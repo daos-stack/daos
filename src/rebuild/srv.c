@@ -1036,10 +1036,10 @@ ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 		       force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
 	}
 
-	/* admin stop command does not usually terminate op:Fail_reclaim, but it is always
-	 * remembered to avoid retrying the original op:Rebuild.
-	 */
-	if (rgt->rgt_abort || (rgt->rgt_opc == RB_OP_FAIL_RECLAIM))
+	/* Only remember the admin-stop (to suppress retry of the original op:Rebuild) when the
+	 * stop was actually honored. A rejected stop (rc != 0, e.g. -DER_NO_PERM because another
+	 * rebuild is queued) must NOT latch rgt_stop_admin. */
+	if (rgt->rgt_abort || (rgt->rgt_opc == RB_OP_FAIL_RECLAIM && rc == 0))
 		rgt->rgt_stop_admin = 1;
 	rgt_put(rgt);
 	return rc;
@@ -1874,6 +1874,65 @@ rebuild_retryable_err(int error)
 		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE);
 }
 
+static bool
+rebuild_tgt_in_list(struct pool_target_id_list *tgts, uint32_t tgt_id)
+{
+	int i;
+
+	for (i = 0; tgts != NULL && i < tgts->pti_number; i++) {
+		if (tgts->pti_ids[i].pti_id == tgt_id)
+			return true;
+	}
+
+	return false;
+}
+
+static void
+rebuild_log_finish_scope(struct ds_pool *pool, struct rebuild_task *task,
+			 struct rebuild_global_pool_tracker *rgt)
+{
+	struct pool_target *tgts;
+	unsigned int        tgts_nr;
+	unsigned int        i;
+
+	D_DEBUG(DB_REBUILD, DF_RB " finish scope check: task_ver=%u dst_tgts=%d pool_map_ver=%u",
+		DP_RB_RGT(rgt), task->dst_map_ver, task->dst_tgts.pti_number, pool->sp_map_version);
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+
+	for (i = 0; i < task->dst_tgts.pti_number; i++) {
+		struct pool_target *target = NULL;
+		int                 rc;
+
+		rc = pool_map_find_target(pool->sp_map, task->dst_tgts.pti_ids[i].pti_id, &target);
+		if (rc == 1 && target != NULL)
+			D_DEBUG(DB_REBUILD, DF_RB " finish dst_tgt " DF_TARGET, DP_RB_RGT(rgt),
+				DP_TARGET(target));
+		else
+			D_ERROR(DF_RB " finish dst_tgt id %u not found in pool map", DP_RB_RGT(rgt),
+				task->dst_tgts.pti_ids[i].pti_id);
+	}
+
+	tgts    = pool_map_targets(pool->sp_map);
+	tgts_nr = pool_map_target_nr(pool->sp_map);
+	for (i = 0; i < tgts_nr; i++) {
+		struct pool_target *target = &tgts[i];
+
+		if (target->ta_comp.co_status != PO_COMP_ST_DOWN &&
+		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
+			continue;
+		if (target->ta_comp.co_fseq == 0 || target->ta_comp.co_fseq > task->dst_map_ver)
+			continue;
+		if (rebuild_tgt_in_list(&task->dst_tgts, target->ta_comp.co_id))
+			continue;
+
+		D_WARN(DF_RB " covered DOWN/DRAIN target not in finish dst_tgts: " DF_TARGET,
+		       DP_RB_RGT(rgt), DP_TARGET(target));
+	}
+
+	ABT_rwlock_unlock(pool->sp_lock);
+}
+
 static void
 retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker *rgt,
 		   daos_rebuild_opc_t *opc)
@@ -1933,28 +1992,6 @@ retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker
 	*opc = RB_OP_REBUILD;
 }
 
-static void
-check_to_retry_orig_rebuild(struct rebuild_task *task, struct rebuild_global_pool_tracker *rgt)
-{
-	/* Only called for Fail_reclaim (whether it fails or succeeds) to know if the original
-	 * op:Rebuild should be retried later when Fail_reclaim is (successfully) done.
-	 */
-	if (task->dst_rebuild_op != RB_OP_FAIL_RECLAIM)
-		return;
-
-	/* If this Fail_reclaim was stopped, and the original Rebuild was not stopped,
-	 * we no longer want the original Rebuild to be retried.
-	 */
-	if (rgt->rgt_stop_admin && (task->dst_retry_rebuild_op != RB_OP_NONE)) {
-		D_INFO(
-		    DF_RB
-		    ": rebuild stop command during Fail_reclaim - do NOT retry original %u(%s)\n",
-		    DP_RB_RGT(rgt), task->dst_retry_rebuild_op,
-		    RB_OP_STR(task->dst_retry_rebuild_op));
-		task->dst_retry_rebuild_op = RB_OP_NONE;
-	}
-}
-
 static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			       struct rebuild_global_pool_tracker *rgt, uint32_t obj_reclaim_ver,
@@ -1995,9 +2032,6 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			  DP_UUID(task->dst_pool_uuid), DP_RC(rc1));
 	}
 
-	/* see if we got stop during Fail_reclaim, configure whether to retry original rebuild */
-	check_to_retry_orig_rebuild(task, rgt);
-
 	if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0) {
 		daos_rebuild_opc_t retry_opc = 0;
 
@@ -2014,11 +2048,14 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		/* reclaim or fail_reclaim failed - retry */
 		if (task->dst_rebuild_op == RB_OP_RECLAIM ||
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
-			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
-						 task->dst_new_layout_version, &task->dst_tgts,
-						 task->dst_rebuild_op, task->dst_retry_rebuild_op,
-						 task->dst_retry_map_ver, task->dst_stop_admin,
-						 task, delay_sec);
+			/* carry a stop latched during this Fail_reclaim across its retry so a
+			 * later successful pass still parks the original rebuild (delay=-1)
+			 */
+			rc = ds_rebuild_schedule(
+			    pool, task->dst_map_ver, rgt->rgt_stable_epoch,
+			    task->dst_new_layout_version, &task->dst_tgts, task->dst_rebuild_op,
+			    task->dst_retry_rebuild_op, task->dst_retry_map_ver,
+			    task->dst_stop_admin || rgt->rgt_stop_admin, task, delay_sec);
 			DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
 				  DF_RB ": errno " DF_RC ", schedule retry %u(%s)", DP_RB_RGT(rgt),
 				  DP_RC(rgt->rgt_status.rs_errno), task->dst_rebuild_op,
@@ -2298,6 +2335,7 @@ done:
 			goto iv_stop;
 
 		if (task->dst_rebuild_op == RB_OP_REBUILD) {
+			rebuild_log_finish_scope(pool, task, rgt);
 			rc = ds_pool_tgt_finish_rebuild(pool->sp_uuid, &task->dst_tgts,
 							&obj_reclaim_ver);
 		}
