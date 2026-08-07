@@ -967,3 +967,52 @@ func SystemCheckDeregPool(ctx context.Context, rpcClient UnaryInvoker, req *Syst
 
 	return resp, nil
 }
+
+// CheckLeaderReq is a request for a message to be sent to the checker leader.
+type CheckLeaderReq struct {
+	unaryRequest
+	msRequest
+
+	mgmtpb.CheckLeaderReq
+}
+
+// CheckLeaderResp contains the response from the checker leader.
+type CheckLeaderResp struct {
+	mgmtpb.CheckLeaderResp
+}
+
+// CheckLeaderForward forwards a request to the checker leader.
+//
+// NB: This is an inter-server RPC. It will only be successful when it is sent to the checker leader.
+func CheckLeaderForward(ctx context.Context, rpcClient UnaryInvoker, req *CheckLeaderReq) (*CheckLeaderResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Req == nil {
+		return nil, errors.Errorf("no forwarded request included in %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).CheckLeaderDrpc(ctx, &req.CheckLeaderReq)
+	})
+
+	rpcClient.Debugf("DAOS check leader forward request: %s", pbutil.Debug(&req.CheckLeaderReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*mgmtpb.CheckLeaderResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+	return &CheckLeaderResp{
+		CheckLeaderResp: *pbResp,
+	}, nil
+}
