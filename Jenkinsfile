@@ -524,7 +524,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal
@@ -549,7 +549,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
+                            stage_tags: 'hw,medium,provider,-cb',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
