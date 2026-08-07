@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,22 +47,15 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value, size, flags);
 	if (rc == 0) {
-		/* Optionally remove the dentry to force a new lookup on access.
-		 * If the xattr is to set a UNS entry point, and dentry_dir
-		 * caching is enabled then invalidate the dentry here, to force
-		 * a lookup which will check the xattr and return the linked
-		 * container.  The fuse header says this potentially deadlocks
-		 * however it does appear to work, and calling this after the
-		 * reply will introduce a race condition that future lookups
-		 * will be skipped.
+		/* Setting a UNS entry point renumbers the inode, so invalidate the dentry to
+		 * force a fresh lookup.  Safe out of order: a racing lookup holds the parent
+		 * shared while it instantiates, the invalidation takes it exclusive, so a stale
+		 * dentry is always in place before the queued invalidation kills it.
 		 */
 		if (duns_attr && inode->ie_dfs->dfc_dentry_dir_timeout > 0) {
 			struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 
-			rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
-							      inode->ie_parent, inode->ie_name,
-							      strnlen(inode->ie_name, NAME_MAX));
-			DFUSE_TRA_INFO(inode, "inval_entry() rc is %d", rc);
+			dfuse_notify_inval_entry(dfuse_info, inode->ie_parent, inode->ie_name);
 		}
 		DFUSE_REPLY_ZERO(inode, req);
 		return;

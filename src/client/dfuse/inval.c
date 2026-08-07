@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +11,8 @@
 #include <math.h>
 
 #include "dfuse_common.h"
+/* Allow this file to call the raw fuse_lowlevel_notify_* symbols. */
+#define DFUSE_NOTIFY_RAW_OK
 #include "dfuse.h"
 
 /* Evict inodes based on timeout.
@@ -92,7 +95,7 @@ struct dfuse_time_entry {
 struct dfuse_ival {
 	d_list_t             time_entry_list;
 	struct fuse_session *session;
-	bool                 session_dead;
+	ATOMIC bool          session_dead;
 };
 
 /* The core data from struct dfuse_inode_entry.  No additional inode references are held on inodes
@@ -180,7 +183,7 @@ out:
 	DFUSE_TRA_DEBUG(&ival_data, "Unlocking, allowing to sleep for %d seconds", *sleep_time);
 	D_MUTEX_UNLOCK(&ival_lock);
 
-	if (idx == 0 || ival_data.session_dead)
+	if (idx == 0 || atomic_load_relaxed(&ival_data.session_dead))
 		return false;
 
 	for (int i = 0; i < idx; i++) {
@@ -194,7 +197,7 @@ out:
 		if (rc && rc != -ENOENT && rc != -EBADF)
 			DHS_ERROR(&ival_data, -rc, "notify_inval_entry() failed");
 		if (rc == -EBADF)
-			ival_data.session_dead = true;
+			atomic_store_relaxed(&ival_data.session_dead, true);
 	}
 
 	return (idx == EVICT_COUNT);
@@ -236,6 +239,315 @@ ival_thread_fn(void *arg)
 	return NULL;
 }
 
+/* Advisory reverse notifications.
+ *
+ * The fuse_lowlevel_notify_*() calls block in the kernel on inode locks that in-flight requests
+ * hold while waiting on dfuse, so request handlers must never issue one directly; they enqueue
+ * here and a dedicated thread delivers.  Nothing waits on delivery: a stalled or dropped entry
+ * leaves a dentry cached until its normal timeout, the same as a failed kernel call.  Duplicate
+ * queued entries coalesce; an entry leaves the coalesce index when popped, before delivery, so
+ * an enqueue racing delivery is never absorbed into a stale notification.
+ */
+enum notify_kind {
+	NOTIFY_INVAL_ENTRY,
+	NOTIFY_DELETE,
+	NOTIFY_INVAL_INODE,
+};
+
+/* Queued by copy; the source inode may be released once enqueued */
+struct notify_entry {
+	d_list_t         ne_list;
+	d_list_t         ne_hlist; /* coalesce bucket, valid only while queued */
+	enum notify_kind ne_kind;
+	fuse_ino_t       ne_parent;
+	fuse_ino_t       ne_ino;
+	char             ne_name[NAME_MAX + 1];
+	size_t           ne_namelen;
+};
+
+/* Drop rather than grow without bound; invalidation is advisory */
+#define NOTIFY_QUEUE_MAX        16384
+
+/* Depth at which delivery is judged stalled rather than merely busy */
+#define NOTIFY_CONGEST_HIGH     (NOTIFY_QUEUE_MAX / 2)
+
+#define NOTIFY_COALESCE_BUCKETS 4096
+
+static pthread_mutex_t     notify_lock = PTHREAD_MUTEX_INITIALIZER;
+static d_list_t            notify_queue;
+static d_list_t            notify_coalesce[NOTIFY_COALESCE_BUCKETS];
+static sem_t               notify_sem;
+static bool                notify_stop;
+static unsigned int        notify_queued;
+static pthread_t           notify_thread;
+static struct d_slab_type *notify_slab;
+
+/* Count of enqueues seen at/above NOTIFY_CONGEST_HIGH; gates the congestion warning rate.
+ * Under notify_lock.
+ */
+static uint64_t            notify_congest_total;
+
+/* Trace identity; carries dfuse_info for the teardown paths, which take no arguments */
+static struct dfuse_notify {
+	struct dfuse_info *dn_info;
+} notify_data;
+
+/* FNV-1a over the coalesce key; 64-bit inos are folded as two 32-bit halves */
+static uint32_t
+notify_hash(enum notify_kind kind, fuse_ino_t parent, fuse_ino_t ino, const char *name,
+	    size_t namelen)
+{
+	uint32_t h = 2166136261u;
+	size_t   i;
+
+	h = (h ^ (uint32_t)kind) * 16777619u;
+	h = (h ^ (uint32_t)parent) * 16777619u;
+	h = (h ^ (uint32_t)(parent >> 32)) * 16777619u;
+	h = (h ^ (uint32_t)ino) * 16777619u;
+	h = (h ^ (uint32_t)(ino >> 32)) * 16777619u;
+	for (i = 0; i < namelen; i++)
+		h = (h ^ (unsigned char)name[i]) * 16777619u;
+
+	return h % NOTIFY_COALESCE_BUCKETS;
+}
+
+/* Must be called with notify_lock held. */
+static struct notify_entry *
+notify_coalesce_find(enum notify_kind kind, fuse_ino_t parent, fuse_ino_t ino, const char *name,
+		     size_t namelen, uint32_t bucket)
+{
+	struct notify_entry *ne;
+
+	d_list_for_each_entry(ne, &notify_coalesce[bucket], ne_hlist) {
+		if (ne->ne_kind != kind || ne->ne_parent != parent || ne->ne_ino != ino)
+			continue;
+		if (ne->ne_namelen != namelen)
+			continue;
+		if (namelen != 0 && memcmp(ne->ne_name, name, namelen) != 0)
+			continue;
+		return ne;
+	}
+
+	return NULL;
+}
+
+/* Must be called with notify_lock held. */
+static struct notify_entry *
+notify_dequeue_locked(void)
+{
+	struct notify_entry *ne;
+
+	if (d_list_empty(&notify_queue))
+		return NULL;
+
+	ne = d_list_entry(notify_queue.next, struct notify_entry, ne_list);
+	d_list_del(&ne->ne_list);
+	d_list_del(&ne->ne_hlist);
+	notify_queued--;
+
+	return ne;
+}
+
+/* Discard everything queued, at stop or after EBADF.  Must be called with notify_lock held. */
+static void
+notify_drain_locked(void)
+{
+	struct notify_entry *ne, *nep;
+	unsigned int         count = 0;
+
+	d_list_for_each_entry_safe(ne, nep, &notify_queue, ne_list) {
+		d_list_del(&ne->ne_list);
+		d_list_del(&ne->ne_hlist);
+		d_slab_release(notify_slab, ne);
+		count++;
+	}
+	notify_queued = 0;
+
+	if (count == 0)
+		return;
+
+	atomic_fetch_add_relaxed(&notify_data.dn_info->di_notify_dropped, count);
+	DFUSE_TRA_DEBUG(&notify_data, "Drained %u queued notifications", count);
+}
+
+/* Rate-limited: a mass drop must not flood the log */
+static void
+notify_drop(struct dfuse_info *dfuse_info, enum notify_kind kind, fuse_ino_t parent)
+{
+	uint64_t total;
+
+	total = atomic_fetch_add_relaxed(&dfuse_info->di_notify_dropped, 1) + 1;
+
+	if (total == 1 || (total % 1000) == 0)
+		DFUSE_TRA_WARNING(&notify_data,
+				  "Dropped advisory notify kind %d parent %#lx, %lu total", kind,
+				  parent, total);
+}
+
+/* Rate-limited: sustained congestion must not flood the log.  Called with notify_lock held. */
+static void
+notify_congest_warn(unsigned int depth)
+{
+	notify_congest_total++;
+
+	if (notify_congest_total == 1 || (notify_congest_total % 4096) == 0)
+		DFUSE_TRA_WARNING(&notify_data, "Notify queue congested: depth %u", depth);
+}
+
+/* Blocking here is expected; only the notify thread runs this */
+static void
+notify_run(struct notify_entry *ne)
+{
+	int rc = 0;
+
+	switch (ne->ne_kind) {
+	case NOTIFY_INVAL_ENTRY:
+		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ne->ne_parent, ne->ne_name,
+						      ne->ne_namelen);
+		break;
+	case NOTIFY_DELETE:
+		rc = fuse_lowlevel_notify_delete(ival_data.session, ne->ne_parent, ne->ne_ino,
+						 ne->ne_name, ne->ne_namelen);
+		break;
+	case NOTIFY_INVAL_INODE:
+		rc = fuse_lowlevel_notify_inval_inode(ival_data.session, ne->ne_ino, 0, 0);
+		break;
+	}
+
+	/* Session is gone; latch (shared with ival_loop) and let the loop drain */
+	if (rc == -EBADF) {
+		atomic_store_relaxed(&ival_data.session_dead, true);
+		atomic_fetch_add_relaxed(&notify_data.dn_info->di_notify_dropped, 1);
+		return;
+	}
+
+	/* ENOENT/ENOTDIR just mean nothing was cached; any other error is unexpected and does
+	 * not count as delivered.
+	 */
+	if (rc != 0 && rc != -ENOENT && rc != -ENOTDIR) {
+		DHS_ERROR(&notify_data, -rc, "notify() failed, kind %d parent %#lx", ne->ne_kind,
+			  ne->ne_parent);
+		return;
+	}
+
+	atomic_fetch_add_relaxed(&notify_data.dn_info->di_notify_delivered, 1);
+}
+
+static void *
+notify_thread_fn(void *arg)
+{
+	while (1) {
+		struct notify_entry *ne = NULL;
+		bool                 stop;
+		bool                 dead;
+
+		if (sem_wait(&notify_sem) != 0) {
+			D_ASSERTF(errno == EINTR, "sem_wait: %d (%s)\n", errno, strerror(errno));
+			continue;
+		}
+
+		D_MUTEX_LOCK(&notify_lock);
+		stop = notify_stop;
+		dead = atomic_load_relaxed(&ival_data.session_dead);
+		if (stop || dead)
+			notify_drain_locked();
+		else
+			ne = notify_dequeue_locked();
+		D_MUTEX_UNLOCK(&notify_lock);
+
+		if (stop)
+			return NULL;
+
+		if (ne == NULL)
+			continue;
+
+		notify_run(ne);
+		d_slab_release(notify_slab, ne);
+	}
+	return NULL;
+}
+
+/* Best effort; failures result in dropped notifications. */
+static void
+notify_enqueue(struct dfuse_info *dfuse_info, enum notify_kind kind, fuse_ino_t parent,
+	       fuse_ino_t ino, const char *name)
+{
+	struct notify_entry *ne;
+	size_t               namelen = name ? strnlen(name, NAME_MAX) : 0;
+	uint32_t             bucket  = notify_hash(kind, parent, ino, name, namelen);
+
+	D_MUTEX_LOCK(&notify_lock);
+
+	if (notify_stop) {
+		D_MUTEX_UNLOCK(&notify_lock);
+		notify_drop(dfuse_info, kind, parent);
+		return;
+	}
+
+	if (notify_coalesce_find(kind, parent, ino, name, namelen, bucket) != NULL) {
+		D_MUTEX_UNLOCK(&notify_lock);
+		atomic_fetch_add_relaxed(&dfuse_info->di_notify_coalesced, 1);
+		DFUSE_TRA_DEBUG(&notify_data, "Coalesced kind %d parent %#lx " DF_DE, kind, parent,
+				DP_DE(name ? name : ""));
+		return;
+	}
+
+	if (notify_queued >= NOTIFY_QUEUE_MAX) {
+		D_MUTEX_UNLOCK(&notify_lock);
+		notify_drop(dfuse_info, kind, parent);
+		return;
+	}
+
+	ne = d_slab_acquire(notify_slab);
+	if (ne == NULL) {
+		D_MUTEX_UNLOCK(&notify_lock);
+		notify_drop(dfuse_info, kind, parent);
+		return;
+	}
+
+	ne->ne_kind    = kind;
+	ne->ne_parent  = parent;
+	ne->ne_ino     = ino;
+	ne->ne_namelen = namelen;
+	if (namelen > 0)
+		memcpy(ne->ne_name, name, namelen);
+	ne->ne_name[namelen] = '\0';
+
+	d_list_add_tail(&ne->ne_hlist, &notify_coalesce[bucket]);
+	d_list_add_tail(&ne->ne_list, &notify_queue);
+	notify_queued++;
+
+	if (notify_queued >= NOTIFY_CONGEST_HIGH)
+		notify_congest_warn(notify_queued);
+
+	D_MUTEX_UNLOCK(&notify_lock);
+
+	atomic_fetch_add_relaxed(&dfuse_info->di_notify_enqueued, 1);
+	DFUSE_TRA_DEBUG(&notify_data, "Enqueued kind %d parent %#lx " DF_DE, kind, parent,
+			DP_DE(name ? name : ""));
+
+	sem_post(&notify_sem);
+}
+
+void
+dfuse_notify_inval_entry(struct dfuse_info *dfuse_info, fuse_ino_t parent, const char *name)
+{
+	notify_enqueue(dfuse_info, NOTIFY_INVAL_ENTRY, parent, 0, name);
+}
+
+void
+dfuse_notify_delete(struct dfuse_info *dfuse_info, fuse_ino_t parent, fuse_ino_t ino,
+		    const char *name)
+{
+	notify_enqueue(dfuse_info, NOTIFY_DELETE, parent, ino, name);
+}
+
+void
+dfuse_notify_inval_inode(struct dfuse_info *dfuse_info, fuse_ino_t ino)
+{
+	notify_enqueue(dfuse_info, NOTIFY_INVAL_INODE, 0, ino, NULL);
+}
+
 /* Allocate and insert a new time value entry */
 static int
 ival_bucket_add(d_list_t *list, double timeout)
@@ -263,28 +575,55 @@ int
 ival_init(struct dfuse_info *dfuse_info)
 {
 	int rc;
+	int i;
 
 	DFUSE_TRA_UP(&ival_data, dfuse_info, "invalidator");
+	DFUSE_TRA_UP(&notify_data, dfuse_info, "notify");
 
 	D_INIT_LIST_HEAD(&ival_data.time_entry_list);
+
+	notify_data.dn_info = dfuse_info;
+	D_INIT_LIST_HEAD(&notify_queue);
+	for (i = 0; i < NOTIFY_COALESCE_BUCKETS; i++)
+		D_INIT_LIST_HEAD(&notify_coalesce[i]);
 
 	rc = sem_init(&ival_sem, 0, 0);
 	if (rc != 0)
 		D_GOTO(out, rc = errno);
 
+	rc = sem_init(&notify_sem, 0, 0);
+	if (rc != 0) {
+		rc = errno;
+		goto ival_sem;
+	}
+
 	rc = ival_bucket_add(&ival_data.time_entry_list, 0);
 	if (rc)
-		goto sem;
+		goto notify_sem;
 
 out:
 	return rc;
-sem:
+notify_sem:
+	sem_destroy(&notify_sem);
+ival_sem:
 	sem_destroy(&ival_sem);
+	DFUSE_TRA_DOWN(&notify_data);
 	DFUSE_TRA_DOWN(&ival_data);
 	return rc;
 }
 
-/* Start the thread.  Not called until after fuse is mounted */
+/* Register the notify entry slab type.  Split out of ival_thread_start() so tests can prepare
+ * the queue for notify_enqueue()/notify_dequeue_locked() without starting the delivery thread.
+ */
+static int
+notify_init(struct dfuse_info *dfuse_info)
+{
+	struct d_slab_reg notify_slab_reg = {POOL_TYPE_INIT(notify_entry, ne_list)};
+
+	return d_slab_register(&dfuse_info->di_slab, &notify_slab_reg, dfuse_info, &notify_slab);
+}
+
+/* Start the threads.  Not called until after fuse is mounted */
 int
 ival_thread_start(struct dfuse_info *dfuse_info)
 {
@@ -292,16 +631,31 @@ ival_thread_start(struct dfuse_info *dfuse_info)
 
 	ival_data.session = dfuse_info->di_session;
 
-	rc = pthread_create(&ival_thread, NULL, ival_thread_fn, NULL);
+	rc = notify_init(dfuse_info);
+	if (rc != -DER_SUCCESS)
+		return daos_der2errno(rc);
+
+	rc = pthread_create(&notify_thread, NULL, notify_thread_fn, NULL);
 	if (rc != 0)
-		goto out;
+		return rc;
+	pthread_setname_np(notify_thread, "dfuse notify");
+
+	rc = pthread_create(&ival_thread, NULL, ival_thread_fn, NULL);
+	if (rc != 0) {
+		D_MUTEX_LOCK(&notify_lock);
+		notify_stop = true;
+		D_MUTEX_UNLOCK(&notify_lock);
+		sem_post(&notify_sem);
+		pthread_join(notify_thread, NULL);
+		notify_thread = 0;
+		return rc;
+	}
 	pthread_setname_np(ival_thread, "dfuse inval");
 
-out:
-	return rc;
+	return 0;
 }
 
-/* Stop thread, remove all inodes from the invalidation queues and teardown all data structures
+/* Stop threads, remove all inodes from the invalidation queues and teardown all data structures.
  * May be called without thread_start() having been called.
  */
 void
@@ -314,6 +668,18 @@ ival_thread_stop()
 	if (ival_thread)
 		pthread_join(ival_thread, NULL);
 	ival_thread = 0;
+
+	/* Latch stop before waking the thread: anything still landing behind an in-flight
+	 * request during unmount is dropped rather than queued behind a thread about to exit.
+	 */
+	D_MUTEX_LOCK(&notify_lock);
+	notify_stop = true;
+	D_MUTEX_UNLOCK(&notify_lock);
+	sem_post(&notify_sem);
+
+	if (notify_thread)
+		pthread_join(notify_thread, NULL);
+	notify_thread = 0;
 }
 
 void
@@ -331,6 +697,10 @@ ival_fini()
 		d_list_del(&dte->dte_list);
 		D_FREE(dte);
 	}
+
+	sem_destroy(&notify_sem);
+	sem_destroy(&ival_sem);
+	DFUSE_TRA_DOWN(&notify_data);
 	DFUSE_TRA_DOWN(&ival_data);
 }
 

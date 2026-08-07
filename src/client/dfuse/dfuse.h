@@ -13,6 +13,11 @@
 #include <fused/fuse.h>
 #include <fused/fuse_lowlevel.h>
 
+/* Only inval.c may call these directly. */
+#ifndef DFUSE_NOTIFY_RAW_OK
+#pragma GCC poison fuse_lowlevel_notify_inval_entry fuse_lowlevel_notify_expire_entry fuse_lowlevel_notify_delete fuse_lowlevel_notify_inval_inode
+#endif
+
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
@@ -76,6 +81,11 @@ struct dfuse_info {
 	ATOMIC uint64_t      di_fh_count;
 	ATOMIC uint64_t      di_pool_count;
 	ATOMIC uint64_t      di_container_count;
+
+	ATOMIC uint64_t      di_notify_enqueued;
+	ATOMIC uint64_t      di_notify_coalesced;
+	ATOMIC uint64_t      di_notify_delivered;
+	ATOMIC uint64_t      di_notify_dropped;
 };
 
 struct dfuse_eq {
@@ -1200,6 +1210,17 @@ ival_thread_stop();
 
 void
 ival_fini();
+
+/* Fire-and-forget reverse notifications, delivered by the notify thread in inval.c */
+void
+dfuse_notify_inval_entry(struct dfuse_info *dfuse_info, fuse_ino_t parent, const char *name);
+
+void
+dfuse_notify_delete(struct dfuse_info *dfuse_info, fuse_ino_t parent, fuse_ino_t ino,
+		    const char *name);
+
+void
+dfuse_notify_inval_inode(struct dfuse_info *dfuse_info, fuse_ino_t ino);
 
 /* Data caching functions */
 
