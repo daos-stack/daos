@@ -71,8 +71,8 @@ def main():
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
 
-    # Default the summary name off the class so parallel CI stages (e.g. nlt vs fault-injection)
-    # do not archive over each other. "" still disables it.
+    # Default the summary name from the class name so parallel CI stages (e.g. nlt vs
+    # fault-injection) do not archive over each other. "" still disables it.
     if args.summary is None:
         args.summary = f'nlt-summary-{args.class_name}.md' if args.class_name else 'nlt-summary.md'
 
@@ -81,10 +81,6 @@ def main():
         (soft, hard) = resource.getrlimit(resource.RLIMIT_NOFILE)
         if soft < hard:
             resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
-
-    if args.server_fi:
-        server_fi(args)
-        return
 
     if args.mode:
         mode_list = args.mode
@@ -114,6 +110,11 @@ Tests are:
               + '\n'.join(sorted(manual)))
         sys.exit(1)
 
+    # Run this only after the argument checks above, so invalid arguments do not start a server.
+    if args.server_fi:
+        server_fi(args)
+        return
+
     wf = WarningsFactory('nlt-errors.json',
                          post_error=True,
                          check='Log file errors',
@@ -123,19 +124,19 @@ Tests are:
     try:
         fatal_errors = run(wf, args)
         wf.add_test_case('exit_wrapper')
-        wf.close()
     except Exception as error:
         print(error)
         print(str(error))
         print(repr(error))
         trace = ''.join(traceback.format_tb(error.__traceback__))
         wf.add_test_case('exit_wrapper', str(error), output=trace)
-        # Emit the summary here too: an abnormal or single-test failure never reaches the
-        # normal write in run(). arm_summary() made this idempotent, so it is a no-op if run()
-        # already wrote it.
+        raise
+    finally:
+        # A single-test or abnormal failure never reaches the write in run(); arm_summary() made
+        # write_summary() idempotent, so this is a no-op if run() already wrote it.  Close last so
+        # a secondary exception here cannot skip it.
         wf.write_summary()
         wf.close()
-        raise
 
     if fatal_errors.errors:
         print("Significant errors encountered")

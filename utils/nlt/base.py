@@ -44,13 +44,16 @@ class NLTestTimeout(NLTestFail):
 
 
 instance_num = 0  # pylint: disable=invalid-name
+_instance_lock = threading.Lock()
 
 
 def get_inc_id():
     """Return a unique character"""
     global instance_num  # pylint: disable=invalid-name
-    instance_num += 1
-    return f'{instance_num:04d}'
+    # Called from the parallel POSIX test threads, so guard the counter.
+    with _instance_lock:
+        instance_num += 1
+        return f'{instance_num:04d}'
 
 
 # Name of the test currently executing on this thread, used to correlate log-analysis findings
@@ -75,7 +78,7 @@ def umount(path, background=False):
     else:
         cmd = ['fusermount3', '-u', path]
     ret = subprocess.run(cmd, check=False)
-    print(f'rc from umount {ret.returncode}')
+    print(f'rc from {" ".join(cmd[:2])} {ret.returncode}')
     return ret.returncode
 
 

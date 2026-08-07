@@ -78,9 +78,10 @@ def stat_and_check(dfuse, pre_stat):
 
 def check_no_file(dfuse):
     """Check that a non-existent file doesn't exist"""
+    path = join(dfuse.dir, 'no-file')
     try:
-        os.stat(join(dfuse.dir, 'no-file'))
-        raise NLTestFail('file exists')
+        os.stat(path)
+        raise NLTestFail(f'file exists: {path}')
     except FileNotFoundError:
         pass
 
