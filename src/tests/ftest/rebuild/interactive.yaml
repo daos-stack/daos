@@ -2,7 +2,7 @@ hosts:
   test_servers: 7
   test_clients: 1
 
-timeout: 500
+timeout: 560
 
 server_config:
   name: daos_server
@@ -33,7 +33,7 @@ pool:
   size: 50%
   pool_query_timeout: 30
 
-cont_ior:
+container:
   type: POSIX
   properties: rd_fac:3
   oclass: EC_8P3GX
@@ -46,3 +46,14 @@ ior:
   block_size: 128M
   flags_write: "-v -w -k -G 1 -F"
   flags_read: "-v -r -R -k -G 1 -F"
+
+ior_background:
+  np: 1
+  test_file: /testFile
+  api: DFS
+  transfer_size: 1M
+  flags: "-v -w -r -R -k -G 1 -F"
+  block_size: '150G'
+  repetitions: 4   # 4 iterations of write + read for 30s each,
+  sw_deadline: 30  # for a total of ~240s
+  sw_wearout: 1
