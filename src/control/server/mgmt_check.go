@@ -129,6 +129,11 @@ func (svc *mgmtSvc) unwrapCheckerReq(req proto.Message) (proto.Message, error) {
 
 // selectLocalCheckLeader returns a local rank that can be used as the check leader.
 func (svc *mgmtSvc) selectLocalCheckLeader() (ranklist.Rank, error) {
+	// Only the MS leader can select a new checker leader.
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return ranklist.NilRank, err
+	}
+
 	for i, ei := range svc.harness.instances {
 		r, err := ei.GetRank()
 		if err != nil {
@@ -157,29 +162,27 @@ func (svc *mgmtSvc) selectLocalCheckLeader() (ranklist.Rank, error) {
 	return ranklist.NilRank, errors.New("no ranks are usable as the check leader")
 }
 
-func (svc *mgmtSvc) getCheckerLeader() (ranklist.Rank, error) {
-	// Checker calls must be sent to the check leader, which may not be the same as the MS leader.
+func (svc *mgmtSvc) getCheckerLeaderControlAddr() (string, error) {
 	r, err := svc.getCheckerLeaderRank()
 	if system.IsErrSystemAttrNotFound(err) {
-		// If not found, the MS leader will select the checker leader.
-		if err := svc.sysdb.CheckLeader(); err != nil {
-			return ranklist.NilRank, err
+		r, err = svc.selectLocalCheckLeader()
+		if err != nil {
+			return "", errors.Wrap(err, "select local check leader")
 		}
-		return svc.selectLocalCheckLeader()
-	}
-
-	return r, err
-}
-
-func (svc *mgmtSvc) getCheckerLeaderControlAddr() (string, error) {
-	leaderRank, err := svc.getCheckerLeader()
-	if err != nil {
+	} else if err != nil {
 		return "", errors.Wrap(err, "get check leader rank")
 	}
 
-	m, err := svc.sysdb.FindMemberByRank(leaderRank)
+	m, err := svc.sysdb.FindMemberByRank(r)
 	if err != nil {
-		return "", errors.Wrapf(err, "look up member for check leader rank %d", leaderRank)
+		return "", errors.Wrapf(err, "look up member for check leader rank %d", r)
+	}
+
+	if m.State != system.MemberStateCheckerStarted {
+		r, err = svc.selectLocalCheckLeader()
+		if err != nil {
+			return "", errors.Wrap(err, "select local check leader")
+		}
 	}
 
 	return m.Addr.String(), nil

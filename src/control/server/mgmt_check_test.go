@@ -2013,15 +2013,17 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 	testCheckLeaderRank := ranklist.Rank(0)
 
 	for name, tc := range map[string]struct {
-		createMS func(*testing.T, logging.Logger) *mgmtSvc
-		mic      *control.MockInvokerConfig
-		req      proto.Message
-		expResp  *mgmtpb.CheckLeaderResp
-		expErr   error
+		createMS       func(*testing.T, logging.Logger) *mgmtSvc
+		mic            *control.MockInvokerConfig
+		req            proto.Message
+		expResp        *mgmtpb.CheckLeaderResp
+		expErr         error
+		expCheckLeader *ranklist.Rank
 	}{
 		"unforwardable request": {
-			req:    &mgmtpb.GetAttachInfoReq{},
-			expErr: errors.New("cannot be forwarded"),
+			req:            &mgmtpb.GetAttachInfoReq{},
+			expErr:         errors.New("cannot be forwarded"),
+			expCheckLeader: &testCheckLeaderRank,
 		},
 		"check leader fails": {
 			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
@@ -2051,7 +2053,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 			mic: &control.MockInvokerConfig{
 				UnaryError: errors.New("shouldn't call gRPC"),
 			},
-			expErr: errors.New("unable to find member with rank 1234"),
+			expErr:         errors.New("unable to find member with rank 1234"),
+			expCheckLeader: ranklist.NewRankPtr(1234),
 		},
 		"check leader unset (MS leader)": {
 			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
@@ -2074,10 +2077,11 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
+			expCheckLeader: &testCheckLeaderRank,
 		},
 		"check leader unset (MS replica)": {
 			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				svc := createMSMultiInCheckerMode(t, l, 1)
+				svc := createMSMultiInCheckerMode(t, l, 2)
 				if err := svc.sysdb.ResignLeadership(nil); err != nil {
 					t.Fatal(err)
 				}
@@ -2095,12 +2099,49 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 			},
 			expErr: &system.ErrNotLeader{},
 		},
+		"check leader down": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := createMSMultiInCheckerMode(t, l, 3)
+				leaderRank := ranklist.Rank(2)
+				if err := svc.setCheckerLeaderRank(leaderRank); err != nil {
+					t.Fatal(err)
+				}
+				members, err := svc.membership.Members(ranklist.MustCreateRankSet(leaderRank.String()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				members[0].State = system.MemberStateAdminExcluded
+				if err := svc.sysdb.UpdateMember(members[0]); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{
+						StartResp: &mgmtpb.CheckStartResp{
+							Status: int32(daos.MiscError),
+						},
+					},
+				}),
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_StartResp{
+					StartResp: &mgmtpb.CheckStartResp{
+						Status: int32(daos.MiscError),
+					},
+				},
+			},
+			expCheckLeader: ranklist.NewRankPtr(0),
+		},
 		"gRPC fails": {
 			req: startReq,
 			mic: &control.MockInvokerConfig{
 				UnaryError: errors.New("MockInvoker error"),
 			},
-			expErr: errors.New("MockInvoker error"),
+			expErr:         errors.New("MockInvoker error"),
+			expCheckLeader: &testCheckLeaderRank,
 		},
 		"CheckStartReq returns": {
 			req: startReq,
@@ -2120,6 +2161,7 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
+			expCheckLeader: &testCheckLeaderRank,
 		},
 		"CheckStopReq returns": {
 			req: stopReq,
@@ -2139,6 +2181,7 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
+			expCheckLeader: &testCheckLeaderRank,
 		},
 		"CheckQueryReq returns": {
 			req: queryReq,
@@ -2158,6 +2201,7 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
+			expCheckLeader: &testCheckLeaderRank,
 		},
 		"CheckSetPolicyReq returns": {
 			req: setPolicyReq,
@@ -2177,6 +2221,7 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
+			expCheckLeader: &testCheckLeaderRank,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -2185,7 +2230,7 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 
 			if tc.createMS == nil {
 				tc.createMS = func(t *testing.T, l logging.Logger) *mgmtSvc {
-					svc := createMSMultiInCheckerMode(t, l, 1)
+					svc := createMSMultiInCheckerMode(t, l, 2)
 					if err := svc.setCheckerLeaderRank(testCheckLeaderRank); err != nil {
 						t.Fatal(err)
 					}
@@ -2206,6 +2251,18 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 				mgmtpb.DaosResp{},
 				mgmtpb.CheckQueryResp{},
 			))
+
+			finalCheckLeader, err := svc.getCheckerLeaderRank()
+			if tc.expCheckLeader == nil {
+				if err == nil {
+					t.Fatalf("expected error, got rank %d", finalCheckLeader)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected rank %d, got error: %v", *tc.expCheckLeader, err)
+				}
+				test.AssertEqual(t, *tc.expCheckLeader, finalCheckLeader, "")
+			}
 		})
 	}
 }
