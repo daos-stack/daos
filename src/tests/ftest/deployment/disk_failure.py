@@ -94,7 +94,7 @@ class DiskFailureTest(OSAUtils):
             for thread in threads:
                 thread.join()
 
-            if evict_device["has_sys_xs"]:
+            if not evict_device["has_sys_xs"]:
                 # Now replace the faulty NVME device.
                 self.log_step(
                     f"Loop {val + 1}/{num_pools}: Replacing evicted target {evict_device['uuid']}")
