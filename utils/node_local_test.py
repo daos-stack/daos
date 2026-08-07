@@ -16,7 +16,9 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# The nlt package lives under src/tests/nlt; add that directory to the path so it imports.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                'src', 'tests'))
 
 # pylint: disable=wrong-import-position
 from nlt.cli import main  # noqa: E402

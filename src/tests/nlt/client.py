@@ -128,9 +128,10 @@ class ValgrindHelper():
         self._xml_file = None
         self._logid = logid
 
-        # Repo root, two levels above this package (utils/nlt/ -> utils/ -> root).
+        # Repo root, three levels above this package (src/tests/nlt/ -> src/tests/ -> src/ -> root).
         src_dir = os.path.realpath(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__))))))
         self.src_dir = f'{src_dir}/'
 
     def get_cmd_prefix(self):

@@ -100,9 +100,9 @@ nlt_ct = None  # pylint: disable=invalid-name
 
 def setup_log_test(conf):
     """Setup and import the log tracing code"""
-    # Try and pick this up from the src tree if possible. utils/ is the parent of this package.
+    # Try and pick this up from the src tree if possible; src/tests/ is the parent of this package.
     file_self = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    logparse_dir = join(file_self, '../src/tests/ftest/cart/util')
+    logparse_dir = join(file_self, 'ftest/cart/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)

@@ -217,8 +217,8 @@ class DaosServer():
 
         daos_server = join(self.conf['PREFIX'], 'bin', 'daos_server')
 
-        # nlt_server.yaml lives in utils/, the parent of this package directory.
-        self_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # nlt_server.yaml ships alongside this package.
+        self_dir = os.path.dirname(os.path.abspath(__file__))
 
         # Create a server yaml file.  To do this open and copy the
         # nlt_server.yaml file in the current directory, but overwrite

@@ -2,8 +2,9 @@
 
 NLT runs a full DAOS server, client, DFuse and fault-injection stack on a **single node
 over tmpfs**. It is the fastest way to smoke-test client/DFuse changes locally and is the
-basis for two CI stages. The entry point is [`../node_local_test.py`](../node_local_test.py),
-a thin wrapper around this `nlt` package.
+basis for two CI stages. The entry point is
+[`utils/node_local_test.py`](../../../utils/node_local_test.py), a thin wrapper around this
+`nlt` package.
 
 ## Running
 
