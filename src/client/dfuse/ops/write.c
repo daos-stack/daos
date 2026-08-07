@@ -106,13 +106,13 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	ev->de_len         = len;
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
-	if (rc != 0)
-		D_GOTO(err, rc);
-
-	/* Check for potentially using readahead on this file, ie_truncated
-	 * will only be set if caching is enabled so only check for the one
-	 * flag rather than two here
+	/* Update all inode state before submitting the write.  Once dfs_write() submits the
+	 * event, the async progress thread may complete it and reply to the request at any time,
+	 * after which the kernel can release the handle and free oh, so oh->doh_ie must not be
+	 * dereferenced past this point.
+	 *
+	 * Check for potentially using readahead on this file, ie_truncated will only be set if
+	 * caching is enabled so only check for the one flag rather than two here.
 	 */
 	if (oh->doh_ie->ie_truncated) {
 		if (oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) {
@@ -128,6 +128,10 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 
 	if (end_position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = end_position;
+
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
+	if (rc != 0)
+		D_GOTO(err, rc);
 
 	if (wb_cache)
 		DFUSE_REPLY_WRITE(oh, req, len);
