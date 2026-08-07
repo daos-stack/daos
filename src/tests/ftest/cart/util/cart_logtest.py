@@ -407,7 +407,7 @@ class LogTest():
                                 src_offset -= self.fi_location.lineno
                                 if 0 < src_offset < 5:
                                     show_line(line, 'NORMAL',
-                                              'Logging allocation failure')
+                                              'Logging allocation failure (same allocation failure logged within 5 lines)')
 
                             if not line.get_msg().endswith("DER_NOMEM(-1009): 'Out of memory'"):
                                 show_line(line, 'LOW', 'Error does not use DF_RC')

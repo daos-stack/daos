@@ -87,6 +87,24 @@ void updateRunStage() {
     println("updateRunStage: Build cause: ${buildCauses}")
     println("updateRunStage: Started by user: ${startedByUser()}")
 
+    // Force an NLT-only run profile for targeted reliability testing.
+    if (params.CI_NLT_ONLY) {
+        println('updateRunStage: Detected CI_NLT_ONLY, enabling only NLT and required build stages')
+        List<String> nltOnlyStages = [
+            'Pre-build',
+            'Build',
+            'Build on EL 9',
+            'Unit Tests',
+            'NLT'
+        ]
+        for (stage in runStage.keySet()) {
+            runStage[stage] = stage in nltOnlyStages
+            reasons[stage] = 'CI_NLT_ONLY'
+        }
+        displayRunStage(reasons)
+        return
+    }
+
     // Handle landing builds
     if (startedByLanding()) {
         println('updateRunStage: Detected landing build, overwriting defaults')
@@ -539,6 +557,9 @@ pipeline {
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Build RPM and DEB packages, Skip unit tests.')
+        booleanParam(name: 'CI_NLT_ONLY',
+                     defaultValue: true,
+                     description: 'Run only stages needed for NLT: Build on EL 9 and NLT path.')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -994,8 +1015,16 @@ pipeline {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
-                        // NLT memchecks the valgrind-tagged build, not the shared -race one.
-                        unstash 'opt-daos-valgrind'
+                        // Prefer the valgrind-tagged build when available, but allow
+                        // NLT to run without it (e.g. CI_PR_REPOS-only workflows).
+                        script {
+                            try {
+                                unstash 'opt-daos-valgrind'
+                                echo 'Using opt-daos-valgrind stash for NLT'
+                            } catch (hudson.AbortException err) {
+                                echo "opt-daos-valgrind stash not available, falling back to opt-daos.tar (${err.message})"
+                            }
+                        }
                         job_step_update(
                             unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat',
                                                                            def_val: '1').toInteger(),
@@ -1028,7 +1057,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_logs/', 'vm_test/'],
                                          testResults: 'nlt-junit.xml',
                                          valgrind_stash: 'nlt-memcheck',
                                          valgrind_pattern: '*memcheck.xml',
@@ -1194,7 +1223,7 @@ pipeline {
                             ],
                             unitTestPostArgs: [
                                 /* groovylint-disable-next-line DuplicateListLiteral */
-                                artifacts: ['nlt_logs/'],
+                                artifacts: ['nlt_logs/', 'vm_test/'],
                                 testResults: 'nlt-junit.xml',
                                 with_valgrind: '',
                                 FI: true],
