@@ -156,7 +156,7 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_in_ver = ++(*version);
-			target->ta_comp.co_flags &= ~(PO_COMPF_DOWN2OUT | PO_COMPF_NEVER_UP);
+			target->ta_comp.co_flags &= ~PO_COMPF_DOWN2OUT;
 			if (print_changes)
 				D_PRINT(DF_MAP ": " DF_TARGET " start reintegration.\n",
 					DP_MAP(pool_uuid, map), DP_TARGET(target));
@@ -267,11 +267,45 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 			rc = 1;
 			break;
 		case PO_COMP_ST_UP:
-			if (target->ta_comp.co_fseq == 1) {
+			/*
+			 * A UP target can come from three prior states, distinguished by the
+			 * relationship between co_fseq and co_ver (never touched by MAP_REINT
+			 * or MAP_EXTEND, so this is stable):
+			 *
+			 *   co_fseq <  co_ver : fresh MAP_EXTEND (NEW->UP). fseq was
+			 *                       initialised to 1 in gen_pool_buf() and co_ver
+			 *                       is the extend map version, which is > 1.
+			 *                       Revert to NEW.
+			 *   co_fseq == co_ver : baseline creation-DOWNOUT reintegration
+			 *                       (see pool_comp_is_creation_downout()).
+			 *                       Revert to DOWNOUT, preserving the invariant
+			 *                       (do not touch co_out_ver).
+			 *   co_fseq >  co_ver : real UPIN->DOWN/DRAIN->DOWNOUT->UP or
+			 *                       UPIN->DOWN->UP (DOWN2UP). MAP_EXCLUDE bumped
+			 *                       co_fseq strictly above co_ver. Revert to
+			 *                       DOWN if DOWN2UP flag is set, otherwise
+			 *                       DOWNOUT.
+			 *
+			 * Do NOT rely on co_in_ver here: both MAP_EXTEND and MAP_REINT bump
+			 * it on the UP transition, so it cannot distinguish these cases.
+			 */
+			if (target->ta_comp.co_fseq < target->ta_comp.co_ver) {
 				D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to NEW\n",
 					DP_MAP(pool_uuid, map), DP_TARGET(target));
 				target->ta_comp.co_status = PO_COMP_ST_NEW;
 				target->ta_comp.co_in_ver = 0;
+				++(*version);
+			} else if (target->ta_comp.co_fseq == target->ta_comp.co_ver) {
+				D_DEBUG(DB_MD,
+					DF_MAP ": revert baseline reint " DF_TARGET " to DOWNOUT\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
+				target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+				/*
+				 * Restore co_in_ver == co_ver == co_fseq to keep every baseline
+				 * invariant intact so subsequent reint attempts behave the same
+				 * as the very first attempt.
+				 */
+				target->ta_comp.co_in_ver = target->ta_comp.co_ver;
 				++(*version);
 			} else {
 				if (target->ta_comp.co_flags & PO_COMPF_DOWN2UP) {
@@ -344,9 +378,17 @@ update_one_dom(struct pool_map *map, struct pool_domain *dom, struct pool_target
 		break;
 	case MAP_REVERT_REBUILD:
 		if (dom->do_comp.co_status == PO_COMP_ST_UP) {
-			if (dom->do_comp.co_fseq == 1)
+			/*
+			 * See update_one_tgt() MAP_REVERT_REBUILD PO_COMP_ST_UP for the tri-
+			 * partite discriminator on (co_fseq, co_ver).
+			 */
+			if (dom->do_comp.co_fseq < dom->do_comp.co_ver)
 				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_NEW,
 							    *version, &updated, true);
+			else if (dom->do_comp.co_fseq == dom->do_comp.co_ver)
+				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id,
+							    PO_COMP_ST_DOWNOUT, *version, &updated,
+							    true);
 			else if (dom->do_comp.co_flags == PO_COMPF_DOWN2UP)
 				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id,
 							    PO_COMP_ST_DOWN, *version, &updated,

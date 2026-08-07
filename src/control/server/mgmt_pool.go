@@ -371,7 +371,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, FaultPoolNoLabel
 	}
 
-	allRanks, err := svc.sysdb.MemberRanks(system.MemberStateJoined)
+	joinedRanks, err := svc.sysdb.MemberRanks(system.MemberStateJoined)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +399,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		// create target. Do NOT auto-add other system-wide non-joined ranks in
 		// this path: an explicit list is the caller's exact intent.
 		requestedSet := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(req.GetRanks()))
-		knownSet := ranklist.RankSetFromRanks(allRanks)
+		knownSet := ranklist.RankSetFromRanks(joinedRanks)
 		for _, r := range downoutRanks {
 			knownSet.Add(r)
 		}
@@ -411,12 +411,12 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		// Otherwise, create the pool across the requested number of
 		// joined ranks in the system (if the request does not
 		// specify a number of ranks, all are used).
-		nAllRanks := len(allRanks)
+		nJoinedRanks := len(joinedRanks)
 		if numRanksRequested {
 			nRanks := int(req.GetNumRanks())
 
-			if nRanks > nAllRanks {
-				return nil, FaultPoolInvalidNumRanks(nRanks, nAllRanks)
+			if nRanks > nJoinedRanks {
+				return nil, FaultPoolInvalidNumRanks(nRanks, nJoinedRanks)
 			}
 
 			// TODO (DAOS-6263): Improve rank selection algorithm.
@@ -424,16 +424,16 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			// joined ranks in order to avoid always choosing the
 			// first N ranks.
 			rand.Seed(time.Now().UnixNano())
-			rand.Shuffle(nAllRanks, func(i, j int) {
-				allRanks[i], allRanks[j] = allRanks[j], allRanks[i]
+			rand.Shuffle(nJoinedRanks, func(i, j int) {
+				joinedRanks[i], joinedRanks[j] = joinedRanks[j], joinedRanks[i]
 			})
 			// With an explicit num_ranks, do NOT auto-admit excluded
 			// ranks: the user asked for a specific size.
-			req.Ranks = ranklist.RanksToUint32(allRanks[:nRanks])
+			req.Ranks = ranklist.RanksToUint32(joinedRanks[:nRanks])
 		} else {
 			// Full-cluster default preserves the original target-create behavior:
 			// only Joined ranks receive VOS/blob-store creation.
-			req.Ranks = ranklist.RanksToUint32(allRanks)
+			req.Ranks = ranklist.RanksToUint32(joinedRanks)
 		}
 		sort.Slice(req.Ranks, func(i, j int) bool { return req.Ranks[i] < req.Ranks[j] })
 	}

@@ -2328,6 +2328,308 @@ placement_test_teardown(void **state)
 	return 0;
 }
 
+/*
+ * Asymmetric pool create / baseline DOWNOUT invariant tests.
+ *
+ * These tests directly exercise the invariants introduced by the removal of
+ * PO_COMPF_NEVER_UP:
+ *   - pool_comp_is_creation_downout / _failed_downout / _drain_downout
+ *     classification is stable across reint / revert / drain flows.
+ *   - update_one_tgt MAP_REVERT_REBUILD picks the correct target state from
+ *     the (co_fseq vs co_ver) tri-way judge.
+ *   - gen_pool_buf propagates DOWNOUT up the domain tree for asymmetric
+ *     pool create.
+ *   - pool_map_compat accepts an extend against a pool whose targets are
+ *     all DOWNOUT (asymmetric-create followed by extend).
+ */
+
+static void
+creation_downout_classifier(void **state)
+{
+	struct pool_component comp;
+
+	/* Baseline creation-time DOWNOUT: fseq == co_ver, no flags. */
+	memset(&comp, 0, sizeof(comp));
+	comp.co_status = PO_COMP_ST_DOWNOUT;
+	comp.co_ver    = 1;
+	comp.co_fseq   = 1;
+	comp.co_flags  = 0;
+	assert_true(pool_comp_is_creation_downout(&comp));
+	assert_false(pool_comp_is_failed_downout(&comp));
+	assert_false(pool_comp_is_drain_downout(&comp));
+
+	/* Real failure DOWNOUT: DOWN2OUT flag, fseq bumped strictly above co_ver. */
+	memset(&comp, 0, sizeof(comp));
+	comp.co_status = PO_COMP_ST_DOWNOUT;
+	comp.co_ver    = 3;
+	comp.co_fseq   = 7;
+	comp.co_flags  = PO_COMPF_DOWN2OUT;
+	assert_false(pool_comp_is_creation_downout(&comp));
+	assert_true(pool_comp_is_failed_downout(&comp));
+	assert_false(pool_comp_is_drain_downout(&comp));
+
+	/* Drain-produced DOWNOUT: no DOWN2OUT flag, fseq > co_ver. */
+	memset(&comp, 0, sizeof(comp));
+	comp.co_status = PO_COMP_ST_DOWNOUT;
+	comp.co_ver    = 3;
+	comp.co_fseq   = 8;
+	comp.co_flags  = 0;
+	assert_false(pool_comp_is_creation_downout(&comp));
+	assert_false(pool_comp_is_failed_downout(&comp));
+	assert_true(pool_comp_is_drain_downout(&comp));
+
+	/* Not DOWNOUT: none of the classifiers should match. */
+	memset(&comp, 0, sizeof(comp));
+	comp.co_status = PO_COMP_ST_UPIN;
+	comp.co_ver    = 1;
+	comp.co_fseq   = 1;
+	assert_false(pool_comp_is_creation_downout(&comp));
+	assert_false(pool_comp_is_failed_downout(&comp));
+	assert_false(pool_comp_is_drain_downout(&comp));
+
+	/*
+	 * Baseline reint failure round-trip: MAP_REVERT_REBUILD's baseline
+	 * branch restores co_in_ver = co_ver and leaves co_fseq alone, so the
+	 * baseline classifier is still true after a failed reint attempt.
+	 */
+	memset(&comp, 0, sizeof(comp));
+	comp.co_status = PO_COMP_ST_DOWNOUT;
+	comp.co_ver    = 1;
+	comp.co_fseq   = 1;
+	comp.co_in_ver = 1;
+	assert_true(pool_comp_is_creation_downout(&comp));
+}
+
+static void
+revert_rebuild_three_way(void **state)
+{
+	struct pool_map           *po_map;
+	struct pl_map             *pl_map;
+	struct pool_target        *tgt0, *tgt1, *tgt2, *tgt3;
+	struct pool_target_id      ids[4];
+	struct pool_target_id_list tgts;
+	uint32_t                   map_ver;
+	uint32_t                   ver_hint = 0;
+	int                        rc;
+
+	/* 1 pd, 4 fault domains, 1 rank each, 1 target each: 4 targets total. */
+	gen_maps(1, 4, 1, 1, &po_map, &pl_map);
+
+	assert_int_equal(pool_map_find_target(po_map, 0, &tgt0), 1);
+	assert_int_equal(pool_map_find_target(po_map, 1, &tgt1), 1);
+	assert_int_equal(pool_map_find_target(po_map, 2, &tgt2), 1);
+	assert_int_equal(pool_map_find_target(po_map, 3, &tgt3), 1);
+
+	/*
+	 * Force each target into PO_COMP_ST_UP with a distinct (co_fseq,
+	 * co_ver) relationship so MAP_REVERT_REBUILD picks a different branch
+	 * for each one. co_ver is fixed at gen time (== 1), so we bump co_fseq
+	 * to place it above/below/equal. tgt0 needs co_ver > co_fseq: raise
+	 * co_ver above co_fseq to simulate a fresh extend UP.
+	 */
+
+	/* tgt0: fresh extend UP (co_fseq < co_ver). */
+	tgt0->ta_comp.co_status = PO_COMP_ST_UP;
+	tgt0->ta_comp.co_ver    = 5;
+	tgt0->ta_comp.co_fseq   = 1;
+	tgt0->ta_comp.co_in_ver = 6;
+	tgt0->ta_comp.co_flags  = 0;
+
+	/* tgt1: baseline reint UP (co_fseq == co_ver). */
+	tgt1->ta_comp.co_status = PO_COMP_ST_UP;
+	tgt1->ta_comp.co_ver    = 1;
+	tgt1->ta_comp.co_fseq   = 1;
+	tgt1->ta_comp.co_in_ver = 7; /* bumped by MAP_REINT before revert */
+	tgt1->ta_comp.co_flags  = 0;
+
+	/* tgt2: real failure reint (co_fseq > co_ver), no DOWN2UP. */
+	tgt2->ta_comp.co_status = PO_COMP_ST_UP;
+	tgt2->ta_comp.co_ver    = 1;
+	tgt2->ta_comp.co_fseq   = 5;
+	tgt2->ta_comp.co_in_ver = 7;
+	tgt2->ta_comp.co_flags  = 0;
+
+	/* tgt3: real DOWN interrupted mid-rebuild (co_fseq > co_ver) with DOWN2UP. */
+	tgt3->ta_comp.co_status = PO_COMP_ST_UP;
+	tgt3->ta_comp.co_ver    = 1;
+	tgt3->ta_comp.co_fseq   = 5;
+	tgt3->ta_comp.co_in_ver = 7;
+	tgt3->ta_comp.co_flags  = PO_COMPF_DOWN2UP;
+
+	ver_hint = pool_map_get_version(po_map);
+	if (ver_hint < 8)
+		ver_hint = 8; /* stay above all forced co_ver / co_fseq */
+	rc = pool_map_set_version(po_map, ver_hint);
+	assert_success(rc);
+
+	ids[0].pti_id   = tgt0->ta_comp.co_id;
+	ids[1].pti_id   = tgt1->ta_comp.co_id;
+	ids[2].pti_id   = tgt2->ta_comp.co_id;
+	ids[3].pti_id   = tgt3->ta_comp.co_id;
+	tgts.pti_ids    = ids;
+	tgts.pti_number = 4;
+
+	rc = ds_pool_map_tgts_update(NULL /* pool_uuid */, po_map, &tgts, MAP_REVERT_REBUILD,
+				     false /* exclude_rank */, &map_ver, false /* print */);
+	assert_success(rc);
+
+	/* tgt0: fresh extend revert -> NEW, co_in_ver cleared. */
+	assert_int_equal(tgt0->ta_comp.co_status, PO_COMP_ST_NEW);
+	assert_int_equal(tgt0->ta_comp.co_in_ver, 0);
+
+	/*
+	 * tgt1: baseline reint revert -> DOWNOUT, co_in_ver restored to
+	 * co_ver so the (fseq == co_ver == co_in_ver) baseline invariant is
+	 * intact. co_fseq must be untouched to preserve the classifier.
+	 */
+	assert_int_equal(tgt1->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+	assert_int_equal(tgt1->ta_comp.co_in_ver, tgt1->ta_comp.co_ver);
+	assert_int_equal(tgt1->ta_comp.co_fseq, tgt1->ta_comp.co_ver);
+	assert_true(pool_comp_is_creation_downout(&tgt1->ta_comp));
+	assert_false(pool_comp_is_failed_downout(&tgt1->ta_comp));
+
+	/* tgt2: real reint revert without DOWN2UP -> DOWNOUT (real failed_downout). */
+	assert_int_equal(tgt2->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+	assert_false(pool_comp_is_creation_downout(&tgt2->ta_comp));
+
+	/* tgt3: DOWN2UP revert -> DOWN. */
+	assert_int_equal(tgt3->ta_comp.co_status, PO_COMP_ST_DOWN);
+
+	free_pool_and_placement_map(po_map, pl_map);
+}
+
+static void
+gen_pool_buf_baseline_domain_propagation(void **state)
+{
+	/*
+	 * Compressed fault-domain tree: [md_flags, root, node_A, node_B,
+	 * rank_ids...]. md_flags = 0 means only NODE domains above rank.
+	 * Root has 2 children (nodes), each node has 2 ranks. tuple = (level,
+	 * id, nr_children).
+	 */
+	/* clang-format off */
+	uint32_t         domains[] = {
+		0,               /* metadata flags: NODE-above-rank only */
+		2,    1,  2,     /* root: level=2, ROOT_ID=1, 2 children */
+		1,  100,  2,     /* node A: level=1, id=100, 2 children */
+		1,  101,  2,     /* node B: level=1, id=101, 2 children */
+		10, 11,          /* node A's ranks */
+		20, 21           /* node B's ranks */
+	};
+	/* clang-format on */
+	const uint32_t   ndomains       = ARRAY_SIZE(domains);
+	const uint32_t   nnodes         = 4;
+	const uint32_t   tgt_per_rank   = 1;
+	const uint32_t   ntargets       = nnodes * tgt_per_rank;
+	d_rank_t         downout_arr[3] = {10, 11, 20};
+	d_rank_list_t    downout_ranks  = {.rl_nr = 3, .rl_ranks = downout_arr};
+	struct pool_buf *buf            = NULL;
+	uint32_t         node_a_downout = 0, node_b_downout = 0;
+	uint32_t         rank_downout = 0;
+	int              i, rc;
+
+	rc = gen_pool_buf(NULL /* map */, &buf, 1 /* map_version */, ndomains, nnodes, ntargets,
+			  domains, tgt_per_rank, &downout_ranks);
+	assert_success(rc);
+	assert_non_null(buf);
+
+	for (i = 0; i < buf->pb_domain_nr + buf->pb_node_nr; i++) {
+		struct pool_component *c = &buf->pb_comps[i];
+
+		if (c->co_type != PO_COMP_TP_RANK && c->co_type != PO_COMP_TP_NODE)
+			continue;
+		if (c->co_type == PO_COMP_TP_NODE && c->co_status == PO_COMP_ST_DOWNOUT) {
+			/*
+			 * Baseline domain propagation must preserve the baseline
+			 * invariant so pool_comp_is_creation_downout keeps working
+			 * on parent domains too.
+			 */
+			assert_int_equal(c->co_fseq, c->co_ver);
+			if (c->co_id == 100)
+				node_a_downout = 1;
+			else if (c->co_id == 101)
+				node_b_downout = 1;
+		}
+		if (c->co_type == PO_COMP_TP_RANK && c->co_status == PO_COMP_ST_DOWNOUT)
+			rank_downout++;
+	}
+
+	assert_int_equal(node_a_downout, 1); /* all children DOWNOUT */
+	assert_int_equal(node_b_downout, 0); /* mixed, must stay UPIN */
+	assert_int_equal(rank_downout, 3);   /* exactly the three ranks we requested */
+
+	pool_buf_free(buf);
+}
+
+static void
+pool_map_compat_all_downout_extend(void **state)
+{
+	struct pool_map    *po_map;
+	struct pl_map      *pl_map;
+	struct pool_target *tgt;
+	struct pool_domain *dom;
+	struct pool_buf    *buf = NULL;
+	uint32_t            new_ver;
+	int                 rc;
+	/* clang-format off */
+	/*
+	 * Extend a single NEW rank (id=5) under the existing NODE whose co_id
+	 * is 0. NODE 0 is intentionally set to baseline DOWNOUT before extend,
+	 * so gen_pool_buf() copies the DOWNOUT status into the extend buf and
+	 * pool_map_compat() sees a DOWNOUT existing shared domain. Before the
+	 * whitelist fix this failed with -DER_INVAL; after the fix it must
+	 * succeed.
+	 */
+	uint32_t                domains[] = {
+		0,               /* metadata flags: NODE-above-rank only */
+		2,   1,   1,     /* root: level=2, ROOT_ID=1, 1 child (NODE 0) */
+		1,   0,   1,     /* existing NODE 0, 1 new rank child */
+		5                /* new rank id */
+	};
+	/* clang-format on */
+
+	/*
+	 * Build a 2-NODE / 2-rank / 4-target pool then simulate the outcome
+	 * of an asymmetric create: NODE 0, rank 0 and its two targets sit at
+	 * baseline DOWNOUT while NODE 1 stays UPIN.
+	 */
+	gen_maps(1, 2, 1, 2, &po_map, &pl_map);
+
+	assert_int_equal(pool_map_find_target(po_map, 0, &tgt), 1);
+	tgt->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+	tgt->ta_comp.co_fseq   = tgt->ta_comp.co_ver;
+	tgt->ta_comp.co_flags  = 0;
+	assert_int_equal(pool_map_find_target(po_map, 1, &tgt), 1);
+	tgt->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+	tgt->ta_comp.co_fseq   = tgt->ta_comp.co_ver;
+	tgt->ta_comp.co_flags  = 0;
+
+	assert_true(pool_map_find_ranks(po_map, 0, &dom) > 0);
+	dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
+	dom->do_comp.co_fseq   = dom->do_comp.co_ver;
+
+	assert_true(pool_map_find_domain(po_map, PO_COMP_TP_NODE, 0, &dom) > 0);
+	dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
+	dom->do_comp.co_fseq   = dom->do_comp.co_ver;
+
+	new_ver = pool_map_get_version(po_map) + 1;
+	rc      = gen_pool_buf(po_map, &buf, new_ver, ARRAY_SIZE(domains), 1 /* nnodes */,
+			       2 /* ntargets */, domains, 2 /* dss_tgt_nr */, NULL /* downout_ranks */);
+	assert_success(rc);
+	assert_non_null(buf);
+
+	/*
+	 * pool_map_extend runs pool_map_compat internally. With the DOWN /
+	 * DRAIN / DOWNOUT whitelist fix the DOWNOUT NODE 0 in the extend buf
+	 * is accepted; otherwise this returns -DER_INVAL.
+	 */
+	rc = pool_map_extend(po_map, new_ver, buf);
+	pool_buf_free(buf);
+	assert_success(rc);
+
+	free_pool_and_placement_map(po_map, pl_map);
+}
+
 static void
 basic_down2up_test_oid(daos_obj_id_t oid, bool print_lo)
 {
@@ -2600,6 +2902,15 @@ static const struct CMUnitTest tests[] = {
     T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
     T("fail multiple ranks", fail_multiple_ranks),
     T("Basic DOWN2UP test", basic_down2up_test),
+    /* Asymmetric pool create / baseline DOWNOUT invariants */
+    T("creation_downout / failed_downout / drain_downout classifiers agree with invariants",
+      creation_downout_classifier),
+    T("MAP_REVERT_REBUILD tri-way judge picks NEW / baseline DOWNOUT / real DOWNOUT / DOWN",
+      revert_rebuild_three_way),
+    T("gen_pool_buf propagates DOWNOUT up to parent domains when all children are excluded",
+      gen_pool_buf_baseline_domain_propagation),
+    T("pool_map_compat accepts extending under an existing DOWNOUT parent domain",
+      pool_map_compat_all_downout_extend),
 };
 
 int

@@ -1337,6 +1337,12 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		filterRanks = append(ranklist.RankList{}, joinedRanks...)
 		createReq.Ranks = append(ranklist.RankList{}, joinedRanks...)
 		createReq.UnavailableRanks = append(ranklist.RankList{}, downoutRanks...)
+		// Only the implicit path derives Ranks/UnavailableRanks from the
+		// system membership snapshot and needs sorting. The explicit path
+		// obtains Ranks via requestedSet.Ranks() (already sorted) and must
+		// not mutate the caller-supplied UnavailableRanks.
+		slices.Sort(createReq.Ranks)
+		slices.Sort(createReq.UnavailableRanks)
 	} else {
 		// Use RankSet from the start for natural deduplication.
 		requestedSet := ranklist.RankSetFromRanks(createReq.Ranks)
@@ -1371,8 +1377,6 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		// requestedSet.Ranks() deduplicates the explicit request.
 		createReq.Ranks = requestedSet.Ranks()
 	}
-	slices.Sort(createReq.Ranks)
-	slices.Sort(createReq.UnavailableRanks)
 	slices.Sort(filterRanks)
 	rpcClient.Debugf("requested/joined/downout/filter ranks: %v/%v/%v/%v", createReq.Ranks,
 		joinedRanks, downoutRanks, filterRanks)

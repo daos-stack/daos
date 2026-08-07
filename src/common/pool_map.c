@@ -1172,8 +1172,9 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 					return -DER_NO_PERM;
 				}
 
-			} else if (dc->co_status & (PO_COMP_ST_UPIN | PO_COMP_ST_UP |
-						    PO_COMP_ST_DOWN)) {
+			} else if (dc->co_status &
+				   (PO_COMP_ST_UPIN | PO_COMP_ST_UP | PO_COMP_ST_DOWN |
+				    PO_COMP_ST_DRAIN | PO_COMP_ST_DOWNOUT)) {
 				if (!existed) {
 					D_ERROR("status [%u] not valid for new comp\n",
 						dc->co_status);
@@ -1616,8 +1617,6 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
 				rank_status = PO_COMP_ST_DOWNOUT;
 			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version, rank_status,
 				       nr_tgts, &map_comp);
-			if (rank_status == PO_COMP_ST_DOWNOUT)
-				map_comp.co_flags |= PO_COMPF_NEVER_UP;
 
 			D_ASSERT(i < ordered_ranks->rl_nr);
 			ordered_ranks->rl_ranks[i++] = node.fdn_val.rank;
@@ -1750,8 +1749,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			map_comp.co_ver = map_version;
 			map_comp.co_in_ver = map_version;
 			map_comp.co_fseq = 1;
-			map_comp.co_flags =
-			    target_status == PO_COMP_ST_DOWNOUT ? PO_COMPF_NEVER_UP : PO_COMPF_NONE;
+			map_comp.co_flags   = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
 
 			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, id=%d, "
@@ -1764,6 +1762,45 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
 			if (rc != 0)
 				D_GOTO(out_map_buf, rc);
+		}
+	}
+
+	/*
+	 * Asymmetric pool create: propagate DOWNOUT up the domain tree so a
+	 * parent whose entire subtree is DOWNOUT is marked DOWNOUT too. Only
+	 * runs on fresh pools with downout_ranks; the regular exclude flow
+	 * handles propagation via update_dom_status_by_tgt_id.
+	 *
+	 * pb_comps stores higher-typed comps first (PERF > FAULT > NODE > RANK)
+	 * and preserves BFS order within each type, so a parent's children form
+	 * a contiguous slice of co_nr entries in the immediately lower level.
+	 * Sweeping from the last domain backward with a sliding child cursor
+	 * gives each parent exactly its own children.
+	 */
+	if (map == NULL && downout_ranks != NULL && downout_ranks->rl_nr > 0) {
+		struct pool_component *comps = map_buf->pb_comps;
+		uint32_t               child_start;
+		int                    d;
+
+		child_start = map_buf->pb_domain_nr + map_buf->pb_node_nr;
+		for (d = map_buf->pb_domain_nr - 1; d >= 0; d--) {
+			struct pool_component *dom     = &comps[d];
+			uint32_t               cn      = dom->co_nr;
+			bool                   all_out = true;
+			uint32_t               k;
+
+			D_ASSERT(child_start >= cn);
+			child_start -= cn;
+			if (cn == 0)
+				continue;
+			for (k = 0; k < cn; k++) {
+				if (comps[child_start + k].co_status != PO_COMP_ST_DOWNOUT) {
+					all_out = false;
+					break;
+				}
+			}
+			if (all_out)
+				dom->co_status = PO_COMP_ST_DOWNOUT;
 		}
 	}
 
