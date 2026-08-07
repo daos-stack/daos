@@ -189,7 +189,7 @@ def log_test(conf,
         return "%.1f%s%s" % (num, 'Yi', suffix)
 
     if os.path.exists(f'{filename}.old'):
-        raise NLTestFail('Log file exceeded max size')
+        raise NLTestFail(f'Log file exceeded max size: {filename}')
     fstat = os.stat(filename)
     if fstat.st_size == 0:
         os.unlink(filename)

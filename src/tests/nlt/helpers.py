@@ -113,9 +113,10 @@ def run_container_query(conf, path):
 
     rc = run_daos_cmd(conf, cmd)
 
-    assert rc.returncode == 0
-
+    # Print before asserting so the output is available for debugging on failure.
     print(rc)
     output = rc.stdout.decode('utf-8')
     for line in output.splitlines():
         print(line)
+
+    assert rc.returncode == 0

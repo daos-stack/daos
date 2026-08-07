@@ -100,7 +100,7 @@ def load_conf(args):
             break
         file_self = os.path.dirname(file_self)
         if file_self == '/':
-            raise NLTestFail('build file not found')
+            raise NLTestFail('.build_vars.json file not found')
     return NLTConf(json_file, args)
 
 

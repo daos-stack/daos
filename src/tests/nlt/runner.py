@@ -13,7 +13,7 @@ import subprocess  # nosec
 import sys
 import time
 
-from .base import BoolRatchet
+from .base import BoolRatchet, NLTestFail
 from .client import run_daos_cmd
 from .config import check_memcheck_build, load_conf
 from .dfuse import needs_dfuse_with_opt
@@ -181,8 +181,10 @@ def run(wf, args):
         raw_test_list = PosixTests.generate_manual_test_list()
     elif args.suite == 'all':
         raw_test_list = PosixTests.generate_test_list() + PosixTests.generate_manual_test_list()
-    else:
+    elif args.suite == 'ci':
         raw_test_list = PosixTests.generate_test_list()
+    else:
+        raise NLTestFail(f'Unknown suite: {args.suite}')
     test_dict = expand_test_list(raw_test_list, excluded_dict)
     if len(test_dict) == 0:
         print('No tests to run!')
