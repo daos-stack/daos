@@ -723,3 +723,139 @@ func (svc *mgmtSvc) SystemCheckEngineReport(ctx context.Context, req *sharedpb.C
 	}
 	return new(sharedpb.CheckReportResp), nil
 }
+
+func raftErrToDaosErr(err error) error {
+	// Most of the errors returned by raft updates are logically impossible here. A sign of a
+	// developer error.
+	dErr := daos.MiscError
+	// Leadership change is the only thing that could really go wrong at this point.
+	if system.IsNotLeader(err) {
+		dErr = daos.TryAgain
+	}
+	return dErr
+}
+
+// SystemCheckRegPool registers a pool with the management service for the checker.
+//
+// NB: The final result of this function is delivered to the check leader as a dRPC response.
+//
+//	The daos.Status error codes make it possible to translate errors to meaningful error codes.
+func (svc *mgmtSvc) SystemCheckRegPool(parent context.Context, req *sharedpb.CheckRegPoolReq) (*sharedpb.CheckRegPoolResp, error) {
+	if req == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "nil %T", req)
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	poolUUID, err := uuid.Parse(req.Uuid)
+	if err != nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "invalid pool UUID %q: %s", req.Uuid, err)
+	}
+
+	if !daos.LabelIsValid(req.Label) {
+		return nil, errors.Wrapf(daos.InvalidInput, "bad pool label %q", req.Label)
+	}
+
+	if len(req.Svcreps) == 0 {
+		return nil, errors.Wrapf(daos.InvalidInput, "request for pool %q has zero svcreps", req.Uuid)
+	}
+
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, errors.Wrapf(raftErrToDaosErr(err), "failed to take pool lock: %s", err)
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID)
+	if err == nil {
+		// We're updating an existing pool service.
+		if ps.PoolLabel != req.Label {
+			if _, err := svc.sysdb.FindPoolServiceByLabel(req.Label); err == nil {
+				return nil, errors.Wrapf(daos.Exists, "pool with label %q already exists", req.Label)
+			}
+		}
+		ps.PoolLabel = req.Label
+		ps.Replicas = ranklist.RanksFromUint32(req.Svcreps)
+
+		svc.log.Debugf("updating pool service from req: %+v", req)
+		if err := svc.sysdb.UpdatePoolService(ctx, ps); err != nil {
+			return nil, errors.Wrapf(raftErrToDaosErr(err), "failed to update pool: %s", err.Error())
+		}
+
+		return &sharedpb.CheckRegPoolResp{}, nil
+	}
+
+	if !system.IsPoolNotFound(err) {
+		// Any error besides PoolNotFound is not expected.
+		return nil, errors.Wrapf(raftErrToDaosErr(err), "failed to look up pool %s: %s", poolUUID, err.Error())
+	}
+
+	if _, err := svc.sysdb.FindPoolServiceByLabel(req.Label); err == nil {
+		return nil, errors.Wrapf(daos.Exists, "pool with label %q already exists", req.Label)
+	}
+
+	ps = &system.PoolService{
+		PoolUUID:  poolUUID,
+		PoolLabel: req.Label,
+		State:     system.PoolServiceStateReady,
+		Replicas:  ranklist.RanksFromUint32(req.Svcreps),
+	}
+
+	svc.log.Debugf("adding pool service from req: %+v", req)
+	if err := svc.sysdb.AddPoolService(ctx, ps); err != nil {
+		return nil, errors.Wrapf(raftErrToDaosErr(err), "failed to add pool: %s", err.Error())
+	}
+	return &sharedpb.CheckRegPoolResp{}, nil
+}
+
+// SystemCheckDeregPool de-registers a pool with the management service for the checker.
+//
+// NB: The final result of this function is delivered to the check leader as a dRPC response.
+//
+//	The daos.Status error codes make it possible to translate errors to meaningful error codes.
+func (svc *mgmtSvc) SystemCheckDeregPool(parent context.Context, req *sharedpb.CheckDeregPoolReq) (*sharedpb.CheckDeregPoolResp, error) {
+	if req == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "nil %T", req)
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	poolUUID, err := uuid.Parse(req.Uuid)
+	if err != nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "invalid pool UUID %q: %s", req.Uuid, err)
+	}
+
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, errors.Wrapf(raftErrToDaosErr(err), "failed to take pool lock: %s", err)
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	if _, err := svc.sysdb.FindPoolServiceByUUID(poolUUID); err != nil {
+		if system.IsPoolNotFound(err) {
+			return nil, errors.Wrapf(daos.Nonexistent, "pool with uuid %q does not exist", req.Uuid)
+		}
+
+		return nil, errors.Wrapf(raftErrToDaosErr(err), "failed to look up pool %s: %s", req.Uuid, err)
+	}
+
+	if err := svc.sysdb.RemovePoolService(ctx, poolUUID); err != nil {
+		return nil, errors.Wrapf(raftErrToDaosErr(err), "failed to remove pool %s: %s", req.Uuid, err)
+	}
+
+	return &sharedpb.CheckDeregPoolResp{}, nil
+}
