@@ -66,6 +66,10 @@ The machine-readable artifacts are still produced for the Jenkins plugins:
 | `dnt.*.memcheck.xml`     | valgrind output                                      |
 | `nlt_logs/<class>/`      | raw `dnt*.log` DAOS/DFuse logs                        |
 
+By default only logs that produced a finding are kept (and fault-injection keeps only the
+iterations that crashed or reported something); the many clean per-command, DFuse and
+fault-location logs are dropped after analysis. Pass `--keep-logs` to retain every log.
+
 ## Package layout
 
 The former ~7k-line script is split into a dependency-ordered package (low level first):

@@ -75,6 +75,7 @@ class AllocFailTestRun():
         self._stderr = None
         self._fi_loc = None
         self._cwd = cwd
+        self._issues_before = 0
 
         if loc:
             prefix = f'dnt_{loc:04d}_'
@@ -164,7 +165,37 @@ class AllocFailTestRun():
 
         self._post(self._sp.wait())
 
+    def _issue_total(self):
+        """Findings recorded so far, used to tell if this iteration was of interest."""
+        total = len(self._aft.conf.wf.issues)
+        if self._aft.wf is not self._aft.conf.wf:
+            total += len(self._aft.wf.issues)
+        return total
+
+    def _prune_log(self):
+        """Keep this iteration's log only if it is interesting; most fault locations are not."""
+        if self.returncode is None:
+            return
+        conf = self._aft.conf
+        interesting = self.returncode < 0 or not self.fault_injected \
+            or self._issue_total() > self._issues_before
+        if getattr(conf.args, 'keep_logs', False) or interesting:
+            conf.compress_file(self.log_file)
+        else:
+            try:
+                os.unlink(self.log_file)
+            except FileNotFoundError:
+                pass
+
     def _post(self, rc):
+        """Run the completion checks, then keep or drop this iteration's log."""
+        self._issues_before = self._issue_total()
+        try:
+            self._post_checks(rc)
+        finally:
+            self._prune_log()
+
+    def _post_checks(self, rc):
         """Helper function, called once after command is complete.
 
         This is where all the checks are performed.
@@ -217,7 +248,8 @@ class AllocFailTestRun():
                                     ignore_busy=self._aft.ignore_busy,
                                     quiet=True,
                                     skip_fi=True,
-                                    leak_wf=wf)
+                                    leak_wf=wf,
+                                    defer_prune=True)
             self.fault_injected = True
             assert self._fi_loc
         except NLTestNoFi:
