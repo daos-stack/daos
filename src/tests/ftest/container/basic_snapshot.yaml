@@ -3,6 +3,7 @@ hosts:
   test_servers: 2
   test_clients: 1
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   engines:
