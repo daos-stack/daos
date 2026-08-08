@@ -224,3 +224,7 @@ EOF
     fi
 
 fi
+
+cat /etc/pip.conf || true
+cat /etc/gemrc || true
+cat /etc/uv/uv.toml || true

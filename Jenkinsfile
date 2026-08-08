@@ -831,8 +831,8 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
+                            // sh label: 'Install RPMs',
+                            //     script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -897,8 +897,8 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+                            // sh label: 'Install RPMs',
+                            //     script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
