@@ -303,7 +303,8 @@ class CoreFileProcessing():
                 else:
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
-            result = run_local(self.log, " ".join(["rpm", "-q", "--qf", "'%{evr}'", "daos"]))
+            result = run_local(
+                self.log, "rpm -q --qf '%{evr}' daos daos-bullseye | grep -v 'not installed'")
             rpm_version = result.joined_stdout
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
