@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,7 +28,6 @@
 #include <daos/tests_lib.h>
 #include "utest_common.h"
 
-#define POOL_SIZE ((1024 * 1024  * 1024ULL))
 #define MAX_CHUNKS 8192
 
 struct chunk {
@@ -207,7 +207,7 @@ teardown_pmem(void **state)
 
 	return rc;
 }
-int
+static int
 setup_pmem(void **state)
 {
 	struct test_arg		*arg = *state;
@@ -749,6 +749,16 @@ test_p2_evict(void **state)
 	umem_cache_free(&arg->ta_store);
 }
 
+static void
+test_tx_fail_no_abort(void **state)
+{
+	struct test_arg *arg = *state;
+	int              rc;
+
+	rc = utest_tx_fail_no_abort(arg->ta_utx);
+	assert_int_equal(rc, 0);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -762,6 +772,8 @@ main(int argc, char **argv)
 	    {"UMEM007: Test page cache many writes", test_many_writes, NULL, NULL},
 	    {"UMEM008: Test phase2 APIs", test_p2_basic, NULL, NULL},
 	    {"UMEM009: Test phase2 eviction", test_p2_evict, NULL, NULL},
+	    {"UMEM010: Test TX failure with NO_ABORT on pmem", test_tx_fail_no_abort, setup_pmem,
+	     teardown_pmem},
 	    {NULL, NULL, NULL, NULL}};
 
 	d_register_alt_assert(mock_assert);
