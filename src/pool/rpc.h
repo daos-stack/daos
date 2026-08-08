@@ -311,6 +311,36 @@ pool_connect_in_set_data(crt_rpc_t *rpc, uint64_t pci_flags, uint64_t pci_query_
 	in->pci_pool_version = pci_pool_version;
 }
 
+static inline void
+pool_connect_in_get_node_cert(crt_rpc_t *rpc, d_iov_t **certp, d_iov_t **popp, d_iov_t **payloadp)
+{
+	struct pool_connect_in *in = crt_req_get(rpc);
+
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_NODE_CERT)) {
+		*certp    = &in->pci_node_cert;
+		*popp     = &in->pci_pop_sig;
+		*payloadp = &in->pci_pop_payload;
+	} else {
+		*certp    = NULL;
+		*popp     = NULL;
+		*payloadp = NULL;
+	}
+}
+
+static inline void
+pool_connect_in_set_node_cert(crt_rpc_t *rpc, d_iov_t *cert, d_iov_t *pop, d_iov_t *payload)
+{
+	struct pool_connect_in *in = crt_req_get(rpc);
+
+	D_ASSERT(rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_NODE_CERT));
+	if (cert)
+		in->pci_node_cert = *cert;
+	if (pop)
+		in->pci_pop_sig = *pop;
+	if (payload)
+		in->pci_pop_payload = *payload;
+}
+
 /* clang-format off */
 
 #define DAOS_ISEQ_POOL_DISCONNECT	/* input fields */		 \

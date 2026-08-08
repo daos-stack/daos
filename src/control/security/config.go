@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -96,6 +97,8 @@ func (cm ClientUserMap) Lookup(uid uint32) *MappedClientUser {
 type CredentialConfig struct {
 	CacheExpiration time.Duration `yaml:"cache_expiration,omitempty"`
 	ClientUserMap   ClientUserMap `yaml:"client_user_map,omitempty"`
+	PoolAuthEnabled bool          `yaml:"pool_auth_enabled,omitempty"`
+	NodeCertDir     string        `yaml:"node_cert_dir,omitempty"`
 }
 
 // TransportConfig contains all the information on whether or not to use
