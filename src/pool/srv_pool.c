@@ -8058,8 +8058,7 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	struct pool_tgt_discard_in	*ptdi_in;
 	struct pool_tgt_discard_out	*ptdi_out;
 	crt_rpc_t			*rpc;
-	d_rank_list_t			*rank_list = NULL;
-	struct pool_target_addr_list     valid_list = {0};
+	d_rank_list_t                   *rank_list = NULL;
 	crt_opcode_t                     opc       = POOL_TGT_DISCARD;
 	int				i;
 	int				rc;
@@ -8072,34 +8071,23 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 		D_ASSERTF(svc->ps_pool->sp_incr_reint == 0,
 			  "incremental reint should not get here\n");
 
-	rc = pool_discard_filter_tgts(svc, list, reint, &valid_list);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	if (valid_list.pta_number == 0) {
-		D_INFO(DF_UUID " discard 0 valid target.", DP_UUID(svc->ps_pool->sp_uuid));
-		D_GOTO(out, rc = 0);
-	}
-
-	rank_list = d_rank_list_alloc(valid_list.pta_number);
+	rank_list = d_rank_list_alloc(list->pta_number);
 	if (rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rank_list->rl_nr = 0;
 	/* remove the duplicate ranks from list, see reintegrate target case */
-	for (i = 0; i < valid_list.pta_number; i++) {
-		if (daos_rank_in_rank_list(rank_list, valid_list.pta_addrs[i].pta_rank))
+	for (i = 0; i < list->pta_number; i++) {
+		if (daos_rank_in_rank_list(rank_list, list->pta_addrs[i].pta_rank))
 			continue;
 
-		rank_list->rl_ranks[rank_list->rl_nr++] = valid_list.pta_addrs[i].pta_rank;
+		rank_list->rl_ranks[rank_list->rl_nr++] = list->pta_addrs[i].pta_rank;
 		D_DEBUG(DB_MD, DF_UUID ": discard rank %u\n", DP_UUID(svc->ps_pool->sp_uuid),
-			valid_list.pta_addrs[i].pta_rank);
+			list->pta_addrs[i].pta_rank);
 	}
 
-	if (rank_list->rl_nr == 0) {
-		D_INFO(DF_UUID " discard 0 rank.", DP_UUID(svc->ps_pool->sp_uuid));
-		D_GOTO(out, rc = 0);
-	}
+	D_ASSERTF(rank_list->rl_nr > 0, DF_UUID ": discard 0 rank\n",
+		  DP_UUID(svc->ps_pool->sp_uuid));
 
 	rc = crt_corpc_req_create(ctx, NULL, rank_list, opc, NULL,
 				  NULL, CRT_RPC_FLAG_FILTER_INVERT,
@@ -8108,8 +8096,8 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 		D_GOTO(out, rc);
 
 	ptdi_in = crt_req_get(rpc);
-	ptdi_in->ptdi_addrs.ca_arrays = valid_list.pta_addrs;
-	ptdi_in->ptdi_addrs.ca_count  = valid_list.pta_number;
+	ptdi_in->ptdi_addrs.ca_arrays = list->pta_addrs;
+	ptdi_in->ptdi_addrs.ca_count  = list->pta_number;
 	uuid_copy(ptdi_in->ptdi_uuid, svc->ps_pool->sp_uuid);
 	rc = dss_rpc_send(rpc);
 
@@ -8125,7 +8113,54 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 out:
 	if (rank_list)
 		d_rank_list_free(rank_list);
+	return rc;
+}
+
+static int
+pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list);
+
+/*
+ * Prepare targets to for reintegration or extension. Return
+ *   - 0 if successful,
+ *   - 1 if no target needs to join, or
+ *   - a negative error code.
+ */
+static int
+pool_join_pre(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opc,
+	      struct pool_target_addr_list *list)
+{
+	struct pool_target_addr_list valid_list = {0};
+	bool                         reint;
+	int                          rc;
+
+	D_ASSERT(opc == POOL_REINT || opc == POOL_EXTEND);
+	reint = (opc == POOL_REINT);
+
+	rc = pool_discard_filter_tgts(svc, list, reint, &valid_list);
+	if (rc != 0)
+		goto out;
+
+	if (valid_list.pta_number == 0) {
+		D_INFO(DF_UUID ": no valid target to join\n", DP_UUID(svc->ps_uuid));
+		rc = 1;
+		goto out_valid_list;
+	}
+
+	rc = pool_recov_cont(ctx, svc, &valid_list);
+	if (rc != 0) {
+		DL_INFO(rc, DF_UUID ": recover containers", DP_UUID(svc->ps_uuid));
+		goto out_valid_list;
+	}
+
+	if (!reint || svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
+		rc = pool_discard(ctx, svc, &valid_list, reint);
+		if (rc != 0)
+			DL_ERROR(rc, DF_UUID ": pool_discard failed", DP_UUID(svc->ps_uuid));
+	}
+
+out_valid_list:
 	pool_target_addr_list_free(&valid_list);
+out:
 	return rc;
 }
 
@@ -8163,18 +8198,19 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	rc = pool_discard(rpc->cr_ctx, svc, &tgt_addr_list, false);
-	if (rc) {
-		DL_ERROR(rc, DF_UUID ": pool_discard failed.", DP_UUID(in->pei_op.pi_uuid));
-		goto failed;
+	rc = pool_join_pre(rpc->cr_ctx, svc, opc_get(rpc->cr_opc), &tgt_addr_list);
+	if (rc != 0) {
+		if (rc == 1) /* already joined */
+			rc = 0;
+		goto out_svc;
 	}
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */, &rank_list, domains, ndomains, NULL,
 				 NULL, &out->peo_op.po_map_version, &out->peo_op.po_hint, MUS_DMG,
-				 POOL_TGT_UPDATE_SKIP_RF_CHECK);
+				 POOL_TGT_UPDATE_SKIP_RF_CHECK | POOL_RESET_RECOV_CONT);
 
-failed:
+out_svc:
 	pool_svc_put_leader(svc);
 out:
 	if (tgt_addr_list.pta_addrs != NULL)
@@ -8221,8 +8257,7 @@ pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr
 		}
 	}
 
-	if (unlikely(ranks->rl_nr == 0))
-		D_GOTO(out, rc = 0);
+	D_ASSERTF(ranks->rl_nr > 0, DF_UUID ": recover cont on 0 rank\n", DP_UUID(svc->ps_uuid));
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -8253,29 +8288,20 @@ pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr
 		rc = crt_bulk_create(ctx, &cont_sgl, CRT_BULK_RO, &bulk);
 		if (rc != 0)
 			goto out;
-
-		if (ranks->rl_nr > 1) {
-			rc = crt_bulk_bind(bulk, ctx);
-			if (rc != 0)
-				goto out;
-		}
 	}
 
-	rc = crt_corpc_req_create(ctx, NULL, ranks, opc, NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
+	rc = crt_corpc_req_create(ctx, NULL, ranks, opc, bulk /* co_bulk_hdl */, NULL,
+				  CRT_RPC_FLAG_FILTER_INVERT, crt_tree_topo(CRT_TREE_KNOMIAL, 32),
+				  &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	prci                       = crt_req_get(rpc);
 	prci->prci_cont_nr         = cont_nr;
-	prci->prci_cont_bulk       = bulk;
 	prci->prci_addrs.ca_count  = list->pta_number;
 	prci->prci_addrs.ca_arrays = list->pta_addrs;
 	uuid_copy(prci->prci_uuid, svc->ps_uuid);
-	if (ranks->rl_nr > 1)
-		prci->prci_flags = PRCF_BIND_BULK;
-	else
-		prci->prci_flags = 0;
+	prci->prci_flags = 0;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -8325,14 +8351,13 @@ pool_update_handler(crt_rpc_t *rpc, int handler_version)
 		goto out;
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT) {
-		if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
-			rc = pool_discard(rpc->cr_ctx, svc, &list, true);
-		} else if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_INCREMENTAL) {
-			flags |= POOL_RESET_RECOV_CONT;
-			rc = pool_recov_cont(rpc->cr_ctx, svc, &list);
-		}
-		if (rc)
+		rc = pool_join_pre(rpc->cr_ctx, svc, opc_get(rpc->cr_opc), &list);
+		if (rc != 0) {
+			if (rc == 1) /* already joined */
+				rc = 0;
 			goto out_svc;
+		}
+		flags |= POOL_RESET_RECOV_CONT;
 	}
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),

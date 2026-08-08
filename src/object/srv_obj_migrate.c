@@ -1865,7 +1865,7 @@ again:
 
 static int
 migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
-		       struct ds_cont_child **cont_p, bool create)
+		       struct ds_cont_child **cont_p)
 {
 	struct ds_cont_child	*cont_child = NULL;
 	int			rc;
@@ -1876,32 +1876,14 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		return 0;
 	}
 
-	/* For incremental reintegration, the container has already been (re)-created. */
-	if (create && !tls->mpt_reintegrating) {
-		/* Since the shard might be moved different location for any pool operation,
-		 * so it may need create the container in all cases.
-		 */
-		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, false, &cont_child);
-		if (rc != 0) {
-			if (rc == -DER_CONT_DESTROYING)
-				D_DEBUG(DB_REBUILD,
-					DF_RB ": container " DF_UUID
-					      "already destroyed or destroying\n",
-					DP_RB_MPT(tls), DP_UUID(cont_uuid));
-			D_ASSERT(cont_child == NULL);
-			return rc;
-		}
-	} else {
-		rc = ds_cont_child_lookup(tls->mpt_pool_uuid, cont_uuid, &cont_child);
-		if (rc != 0) {
-			if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING)
-				D_DEBUG(DB_REBUILD,
-					DF_RB ": container " DF_UUID
-					      "already destroyed or destroying\n",
-					DP_RB_MPT(tls), DP_UUID(cont_uuid));
-			D_ASSERT(cont_child == NULL);
-			return rc;
-		}
+	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, cont_uuid, &cont_child);
+	if (rc != 0) {
+		if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING)
+			D_DEBUG(DB_REBUILD,
+				DF_RB ": container " DF_UUID "already destroyed or destroying\n",
+				DP_RB_MPT(tls), DP_UUID(cont_uuid));
+		D_ASSERT(cont_child == NULL);
+		return rc;
 	}
 
 	*cont_p = cont_child;
@@ -1917,7 +1899,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	int			 rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont, true);
+	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont);
 	if (rc || cont == NULL)
 		D_GOTO(out, rc);
 
@@ -2985,7 +2967,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 		/* Create the vos container when no record need to be rebuilt for this shard,
 		 * for the case of reintegrate the container was discarded ahead.
 		 */
-		rc = migrate_get_cont_child(tls, arg->arg->cont_uuid, &cont, true);
+		rc = migrate_get_cont_child(tls, arg->arg->cont_uuid, &cont);
 		if (cont != NULL)
 			ds_cont_child_put(cont);
 
@@ -3039,7 +3021,7 @@ migrate_obj_punch_one(void *data)
 	D_DEBUG(DB_REBUILD, DF_RB ": tls %p version %d punch " DF_U64 " " DF_UOID "\n",
 		DP_RB_MPT(tls), tls, arg->version, arg->punched_epoch, DP_UOID(arg->oid));
 
-	rc = migrate_get_cont_child(tls, arg->cont_uuid, &cont, true);
+	rc = migrate_get_cont_child(tls, arg->cont_uuid, &cont);
 	if (rc != 0 || cont == NULL)
 		D_GOTO(out, rc);
 
@@ -3497,7 +3479,7 @@ migrate_obj_ult(void *data)
 		struct ds_cont_child *cont_child = NULL;
 
 		/* check again to see if the container is being destroyed. */
-		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child, false);
+		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child);
 		if (cont_child != NULL && !cont_child->sc_stopping) {
 			if (vos_oi_exist(cont_child->sc_hdl, arg->oid)) {
 				stable_epoch = vos_cont_get_global_stable_epoch(cont_child->sc_hdl);
