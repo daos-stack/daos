@@ -332,6 +332,10 @@ struct vos_pool {
 	d_list_t		vp_gc_link;
 	/** List of open containers with objects in gc pool */
 	d_list_t		vp_gc_cont;
+
+	/** List of open containers */
+	d_list_t                 vp_cont_list;
+
 	/** address of durable-format pool in SCM */
 	struct vos_pool_df	*vp_pool_df;
 	/** Dummy data I/O context */
@@ -390,6 +394,10 @@ struct vos_container {
 	d_list_t		vc_dtx_unsorted_list;
 	/* The list for the active DTX entries that are re-indexed when open the container. */
 	d_list_t		vc_dtx_reindex_list;
+
+	/* Link into vos_pool::vp_cont_list */
+	d_list_t                 vc_pool_link;
+
 	/* The largest epoch difference for re-indexed DTX entries max/min pairs. */
 	uint64_t		vc_dtx_reindex_eph_diff;
 	/* The latest calculated local stable epoch. */
@@ -717,13 +725,13 @@ vos_obj_tab_register();
  * DTX table destroy
  * Called from vos_cont_destroy
  *
- * \param umm		[IN]	Instance of an unified memory class.
+ * \param pool		[IN]	The pool that holds the container.
  * \param cont_df	[IN]	Pointer to the on-disk VOS container.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_cont_df *cont_df);
 
 /**
  * Register dbtree class for DTX table.
