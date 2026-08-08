@@ -31,9 +31,26 @@ def check_version():
         sys.exit(-1)
 
 
+def _results_dir():
+    """Return the directory to write JUnit/cmocka XML results into.
+
+    When running inside the sanitizer container, CMOCKA_XML_FILE is set
+    to '<mounted-dir>/cmocka-%g.xml'.  Deriving the directory from that
+    env var ensures run_utest.py writes into the Docker-mounted volume
+    (test-results/) rather than the source-tree-relative test_results/
+    directory which is lost when the container exits.
+    """
+    cmocka_xml = os.environ.get('CMOCKA_XML_FILE')
+    if cmocka_xml:
+        return os.path.dirname(cmocka_xml)
+    return 'test_results'
+
+
 def write_xml_result(name, suite_junit):
     """Write an junit result"""
-    with open(f"test_results/test_{name}.xml", "w", encoding='UTF-8') as file:
+    results_dir = _results_dir()
+    os.makedirs(results_dir, exist_ok=True)
+    with open(os.path.join(results_dir, f"test_{name}.xml"), "w", encoding='UTF-8') as file:
         TestSuite.to_file(file, [suite_junit], prettyprint=True)
 
 
@@ -147,8 +164,7 @@ class ValgrindHelper():
 
 
 def run_cmd(cmd, output_log=None, env=None):
-    """Run a command"""
-    # capture_output is only available in 3.7+
+    """Run a command, optionally capturing output to a log file."""
     if output_log:
         with open(output_log, "w", encoding="UTF-8") as output:
             print(f"RUNNING COMMAND {' '.join(cmd)}\n    Log: {output_log}")
@@ -185,7 +201,16 @@ def change_ownership(fname, _arg):
 
 
 def process_cmocka(fname, suite_name):
-    """For files created by sudo process, change the permissions and ownership"""
+    """For files created by sudo process, change the permissions and ownership
+
+    NOTE: the renamed target is UTEST_<suite_name>.<basename>, where basename
+    is derived from cmocka's own CMOCKA_XML_FILE "%g" substitution (the cmocka
+    group name passed to cmocka_run_group_tests_name()). Two tests within the
+    SAME suite that use the same cmocka group name will collide on this target
+    filename and silently overwrite each other's result -- group names only
+    need to be unique within a suite, not repo-wide (cross-suite reuse is safe
+    since the suite_name prefix disambiguates it).
+    """
     dirname = os.path.dirname(fname)
     basename = os.path.basename(fname)
 
@@ -341,6 +366,10 @@ class Test():
         self.cmd = self.subst(config["cmd"], config.get("replace_path", {}), path_info)
         self.env = os.environ.copy()
         self.last = []
+        # Populated by setup(); pre-declared here so pylint doesn't flag them
+        # as defined-outside-init (attribute-defined-outside-init).
+        self._san_log_snapshot = None
+        self._cmocka_xml_snapshot = None
         env_vars = config.get("env_vars", {})
         if env_vars:
             self.env.update(env_vars)
@@ -353,7 +382,7 @@ class Test():
 
         self.path_info = path_info
         name = '-'.join(self.cmd).replace(';', '-').replace('/', '-') + f"_{Test.test_num}"
-        self.name = name.replace(' ', '-')
+        self.name = name.replace(' ', '-').replace('"', '')
         self.env["D_LOG_FILE"] = os.path.join(self.log_dir(), "daos.log")
         Test.test_num = Test.test_num + 1
 
@@ -377,7 +406,10 @@ class Test():
         return self.path_info["DAOS_BASE"]
 
     def cmocka_dir(self):
-        """Return the log directory"""
+        """Return the directory where cmocka XML result files are written"""
+        cmocka_xml = os.environ.get('CMOCKA_XML_FILE')
+        if cmocka_xml:
+            return os.path.dirname(cmocka_xml)
         return os.path.join(self.root_dir(), "test_results")
 
     def subst(self, cmd, replacements, path_info):
@@ -434,7 +466,81 @@ class Test():
                 print(f"Removing old log {fname}")
                 os.unlink(fname)
 
+        # Snapshot existing sanitizer log files so teardown can find new ones.
+        self._san_log_snapshot = self._sanitizer_log_snapshot()
+        # Snapshot existing cmocka XML files so teardown only relabels the
+        # ones this test produces; the cmocka directory is shared across all
+        # suites, and a previous suite's write_xml_result() output (also a
+        # plain <suite>.xml file in that same directory) must not be
+        # relabeled with this test's suite name.
+        self._cmocka_xml_snapshot = self._cmocka_xml_files()
+
         return True
+
+    def _cmocka_xml_files(self):
+        """Return the set of .xml files currently in the shared cmocka directory."""
+        cmocka_dir = self.cmocka_dir()
+        if not os.path.isdir(cmocka_dir):
+            return set()
+        return {os.path.join(cmocka_dir, f)
+                for f in os.listdir(cmocka_dir) if f.endswith(".xml")}
+
+    @staticmethod
+    def _sanitizer_log_dirs():
+        """Return a dict mapping sanitizer env var name → global log directory.
+
+        Each sanitizer runtime writes per-PID files to the directory given
+        by log_path= in its OPTIONS env var. Extract those directories so we
+        can copy newly created log files into the per-test log directory after
+        each test run.
+        """
+        dirs = {}
+        for var in ('ASAN_OPTIONS', 'UBSAN_OPTIONS', 'TSAN_OPTIONS'):
+            val = os.environ.get(var, '')
+            m = re.search(r'log_path=([^:]+)', val)
+            if m:
+                # log_path is a file prefix; the directory is its parent.
+                dirs[var] = os.path.dirname(m.group(1))
+        return dirs
+
+    def _sanitizer_log_snapshot(self):
+        """Return the set of existing sanitizer log files in all global dirs."""
+        existing = set()
+        for san_dir in self._sanitizer_log_dirs().values():
+            if os.path.isdir(san_dir):
+                for entry in os.listdir(san_dir):
+                    existing.add(os.path.join(san_dir, entry))
+        return existing
+
+    def _copy_new_sanitizer_logs(self):
+        """Copy sanitizer log files created during this test into its log dir.
+
+        Sanitizer logs are written to the global sanitizer-logs/ directory
+        where the detection scripts and parsers expect them.  This method
+        additionally copies any log files that appeared AFTER the test started
+        into the per-test log_dir so that the finding can be trivially
+        correlated with the test that triggered it.
+
+        For each new sanitizer log a companion ``<logfile>.testname`` file is
+        written containing the test binary basename, so the sanitizer report
+        parsers can attribute each finding to the command that triggered it.
+        """
+        binary_name = os.path.basename(self.cmd[0])
+        dest_dir = self.log_dir()
+        os.makedirs(dest_dir, exist_ok=True)
+        for san_dir in self._sanitizer_log_dirs().values():
+            if not os.path.isdir(san_dir):
+                continue
+            for entry in os.listdir(san_dir):
+                full_path = os.path.join(san_dir, entry)
+                if full_path not in self._san_log_snapshot and os.path.isfile(full_path):
+                    try:
+                        shutil.copy2(full_path, dest_dir)
+                        with open(full_path + ".testname", "w",
+                                  encoding="utf-8") as tf:
+                            tf.write(binary_name)
+                    except OSError:
+                        pass  # best-effort; do not fail the test run
 
     def run(self, base, memcheck, sudo):
         """Run the test"""
@@ -452,15 +558,10 @@ class Test():
         self.last = cmd
 
         self.env.update({"PMEMOBJ_CONF": "sds.at_create=0"})
-        if self.suite.gha:
-            retval = run_cmd(cmd, env=self.env)
-        else:
-            output_log = os.path.join(self.log_dir(), "output.log")
-            retval = run_cmd(cmd, output_log=output_log, env=self.env)
+        output_log = os.path.join(self.log_dir(), "output.log")
+        return run_cmd(cmd, output_log=output_log, env=self.env)
 
-        return retval
-
-    def teardown(self, suite_name, aio, sudo):
+    def teardown(self, suite_name, aio, sudo, gha_ctx=False):
         """Teardown the test"""
         if self.needs_aio():
             aio.finalize_test()
@@ -468,14 +569,19 @@ class Test():
             change_ownership(ValgrindHelper.get_xml_name(self.name), None)
             for_each_file(self.log_dir(), change_ownership, None)
             for_each_file(self.cmocka_dir(), change_ownership, None, ".xml")
-        for_each_file(self.cmocka_dir(), process_cmocka, suite_name, ".xml")
-        self.remove_empty_files(self.log_dir())
+        # Only process cmocka XML files that appeared since this test's setup()
+        # snapshot (see _cmocka_xml_files()) to avoid relabeling a previous
+        # suite's leftover write_xml_result() output with this suite's name.
+        for fname in sorted(self._cmocka_xml_files() - self._cmocka_xml_snapshot):
+            process_cmocka(fname, suite_name)
+        self._copy_new_sanitizer_logs()
+        self.remove_empty_files(self.log_dir(), gha_ctx)
 
-    def remove_empty_files(self, log_dir):
+    def remove_empty_files(self, log_dir, gha_ctx=False):
         """Remove empty log files, they are useless"""
         if not os.path.isdir(log_dir):
             return
-        if not self.suite.gha:
+        if not gha_ctx:
             print(f"Processing logs for {self.name}")
         for log in os.listdir(log_dir):
             fname = os.path.join(log_dir, log)
@@ -498,7 +604,9 @@ class Suite():
             raise SuiteConfigError()
         self.sudo = config.get("sudo", None)
         self.memcheck = config.get("memcheck", True)
-        self.gha = config.get("gha", False)
+        self.gha = config.get("gha", True)
+        self.asan = config.get("asan", True)
+        self.tsan = config.get("tsan", False)
         self.tests = []
         self.has_aio = False
 
@@ -547,6 +655,14 @@ class Suite():
             print(f"Skipped  suite {self.name}, running on GitHub Actions")
             raise SuiteSkipped()
 
+        if (args.asan or args.ubsan) and not self.asan:
+            print(f"Skipped  suite {self.name}, not supported under ASan/UBSan")
+            raise SuiteSkipped()
+
+        if args.tsan and not self.tsan:
+            print(f"Skipped  suite {self.name}, not tagged for TSan")
+            raise SuiteSkipped()
+
         return False
 
     def needs_aio(self):
@@ -565,44 +681,60 @@ class Suite():
 
     def run_suite(self, args, aio):
         """Run the test suite"""
-        if self.gha:
+        gha_ctx = args.gha
+        if gha_ctx:
             print(f"::group:: {self.name}")
         else:
             print(f"\nRunning suite {self.name}")
         results = BaseResults()
+        cases = []
 
         if self.needs_aio() and aio is not None:
             aio.initialize()
         for test in self.tests:
             run_test = True
             ret = 0
+            case = TestCase(' '.join(test.cmd), classname=self.name)
             try:
                 if not test.setup(self.base, aio):
                     continue
             except Exception:
-                results.add_error(f"{traceback.format_exc()}")
+                err = traceback.format_exc()
+                results.add_error(err)
+                case.add_error_info(err)
                 run_test = False
             results.add_test()
             if run_test:
                 try:
                     ret = test.run(self.base, args.memcheck, self.sudo)
                     if ret != 0:
-                        results.add_failure(f"{' '.join(test.get_last())} failed: ret={ret} "
-                                            + f"logs={test.log_dir()}")
+                        failure_msg = (f"{' '.join(test.get_last())} failed: ret={ret} "
+                                       + f"logs={test.log_dir()}")
+                        results.add_failure(failure_msg)
+                        case.add_failure_info(failure_msg)
                 except Exception:
-                    results.add_error(f"{traceback.format_exc()}")
+                    err = traceback.format_exc()
+                    results.add_error(err)
+                    case.add_error_info(err)
                     ret = 1  # prevent reporting errors on teardown too
             try:
-                test.teardown(self.name, aio, self.sudo)
+                test.teardown(self.name, aio, self.sudo, gha_ctx)
             except Exception:
                 if not run_test or ret != 0:
                     pass
                 results.add_error(f"{traceback.format_exc()}")
+            cases.append(case)
 
         if self.needs_aio() and aio is not None:
             aio.finalize()
-        if self.gha:
+        if gha_ctx:
             print("::endgroup::")
+            # Write one TestCase per test so publish-test-results shows accurate counts.
+            # Only in GHA context: in Jenkins the per-suite files land in the same
+            # directory as cmocka output and get renamed/corrupted by process_cmocka,
+            # creating spurious UTEST_*.xml files that cause the JUnit plugin to mark
+            # the build UNSTABLE.
+            write_xml_result(self.name, TestSuite(self.name, cases))
         return results
 
 
@@ -632,6 +764,12 @@ def get_args():
     parser = argparse.ArgumentParser(description='Run DAOS unit tests')
     parser.add_argument('--memcheck', action='store_true', help='Run tests with Valgrind memcheck')
     parser.add_argument('--gha', action='store_true', help='Run tests tagged for GitHub Actions')
+    parser.add_argument('--asan', action='store_true',
+                        help='Run tests under ASan (skip suites with asan: False)')
+    parser.add_argument('--ubsan', action='store_true',
+                        help='Run tests under UBSan (same suite exclusion as --asan)')
+    parser.add_argument('--tsan', action='store_true',
+                        help='Run only tests tagged tsan: True for ThreadSanitizer')
     parser.add_argument('--test_filter', default=None,
                         help='Regular expression to select tests to run')
     parser.add_argument('--suite_filter', default=None,
@@ -644,6 +782,10 @@ def get_args():
                         help="Device to use for AIO, will create file by default")
     parser.add_argument('--log_dir', default="/tmp/daos_utest",
                         help="Path to store test logs")
+    parser.add_argument('--list', action='store_true',
+                        help='List the suites/tests that would run (honoring all the '
+                             'above selection/filter options) without running them, '
+                             'then exit')
     return parser.parse_args()
 
 
@@ -684,7 +826,8 @@ def main():
     with open(path_info["UTEST_YAML"], "r", encoding="UTF-8") as file:
         all_suites = yaml.safe_load(file)
 
-    if args.gha:
+    is_gha_ctx = args.gha
+    if is_gha_ctx:
         print("::group:: Preamble", flush=True)
 
     for suite_yaml in all_suites:
@@ -699,9 +842,22 @@ def main():
             print(f"Error processing {path_info['UTEST_YAML']}")
             raise exception
         suites.append(real_suite)
-    results = Results(args.memcheck)
-    if args.gha:
+    if is_gha_ctx:
         print("::endgroup::")
+
+    if args.list:
+        # Pure listing mode: suites/tests above already reflect every
+        # selection/skip/filter rule a real run would apply (--gha, --asan,
+        # --ubsan, --tsan, --sudo, --suite_filter, --test_filter), so this
+        # can't drift out of sync with what actually executes. No suite is
+        # run and no side effects (AIO init, log dirs, etc.) occur.
+        for suite in suites:
+            print(f"{suite.name}:")
+            for test in suite.tests:
+                print(f"  {' '.join(test.cmd)}")
+        return
+
+    results = Results(args.memcheck)
 
     run_suites(args, suites, results, aio=aio)
 
