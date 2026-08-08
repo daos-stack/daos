@@ -398,11 +398,6 @@ Duration across processes:
 Completed test=FETCH
 ```
 
-!!! note
-    With 3rd Gen Intel® Xeon® Scalable processors (ICX), the PMEM_NO_FLUSH
-    environment variable can be set to 1 to take advantage of the extended
-    asynchronous DRAM refresh (eADR) feature
-
 A tool called daos\_perf with the same syntax as vos\_perf is also available
 to run tests from a compute node with the full DAOS stack. Please refer
 to the next section for more information.
