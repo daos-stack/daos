@@ -52,7 +52,7 @@ def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMIT
     Returns:
         CommandResult: results from the scontrol command
     """
-    command = ['scontrol', 'create']
+    command = ['sudo', 'scontrol', 'create']
     command.append('='.join(['PartitionName', str(name)]))
     command.append('='.join(['Nodes', str(hosts)]))
     command.append('='.join(['Default', str(default)]))
@@ -73,7 +73,7 @@ def delete_partition(log, control, name):
         int: return status from scontrol command
 
     """
-    command = ['scontrol', 'delete']
+    command = ['sudo', 'scontrol', 'delete']
     command.append('='.join(['PartitionName', str(name)]))
     return run_remote(log, control, ' '.join(command))
 
