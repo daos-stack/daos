@@ -1349,3 +1349,274 @@ func TestServer_mgmtSvc_SystemCheckRepair(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_mgmtSvc_checkerIsEnabled(t *testing.T) {
+	t.Run("property never written means disabled", func(t *testing.T) {
+		log, buf := logging.NewTestLogger(t.Name())
+		defer test.ShowBufferOnFailure(t, buf)
+
+		svc := newTestMgmtSvc(t, log)
+		enabled, err := svc.checkerIsEnabled()
+		if err != nil {
+			t.Fatal(err)
+		}
+		test.AssertEqual(t, false, enabled, "checker enabled state")
+	})
+
+	t.Run("enabled then disabled", func(t *testing.T) {
+		log, buf := logging.NewTestLogger(t.Name())
+		defer test.ShowBufferOnFailure(t, buf)
+
+		svc := newTestMgmtSvc(t, log)
+		if err := svc.enableChecker(); err != nil {
+			t.Fatal(err)
+		}
+		enabled, err := svc.checkerIsEnabled()
+		if err != nil {
+			t.Fatal(err)
+		}
+		test.AssertEqual(t, true, enabled, "checker enabled state")
+
+		if err := svc.disableChecker(); err != nil {
+			t.Fatal(err)
+		}
+		enabled, err = svc.checkerIsEnabled()
+		if err != nil {
+			t.Fatal(err)
+		}
+		test.AssertEqual(t, false, enabled, "checker enabled state")
+	})
+
+	t.Run("read failure propagates instead of reading as disabled", func(t *testing.T) {
+		log, buf := logging.NewTestLogger(t.Name())
+		defer test.ShowBufferOnFailure(t, buf)
+
+		svc := newTestMgmtSvc(t, log)
+		svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
+		if _, err := svc.checkerIsEnabled(); err == nil {
+			t.Fatal("expected error from non-replica db, got nil")
+		}
+	})
+}
+
+func TestServer_mgmtSvc_SystemCheckEnable(t *testing.T) {
+	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
+		return &control.HostResponse{
+			Addr:    test.MockHostAddr(a).String(),
+			Message: &mgmtpb.SystemStartResp{Results: rrs},
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		enabled        bool
+		members        system.Members
+		mResps         [][]*control.HostResponse
+		expResp        *mgmtpb.DaosResp
+		expErr         error
+		expInvokeCount int
+		expEnabled     bool
+	}{
+		"already enabled, all ranks in checker mode": {
+			enabled: true,
+			members: system.Members{
+				mockMember(t, 0, 1, "checkerstarted"),
+				mockMember(t, 1, 1, "checkerstarted"),
+			},
+			expResp:    &mgmtpb.DaosResp{Status: int32(daos.Already)},
+			expEnabled: true,
+		},
+		"retry after half-failed enable starts remaining ranks": {
+			// Flag persisted but ranks never started; a retry must not
+			// short-circuit as Already.
+			enabled: true,
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+			},
+			mResps: [][]*control.HostResponse{{
+				hr(1, mockRankSuccess("start", 0), mockRankSuccess("start", 1)),
+			}},
+			expResp:        &mgmtpb.DaosResp{},
+			expInvokeCount: 1,
+			expEnabled:     true,
+		},
+		"rank fails to start, flag stays set for retry": {
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+			},
+			mResps: [][]*control.HostResponse{{
+				hr(1, mockRankSuccess("start", 0), mockRankFail("start", 1)),
+			}},
+			expErr:     errors.New("failed to start rank(s) 1"),
+			expEnabled: true,
+		},
+		"bad member states": {
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "stopped"),
+			},
+			expErr: errors.New("expected states"),
+		},
+		"enables and starts ranks in check mode": {
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+			},
+			mResps: [][]*control.HostResponse{{
+				hr(1, mockRankSuccess("start", 0), mockRankSuccess("start", 1)),
+			}},
+			expResp:        &mgmtpb.DaosResp{},
+			expInvokeCount: 1,
+			expEnabled:     true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.mResps == nil {
+				tc.mResps = [][]*control.HostResponse{{}}
+			}
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps...)
+			if tc.enabled {
+				if err := svc.enableChecker(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			req := &mgmtpb.CheckEnableReq{Sys: build.DefaultSystemName}
+			gotResp, gotErr := svc.SystemCheckEnable(test.Context(t), req)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			enabled, err := svc.checkerIsEnabled()
+			if err != nil {
+				t.Fatal(err)
+			}
+			test.AssertEqual(t, tc.expEnabled, enabled, "checker enabled state")
+			if tc.expErr != nil {
+				return
+			}
+
+			test.CmpAny(t, "response", tc.expResp, gotResp, cmpopts.IgnoreUnexported(mgmtpb.DaosResp{}))
+
+			mi := svc.rpcClient.(*control.MockInvoker)
+			test.AssertEqual(t, tc.expInvokeCount, mi.GetInvokeCount(), "rpc client invoke count")
+			if tc.expInvokeCount > 0 {
+				startReqSent := mi.SentReqs[0].(*control.RanksReq)
+				test.AssertEqual(t, true, startReqSent.CheckMode, "start request check mode")
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_SystemCheckDisable(t *testing.T) {
+	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
+		return &control.HostResponse{
+			Addr:    test.MockHostAddr(a).String(),
+			Message: &mgmtpb.SystemStopResp{Results: rrs},
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		enabled        bool
+		members        system.Members
+		mResps         [][]*control.HostResponse
+		expResp        *mgmtpb.DaosResp
+		expErr         error
+		expInvokeCount int
+		expFanoutRanks string
+		expEnabled     bool
+	}{
+		"not enabled, no checker ranks": {
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+			},
+			expResp: &mgmtpb.DaosResp{Status: int32(daos.Already)},
+		},
+		"rank fails to stop, flag stays set": {
+			// The mode change must not be persisted over a partial stop;
+			// while the flag is set, joins stay quarantined to checker mode.
+			enabled: true,
+			members: system.Members{
+				mockMember(t, 0, 1, "checkerstarted"),
+				mockMember(t, 1, 1, "checkerstarted"),
+			},
+			mResps: [][]*control.HostResponse{{
+				hr(1, mockRankSuccess("stop", 0), mockRankFail("stop", 1)),
+			}},
+			expErr:     errors.New("failed to stop rank(s) 1"),
+			expEnabled: true,
+		},
+		"disables and force-stops the whole system": {
+			// The stop must be unscoped: rank 2 started in checker mode
+			// but has not joined, so it is not in CheckerStarted.
+			enabled: true,
+			members: system.Members{
+				mockMember(t, 0, 1, "checkerstarted"),
+				mockMember(t, 1, 1, "checkerstarted"),
+				mockMember(t, 2, 1, "starting"),
+			},
+			mResps: [][]*control.HostResponse{{
+				hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1),
+					mockRankSuccess("stop", 2)),
+			}},
+			expResp:        &mgmtpb.DaosResp{},
+			expInvokeCount: 1,
+			expFanoutRanks: "0-2",
+		},
+		"flag already cleared but checker ranks still running": {
+			// A prior disable that failed after clearing the flag must be
+			// retryable, not short-circuited as Already.
+			members: system.Members{
+				mockMember(t, 0, 1, "checkerstarted"),
+				mockMember(t, 1, 1, "checkerstarted"),
+			},
+			mResps: [][]*control.HostResponse{{
+				hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1)),
+			}},
+			expResp:        &mgmtpb.DaosResp{},
+			expInvokeCount: 1,
+			expFanoutRanks: "0-1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.mResps == nil {
+				tc.mResps = [][]*control.HostResponse{{}}
+			}
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps...)
+			if tc.enabled {
+				if err := svc.enableChecker(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			req := &mgmtpb.CheckDisableReq{Sys: build.DefaultSystemName}
+			gotResp, gotErr := svc.SystemCheckDisable(test.Context(t), req)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			enabled, err := svc.checkerIsEnabled()
+			if err != nil {
+				t.Fatal(err)
+			}
+			test.AssertEqual(t, tc.expEnabled, enabled, "checker enabled state")
+			if tc.expErr != nil {
+				return
+			}
+
+			test.CmpAny(t, "response", tc.expResp, gotResp, cmpopts.IgnoreUnexported(mgmtpb.DaosResp{}))
+
+			mi := svc.rpcClient.(*control.MockInvoker)
+			test.AssertEqual(t, tc.expInvokeCount, mi.GetInvokeCount(), "rpc client invoke count")
+			if tc.expInvokeCount > 0 {
+				stopReqSent := mi.SentReqs[0].(*control.RanksReq)
+				test.AssertEqual(t, true, stopReqSent.Force, "stop request force flag")
+				test.AssertEqual(t, tc.expFanoutRanks, stopReqSent.Ranks, "stop request ranks")
+			}
+		})
+	}
+}

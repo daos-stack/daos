@@ -18,6 +18,7 @@
 #include <daos/btree.h>
 #include <daos/object.h>
 #include <daos/sys_db.h>
+#include <daos/control_types.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/pool.h>
@@ -328,7 +329,7 @@ CRT_RPC_DECLARE(chk_set_policy, DAOS_ISEQ_CHK_SET_POLICY, DAOS_OSEQ_CHK_SET_POLI
 
 #define CHK_MSG_BUFLEN		320
 
-#define CHK_INTERACT_OPTION_MAX 3
+#define CHK_INTERACT_OPTION_MAX DAOS_CHECK_INTERACT_OPTION_MAX
 
 /*
  * NOTE: Please be careful when change CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
