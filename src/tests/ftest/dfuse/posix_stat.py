@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -39,7 +39,7 @@ class POSIXStatTest(IorTestBase):
         block_sizes = self.params.get("block_sizes", "/run/*")
         error_list = []
 
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         self.add_container(pool=self.pool)
 
         idx = 1
