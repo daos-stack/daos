@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,6 +31,21 @@ class DaosAgentTransportCredentials(TransportCredentials):
             DaosAgentTransportCredentials: a new DaosAgentTransportCredentials object
         """
         return DaosAgentTransportCredentials(self._log_dir)
+
+
+class DaosAgentCredentialConfig(YamlParameters):
+    """Defines the daos_agent credential_config yaml parameters."""
+
+    def __init__(self):
+        """Initialize a DaosAgentCredentialConfig object."""
+        super().__init__("/run/agent_config/credential_config/*", None, "credential_config")
+
+        # daos_agent credential_config parameters:
+        #   - pool_auth_enabled: <bool>, attach per-pool node certs to pool
+        #       connect credentials. Requires transport security.
+        #   - node_cert_dir: <str>, directory holding per-pool <uuid>.{crt,key}
+        self.pool_auth_enabled = BasicParameter(None)
+        self.node_cert_dir = BasicParameter(None)
 
 
 class DaosAgentYamlParameters(YamlParameters):
@@ -87,6 +102,44 @@ class DaosAgentYamlParameters(YamlParameters):
         self.telemetry_enabled = BasicParameter(None)
         self.telemetry_retain = BasicParameter(None)
         self.access_points = BasicParameter(None, ["localhost"])
+
+        self.credential_config = DaosAgentCredentialConfig()
+
+    def get_params(self, test):
+        """Get values for the yaml parameters from the test yaml file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+        self.credential_config.get_params(test)
+
+    def get_yaml_data(self):
+        """Convert the parameters into a dictionary to use to write a yaml file.
+
+        Returns:
+            dict: a dictionary of parameter name keys and values
+
+        """
+        yaml_data = super().get_yaml_data()
+        cred_data = self.credential_config.get_yaml_data()
+        if cred_data.get(self.credential_config.title):
+            yaml_data.update(cred_data)
+        return yaml_data
+
+    def is_yaml_data_updated(self):
+        """Determine if any of the yaml file parameters have been updated.
+
+        Returns:
+            bool: whether or not a yaml file parameter has been updated
+
+        """
+        return super().is_yaml_data_updated() or self.credential_config.is_yaml_data_updated()
+
+    def reset_yaml_data_updated(self):
+        """Reset each yaml file parameter updated state to False."""
+        super().reset_yaml_data_updated()
+        self.credential_config.reset_yaml_data_updated()
 
     def update_log_file(self, name):
         """Update the log file name for the daos agent.

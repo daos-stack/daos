@@ -292,6 +292,7 @@ mgmt
 middleware
 mins
 mkdir
+mkdtemp
 mnt
 modprobe
 mountpoint
@@ -314,6 +315,7 @@ namespaces
 natively
 nfs
 nodesperjob
+nohup
 nosec
 num
 numa
@@ -341,6 +343,7 @@ perf
 performant
 pgrep
 pid
+pidfile
 pids
 pkgconfig
 pkill
@@ -385,6 +388,7 @@ rdb
 rdbt
 readdir
 readlink
+readyfile
 realloc
 rebase
 relink
@@ -471,12 +475,14 @@ testcases
 testdata
 testFile
 testname
+tempfile
 testrunner
 testsuites
 tgt
 timestamp
 timestamps
 tmp
+tmpdir
 tmpfs
 toolchain
 toplevel
